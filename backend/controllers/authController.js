@@ -13,7 +13,8 @@ const register = async (req, res) => {
     if (!full_name || !email || !phone || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Full name, email, phone number, and password are required',
+        message:
+          'Full name, email, phone number, and password are required',
       });
     }
 
@@ -30,7 +31,7 @@ const register = async (req, res) => {
     await client.query('BEGIN');
 
     const existingUser = await client.query(
-      'SELECT id FROM users WHERE email = $1 OR phone = $2 FOR UPDATE',
+      'SELECT id FROM users WHERE email = $1 OR phone = $2',
       [normalizedEmail, normalizedPhone]
     );
 
@@ -49,8 +50,20 @@ const register = async (req, res) => {
       `INSERT INTO users
         (full_name, email, phone, password_hash)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, full_name, email, phone, role, kyc_status`,
-      [full_name.trim(), normalizedEmail, normalizedPhone, passwordHash]
+       RETURNING
+        id,
+        full_name,
+        email,
+        phone,
+        role,
+        kyc_status,
+        is_verified`,
+      [
+        full_name.trim(),
+        normalizedEmail,
+        normalizedPhone,
+        passwordHash,
+      ]
     );
 
     const user = userResult.rows[0];
@@ -79,7 +92,13 @@ const register = async (req, res) => {
       `INSERT INTO accounts
         (user_id, account_number, account_type, currency)
        VALUES ($1, $2, 'personal', 'NGN')
-       RETURNING id, account_number, account_type, currency, balance, status`,
+       RETURNING
+        id,
+        account_number,
+        account_type,
+        currency,
+        balance,
+        status`,
       [user.id, accountNumber]
     );
 
@@ -130,8 +149,8 @@ const login = async (req, res) => {
         phone,
         password_hash,
         role,
-        status,
-        kyc_status
+        kyc_status,
+        is_verified
        FROM users
        WHERE email = $1`,
       [normalizedEmail]
@@ -145,13 +164,6 @@ const login = async (req, res) => {
     }
 
     const user = userResult.rows[0];
-
-    if (user.status !== 'active') {
-      return res.status(403).json({
-        success: false,
-        message: 'Your account is not active',
-      });
-    }
 
     const passwordMatches = await bcrypt.compare(
       password,
@@ -205,8 +217,8 @@ const login = async (req, res) => {
       email: user.email,
       phone: user.phone,
       role: user.role,
-      status: user.status,
       kyc_status: user.kyc_status,
+      is_verified: user.is_verified,
     };
 
     return res.status(200).json({
