@@ -2,28 +2,37 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+
 const pool = require('./config/database');
+const authRoutes = require('./routes/auth');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 
+// Authentication routes
+app.use('/api/auth', authRoutes);
+
+// API home
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Zenimonies Banking API is running'
+    message: 'Zenimonies Banking API is running',
   });
 });
 
+// General health check
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
-    status: 'healthy'
+    status: 'healthy',
   });
 });
 
+// Database health check
 app.get('/api/health/database', async (req, res) => {
   try {
     const result = await pool.query('SELECT NOW()');
@@ -32,7 +41,7 @@ app.get('/api/health/database', async (req, res) => {
       success: true,
       status: 'healthy',
       database: 'connected',
-      time: result.rows[0].now
+      time: result.rows[0].now,
     });
   } catch (error) {
     console.error('Database health check failed:', error);
@@ -40,11 +49,30 @@ app.get('/api/health/database', async (req, res) => {
     res.status(500).json({
       success: false,
       status: 'unhealthy',
-      database: 'disconnected'
+      database: 'disconnected',
     });
   }
 });
 
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+  });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error',
+  });
+});
+
+// Start server
 app.listen(PORT, () => {
   console.log(`Zenimonies Banking API running on port ${PORT}`);
 });
