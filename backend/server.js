@@ -4,8 +4,10 @@ const express = require('express');
 const cors = require('cors');
 
 const pool = require('./config/database');
+
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
+const transferRoutes = require('./routes/transfer');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -14,11 +16,14 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Authentication routes
+// Authentication
 app.use('/api/auth', authRoutes);
 
-// Account routes
+// Account
 app.use('/api/account', accountRoutes);
+
+// Bank transfers
+app.use('/api/transfers', transferRoutes);
 
 // Root route
 app.get('/', (req, res) => {
@@ -46,7 +51,7 @@ app.get('/health.json', (req, res) => {
   });
 });
 
-// General API health check
+// General API health
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
@@ -54,7 +59,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Database health check
+// Database health
 app.get('/api/health/database', async (req, res) => {
   try {
     const result = await pool.query('SELECT NOW()');
