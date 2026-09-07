@@ -9,6 +9,7 @@ import {
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Transfer from './pages/Transfer';
 
 const App: React.FC = () => {
   return (
@@ -19,6 +20,8 @@ const App: React.FC = () => {
         <Route path="/register" element={<Register />} />
 
         <Route path="/" element={<Dashboard />} />
+
+        <Route path="/transfer" element={<Transfer />} />
 
         <Route
           path="*"
