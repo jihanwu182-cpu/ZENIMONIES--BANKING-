@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Transfer from './pages/Transfer';
+import Deposit from './pages/Deposit';
 
 const App: React.FC = () => {
   return (
@@ -22,6 +23,8 @@ const App: React.FC = () => {
         <Route path="/" element={<Dashboard />} />
 
         <Route path="/transfer" element={<Transfer />} />
+
+        <Route path="/deposit" element={<Deposit />} />
 
         <Route
           path="*"
