@@ -11,20 +11,20 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Transfer from './pages/Transfer';
 import Deposit from './pages/Deposit';
+import Withdraw from './pages/Withdraw';
 
 const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-
         <Route path="/register" element={<Register />} />
 
         <Route path="/" element={<Dashboard />} />
 
         <Route path="/transfer" element={<Transfer />} />
-
         <Route path="/deposit" element={<Deposit />} />
+        <Route path="/withdraw" element={<Withdraw />} />
 
         <Route
           path="*"
