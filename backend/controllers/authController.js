@@ -85,7 +85,9 @@ const register = async (req, res) => {
     }
 
     if (!accountNumber) {
-      throw new Error('Unable to generate a unique account number');
+      throw new Error(
+        'Unable to generate a unique account number'
+      );
     }
 
     const accountResult = await client.query(
@@ -114,14 +116,32 @@ const register = async (req, res) => {
     try {
       await client.query('ROLLBACK');
     } catch (rollbackError) {
-      console.error('Rollback error:', rollbackError);
+      console.error(
+        'Rollback error:',
+        rollbackError
+      );
     }
 
-    console.error('Registration error:', error);
+    console.error(
+      'Registration error:',
+      error
+    );
+
+    // PostgreSQL duplicate-value error
+    if (error && error.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message:
+          'Email, phone number, or account number is already registered',
+      });
+    }
 
     return res.status(500).json({
       success: false,
-      message: 'Unable to create account',
+      message:
+        error && error.message
+          ? error.message
+          : 'Unable to create account',
     });
   } finally {
     client.release();
@@ -178,11 +198,14 @@ const login = async (req, res) => {
     }
 
     if (!process.env.JWT_SECRET) {
-      console.error('JWT_SECRET is not configured');
+      console.error(
+        'JWT_SECRET is not configured'
+      );
 
       return res.status(500).json({
         success: false,
-        message: 'Authentication service is not configured',
+        message:
+          'Authentication service is not configured',
       });
     }
 
@@ -229,7 +252,10 @@ const login = async (req, res) => {
       accounts: accountResult.rows,
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error(
+      'Login error:',
+      error
+    );
 
     return res.status(500).json({
       success: false,
