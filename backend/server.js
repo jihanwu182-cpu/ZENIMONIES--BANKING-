@@ -16,7 +16,7 @@ app.use(express.json());
 // Authentication routes
 app.use('/api/auth', authRoutes);
 
-// API home
+// Root route
 app.get('/', (req, res) => {
   res.json({
     success: true,
@@ -24,7 +24,25 @@ app.get('/', (req, res) => {
   });
 });
 
-// General health check
+// API home
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Zenimonies Banking API is running',
+  });
+});
+
+// Health check
+app.get('/health.json', (req, res) => {
+  res.json({
+    success: true,
+    status: 'ok',
+    platform: 'Zenimonies',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// General API health check
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
@@ -59,6 +77,7 @@ app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: 'Route not found',
+    path: req.originalUrl,
   });
 });
 
