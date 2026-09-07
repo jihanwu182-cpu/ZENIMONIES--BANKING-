@@ -1,13 +1,14 @@
--- =========================================================
--- ZENIMONIES BANKING DATABASE SCHEMA
--- =========================================================
+-- ============================================================
+-- ZENIMONIES BANKING DATABASE
+-- No investment functionality
+-- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 
--- =========================================================
+-- ============================================================
 -- USERS
--- =========================================================
+-- ============================================================
 
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -34,9 +35,9 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 
--- =========================================================
+-- ============================================================
 -- ACCOUNTS
--- =========================================================
+-- ============================================================
 
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -55,13 +56,16 @@ CREATE TABLE IF NOT EXISTS accounts (
 
     status VARCHAR(30) NOT NULL DEFAULT 'active',
 
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 
--- =========================================================
+-- ============================================================
 -- TRANSACTIONS
--- =========================================================
+-- Central transaction history
+-- ============================================================
 
 CREATE TABLE IF NOT EXISTS transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -82,81 +86,18 @@ CREATE TABLE IF NOT EXISTS transactions (
 
     status VARCHAR(30) NOT NULL DEFAULT 'pending',
 
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+    balance_before NUMERIC(18,2),
 
-
--- =========================================================
--- INTERNAL TRANSFERS
--- Zenimonies account -> Zenimonies account
--- =========================================================
-
-CREATE TABLE IF NOT EXISTS transfers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    sender_account_id UUID NOT NULL
-        REFERENCES accounts(id),
-
-    recipient_account_id UUID
-        REFERENCES accounts(id),
-
-    amount NUMERIC(18,2) NOT NULL,
-
-    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
-
-    reference VARCHAR(100) UNIQUE NOT NULL,
-
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
-
-    description TEXT,
+    balance_after NUMERIC(18,2),
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 
--- =========================================================
--- EXTERNAL BANK TRANSFERS
--- Zenimonies -> another bank
--- =========================================================
-
-CREATE TABLE IF NOT EXISTS bank_transfers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    account_id UUID NOT NULL
-        REFERENCES accounts(id)
-        ON DELETE CASCADE,
-
-    recipient_name VARCHAR(150) NOT NULL,
-
-    recipient_account_number VARCHAR(30) NOT NULL,
-
-    recipient_bank_name VARCHAR(150) NOT NULL,
-
-    recipient_bank_code VARCHAR(30),
-
-    amount NUMERIC(18,2) NOT NULL,
-
-    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
-
-    narration VARCHAR(255),
-
-    reference VARCHAR(100) UNIQUE NOT NULL,
-
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
-
-    provider_reference VARCHAR(150),
-
-    failure_reason TEXT,
-
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    completed_at TIMESTAMP
-);
-
-
--- =========================================================
+-- ============================================================
 -- BENEFICIARIES
--- =========================================================
+-- Saved bank recipients
+-- ============================================================
 
 CREATE TABLE IF NOT EXISTS beneficiaries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -173,15 +114,56 @@ CREATE TABLE IF NOT EXISTS beneficiaries (
 
     account_number VARCHAR(30) NOT NULL,
 
-    account_name VARCHAR(150),
-
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 
--- =========================================================
+-- ============================================================
+-- BANK TRANSFERS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS bank_transfers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    account_id UUID NOT NULL
+        REFERENCES accounts(id)
+        ON DELETE CASCADE,
+
+    beneficiary_id UUID
+        REFERENCES beneficiaries(id)
+        ON DELETE SET NULL,
+
+    recipient_name VARCHAR(150) NOT NULL,
+
+    recipient_account_number VARCHAR(30) NOT NULL,
+
+    recipient_bank_name VARCHAR(150) NOT NULL,
+
+    recipient_bank_code VARCHAR(30),
+
+    amount NUMERIC(18,2) NOT NULL,
+
+    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
+
+    narration TEXT,
+
+    reference VARCHAR(100) UNIQUE NOT NULL,
+
+    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+
+    provider_reference VARCHAR(100),
+
+    failure_reason TEXT,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    completed_at TIMESTAMP
+);
+
+
+-- ============================================================
 -- DEPOSITS
--- =========================================================
+-- ============================================================
 
 CREATE TABLE IF NOT EXISTS deposits (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -196,9 +178,13 @@ CREATE TABLE IF NOT EXISTS deposits (
 
     reference VARCHAR(100) UNIQUE NOT NULL,
 
+    provider_reference VARCHAR(100),
+
+    payment_method VARCHAR(50),
+
     status VARCHAR(30) NOT NULL DEFAULT 'pending',
 
-    provider_reference VARCHAR(150),
+    failure_reason TEXT,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -206,9 +192,9 @@ CREATE TABLE IF NOT EXISTS deposits (
 );
 
 
--- =========================================================
+-- ============================================================
 -- WITHDRAWALS
--- =========================================================
+-- ============================================================
 
 CREATE TABLE IF NOT EXISTS withdrawals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -223,9 +209,15 @@ CREATE TABLE IF NOT EXISTS withdrawals (
 
     reference VARCHAR(100) UNIQUE NOT NULL,
 
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+    destination_bank_name VARCHAR(150),
 
-    provider_reference VARCHAR(150),
+    destination_account_number VARCHAR(30),
+
+    destination_account_name VARCHAR(150),
+
+    provider_reference VARCHAR(100),
+
+    status VARCHAR(30) NOT NULL DEFAULT 'pending',
 
     failure_reason TEXT,
 
@@ -235,9 +227,140 @@ CREATE TABLE IF NOT EXISTS withdrawals (
 );
 
 
--- =========================================================
+-- ============================================================
+-- AIRTIME PURCHASES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS airtime_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    account_id UUID NOT NULL
+        REFERENCES accounts(id)
+        ON DELETE CASCADE,
+
+    network VARCHAR(50) NOT NULL,
+
+    phone_number VARCHAR(30) NOT NULL,
+
+    amount NUMERIC(18,2) NOT NULL,
+
+    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
+
+    reference VARCHAR(100) UNIQUE NOT NULL,
+
+    provider_reference VARCHAR(100),
+
+    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+
+    failure_reason TEXT,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    completed_at TIMESTAMP
+);
+
+
+-- ============================================================
+-- DATA PURCHASES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS data_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    account_id UUID NOT NULL
+        REFERENCES accounts(id)
+        ON DELETE CASCADE,
+
+    network VARCHAR(50) NOT NULL,
+
+    phone_number VARCHAR(30) NOT NULL,
+
+    plan_code VARCHAR(100),
+
+    plan_name VARCHAR(150),
+
+    amount NUMERIC(18,2) NOT NULL,
+
+    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
+
+    reference VARCHAR(100) UNIQUE NOT NULL,
+
+    provider_reference VARCHAR(100),
+
+    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+
+    failure_reason TEXT,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    completed_at TIMESTAMP
+);
+
+
+-- ============================================================
+-- BILLERS
+-- Electricity, TV, internet and other bill providers
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS billers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    name VARCHAR(150) NOT NULL,
+
+    category VARCHAR(50) NOT NULL,
+
+    provider_code VARCHAR(100) UNIQUE,
+
+    is_active BOOLEAN NOT NULL DEFAULT true,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- ============================================================
+-- BILL PAYMENTS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS bill_payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    account_id UUID NOT NULL
+        REFERENCES accounts(id)
+        ON DELETE CASCADE,
+
+    biller_id UUID
+        REFERENCES billers(id)
+        ON DELETE SET NULL,
+
+    category VARCHAR(50) NOT NULL,
+
+    biller_name VARCHAR(150) NOT NULL,
+
+    customer_reference VARCHAR(150) NOT NULL,
+
+    customer_name VARCHAR(150),
+
+    amount NUMERIC(18,2) NOT NULL,
+
+    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
+
+    reference VARCHAR(100) UNIQUE NOT NULL,
+
+    provider_reference VARCHAR(100),
+
+    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+
+    failure_reason TEXT,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    completed_at TIMESTAMP
+);
+
+
+-- ============================================================
 -- KYC RECORDS
--- =========================================================
+-- ============================================================
 
 CREATE TABLE IF NOT EXISTS kyc_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -250,7 +373,15 @@ CREATE TABLE IF NOT EXISTS kyc_records (
 
     document_number VARCHAR(100),
 
+    document_front_url TEXT,
+
+    document_back_url TEXT,
+
+    selfie_url TEXT,
+
     verification_status VARCHAR(30) NOT NULL DEFAULT 'pending',
+
+    rejection_reason TEXT,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -258,182 +389,179 @@ CREATE TABLE IF NOT EXISTS kyc_records (
 );
 
 
--- =========================================================
--- SERVICE PROVIDERS
--- =========================================================
+-- ============================================================
+-- NOTIFICATIONS
+-- ============================================================
 
-CREATE TABLE IF NOT EXISTS service_providers (
+CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    name VARCHAR(150) NOT NULL,
+    user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
 
-    service_type VARCHAR(30) NOT NULL,
+    title VARCHAR(200) NOT NULL,
 
-    code VARCHAR(50) UNIQUE,
+    message TEXT NOT NULL,
 
-    is_active BOOLEAN NOT NULL DEFAULT true,
+    type VARCHAR(50) NOT NULL DEFAULT 'general',
+
+    is_read BOOLEAN NOT NULL DEFAULT false,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 
--- =========================================================
--- AIRTIME PURCHASES
--- =========================================================
+-- ============================================================
+-- LOGIN / SECURITY TOKENS
+-- Used later for OTP/password reset/security flows
+-- ============================================================
 
-CREATE TABLE IF NOT EXISTS airtime_purchases (
+CREATE TABLE IF NOT EXISTS security_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    account_id UUID NOT NULL
-        REFERENCES accounts(id)
+    user_id UUID NOT NULL
+        REFERENCES users(id)
         ON DELETE CASCADE,
 
-    provider_id UUID
-        REFERENCES service_providers(id),
+    token_hash TEXT NOT NULL,
 
-    phone_number VARCHAR(30) NOT NULL,
+    token_type VARCHAR(50) NOT NULL,
 
-    amount NUMERIC(18,2) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
 
-    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
+    used_at TIMESTAMP,
 
-    reference VARCHAR(100) UNIQUE NOT NULL,
-
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
-
-    provider_reference VARCHAR(150),
-
-    failure_reason TEXT,
-
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    completed_at TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 
--- =========================================================
--- DATA PURCHASES
--- =========================================================
+-- ============================================================
+-- AUDIT LOG
+-- Records important account actions
+-- ============================================================
 
-CREATE TABLE IF NOT EXISTS data_purchases (
+CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    account_id UUID NOT NULL
-        REFERENCES accounts(id)
-        ON DELETE CASCADE,
+    user_id UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
 
-    provider_id UUID
-        REFERENCES service_providers(id),
+    action VARCHAR(100) NOT NULL,
 
-    phone_number VARCHAR(30) NOT NULL,
+    description TEXT,
 
-    plan_code VARCHAR(100) NOT NULL,
+    ip_address VARCHAR(100),
 
-    plan_name VARCHAR(150),
+    user_agent TEXT,
 
-    amount NUMERIC(18,2) NOT NULL,
-
-    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
-
-    reference VARCHAR(100) UNIQUE NOT NULL,
-
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
-
-    provider_reference VARCHAR(150),
-
-    failure_reason TEXT,
-
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    completed_at TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 
--- =========================================================
--- BILL PAYMENTS
--- =========================================================
-
-CREATE TABLE IF NOT EXISTS bill_payments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    account_id UUID NOT NULL
-        REFERENCES accounts(id)
-        ON DELETE CASCADE,
-
-    provider_id UUID
-        REFERENCES service_providers(id),
-
-    bill_type VARCHAR(50) NOT NULL,
-
-    customer_number VARCHAR(100) NOT NULL,
-
-    customer_name VARCHAR(150),
-
-    amount NUMERIC(18,2) NOT NULL,
-
-    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
-
-    reference VARCHAR(100) UNIQUE NOT NULL,
-
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
-
-    provider_reference VARCHAR(150),
-
-    failure_reason TEXT,
-
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    completed_at TIMESTAMP
-);
-
-
--- =========================================================
+-- ============================================================
 -- INDEXES
--- =========================================================
+-- ============================================================
 
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id
 ON accounts(user_id);
 
+
 CREATE INDEX IF NOT EXISTS idx_transactions_account_id
 ON transactions(account_id);
 
-CREATE INDEX IF NOT EXISTS idx_transfers_sender
-ON transfers(sender_account_id);
 
-CREATE INDEX IF NOT EXISTS idx_transfers_recipient
-ON transfers(recipient_account_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_created_at
+ON transactions(created_at);
 
-CREATE INDEX IF NOT EXISTS idx_bank_transfers_account_id
-ON bank_transfers(account_id);
-
-CREATE INDEX IF NOT EXISTS idx_bank_transfers_status
-ON bank_transfers(status);
 
 CREATE INDEX IF NOT EXISTS idx_beneficiaries_user_id
 ON beneficiaries(user_id);
 
+
+CREATE INDEX IF NOT EXISTS idx_bank_transfers_account_id
+ON bank_transfers(account_id);
+
+
+CREATE INDEX IF NOT EXISTS idx_bank_transfers_reference
+ON bank_transfers(reference);
+
+
+CREATE INDEX IF NOT EXISTS idx_bank_transfers_created_at
+ON bank_transfers(created_at);
+
+
 CREATE INDEX IF NOT EXISTS idx_deposits_account_id
 ON deposits(account_id);
+
 
 CREATE INDEX IF NOT EXISTS idx_withdrawals_account_id
 ON withdrawals(account_id);
 
-CREATE INDEX IF NOT EXISTS idx_kyc_user_id
-ON kyc_records(user_id);
-
-CREATE INDEX IF NOT EXISTS idx_service_providers_type
-ON service_providers(service_type);
 
 CREATE INDEX IF NOT EXISTS idx_airtime_account_id
-ON airtime_purchases(account_id);
+ON airtime_transactions(account_id);
+
 
 CREATE INDEX IF NOT EXISTS idx_data_account_id
-ON data_purchases(account_id);
+ON data_transactions(account_id);
+
 
 CREATE INDEX IF NOT EXISTS idx_bill_payments_account_id
 ON bill_payments(account_id);
 
 
--- =========================================================
--- END OF ZENIMONIES DATABASE SCHEMA
--- =========================================================
+CREATE INDEX IF NOT EXISTS idx_billers_category
+ON billers(category);
+
+
+CREATE INDEX IF NOT EXISTS idx_kyc_user_id
+ON kyc_records(user_id);
+
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id
+ON notifications(user_id);
+
+
+CREATE INDEX IF NOT EXISTS idx_security_tokens_user_id
+ON security_tokens(user_id);
+
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id
+ON audit_logs(user_id);
+
+
+-- ============================================================
+-- EXISTING DATABASE COMPATIBILITY
+-- ============================================================
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS status VARCHAR(30)
+NOT NULL DEFAULT 'active';
+
+
+ALTER TABLE accounts
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
+NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+
+ALTER TABLE bank_transfers
+ADD COLUMN IF NOT EXISTS beneficiary_id UUID
+REFERENCES beneficiaries(id)
+ON DELETE SET NULL;
+
+
+-- ============================================================
+-- DEFAULT BILLER CATEGORIES
+-- ============================================================
+
+INSERT INTO billers
+    (name, category, provider_code)
+VALUES
+    ('Electricity', 'electricity', 'ELECTRICITY'),
+    ('Cable TV', 'cable_tv', 'CABLE_TV'),
+    ('Internet', 'internet', 'INTERNET'),
+    ('Other Bills', 'other', 'OTHER')
+ON CONFLICT (provider_code)
+DO NOTHING;
