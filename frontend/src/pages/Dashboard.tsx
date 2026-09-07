@@ -1,18 +1,45 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+
+interface User {
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+}
+
+interface Account {
+  account_number?: string;
+  account_name?: string;
+  balance?: number;
+  currency?: string;
+}
 
 const Dashboard: React.FC = () => {
-  const user = JSON.parse(
-    localStorage.getItem('zenimonies_user') || 'null'
-  );
+  const navigate = useNavigate();
 
-  const accounts = JSON.parse(
-    localStorage.getItem('zenimonies_accounts') || '[]'
-  );
+  let user: User | null = null;
+  let accounts: Account[] = [];
+
+  try {
+    user = JSON.parse(
+      localStorage.getItem('zenimonies_user') || 'null'
+    );
+
+    accounts = JSON.parse(
+      localStorage.getItem('zenimonies_accounts') || '[]'
+    );
+  } catch {
+    user = null;
+    accounts = [];
+  }
 
   const account = accounts[0];
 
-  const formatCurrency = (amount: number, currency = 'NGN') => {
+  const formatCurrency = (
+    amount: number,
+    currency = 'NGN'
+  ) => {
     return new Intl.NumberFormat('en-NG', {
       style: 'currency',
       currency,
@@ -22,11 +49,19 @@ const Dashboard: React.FC = () => {
 
   const logout = () => {
     localStorage.removeItem('zenimonies_token');
+    localStorage.removeItem('token');
     localStorage.removeItem('zenimonies_user');
     localStorage.removeItem('zenimonies_accounts');
 
-    window.location.href = '/login';
+    navigate('/login');
   };
+
+  const displayName =
+    user?.full_name ||
+    `${user?.first_name || ''} ${
+      user?.last_name || ''
+    }`.trim() ||
+    'Zenimonies User';
 
   return (
     <div
@@ -44,6 +79,8 @@ const Dashboard: React.FC = () => {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          gap: '15px',
+          flexWrap: 'wrap',
         }}
       >
         <div>
@@ -67,19 +104,39 @@ const Dashboard: React.FC = () => {
           </span>
         </div>
 
-        <button
-          onClick={logout}
+        <div
           style={{
-            border: '1px solid #d0d5dd',
-            background: '#ffffff',
-            borderRadius: '8px',
-            padding: '9px 15px',
-            cursor: 'pointer',
-            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
           }}
         >
-          Logout
-        </button>
+          <Link
+            to="/profile"
+            style={{
+              textDecoration: 'none',
+              color: '#172033',
+              fontWeight: 600,
+            }}
+          >
+            Profile
+          </Link>
+
+          <button
+            type="button"
+            onClick={logout}
+            style={{
+              border: '1px solid #d0d5dd',
+              background: '#ffffff',
+              borderRadius: '8px',
+              padding: '9px 15px',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            Logout
+          </button>
+        </div>
       </header>
 
       {/* Main */}
@@ -105,20 +162,24 @@ const Dashboard: React.FC = () => {
             style={{
               margin: '5px 0 0',
               fontSize: '28px',
+              color: '#172033',
             }}
           >
-            {user?.full_name || 'Zenimonies User'}
+            {displayName}
           </h2>
         </section>
 
         {/* Balance */}
         <section
           style={{
-            background: '#0b5cff',
+            background:
+              'linear-gradient(135deg, #0b5cff, #1747c7)',
             color: '#ffffff',
             borderRadius: '18px',
             padding: '28px',
             marginBottom: '25px',
+            boxShadow:
+              '0 10px 30px rgba(11, 92, 255, 0.20)',
           }}
         >
           <p
@@ -150,14 +211,22 @@ const Dashboard: React.FC = () => {
           >
             Account Number:{' '}
             <strong>
-              {account?.account_number || 'Not available'}
+              {account?.account_number ||
+                'Not available'}
             </strong>
           </p>
         </section>
 
-        {/* Quick Actions */}
-        <section>
-          <h3>Quick Services</h3>
+        {/* Main Actions */}
+        <section style={{ marginBottom: '30px' }}>
+          <h3
+            style={{
+              marginBottom: '15px',
+              color: '#172033',
+            }}
+          >
+            Banking Services
+          </h3>
 
           <div
             style={{
@@ -167,61 +236,95 @@ const Dashboard: React.FC = () => {
               gap: '15px',
             }}
           >
-            <Link to="/transfer">
-              <ServiceCard
-                title="Transfer"
-                description="Send money to a bank account"
-              />
-            </Link>
+            <ServiceLink
+              to="/transfer"
+              title="Transfer"
+              description="Send money to another bank"
+            />
 
-            <Link to="/deposit">
-              <ServiceCard
-                title="Deposit"
-                description="Fund your Zenimonies account"
-              />
-            </Link>
+            <ServiceLink
+              to="/deposit"
+              title="Deposit"
+              description="Fund your Zenimonies account"
+            />
 
-            <Link to="/withdraw">
-              <ServiceCard
-                title="Withdraw"
-                description="Withdraw money from your account"
-              />
-            </Link>
+            <ServiceLink
+              to="/withdraw"
+              title="Withdraw"
+              description="Withdraw money to your bank"
+            />
 
-            <Link to="/airtime">
-              <ServiceCard
-                title="Airtime"
-                description="Buy mobile airtime"
-              />
-            </Link>
+            <ServiceLink
+              to="/transactions"
+              title="Transactions"
+              description="View your account activity"
+            />
+          </div>
+        </section>
 
-            <Link to="/data">
-              <ServiceCard
-                title="Data"
-                description="Buy mobile data bundles"
-              />
-            </Link>
+        {/* Bills & Mobile Services */}
+        <section style={{ marginBottom: '30px' }}>
+          <h3
+            style={{
+              marginBottom: '15px',
+              color: '#172033',
+            }}
+          >
+            Bills & Mobile
+          </h3>
 
-            <Link to="/bills">
-              <ServiceCard
-                title="Bills"
-                description="Pay electricity, TV and other bills"
-              />
-            </Link>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '15px',
+            }}
+          >
+            <ServiceLink
+              to="/airtime"
+              title="Airtime"
+              description="Buy airtime for any supported network"
+            />
 
-            <Link to="/transactions">
-              <ServiceCard
-                title="Transactions"
-                description="View your transaction history"
-              />
-            </Link>
+            <ServiceLink
+              to="/data"
+              title="Data"
+              description="Buy mobile data bundles"
+            />
 
-            <Link to="/profile">
-              <ServiceCard
-                title="Profile"
-                description="Manage your account"
-              />
-            </Link>
+            <ServiceLink
+              to="/bills"
+              title="Bills"
+              description="Pay electricity, TV and other bills"
+            />
+          </div>
+        </section>
+
+        {/* Account */}
+        <section>
+          <h3
+            style={{
+              marginBottom: '15px',
+              color: '#172033',
+            }}
+          >
+            Account
+          </h3>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '15px',
+            }}
+          >
+            <ServiceLink
+              to="/profile"
+              title="Profile"
+              description="View and manage your account"
+            />
           </div>
         </section>
       </main>
@@ -229,47 +332,58 @@ const Dashboard: React.FC = () => {
   );
 };
 
-interface ServiceCardProps {
+interface ServiceLinkProps {
+  to: string;
   title: string;
   description: string;
 }
 
-const ServiceCard: React.FC<ServiceCardProps> = ({
+const ServiceLink: React.FC<ServiceLinkProps> = ({
+  to,
   title,
   description,
 }) => {
   return (
-    <div
+    <Link
+      to={to}
       style={{
-        background: '#ffffff',
-        border: '1px solid #eaecf0',
-        borderRadius: '14px',
-        padding: '20px',
-        minHeight: '120px',
-        transition: 'box-shadow 0.2s ease',
+        textDecoration: 'none',
+        color: 'inherit',
       }}
     >
-      <h4
+      <div
         style={{
-          margin: '0 0 8px',
-          color: '#172033',
-          fontSize: '17px',
+          background: '#ffffff',
+          border: '1px solid #eaecf0',
+          borderRadius: '14px',
+          padding: '20px',
+          minHeight: '110px',
+          boxSizing: 'border-box',
+          transition: 'box-shadow 0.2s ease',
         }}
       >
-        {title}
-      </h4>
+        <h4
+          style={{
+            margin: '0 0 8px',
+            color: '#172033',
+            fontSize: '17px',
+          }}
+        >
+          {title}
+        </h4>
 
-      <p
-        style={{
-          margin: 0,
-          color: '#667085',
-          fontSize: '14px',
-          lineHeight: 1.5,
-        }}
-      >
-        {description}
-      </p>
-    </div>
+        <p
+          style={{
+            margin: 0,
+            color: '#667085',
+            fontSize: '14px',
+            lineHeight: 1.5,
+          }}
+        >
+          {description}
+        </p>
+      </div>
+    </Link>
   );
 };
 
