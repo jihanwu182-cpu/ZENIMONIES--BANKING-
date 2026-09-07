@@ -5,6 +5,7 @@ const cors = require('cors');
 
 const pool = require('./config/database');
 const authRoutes = require('./routes/auth');
+const accountRoutes = require('./routes/account');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,6 +16,9 @@ app.use(express.json());
 
 // Authentication routes
 app.use('/api/auth', authRoutes);
+
+// Account routes
+app.use('/api/account', accountRoutes);
 
 // Root route
 app.get('/', (req, res) => {
@@ -62,7 +66,10 @@ app.get('/api/health/database', async (req, res) => {
       time: result.rows[0].now,
     });
   } catch (error) {
-    console.error('Database health check failed:', error);
+    console.error(
+      'Database health check failed:',
+      error
+    );
 
     res.status(500).json({
       success: false,
@@ -93,5 +100,7 @@ app.use((err, req, res, next) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Zenimonies Banking API running on port ${PORT}`);
+  console.log(
+    `Zenimonies Banking API running on port ${PORT}`
+  );
 });
