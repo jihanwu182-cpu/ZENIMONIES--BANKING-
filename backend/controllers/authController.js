@@ -1,4 +1,6 @@
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
 const pool = require('../config/database');
 const { generateAccountNumber } = require('../utils/accountNumber');
 
@@ -25,12 +27,16 @@ const register = async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedPhone = phone.trim();
 
+    await client.query('BEGIN');
+
     const existingUser = await client.query(
-      'SELECT id FROM users WHERE email = $1 OR phone = $2',
+      'SELECT id FROM users WHERE email = $1 OR phone = $2 FOR UPDATE',
       [normalizedEmail, normalizedPhone]
     );
 
     if (existingUser.rows.length > 0) {
+      await client.query('ROLLBACK');
+
       return res.status(409).json({
         success: false,
         message: 'Email or phone number is already registered',
@@ -38,8 +44,6 @@ const register = async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-
-    await client.query('BEGIN');
 
     const userResult = await client.query(
       `INSERT INTO users
@@ -51,10 +55,9 @@ const register = async (req, res) => {
 
     const user = userResult.rows[0];
 
-    let accountNumber;
-    let accountCreated = false;
+    let accountNumber = null;
 
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
       const candidate = generateAccountNumber('10');
 
       const existingAccount = await client.query(
@@ -64,12 +67,11 @@ const register = async (req, res) => {
 
       if (existingAccount.rows.length === 0) {
         accountNumber = candidate;
-        accountCreated = true;
         break;
       }
     }
 
-    if (!accountCreated) {
+    if (!accountNumber) {
       throw new Error('Unable to generate a unique account number');
     }
 
@@ -90,7 +92,11 @@ const register = async (req, res) => {
       account: accountResult.rows[0],
     });
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error('Rollback error:', rollbackError);
+    }
 
     console.error('Registration error:', error);
 
@@ -103,6 +109,124 @@ const register = async (req, res) => {
   }
 };
 
+const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required',
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const userResult = await pool.query(
+      `SELECT
+        id,
+        full_name,
+        email,
+        phone,
+        password_hash,
+        role,
+        status,
+        kyc_status
+       FROM users
+       WHERE email = $1`,
+      [normalizedEmail]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password',
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    if (user.status !== 'active') {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is not active',
+      });
+    }
+
+    const passwordMatches = await bcrypt.compare(
+      password,
+      user.password_hash
+    );
+
+    if (!passwordMatches) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password',
+      });
+    }
+
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET is not configured');
+
+      return res.status(500).json({
+        success: false,
+        message: 'Authentication service is not configured',
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: '1h',
+      }
+    );
+
+    const accountResult = await pool.query(
+      `SELECT
+        id,
+        account_number,
+        account_type,
+        currency,
+        balance,
+        status
+       FROM accounts
+       WHERE user_id = $1
+       ORDER BY created_at ASC`,
+      [user.id]
+    );
+
+    const safeUser = {
+      id: user.id,
+      full_name: user.full_name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      status: user.status,
+      kyc_status: user.kyc_status,
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      token,
+      user: safeUser,
+      accounts: accountResult.rows,
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to login',
+    });
+  }
+};
+
 module.exports = {
   register,
+  login,
 };
