@@ -13,6 +13,7 @@ import Transfer from './pages/Transfer';
 import Deposit from './pages/Deposit';
 import Withdraw from './pages/Withdraw';
 import Transactions from './pages/Transactions';
+import Airtime from './pages/Airtime';
 
 const App: React.FC = () => {
   return (
@@ -27,6 +28,7 @@ const App: React.FC = () => {
         <Route path="/deposit" element={<Deposit />} />
         <Route path="/withdraw" element={<Withdraw />} />
         <Route path="/transactions" element={<Transactions />} />
+        <Route path="/airtime" element={<Airtime />} />
 
         <Route
           path="*"
