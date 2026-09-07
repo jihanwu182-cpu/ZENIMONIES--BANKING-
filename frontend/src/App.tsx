@@ -15,6 +15,7 @@ import Withdraw from './pages/Withdraw';
 import Transactions from './pages/Transactions';
 import Airtime from './pages/Airtime';
 import Data from './pages/Data';
+import Bills from './pages/Bills';
 
 const App: React.FC = () => {
   return (
@@ -31,6 +32,7 @@ const App: React.FC = () => {
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/airtime" element={<Airtime />} />
         <Route path="/data" element={<Data />} />
+        <Route path="/bills" element={<Bills />} />
 
         <Route
           path="*"
