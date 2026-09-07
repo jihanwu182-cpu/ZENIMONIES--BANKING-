@@ -3,13 +3,17 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
-const pool = require('./config/database');
+const database = require('./config/database');
+
+const pool = database;
+const { initializeDatabase } = database;
 
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
 const transferRoutes = require('./routes/transfer');
 
 const app = express();
+
 const PORT = process.env.PORT || 5000;
 
 // Middleware
@@ -62,7 +66,9 @@ app.get('/api/health', (req, res) => {
 // Database health
 app.get('/api/health/database', async (req, res) => {
   try {
-    const result = await pool.query('SELECT NOW()');
+    const result = await pool.query(
+      'SELECT NOW()'
+    );
 
     res.json({
       success: true,
@@ -95,7 +101,10 @@ app.use((req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error('Server error:', err);
+  console.error(
+    'Server error:',
+    err
+  );
 
   res.status(500).json({
     success: false,
@@ -104,8 +113,23 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(
-    `Zenimonies Banking API running on port ${PORT}`
-  );
-});
+const startServer = async () => {
+  try {
+    await initializeDatabase();
+
+    app.listen(PORT, () => {
+      console.log(
+        `Zenimonies Banking API running on port ${PORT}`
+      );
+    });
+  } catch (error) {
+    console.error(
+      'Unable to start Zenimonies Banking API:',
+      error
+    );
+
+    process.exit(1);
+  }
+};
+
+startServer();
