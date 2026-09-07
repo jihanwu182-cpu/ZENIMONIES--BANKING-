@@ -6,17 +6,17 @@ import {
   Navigate,
 } from 'react-router-dom';
 
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import Transfer from './pages/Transfer';
-import Deposit from './pages/Deposit';
-import Withdraw from './pages/Withdraw';
-import Transactions from './pages/Transactions';
-import Airtime from './pages/Airtime';
-import Data from './pages/Data';
-import Bills from './pages/Bills';
-import Profile from './pages/Profile';
+import Login from './pages/Login.tsx';
+import Register from './pages/Register.tsx';
+import Dashboard from './pages/Dashboard.tsx';
+import Transfer from './pages/Transfer.tsx';
+import Deposit from './pages/Deposit.tsx';
+import Withdraw from './pages/Withdraw.tsx';
+import Transactions from './pages/Transactions.tsx';
+import Airtime from './pages/Airtime.tsx';
+import Data from './pages/Data.tsx';
+import Bills from './pages/Bills.tsx';
+import Profile from './pages/Profile.tsx';
 
 const App: React.FC = () => {
   return (
