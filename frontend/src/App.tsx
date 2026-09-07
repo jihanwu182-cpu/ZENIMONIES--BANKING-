@@ -8,34 +8,7 @@ import {
 
 import Login from './pages/Login';
 import Register from './pages/Register';
-
-const Dashboard: React.FC = () => {
-  return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#f5f7fb',
-        padding: '24px',
-      }}
-    >
-      <div
-        style={{
-          background: '#ffffff',
-          padding: '40px',
-          borderRadius: '16px',
-          textAlign: 'center',
-          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08)',
-        }}
-      >
-        <h1>Welcome to Zenimonies</h1>
-        <p>Your digital banking dashboard is coming next.</p>
-      </div>
-    </div>
-  );
-};
+import Dashboard from './pages/Dashboard';
 
 const App: React.FC = () => {
   return (
