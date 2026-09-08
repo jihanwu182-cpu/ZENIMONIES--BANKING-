@@ -16,7 +16,7 @@ const Login: React.FC = () => {
   const handleSubmit = async (
     event: React.FormEvent<HTMLFormElement>
   ) => {
-    event.preventDefault();
+    event.preventDefault(); 
 
     setError('');
 
