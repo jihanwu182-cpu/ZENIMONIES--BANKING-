@@ -22,9 +22,21 @@ const bankRoutes = require('./routes/bankRoutes');
 // PAYSTACK WEBHOOK
 // ============================================================
 
-const {
-  handlePaystackWebhook,
-} = require('./controllers/paystackWebhookController');
+// Paystack requires the raw request body for
+// webhook signature verification.
+app.post(
+  '/api/paystack/webhook',
+  express.raw({
+    type: 'application/json',
+  }),
+  handlePaystackWebhook
+);
+
+// ============================================================
+// JSON BODY PARSER
+// ============================================================
+
+app.use(express.json());
 
 // ============================================================
 // APP
