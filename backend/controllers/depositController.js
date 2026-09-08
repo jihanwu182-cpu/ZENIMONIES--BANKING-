@@ -23,8 +23,7 @@ const createDeposit = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message:
-          'Amount and payment method are required',
+        message: 'Amount and payment method are required',
       });
     }
 
@@ -36,16 +35,14 @@ const createDeposit = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message:
-          'Deposit amount must be greater than zero',
+        message: 'Deposit amount must be greater than zero',
       });
     }
 
     if (depositAmount > 100000000) {
       return res.status(400).json({
         success: false,
-        message:
-          'Deposit amount is too large',
+        message: 'Deposit amount is too large',
       });
     }
 
@@ -57,8 +54,7 @@ const createDeposit = async (req, res) => {
     if (!allowedMethods.includes(method)) {
       return res.status(400).json({
         success: false,
-        message:
-          'Invalid payment method',
+        message: 'Invalid payment method',
       });
     }
 
@@ -92,45 +88,47 @@ const createDeposit = async (req, res) => {
 
     const reference = generateReference();
 
-    const transactionResult = await client.query(
-      `INSERT INTO transactions (
+    /*
+     * Create a pending deposit request.
+     *
+     * IMPORTANT:
+     * We do not increase the account balance here.
+     * A real payment provider will confirm the payment
+     * before the balance is credited.
+     */
+
+    const depositResult = await client.query(
+      `INSERT INTO deposits (
         account_id,
-        transaction_reference,
-        transaction_type,
         amount,
         currency,
+        reference,
         payment_method,
-        status,
-        description
+        status
       )
       VALUES (
         $1,
         $2,
-        'DEPOSIT',
         $3,
         $4,
         $5,
-        'PENDING',
-        $6
+        'pending'
       )
       RETURNING
         id,
         account_id,
-        transaction_reference,
-        transaction_type,
         amount,
         currency,
+        reference,
         payment_method,
         status,
-        description,
         created_at`,
       [
         account.id,
-        reference,
         depositAmount,
         account.currency,
+        reference,
         method,
-        'User deposit request',
       ]
     );
 
@@ -140,7 +138,7 @@ const createDeposit = async (req, res) => {
       success: true,
       message:
         'Deposit request created successfully and is pending processing.',
-      deposit: transactionResult.rows[0],
+      deposit: depositResult.rows[0],
     });
   } catch (error) {
     try {
@@ -159,13 +157,9 @@ const createDeposit = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-
-      // TEMPORARY: exposes the actual database/server error
-      // so we can identify the problem.
       message:
         error?.message ||
         'Unable to create deposit request',
-
       error_code:
         error?.code || null,
     });
