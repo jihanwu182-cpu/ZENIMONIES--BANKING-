@@ -6,6 +6,7 @@ interface User {
   first_name?: string;
   last_name?: string;
   email?: string;
+  phone?: string;
 }
 
 interface Account {
@@ -70,7 +71,7 @@ const Dashboard: React.FC = () => {
         background: '#f5f7fb',
       }}
     >
-      {/* Header */}
+      {/* HEADER */}
       <header
         style={{
           background: '#ffffff',
@@ -139,7 +140,7 @@ const Dashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* Main */}
+      {/* MAIN */}
       <main
         style={{
           maxWidth: '1100px',
@@ -147,7 +148,7 @@ const Dashboard: React.FC = () => {
           padding: '30px 24px',
         }}
       >
-        {/* Welcome */}
+        {/* WELCOME */}
         <section style={{ marginBottom: '25px' }}>
           <p
             style={{
@@ -169,7 +170,7 @@ const Dashboard: React.FC = () => {
           </h2>
         </section>
 
-        {/* Balance */}
+        {/* BALANCE */}
         <section
           style={{
             background:
@@ -194,7 +195,7 @@ const Dashboard: React.FC = () => {
           <h2
             style={{
               fontSize: '34px',
-              margin: '8px 0 20px',
+              margin: '8px 0 0',
             }}
           >
             {formatCurrency(
@@ -202,22 +203,84 @@ const Dashboard: React.FC = () => {
               account?.currency || 'NGN'
             )}
           </h2>
-
-          <p
-            style={{
-              margin: 0,
-              opacity: 0.9,
-            }}
-          >
-            Account Number:{' '}
-            <strong>
-              {account?.account_number ||
-                'Not available'}
-            </strong>
-          </p>
         </section>
 
-        {/* Main Actions */}
+        {/* ADD MONEY */}
+        <section style={{ marginBottom: '30px' }}>
+          <Link
+            to="/deposit"
+            style={{
+              textDecoration: 'none',
+              color: 'inherit',
+            }}
+          >
+            <div
+              style={{
+                background: '#ffffff',
+                border: '2px solid #0b5cff',
+                borderRadius: '16px',
+                padding: '22px',
+                cursor: 'pointer',
+              }}
+            >
+              <h3
+                style={{
+                  margin: '0 0 8px',
+                  color: '#0b5cff',
+                }}
+              >
+                + Add Money / Funds
+              </h3>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: '#667085',
+                  lineHeight: 1.5,
+                }}
+              >
+                Tap here to get the approved Zenimonies
+                deposit account details for funding your
+                account from another bank.
+              </p>
+            </div>
+          </Link>
+        </section>
+
+        {/* ZENIMONIES TRANSFER */}
+        <section style={{ marginBottom: '30px' }}>
+          <h3
+            style={{
+              marginBottom: '15px',
+              color: '#172033',
+            }}
+          >
+            Send Money
+          </h3>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '15px',
+            }}
+          >
+            <ServiceLink
+              to="/transfer"
+              title="Bank Transfer"
+              description="Send money to a Nigerian bank account"
+            />
+
+            <ServiceLink
+              to="/transfer?type=zenimonies"
+              title="Send to Zenimonies User"
+              description="Send money instantly using a registered phone number"
+            />
+          </div>
+        </section>
+
+        {/* BANKING SERVICES */}
         <section style={{ marginBottom: '30px' }}>
           <h3
             style={{
@@ -237,21 +300,9 @@ const Dashboard: React.FC = () => {
             }}
           >
             <ServiceLink
-              to="/transfer"
-              title="Transfer"
-              description="Send money to another bank"
-            />
-
-            <ServiceLink
-              to="/deposit"
-              title="Deposit"
-              description="Fund your Zenimonies account"
-            />
-
-            <ServiceLink
               to="/withdraw"
               title="Withdraw"
-              description="Withdraw money to your bank"
+              description="Withdraw money to your bank account"
             />
 
             <ServiceLink
@@ -262,7 +313,7 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
 
-        {/* Bills & Mobile Services */}
+        {/* BILLS & MOBILE */}
         <section style={{ marginBottom: '30px' }}>
           <h3
             style={{
@@ -284,7 +335,7 @@ const Dashboard: React.FC = () => {
             <ServiceLink
               to="/airtime"
               title="Airtime"
-              description="Buy airtime for any supported network"
+              description="Buy airtime for supported networks"
             />
 
             <ServiceLink
@@ -301,7 +352,7 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
 
-        {/* Account */}
+        {/* ACCOUNT */}
         <section>
           <h3
             style={{
@@ -359,7 +410,6 @@ const ServiceLink: React.FC<ServiceLinkProps> = ({
           padding: '20px',
           minHeight: '110px',
           boxSizing: 'border-box',
-          transition: 'box-shadow 0.2s ease',
         }}
       >
         <h4
