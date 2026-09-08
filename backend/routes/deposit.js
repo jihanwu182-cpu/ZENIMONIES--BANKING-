@@ -10,6 +10,14 @@ const {
 
 const router = express.Router();
 
+// Deposit API test
+router.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Deposit route is working',
+  });
+});
+
 // Create a deposit request
 router.post(
   '/',
