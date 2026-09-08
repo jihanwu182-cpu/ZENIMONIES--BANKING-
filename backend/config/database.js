@@ -21,7 +21,9 @@ pool.on('error', (err) => {
 const initializeDatabase = async () => {
   const schemaPath = path.join(
     __dirname,
-    '../../database/schema.sql'
+    const schemaPath = path.join(
+  __dirname,
+  '../database/schema.sql'
   );
 
   try {
