@@ -27,8 +27,15 @@ const Deposit: React.FC = () => {
     useState<DepositAccount | null>(null);
 
   const [deposits, setDeposits] = useState<Deposit[]>([]);
+
+  const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState('bank_transfer');
+
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   const loadDepositInformation = async () => {
     setLoading(true);
@@ -39,20 +46,17 @@ const Deposit: React.FC = () => {
 
       if (!token) {
         setError(
-          'Please log in again to view your deposit account.'
+          'Please log in again to view your deposit information.'
         );
         return;
       }
 
       /*
-       * The Paystack Dedicated Virtual Account will be connected
-       * after Zenimonies completes the required business/provider
-       * onboarding.
+       * Try to load the dedicated deposit account.
        *
-       * For now we safely display the pending-activation state
-       * instead of inventing an account number.
+       * This endpoint will become active when the payment
+       * provider integration is connected.
        */
-
       try {
         const accountResponse = await axios.get(
           `${API_URL}/api/deposits/account`,
@@ -69,10 +73,6 @@ const Deposit: React.FC = () => {
           );
         }
       } catch (accountError: any) {
-        /*
-         * A 404 simply means the Paystack deposit account has
-         * not been created yet.
-         */
         if (accountError?.response?.status !== 404) {
           console.error(
             'Deposit account error:',
@@ -82,10 +82,10 @@ const Deposit: React.FC = () => {
       }
 
       /*
-       * Load the customer's existing deposit history.
+       * Load deposit history.
        */
       try {
-        const depositsResponse = await axios.get(
+        const historyResponse = await axios.get(
           `${API_URL}/api/deposits/history`,
           {
             headers: {
@@ -94,17 +94,12 @@ const Deposit: React.FC = () => {
           }
         );
 
-        if (depositsResponse.data?.success) {
+        if (historyResponse.data?.success) {
           setDeposits(
-            depositsResponse.data.deposits || []
+            historyResponse.data.deposits || []
           );
         }
       } catch (historyError: any) {
-        /*
-         * Deposit history endpoint may not exist yet.
-         * We don't want that to prevent the deposit account
-         * page from loading.
-         */
         if (historyError?.response?.status !== 404) {
           console.error(
             'Deposit history error:',
@@ -130,11 +125,113 @@ const Deposit: React.FC = () => {
     loadDepositInformation();
   }, []);
 
+  const handleCreateDeposit = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    setError('');
+    setMessage('');
+
+    const token = localStorage.getItem('zenimonies_token');
+
+    if (!token) {
+      setError(
+        'Your session has expired. Please log in again.'
+      );
+      return;
+    }
+
+    const numericAmount = Number(amount);
+
+    if (
+      !Number.isFinite(numericAmount) ||
+      numericAmount <= 0
+    ) {
+      setError(
+        'Please enter a valid deposit amount.'
+      );
+      return;
+    }
+
+    if (numericAmount > 100000000) {
+      setError(
+        'Deposit amount is too large.'
+      );
+      return;
+    }
+
+    if (
+      method !== 'bank_transfer' &&
+      method !== 'card'
+    ) {
+      setError(
+        'Please select a valid payment method.'
+      );
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const response = await axios.post(
+        `${API_URL}/api/deposits`,
+        {
+          amount: numericAmount,
+          method,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.data?.success) {
+        setMessage(
+          response.data.message ||
+            'Deposit request created successfully.'
+        );
+
+        setAmount('');
+
+        /*
+         * Add the newly created deposit to the top
+         * of the displayed history immediately.
+         */
+        if (response.data.deposit) {
+          setDeposits((previous) => [
+            response.data.deposit,
+            ...previous,
+          ]);
+        }
+      } else {
+        setError(
+          response.data?.message ||
+            'Unable to create deposit request.'
+        );
+      }
+    } catch (err: any) {
+      console.error(
+        'Create deposit error:',
+        err
+      );
+
+      setError(
+        err?.response?.data?.message ||
+          'Unable to create deposit request. Please try again.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const formatAmount = (
-    amount: string | number,
+    value: string | number,
     currency = 'NGN'
   ) => {
-    const numericAmount = Number(amount);
+    const numericAmount = Number(value);
 
     if (!Number.isFinite(numericAmount)) {
       return `${currency} 0.00`;
@@ -149,10 +246,13 @@ const Deposit: React.FC = () => {
 
   const formatDate = (date: string) => {
     try {
-      return new Date(date).toLocaleString('en-NG', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      });
+      return new Date(date).toLocaleString(
+        'en-NG',
+        {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }
+      );
     } catch {
       return date;
     }
@@ -212,6 +312,7 @@ const Deposit: React.FC = () => {
           ← Back to Dashboard
         </Link>
 
+        {/* MAIN DEPOSIT CARD */}
         <div
           style={{
             background: '#ffffff',
@@ -238,10 +339,11 @@ const Deposit: React.FC = () => {
               marginBottom: '28px',
             }}
           >
-            Your dedicated Zenimonies deposit account
-            will be used to fund your account.
+            Add money to your Zenimonies account
+            securely.
           </p>
 
+          {/* ERROR */}
           {error && (
             <div
               style={{
@@ -250,236 +352,375 @@ const Deposit: React.FC = () => {
                 borderRadius: '10px',
                 background: '#fee4e2',
                 color: '#b42318',
+                lineHeight: 1.5,
               }}
             >
               {error}
             </div>
           )}
 
-          {loading ? (
+          {/* SUCCESS */}
+          {message && (
             <div
               style={{
-                padding: '35px 20px',
-                textAlign: 'center',
-                color: '#667085',
+                padding: '14px',
+                marginBottom: '20px',
+                borderRadius: '10px',
+                background: '#ecfdf3',
+                color: '#027a48',
+                lineHeight: 1.5,
               }}
             >
-              Loading deposit information...
-            </div>
-          ) : depositAccount?.account_number ? (
-            <div
-              style={{
-                border: '1px solid #d0d5dd',
-                borderRadius: '14px',
-                padding: '22px',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: '12px',
-                  marginBottom: '20px',
-                }}
-              >
-                <h2
-                  style={{
-                    margin: 0,
-                    fontSize: '20px',
-                  }}
-                >
-                  Your Deposit Account
-                </h2>
-
-                <span
-                  style={{
-                    padding: '6px 10px',
-                    borderRadius: '20px',
-                    background: '#ecfdf3',
-                    color: '#027a48',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                  }}
-                >
-                  Active
-                </span>
-              </div>
-
-              <div
-                style={{
-                  display: 'grid',
-                  gap: '16px',
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      color: '#667085',
-                      fontSize: '13px',
-                      marginBottom: '5px',
-                    }}
-                  >
-                    Bank
-                  </div>
-
-                  <strong>
-                    {depositAccount.bank_name ||
-                      '—'}
-                  </strong>
-                </div>
-
-                <div>
-                  <div
-                    style={{
-                      color: '#667085',
-                      fontSize: '13px',
-                      marginBottom: '5px',
-                    }}
-                  >
-                    Account Name
-                  </div>
-
-                  <strong>
-                    {depositAccount.account_name ||
-                      '—'}
-                  </strong>
-                </div>
-
-                <div>
-                  <div
-                    style={{
-                      color: '#667085',
-                      fontSize: '13px',
-                      marginBottom: '5px',
-                    }}
-                  >
-                    Account Number
-                  </div>
-
-                  <strong
-                    style={{
-                      fontSize: '22px',
-                      letterSpacing: '1px',
-                    }}
-                  >
-                    {depositAccount.account_number}
-                  </strong>
-                </div>
-
-                <div>
-                  <div
-                    style={{
-                      color: '#667085',
-                      fontSize: '13px',
-                      marginBottom: '5px',
-                    }}
-                  >
-                    Currency
-                  </div>
-
-                  <strong>
-                    {depositAccount.currency ||
-                      'NGN'}
-                  </strong>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  marginTop: '22px',
-                  padding: '14px',
-                  borderRadius: '10px',
-                  background: '#f5f7fb',
-                  color: '#475467',
-                  lineHeight: 1.6,
-                }}
-              >
-                Transfer funds from your bank to this
-                dedicated account. Your deposit will be
-                processed after the payment provider
-                confirms the transaction.
-              </div>
-            </div>
-          ) : (
-            <div
-              style={{
-                border: '1px solid #d0d5dd',
-                borderRadius: '14px',
-                padding: '28px',
-                textAlign: 'center',
-              }}
-            >
-              <div
-                style={{
-                  width: '58px',
-                  height: '58px',
-                  borderRadius: '50%',
-                  background: '#eef4ff',
-                  color: '#0b5cff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 18px',
-                  fontSize: '28px',
-                }}
-              >
-                ₦
-              </div>
-
-              <h2
-                style={{
-                  marginTop: 0,
-                  marginBottom: '10px',
-                }}
-              >
-                Deposit Account Pending Activation
-              </h2>
-
-              <p
-                style={{
-                  color: '#667085',
-                  lineHeight: 1.7,
-                  marginBottom: '20px',
-                }}
-              >
-                Your dedicated Nigerian deposit account
-                has not been activated yet.
-              </p>
-
-              <div
-                style={{
-                  padding: '16px',
-                  borderRadius: '10px',
-                  background: '#fffaeb',
-                  color: '#7a2e0b',
-                  textAlign: 'left',
-                  lineHeight: 1.6,
-                }}
-              >
-                <strong>What happens next?</strong>
-                <br />
-                Once the approved payment provider is
-                connected to Zenimonies, your dedicated
-                deposit account details will appear here.
-              </div>
-
-              <p
-                style={{
-                  color: '#98a2b3',
-                  fontSize: '14px',
-                  marginTop: '18px',
-                }}
-              >
-                Please do not send money to any account
-                claiming to be a Zenimonies deposit account
-                until your official account details appear
-                here.
-              </p>
+              {message}
             </div>
           )}
+
+          {/* DEPOSIT REQUEST FORM */}
+          <form onSubmit={handleCreateDeposit}>
+            <label
+              htmlFor="amount"
+              style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontWeight: 600,
+              }}
+            >
+              Amount (NGN)
+            </label>
+
+            <input
+              id="amount"
+              type="number"
+              min="1"
+              step="0.01"
+              value={amount}
+              onChange={(event) =>
+                setAmount(event.target.value)
+              }
+              placeholder="Enter amount"
+              disabled={submitting}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                padding: '14px',
+                marginBottom: '20px',
+                border: '1px solid #d0d5dd',
+                borderRadius: '10px',
+                fontSize: '16px',
+                outline: 'none',
+              }}
+            />
+
+            <label
+              htmlFor="method"
+              style={{
+                display: 'block',
+                marginBottom: '8px',
+                fontWeight: 600,
+              }}
+            >
+              Payment Method
+            </label>
+
+            <select
+              id="method"
+              value={method}
+              onChange={(event) =>
+                setMethod(event.target.value)
+              }
+              disabled={submitting}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                padding: '14px',
+                marginBottom: '20px',
+                border: '1px solid #d0d5dd',
+                borderRadius: '10px',
+                background: '#ffffff',
+                fontSize: '16px',
+              }}
+            >
+              <option value="bank_transfer">
+                Bank Transfer
+              </option>
+
+              <option value="card">
+                Card
+              </option>
+            </select>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{
+                width: '100%',
+                padding: '15px',
+                border: 'none',
+                borderRadius: '10px',
+                background: '#0b5cff',
+                color: '#ffffff',
+                fontSize: '16px',
+                fontWeight: 700,
+                cursor: submitting
+                  ? 'not-allowed'
+                  : 'pointer',
+                opacity: submitting ? 0.7 : 1,
+              }}
+            >
+              {submitting
+                ? 'Processing...'
+                : 'Continue'}
+            </button>
+          </form>
+
+          {/* DEDICATED ACCOUNT */}
+          <div
+            style={{
+              marginTop: '30px',
+              paddingTop: '25px',
+              borderTop:
+                '1px solid #eaecf0',
+            }}
+          >
+            {loading ? (
+              <div
+                style={{
+                  padding: '25px 10px',
+                  textAlign: 'center',
+                  color: '#667085',
+                }}
+              >
+                Loading deposit account...
+              </div>
+            ) : depositAccount?.account_number ? (
+              <div
+                style={{
+                  border:
+                    '1px solid #d0d5dd',
+                  borderRadius: '14px',
+                  padding: '22px',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent:
+                      'space-between',
+                    alignItems: 'center',
+                    gap: '12px',
+                    marginBottom: '20px',
+                  }}
+                >
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: '20px',
+                    }}
+                  >
+                    Your Deposit Account
+                  </h2>
+
+                  <span
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '20px',
+                      background:
+                        '#ecfdf3',
+                      color: '#027a48',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Active
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gap: '16px',
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        color: '#667085',
+                        fontSize: '13px',
+                        marginBottom: '5px',
+                      }}
+                    >
+                      Bank
+                    </div>
+
+                    <strong>
+                      {depositAccount.bank_name ||
+                        '—'}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        color: '#667085',
+                        fontSize: '13px',
+                        marginBottom: '5px',
+                      }}
+                    >
+                      Account Name
+                    </div>
+
+                    <strong>
+                      {depositAccount.account_name ||
+                        '—'}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        color: '#667085',
+                        fontSize: '13px',
+                        marginBottom: '5px',
+                      }}
+                    >
+                      Account Number
+                    </div>
+
+                    <strong
+                      style={{
+                        fontSize: '22px',
+                        letterSpacing: '1px',
+                      }}
+                    >
+                      {
+                        depositAccount.account_number
+                      }
+                    </strong>
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        color: '#667085',
+                        fontSize: '13px',
+                        marginBottom: '5px',
+                      }}
+                    >
+                      Currency
+                    </div>
+
+                    <strong>
+                      {depositAccount.currency ||
+                        'NGN'}
+                    </strong>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: '22px',
+                    padding: '14px',
+                    borderRadius: '10px',
+                    background: '#f5f7fb',
+                    color: '#475467',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Transfer funds from your bank to
+                  this dedicated account. Your
+                  Zenimonies balance will only be
+                  credited after the payment provider
+                  confirms the transaction.
+                </div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  border:
+                    '1px solid #d0d5dd',
+                  borderRadius: '14px',
+                  padding: '28px',
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    width: '58px',
+                    height: '58px',
+                    borderRadius: '50%',
+                    background: '#eef4ff',
+                    color: '#0b5cff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent:
+                      'center',
+                    margin:
+                      '0 auto 18px',
+                    fontSize: '28px',
+                  }}
+                >
+                  ₦
+                </div>
+
+                <h2
+                  style={{
+                    marginTop: 0,
+                    marginBottom: '10px',
+                  }}
+                >
+                  Deposit Account Pending
+                </h2>
+
+                <p
+                  style={{
+                    color: '#667085',
+                    lineHeight: 1.7,
+                    marginBottom: '20px',
+                  }}
+                >
+                  Your dedicated Nigerian deposit
+                  account has not been activated yet.
+                </p>
+
+                <div
+                  style={{
+                    padding: '16px',
+                    borderRadius: '10px',
+                    background: '#fffaeb',
+                    color: '#7a2e0b',
+                    textAlign: 'left',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <strong>
+                    What happens next?
+                  </strong>
+                  <br />
+
+                  Once the approved payment provider
+                  is connected to Zenimonies, your
+                  dedicated deposit account details
+                  will appear here.
+                </div>
+
+                <p
+                  style={{
+                    color: '#98a2b3',
+                    fontSize: '14px',
+                    marginTop: '18px',
+                  }}
+                >
+                  Please do not send money to any
+                  account claiming to be a Zenimonies
+                  deposit account until your official
+                  account details appear here.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
+        {/* DEPOSIT HISTORY */}
         <div
           style={{
             background: '#ffffff',
@@ -513,7 +754,8 @@ const Deposit: React.FC = () => {
               style={{
                 padding: '25px',
                 textAlign: 'center',
-                border: '1px dashed #d0d5dd',
+                border:
+                  '1px dashed #d0d5dd',
                 borderRadius: '12px',
                 color: '#667085',
               }}
@@ -537,7 +779,8 @@ const Deposit: React.FC = () => {
                   <div
                     key={deposit.id}
                     style={{
-                      border: '1px solid #eaecf0',
+                      border:
+                        '1px solid #eaecf0',
                       borderRadius: '12px',
                       padding: '16px',
                     }}
@@ -579,6 +822,18 @@ const Deposit: React.FC = () => {
                       style={{
                         color: '#667085',
                         fontSize: '13px',
+                      }}
+                    >
+                      Method:{' '}
+                      {deposit.payment_method ||
+                        '—'}
+                    </div>
+
+                    <div
+                      style={{
+                        color: '#667085',
+                        fontSize: '13px',
+                        marginTop: '5px',
                       }}
                     >
                       Reference:{' '}
