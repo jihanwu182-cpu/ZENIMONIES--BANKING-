@@ -23,11 +23,9 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Routes>
 
-        {/* Authentication */}
-
         <Route
           path="/login"
-          element={<LoginPage />}
+          element={<Login />}
         />
 
         <Route
@@ -40,8 +38,6 @@ const App: React.FC = () => {
           element={<VerifyOTP />}
         />
 
-        {/* Main application */}
-
         <Route
           path="/"
           element={<Dashboard />}
@@ -49,12 +45,7 @@ const App: React.FC = () => {
 
         <Route
           path="/dashboard"
-          element={
-            <Navigate
-              to="/"
-              replace
-            />
-          }
+          element={<Navigate to="/" replace />}
         />
 
         <Route
@@ -67,8 +58,6 @@ const App: React.FC = () => {
           element={<Profile />}
         />
 
-        {/* Verification */}
-
         <Route
           path="/kyc"
           element={<KYC />}
@@ -78,8 +67,6 @@ const App: React.FC = () => {
           path="/verify-phone"
           element={<VerifyPhone />}
         />
-
-        {/* Other pages */}
 
         <Route
           path="/portfolio"
@@ -96,16 +83,9 @@ const App: React.FC = () => {
           element={<Market />}
         />
 
-        {/* Fallback */}
-
         <Route
           path="*"
-          element={
-            <Navigate
-              to="/"
-              replace
-            />
-          }
+          element={<Navigate to="/" replace />}
         />
 
       </Routes>
