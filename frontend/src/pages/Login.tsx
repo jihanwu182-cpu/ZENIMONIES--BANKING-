@@ -9,15 +9,20 @@ const Login: React.FC = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
     event.preventDefault();
 
     setError('');
 
-    if (!email || !password) {
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail || !password) {
       setError('Email and password are required.');
       return;
     }
@@ -25,27 +30,89 @@ const Login: React.FC = () => {
     try {
       setLoading(true);
 
-      const response = await axios.post(`${API_URL}/api/auth/login`, {
-        email: email.trim().toLowerCase(),
-        password,
-      });
+      const response = await axios.post(
+        `${API_URL}/api/auth/login`,
+        {
+          email: cleanEmail,
+          password,
+        }
+      );
 
-      if (response.data?.success) {
-        localStorage.setItem('zenimonies_token', response.data.token);
+      const data = response.data;
+
+      if (!data?.success) {
+        setError(
+          data?.message || 'Login failed.'
+        );
+        return;
+      }
+
+      /*
+       * If the backend requires OTP after password
+       * authentication, send the user to OTP verification.
+       */
+      if (
+        data.requiresOtp ||
+        data.requires_otp ||
+        data.otpRequired ||
+        data.otp_required
+      ) {
+        sessionStorage.setItem(
+          'zenimonies_otp_email',
+          cleanEmail
+        );
+
+        if (data.otpToken) {
+          sessionStorage.setItem(
+            'zenimonies_otp_token',
+            data.otpToken
+          );
+        }
+
+        if (data.otp_token) {
+          sessionStorage.setItem(
+            'zenimonies_otp_token',
+            data.otp_token
+          );
+        }
+
+        navigate('/verify-otp');
+        return;
+      }
+
+      /*
+       * Compatibility with the current backend.
+       * If login still returns a normal authentication
+       * token, save it and continue to the dashboard.
+       */
+      if (data.token) {
+        localStorage.setItem(
+          'zenimonies_token',
+          data.token
+        );
+
+        localStorage.setItem(
+          'token',
+          data.token
+        );
+      }
+
+      if (data.user) {
         localStorage.setItem(
           'zenimonies_user',
-          JSON.stringify(response.data.user)
+          JSON.stringify(data.user)
         );
-        localStorage.setItem(
-          'zenimonies_accounts',
-          JSON.stringify(response.data.accounts || [])
-        );
-
-        navigate('/');
-      } else {
-        setError(response.data?.message || 'Login failed.');
       }
+
+      localStorage.setItem(
+        'zenimonies_accounts',
+        JSON.stringify(data.accounts || [])
+      );
+
+      navigate('/');
     } catch (err: any) {
+      console.error('Login error:', err);
+
       const message =
         err?.response?.data?.message ||
         'Unable to login. Please try again.';
@@ -74,7 +141,8 @@ const Login: React.FC = () => {
           background: '#ffffff',
           padding: '32px',
           borderRadius: '16px',
-          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08)',
+          boxShadow:
+            '0 8px 30px rgba(0, 0, 0, 0.08)',
         }}
       >
         <h1
@@ -82,6 +150,7 @@ const Login: React.FC = () => {
             marginTop: 0,
             marginBottom: '8px',
             textAlign: 'center',
+            color: '#172033',
           }}
         >
           Zenimonies
@@ -119,6 +188,7 @@ const Login: React.FC = () => {
               display: 'block',
               marginBottom: '6px',
               fontWeight: 600,
+              color: '#172033',
             }}
           >
             Email
@@ -128,16 +198,21 @@ const Login: React.FC = () => {
             id="email"
             type="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) =>
+              setEmail(event.target.value)
+            }
             placeholder="Enter your email"
             autoComplete="email"
+            disabled={loading}
             style={{
+              boxSizing: 'border-box',
               width: '100%',
               padding: '12px',
               marginBottom: '18px',
               border: '1px solid #d0d5dd',
               borderRadius: '8px',
               outline: 'none',
+              fontSize: '15px',
             }}
           />
 
@@ -147,6 +222,7 @@ const Login: React.FC = () => {
               display: 'block',
               marginBottom: '6px',
               fontWeight: 600,
+              color: '#172033',
             }}
           >
             Password
@@ -156,16 +232,21 @@ const Login: React.FC = () => {
             id="password"
             type="password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) =>
+              setPassword(event.target.value)
+            }
             placeholder="Enter your password"
             autoComplete="current-password"
+            disabled={loading}
             style={{
+              boxSizing: 'border-box',
               width: '100%',
               padding: '12px',
               marginBottom: '22px',
               border: '1px solid #d0d5dd',
               borderRadius: '8px',
               outline: 'none',
+              fontSize: '15px',
             }}
           />
 
@@ -180,11 +261,16 @@ const Login: React.FC = () => {
               background: '#0b5cff',
               color: '#ffffff',
               fontWeight: 600,
-              cursor: loading ? 'not-allowed' : 'pointer',
+              fontSize: '15px',
+              cursor: loading
+                ? 'not-allowed'
+                : 'pointer',
               opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading
+              ? 'Signing in...'
+              : 'Sign In'}
           </button>
         </form>
 
@@ -201,6 +287,7 @@ const Login: React.FC = () => {
             style={{
               color: '#0b5cff',
               fontWeight: 600,
+              textDecoration: 'none',
             }}
           >
             Create one
