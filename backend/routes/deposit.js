@@ -5,6 +5,10 @@ const {
 } = require('../controllers/depositController');
 
 const {
+  getDepositAccount,
+} = require('../controllers/depositAccountController');
+
+const {
   authenticateToken,
 } = require('../utils/authMiddleware');
 
@@ -17,6 +21,13 @@ router.get('/', (req, res) => {
     message: 'Deposit route is working',
   });
 });
+
+// Get the logged-in user's dedicated deposit account
+router.get(
+  '/account',
+  authenticateToken,
+  getDepositAccount
+);
 
 // Create a deposit request
 router.post(
