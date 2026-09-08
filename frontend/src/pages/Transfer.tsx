@@ -4,8 +4,58 @@ import axios from 'axios';
 
 const API_URL = 'https://zenimonies-banking.onrender.com';
 
+interface Bank {
+  name: string;
+  code: string;
+}
+
+const NIGERIAN_BANKS: Bank[] = [
+  { name: '9 Payment Service Bank', code: '120001' },
+  { name: 'Access Bank', code: '000014' },
+  { name: 'Airtel Smartcash PSB', code: '120004' },
+  { name: 'ALAT by Wema', code: '035A' },
+  { name: 'Carbon', code: '565' },
+  { name: 'Citibank Nigeria', code: '023' },
+  { name: 'Coronation Merchant Bank', code: '559' },
+  { name: 'Ecobank Nigeria', code: '050' },
+  { name: 'Eyowo', code: '50126' },
+  { name: 'FCMB', code: '214' },
+  { name: 'Fidelity Bank', code: '070' },
+  { name: 'First Bank of Nigeria', code: '011' },
+  { name: 'Globus Bank', code: '103' },
+  { name: 'GTBank', code: '058' },
+  { name: 'Heritage Bank', code: '030' },
+  { name: 'Jaiz Bank', code: '301' },
+  { name: 'Keystone Bank', code: '082' },
+  { name: 'Kuda Microfinance Bank', code: '090267' },
+  { name: 'Lotus Bank', code: '303' },
+  { name: 'Moniepoint Microfinance Bank', code: '090405' },
+  { name: 'Nova Bank', code: '561' },
+  { name: 'OPay', code: '999992' },
+  { name: 'Optimus Bank', code: '107' },
+  { name: 'PalmPay', code: '999991' },
+  { name: 'Parallex Bank', code: '526' },
+  { name: 'Polaris Bank', code: '076' },
+  { name: 'Premium Trust Bank', code: '105' },
+  { name: 'Providus Bank', code: '101' },
+  { name: 'Signature Bank', code: '106' },
+  { name: 'Stanbic IBTC Bank', code: '221' },
+  { name: 'Standard Chartered Bank Nigeria', code: '068' },
+  { name: 'Sterling Bank', code: '232' },
+  { name: 'SunTrust Bank', code: '100' },
+  { name: 'TAJ Bank', code: '302' },
+  { name: 'Tatum Bank', code: '102' },
+  { name: 'Titan Trust Bank', code: '102' },
+  { name: 'UBA', code: '033' },
+  { name: 'Union Bank', code: '032' },
+  { name: 'Unity Bank', code: '215' },
+  { name: 'Wema Bank', code: '035' },
+  { name: 'Zenith Bank', code: '057' },
+];
+
 const Transfer: React.FC = () => {
   const [bank, setBank] = useState('');
+  const [bankCode, setBankCode] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [amount, setAmount] = useState('');
@@ -16,33 +66,53 @@ const Transfer: React.FC = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  const handleBankChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const selectedBank = NIGERIAN_BANKS.find(
+      (item) => item.name === event.target.value
+    );
+
+    setBank(selectedBank?.name || '');
+    setBankCode(selectedBank?.code || '');
+
+    // Clear previous verification when bank changes
+    setRecipientName('');
+    setMessage('');
+    setError('');
+  };
+
   const verifyAccount = async () => {
     setError('');
     setMessage('');
 
-    if (!bank || !accountNumber) {
-      setError('Please select a bank and enter the account number.');
+    if (!bank || !bankCode) {
+      setError('Please select a bank.');
       return;
     }
 
-    if (accountNumber.length < 10) {
+    if (accountNumber.length !== 10) {
       setError('Please enter a valid 10-digit account number.');
       return;
     }
 
-    /*
-     * The backend currently does not have a bank-account
-     * verification endpoint, so we are preparing the UI here.
-     * Real verification will be connected to the approved
-     * bank-transfer provider later.
-     */
     setVerifying(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      /*
+       * The actual account-name lookup will be connected
+       * to the approved payment/bank-transfer provider.
+       *
+       * We do not invent a recipient name.
+       */
 
       setMessage(
-        'Account verification service will be connected when the bank-transfer provider is configured.'
+        'Account verification is ready for connection to the approved bank-transfer provider.'
+      );
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message ||
+          'Unable to verify this account.'
       );
     } finally {
       setVerifying(false);
@@ -59,64 +129,83 @@ const Transfer: React.FC = () => {
 
     const numericAmount = Number(amount);
 
-    if (!bank || !accountNumber || !amount) {
-      setError('Please complete all required fields.');
+    if (!bank || !bankCode) {
+      setError('Please select a bank.');
       return;
     }
 
     if (accountNumber.length !== 10) {
-      setError('Account number must contain 10 digits.');
+      setError('Account number must contain exactly 10 digits.');
       return;
     }
 
-    if (!recipientName) {
-      setError('Please verify the recipient account first.');
+    if (!recipientName.trim()) {
+      setError(
+        'Please verify the recipient account before continuing.'
+      );
       return;
     }
 
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    if (
+      !Number.isFinite(numericAmount) ||
+      numericAmount <= 0
+    ) {
       setError('Please enter a valid transfer amount.');
+      return;
+    }
+
+    if (numericAmount > 100000000) {
+      setError('Transfer amount is too large.');
       return;
     }
 
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('zenimonies_token');
+      const token = localStorage.getItem(
+        'zenimonies_token'
+      );
 
-      /*
-       * The current backend does not yet expose a transfer endpoint.
-       * This request is intentionally prepared for the endpoint we
-       * will add to the backend next.
-       */
-
-      await axios.post(
-        `${API_URL}/api/transfers/bank`,
+      const response = await axios.post(
+        `${API_URL}/api/transfers`,
         {
-          bank,
-          account_number: accountNumber,
-          recipient_name: recipientName,
+          recipient_name: recipientName.trim(),
+          recipient_account_number: accountNumber,
+          recipient_bank_name: bank,
+          recipient_bank_code: bankCode,
           amount: numericAmount,
-          description: description.trim(),
+          narration: description.trim() || null,
         },
         {
           headers: {
             Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
-      setMessage('Transfer submitted successfully.');
+      if (response.data?.success) {
+        setMessage(
+          response.data?.message ||
+            'Transfer request created successfully and is pending processing.'
+        );
 
-      setBank('');
-      setAccountNumber('');
-      setRecipientName('');
-      setAmount('');
-      setDescription('');
+        setBank('');
+        setBankCode('');
+        setAccountNumber('');
+        setRecipientName('');
+        setAmount('');
+        setDescription('');
+      } else {
+        setError(
+          response.data?.message ||
+            'Unable to create transfer request.'
+        );
+      }
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||
-          'Bank transfer is not available yet. The transfer backend needs to be connected.'
+          'Unable to create transfer request.'
       );
     } finally {
       setLoading(false);
@@ -144,6 +233,7 @@ const Transfer: React.FC = () => {
             marginBottom: '20px',
             color: '#0b5cff',
             fontWeight: 600,
+            textDecoration: 'none',
           }}
         >
           ← Back to Dashboard
@@ -154,7 +244,8 @@ const Transfer: React.FC = () => {
             background: '#ffffff',
             borderRadius: '18px',
             padding: '30px',
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08)',
+            boxShadow:
+              '0 8px 30px rgba(0, 0, 0, 0.08)',
           }}
         >
           <h1
@@ -170,9 +261,10 @@ const Transfer: React.FC = () => {
             style={{
               color: '#667085',
               marginBottom: '28px',
+              lineHeight: 1.6,
             }}
           >
-            Transfer money to another Nigerian bank account.
+            Transfer money to a Nigerian bank account securely.
           </p>
 
           {error && (
@@ -204,6 +296,8 @@ const Transfer: React.FC = () => {
           )}
 
           <form onSubmit={handleTransfer}>
+            {/* BANK */}
+
             <label
               htmlFor="bank"
               style={{
@@ -218,28 +312,32 @@ const Transfer: React.FC = () => {
             <select
               id="bank"
               value={bank}
-              onChange={(event) => setBank(event.target.value)}
+              onChange={handleBankChange}
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '13px',
                 marginBottom: '18px',
                 border: '1px solid #d0d5dd',
                 borderRadius: '8px',
                 background: '#ffffff',
+                fontSize: '16px',
               }}
             >
-              <option value="">Select bank</option>
-              <option value="Access Bank">Access Bank</option>
-              <option value="First Bank">First Bank</option>
-              <option value="GTBank">GTBank</option>
-              <option value="UBA">UBA</option>
-              <option value="Zenith Bank">Zenith Bank</option>
-              <option value="Opay">Opay</option>
-              <option value="PalmPay">PalmPay</option>
-              <option value="Kuda">Kuda</option>
-              <option value="Moniepoint">Moniepoint</option>
-              <option value="Other">Other</option>
+              <option value="">
+                Select bank
+              </option>
+
+              {NIGERIAN_BANKS.map((item) => (
+                <option
+                  key={`${item.name}-${item.code}`}
+                  value={item.name}
+                >
+                  {item.name}
+                </option>
+              ))}
             </select>
+
+            {/* ACCOUNT NUMBER */}
 
             <label
               htmlFor="accountNumber"
@@ -266,31 +364,55 @@ const Transfer: React.FC = () => {
               placeholder="Enter 10-digit account number"
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '13px',
                 marginBottom: '12px',
                 border: '1px solid #d0d5dd',
                 borderRadius: '8px',
+                fontSize: '16px',
+                boxSizing: 'border-box',
               }}
             />
+
+            {/* VERIFY */}
 
             <button
               type="button"
               onClick={verifyAccount}
-              disabled={verifying}
+              disabled={
+                verifying ||
+                !bank ||
+                accountNumber.length !== 10
+              }
               style={{
                 width: '100%',
-                padding: '11px',
-                marginBottom: '18px',
-                border: '1px solid #0b5cff',
+                padding: '12px',
+                marginBottom: '20px',
+                border:
+                  '1px solid #0b5cff',
                 borderRadius: '8px',
                 background: '#ffffff',
                 color: '#0b5cff',
                 fontWeight: 600,
-                cursor: verifying ? 'not-allowed' : 'pointer',
+                cursor:
+                  verifying ||
+                  !bank ||
+                  accountNumber.length !== 10
+                    ? 'not-allowed'
+                    : 'pointer',
+                opacity:
+                  verifying ||
+                  !bank ||
+                  accountNumber.length !== 10
+                    ? 0.6
+                    : 1,
               }}
             >
-              {verifying ? 'Checking...' : 'Verify Account'}
+              {verifying
+                ? 'Checking...'
+                : 'Verify Account'}
             </button>
+
+            {/* RECIPIENT */}
 
             <label
               htmlFor="recipientName"
@@ -313,12 +435,16 @@ const Transfer: React.FC = () => {
               placeholder="Verified recipient name"
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '13px',
                 marginBottom: '18px',
                 border: '1px solid #d0d5dd',
                 borderRadius: '8px',
+                fontSize: '16px',
+                boxSizing: 'border-box',
               }}
             />
+
+            {/* AMOUNT */}
 
             <label
               htmlFor="amount"
@@ -337,16 +463,22 @@ const Transfer: React.FC = () => {
               min="1"
               step="0.01"
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(event) =>
+                setAmount(event.target.value)
+              }
               placeholder="Enter amount"
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '13px',
                 marginBottom: '18px',
                 border: '1px solid #d0d5dd',
                 borderRadius: '8px',
+                fontSize: '16px',
+                boxSizing: 'border-box',
               }}
             />
+
+            {/* DESCRIPTION */}
 
             <label
               htmlFor="description"
@@ -370,13 +502,17 @@ const Transfer: React.FC = () => {
               maxLength={200}
               style={{
                 width: '100%',
-                padding: '12px',
+                padding: '13px',
                 marginBottom: '22px',
                 border: '1px solid #d0d5dd',
                 borderRadius: '8px',
                 resize: 'vertical',
+                fontSize: '16px',
+                boxSizing: 'border-box',
               }}
             />
+
+            {/* SUBMIT */}
 
             <button
               type="submit"
@@ -389,11 +525,16 @@ const Transfer: React.FC = () => {
                 background: '#0b5cff',
                 color: '#ffffff',
                 fontWeight: 600,
-                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: '16px',
+                cursor: loading
+                  ? 'not-allowed'
+                  : 'pointer',
                 opacity: loading ? 0.7 : 1,
               }}
             >
-              {loading ? 'Processing...' : 'Continue Transfer'}
+              {loading
+                ? 'Processing...'
+                : 'Continue Transfer'}
             </button>
           </form>
         </div>
