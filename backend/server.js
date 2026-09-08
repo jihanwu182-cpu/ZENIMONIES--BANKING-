@@ -8,11 +8,19 @@ const database = require('./config/database');
 const pool = database;
 const { initializeDatabase } = database;
 
+// ============================================================
+// ROUTES
+// ============================================================
+
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
 const transferRoutes = require('./routes/transfer');
 const depositRoutes = require('./routes/deposit');
 const bankRoutes = require('./routes/bankRoutes');
+
+// ============================================================
+// APP
+// ============================================================
 
 const app = express();
 
@@ -41,7 +49,7 @@ app.use('/api/transfers', transferRoutes);
 // Deposits
 app.use('/api/deposits', depositRoutes);
 
-// Nigerian banks
+// Banks
 app.use('/api/banks', bankRoutes);
 
 // ============================================================
