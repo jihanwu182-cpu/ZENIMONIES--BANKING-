@@ -1,22 +1,81 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 
 const API_URL = 'https://zenimonies-banking.onrender.com';
+
+type LoginPayload = {
+  success?: boolean;
+  message?: string;
+  token?: string;
+  accessToken?: string;
+  access_token?: string;
+  user?: unknown;
+  accounts?: unknown;
+  requiresOtp?: boolean;
+  requires_otp?: boolean;
+  otpRequired?: boolean;
+  otp_required?: boolean;
+  otpToken?: string;
+  otp_token?: string;
+  data?: LoginPayload;
+};
+
+function unwrapLoginPayload(raw: LoginPayload): LoginPayload {
+  if (raw?.data && typeof raw.data === 'object') {
+    return { ...raw, ...raw.data };
+  }
+  return raw ?? {};
+}
+
+function getLoginErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const axiosErr = err as AxiosError<LoginPayload>;
+    const status = axiosErr.response?.status;
+    const serverMessage = axiosErr.response?.data?.message;
+
+    if (serverMessage) {
+      return serverMessage;
+    }
+
+    if (axiosErr.code === 'ECONNABORTED') {
+      return 'The server took too long to respond. Please try again.';
+    }
+
+    if (!axiosErr.response) {
+      return 'Unable to reach the server. Check your connection and try again.';
+    }
+
+    if (status === 503) {
+      return 'The server is waking up. Wait a few seconds and try again.';
+    }
+
+    if (status === 429) {
+      return 'Too many login attempts. Please wait a moment and try again.';
+    }
+
+    if (status === 401 || status === 403) {
+      return 'Invalid email or password.';
+    }
+
+    return 'Unable to login. Please try again.';
+  }
+
+  return 'Unable to login. Please try again.';
+}
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (
     event: React.FormEvent<HTMLFormElement>
   ) => {
-    event.preventDefault(); 
+    event.preventDefault();
 
     setError('');
 
@@ -30,72 +89,56 @@ const Login: React.FC = () => {
     try {
       setLoading(true);
 
-      const response = await axios.post(
+      const response = await axios.post<LoginPayload>(
         `${API_URL}/api/auth/login`,
         {
           email: cleanEmail,
           password,
+        },
+        {
+          timeout: 45000,
+          headers: {
+            'Content-Type': 'application/json',
+          },
         }
       );
 
-      const data = response.data;
+      const data = unwrapLoginPayload(response.data);
 
-      if (!data?.success) {
-        setError(
-          data?.message || 'Login failed.'
-        );
+      const token =
+        data.token || data.accessToken || data.access_token;
+
+      const requiresOtp = Boolean(
+        data.requiresOtp ||
+          data.requires_otp ||
+          data.otpRequired ||
+          data.otp_required
+      );
+
+      if (data.success === false && !token && !requiresOtp) {
+        setError(data.message || 'Login failed.');
         return;
       }
 
-      /*
-       * If the backend requires OTP after password
-       * authentication, send the user to OTP verification.
-       */
-      if (
-        data.requiresOtp ||
-        data.requires_otp ||
-        data.otpRequired ||
-        data.otp_required
-      ) {
-        sessionStorage.setItem(
-          'zenimonies_otp_email',
-          cleanEmail
-        );
+      if (requiresOtp) {
+        sessionStorage.setItem('zenimonies_otp_email', cleanEmail);
 
-        if (data.otpToken) {
-          sessionStorage.setItem(
-            'zenimonies_otp_token',
-            data.otpToken
-          );
-        }
-
-        if (data.otp_token) {
-          sessionStorage.setItem(
-            'zenimonies_otp_token',
-            data.otp_token
-          );
+        const otpToken = data.otpToken || data.otp_token;
+        if (otpToken) {
+          sessionStorage.setItem('zenimonies_otp_token', otpToken);
         }
 
         navigate('/verify-otp');
         return;
       }
 
-      /*
-       * Compatibility with the current backend.
-       * If login still returns a normal authentication
-       * token, save it and continue to the dashboard.
-       */
-      if (data.token) {
-        localStorage.setItem(
-          'zenimonies_token',
-          data.token
-        );
-
-        localStorage.setItem(
-          'token',
-          data.token
-        );
+      if (!token) {
+        setError(data.message || 'Login failed.');
+        return;
       }
+
+      localStorage.setItem('zenimonies_token', token);
+      localStorage.setItem('token', token);
 
       if (data.user) {
         localStorage.setItem(
@@ -110,14 +153,9 @@ const Login: React.FC = () => {
       );
 
       navigate('/');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Login error:', err);
-
-      const message =
-        err?.response?.data?.message ||
-        'Unable to login. Please try again.';
-
-      setError(message);
+      setError(getLoginErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -141,8 +179,7 @@ const Login: React.FC = () => {
           background: '#ffffff',
           padding: '32px',
           borderRadius: '16px',
-          boxShadow:
-            '0 8px 30px rgba(0, 0, 0, 0.08)',
+          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08)',
         }}
       >
         <h1
@@ -168,6 +205,7 @@ const Login: React.FC = () => {
 
         {error && (
           <div
+            role="alert"
             style={{
               padding: '12px',
               marginBottom: '18px',
@@ -181,7 +219,7 @@ const Login: React.FC = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <label
             htmlFor="email"
             style={{
@@ -198,9 +236,7 @@ const Login: React.FC = () => {
             id="email"
             type="email"
             value={email}
-            onChange={(event) =>
-              setEmail(event.target.value)
-            }
+            onChange={(event) => setEmail(event.target.value)}
             placeholder="Enter your email"
             autoComplete="email"
             disabled={loading}
@@ -232,9 +268,7 @@ const Login: React.FC = () => {
             id="password"
             type="password"
             value={password}
-            onChange={(event) =>
-              setPassword(event.target.value)
-            }
+            onChange={(event) => setPassword(event.target.value)}
             placeholder="Enter your password"
             autoComplete="current-password"
             disabled={loading}
@@ -262,15 +296,11 @@ const Login: React.FC = () => {
               color: '#ffffff',
               fontWeight: 600,
               fontSize: '15px',
-              cursor: loading
-                ? 'not-allowed'
-                : 'pointer',
+              cursor: loading ? 'not-allowed' : 'pointer',
               opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading
-              ? 'Signing in...'
-              : 'Sign In'}
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
@@ -281,7 +311,7 @@ const Login: React.FC = () => {
             color: '#667085',
           }}
         >
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <Link
             to="/register"
             style={{
