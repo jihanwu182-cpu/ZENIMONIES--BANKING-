@@ -8,20 +8,22 @@ const pool = require('../config/database');
  * ============================================================
  */
 
-const verifyPaystackSignature = (req) => {
-  const secretKey =
-    process.env.PAYSTACK_SECRET_KEY;
 
-  const signature =
-    req.headers['x-paystack-signature'];
+const verifyPaystackSignature = (req) => {
+  const secretKey = process.env.PAYSTACK_SECRET_KEY;
+  const signature = req.headers['x-paystack-signature'];
 
   if (!secretKey || !signature) {
     return false;
   }
 
+  const rawBody = Buffer.isBuffer(req.body)
+    ? req.body
+    : Buffer.from(JSON.stringify(req.body));
+
   const hash = crypto
     .createHmac('sha512', secretKey)
-    .update(JSON.stringify(req.body))
+    .update(rawBody)
     .digest('hex');
 
   try {
@@ -33,7 +35,6 @@ const verifyPaystackSignature = (req) => {
     return false;
   }
 };
-
 
 /*
  * ============================================================
@@ -61,13 +62,9 @@ const handlePaystackWebhook = async (
       });
     }
 
-    const event = req.body;
-
-    console.log(
-      'Paystack webhook received:',
-      event?.event
-    );
-
+    const event = Buffer.isBuffer(req.body)
+  ? JSON.parse(req.body.toString('utf8'))
+  : req.body;
     /*
      * --------------------------------------------------------
      * TRANSFER SUCCESS
