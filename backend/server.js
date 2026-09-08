@@ -40,22 +40,11 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 
-/*
- * JSON parser
- */
 app.use(express.json());
 
 // ============================================================
 // PAYSTACK WEBHOOK
 // ============================================================
-
-/*
- * Paystack sends webhook events to this endpoint.
- *
- * The webhook controller verifies the
- * x-paystack-signature header before processing
- * any event.
- */
 
 app.post(
   '/api/paystack/webhook',
@@ -66,19 +55,14 @@ app.post(
 // API ROUTES
 // ============================================================
 
-// Authentication
 app.use('/api/auth', authRoutes);
 
-// Account
 app.use('/api/account', accountRoutes);
 
-// Bank transfers
 app.use('/api/transfers', transferRoutes);
 
-// Deposits
 app.use('/api/deposits', depositRoutes);
 
-// Banks
 app.use('/api/banks', bankRoutes);
 
 // ============================================================
@@ -88,8 +72,7 @@ app.use('/api/banks', bankRoutes);
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message:
-      'Zenimonies Banking API is running',
+    message: 'Zenimonies Banking API is running',
   });
 });
 
@@ -100,8 +83,7 @@ app.get('/', (req, res) => {
 app.get('/api', (req, res) => {
   res.json({
     success: true,
-    message:
-      'Zenimonies Banking API is running',
+    message: 'Zenimonies Banking API is running',
   });
 });
 
@@ -114,8 +96,7 @@ app.get('/health.json', (req, res) => {
     success: true,
     status: 'ok',
     platform: 'Zenimonies',
-    timestamp:
-      new Date().toISOString(),
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -181,4 +162,42 @@ app.use((req, res) => {
 app.use(
   (err, req, res, next) => {
     console.error(
-      'Server
+      'Server error:',
+      err
+    );
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+);
+
+// ============================================================
+// START SERVER
+// ============================================================
+
+const startServer = async () => {
+  try {
+    await initializeDatabase();
+
+    app.listen(PORT, () => {
+      console.log(
+        `Zenimonies Banking API running on port ${PORT}`
+      );
+
+      console.log(
+        'Paystack webhook endpoint: /api/paystack/webhook'
+      );
+    });
+  } catch (error) {
+    console.error(
+      'Unable to start Zenimonies Banking API:',
+      error
+    );
+
+    process.exit(1);
+  }
+};
+
+startServer();
