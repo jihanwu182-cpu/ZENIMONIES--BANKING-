@@ -6,7 +6,7 @@ import {
   Navigate,
 } from 'react-router-dom';
 
-import Login from './pages/Login';
+import LoginPage from './pages/LoginPage';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Portfolio from './pages/Portfolio';
@@ -16,19 +16,18 @@ import Wallet from './pages/Wallet';
 import Profile from './pages/Profile';
 import KYC from './pages/KYC';
 import VerifyPhone from './pages/VerifyPhone';
+import VerifyOTP from './pages/VerifyOTP';
 
 const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* =====================================================
-            AUTHENTICATION
-        ===================================================== */}
+        {/* Authentication */}
 
         <Route
           path="/login"
-          element={<Login />}
+          element={<LoginPage />}
         />
 
         <Route
@@ -36,10 +35,12 @@ const App: React.FC = () => {
           element={<Register />}
         />
 
+        <Route
+          path="/verify-otp"
+          element={<VerifyOTP />}
+        />
 
-        {/* =====================================================
-            MAIN APPLICATION
-        ===================================================== */}
+        {/* Main application */}
 
         <Route
           path="/"
@@ -48,7 +49,12 @@ const App: React.FC = () => {
 
         <Route
           path="/dashboard"
-          element={<Navigate to="/" replace />}
+          element={
+            <Navigate
+              to="/"
+              replace
+            />
+          }
         />
 
         <Route
@@ -61,10 +67,7 @@ const App: React.FC = () => {
           element={<Profile />}
         />
 
-
-        {/* =====================================================
-            KYC / VERIFICATION
-        ===================================================== */}
+        {/* Verification */}
 
         <Route
           path="/kyc"
@@ -76,10 +79,7 @@ const App: React.FC = () => {
           element={<VerifyPhone />}
         />
 
-
-        {/* =====================================================
-            OTHER APPLICATION PAGES
-        ===================================================== */}
+        {/* Other pages */}
 
         <Route
           path="/portfolio"
@@ -96,14 +96,16 @@ const App: React.FC = () => {
           element={<Market />}
         />
 
-
-        {/* =====================================================
-            FALLBACK
-        ===================================================== */}
+        {/* Fallback */}
 
         <Route
           path="*"
-          element={<Navigate to="/" replace />}
+          element={
+            <Navigate
+              to="/"
+              replace
+            />
+          }
         />
 
       </Routes>
