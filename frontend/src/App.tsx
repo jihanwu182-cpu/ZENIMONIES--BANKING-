@@ -6,40 +6,106 @@ import {
   Navigate,
 } from 'react-router-dom';
 
-import Login from './pages/Login.tsx';
-import Register from './pages/Register.tsx';
-import Dashboard from './pages/Dashboard.tsx';
-import Transfer from './pages/Transfer.tsx';
-import Deposit from './pages/Deposit.tsx';
-import Withdraw from './pages/Withdraw.tsx';
-import Transactions from './pages/Transactions.tsx';
-import Airtime from './pages/Airtime.tsx';
-import Data from './pages/Data.tsx';
-import Bills from './pages/Bills.tsx';
-import Profile from './pages/Profile.tsx';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import Portfolio from './pages/Portfolio';
+import Trading from './pages/Trading';
+import Market from './pages/Market';
+import Wallet from './pages/Wallet';
+import Profile from './pages/Profile';
+import KYC from './pages/KYC';
+import VerifyPhone from './pages/VerifyPhone';
 
 const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
 
-        <Route path="/" element={<Dashboard />} />
+        {/* =====================================================
+            AUTHENTICATION
+        ===================================================== */}
 
-        <Route path="/transfer" element={<Transfer />} />
-        <Route path="/deposit" element={<Deposit />} />
-        <Route path="/withdraw" element={<Withdraw />} />
-        <Route path="/transactions" element={<Transactions />} />
-        <Route path="/airtime" element={<Airtime />} />
-        <Route path="/data" element={<Data />} />
-        <Route path="/bills" element={<Bills />} />
-        <Route path="/profile" element={<Profile />} />
+        <Route
+          path="/login"
+          element={<Login />}
+        />
+
+        <Route
+          path="/register"
+          element={<Register />}
+        />
+
+
+        {/* =====================================================
+            MAIN APPLICATION
+        ===================================================== */}
+
+        <Route
+          path="/"
+          element={<Dashboard />}
+        />
+
+        <Route
+          path="/dashboard"
+          element={<Navigate to="/" replace />}
+        />
+
+        <Route
+          path="/wallet"
+          element={<Wallet />}
+        />
+
+        <Route
+          path="/profile"
+          element={<Profile />}
+        />
+
+
+        {/* =====================================================
+            KYC / VERIFICATION
+        ===================================================== */}
+
+        <Route
+          path="/kyc"
+          element={<KYC />}
+        />
+
+        <Route
+          path="/verify-phone"
+          element={<VerifyPhone />}
+        />
+
+
+        {/* =====================================================
+            OTHER APPLICATION PAGES
+        ===================================================== */}
+
+        <Route
+          path="/portfolio"
+          element={<Portfolio />}
+        />
+
+        <Route
+          path="/trading"
+          element={<Trading />}
+        />
+
+        <Route
+          path="/market"
+          element={<Market />}
+        />
+
+
+        {/* =====================================================
+            FALLBACK
+        ===================================================== */}
 
         <Route
           path="*"
           element={<Navigate to="/" replace />}
         />
+
       </Routes>
     </BrowserRouter>
   );
