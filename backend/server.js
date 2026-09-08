@@ -15,6 +15,7 @@ const { initializeDatabase } = database;
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
 const transferRoutes = require('./routes/transfer');
+const internalTransferRoutes = require('./routes/internalTransfer');
 const depositRoutes = require('./routes/deposit');
 const bankRoutes = require('./routes/bankRoutes');
 
@@ -60,6 +61,12 @@ app.use('/api/auth', authRoutes);
 app.use('/api/account', accountRoutes);
 
 app.use('/api/transfers', transferRoutes);
+
+// Zenimonies-to-Zenimonies transfers
+app.use(
+  '/api/internal-transfers',
+  internalTransferRoutes
+);
 
 app.use('/api/deposits', depositRoutes);
 
@@ -188,6 +195,10 @@ const startServer = async () => {
 
       console.log(
         'Paystack webhook endpoint: /api/paystack/webhook'
+      );
+
+      console.log(
+        'Zenimonies internal transfer endpoint: /api/internal-transfers'
       );
     });
   } catch (error) {
