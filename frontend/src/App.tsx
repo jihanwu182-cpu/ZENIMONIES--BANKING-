@@ -9,10 +9,6 @@ import {
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import Portfolio from './pages/Portfolio';
-import Trading from './pages/Trading';
-import Market from './pages/Market';
-import Wallet from './pages/Wallet';
 import Profile from './pages/Profile';
 import KYC from './pages/KYC';
 import VerifyPhone from './pages/VerifyPhone';
