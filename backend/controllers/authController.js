@@ -7,6 +7,7 @@ const { generateAccountNumber } = require('../utils/accountNumber');
 
 // ============================================================
 // REGISTER
+// POST /api/auth/register
 // ============================================================
 
 const register = async (req, res) => {
@@ -18,7 +19,11 @@ const register = async (req, res) => {
       email,
       phone,
       password,
-    } = req.body;
+    } = req.body || {};
+
+    // --------------------------------------------------------
+    // VALIDATION
+    // --------------------------------------------------------
 
     if (
       !full_name ||
@@ -33,7 +38,42 @@ const register = async (req, res) => {
       });
     }
 
-    if (password.length < 8) {
+    const normalizedFullName =
+      String(full_name).trim();
+
+    const normalizedEmail =
+      String(email).trim().toLowerCase();
+
+    const normalizedPhone =
+      String(phone).trim();
+
+    const normalizedPassword =
+      String(password);
+
+    if (!normalizedFullName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Full name is required',
+      });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      normalizedEmail
+    )) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address',
+      });
+    }
+
+    if (!normalizedPhone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number is required',
+      });
+    }
+
+    if (normalizedPassword.length < 8) {
       return res.status(400).json({
         success: false,
         message:
@@ -41,17 +81,28 @@ const register = async (req, res) => {
       });
     }
 
-    const normalizedEmail =
-      email.trim().toLowerCase();
-
-    const normalizedPhone =
-      phone.trim();
+    // --------------------------------------------------------
+    // TRANSACTION
+    // --------------------------------------------------------
 
     await client.query('BEGIN');
 
+    // --------------------------------------------------------
+    // CHECK EXISTING USER
+    // --------------------------------------------------------
+
     const existingUser =
       await client.query(
-        'SELECT id FROM users WHERE email = $1 OR phone = $2',
+        `
+        SELECT
+          id,
+          email,
+          phone
+        FROM users
+        WHERE email = $1
+           OR phone = $2
+        LIMIT 1
+        `,
         [
           normalizedEmail,
           normalizedPhone,
@@ -61,43 +112,112 @@ const register = async (req, res) => {
     if (existingUser.rows.length > 0) {
       await client.query('ROLLBACK');
 
+      const existing =
+        existingUser.rows[0];
+
+      if (
+        existing.email ===
+        normalizedEmail
+      ) {
+        return res.status(409).json({
+          success: false,
+          message:
+            'An account with this email already exists',
+        });
+      }
+
       return res.status(409).json({
         success: false,
         message:
-          'Email or phone number is already registered',
+          'An account with this phone number already exists',
       });
     }
 
+    // --------------------------------------------------------
+    // HASH PASSWORD
+    // --------------------------------------------------------
+
     const passwordHash =
-      await bcrypt.hash(password, 12);
+      await bcrypt.hash(
+        normalizedPassword,
+        12
+      );
+
+    // --------------------------------------------------------
+    // CREATE USER
+    // --------------------------------------------------------
 
     const userResult =
       await client.query(
-        `INSERT INTO users
-          (
-            full_name,
-            email,
-            phone,
-            password_hash
-          )
-         VALUES ($1, $2, $3, $4)
-         RETURNING
+        `
+        INSERT INTO users (
+          full_name,
+          email,
+          phone,
+          password_hash,
+          role,
+          status,
+          kyc_status,
+          kyc_tier,
+          bvn_verified,
+          id_verified,
+          tier_3_verified,
+          is_verified,
+          account_limit,
+          daily_transfer_limit,
+          daily_transfer_used,
+          daily_transfer_reset_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          'user',
+          'active',
+          'pending',
+          1,
+          false,
+          false,
+          false,
+          false,
+          200000.00,
+          50000.00,
+          0.00,
+          CURRENT_TIMESTAMP
+        )
+        RETURNING
           id,
           full_name,
           email,
           phone,
           role,
+          status,
           kyc_status,
-          is_verified`,
+          kyc_tier,
+          bvn_verified,
+          id_verified,
+          tier_3_verified,
+          is_verified,
+          account_limit,
+          daily_transfer_limit,
+          daily_transfer_used,
+          created_at
+        `,
         [
-          full_name.trim(),
+          normalizedFullName,
           normalizedEmail,
           normalizedPhone,
           passwordHash,
         ]
       );
 
-    const user = userResult.rows[0];
+    const user =
+      userResult.rows[0];
+
+    // --------------------------------------------------------
+    // GENERATE UNIQUE ACCOUNT NUMBER
+    // --------------------------------------------------------
 
     let accountNumber = null;
 
@@ -111,7 +231,12 @@ const register = async (req, res) => {
 
       const existingAccount =
         await client.query(
-          'SELECT id FROM accounts WHERE account_number = $1',
+          `
+          SELECT id
+          FROM accounts
+          WHERE account_number = $1
+          LIMIT 1
+          `,
           [candidate]
         );
 
@@ -129,39 +254,119 @@ const register = async (req, res) => {
       );
     }
 
+    // --------------------------------------------------------
+    // CREATE CUSTOMER ACCOUNT
+    // --------------------------------------------------------
+
     const accountResult =
       await client.query(
-        `INSERT INTO accounts
-          (
-            user_id,
-            account_number,
-            account_type,
-            currency
-          )
-         VALUES
-          ($1, $2, 'personal', 'NGN')
-         RETURNING
+        `
+        INSERT INTO accounts (
+          user_id,
+          account_number,
+          account_type,
+          currency,
+          balance,
+          status
+        )
+        VALUES (
+          $1,
+          $2,
+          'personal',
+          'NGN',
+          0.00,
+          'active'
+        )
+        RETURNING
           id,
           account_number,
           account_type,
           currency,
           balance,
-          status`,
+          status,
+          created_at
+        `,
         [
           user.id,
           accountNumber,
         ]
       );
 
+    const account =
+      accountResult.rows[0];
+
+    // --------------------------------------------------------
+    // AUDIT LOG
+    // --------------------------------------------------------
+
+    await client.query(
+      `
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description,
+        ip_address,
+        user_agent
+      )
+      VALUES (
+        $1,
+        'account_created',
+        $2,
+        $3,
+        $4
+      )
+      `,
+      [
+        user.id,
+        'Customer account created successfully',
+        req.ip || null,
+        req.get('user-agent') || null,
+      ]
+    );
+
+    // --------------------------------------------------------
+    // COMMIT
+    // --------------------------------------------------------
+
     await client.query('COMMIT');
+
+    // --------------------------------------------------------
+    // RESPONSE
+    // --------------------------------------------------------
 
     return res.status(201).json({
       success: true,
       message:
         'Account created successfully',
-      user,
-      account:
-        accountResult.rows[0],
+
+      user: {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        status: user.status,
+        kyc_status: user.kyc_status,
+        kyc_tier: user.kyc_tier,
+        bvn_verified:
+          user.bvn_verified,
+        id_verified:
+          user.id_verified,
+        tier_3_verified:
+          user.tier_3_verified,
+        is_verified:
+          user.is_verified,
+        account_limit:
+          user.account_limit,
+        daily_transfer_limit:
+          user.daily_transfer_limit,
+        daily_transfer_used:
+          user.daily_transfer_used,
+        created_at:
+          user.created_at,
+      },
+
+      account,
     });
 
   } catch (error) {
@@ -180,6 +385,7 @@ const register = async (req, res) => {
       error
     );
 
+    // PostgreSQL unique violation
     if (
       error &&
       error.code === '23505'
@@ -194,9 +400,7 @@ const register = async (req, res) => {
     return res.status(500).json({
       success: false,
       message:
-        error && error.message
-          ? error.message
-          : 'Unable to create account',
+        'Unable to create account',
     });
 
   } finally {
@@ -207,6 +411,7 @@ const register = async (req, res) => {
 
 // ============================================================
 // LOGIN
+// POST /api/auth/login
 // ============================================================
 
 const login = async (req, res) => {
@@ -215,7 +420,7 @@ const login = async (req, res) => {
     const {
       email,
       password,
-    } = req.body;
+    } = req.body || {};
 
     if (!email || !password) {
       return res.status(400).json({
@@ -226,21 +431,41 @@ const login = async (req, res) => {
     }
 
     const normalizedEmail =
-      email.trim().toLowerCase();
+      String(email)
+        .trim()
+        .toLowerCase();
+
+    // --------------------------------------------------------
+    // FIND USER
+    // --------------------------------------------------------
 
     const userResult =
       await pool.query(
-        `SELECT
+        `
+        SELECT
           id,
           full_name,
           email,
           phone,
           password_hash,
           role,
+          status,
           kyc_status,
-          is_verified
-         FROM users
-         WHERE email = $1`,
+          kyc_tier,
+          bvn_verified,
+          id_verified,
+          tier_3_verified,
+          tier_3_method,
+          is_verified,
+          account_limit,
+          daily_transfer_limit,
+          daily_transfer_used,
+          daily_transfer_reset_at,
+          created_at
+        FROM users
+        WHERE email = $1
+        LIMIT 1
+        `,
         [normalizedEmail]
       );
 
@@ -257,9 +482,25 @@ const login = async (req, res) => {
     const user =
       userResult.rows[0];
 
+    // --------------------------------------------------------
+    // ACCOUNT STATUS
+    // --------------------------------------------------------
+
+    if (user.status !== 'active') {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Your account is not currently active',
+      });
+    }
+
+    // --------------------------------------------------------
+    // PASSWORD
+    // --------------------------------------------------------
+
     const passwordMatches =
       await bcrypt.compare(
-        password,
+        String(password),
         user.password_hash
       );
 
@@ -270,6 +511,10 @@ const login = async (req, res) => {
           'Invalid email or password',
       });
     }
+
+    // --------------------------------------------------------
+    // JWT CONFIGURATION
+    // --------------------------------------------------------
 
     if (!process.env.JWT_SECRET) {
       console.error(
@@ -283,31 +528,47 @@ const login = async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: '24h',
-      }
-    );
+    // --------------------------------------------------------
+    // CREATE TOKEN
+    // --------------------------------------------------------
+
+    const token =
+      jwt.sign(
+        {
+          userId: user.id,
+          role: user.role,
+        },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: '24h',
+        }
+      );
+
+    // --------------------------------------------------------
+    // GET ACCOUNTS
+    // --------------------------------------------------------
 
     const accountResult =
       await pool.query(
-        `SELECT
+        `
+        SELECT
           id,
           account_number,
           account_type,
           currency,
           balance,
-          status
-         FROM accounts
-         WHERE user_id = $1
-         ORDER BY created_at ASC`,
+          status,
+          created_at
+        FROM accounts
+        WHERE user_id = $1
+        ORDER BY created_at ASC
+        `,
         [user.id]
       );
+
+    // --------------------------------------------------------
+    // SAFE USER OBJECT
+    // --------------------------------------------------------
 
     const safeUser = {
       id: user.id,
@@ -315,15 +576,58 @@ const login = async (req, res) => {
       email: user.email,
       phone: user.phone,
       role: user.role,
-      kyc_status: user.kyc_status,
-      is_verified: user.is_verified,
+      status: user.status,
+
+      kyc_status:
+        user.kyc_status,
+
+      kyc_tier:
+        user.kyc_tier,
+
+      bvn_verified:
+        user.bvn_verified,
+
+      id_verified:
+        user.id_verified,
+
+      tier_3_verified:
+        user.tier_3_verified,
+
+      tier_3_method:
+        user.tier_3_method,
+
+      is_verified:
+        user.is_verified,
+
+      account_limit:
+        user.account_limit,
+
+      daily_transfer_limit:
+        user.daily_transfer_limit,
+
+      daily_transfer_used:
+        user.daily_transfer_used,
+
+      daily_transfer_reset_at:
+        user.daily_transfer_reset_at,
+
+      created_at:
+        user.created_at,
     };
+
+    // --------------------------------------------------------
+    // RESPONSE
+    // --------------------------------------------------------
 
     return res.status(200).json({
       success: true,
-      message: 'Login successful',
+      message:
+        'Login successful',
+
       token,
+
       user: safeUser,
+
       accounts:
         accountResult.rows,
     });
@@ -337,26 +641,41 @@ const login = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: 'Unable to login',
+      message:
+        'Unable to login',
     });
   }
 };
 
 
 // ============================================================
-// GET CURRENT USER PROFILE
+// GET CURRENT USER
 // GET /api/auth/me
 // ============================================================
 
 const getMe = async (req, res) => {
   try {
 
-    // Our middleware stores the ID here.
-    const userId = req.user.id;
+    const userId =
+      req.user &&
+      req.user.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message:
+          'Authentication required',
+      });
+    }
+
+    // --------------------------------------------------------
+    // USER
+    // --------------------------------------------------------
 
     const userResult =
       await pool.query(
-        `SELECT
+        `
+        SELECT
           id,
           full_name,
           email,
@@ -364,10 +683,22 @@ const getMe = async (req, res) => {
           role,
           status,
           kyc_status,
+          kyc_tier,
+          bvn_verified,
+          id_verified,
+          tier_3_verified,
+          tier_3_method,
           is_verified,
-          created_at
-         FROM users
-         WHERE id = $1`,
+          account_limit,
+          daily_transfer_limit,
+          daily_transfer_used,
+          daily_transfer_reset_at,
+          created_at,
+          updated_at
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+        `,
         [userId]
       );
 
@@ -376,31 +707,44 @@ const getMe = async (req, res) => {
     ) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message:
+          'User not found',
       });
     }
 
     const user =
       userResult.rows[0];
 
+    // --------------------------------------------------------
+    // ACCOUNT
+    // --------------------------------------------------------
+
     const accountResult =
       await pool.query(
-        `SELECT
+        `
+        SELECT
           id,
           account_number,
           account_type,
           currency,
           balance,
           status,
-          created_at
-         FROM accounts
-         WHERE user_id = $1
-         ORDER BY created_at ASC`,
+          created_at,
+          updated_at
+        FROM accounts
+        WHERE user_id = $1
+        ORDER BY created_at ASC
+        `,
         [userId]
       );
 
     const account =
-      accountResult.rows[0] || null;
+      accountResult.rows[0] ||
+      null;
+
+    // --------------------------------------------------------
+    // RESPONSE
+    // --------------------------------------------------------
 
     return res.status(200).json({
       success: true,
@@ -408,23 +752,62 @@ const getMe = async (req, res) => {
       user: {
         id: user.id,
 
-        name: user.full_name,
-        full_name: user.full_name,
+        name:
+          user.full_name,
 
-        email: user.email,
-        phone: user.phone,
+        full_name:
+          user.full_name,
 
-        role: user.role,
-        status: user.status,
+        email:
+          user.email,
+
+        phone:
+          user.phone,
+
+        role:
+          user.role,
+
+        status:
+          user.status,
 
         kyc_status:
           user.kyc_status,
 
+        kyc_tier:
+          user.kyc_tier,
+
+        bvn_verified:
+          user.bvn_verified,
+
+        id_verified:
+          user.id_verified,
+
+        tier_3_verified:
+          user.tier_3_verified,
+
+        tier_3_method:
+          user.tier_3_method,
+
         is_verified:
           user.is_verified,
 
+        account_limit:
+          user.account_limit,
+
+        daily_transfer_limit:
+          user.daily_transfer_limit,
+
+        daily_transfer_used:
+          user.daily_transfer_used,
+
+        daily_transfer_reset_at:
+          user.daily_transfer_reset_at,
+
         created_at:
           user.created_at,
+
+        updated_at:
+          user.updated_at,
 
         account_number:
           account
@@ -456,7 +839,8 @@ const getMe = async (req, res) => {
       },
 
       account,
-
+      accounts:
+        accountResult.rows,
     });
 
   } catch (error) {
