@@ -19,6 +19,14 @@ const depositRoutes = require('./routes/deposit');
 const bankRoutes = require('./routes/bankRoutes');
 
 // ============================================================
+// PAYSTACK WEBHOOK
+// ============================================================
+
+const {
+  handlePaystackWebhook,
+} = require('./controllers/paystackWebhookController');
+
+// ============================================================
 // APP
 // ============================================================
 
@@ -31,7 +39,28 @@ const PORT = process.env.PORT || 5000;
 // ============================================================
 
 app.use(cors());
+
+/*
+ * JSON parser
+ */
 app.use(express.json());
+
+// ============================================================
+// PAYSTACK WEBHOOK
+// ============================================================
+
+/*
+ * Paystack sends webhook events to this endpoint.
+ *
+ * The webhook controller verifies the
+ * x-paystack-signature header before processing
+ * any event.
+ */
+
+app.post(
+  '/api/paystack/webhook',
+  handlePaystackWebhook
+);
 
 // ============================================================
 // API ROUTES
@@ -59,7 +88,8 @@ app.use('/api/banks', bankRoutes);
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Zenimonies Banking API is running',
+    message:
+      'Zenimonies Banking API is running',
   });
 });
 
@@ -70,7 +100,8 @@ app.get('/', (req, res) => {
 app.get('/api', (req, res) => {
   res.json({
     success: true,
-    message: 'Zenimonies Banking API is running',
+    message:
+      'Zenimonies Banking API is running',
   });
 });
 
@@ -83,7 +114,8 @@ app.get('/health.json', (req, res) => {
     success: true,
     status: 'ok',
     platform: 'Zenimonies',
-    timestamp: new Date().toISOString(),
+    timestamp:
+      new Date().toISOString(),
   });
 });
 
@@ -102,29 +134,33 @@ app.get('/api/health', (req, res) => {
 // DATABASE HEALTH
 // ============================================================
 
-app.get('/api/health/database', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT NOW()');
+app.get(
+  '/api/health/database',
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query('SELECT NOW()');
 
-    res.json({
-      success: true,
-      status: 'healthy',
-      database: 'connected',
-      time: result.rows[0].now,
-    });
-  } catch (error) {
-    console.error(
-      'Database health check failed:',
-      error
-    );
+      res.json({
+        success: true,
+        status: 'healthy',
+        database: 'connected',
+        time: result.rows[0].now,
+      });
+    } catch (error) {
+      console.error(
+        'Database health check failed:',
+        error
+      );
 
-    res.status(500).json({
-      success: false,
-      status: 'unhealthy',
-      database: 'disconnected',
-    });
+      res.status(500).json({
+        success: false,
+        status: 'unhealthy',
+        database: 'disconnected',
+      });
+    }
   }
-});
+);
 
 // ============================================================
 // 404 HANDLER
@@ -142,39 +178,7 @@ app.use((req, res) => {
 // GLOBAL ERROR HANDLER
 // ============================================================
 
-app.use((err, req, res, next) => {
-  console.error(
-    'Server error:',
-    err
-  );
-
-  res.status(500).json({
-    success: false,
-    message: 'Internal server error',
-  });
-});
-
-// ============================================================
-// START SERVER
-// ============================================================
-
-const startServer = async () => {
-  try {
-    await initializeDatabase();
-
-    app.listen(PORT, () => {
-      console.log(
-        `Zenimonies Banking API running on port ${PORT}`
-      );
-    });
-  } catch (error) {
+app.use(
+  (err, req, res, next) => {
     console.error(
-      'Unable to start Zenimonies Banking API:',
-      error
-    );
-
-    process.exit(1);
-  }
-};
-
-startServer();
+      'Server
