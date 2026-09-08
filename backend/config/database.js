@@ -19,15 +19,22 @@ pool.on('error', (err) => {
 });
 
 const initializeDatabase = async () => {
+  // schema.sql is inside backend/database/
+  // database.js is inside backend/config/
   const schemaPath = path.join(
     __dirname,
-    const schemaPath = path.join(
-  __dirname,
-  '../database/schema.sql'
+    '../database/schema.sql'
   );
 
   try {
     console.log('Initializing database...');
+    console.log(`Schema path: ${schemaPath}`);
+
+    if (!fs.existsSync(schemaPath)) {
+      throw new Error(
+        `Schema file not found at: ${schemaPath}`
+      );
+    }
 
     const schema = fs.readFileSync(
       schemaPath,
