@@ -16,7 +16,6 @@ const createDeposit = async (req, res) => {
 
     const { amount, method } = req.body;
 
-    // Validate required fields
     if (
       amount === undefined ||
       amount === null ||
@@ -31,7 +30,6 @@ const createDeposit = async (req, res) => {
 
     const depositAmount = Number(amount);
 
-    // Validate amount
     if (
       !Number.isFinite(depositAmount) ||
       depositAmount <= 0
@@ -43,7 +41,6 @@ const createDeposit = async (req, res) => {
       });
     }
 
-    // Prevent excessively large values
     if (depositAmount > 100000000) {
       return res.status(400).json({
         success: false,
@@ -52,7 +49,6 @@ const createDeposit = async (req, res) => {
       });
     }
 
-    // Validate payment method
     const allowedMethods = [
       'card',
       'bank_transfer',
@@ -68,7 +64,6 @@ const createDeposit = async (req, res) => {
 
     await client.query('BEGIN');
 
-    // Find the logged-in user's active account
     const accountResult = await client.query(
       `SELECT
         id,
@@ -89,8 +84,7 @@ const createDeposit = async (req, res) => {
 
       return res.status(404).json({
         success: false,
-        message:
-          'Active account not found',
+        message: 'Active account not found',
       });
     }
 
@@ -98,13 +92,6 @@ const createDeposit = async (req, res) => {
 
     const reference = generateReference();
 
-    /*
-     * The deposit is recorded as PENDING.
-     *
-     * We do NOT immediately increase the user's balance.
-     * The deposit must be reviewed/processed before the
-     * account is credited.
-     */
     const transactionResult = await client.query(
       `INSERT INTO transactions (
         account_id,
@@ -166,14 +153,21 @@ const createDeposit = async (req, res) => {
     }
 
     console.error(
-      'Create deposit error:',
+      'CREATE DEPOSIT ERROR:',
       error
     );
 
     return res.status(500).json({
       success: false,
+
+      // TEMPORARY: exposes the actual database/server error
+      // so we can identify the problem.
       message:
+        error?.message ||
         'Unable to create deposit request',
+
+      error_code:
+        error?.code || null,
     });
   } finally {
     client.release();
