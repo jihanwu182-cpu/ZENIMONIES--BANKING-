@@ -12,6 +12,7 @@ import Login from './pages/Login.tsx';
 import Register from './pages/Register.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 import Profile from './pages/Profile.tsx';
+import Settings from './pages/Settings.tsx';
 import KYC from './pages/KYC.tsx';
 import VerifyPhone from './pages/VerifyPhone.tsx';
 
@@ -36,17 +37,19 @@ const ServicePage: React.FC<ServicePageProps> = ({
     <div
       style={{
         minHeight: '100vh',
-        background: '#f5f7fb',
-        color: '#172033',
+        background: '#f6faf8',
+        color: '#172b22',
         fontFamily:
-          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+        paddingBottom: '40px',
       }}
     >
-      {/* HEADER */}
+      {/* ================= HEADER ================= */}
+
       <header
         style={{
           background: '#ffffff',
-          borderBottom: '1px solid #eaecf0',
+          borderBottom: '1px solid #e5ebe8',
           position: 'sticky',
           top: 0,
           zIndex: 20,
@@ -54,9 +57,9 @@ const ServicePage: React.FC<ServicePageProps> = ({
       >
         <div
           style={{
-            maxWidth: '1100px',
+            width: 'min(920px, 92%)',
             margin: '0 auto',
-            padding: '14px 20px',
+            height: '64px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -73,16 +76,16 @@ const ServicePage: React.FC<ServicePageProps> = ({
           >
             <div
               style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '12px',
+                width: '40px',
+                height: '40px',
+                borderRadius: '11px',
                 background:
-                  'linear-gradient(135deg, #008f62, #006b4a)',
+                  'linear-gradient(135deg, #079447, #007a3f)',
                 color: '#ffffff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '21px',
+                fontSize: '20px',
                 fontWeight: 800,
               }}
             >
@@ -92,7 +95,7 @@ const ServicePage: React.FC<ServicePageProps> = ({
             <div>
               <div
                 style={{
-                  fontSize: '18px',
+                  fontSize: '17px',
                   fontWeight: 800,
                   color: '#063b2d',
                 }}
@@ -102,9 +105,9 @@ const ServicePage: React.FC<ServicePageProps> = ({
 
               <div
                 style={{
-                  fontSize: '10px',
-                  letterSpacing: '1px',
-                  color: '#98a2b3',
+                  fontSize: '9px',
+                  letterSpacing: '1.5px',
+                  color: '#98a2a0',
                 }}
               >
                 DIGITAL BANKING
@@ -116,9 +119,9 @@ const ServicePage: React.FC<ServicePageProps> = ({
             to="/"
             style={{
               textDecoration: 'none',
-              color: '#008f62',
+              color: '#087c43',
               fontWeight: 700,
-              fontSize: '14px',
+              fontSize: '13px',
             }}
           >
             Home
@@ -126,12 +129,13 @@ const ServicePage: React.FC<ServicePageProps> = ({
         </div>
       </header>
 
-      {/* CONTENT */}
+      {/* ================= CONTENT ================= */}
+
       <main
         style={{
-          maxWidth: '900px',
+          width: 'min(700px, 92%)',
           margin: '0 auto',
-          padding: '40px 20px 100px',
+          paddingTop: '28px',
         }}
       >
         <Link
@@ -141,10 +145,10 @@ const ServicePage: React.FC<ServicePageProps> = ({
             alignItems: 'center',
             gap: '6px',
             textDecoration: 'none',
-            color: '#667085',
-            fontSize: '14px',
+            color: '#66756e',
+            fontSize: '13px',
             fontWeight: 600,
-            marginBottom: '25px',
+            marginBottom: '18px',
           }}
         >
           ← Back to Dashboard
@@ -153,70 +157,82 @@ const ServicePage: React.FC<ServicePageProps> = ({
         <div
           style={{
             background: '#ffffff',
-            border: '1px solid #eaecf0',
-            borderRadius: '22px',
-            padding: '35px',
+            border: '1px solid #e5ebe8',
+            borderRadius: '20px',
+            padding: '26px',
             boxShadow:
-              '0 10px 30px rgba(16, 24, 40, 0.05)',
+              '0 8px 25px rgba(26, 61, 47, 0.05)',
           }}
         >
+          {/* ICON */}
+
           <div
             style={{
-              width: '70px',
-              height: '70px',
-              borderRadius: '20px',
-              background: '#e7f8f1',
-              color: '#008f62',
+              width: '58px',
+              height: '58px',
+              borderRadius: '17px',
+              background: '#e8f8f0',
+              color: '#087c43',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '32px',
-              marginBottom: '22px',
+              fontSize: '27px',
+              marginBottom: '17px',
             }}
           >
             {icon}
           </div>
 
+          {/* TITLE */}
+
           <h1
             style={{
-              margin: '0 0 10px',
-              fontSize: '30px',
+              margin: '0 0 8px',
+              fontSize: '26px',
+              fontWeight: 800,
               color: '#063b2d',
             }}
           >
             {title}
           </h1>
 
+          {/* DESCRIPTION */}
+
           <p
             style={{
-              margin: '0 0 25px',
-              color: '#667085',
-              fontSize: '16px',
+              margin: '0 0 20px',
+              color: '#66756e',
+              fontSize: '14px',
               lineHeight: 1.6,
             }}
           >
             {description}
           </p>
 
-          <div
-            style={{
-              padding: '18px',
-              borderRadius: '14px',
-              background: '#f0faf6',
-              border: '1px solid #ccefe1',
-              color: '#05603a',
-              fontSize: '14px',
-              lineHeight: 1.5,
-            }}
-          >
-            This service is ready for the next setup stage.
-          </div>
+          {/* STATUS */}
 
           <div
             style={{
-              marginTop: '25px',
+              padding: '15px',
+              borderRadius: '13px',
+              background: '#effbf5',
+              border: '1px solid #d2eee0',
+              color: '#05603a',
+              fontSize: '13px',
+              lineHeight: 1.5,
+            }}
+          >
+            This service is ready for the next setup
+            stage.
+          </div>
+
+          {/* ACTIONS */}
+
+          <div
+            style={{
+              marginTop: '20px',
               display: 'flex',
-              gap: '12px',
+              gap: '10px',
               flexWrap: 'wrap',
             }}
           >
@@ -224,11 +240,12 @@ const ServicePage: React.FC<ServicePageProps> = ({
               to="/"
               style={{
                 textDecoration: 'none',
-                background: '#008f62',
+                background: '#079447',
                 color: '#ffffff',
-                padding: '12px 20px',
-                borderRadius: '11px',
+                padding: '11px 17px',
+                borderRadius: '10px',
                 fontWeight: 700,
+                fontSize: '13px',
               }}
             >
               Back Home
@@ -239,11 +256,12 @@ const ServicePage: React.FC<ServicePageProps> = ({
               onClick={() => window.history.back()}
               style={{
                 background: '#ffffff',
-                border: '1px solid #d0d5dd',
+                border: '1px solid #d0d9d5',
                 color: '#344054',
-                padding: '12px 20px',
-                borderRadius: '11px',
+                padding: '11px 17px',
+                borderRadius: '10px',
                 fontWeight: 700,
+                fontSize: '13px',
                 cursor: 'pointer',
               }}
             >
@@ -254,9 +272,9 @@ const ServicePage: React.FC<ServicePageProps> = ({
 
         <div
           style={{
-            marginTop: '15px',
+            marginTop: '13px',
             color: '#98a2b3',
-            fontSize: '12px',
+            fontSize: '11px',
             textAlign: 'center',
           }}
         >
@@ -290,7 +308,6 @@ const App: React.FC = () => {
           element={<Register />}
         />
 
-
         {/* ====================================================
             DASHBOARD
         ==================================================== */}
@@ -310,7 +327,6 @@ const App: React.FC = () => {
           }
         />
 
-
         {/* ====================================================
             ACCOUNT
         ==================================================== */}
@@ -318,6 +334,11 @@ const App: React.FC = () => {
         <Route
           path="/profile"
           element={<Profile />}
+        />
+
+        <Route
+          path="/settings"
+          element={<Settings />}
         />
 
         <Route
@@ -330,7 +351,6 @@ const App: React.FC = () => {
           element={<VerifyPhone />}
         />
 
-
         {/* ====================================================
             MONEY
         ==================================================== */}
@@ -340,7 +360,7 @@ const App: React.FC = () => {
           element={
             <ServicePage
               title="Send Money"
-              icon="↗"
+              icon="➤"
               description="Send money securely to another Zenimonies customer or to a bank account."
             />
           }
@@ -352,7 +372,7 @@ const App: React.FC = () => {
             <ServicePage
               title="Add Money"
               icon="+"
-              description="Add funds to your Zenimonies account."
+              description="Add funds securely to your Zenimonies account."
             />
           }
         />
@@ -390,7 +410,6 @@ const App: React.FC = () => {
           }
         />
 
-
         {/* ====================================================
             AIRTIME & DATA
         ==================================================== */}
@@ -417,7 +436,6 @@ const App: React.FC = () => {
           }
         />
 
-
         {/* ====================================================
             TV
         ==================================================== */}
@@ -432,7 +450,6 @@ const App: React.FC = () => {
             />
           }
         />
-
 
         {/* ====================================================
             BILL PAYMENT
@@ -449,7 +466,6 @@ const App: React.FC = () => {
           }
         />
 
-
         {/* ====================================================
             BETTING
         ==================================================== */}
@@ -464,7 +480,6 @@ const App: React.FC = () => {
             />
           }
         />
-
 
         {/* ====================================================
             SAFEBOX
@@ -481,7 +496,6 @@ const App: React.FC = () => {
           }
         />
 
-
         {/* ====================================================
             MORE
         ==================================================== */}
@@ -496,7 +510,6 @@ const App: React.FC = () => {
             />
           }
         />
-
 
         {/* ====================================================
             FALLBACK
