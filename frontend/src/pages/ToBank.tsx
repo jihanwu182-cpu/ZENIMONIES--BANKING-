@@ -37,48 +37,17 @@ const BANKS: Bank[] = [
 const ToBank: React.FC = () => {
   const navigate = useNavigate();
 
-  const [selectedBankCode, setSelectedBankCode] = useState('');
+  const [selectedBank, setSelectedBank] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [amount, setAmount] = useState('');
   const [narration, setNarration] = useState('');
   const [error, setError] = useState('');
 
-  const selectedBank = BANKS.find(
-    (bank) => bank.code === selectedBankCode
-  );
-
-  const handleAccountNumberChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const value = event.target.value.replace(/\D/g, '').slice(0, 10);
-
-    setAccountNumber(value);
-    setError('');
-  };
-
-  const handleAmountChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    let value = event.target.value;
-
-    // Allow only numbers and one decimal point
-    value = value.replace(/[^\d.]/g, '');
-
-    const parts = value.split('.');
-
-    if (parts.length > 2) {
-      value = `${parts[0]}.${parts.slice(1).join('')}`;
-    }
-
-    setAmount(value);
-    setError('');
-  };
-
   const handleContinue = () => {
     setError('');
 
     if (!selectedBank) {
-      setError('Please select the recipient bank.');
+      setError('Please select a bank.');
       return;
     }
 
@@ -87,16 +56,25 @@ const ToBank: React.FC = () => {
       return;
     }
 
-    const numericAmount = Number(amount);
+    const numericAmount = Number(amount.replace(/,/g, ''));
 
     if (!numericAmount || numericAmount <= 0) {
       setError('Please enter a valid amount.');
       return;
     }
 
+    const bank = BANKS.find(
+      (item) => item.code === selectedBank
+    );
+
+    if (!bank) {
+      setError('Please select a valid bank.');
+      return;
+    }
+
     navigate('/transfer-confirmation', {
       state: {
-        bank: selectedBank,
+        bank,
         accountNumber,
         amount: numericAmount,
         narration,
@@ -115,9 +93,7 @@ const ToBank: React.FC = () => {
         paddingBottom: 40,
       }}
     >
-      {/* =====================================================
-          HEADER
-      ===================================================== */}
+      {/* HEADER */}
 
       <header
         style={{
@@ -132,16 +108,15 @@ const ToBank: React.FC = () => {
           style={{
             width: 'min(700px, 92%)',
             margin: '0 auto',
-            padding: '14px 0',
+            minHeight: 68,
             display: 'flex',
             alignItems: 'center',
-            gap: 13,
+            gap: 14,
           }}
         >
           <button
             type="button"
             onClick={() => navigate('/')}
-            aria-label="Back to dashboard"
             style={{
               width: 40,
               height: 40,
@@ -149,11 +124,8 @@ const ToBank: React.FC = () => {
               border: '1px solid #e1e8e5',
               background: '#ffffff',
               color: '#087f5b',
-              fontSize: 22,
+              fontSize: 23,
               cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
             }}
           >
             ←
@@ -183,18 +155,16 @@ const ToBank: React.FC = () => {
         </div>
       </header>
 
-      {/* =====================================================
-          MAIN
-      ===================================================== */}
+      {/* MAIN */}
 
       <main
         style={{
           width: 'min(700px, 92%)',
           margin: '0 auto',
-          padding: '24px 0 50px',
+          paddingTop: 25,
         }}
       >
-        {/* Introduction */}
+        {/* INTRO */}
 
         <div
           style={{
@@ -203,12 +173,13 @@ const ToBank: React.FC = () => {
         >
           <div
             style={{
-              color: '#71807b',
-              fontSize: 13,
+              color: '#087f5b',
+              fontSize: 12,
+              fontWeight: 700,
               marginBottom: 5,
             }}
           >
-            Bank transfer
+            BANK TRANSFER
           </div>
 
           <h1
@@ -216,8 +187,8 @@ const ToBank: React.FC = () => {
               margin: 0,
               fontSize: 27,
               lineHeight: 1.2,
-              color: '#102a25',
               fontWeight: 800,
+              color: '#102a25',
             }}
           >
             Send money
@@ -228,16 +199,13 @@ const ToBank: React.FC = () => {
               margin: '8px 0 0',
               color: '#71807b',
               fontSize: 14,
-              lineHeight: 1.5,
             }}
           >
             Enter the bank account details and amount.
           </p>
         </div>
 
-        {/* =====================================================
-            TRANSFER CARD
-        ===================================================== */}
+        {/* FORM CARD */}
 
         <section
           style={{
@@ -249,17 +217,15 @@ const ToBank: React.FC = () => {
               '0 8px 25px rgba(16, 42, 37, 0.05)',
           }}
         >
-          {/* =================================================
-              BANK NAME
-          ================================================= */}
+          {/* BANK */}
 
           <label
-            htmlFor="bank-name"
+            htmlFor="bank"
             style={{
               display: 'block',
-              color: '#344c46',
               fontSize: 13,
               fontWeight: 700,
+              color: '#344c46',
               marginBottom: 8,
             }}
           >
@@ -272,10 +238,10 @@ const ToBank: React.FC = () => {
             }}
           >
             <select
-              id="bank-name"
-              value={selectedBankCode}
+              id="bank"
+              value={selectedBank}
               onChange={(event) => {
-                setSelectedBankCode(event.target.value);
+                setSelectedBank(event.target.value);
                 setError('');
               }}
               style={{
@@ -286,7 +252,7 @@ const ToBank: React.FC = () => {
                 borderRadius: 13,
                 padding: '0 45px 0 15px',
                 fontSize: 15,
-                color: selectedBankCode
+                color: selectedBank
                   ? '#102a25'
                   : '#8a9994',
                 background: '#ffffff',
@@ -296,7 +262,7 @@ const ToBank: React.FC = () => {
               }}
             >
               <option value="">
-                Select your bank
+                Select bank
               </option>
 
               {BANKS.map((bank) => (
@@ -310,28 +276,32 @@ const ToBank: React.FC = () => {
             </select>
           </div>
 
-          {/* Selected bank */}
+          {/* SELECTED BANK */}
 
           {selectedBank && (
             <div
               style={{
                 marginTop: 10,
-                padding: '11px 13px',
+                padding: '10px 12px',
                 background: '#ecfdf5',
                 border: '1px solid #b7ebd4',
-                borderRadius: 11,
+                borderRadius: 10,
                 color: '#087f5b',
                 fontSize: 13,
                 fontWeight: 700,
               }}
             >
-              ✓ {selectedBank.name}
+              ✓{' '}
+              {
+                BANKS.find(
+                  (bank) =>
+                    bank.code === selectedBank
+                )?.name
+              }
             </div>
           )}
 
-          {/* =================================================
-              ACCOUNT NUMBER
-          ================================================= */}
+          {/* ACCOUNT NUMBER */}
 
           <div
             style={{
@@ -342,9 +312,9 @@ const ToBank: React.FC = () => {
               htmlFor="account-number"
               style={{
                 display: 'block',
-                color: '#344c46',
                 fontSize: 13,
                 fontWeight: 700,
+                color: '#344c46',
                 marginBottom: 8,
               }}
             >
@@ -355,10 +325,15 @@ const ToBank: React.FC = () => {
               id="account-number"
               type="tel"
               inputMode="numeric"
-              autoComplete="off"
               maxLength={10}
               value={accountNumber}
-              onChange={handleAccountNumberChange}
+              onChange={(event) => {
+                const value =
+                  event.target.value.replace(/\D/g, '');
+
+                setAccountNumber(value);
+                setError('');
+              }}
               placeholder="Enter 10-digit account number"
               style={{
                 width: '100%',
@@ -369,42 +344,29 @@ const ToBank: React.FC = () => {
                 padding: '0 15px',
                 fontSize: 15,
                 color: '#102a25',
-                background: '#ffffff',
                 outline: 'none',
               }}
             />
-
-            <div
-              style={{
-                marginTop: 6,
-                color: '#8a9994',
-                fontSize: 11,
-              }}
-            >
-              {accountNumber.length}/10 digits
-            </div>
           </div>
 
-          {/* =================================================
-              AMOUNT
-          ================================================= */}
+          {/* AMOUNT */}
 
           <div
             style={{
-              marginTop: 18,
+              marginTop: 20,
             }}
           >
             <label
-              htmlFor="transfer-amount"
+              htmlFor="amount"
               style={{
                 display: 'block',
-                color: '#344c46',
                 fontSize: 13,
                 fontWeight: 700,
+                color: '#344c46',
                 marginBottom: 8,
               }}
             >
-              Amount (₦)
+              Amount
             </label>
 
             <div
@@ -418,7 +380,7 @@ const ToBank: React.FC = () => {
                   left: 15,
                   top: 16,
                   color: '#087f5b',
-                  fontSize: 16,
+                  fontSize: 17,
                   fontWeight: 800,
                   zIndex: 1,
                 }}
@@ -427,11 +389,20 @@ const ToBank: React.FC = () => {
               </span>
 
               <input
-                id="transfer-amount"
+                id="amount"
                 type="text"
                 inputMode="decimal"
                 value={amount}
-                onChange={handleAmountChange}
+                onChange={(event) => {
+                  const value =
+                    event.target.value.replace(
+                      /[^\d.]/g,
+                      ''
+                    );
+
+                  setAmount(value);
+                  setError('');
+                }}
                 placeholder="0.00"
                 style={{
                   width: '100%',
@@ -439,43 +410,41 @@ const ToBank: React.FC = () => {
                   boxSizing: 'border-box',
                   border: '1px solid #d9e3df',
                   borderRadius: 13,
-                  padding: '0 15px 0 37px',
+                  padding: '0 15px 0 38px',
                   fontSize: 17,
                   fontWeight: 700,
                   color: '#102a25',
-                  background: '#ffffff',
                   outline: 'none',
                 }}
               />
             </div>
           </div>
 
-          {/* =================================================
-              NARRATION
-          ================================================= */}
+          {/* NARRATION */}
 
           <div
             style={{
-              marginTop: 18,
+              marginTop: 20,
             }}
           >
             <label
               htmlFor="narration"
               style={{
                 display: 'block',
-                color: '#344c46',
                 fontSize: 13,
                 fontWeight: 700,
+                color: '#344c46',
                 marginBottom: 8,
               }}
             >
-              Narration{' '}
+              Narration
               <span
                 style={{
                   color: '#98a2b3',
                   fontWeight: 400,
                 }}
               >
+                {' '}
                 (optional)
               </span>
             </label>
@@ -498,19 +467,15 @@ const ToBank: React.FC = () => {
                 padding: '0 15px',
                 fontSize: 15,
                 color: '#102a25',
-                background: '#ffffff',
                 outline: 'none',
               }}
             />
           </div>
 
-          {/* =================================================
-              ERROR
-          ================================================= */}
+          {/* ERROR */}
 
           {error && (
             <div
-              role="alert"
               style={{
                 marginTop: 18,
                 padding: '12px 14px',
@@ -519,16 +484,14 @@ const ToBank: React.FC = () => {
                 color: '#b42318',
                 borderRadius: 11,
                 fontSize: 13,
-                lineHeight: 1.5,
+                lineHeight: 1.4,
               }}
             >
               {error}
             </div>
           )}
 
-          {/* =================================================
-              CONTINUE
-          ================================================= */}
+          {/* CONTINUE */}
 
           <button
             type="button"
@@ -561,14 +524,12 @@ const ToBank: React.FC = () => {
               lineHeight: 1.5,
             }}
           >
-            Please check the recipient details before
-            continuing.
+            Your transfer will be reviewed before it is
+            sent.
           </div>
         </section>
 
-        {/* =================================================
-            BACK
-        ================================================= */}
+        {/* BACK */}
 
         <div
           style={{
