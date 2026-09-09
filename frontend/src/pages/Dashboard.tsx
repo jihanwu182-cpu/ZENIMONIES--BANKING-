@@ -14,16 +14,23 @@ const Dashboard: React.FC = () => {
   const [showMenu, setShowMenu] = useState(false);
   const [activeService, setActiveService] = useState<string | null>(null);
 
+  const [sendType, setSendType] = useState<
+    'zenimonies' | 'bank' | null
+  >(null);
+
+  const [recipient, setRecipient] = useState('');
+  const [amount, setAmount] = useState('');
+
   const services: Service[] = [
     {
       name: 'Add Money',
-      icon: '+',
+      icon: '＋',
       description: 'Fund your account',
     },
     {
       name: 'Send Money',
       icon: '➤',
-      description: 'Transfer money',
+      description: 'Send money',
     },
     {
       name: 'To Bank',
@@ -78,70 +85,69 @@ const Dashboard: React.FC = () => {
       return;
     }
 
+    if (service === 'Send Money') {
+      setActiveService('Send Money');
+      setSendType(null);
+      return;
+    }
+
+    if (service === 'To Bank') {
+      setActiveService('To Bank');
+      setSendType('bank');
+      return;
+    }
+
     setActiveService(service);
   };
 
   const closeService = () => {
     setActiveService(null);
+    setSendType(null);
+    setRecipient('');
+    setAmount('');
   };
 
-  const getServiceDescription = (service: string) => {
-    switch (service) {
-      case 'Add Money':
-        return 'Fund your Zenimonies account securely.';
+  const selectSendType = (
+    type: 'zenimonies' | 'bank'
+  ) => {
+    setSendType(type);
+  };
 
-      case 'Send Money':
-        return 'Send money quickly and securely to another Zenimonies customer.';
+  const handleContinueSend = () => {
+    if (!recipient || !amount) {
+      alert('Please enter the required information.');
+      return;
+    }
 
-      case 'To Bank':
-        return 'Send money securely to any Nigerian bank or supported financial institution.';
+    if (Number(amount) <= 0) {
+      alert('Please enter a valid amount.');
+      return;
+    }
 
-      case 'Withdraw':
-        return 'Withdraw money from your Zenimonies account.';
-
-      case 'Airtime':
-        return 'Buy airtime for your mobile line.';
-
-      case 'Data':
-        return 'Purchase mobile data bundles.';
-
-      case 'Betting':
-        return 'Fund your betting wallet.';
-
-      case 'TV':
-        return 'Pay your television subscription.';
-
-      case 'Bills':
-        return 'Pay supported bills and services.';
-
-      case 'SafeBox':
-        return 'Save money securely in your SafeBox.';
-
-      case 'Transactions':
-        return 'Your transaction history will appear here.';
-
-      case 'Wallet':
-        return 'Your wallet information will appear here.';
-
-      default:
-        return 'This service is ready to be connected.';
+    if (sendType === 'zenimonies') {
+      alert(
+        `Zenimonies transfer prepared for ${recipient} - ₦${amount}`
+      );
+    } else if (sendType === 'bank') {
+      alert(
+        `Bank transfer prepared for ${recipient} - ₦${amount}`
+      );
     }
   };
 
   return (
     <div style={styles.page}>
 
-      {/* =====================================================
-          HEADER
-      ===================================================== */}
+      {/* ================= HEADER ================= */}
 
       <header style={styles.header}>
-
         <div style={styles.brandArea}>
           <div style={styles.logo}>Z</div>
 
           <div>
-            <div style={styles.brandName}>Zenimonies</div>
+            <div style={styles.brandName}>
+              Zenimonies
+            </div>
 
             <div style={styles.brandSubtitle}>
               DIGITAL BANKING
@@ -150,11 +156,12 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div style={styles.headerRight}>
-
           <button
             type="button"
             style={styles.notificationButton}
-            onClick={() => alert('No new notifications')}
+            onClick={() =>
+              alert('No new notifications')
+            }
             aria-label="Notifications"
           >
             ♧
@@ -172,23 +179,16 @@ const Dashboard: React.FC = () => {
               Harrison
             </span>
           </button>
-
         </div>
       </header>
 
-
-      {/* =====================================================
-          MAIN
-      ===================================================== */}
+      {/* ================= MAIN ================= */}
 
       <main style={styles.main}>
 
-        {/* ===================================================
-            WELCOME
-        =================================================== */}
+        {/* ================= WELCOME ================= */}
 
         <section style={styles.welcomeSection}>
-
           <div>
             <div style={styles.welcomeSmall}>
               Welcome back,
@@ -199,7 +199,7 @@ const Dashboard: React.FC = () => {
             </h1>
 
             <p style={styles.subtitle}>
-              Here’s your financial overview.
+              Here&apos;s your financial overview.
             </p>
           </div>
 
@@ -212,27 +212,19 @@ const Dashboard: React.FC = () => {
               ✓
             </span>
 
-            <span>
-              Tier 1 Verified
-            </span>
+            <span>Tier 1 Verified</span>
           </button>
-
         </section>
 
-
-        {/* ===================================================
-            BALANCE
-        =================================================== */}
+        {/* ================= BALANCE CARD ================= */}
 
         <section style={styles.balanceCard}>
-
           <div style={styles.waveOne} />
           <div style={styles.waveTwo} />
 
           <div style={styles.balanceContent}>
 
             <div style={styles.balanceTop}>
-
               <span style={styles.balanceLabel}>
                 Available Balance
               </span>
@@ -241,7 +233,7 @@ const Dashboard: React.FC = () => {
                 type="button"
                 style={styles.hideButton}
                 onClick={() =>
-                  setShowBalance((previous) => !previous)
+                  setShowBalance(!showBalance)
                 }
               >
                 <span style={styles.eyeIcon}>
@@ -250,73 +242,22 @@ const Dashboard: React.FC = () => {
 
                 {showBalance ? 'Hide' : 'Show'}
               </button>
-
             </div>
 
             <div style={styles.balanceAmount}>
-              {showBalance ? '₦0.00' : '₦••••'}
-            </div>
-
-
-            {/* ADD MONEY + SEND MONEY */}
-
-            <div style={styles.balanceButtons}>
-
-              <button
-                type="button"
-                style={styles.addMoneyButton}
-                onClick={() =>
-                  handleServiceClick('Add Money')
-                }
-              >
-                <span style={styles.addCircle}>
-                  +
-                </span>
-
-                <span>
-                  Add Money
-                </span>
-
-                <span style={styles.buttonArrow}>
-                  ›
-                </span>
-              </button>
-
-
-              <button
-                type="button"
-                style={styles.sendMoneyButton}
-                onClick={() =>
-                  handleServiceClick('Send Money')
-                }
-              >
-                <span style={styles.sendIcon}>
-                  ➤
-                </span>
-
-                <span>
-                  Send Money
-                </span>
-
-                <span style={styles.buttonArrow}>
-                  ›
-                </span>
-              </button>
-
+              {showBalance
+                ? '₦0.00'
+                : '₦••••'}
             </div>
 
           </div>
         </section>
 
-
-        {/* ===================================================
-            QUICK ACTIONS
-        =================================================== */}
+        {/* ================= QUICK ACTIONS ================= */}
 
         <section style={styles.quickSection}>
 
           <div style={styles.sectionHeading}>
-
             <h2 style={styles.quickTitle}>
               Quick Actions
             </h2>
@@ -325,37 +266,29 @@ const Dashboard: React.FC = () => {
               type="button"
               style={styles.seeAllButton}
               onClick={() =>
-                setShowMenu((previous) => !previous)
+                setShowMenu(!showMenu)
               }
             >
               See all <span>›</span>
             </button>
-
           </div>
-
 
           <div style={styles.servicesGrid}>
 
             {services.map((service) => (
-
               <button
                 type="button"
                 key={service.name}
                 style={styles.serviceButton}
                 onClick={() =>
-                  handleServiceClick(service.name)
+                  handleServiceClick(
+                    service.name
+                  )
                 }
               >
-
                 <div
                   style={{
                     ...styles.serviceIcon,
-                    ...(service.name === 'Add Money'
-                      ? styles.addServiceIcon
-                      : {}),
-                    ...(service.name === 'Send Money'
-                      ? styles.sendServiceIcon
-                      : {}),
                     ...(service.name === 'Betting'
                       ? styles.bettingIcon
                       : {}),
@@ -367,26 +300,18 @@ const Dashboard: React.FC = () => {
                 <div style={styles.serviceName}>
                   {service.name}
                 </div>
-
               </button>
-
             ))}
 
           </div>
-
         </section>
 
-
-        {/* ===================================================
-            MORE MENU
-        =================================================== */}
+        {/* ================= MORE MENU ================= */}
 
         {showMenu && (
-
           <section style={styles.morePanel}>
 
             <div style={styles.moreHeader}>
-
               <div>
                 <h3 style={styles.moreTitle}>
                   More Services
@@ -400,13 +325,13 @@ const Dashboard: React.FC = () => {
               <button
                 type="button"
                 style={styles.closeSmallButton}
-                onClick={() => setShowMenu(false)}
+                onClick={() =>
+                  setShowMenu(false)
+                }
               >
                 ×
               </button>
-
             </div>
-
 
             <div style={styles.moreItems}>
 
@@ -414,25 +339,14 @@ const Dashboard: React.FC = () => {
                 type="button"
                 style={styles.moreItem}
                 onClick={() =>
-                  setActiveService('Transactions')
+                  setActiveService(
+                    'Transactions'
+                  )
                 }
               >
                 <span>↕</span>
                 Transactions
               </button>
-
-
-              <button
-                type="button"
-                style={styles.moreItem}
-                onClick={() =>
-                  setActiveService('Wallet')
-                }
-              >
-                <span>▱</span>
-                Wallet
-              </button>
-
 
               <button
                 type="button"
@@ -444,7 +358,6 @@ const Dashboard: React.FC = () => {
                 <span>♙</span>
                 Profile
               </button>
-
 
               <button
                 type="button"
@@ -458,15 +371,10 @@ const Dashboard: React.FC = () => {
               </button>
 
             </div>
-
           </section>
-
         )}
 
-
-        {/* ===================================================
-            ACCOUNT VERIFICATION
-        =================================================== */}
+        {/* ================= KYC ================= */}
 
         <section style={styles.verificationCard}>
 
@@ -475,15 +383,14 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div style={styles.verificationText}>
-
-            <h3 style={styles.verificationHeading}>
+            <h3 style={styles.verificationTitle}>
               Account Verification
             </h3>
 
-            <p style={styles.verificationParagraph}>
-              Complete your KYC to increase your limits.
+            <p style={styles.verificationDescription}>
+              Complete your KYC to increase your
+              limits.
             </p>
-
           </div>
 
           <button
@@ -497,10 +404,7 @@ const Dashboard: React.FC = () => {
 
         </section>
 
-
-        {/* ===================================================
-            RECENT TRANSACTIONS
-        =================================================== */}
+        {/* ================= RECENT TRANSACTIONS ================= */}
 
         <section style={styles.transactionsSection}>
 
@@ -514,14 +418,15 @@ const Dashboard: React.FC = () => {
               type="button"
               style={styles.seeAllButton}
               onClick={() =>
-                setActiveService('Transactions')
+                setActiveService(
+                  'Transactions'
+                )
               }
             >
               See all <span>›</span>
             </button>
 
           </div>
-
 
           <div style={styles.emptyTransactions}>
 
@@ -534,8 +439,9 @@ const Dashboard: React.FC = () => {
                 No transactions yet
               </strong>
 
-              <p style={styles.emptyParagraph}>
-                Your transactions will appear here.
+              <p style={styles.emptyDescription}>
+                Your transactions will appear
+                here.
               </p>
             </div>
 
@@ -545,10 +451,7 @@ const Dashboard: React.FC = () => {
 
       </main>
 
-
-      {/* =====================================================
-          BOTTOM NAVIGATION
-      ===================================================== */}
+      {/* ================= BOTTOM NAVIGATION ================= */}
 
       <nav style={styles.bottomNav}>
 
@@ -564,30 +467,26 @@ const Dashboard: React.FC = () => {
             ⌂
           </span>
 
-          <span>
-            Home
-          </span>
+          <span>Home</span>
 
           <span style={styles.activeIndicator} />
         </button>
-
 
         <button
           type="button"
           style={styles.navItem}
           onClick={() =>
-            setActiveService('Transactions')
+            setActiveService(
+              'Transactions'
+            )
           }
         >
           <span style={styles.navIcon}>
             ↕
           </span>
 
-          <span>
-            Transactions
-          </span>
+          <span>Transactions</span>
         </button>
-
 
         <button
           type="button"
@@ -600,43 +499,29 @@ const Dashboard: React.FC = () => {
             ▱
           </span>
 
-          <span>
-            Wallet
-          </span>
+          <span>Wallet</span>
         </button>
-
 
         <button
           type="button"
           style={styles.navItem}
-          onClick={() => navigate('/profile')}
+          onClick={() =>
+            navigate('/profile')
+          }
         >
           <span style={styles.navIcon}>
             ♙
           </span>
 
-          <span>
-            Profile
-          </span>
+          <span>Profile</span>
         </button>
 
       </nav>
 
-
-      {/* =====================================================
-          SERVICE MODAL
-      ===================================================== */}
+      {/* ================= SERVICE MODAL ================= */}
 
       {activeService && (
-
-        <div
-          style={styles.overlay}
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              closeService();
-            }
-          }}
-        >
+        <div style={styles.overlay}>
 
           <div style={styles.serviceModal}>
 
@@ -644,68 +529,322 @@ const Dashboard: React.FC = () => {
               type="button"
               style={styles.modalClose}
               onClick={closeService}
+              aria-label="Close"
             >
               ×
             </button>
 
+            {/* SEND MONEY */}
 
-            <div style={styles.modalIcon}>
+            {activeService ===
+              'Send Money' && (
+              <>
+                {!sendType && (
+                  <>
+                    <div style={styles.modalIcon}>
+                      ➤
+                    </div>
 
-              {
-                services.find(
-                  (item) => item.name === activeService
-                )?.icon || '✓'
-              }
+                    <h2 style={styles.modalTitle}>
+                      Send Money
+                    </h2>
 
-            </div>
+                    <p style={styles.modalText}>
+                      Choose where you want to
+                      send your money.
+                    </p>
 
+                    <div style={styles.sendOptions}>
 
-            <h2 style={styles.modalTitle}>
-              {activeService}
-            </h2>
+                      <button
+                        type="button"
+                        style={styles.sendOption}
+                        onClick={() =>
+                          selectSendType(
+                            'zenimonies'
+                          )
+                        }
+                      >
+                        <div style={styles.optionIcon}>
+                          Z
+                        </div>
 
+                        <div>
+                          <strong>
+                            Send to Zenimonies User
+                          </strong>
 
-            <p style={styles.modalText}>
-              {getServiceDescription(activeService)}
-            </p>
+                          <span>
+                            Send instantly to another
+                            Zenimonies user
+                          </span>
+                        </div>
 
+                        <span style={styles.optionArrow}>
+                          ›
+                        </span>
+                      </button>
 
-            <button
-              type="button"
-              style={styles.modalPrimaryButton}
-              onClick={() => {
-                if (activeService === 'To Bank') {
-                  alert(
-                    'Bank transfer screen will be connected next.'
-                  );
-                } else {
-                  alert(
-                    `${activeService} screen will be connected next.`
-                  );
-                }
+                      <button
+                        type="button"
+                        style={styles.sendOption}
+                        onClick={() =>
+                          selectSendType('bank')
+                        }
+                      >
+                        <div style={styles.optionIcon}>
+                          ▥
+                        </div>
 
-                closeService();
-              }}
-            >
-              Continue
-            </button>
+                        <div>
+                          <strong>
+                            Send to Bank
+                          </strong>
+
+                          <span>
+                            Transfer to a Nigerian bank
+                            account
+                          </span>
+                        </div>
+
+                        <span style={styles.optionArrow}>
+                          ›
+                        </span>
+                      </button>
+
+                    </div>
+                  </>
+                )}
+
+                {sendType && (
+                  <>
+                    <div style={styles.modalIcon}>
+                      {sendType ===
+                      'zenimonies'
+                        ? 'Z'
+                        : '▥'}
+                    </div>
+
+                    <h2 style={styles.modalTitle}>
+                      {sendType ===
+                      'zenimonies'
+                        ? 'Send to Zenimonies User'
+                        : 'Send to Bank'}
+                    </h2>
+
+                    <p style={styles.modalText}>
+                      {sendType ===
+                      'zenimonies'
+                        ? 'Enter the recipient details and amount.'
+                        : 'Enter the bank account details and amount.'}
+                    </p>
+
+                    <input
+                      type="text"
+                      value={recipient}
+                      onChange={(event) =>
+                        setRecipient(
+                          event.target.value
+                        )
+                      }
+                      placeholder={
+                        sendType ===
+                        'zenimonies'
+                          ? 'Phone number or username'
+                          : 'Account number'
+                      }
+                      style={styles.modalInput}
+                    />
+
+                    {sendType === 'bank' && (
+                      <input
+                        type="text"
+                        placeholder="Bank name"
+                        style={styles.modalInput}
+                      />
+                    )}
+
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={(event) =>
+                        setAmount(
+                          event.target.value
+                        )
+                      }
+                      placeholder="Amount (₦)"
+                      min="1"
+                      style={styles.modalInput}
+                    />
+
+                    <button
+                      type="button"
+                      style={styles.modalPrimaryButton}
+                      onClick={
+                        handleContinueSend
+                      }
+                    >
+                      Continue
+                    </button>
+
+                    <button
+                      type="button"
+                      style={styles.backButton}
+                      onClick={() =>
+                        setSendType(null)
+                      }
+                    >
+                      ← Back
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ADD MONEY */}
+
+            {activeService ===
+              'Add Money' && (
+              <>
+                <div style={styles.modalIcon}>
+                  +
+                </div>
+
+                <h2 style={styles.modalTitle}>
+                  Add Money
+                </h2>
+
+                <p style={styles.modalText}>
+                  Fund your Zenimonies account
+                  securely.
+                </p>
+
+                <button
+                  type="button"
+                  style={styles.modalPrimaryButton}
+                  onClick={() => {
+                    closeService();
+                    alert(
+                      'Add Money will be connected next.'
+                    );
+                  }}
+                >
+                  Continue
+                </button>
+              </>
+            )}
+
+            {/* TO BANK */}
+
+            {activeService ===
+              'To Bank' && (
+              <>
+                <div style={styles.modalIcon}>
+                  ▥
+                </div>
+
+                <h2 style={styles.modalTitle}>
+                  Send to Bank
+                </h2>
+
+                <p style={styles.modalText}>
+                  Transfer money securely to any
+                  supported Nigerian bank.
+                </p>
+
+                <button
+                  type="button"
+                  style={styles.modalPrimaryButton}
+                  onClick={() => {
+                    setActiveService(
+                      'Send Money'
+                    );
+                    setSendType('bank');
+                  }}
+                >
+                  Continue
+                </button>
+              </>
+            )}
+
+            {/* OTHER SERVICES */}
+
+            {activeService !==
+              'Send Money' &&
+              activeService !==
+                'Add Money' &&
+              activeService !==
+                'To Bank' && (
+              <>
+                <div style={styles.modalIcon}>
+                  {services.find(
+                    (item) =>
+                      item.name ===
+                      activeService
+                  )?.icon || '✓'}
+                </div>
+
+                <h2 style={styles.modalTitle}>
+                  {activeService}
+                </h2>
+
+                <p style={styles.modalText}>
+                  {activeService ===
+                  'Withdraw'
+                    ? 'Withdraw money from your Zenimonies account.'
+                    : activeService ===
+                      'Airtime'
+                    ? 'Buy airtime for your mobile line.'
+                    : activeService ===
+                      'Data'
+                    ? 'Purchase mobile data bundles.'
+                    : activeService ===
+                      'Betting'
+                    ? 'Fund your betting wallet.'
+                    : activeService ===
+                      'TV'
+                    ? 'Pay your television subscription.'
+                    : activeService ===
+                      'Bills'
+                    ? 'Pay supported bills and services.'
+                    : activeService ===
+                      'SafeBox'
+                    ? 'Save money securely in your SafeBox.'
+                    : activeService ===
+                      'Transactions'
+                    ? 'Your transaction history will appear here.'
+                    : activeService ===
+                      'Wallet'
+                    ? 'Your wallet information will appear here.'
+                    : 'This service is ready to be connected.'}
+                </p>
+
+                <button
+                  type="button"
+                  style={styles.modalPrimaryButton}
+                  onClick={closeService}
+                >
+                  Continue
+                </button>
+              </>
+            )}
 
           </div>
-
         </div>
-
       )}
 
     </div>
   );
 };
 
-
-/* ===========================================================
+/* =========================================================
    STYLES
-=========================================================== */
+========================================================= */
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
 
   page: {
     minHeight: '100vh',
@@ -713,25 +852,21 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#10251d',
     fontFamily:
       'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-    paddingBottom: 82,
-    boxSizing: 'border-box',
+    paddingBottom: 88,
   },
 
-
-  /* ================= HEADER ================= */
-
   header: {
-    height: 64,
+    height: 68,
     background: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '0 4%',
-    borderBottom: '1px solid #edf2ef',
+    borderBottom:
+      '1px solid #edf2ef',
     position: 'sticky',
     top: 0,
     zIndex: 20,
-    boxSizing: 'border-box',
   },
 
   brandArea: {
@@ -741,20 +876,20 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   logo: {
-    width: 40,
-    height: 40,
+    width: 43,
+    height: 43,
     borderRadius: 12,
     background: '#079447',
     color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 23,
+    fontSize: 25,
     fontWeight: 800,
   },
 
   brandName: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: 800,
     lineHeight: 1.1,
   },
@@ -763,7 +898,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 8,
     letterSpacing: 1.7,
     color: '#9aa7a1',
-    marginTop: 2,
+    marginTop: 3,
   },
 
   headerRight: {
@@ -775,11 +910,10 @@ const styles: Record<string, React.CSSProperties> = {
   notificationButton: {
     border: 'none',
     background: 'transparent',
-    fontSize: 22,
+    fontSize: 24,
     cursor: 'pointer',
     position: 'relative',
     color: '#18382c',
-    padding: 4,
   },
 
   notificationDot: {
@@ -789,7 +923,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#ef3340',
     position: 'absolute',
     top: 1,
-    right: 1,
+    right: 0,
   },
 
   profileButton: {
@@ -799,7 +933,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     background: 'transparent',
     cursor: 'pointer',
-    padding: 0,
   },
 
   avatar: {
@@ -820,24 +953,18 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
   },
 
-
-  /* ================= MAIN ================= */
-
   main: {
-    width: 'min(1120px, 92%)',
+    width: 'min(1080px, 92%)',
     margin: '0 auto',
-    paddingTop: 20,
+    paddingTop: 22,
   },
-
-
-  /* ================= WELCOME ================= */
 
   welcomeSection: {
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 17,
   },
 
   welcomeSmall: {
@@ -848,7 +975,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   name: {
     margin: 0,
-    fontSize: 'clamp(28px, 6vw, 42px)',
+    fontSize:
+      'clamp(28px, 5vw, 40px)',
     lineHeight: 1,
     fontWeight: 800,
     letterSpacing: -1,
@@ -857,19 +985,20 @@ const styles: Record<string, React.CSSProperties> = {
   subtitle: {
     margin: '6px 0 0',
     color: '#75827d',
-    fontSize: 13,
+    fontSize: 14,
   },
 
   verifiedBadge: {
-    border: '1px solid #bfe9d4',
+    border:
+      '1px solid #bfe9d4',
     background: '#eafaf2',
     color: '#086c3c',
     borderRadius: 999,
-    padding: '8px 11px',
+    padding: '8px 12px',
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 700,
     cursor: 'pointer',
     whiteSpace: 'nowrap',
@@ -887,167 +1016,102 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
   },
 
-
-  /* ================= BALANCE ================= */
-
   balanceCard: {
     position: 'relative',
     overflow: 'hidden',
-    minHeight: 190,
-    borderRadius: 20,
+    minHeight: 175,
+    borderRadius: 22,
     background:
       'linear-gradient(135deg, #007a3f 0%, #079b52 55%, #04ad60 100%)',
     boxShadow:
-      '0 12px 28px rgba(0, 112, 58, 0.15)',
-    marginBottom: 20,
+      '0 12px 30px rgba(0,112,58,0.16)',
+    marginBottom: 22,
   },
 
   waveOne: {
     position: 'absolute',
-    width: 430,
-    height: 200,
+    width: 480,
+    height: 220,
     right: -150,
-    bottom: -140,
-    border: '1px solid rgba(255,255,255,0.13)',
+    bottom: -150,
+    border:
+      '1px solid rgba(255,255,255,0.13)',
     borderRadius: '50%',
   },
 
   waveTwo: {
     position: 'absolute',
-    width: 560,
-    height: 230,
-    right: -220,
-    bottom: -155,
-    border: '1px solid rgba(255,255,255,0.09)',
+    width: 620,
+    height: 250,
+    right: -250,
+    bottom: -170,
+    border:
+      '1px solid rgba(255,255,255,0.09)',
     borderRadius: '50%',
   },
 
   balanceContent: {
     position: 'relative',
     zIndex: 2,
-    padding: '21px 22px',
+    padding: '22px 23px',
   },
 
   balanceTop: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 10,
+    gap: 15,
   },
 
   balanceLabel: {
-    color: 'rgba(255,255,255,0.78)',
-    fontSize: 14,
+    color:
+      'rgba(255,255,255,0.8)',
+    fontSize: 15,
   },
 
   hideButton: {
-    border: '1px solid rgba(255,255,255,0.28)',
-    background: 'rgba(0,0,0,0.08)',
+    border:
+      '1px solid rgba(255,255,255,0.25)',
+    background:
+      'rgba(0,0,0,0.08)',
     color: '#ffffff',
-    borderRadius: 12,
-    padding: '6px 10px',
+    borderRadius: 13,
+    padding: '7px 12px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     gap: 6,
     fontWeight: 600,
-    fontSize: 11,
+    fontSize: 12,
   },
 
   eyeIcon: {
-    fontSize: 12,
+    fontSize: 13,
   },
 
   balanceAmount: {
     color: '#ffffff',
-    fontSize: 'clamp(36px, 8vw, 52px)',
+    fontSize:
+      'clamp(36px, 7vw, 50px)',
     fontWeight: 800,
     letterSpacing: -2,
-    marginTop: 5,
+    marginTop: 13,
   },
-
-
-  /* ================= BALANCE BUTTONS ================= */
-
-  balanceButtons: {
-    display: 'flex',
-    gap: 9,
-    marginTop: 17,
-    flexWrap: 'wrap',
-  },
-
-  addMoneyButton: {
-    flex: '1 1 145px',
-    minWidth: 135,
-    height: 46,
-    borderRadius: 13,
-    border: 'none',
-    background: '#ffffff',
-    color: '#064f32',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '0 12px',
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-
-  addCircle: {
-    width: 27,
-    height: 27,
-    borderRadius: '50%',
-    background: '#079447',
-    color: '#ffffff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 19,
-  },
-
-  sendMoneyButton: {
-    flex: '1 1 145px',
-    minWidth: 135,
-    height: 46,
-    borderRadius: 13,
-    border: '1px solid rgba(255,255,255,0.35)',
-    background: 'rgba(255,255,255,0.12)',
-    color: '#ffffff',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '0 12px',
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-
-  sendIcon: {
-    fontSize: 17,
-  },
-
-  buttonArrow: {
-    marginLeft: 'auto',
-    fontSize: 20,
-  },
-
-
-  /* ================= QUICK ACTIONS ================= */
 
   quickSection: {
-    marginBottom: 20,
+    marginBottom: 21,
   },
 
   sectionHeading: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 11,
   },
 
   quickTitle: {
     margin: 0,
-    fontSize: 19,
+    fontSize: 20,
     fontWeight: 800,
   },
 
@@ -1057,22 +1121,19 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#087c43',
     fontWeight: 700,
     cursor: 'pointer',
-    fontSize: 12,
+    fontSize: 13,
   },
-
-
-  /* ================= SERVICES ================= */
 
   servicesGrid: {
     display: 'grid',
     gridTemplateColumns:
-      'repeat(auto-fit, minmax(75px, 1fr))',
-    gap: 7,
+      'repeat(4, minmax(0, 1fr))',
+    gap: 8,
     background: '#ffffff',
-    borderRadius: 18,
-    padding: 12,
+    borderRadius: 20,
+    padding: 13,
     boxShadow:
-      '0 7px 20px rgba(26, 61, 47, 0.05)',
+      '0 6px 20px rgba(26,61,47,0.05)',
   },
 
   serviceButton: {
@@ -1087,7 +1148,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: 54,
     height: 54,
     margin: '0 auto 6px',
-    borderRadius: 16,
+    borderRadius: 17,
     background: '#e9f8f1',
     color: '#078b4a',
     display: 'flex',
@@ -1097,24 +1158,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
   },
 
-  addServiceIcon: {
-    background: '#e1f7eb',
-    color: '#079447',
-    fontSize: 29,
-  },
-
-  sendServiceIcon: {
-    background: '#e1f7eb',
-    color: '#079447',
-    fontSize: 22,
-  },
-
   bettingIcon: {
-    fontSize: 24,
+    fontSize: 23,
   },
 
   serviceName: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: 700,
     color: '#15251f',
     whiteSpace: 'nowrap',
@@ -1123,16 +1172,13 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
   },
 
-
-  /* ================= MORE ================= */
-
   morePanel: {
     background: '#ffffff',
-    borderRadius: 17,
-    padding: 15,
-    marginBottom: 18,
+    borderRadius: 18,
+    padding: 17,
+    marginBottom: 19,
     boxShadow:
-      '0 7px 20px rgba(26, 61, 47, 0.06)',
+      '0 7px 22px rgba(26,61,47,0.06)',
   },
 
   moreHeader: {
@@ -1143,22 +1189,22 @@ const styles: Record<string, React.CSSProperties> = {
 
   moreTitle: {
     margin: 0,
-    fontSize: 16,
+    fontSize: 17,
   },
 
   moreSubtitle: {
     margin: '4px 0 0',
     color: '#78857f',
-    fontSize: 11,
+    fontSize: 12,
   },
 
   closeSmallButton: {
     border: 'none',
     background: '#f1f5f3',
     borderRadius: '50%',
-    width: 29,
-    height: 29,
-    fontSize: 18,
+    width: 30,
+    height: 30,
+    fontSize: 19,
     cursor: 'pointer',
   },
 
@@ -1166,47 +1212,44 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: 8,
     flexWrap: 'wrap',
-    marginTop: 12,
+    marginTop: 13,
   },
 
   moreItem: {
-    border: '1px solid #dcebe4',
+    border:
+      '1px solid #dcebe4',
     background: '#f8fcfa',
-    borderRadius: 10,
-    padding: '9px 11px',
+    borderRadius: 11,
+    padding: '9px 12px',
     color: '#075e38',
     cursor: 'pointer',
     fontWeight: 600,
-    fontSize: 11,
+    fontSize: 12,
   },
-
-
-  /* ================= VERIFICATION ================= */
 
   verificationCard: {
     background: '#ffffff',
-    border: '1px solid #e4eee9',
-    borderRadius: 18,
-    padding: '14px',
+    border:
+      '1px solid #dcefe5',
+    borderRadius: 19,
+    padding: '14px 15px',
     display: 'flex',
     alignItems: 'center',
     gap: 11,
-    marginBottom: 20,
-    boxShadow:
-      '0 6px 18px rgba(26, 61, 47, 0.04)',
+    marginBottom: 21,
   },
 
   verificationIcon: {
-    width: 48,
-    height: 48,
+    width: 49,
+    height: 49,
     flexShrink: 0,
-    borderRadius: 14,
-    background: '#e1f7eb',
+    borderRadius: 15,
+    background: '#d9f5e8',
     color: '#078b4a',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 23,
+    fontSize: 24,
     fontWeight: 800,
   },
 
@@ -1215,36 +1258,32 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
 
-  verificationHeading: {
+  verificationTitle: {
     margin: 0,
-    fontSize: 14,
-    fontWeight: 800,
+    fontSize: 15,
   },
 
-  verificationParagraph: {
+  verificationDescription: {
     margin: '4px 0 0',
-    color: '#78857f',
-    fontSize: 11,
-    lineHeight: 1.4,
+    color: '#75827d',
+    fontSize: 12,
+    lineHeight: 1.35,
   },
 
   verifyButton: {
     border: 'none',
     background: '#079447',
     color: '#ffffff',
-    borderRadius: 11,
-    padding: '10px 12px',
+    borderRadius: 12,
+    padding: '10px 13px',
     fontWeight: 700,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     gap: 7,
     whiteSpace: 'nowrap',
-    fontSize: 11,
+    fontSize: 12,
   },
-
-
-  /* ================= TRANSACTIONS ================= */
 
   transactionsSection: {
     marginBottom: 25,
@@ -1257,18 +1296,18 @@ const styles: Record<string, React.CSSProperties> = {
 
   emptyTransactions: {
     background: '#ffffff',
-    borderRadius: 17,
-    padding: 16,
+    borderRadius: 18,
+    padding: 17,
     display: 'flex',
     alignItems: 'center',
     gap: 12,
     boxShadow:
-      '0 6px 18px rgba(26, 61, 47, 0.04)',
+      '0 5px 17px rgba(26,61,47,0.04)',
   },
 
   emptyIcon: {
-    width: 44,
-    height: 44,
+    width: 43,
+    height: 43,
     borderRadius: 13,
     background: '#e9f8f1',
     color: '#078b4a',
@@ -1276,17 +1315,13 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: 20,
-    flexShrink: 0,
   },
 
-  emptyParagraph: {
+  emptyDescription: {
     margin: '4px 0 0',
     color: '#78857f',
-    fontSize: 11,
+    fontSize: 12,
   },
-
-
-  /* ================= BOTTOM NAV ================= */
 
   bottomNav: {
     position: 'fixed',
@@ -1294,13 +1329,16 @@ const styles: Record<string, React.CSSProperties> = {
     left: 0,
     right: 0,
     height: 68,
-    background: 'rgba(255,255,255,0.98)',
-    borderTop: '1px solid #e5ebe8',
+    background:
+      'rgba(255,255,255,0.98)',
+    borderTop:
+      '1px solid #e5ebe8',
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    gridTemplateColumns:
+      'repeat(4, 1fr)',
     zIndex: 30,
     boxShadow:
-      '0 -5px 20px rgba(25, 55, 43, 0.06)',
+      '0 -5px 18px rgba(25,55,43,0.05)',
   },
 
   navItem: {
@@ -1329,64 +1367,62 @@ const styles: Record<string, React.CSSProperties> = {
 
   activeIndicator: {
     position: 'absolute',
-    bottom: 4,
-    width: 38,
+    bottom: 3,
+    width: 40,
     height: 3,
     borderRadius: 5,
     background: '#079447',
   },
 
-
-  /* ================= MODAL ================= */
-
   overlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(10, 30, 22, 0.45)',
+    background:
+      'rgba(10,30,22,0.48)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 18,
+    padding: 16,
     zIndex: 100,
-    boxSizing: 'border-box',
   },
 
   serviceModal: {
-    width: 'min(410px, 100%)',
+    width: 'min(430px, 100%)',
+    maxHeight: '90vh',
+    overflowY: 'auto',
     background: '#ffffff',
-    borderRadius: 21,
+    borderRadius: 23,
     padding: 23,
     position: 'relative',
     textAlign: 'center',
     boxShadow:
       '0 25px 70px rgba(0,0,0,0.2)',
-    boxSizing: 'border-box',
   },
 
   modalClose: {
     position: 'absolute',
-    right: 13,
+    right: 14,
     top: 12,
     border: 'none',
     background: '#f1f5f3',
-    width: 31,
-    height: 31,
+    width: 32,
+    height: 32,
     borderRadius: '50%',
-    fontSize: 20,
+    fontSize: 21,
     cursor: 'pointer',
   },
 
   modalIcon: {
     width: 62,
     height: 62,
-    margin: '5px auto 13px',
+    margin: '6px auto 13px',
     borderRadius: 18,
     background: '#e5f7ee',
     color: '#078b4a',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 27,
+    fontSize: 28,
     fontWeight: 800,
   },
 
@@ -1399,19 +1435,84 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#6f7c76',
     lineHeight: 1.5,
     fontSize: 13,
-    margin: '10px 0 19px',
+    margin: '9px 0 18px',
+  },
+
+  sendOptions: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 9,
+  },
+
+  sendOption: {
+    width: '100%',
+    border:
+      '1px solid #dcebe4',
+    background: '#f8fcfa',
+    borderRadius: 15,
+    padding: 12,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 11,
+    textAlign: 'left',
+    cursor: 'pointer',
+  },
+
+  optionIcon: {
+    width: 43,
+    height: 43,
+    flexShrink: 0,
+    borderRadius: 13,
+    background: '#dff6e9',
+    color: '#078b4a',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800,
+    fontSize: 19,
+  },
+
+  optionArrow: {
+    marginLeft: 'auto',
+    fontSize: 23,
+    color: '#078b4a',
+  },
+
+  modalInput: {
+    width: '100%',
+    height: 47,
+    boxSizing: 'border-box',
+    border:
+      '1px solid #d8e5df',
+    borderRadius: 12,
+    padding: '0 13px',
+    marginBottom: 10,
+    fontSize: 14,
+    outline: 'none',
   },
 
   modalPrimaryButton: {
     width: '100%',
-    height: 46,
+    height: 47,
     border: 'none',
-    borderRadius: 12,
+    borderRadius: 13,
     background: '#079447',
     color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: 'pointer',
+    marginTop: 3,
+  },
+
+  backButton: {
+    width: '100%',
+    border: 'none',
+    background: 'transparent',
+    color: '#087c43',
     fontSize: 13,
     fontWeight: 700,
     cursor: 'pointer',
+    padding: '12px 0 0',
   },
 };
 
