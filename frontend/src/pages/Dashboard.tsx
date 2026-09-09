@@ -37,21 +37,19 @@ interface MeResponse {
   accounts?: Account[];
 }
 
+/* ============================================================
+   DASHBOARD
+============================================================ */
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
 
   const [user, setUser] = useState<User | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [showBalance, setShowBalance] = useState(true);
   const [error, setError] = useState('');
-
-  /*
-   * This will later come from the backend.
-   * Keeping it separate from balance is important because
-   * account limit and daily transfer limit are different.
-   */
-  const dailyTransferUsed = 0;
 
   useEffect(() => {
     loadAccount();
@@ -66,9 +64,7 @@ const Dashboard: React.FC = () => {
         localStorage.getItem('zenimonies_token') ||
         localStorage.getItem('token');
 
-      /*
-       * Load cached data first.
-       */
+      /* Load saved information immediately */
       try {
         const savedUser = JSON.parse(
           localStorage.getItem('zenimonies_user') || 'null'
@@ -97,9 +93,6 @@ const Dashboard: React.FC = () => {
         return;
       }
 
-      /*
-       * Get latest information from backend.
-       */
       const response = await axios.get<MeResponse>(
         `${API_URL}/api/auth/me`,
         {
@@ -160,6 +153,10 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  /* ==========================================================
+     LOGOUT
+  ========================================================== */
+
   const logout = () => {
     localStorage.removeItem('zenimonies_token');
     localStorage.removeItem('token');
@@ -171,6 +168,10 @@ const Dashboard: React.FC = () => {
 
     navigate('/login');
   };
+
+  /* ==========================================================
+     USER NAME
+  ========================================================== */
 
   const displayName = useMemo(() => {
     return (
@@ -187,9 +188,10 @@ const Dashboard: React.FC = () => {
     return displayName.split(' ')[0] || 'there';
   }, [displayName]);
 
-  /*
-   * KYC tier.
-   */
+  /* ==========================================================
+     KYC TIER
+  ========================================================== */
+
   const currentTier = useMemo(() => {
     const tier = Number(
       user?.kyc_tier ?? user?.tier ?? 0
@@ -202,91 +204,22 @@ const Dashboard: React.FC = () => {
     return 0;
   }, [user]);
 
-  /*
-   * Zenimonies verification limits.
-   */
-  const limits = useMemo(() => {
-    if (currentTier === 3) {
-      return {
-        label: 'Tier 3',
-        accountLimit: null as number | null,
-        accountLimitLabel: 'Unlimited',
-        dailyTransferLimit: 5000000,
-        dailyTransferLabel: '₦5,000,000',
-        description: 'Fully verified account',
-      };
-    }
+  const verificationText =
+    currentTier >= 3
+      ? 'Fully verified'
+      : currentTier === 2
+      ? 'ID verification completed'
+      : currentTier === 1
+      ? 'Tier 1 verified'
+      : user?.is_verified
+      ? 'Email & phone verified'
+      : 'Verification required';
 
-    if (currentTier === 2) {
-      return {
-        label: 'Tier 2',
-        accountLimit: 500000,
-        accountLimitLabel: '₦500,000',
-        dailyTransferLimit: 200000,
-        dailyTransferLabel: '₦200,000',
-        description: 'ID document + face verification',
-      };
-    }
-
-    if (currentTier === 1) {
-      return {
-        label: 'Tier 1',
-        accountLimit: 200000,
-        accountLimitLabel: '₦200,000',
-        dailyTransferLimit: 50000,
-        dailyTransferLabel: '₦50,000',
-        description: 'BVN + face verification',
-      };
-    }
-
-    return {
-      label: 'Basic',
-      accountLimit: 50000,
-      accountLimitLabel: '₦50,000',
-      dailyTransferLimit: 50000,
-      dailyTransferLabel: '₦50,000',
-      description: 'Email + phone verification',
-    };
-  }, [currentTier]);
+  /* ==========================================================
+     BALANCE
+  ========================================================== */
 
   const balance = Number(account?.balance || 0);
-
-  const accountLimitPercentage = useMemo(() => {
-    if (limits.accountLimit === null) {
-      return 0;
-    }
-
-    if (limits.accountLimit <= 0) {
-      return 0;
-    }
-
-    return Math.min(
-      100,
-      Math.round(
-        (balance / limits.accountLimit) * 100
-      )
-    );
-  }, [balance, limits.accountLimit]);
-
-  const dailyTransferPercentage = useMemo(() => {
-    if (limits.dailyTransferLimit <= 0) {
-      return 0;
-    }
-
-    return Math.min(
-      100,
-      Math.round(
-        (dailyTransferUsed /
-          limits.dailyTransferLimit) *
-          100
-      )
-    );
-  }, [dailyTransferUsed, limits.dailyTransferLimit]);
-
-  const remainingDailyTransfer = Math.max(
-    0,
-    limits.dailyTransferLimit - dailyTransferUsed
-  );
 
   const formatCurrency = (
     amount: number,
@@ -310,209 +243,95 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const verificationText =
-    currentTier === 3
-      ? 'Fully verified'
-      : currentTier === 2
-      ? 'Tier 2 verified'
-      : currentTier === 1
-      ? 'Tier 1 verified'
-      : user?.is_verified
-      ? 'Email & phone verified'
-      : 'Verification required';
+  /* ==========================================================
+     LOADING
+  ========================================================== */
 
-  /*
-   * Loading screen.
-   */
   if (loading) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          background: '#f4f7fc',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '20px',
-        }}
-      >
-        <div
-          style={{
-            background: '#ffffff',
-            padding: '30px',
-            borderRadius: '18px',
-            textAlign: 'center',
-            boxShadow:
-              '0 10px 30px rgba(15, 23, 42, 0.08)',
-          }}
-        >
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              border: '4px solid #dbe5f5',
-              borderTopColor: '#123b7a',
-              margin: '0 auto 15px',
-              animation: 'zenimoniesSpin 1s linear infinite',
-            }}
-          />
+      <div style={styles.loadingPage}>
+        <div style={styles.loadingCard}>
+          <div style={styles.spinner} />
 
-          <strong>
+          <strong style={{ color: '#12372f' }}>
             Loading your dashboard...
           </strong>
-
-          <style>
-            {`
-              @keyframes zenimoniesSpin {
-                to {
-                  transform: rotate(360deg);
-                }
-              }
-            `}
-          </style>
         </div>
+
+        <style>
+          {`
+            @keyframes zenimoniesSpin {
+              to {
+                transform: rotate(360deg);
+              }
+            }
+          `}
+        </style>
       </div>
     );
   }
 
-  return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: '#f4f7fc',
-        color: '#172033',
-        fontFamily:
-          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      }}
-    >
-      {/* =====================================================
-          HEADER
-      ===================================================== */}
+  /* ==========================================================
+     MAIN DASHBOARD
+  ========================================================== */
 
-      <header
-        style={{
-          background: '#ffffff',
-          borderBottom: '1px solid #e6eaf0',
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
-        }}
-      >
-        <div
-          style={{
-            maxWidth: '1180px',
-            margin: '0 auto',
-            padding: '13px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '15px',
-          }}
-        >
-          <Link
-            to="/"
-            style={{
-              textDecoration: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-            }}
-          >
-            <div
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '11px',
-                background:
-                  'linear-gradient(135deg, #123b7a, #1e63b8)',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '18px',
-                fontWeight: 800,
-              }}
-            >
+  return (
+    <div style={styles.page}>
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
+
+      <header style={styles.header}>
+        <div style={styles.headerInner}>
+          <Link to="/" style={styles.brand}>
+            <div style={styles.logo}>
               Z
             </div>
 
             <div>
-              <div
-                style={{
-                  color: '#123b7a',
-                  fontSize: '17px',
-                  fontWeight: 800,
-                  lineHeight: 1,
-                }}
-              >
+              <div style={styles.brandName}>
                 Zenimonies
               </div>
 
-              <div
-                style={{
-                  color: '#98a2b3',
-                  fontSize: '9px',
-                  marginTop: '4px',
-                  letterSpacing: '1px',
-                }}
-              >
+              <div style={styles.brandSubtitle}>
                 DIGITAL BANKING
               </div>
             </div>
           </Link>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-          >
+          <div style={styles.headerRight}>
             <button
               type="button"
-              onClick={() => loadAccount()}
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
-                border: '1px solid #e4e7ec',
-                background: '#ffffff',
-                color: '#344054',
-                cursor: 'pointer',
-                fontSize: '18px',
-              }}
-              title="Refresh account"
+              style={styles.notificationButton}
+              aria-label="Notifications"
             >
-              ↻
+              ♧
+              <span style={styles.notificationDot} />
             </button>
+
+            <div style={styles.headerDivider} />
 
             <Link
               to="/profile"
-              style={{
-                textDecoration: 'none',
-                color: '#344054',
-                fontWeight: 700,
-                fontSize: '13px',
-                padding: '9px 10px',
-              }}
+              style={styles.profileButton}
             >
-              Profile
+              <div style={styles.profileAvatar}>
+                {firstName.charAt(0).toUpperCase()}
+              </div>
+
+              <span style={styles.profileName}>
+                {firstName}
+              </span>
+
+              <span style={styles.profileArrow}>
+                ˅
+              </span>
             </Link>
 
             <button
               type="button"
               onClick={logout}
-              style={{
-                border: '1px solid #d0d5dd',
-                background: '#ffffff',
-                color: '#344054',
-                borderRadius: '9px',
-                padding: '8px 13px',
-                cursor: 'pointer',
-                fontWeight: 700,
-                fontSize: '13px',
-              }}
+              style={styles.logoutButton}
             >
               Logout
             </button>
@@ -520,166 +339,61 @@ const Dashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* =====================================================
+      {/* ======================================================
           MAIN
-      ===================================================== */}
+      ====================================================== */}
 
-      <main
-        style={{
-          width: '100%',
-          maxWidth: '1180px',
-          margin: '0 auto',
-          padding: '25px 20px 50px',
-          boxSizing: 'border-box',
-        }}
-      >
+      <main style={styles.main}>
         {error && (
-          <div
-            style={{
-              marginBottom: '18px',
-              padding: '12px 14px',
-              borderRadius: '10px',
-              background: '#fff4ed',
-              border: '1px solid #fed7aa',
-              color: '#9a3412',
-              fontSize: '13px',
-            }}
-          >
+          <div style={styles.errorBox}>
             {error}
           </div>
         )}
 
-        {/* ===================================================
+        {/* ====================================================
             WELCOME
-        =================================================== */}
+        ==================================================== */}
 
-        <section
-          style={{
-            marginBottom: '20px',
-          }}
-        >
-          <div
-            style={{
-              color: '#667085',
-              fontSize: '13px',
-              marginBottom: '4px',
-            }}
-          >
-            Welcome back,
+        <section style={styles.welcomeSection}>
+          <div>
+            <div style={styles.welcomeSmall}>
+              Welcome back,
+            </div>
+
+            <h1 style={styles.welcomeName}>
+              {firstName}
+            </h1>
+
+            <p style={styles.welcomeText}>
+              Manage your money securely with Zenimonies.
+            </p>
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '15px',
-              flexWrap: 'wrap',
-            }}
-          >
-            <div>
-              <h1
-                style={{
-                  margin: 0,
-                  color: '#172033',
-                  fontSize: '27px',
-                  lineHeight: 1.2,
-                  fontWeight: 800,
-                }}
-              >
-                {firstName}
-              </h1>
+          <div style={styles.verificationPill}>
+            <span style={styles.verificationDot}>
+              ●
+            </span>
 
-              <p
-                style={{
-                  margin: '5px 0 0',
-                  color: '#667085',
-                  fontSize: '13px',
-                }}
-              >
-                Manage your money securely with Zenimonies.
-              </p>
-            </div>
-
-            <div
-              style={{
-                background: '#ecfdf3',
-                color: '#027a48',
-                border: '1px solid #abefc6',
-                padding: '7px 11px',
-                borderRadius: '999px',
-                fontSize: '12px',
-                fontWeight: 700,
-              }}
-            >
-              ● {verificationText}
-            </div>
+            {verificationText}
           </div>
         </section>
 
-        {/* ===================================================
-            BALANCE + ADD FUNDS
-        =================================================== */}
+        {/* ====================================================
+            BALANCE CARD
+        ==================================================== */}
 
-        <section
-          style={{
-            background:
-              'linear-gradient(135deg, #102f5c 0%, #155aa8 100%)',
-            borderRadius: '20px',
-            padding: '24px',
-            color: '#ffffff',
-            boxShadow:
-              '0 14px 35px rgba(16, 47, 92, 0.18)',
-            marginBottom: '18px',
-            position: 'relative',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              width: '200px',
-              height: '200px',
-              borderRadius: '50%',
-              background:
-                'rgba(255,255,255,0.06)',
-              right: '-80px',
-              top: '-90px',
-            }}
-          />
+        <section style={styles.balanceCard}>
+          <div style={styles.balanceGlowOne} />
+          <div style={styles.balanceGlowTwo} />
 
-          <div
-            style={{
-              position: 'relative',
-              zIndex: 1,
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '15px',
-              }}
-            >
+          <div style={styles.balanceContent}>
+            <div style={styles.balanceTop}>
               <div>
-                <div
-                  style={{
-                    fontSize: '13px',
-                    opacity: 0.78,
-                  }}
-                >
+                <div style={styles.balanceLabel}>
                   Available Balance
                 </div>
 
-                <div
-                  style={{
-                    fontSize: '31px',
-                    fontWeight: 800,
-                    marginTop: '7px',
-                    letterSpacing: '-0.5px',
-                  }}
-                >
+                <div style={styles.balanceAmount}>
                   {showBalance
                     ? formatCurrency(
                         balance,
@@ -694,405 +408,242 @@ const Dashboard: React.FC = () => {
                 onClick={() =>
                   setShowBalance((value) => !value)
                 }
-                style={{
-                  border:
-                    '1px solid rgba(255,255,255,0.25)',
-                  background:
-                    'rgba(255,255,255,0.10)',
-                  color: '#ffffff',
-                  borderRadius: '9px',
-                  padding: '7px 10px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                }}
+                style={styles.hideButton}
               >
+                <span style={styles.eyeIcon}>
+                  {showBalance ? '◉' : '○'}
+                </span>
+
                 {showBalance ? 'Hide' : 'Show'}
               </button>
             </div>
 
-            {/* ADD FUNDS */}
-            <div
-              style={{
-                marginTop: '20px',
-                display: 'flex',
-                gap: '9px',
-                flexWrap: 'wrap',
-              }}
-            >
+            <div style={styles.balanceActions}>
               <Link
                 to="/deposit"
-                style={{
-                  textDecoration: 'none',
-                  background: '#ffffff',
-                  color: '#123b7a',
-                  borderRadius: '9px',
-                  padding: '10px 15px',
-                  fontWeight: 800,
-                  fontSize: '13px',
-                }}
+                style={styles.addMoneyButton}
               >
-                + Add Funds
+                <span style={styles.plusCircle}>
+                  +
+                </span>
+
+                <span>Add Money</span>
+
+                <span style={styles.actionArrow}>
+                  ›
+                </span>
               </Link>
 
               <Link
                 to="/transfer"
-                style={{
-                  textDecoration: 'none',
-                  background:
-                    'rgba(255,255,255,0.12)',
-                  border:
-                    '1px solid rgba(255,255,255,0.22)',
-                  color: '#ffffff',
-                  borderRadius: '9px',
-                  padding: '10px 15px',
-                  fontWeight: 700,
-                  fontSize: '13px',
-                }}
+                style={styles.sendMoneyButton}
               >
-                Send Money
+                <span style={styles.sendIcon}>
+                  ↗
+                </span>
+
+                <span>Send Money</span>
+
+                <span style={styles.actionArrow}>
+                  ›
+                </span>
               </Link>
             </div>
           </div>
         </section>
 
-        {/* ===================================================
-            QUICK ACTIONS
-        =================================================== */}
+        {/* ====================================================
+            SERVICES
+        ==================================================== */}
 
-        <section
-          style={{
-            display: 'grid',
-            gridTemplateColumns:
-              'repeat(auto-fit, minmax(150px, 1fr))',
-            gap: '10px',
-            marginBottom: '20px',
-          }}
-        >
-          <QuickAction
+        <section style={styles.servicesCard}>
+          <DashboardService
             to="/transfer"
-            icon="↗"
-            title="Send Money"
-            description="Transfer funds"
+            icon="▥"
+            title="To Bank"
+            description="Send to any bank"
           />
 
-          <QuickAction
-            to="/deposit"
-            icon="+"
-            title="Add Funds"
-            description="Fund your account"
-          />
-
-          <QuickAction
+          <DashboardService
             to="/withdraw"
-            icon="↙"
+            icon="↗"
             title="Withdraw"
             description="Withdraw funds"
           />
 
-          <QuickAction
-            to="/transactions"
+          <DashboardService
+            to="/airtime"
+            icon="▥"
+            title="Airtime"
+            description="Buy airtime"
+          />
+
+          <DashboardService
+            to="/data"
             icon="↕"
-            title="Transactions"
-            description="View activity"
+            title="Data"
+            description="Buy data"
+          />
+
+          <DashboardService
+            to="/betting"
+            icon="⚽"
+            title="Betting"
+            description="Fund your bets"
+          />
+
+          <DashboardService
+            to="/tv"
+            icon="▣"
+            title="TV"
+            description="Pay TV bills"
+          />
+
+          <DashboardService
+            to="/bills"
+            icon="▤"
+            title="Bill"
+            description="Pay your bills"
+          />
+
+          <DashboardService
+            to="/safebox"
+            icon="▣"
+            title="SafeBox"
+            description="Save securely"
+          />
+
+          <DashboardService
+            to="/more"
+            icon="••"
+            title="More"
+            description="More services"
           />
         </section>
 
-        {/* ===================================================
-            SEND MONEY
-        =================================================== */}
+        {/* ====================================================
+            ACCOUNT VERIFICATION
+        ==================================================== */}
 
-        <section
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e6eaf0',
-            borderRadius: '16px',
-            padding: '19px',
-            marginBottom: '18px',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '13px',
-            }}
-          >
-            <div>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: '18px',
-                  color: '#172033',
-                }}
-              >
-                Send Money
-              </h2>
-
-              <p
-                style={{
-                  margin: '4px 0 0',
-                  color: '#667085',
-                  fontSize: '12px',
-                }}
-              >
-                Choose where you want to send your money.
-              </p>
-            </div>
+        <section style={styles.verificationCard}>
+          <div style={styles.verificationIconBox}>
+            <span style={styles.shieldIcon}>
+              ✓
+            </span>
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns:
-                'repeat(auto-fit, minmax(230px, 1fr))',
-              gap: '10px',
-            }}
-          >
-            <TransferCard
-              to="/transfer?type=zenimonies"
-              icon="Z"
-              title="Zenimonies User"
-              description="Send money to another Zenimonies customer."
-            />
+          <div style={styles.verificationInfo}>
+            <h2 style={styles.verificationTitle}>
+              Account Verification
+            </h2>
 
-            <TransferCard
-              to="/transfer?type=bank"
-              icon="₦"
-              title="Other Bank"
-              description="Send money to a Nigerian bank account."
-            />
+            <p style={styles.verificationDescription}>
+              Complete your KYC to increase your limits
+              and enjoy all features.
+            </p>
           </div>
-        </section>
 
-        {/* ===================================================
-            LIMITS
-        =================================================== */}
-
-        <section
-          style={{
-            display: 'grid',
-            gridTemplateColumns:
-              'repeat(auto-fit, minmax(270px, 1fr))',
-            gap: '12px',
-            marginBottom: '18px',
-          }}
-        >
-          <LimitCard
-            title="Account Limit"
-            value={limits.accountLimitLabel}
-            badge={limits.label}
-            percentage={accountLimitPercentage}
-            usedText={
-              limits.accountLimit === null
-                ? 'Unlimited account balance'
-                : `${formatCurrency(balance)} used`
-            }
-            rightText={
-              limits.accountLimit === null
-                ? 'No limit'
-                : `${accountLimitPercentage}% used`
-            }
-            unlimited={limits.accountLimit === null}
-          />
-
-          <LimitCard
-            title="Daily Transfer Limit"
-            value={limits.dailyTransferLabel}
-            badge="Today"
-            percentage={dailyTransferPercentage}
-            usedText={`Used ${formatCurrency(
-              dailyTransferUsed
-            )}`}
-            rightText={`${formatCurrency(
-              remainingDailyTransfer
-            )} remaining`}
-          />
-        </section>
-
-        {/* ===================================================
-            VERIFICATION
-        =================================================== */}
-
-        <section
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e6eaf0',
-            borderRadius: '16px',
-            padding: '19px',
-            marginBottom: '18px',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '15px',
-              flexWrap: 'wrap',
-            }}
+          <Link
+            to="/kyc"
+            style={styles.verificationButton}
           >
-            <div>
-              <div
-                style={{
-                  color: '#667085',
-                  fontSize: '12px',
-                }}
-              >
-                Verification
-              </div>
+            {currentTier >= 3
+              ? 'View Verification'
+              : 'Upgrade'}
 
-              <h2
-                style={{
-                  margin: '4px 0',
-                  fontSize: '18px',
-                }}
-              >
-                {limits.label}
-              </h2>
+            <span style={styles.verificationArrow}>
+              ›
+            </span>
+          </Link>
+        </section>
 
-              <p
-                style={{
-                  margin: 0,
-                  color: '#667085',
-                  fontSize: '12px',
-                }}
-              >
-                {limits.description}
-              </p>
-            </div>
+        {/* ====================================================
+            RECENT TRANSACTIONS
+        ==================================================== */}
+
+        <section style={styles.transactionsSection}>
+          <div style={styles.sectionHeader}>
+            <h2 style={styles.sectionTitle}>
+              Recent Transactions
+            </h2>
 
             <Link
-              to="/kyc"
-              style={{
-                textDecoration: 'none',
-                background: '#eef4ff',
-                color: '#123b7a',
-                padding: '9px 13px',
-                borderRadius: '9px',
-                fontWeight: 800,
-                fontSize: '12px',
-              }}
+              to="/transactions"
+              style={styles.seeAll}
             >
-              {currentTier >= 3
-                ? 'View KYC'
-                : 'Upgrade'}
+              See All
+              <span>›</span>
             </Link>
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns:
-                'repeat(4, 1fr)',
-              gap: '7px',
-              marginTop: '17px',
-            }}
-          >
-            <TierStep
-              label="Basic"
-              active={currentTier >= 0}
-              completed={currentTier >= 0}
-            />
+          <div style={styles.emptyTransactions}>
+            <div style={styles.transactionIcon}>
+              ≡
+            </div>
 
-            <TierStep
-              label="Tier 1"
-              active={currentTier >= 1}
-              completed={currentTier >= 1}
-            />
+            <div>
+              <div style={styles.emptyTitle}>
+                No transactions yet
+              </div>
 
-            <TierStep
-              label="Tier 2"
-              active={currentTier >= 2}
-              completed={currentTier >= 2}
-            />
-
-            <TierStep
-              label="Tier 3"
-              active={currentTier >= 3}
-              completed={currentTier >= 3}
-            />
-          </div>
-        </section>
-
-        {/* ===================================================
-            SERVICES
-        =================================================== */}
-
-        <section>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '12px',
-            }}
-          >
-            <h2
-              style={{
-                margin: 0,
-                fontSize: '18px',
-              }}
-            >
-              Services
-            </h2>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns:
-                'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '10px',
-            }}
-          >
-            <ServiceCard
-              to="/transactions"
-              icon="↕"
-              title="Transactions"
-              description="View your transaction history."
-            />
-
-            <ServiceCard
-              to="/wallet"
-              icon="◈"
-              title="Wallet"
-              description="Manage your wallet."
-            />
-
-            <ServiceCard
-              to="/market"
-              icon="↗"
-              title="Market"
-              description="Explore market information."
-            />
-
-            <ServiceCard
-              to="/profile"
-              icon="●"
-              title="Profile"
-              description="Manage your account."
-            />
+              <div style={styles.emptyDescription}>
+                Your transactions will appear here.
+              </div>
+            </div>
           </div>
         </section>
       </main>
+
+      {/* ======================================================
+          BOTTOM NAVIGATION
+      ====================================================== */}
+
+      <nav style={styles.bottomNav}>
+        <div style={styles.bottomNavInner}>
+          <BottomNavItem
+            to="/"
+            icon="⌂"
+            label="Home"
+            active
+          />
+
+          <BottomNavItem
+            to="/transactions"
+            icon="↕"
+            label="Transactions"
+          />
+
+          <BottomNavItem
+            to="/wallet"
+            icon="▱"
+            label="Wallet"
+          />
+
+          <BottomNavItem
+            to="/profile"
+            icon="○"
+            label="Profile"
+          />
+        </div>
+      </nav>
     </div>
   );
 };
 
 /* ============================================================
-   QUICK ACTION
+   DASHBOARD SERVICE
 ============================================================ */
 
-interface QuickActionProps {
+interface DashboardServiceProps {
   to: string;
   icon: string;
   title: string;
   description: string;
 }
 
-const QuickAction: React.FC<QuickActionProps> = ({
+const DashboardService: React.FC<
+  DashboardServiceProps
+> = ({
   to,
   icon,
   title,
@@ -1101,399 +652,725 @@ const QuickAction: React.FC<QuickActionProps> = ({
   return (
     <Link
       to={to}
-      style={{
-        textDecoration: 'none',
-        color: 'inherit',
-      }}
+      style={styles.serviceLink}
     >
-      <div
-        style={{
-          background: '#ffffff',
-          border: '1px solid #e6eaf0',
-          borderRadius: '13px',
-          padding: '14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          minHeight: '62px',
-          boxSizing: 'border-box',
-        }}
-      >
-        <div
-          style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '9px',
-            background: '#edf3fa',
-            color: '#123b7a',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '17px',
-            fontWeight: 800,
-            flexShrink: 0,
-          }}
-        >
+      <div style={styles.serviceIconBox}>
+        <div style={styles.serviceIcon}>
           {icon}
         </div>
+      </div>
 
-        <div>
-          <div
-            style={{
-              fontWeight: 800,
-              fontSize: '13px',
-              color: '#172033',
-            }}
-          >
-            {title}
-          </div>
+      <div style={styles.serviceTitle}>
+        {title}
+      </div>
 
-          <div
-            style={{
-              color: '#667085',
-              fontSize: '11px',
-              marginTop: '2px',
-            }}
-          >
-            {description}
-          </div>
-        </div>
+      <div style={styles.serviceDescription}>
+        {description}
       </div>
     </Link>
   );
 };
 
 /* ============================================================
-   TRANSFER CARD
+   BOTTOM NAV ITEM
 ============================================================ */
 
-interface TransferCardProps {
+interface BottomNavItemProps {
   to: string;
   icon: string;
-  title: string;
-  description: string;
-}
-
-const TransferCard: React.FC<TransferCardProps> = ({
-  to,
-  icon,
-  title,
-  description,
-}) => {
-  return (
-    <Link
-      to={to}
-      style={{
-        textDecoration: 'none',
-        color: 'inherit',
-      }}
-    >
-      <div
-        style={{
-          border: '1px solid #e1e7ef',
-          borderRadius: '13px',
-          padding: '15px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          background: '#fbfcfe',
-        }}
-      >
-        <div
-          style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '10px',
-            background: '#eaf1f9',
-            color: '#123b7a',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 900,
-            fontSize: '17px',
-            flexShrink: 0,
-          }}
-        >
-          {icon}
-        </div>
-
-        <div>
-          <div
-            style={{
-              fontWeight: 800,
-              fontSize: '14px',
-              color: '#172033',
-            }}
-          >
-            {title}
-          </div>
-
-          <div
-            style={{
-              color: '#667085',
-              fontSize: '11px',
-              lineHeight: 1.45,
-              marginTop: '3px',
-            }}
-          >
-            {description}
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-};
-
-/* ============================================================
-   LIMIT CARD
-============================================================ */
-
-interface LimitCardProps {
-  title: string;
-  value: string;
-  badge: string;
-  percentage: number;
-  usedText: string;
-  rightText: string;
-  unlimited?: boolean;
-}
-
-const LimitCard: React.FC<LimitCardProps> = ({
-  title,
-  value,
-  badge,
-  percentage,
-  usedText,
-  rightText,
-  unlimited = false,
-}) => {
-  return (
-    <div
-      style={{
-        background: '#ffffff',
-        border: '1px solid #e6eaf0',
-        borderRadius: '16px',
-        padding: '18px',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: '10px',
-        }}
-      >
-        <div>
-          <div
-            style={{
-              color: '#667085',
-              fontSize: '12px',
-            }}
-          >
-            {title}
-          </div>
-
-          <div
-            style={{
-              marginTop: '4px',
-              fontSize: '21px',
-              fontWeight: 800,
-              color: '#172033',
-            }}
-          >
-            {value}
-          </div>
-        </div>
-
-        <span
-          style={{
-            background: '#edf3fa',
-            color: '#123b7a',
-            padding: '6px 8px',
-            borderRadius: '8px',
-            fontSize: '10px',
-            fontWeight: 800,
-          }}
-        >
-          {badge}
-        </span>
-      </div>
-
-      {unlimited ? (
-        <div
-          style={{
-            marginTop: '16px',
-            background: '#ecfdf3',
-            color: '#027a48',
-            padding: '9px',
-            borderRadius: '9px',
-            fontSize: '11px',
-            fontWeight: 700,
-          }}
-        >
-          ✓ Unlimited account balance
-        </div>
-      ) : (
-        <>
-          <div
-            style={{
-              height: '6px',
-              background: '#edf0f4',
-              borderRadius: '999px',
-              overflow: 'hidden',
-              marginTop: '16px',
-            }}
-          >
-            <div
-              style={{
-                width: `${percentage}%`,
-                height: '100%',
-                background: '#1e63b8',
-                borderRadius: '999px',
-              }}
-            />
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: '10px',
-              marginTop: '7px',
-              color: '#667085',
-              fontSize: '10px',
-            }}
-          >
-            <span>{usedText}</span>
-            <span>{rightText}</span>
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-
-/* ============================================================
-   SERVICE CARD
-============================================================ */
-
-interface ServiceCardProps {
-  to: string;
-  icon: string;
-  title: string;
-  description: string;
-}
-
-const ServiceCard: React.FC<ServiceCardProps> = ({
-  to,
-  icon,
-  title,
-  description,
-}) => {
-  return (
-    <Link
-      to={to}
-      style={{
-        textDecoration: 'none',
-        color: 'inherit',
-      }}
-    >
-      <div
-        style={{
-          background: '#ffffff',
-          border: '1px solid #e6eaf0',
-          borderRadius: '14px',
-          padding: '16px',
-          minHeight: '105px',
-          boxSizing: 'border-box',
-        }}
-      >
-        <div
-          style={{
-            width: '34px',
-            height: '34px',
-            borderRadius: '9px',
-            background: '#f0f3f7',
-            color: '#344054',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '16px',
-            marginBottom: '10px',
-          }}
-        >
-          {icon}
-        </div>
-
-        <h3
-          style={{
-            margin: '0 0 4px',
-            fontSize: '14px',
-            color: '#172033',
-          }}
-        >
-          {title}
-        </h3>
-
-        <p
-          style={{
-            margin: 0,
-            color: '#667085',
-            fontSize: '11px',
-            lineHeight: 1.4,
-          }}
-        >
-          {description}
-        </p>
-      </div>
-    </Link>
-  );
-};
-
-/* ============================================================
-   KYC TIER STEP
-============================================================ */
-
-interface TierStepProps {
   label: string;
-  active: boolean;
-  completed: boolean;
+  active?: boolean;
 }
 
-const TierStep: React.FC<TierStepProps> = ({
+const BottomNavItem: React.FC<
+  BottomNavItemProps
+> = ({
+  to,
+  icon,
   label,
-  active,
-  completed,
+  active = false,
 }) => {
   return (
-    <div
+    <Link
+      to={to}
       style={{
-        textAlign: 'center',
-        padding: '8px 4px',
-        borderRadius: '9px',
-        background: active
-          ? '#edf3fa'
-          : '#f8f9fb',
+        ...styles.bottomNavItem,
         color: active
-          ? '#123b7a'
-          : '#98a2b3',
-        fontSize: '10px',
-        fontWeight: 800,
+          ? '#00875a'
+          : '#667085',
       }}
     >
       <div
         style={{
-          fontSize: '14px',
-          marginBottom: '2px',
+          ...styles.bottomNavIcon,
+          fontWeight: active ? 800 : 500,
         }}
       >
-        {completed ? '✓' : '○'}
+        {icon}
       </div>
 
-      {label}
-    </div>
+      <div
+        style={{
+          ...styles.bottomNavLabel,
+          fontWeight: active ? 800 : 500,
+        }}
+      >
+        {label}
+      </div>
+    </Link>
   );
 };
+
+/* ============================================================
+   STYLES
+============================================================ */
+
+const styles: {
+  [key: string]: React.CSSProperties;
+} = {
+  page: {
+    minHeight: '100vh',
+    background:
+      'linear-gradient(180deg, #f8faf9 0%, #ffffff 65%)',
+    color: '#102a25',
+    paddingBottom: '100px',
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+  },
+
+  header: {
+    background: '#ffffff',
+    borderBottom: '1px solid #eef1ef',
+    position: 'sticky',
+    top: 0,
+    zIndex: 50,
+  },
+
+  headerInner: {
+    maxWidth: '1180px',
+    margin: '0 auto',
+    padding: '12px 24px',
+    minHeight: '68px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '20px',
+  },
+
+  brand: {
+    textDecoration: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    color: '#12372f',
+  },
+
+  logo: {
+    width: '46px',
+    height: '46px',
+    borderRadius: '12px',
+    background:
+      'linear-gradient(135deg, #009b68, #00754f)',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '25px',
+    fontWeight: 800,
+    boxShadow:
+      '0 7px 18px rgba(0, 135, 90, 0.18)',
+  },
+
+  brandName: {
+    fontSize: '21px',
+    fontWeight: 800,
+    letterSpacing: '-0.5px',
+  },
+
+  brandSubtitle: {
+    marginTop: '1px',
+    fontSize: '10px',
+    letterSpacing: '1px',
+    color: '#98a2b3',
+    fontWeight: 600,
+  },
+
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '15px',
+  },
+
+  notificationButton: {
+    position: 'relative',
+    width: '40px',
+    height: '40px',
+    border: 'none',
+    background: 'transparent',
+    color: '#667085',
+    fontSize: '24px',
+    cursor: 'pointer',
+  },
+
+  notificationDot: {
+    position: 'absolute',
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    background: '#ef4444',
+    top: '5px',
+    right: '6px',
+    border: '2px solid #ffffff',
+  },
+
+  headerDivider: {
+    width: '1px',
+    height: '30px',
+    background: '#eaecf0',
+  },
+
+  profileButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    textDecoration: 'none',
+    color: '#172033',
+  },
+
+  profileAvatar: {
+    width: '42px',
+    height: '42px',
+    borderRadius: '50%',
+    background: '#edf3f1',
+    color: '#12372f',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800,
+    fontSize: '18px',
+  },
+
+  profileName: {
+    fontSize: '15px',
+    fontWeight: 700,
+  },
+
+  profileArrow: {
+    color: '#667085',
+    fontSize: '18px',
+  },
+
+  logoutButton: {
+    border: '1px solid #d0d5dd',
+    background: '#ffffff',
+    color: '#344054',
+    borderRadius: '9px',
+    padding: '8px 12px',
+    cursor: 'pointer',
+    fontWeight: 700,
+  },
+
+  main: {
+    maxWidth: '1180px',
+    margin: '0 auto',
+    padding: '30px 24px 45px',
+  },
+
+  errorBox: {
+    marginBottom: '18px',
+    padding: '12px 15px',
+    borderRadius: '12px',
+    background: '#fff4ed',
+    border: '1px solid #fed7aa',
+    color: '#9a3412',
+    fontSize: '14px',
+  },
+
+  welcomeSection: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    gap: '20px',
+    marginBottom: '22px',
+    flexWrap: 'wrap',
+  },
+
+  welcomeSmall: {
+    color: '#667085',
+    fontSize: '15px',
+    marginBottom: '2px',
+  },
+
+  welcomeName: {
+    margin: 0,
+    fontSize: '42px',
+    lineHeight: 1.08,
+    letterSpacing: '-1.5px',
+    color: '#102a25',
+  },
+
+  welcomeText: {
+    margin: '7px 0 0',
+    color: '#667085',
+    fontSize: '17px',
+  },
+
+  verificationPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    background: '#ecfdf3',
+    border: '1px solid #abefc6',
+    color: '#05603a',
+    borderRadius: '999px',
+    padding: '11px 17px',
+    fontWeight: 700,
+    fontSize: '14px',
+  },
+
+  verificationDot: {
+    fontSize: '11px',
+  },
+
+  balanceCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: '24px',
+    background:
+      'linear-gradient(125deg, #006b49 0%, #00875a 52%, #00a56d 100%)',
+    color: '#ffffff',
+    marginBottom: '22px',
+    boxShadow:
+      '0 18px 40px rgba(0, 107, 73, 0.18)',
+  },
+
+  balanceGlowOne: {
+    position: 'absolute',
+    width: '440px',
+    height: '220px',
+    borderRadius: '50%',
+    background:
+      'rgba(255,255,255,0.055)',
+    right: '-130px',
+    top: '-95px',
+    transform: 'rotate(-12deg)',
+  },
+
+  balanceGlowTwo: {
+    position: 'absolute',
+    width: '400px',
+    height: '150px',
+    borderRadius: '50%',
+    background:
+      'rgba(255,255,255,0.045)',
+    right: '60px',
+    bottom: '-80px',
+    transform: 'rotate(-16deg)',
+  },
+
+  balanceContent: {
+    position: 'relative',
+    zIndex: 2,
+    padding: '28px 30px',
+  },
+
+  balanceTop: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: '20px',
+  },
+
+  balanceLabel: {
+    fontSize: '17px',
+    opacity: 0.85,
+    marginBottom: '7px',
+  },
+
+  balanceAmount: {
+    fontSize: '46px',
+    fontWeight: 800,
+    letterSpacing: '-1.5px',
+  },
+
+  hideButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    background: 'rgba(255,255,255,0.08)',
+    color: '#ffffff',
+    border: '1px solid rgba(255,255,255,0.25)',
+    borderRadius: '11px',
+    padding: '10px 15px',
+    cursor: 'pointer',
+    fontWeight: 700,
+    fontSize: '14px',
+  },
+
+  eyeIcon: {
+    fontSize: '15px',
+  },
+
+  balanceActions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '12px',
+    marginTop: '24px',
+    flexWrap: 'wrap',
+  },
+
+  addMoneyButton: {
+    minWidth: '210px',
+    minHeight: '58px',
+    padding: '0 20px',
+    boxSizing: 'border-box',
+    borderRadius: '15px',
+    background: '#ffffff',
+    color: '#075f43',
+    textDecoration: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '11px',
+    fontWeight: 800,
+    fontSize: '16px',
+  },
+
+  plusCircle: {
+    width: '34px',
+    height: '34px',
+    borderRadius: '50%',
+    background: '#00875a',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '25px',
+    lineHeight: 1,
+  },
+
+  sendMoneyButton: {
+    minWidth: '210px',
+    minHeight: '58px',
+    padding: '0 20px',
+    boxSizing: 'border-box',
+    borderRadius: '15px',
+    background: 'rgba(255,255,255,0.08)',
+    border: '1px solid rgba(255,255,255,0.35)',
+    color: '#ffffff',
+    textDecoration: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '11px',
+    fontWeight: 800,
+    fontSize: '16px',
+  },
+
+  sendIcon: {
+    fontSize: '23px',
+  },
+
+  actionArrow: {
+    marginLeft: 'auto',
+    fontSize: '25px',
+    opacity: 0.8,
+  },
+
+  servicesCard: {
+    background: '#ffffff',
+    border: '1px solid #edf1ef',
+    borderRadius: '22px',
+    padding: '22px',
+    display: 'grid',
+    gridTemplateColumns:
+      'repeat(3, minmax(0, 1fr))',
+    gap: '10px',
+    boxShadow:
+      '0 7px 25px rgba(16, 24, 40, 0.035)',
+    marginBottom: '20px',
+  },
+
+  serviceLink: {
+    textDecoration: 'none',
+    color: '#102a25',
+    textAlign: 'center',
+    borderRadius: '16px',
+    padding: '15px 8px 14px',
+    transition:
+      'transform 0.15s ease, background 0.15s ease',
+  },
+
+  serviceIconBox: {
+    width: '66px',
+    height: '66px',
+    borderRadius: '19px',
+    background: '#eaf8f3',
+    margin: '0 auto 9px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  serviceIcon: {
+    width: '43px',
+    height: '43px',
+    borderRadius: '12px',
+    background:
+      'linear-gradient(145deg, #00a66d, #00875a)',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '20px',
+    fontWeight: 800,
+  },
+
+  serviceTitle: {
+    fontSize: '16px',
+    fontWeight: 800,
+    marginBottom: '3px',
+  },
+
+  serviceDescription: {
+    color: '#667085',
+    fontSize: '12px',
+  },
+
+  verificationCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '17px',
+    background:
+      'linear-gradient(100deg, #f0fbf7, #ffffff)',
+    border: '1px solid #d9f3e8',
+    borderRadius: '20px',
+    padding: '18px 22px',
+    marginBottom: '25px',
+  },
+
+  verificationIconBox: {
+    width: '62px',
+    height: '62px',
+    borderRadius: '17px',
+    background: '#e1f7ee',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+
+  shieldIcon: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '12px',
+    background: '#009b68',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '22px',
+    fontWeight: 900,
+  },
+
+  verificationInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  verificationTitle: {
+    margin: 0,
+    fontSize: '19px',
+    color: '#12372f',
+  },
+
+  verificationDescription: {
+    margin: '4px 0 0',
+    color: '#667085',
+    fontSize: '14px',
+  },
+
+  verificationButton: {
+    flexShrink: 0,
+    textDecoration: 'none',
+    background:
+      'linear-gradient(135deg, #009b68, #00754f)',
+    color: '#ffffff',
+    borderRadius: '12px',
+    padding: '12px 17px',
+    fontWeight: 800,
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+
+  verificationArrow: {
+    fontSize: '23px',
+    lineHeight: 1,
+  },
+
+  transactionsSection: {
+    marginTop: '8px',
+  },
+
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '15px',
+    marginBottom: '12px',
+  },
+
+  sectionTitle: {
+    margin: 0,
+    fontSize: '21px',
+    color: '#102a25',
+  },
+
+  seeAll: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    color: '#00875a',
+    textDecoration: 'none',
+    fontWeight: 800,
+    fontSize: '14px',
+  },
+
+  emptyTransactions: {
+    background: '#ffffff',
+    border: '1px solid #edf1ef',
+    borderRadius: '18px',
+    padding: '19px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '15px',
+  },
+
+  transactionIcon: {
+    width: '50px',
+    height: '50px',
+    borderRadius: '15px',
+    background: '#f2f4f7',
+    color: '#667085',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '25px',
+    fontWeight: 800,
+  },
+
+  emptyTitle: {
+    fontSize: '15px',
+    fontWeight: 800,
+    color: '#172033',
+  },
+
+  emptyDescription: {
+    marginTop: '3px',
+    fontSize: '13px',
+    color: '#98a2b3',
+  },
+
+  bottomNav: {
+    position: 'fixed',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 100,
+    background:
+      'rgba(255,255,255,0.96)',
+    backdropFilter: 'blur(15px)',
+    borderTop: '1px solid #eaecf0',
+    boxShadow:
+      '0 -8px 25px rgba(16,24,40,0.06)',
+  },
+
+  bottomNavInner: {
+    maxWidth: '700px',
+    margin: '0 auto',
+    display: 'grid',
+    gridTemplateColumns:
+      'repeat(4, 1fr)',
+    padding: '9px 12px calc(9px + env(safe-area-inset-bottom))',
+  },
+
+  bottomNavItem: {
+    textDecoration: 'none',
+    textAlign: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '2px',
+    padding: '4px',
+  },
+
+  bottomNavIcon: {
+    fontSize: '25px',
+    lineHeight: 1.1,
+  },
+
+  bottomNavLabel: {
+    fontSize: '11px',
+  },
+
+  loadingPage: {
+    minHeight: '100vh',
+    background: '#f5f8f6',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '20px',
+  },
+
+  loadingCard: {
+    background: '#ffffff',
+    borderRadius: '18px',
+    padding: '32px',
+    textAlign: 'center',
+    boxShadow:
+      '0 12px 35px rgba(16,24,40,0.08)',
+  },
+
+  spinner: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '50%',
+    border: '4px solid #dff2eb',
+    borderTopColor: '#00875a',
+    margin: '0 auto 15px',
+    animation:
+      'zenimoniesSpin 0.9s linear infinite',
+  },
+};
+
+/* ============================================================
+   RESPONSIVE CSS
+============================================================ */
+
+const responsiveStyle = document.createElement('style');
+
+responsiveStyle.innerHTML = `
+  * {
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 760px) {
+    .zenimonies-mobile-placeholder {
+      display: none;
+    }
+  }
+`;
+
+if (
+  typeof document !== 'undefined' &&
+  !document.getElementById(
+    'zenimonies-dashboard-responsive'
+  )
+) {
+  responsiveStyle.id =
+    'zenimonies-dashboard-responsive';
+
+  document.head.appendChild(responsiveStyle);
+}
 
 export default Dashboard;
