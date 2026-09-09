@@ -85,6 +85,11 @@ const Dashboard: React.FC = () => {
       return;
     }
 
+    if (service === 'Betting') {
+      navigate('/betting');
+      return;
+   }
+    
     if (service === 'Send Money') {
       setActiveService('Send Money');
       setSendType(null);
