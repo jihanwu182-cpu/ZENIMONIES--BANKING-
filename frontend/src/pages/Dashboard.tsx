@@ -1,132 +1,58 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  IconButton,
-  InputAdornment,
-  List,
-  ListItemButton,
-  ListItemText,
-  MenuItem,
-  Paper,
-  Snackbar,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
-
-import {
-  AccountBalance,
-  Add,
-  ArrowBack,
-  ArrowForward,
-  ArrowOutward,
-  BarChart,
-  CheckCircle,
-  Close,
-  ContentCopy,
-  DataUsage,
-  ExpandMore,
-  GridView,
-  Home,
-  KeyboardArrowRight,
-  Lock,
-  Logout,
-  MoreHoriz,
-  NotificationsNone,
-  Payments,
-  PhoneAndroid,
-  ReceiptLong,
-  Search,
-  SportsSoccer,
-  Tv,
-  Visibility,
-  VisibilityOff,
-  Wallet,
-  SwapHoriz,
-  PersonOutline,
-} from '@mui/icons-material';
-
-type ServiceType =
-  | 'bank'
-  | 'withdraw'
-  | 'airtime'
-  | 'data'
-  | 'betting'
-  | 'tv'
-  | 'bills'
-  | 'safebox'
-  | 'more'
-  | null;
-
-interface Bank {
-  name: string;
-  shortName: string;
-}
-
-const banks: Bank[] = [
-  { name: 'Access Bank', shortName: 'Access' },
-  { name: 'Citibank Nigeria', shortName: 'Citibank' },
-  { name: 'Ecobank Nigeria', shortName: 'Ecobank' },
-  { name: 'Fidelity Bank', shortName: 'Fidelity' },
-  { name: 'First Bank of Nigeria', shortName: 'FirstBank' },
-  { name: 'First City Monument Bank', shortName: 'FCMB' },
-  { name: 'Globus Bank', shortName: 'Globus' },
-  { name: 'Guaranty Trust Bank', shortName: 'GTBank' },
-  { name: 'Heritage Bank', shortName: 'Heritage' },
-  { name: 'Jaiz Bank', shortName: 'Jaiz' },
-  { name: 'Keystone Bank', shortName: 'Keystone' },
-  { name: 'Kuda Bank', shortName: 'Kuda' },
-  { name: 'Moniepoint', shortName: 'Moniepoint' },
-  { name: 'OPay', shortName: 'OPay' },
-  { name: 'Optimus Bank', shortName: 'Optimus' },
-  { name: 'Parallex Bank', shortName: 'Parallex' },
-  { name: 'Polaris Bank', shortName: 'Polaris' },
-  { name: 'PremiumTrust Bank', shortName: 'PremiumTrust' },
-  { name: 'Providus Bank', shortName: 'Providus' },
-  { name: 'Stanbic IBTC Bank', shortName: 'Stanbic' },
-  { name: 'Standard Chartered Bank', shortName: 'Standard Chartered' },
-  { name: 'Sterling Bank', shortName: 'Sterling' },
-  { name: 'SunTrust Bank', shortName: 'SunTrust' },
-  { name: 'Titan Trust Bank', shortName: 'Titan' },
-  { name: 'Union Bank of Nigeria', shortName: 'Union' },
-  { name: 'United Bank for Africa', shortName: 'UBA' },
-  { name: 'Unity Bank', shortName: 'Unity' },
-  { name: 'Wema Bank', shortName: 'Wema' },
-  { name: 'Zenith Bank', shortName: 'Zenith' },
-];
+type Feature = {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+};
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
 
   const [balanceVisible, setBalanceVisible] = useState(true);
-  const [service, setService] = useState<ServiceType>(null);
+  const [feature, setFeature] = useState<Feature | null>(null);
   const [bankSearch, setBankSearch] = useState('');
-  const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
+  const [selectedBank, setSelectedBank] = useState('');
 
-  const [amount, setAmount] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [network, setNetwork] = useState('');
-  const [dataPlan, setDataPlan] = useState('');
-  const [tvProvider, setTvProvider] = useState('');
-  const [smartCard, setSmartCard] = useState('');
-  const [betAmount, setBetAmount] = useState('');
-
-  const [snackbar, setSnackbar] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+  /*
+   * Nigerian banks + payment institutions.
+   * These are used for the "To Bank" search screen.
+   */
+  const banks = [
+    'Access Bank',
+    'Carbon',
+    'Citibank Nigeria',
+    'Ecobank Nigeria',
+    'FairMoney',
+    'Fidelity Bank',
+    'First Bank of Nigeria',
+    'First City Monument Bank (FCMB)',
+    'Globus Bank',
+    'GTBank',
+    'Heritage Bank',
+    'Jaiz Bank',
+    'Keystone Bank',
+    'Kuda Bank',
+    'Moniepoint',
+    'Opay',
+    'Palmpay',
+    'Parallex Bank',
+    'Polaris Bank',
+    'Premium Trust Bank',
+    'Providus Bank',
+    'Stanbic IBTC Bank',
+    'Standard Chartered Bank',
+    'Sterling Bank',
+    'Taj Bank',
+    'Titan Trust Bank',
+    'Union Bank',
+    'United Bank for Africa (UBA)',
+    'Unity Bank',
+    'Wema Bank',
+    'Zenith Bank',
+  ];
 
   const filteredBanks = useMemo(() => {
     const search = bankSearch.trim().toLowerCase();
@@ -135,1669 +61,1327 @@ const Dashboard: React.FC = () => {
       return banks;
     }
 
-    return banks.filter(
-      (bank) =>
-        bank.name.toLowerCase().includes(search) ||
-        bank.shortName.toLowerCase().includes(search),
+    return banks.filter((bank) =>
+      bank.toLowerCase().includes(search)
     );
   }, [bankSearch]);
 
-  const showMessage = (message: string) => {
-    setSnackbarMessage(message);
-    setSnackbar(true);
-  };
-
-  const openService = (type: ServiceType) => {
-    setService(type);
-    setBankSearch('');
-    setSelectedBank(null);
-    setAmount('');
-    setAccountNumber('');
-    setPhoneNumber('');
-    setNetwork('');
-    setDataPlan('');
-    setTvProvider('');
-    setSmartCard('');
-    setBetAmount('');
-  };
-
-  const closeService = () => {
-    setService(null);
-  };
-
-  const submitAction = (message: string) => {
-    closeService();
-    showMessage(message);
-  };
-
-  const serviceItems = [
+  const features: Feature[] = [
     {
+      id: 'bank',
       title: 'To Bank',
-      subtitle: 'Send to any bank',
-      icon: <AccountBalance />,
-      type: 'bank' as ServiceType,
+      description: 'Send money to any bank',
+      icon: '▥',
     },
     {
+      id: 'withdraw',
       title: 'Withdraw',
-      subtitle: 'Withdraw funds',
-      icon: <ArrowOutward />,
-      type: 'withdraw' as ServiceType,
+      description: 'Withdraw funds',
+      icon: '↗',
     },
     {
+      id: 'airtime',
       title: 'Airtime',
-      subtitle: 'Buy airtime',
-      icon: <BarChart />,
-      type: 'airtime' as ServiceType,
+      description: 'Buy airtime',
+      icon: '▥',
     },
     {
+      id: 'data',
       title: 'Data',
-      subtitle: 'Buy data',
-      icon: <DataUsage />,
-      type: 'data' as ServiceType,
+      description: 'Buy data',
+      icon: '↕',
     },
     {
+      id: 'betting',
       title: 'Betting',
-      subtitle: 'Fund your bets',
-      icon: <SportsSoccer />,
-      type: 'betting' as ServiceType,
+      description: 'Fund your bets',
+      icon: '⚽',
     },
     {
+      id: 'tv',
       title: 'TV',
-      subtitle: 'Pay TV bills',
-      icon: <Tv />,
-      type: 'tv' as ServiceType,
+      description: 'Pay TV bills',
+      icon: '▣',
     },
     {
+      id: 'bill',
       title: 'Bills',
-      subtitle: 'Pay your bills',
-      icon: <ReceiptLong />,
-      type: 'bills' as ServiceType,
+      description: 'Pay your bills',
+      icon: '▤',
     },
     {
+      id: 'safebox',
       title: 'SafeBox',
-      subtitle: 'Protect your money',
-      icon: <Lock />,
-      type: 'safebox' as ServiceType,
+      description: 'Keep money secure',
+      icon: '▣',
     },
     {
+      id: 'more',
       title: 'More',
-      subtitle: 'More services',
-      icon: <GridView />,
-      type: 'more' as ServiceType,
+      description: 'More services',
+      icon: '••',
     },
   ];
 
+  const openFeature = (item: Feature) => {
+    setFeature(item);
+    setBankSearch('');
+    setSelectedBank('');
+  };
+
+  const closeFeature = () => {
+    setFeature(null);
+    setBankSearch('');
+    setSelectedBank('');
+  };
+
+  const handleProfile = () => {
+    navigate('/profile');
+  };
+
+  const handleKYC = () => {
+    navigate('/kyc');
+  };
+
+  const handleTransactions = () => {
+    /*
+     * Transactions page is not currently registered in App.tsx.
+     * For now we display it inside the dashboard instead of
+     * sending the user to a missing route.
+     */
+    setFeature({
+      id: 'transactions',
+      title: 'Transactions',
+      description: 'View your recent activity',
+      icon: '↕',
+    });
+  };
+
+  const handleWallet = () => {
+    /*
+     * Wallet page is also not currently registered in App.tsx.
+     * Keep the user inside the dashboard until that page is created.
+     */
+    setFeature({
+      id: 'wallet',
+      title: 'Wallet',
+      description: 'Manage your wallet',
+      icon: '▣',
+    });
+  };
+
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        background:
-          'linear-gradient(180deg, #f8fafb 0%, #f4f7f7 50%, #ffffff 100%)',
-        pb: {
-          xs: 10,
-          sm: 12,
-        },
-      }}
-    >
-      {/* =========================================================
-          TOP HEADER
-      ========================================================== */}
+    <div className="zen-dashboard">
+      <style>{`
+        * {
+          box-sizing: border-box;
+        }
 
-      <Paper
-        elevation={0}
-        sx={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 20,
-          borderBottom: '1px solid #edf1ef',
-          backgroundColor: 'rgba(255,255,255,0.96)',
-          backdropFilter: 'blur(12px)',
-        }}
-      >
-        <Box
-          sx={{
-            maxWidth: 1180,
-            mx: 'auto',
-            px: {
-              xs: 2,
-              sm: 3,
-              md: 4,
-            },
-            py: {
-              xs: 1.3,
-              sm: 1.5,
-            },
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 2,
-          }}
-        >
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={{
-              xs: 1,
-              sm: 1.5,
-            }}
-          >
-            <Box
-              sx={{
-                width: {
-                  xs: 46,
-                  sm: 52,
-                },
-                height: {
-                  xs: 46,
-                  sm: 52,
-                },
-                borderRadius: '14px',
-                background:
-                  'linear-gradient(145deg, #08a96c 0%, #078653 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#ffffff',
-                fontSize: {
-                  xs: 25,
-                  sm: 29,
-                },
-                fontWeight: 800,
-                boxShadow: '0 8px 20px rgba(7,134,83,0.18)',
-              }}
-            >
-              Z
-            </Box>
+        .zen-dashboard {
+          min-height: 100vh;
+          background:
+            radial-gradient(
+              circle at top right,
+              rgba(16, 185, 129, 0.08),
+              transparent 32%
+            ),
+            #f6faf8;
+          color: #10231d;
+          font-family:
+            Inter,
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif;
+          padding-bottom: 92px;
+        }
 
-            <Box>
-              <Typography
-                sx={{
-                  fontSize: {
-                    xs: 21,
-                    sm: 25,
-                  },
-                  fontWeight: 800,
-                  lineHeight: 1,
-                  color: '#123c31',
-                  letterSpacing: '-0.5px',
-                }}
-              >
+        .zen-container {
+          width: min(1100px, calc(100% - 32px));
+          margin: 0 auto;
+        }
+
+        /* HEADER */
+
+        .zen-header {
+          height: 76px;
+          background: rgba(255, 255, 255, 0.96);
+          border-bottom: 1px solid #edf2ef;
+          display: flex;
+          align-items: center;
+          position: sticky;
+          top: 0;
+          z-index: 20;
+          backdrop-filter: blur(14px);
+        }
+
+        .zen-header-inner {
+          width: min(1100px, calc(100% - 32px));
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .zen-brand {
+          display: flex;
+          align-items: center;
+          gap: 13px;
+        }
+
+        .zen-logo {
+          width: 46px;
+          height: 46px;
+          border-radius: 13px;
+          background: linear-gradient(145deg, #12a86f, #07875a);
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 25px;
+          font-weight: 800;
+          box-shadow: 0 8px 20px rgba(5, 135, 90, 0.18);
+        }
+
+        .zen-brand-name {
+          font-size: 25px;
+          font-weight: 800;
+          letter-spacing: -0.7px;
+          color: #102d25;
+          line-height: 1;
+        }
+
+        .zen-brand-subtitle {
+          margin-top: 4px;
+          color: #9aa6a2;
+          font-size: 11px;
+          letter-spacing: 1.2px;
+          font-weight: 600;
+        }
+
+        .zen-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 18px;
+        }
+
+        .zen-notification {
+          width: 42px;
+          height: 42px;
+          border-radius: 50%;
+          border: 1px solid #edf1ef;
+          background: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 21px;
+          position: relative;
+          cursor: pointer;
+        }
+
+        .zen-notification-dot {
+          position: absolute;
+          width: 8px;
+          height: 8px;
+          background: #e53935;
+          border-radius: 50%;
+          top: 8px;
+          right: 9px;
+          border: 2px solid white;
+        }
+
+        .zen-divider {
+          width: 1px;
+          height: 30px;
+          background: #e4ebe8;
+        }
+
+        .zen-user {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          cursor: pointer;
+          border: 0;
+          background: transparent;
+        }
+
+        .zen-avatar {
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          background: #edf3f1;
+          color: #0a7050;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 800;
+          font-size: 18px;
+        }
+
+        .zen-user-name {
+          font-weight: 700;
+          font-size: 15px;
+        }
+
+        .zen-chevron {
+          color: #74827d;
+          font-size: 17px;
+        }
+
+        /* WELCOME */
+
+        .zen-welcome {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          gap: 20px;
+          padding: 38px 0 22px;
+        }
+
+        .zen-welcome-small {
+          color: #7d8b86;
+          font-size: 18px;
+          margin-bottom: 2px;
+        }
+
+        .zen-welcome-name {
+          margin: 0;
+          font-size: clamp(32px, 5vw, 48px);
+          line-height: 1.05;
+          letter-spacing: -1.8px;
+          color: #0e1820;
+        }
+
+        .zen-welcome-description {
+          margin: 9px 0 0;
+          color: #7b8984;
+          font-size: 17px;
+        }
+
+        .zen-verification {
+          display: inline-flex;
+          align-items: center;
+          gap: 9px;
+          background: #eaf9f2;
+          color: #087151;
+          border: 1px solid #c8eddd;
+          border-radius: 999px;
+          padding: 13px 20px;
+          font-size: 14px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
+        .zen-verification-dot {
+          width: 10px;
+          height: 10px;
+          background: #079568;
+          border-radius: 50%;
+        }
+
+        /* BALANCE */
+
+        .zen-balance-card {
+          min-height: 255px;
+          border-radius: 25px;
+          padding: 30px 34px;
+          position: relative;
+          overflow: hidden;
+          background:
+            radial-gradient(
+              circle at 92% 15%,
+              rgba(37, 208, 143, 0.42),
+              transparent 32%
+            ),
+            linear-gradient(
+              135deg,
+              #075d45 0%,
+              #087653 52%,
+              #0aa16d 100%
+            );
+          box-shadow: 0 18px 38px rgba(5, 104, 72, 0.16);
+        }
+
+        .zen-balance-card::before {
+          content: "";
+          position: absolute;
+          width: 450px;
+          height: 450px;
+          right: -180px;
+          top: -250px;
+          border: 1px solid rgba(255,255,255,0.09);
+          border-radius: 50%;
+        }
+
+        .zen-balance-content {
+          position: relative;
+          z-index: 1;
+        }
+
+        .zen-balance-top {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+        }
+
+        .zen-balance-label {
+          color: rgba(255,255,255,0.78);
+          font-size: 17px;
+          font-weight: 500;
+        }
+
+        .zen-balance-value {
+          color: white;
+          font-size: clamp(38px, 6vw, 57px);
+          font-weight: 800;
+          letter-spacing: -2px;
+          margin-top: 7px;
+        }
+
+        .zen-hide {
+          border: 1px solid rgba(255,255,255,0.28);
+          background: rgba(255,255,255,0.06);
+          color: white;
+          padding: 12px 18px;
+          border-radius: 14px;
+          cursor: pointer;
+          font-weight: 700;
+          font-size: 14px;
+        }
+
+        .zen-balance-bottom {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 23px;
+        }
+
+        .zen-add-money {
+          min-width: 280px;
+          border: none;
+          background: white;
+          color: #07563f;
+          border-radius: 18px;
+          padding: 15px 20px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 15px;
+          font-size: 17px;
+          font-weight: 800;
+          cursor: pointer;
+          box-shadow: 0 8px 22px rgba(0,0,0,0.08);
+        }
+
+        .zen-add-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .zen-plus {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background: #079966;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 26px;
+          line-height: 1;
+        }
+
+        .zen-arrow {
+          font-size: 24px;
+        }
+
+        /* SERVICES */
+
+        .zen-services {
+          margin-top: 25px;
+          background: white;
+          border: 1px solid #edf2ef;
+          border-radius: 25px;
+          padding: 27px 25px 30px;
+          box-shadow: 0 10px 30px rgba(16, 47, 36, 0.035);
+        }
+
+        .zen-services-title {
+          margin: 0 0 22px 4px;
+          color: #18362c;
+          font-size: 18px;
+          font-weight: 800;
+        }
+
+        .zen-service-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 28px 18px;
+        }
+
+        .zen-service {
+          border: 0;
+          background: transparent;
+          text-align: center;
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 18px;
+          transition: transform .18s ease, background .18s ease;
+        }
+
+        .zen-service:hover {
+          transform: translateY(-3px);
+          background: #f7fbf9;
+        }
+
+        .zen-service:active {
+          transform: scale(.97);
+        }
+
+        .zen-service-icon {
+          width: 78px;
+          height: 78px;
+          margin: 0 auto 10px;
+          border-radius: 24px;
+          background: #e9f8f2;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #079568;
+          font-size: 31px;
+          font-weight: 800;
+        }
+
+        .zen-service-title {
+          color: #17251f;
+          font-size: 16px;
+          font-weight: 700;
+          margin-bottom: 3px;
+        }
+
+        .zen-service-description {
+          color: #91a09a;
+          font-size: 12px;
+          line-height: 1.35;
+        }
+
+        /* KYC */
+
+        .zen-kyc {
+          margin-top: 23px;
+          background: linear-gradient(110deg, #effbf6, #f9fffc);
+          border: 1px solid #d9f1e6;
+          border-radius: 23px;
+          padding: 20px 22px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+        }
+
+        .zen-kyc-left {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .zen-kyc-icon {
+          width: 60px;
+          height: 60px;
+          border-radius: 17px;
+          background: #dff6ec;
+          color: #079568;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 27px;
+        }
+
+        .zen-kyc-title {
+          font-size: 17px;
+          font-weight: 800;
+          color: #134c3b;
+        }
+
+        .zen-kyc-text {
+          margin-top: 4px;
+          color: #80918a;
+          font-size: 14px;
+        }
+
+        .zen-kyc-button {
+          border: none;
+          border-radius: 14px;
+          background: #079568;
+          color: white;
+          padding: 14px 21px;
+          font-weight: 800;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+
+        /* BOTTOM NAVIGATION */
+
+        .zen-bottom-nav {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 76px;
+          background: rgba(255,255,255,0.97);
+          border-top: 1px solid #e9efec;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 30;
+          backdrop-filter: blur(15px);
+        }
+
+        .zen-bottom-inner {
+          width: min(600px, 100%);
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+        }
+
+        .zen-bottom-item {
+          border: 0;
+          background: transparent;
+          color: #78857f;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .zen-bottom-item.active {
+          color: #079568;
+        }
+
+        .zen-bottom-icon {
+          font-size: 22px;
+          line-height: 1;
+        }
+
+        /* MODAL */
+
+        .zen-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(8, 24, 18, 0.48);
+          z-index: 100;
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+          padding: 15px;
+          backdrop-filter: blur(4px);
+        }
+
+        .zen-modal {
+          width: min(560px, 100%);
+          max-height: 88vh;
+          overflow-y: auto;
+          background: white;
+          border-radius: 27px 27px 18px 18px;
+          padding: 24px;
+          box-shadow: 0 25px 70px rgba(0,0,0,.2);
+          animation: zenSlide .2s ease;
+        }
+
+        @keyframes zenSlide {
+          from {
+            transform: translateY(20px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+
+        .zen-modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+        }
+
+        .zen-modal-heading {
+          display: flex;
+          align-items: center;
+          gap: 13px;
+        }
+
+        .zen-modal-icon {
+          width: 50px;
+          height: 50px;
+          border-radius: 15px;
+          background: #e9f8f2;
+          color: #079568;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 22px;
+          font-weight: 800;
+        }
+
+        .zen-modal-title {
+          margin: 0;
+          font-size: 21px;
+          color: #16372c;
+        }
+
+        .zen-modal-subtitle {
+          margin: 3px 0 0;
+          color: #899790;
+          font-size: 13px;
+        }
+
+        .zen-close {
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          border: 0;
+          background: #f1f5f3;
+          color: #53625d;
+          font-size: 21px;
+          cursor: pointer;
+        }
+
+        .zen-input {
+          width: 100%;
+          border: 1px solid #dfe9e5;
+          background: #f9fbfa;
+          border-radius: 14px;
+          padding: 14px 16px;
+          outline: none;
+          font-size: 15px;
+          color: #19332a;
+          margin-bottom: 15px;
+        }
+
+        .zen-input:focus {
+          border-color: #079568;
+          background: white;
+        }
+
+        .zen-bank-list {
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+        }
+
+        .zen-bank {
+          width: 100%;
+          border: 1px solid #edf2ef;
+          background: white;
+          padding: 13px;
+          border-radius: 13px;
+          text-align: left;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-weight: 600;
+          color: #20372f;
+        }
+
+        .zen-bank:hover {
+          border-color: #bde8d6;
+          background: #f6fcf9;
+        }
+
+        .zen-bank-logo {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          background: #e9f8f2;
+          color: #079568;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 800;
+        }
+
+        .zen-selected-bank {
+          padding: 15px;
+          border-radius: 14px;
+          background: #eaf9f2;
+          color: #086d50;
+          font-weight: 700;
+          margin-bottom: 15px;
+        }
+
+        .zen-primary-button {
+          width: 100%;
+          border: none;
+          border-radius: 14px;
+          background: #079568;
+          color: white;
+          padding: 15px;
+          font-size: 15px;
+          font-weight: 800;
+          cursor: pointer;
+          margin-top: 5px;
+        }
+
+        .zen-info-box {
+          background: #f6faf8;
+          border: 1px solid #e9f0ed;
+          border-radius: 16px;
+          padding: 18px;
+          color: #687872;
+          line-height: 1.6;
+          font-size: 14px;
+        }
+
+        /* MOBILE */
+
+        @media (max-width: 700px) {
+          .zen-container {
+            width: min(100% - 24px, 560px);
+          }
+
+          .zen-header {
+            height: 67px;
+          }
+
+          .zen-header-inner {
+            width: calc(100% - 24px);
+          }
+
+          .zen-brand-name {
+            font-size: 19px;
+          }
+
+          .zen-brand-subtitle {
+            font-size: 9px;
+          }
+
+          .zen-logo {
+            width: 40px;
+            height: 40px;
+            font-size: 21px;
+          }
+
+          .zen-notification {
+            width: 36px;
+            height: 36px;
+          }
+
+          .zen-user-name,
+          .zen-divider {
+            display: none;
+          }
+
+          .zen-avatar {
+            width: 38px;
+            height: 38px;
+          }
+
+          .zen-welcome {
+            padding: 25px 0 17px;
+            display: block;
+          }
+
+          .zen-welcome-small {
+            font-size: 15px;
+          }
+
+          .zen-welcome-name {
+            font-size: 36px;
+          }
+
+          .zen-welcome-description {
+            font-size: 14px;
+          }
+
+          .zen-verification {
+            margin-top: 15px;
+            font-size: 12px;
+            padding: 10px 14px;
+          }
+
+          .zen-balance-card {
+            min-height: 215px;
+            padding: 24px 21px;
+            border-radius: 22px;
+          }
+
+          .zen-balance-label {
+            font-size: 15px;
+          }
+
+          .zen-balance-value {
+            font-size: 43px;
+          }
+
+          .zen-hide {
+            padding: 9px 13px;
+            font-size: 12px;
+          }
+
+          .zen-balance-bottom {
+            justify-content: stretch;
+          }
+
+          .zen-add-money {
+            width: 100%;
+            min-width: 0;
+          }
+
+          .zen-services {
+            padding: 20px 13px 23px;
+            border-radius: 22px;
+          }
+
+          .zen-services-title {
+            font-size: 16px;
+          }
+
+          .zen-service-grid {
+            gap: 24px 8px;
+          }
+
+          .zen-service-icon {
+            width: 62px;
+            height: 62px;
+            border-radius: 19px;
+            font-size: 25px;
+          }
+
+          .zen-service-title {
+            font-size: 14px;
+          }
+
+          .zen-service-description {
+            font-size: 10px;
+          }
+
+          .zen-kyc {
+            padding: 16px;
+          }
+
+          .zen-kyc-icon {
+            width: 47px;
+            height: 47px;
+          }
+
+          .zen-kyc-title {
+            font-size: 14px;
+          }
+
+          .zen-kyc-text {
+            font-size: 11px;
+          }
+
+          .zen-kyc-button {
+            padding: 11px 13px;
+            font-size: 11px;
+          }
+
+          .zen-bottom-nav {
+            height: 69px;
+          }
+
+          .zen-overlay {
+            padding: 0;
+          }
+
+          .zen-modal {
+            border-radius: 25px 25px 0 0;
+            max-height: 91vh;
+          }
+        }
+      `}</style>
+
+      {/* HEADER */}
+      <header className="zen-header">
+        <div className="zen-header-inner">
+          <div className="zen-brand">
+            <div className="zen-logo">Z</div>
+
+            <div>
+              <div className="zen-brand-name">
                 Zenimonies
-              </Typography>
+              </div>
 
-              <Typography
-                sx={{
-                  mt: 0.35,
-                  fontSize: {
-                    xs: 9,
-                    sm: 10,
-                  },
-                  fontWeight: 700,
-                  color: '#8b949b',
-                  letterSpacing: 1.4,
-                }}
-              >
+              <div className="zen-brand-subtitle">
                 DIGITAL BANKING
-              </Typography>
-            </Box>
-          </Stack>
+              </div>
+            </div>
+          </div>
 
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={{
-              xs: 0.5,
-              sm: 1.5,
-            }}
-          >
-            <IconButton
-              onClick={() => showMessage('You have no new notifications.')}
-              sx={{
-                color: '#52636b',
-              }}
+          <div className="zen-header-actions">
+            <button
+              className="zen-notification"
+              type="button"
+              aria-label="Notifications"
+              onClick={() =>
+                alert('You have no new notifications.')
+              }
             >
-              <NotificationsNone />
-            </IconButton>
+              ♧
+              <span className="zen-notification-dot" />
+            </button>
 
-            <Divider
-              orientation="vertical"
-              flexItem
-              sx={{
-                mx: {
-                  xs: 0.5,
-                  sm: 1,
-                },
-              }}
-            />
+            <div className="zen-divider" />
 
-            <Avatar
-              sx={{
-                width: {
-                  xs: 38,
-                  sm: 46,
-                },
-                height: {
-                  xs: 38,
-                  sm: 46,
-                },
-                backgroundColor: '#e8eef1',
-                color: '#173d34',
-                fontWeight: 700,
-              }}
+            <button
+              className="zen-user"
+              type="button"
+              onClick={handleProfile}
             >
-              H
-            </Avatar>
+              <div className="zen-avatar">H</div>
 
-            <Box
-              sx={{
-                display: {
-                  xs: 'none',
-                  sm: 'block',
-                },
-              }}
-            >
-              <Typography
-                sx={{
-                  fontWeight: 700,
-                  color: '#182e39',
-                }}
-              >
+              <span className="zen-user-name">
                 Harrison
-              </Typography>
-            </Box>
+              </span>
 
-            <IconButton
-              onClick={() => navigate('/profile')}
-              sx={{
-                color: '#65747c',
-              }}
-            >
-              <ExpandMore />
-            </IconButton>
-          </Stack>
-        </Box>
-      </Paper>
+              <span className="zen-chevron">
+                ˅
+              </span>
+            </button>
+          </div>
+        </div>
+      </header>
 
-      {/* =========================================================
-          MAIN CONTENT
-      ========================================================== */}
-
-      <Box
-        sx={{
-          maxWidth: 1180,
-          mx: 'auto',
-          px: {
-            xs: 2,
-            sm: 3,
-            md: 4,
-          },
-          pt: {
-            xs: 3,
-            sm: 4,
-            md: 5,
-          },
-        }}
-      >
-        {/* Welcome */}
-
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: {
-              xs: 'flex-start',
-              md: 'center',
-            },
-            flexDirection: {
-              xs: 'column',
-              md: 'row',
-            },
-            gap: 2,
-            mb: {
-              xs: 2.5,
-              sm: 3,
-            },
-          }}
-        >
-          <Box>
-            <Typography
-              sx={{
-                fontSize: {
-                  xs: 18,
-                  sm: 21,
-                },
-                color: '#687986',
-                fontWeight: 500,
-              }}
-            >
+      <main className="zen-container">
+        {/* WELCOME */}
+        <section className="zen-welcome">
+          <div>
+            <div className="zen-welcome-small">
               Welcome back,
-            </Typography>
+            </div>
 
-            <Typography
-              sx={{
-                mt: 0.1,
-                fontSize: {
-                  xs: 35,
-                  sm: 43,
-                  md: 48,
-                },
-                lineHeight: 1,
-                fontWeight: 800,
-                color: '#132536',
-                letterSpacing: '-1.8px',
-              }}
-            >
+            <h1 className="zen-welcome-name">
               Harrison
-            </Typography>
+            </h1>
 
-            <Typography
-              sx={{
-                mt: 1,
-                fontSize: {
-                  xs: 16,
-                  sm: 19,
-                },
-                color: '#71808b',
-              }}
-            >
-              Here&apos;s your financial overview.
-            </Typography>
-          </Box>
+            <p className="zen-welcome-description">
+              Here's your financial overview.
+            </p>
+          </div>
 
-          <Chip
-            icon={
-              <CheckCircle
-                sx={{
-                  fontSize: '18px !important',
-                }}
-              />
-            }
-            label="Tier 1 verified"
-            sx={{
-              alignSelf: {
-                xs: 'flex-start',
-                md: 'center',
-              },
-              height: 48,
-              px: 1.5,
-              borderRadius: 5,
-              backgroundColor: '#e9faf3',
-              color: '#126448',
-              border: '1px solid #d3f1e4',
-              fontWeight: 700,
-              fontSize: 15,
-            }}
-          />
-        </Box>
+          <div className="zen-verification">
+            <span className="zen-verification-dot" />
+            Email & phone verified
+          </div>
+        </section>
 
-        {/* =========================================================
-            BALANCE CARD
-        ========================================================== */}
-
-        <Card
-          elevation={0}
-          sx={{
-            borderRadius: {
-              xs: '25px',
-              sm: '28px',
-            },
-            overflow: 'hidden',
-            background:
-              'radial-gradient(circle at 90% 15%, rgba(22,188,124,0.55) 0%, rgba(8,151,94,0.2) 28%, transparent 50%), linear-gradient(135deg, #08734e 0%, #05845a 50%, #0aa56d 100%)',
-            color: '#ffffff',
-            position: 'relative',
-            minHeight: {
-              xs: 245,
-              sm: 265,
-            },
-            boxShadow: '0 16px 40px rgba(0,99,65,0.16)',
-            mb: {
-              xs: 2.5,
-              sm: 3,
-            },
-          }}
-        >
-          <Box
-            sx={{
-              position: 'absolute',
-              width: 300,
-              height: 300,
-              borderRadius: '50%',
-              right: -100,
-              top: -170,
-              background: 'rgba(255,255,255,0.06)',
-            }}
-          />
-
-          <CardContent
-            sx={{
-              position: 'relative',
-              height: '100%',
-              minHeight: {
-                xs: 245,
-                sm: 265,
-              },
-              p: {
-                xs: 3,
-                sm: 4,
-                md: 4.5,
-              },
-              '&:last-child': {
-                pb: {
-                  xs: 3,
-                  sm: 4,
-                },
-              },
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-            }}
-          >
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-              }}
-            >
-              <Box>
-                <Typography
-                  sx={{
-                    fontSize: {
-                      xs: 16,
-                      sm: 19,
-                    },
-                    fontWeight: 500,
-                    color: 'rgba(255,255,255,0.82)',
-                  }}
-                >
+        {/* BALANCE */}
+        <section className="zen-balance-card">
+          <div className="zen-balance-content">
+            <div className="zen-balance-top">
+              <div>
+                <div className="zen-balance-label">
                   Available Balance
-                </Typography>
+                </div>
 
-                <Typography
-                  sx={{
-                    mt: 1,
-                    fontSize: {
-                      xs: 40,
-                      sm: 50,
-                      md: 56,
-                    },
-                    lineHeight: 1,
-                    fontWeight: 800,
-                    letterSpacing: '-2px',
-                  }}
-                >
-                  {balanceVisible ? '₦0.00' : '₦••••••'}
-                </Typography>
-              </Box>
+                <div className="zen-balance-value">
+                  {balanceVisible ? '₦0.00' : '₦••••'}
+                </div>
+              </div>
 
-              <Button
-                onClick={() => setBalanceVisible((value) => !value)}
-                startIcon={
-                  balanceVisible ? <Visibility /> : <VisibilityOff />
+              <button
+                type="button"
+                className="zen-hide"
+                onClick={() =>
+                  setBalanceVisible((value) => !value)
                 }
-                sx={{
-                  color: '#ffffff',
-                  border: '1px solid rgba(255,255,255,0.25)',
-                  borderRadius: '15px',
-                  px: {
-                    xs: 1.5,
-                    sm: 2,
-                  },
-                  py: 1,
-                  minWidth: {
-                    xs: 88,
-                    sm: 105,
-                  },
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.12)',
-                  },
-                }}
               >
-                {balanceVisible ? 'Hide' : 'Show'}
-              </Button>
-            </Box>
+                {balanceVisible ? '◉ Hide' : '◉ Show'}
+              </button>
+            </div>
 
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'flex-end',
-                mt: 3,
-              }}
-            >
-              <Button
-                onClick={() => submitAction('Add Funds is ready to use.')}
-                endIcon={<KeyboardArrowRight />}
-                startIcon={<Add />}
-                sx={{
-                  backgroundColor: '#ffffff',
-                  color: '#074d39',
-                  borderRadius: '18px',
-                  minHeight: {
-                    xs: 58,
-                    sm: 66,
-                  },
-                  px: {
-                    xs: 2.5,
-                    sm: 3.5,
-                  },
-                  minWidth: {
-                    xs: 185,
-                    sm: 235,
-                  },
-                  fontSize: {
-                    xs: 15,
-                    sm: 18,
-                  },
-                  fontWeight: 800,
-                  textTransform: 'none',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
-                  '&:hover': {
-                    backgroundColor: '#f4fffa',
-                  },
-                }}
+            <div className="zen-balance-bottom">
+              <button
+                type="button"
+                className="zen-add-money"
+                onClick={() =>
+                  setFeature({
+                    id: 'add-money',
+                    title: 'Add Money',
+                    description: 'Fund your Zenimonies account',
+                    icon: '+',
+                  })
+                }
               >
-                Add Money
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
+                <span className="zen-add-left">
+                  <span className="zen-plus">+</span>
+                  <span>Add Money</span>
+                </span>
 
-        {/* =========================================================
-            SERVICES
-        ========================================================== */}
+                <span className="zen-arrow">›</span>
+              </button>
+            </div>
+          </div>
+        </section>
 
-        <Card
-          elevation={0}
-          sx={{
-            borderRadius: {
-              xs: '24px',
-              sm: '28px',
-            },
-            backgroundColor: '#ffffff',
-            border: '1px solid #edf1ef',
-            boxShadow: '0 8px 30px rgba(31,55,48,0.045)',
-            mb: {
-              xs: 2.5,
-              sm: 3,
-            },
-          }}
-        >
-          <CardContent
-            sx={{
-              p: {
-                xs: 2,
-                sm: 3,
-                md: 3.5,
-              },
-              '&:last-child': {
-                pb: {
-                  xs: 2.5,
-                  sm: 3.5,
-                },
-              },
-            }}
+        {/* SERVICES */}
+        <section className="zen-services">
+          <h2 className="zen-services-title">
+            Services
+          </h2>
+
+          <div className="zen-service-grid">
+            {features.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="zen-service"
+                onClick={() => openFeature(item)}
+              >
+                <div className="zen-service-icon">
+                  {item.icon}
+                </div>
+
+                <div className="zen-service-title">
+                  {item.title}
+                </div>
+
+                <div className="zen-service-description">
+                  {item.description}
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* KYC */}
+        <section className="zen-kyc">
+          <div className="zen-kyc-left">
+            <div className="zen-kyc-icon">
+              ✓
+            </div>
+
+            <div>
+              <div className="zen-kyc-title">
+                Account Verification
+              </div>
+
+              <div className="zen-kyc-text">
+                Complete your KYC to increase your limits.
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="zen-kyc-button"
+            onClick={handleKYC}
           >
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: 'repeat(3, 1fr)',
-                  sm: 'repeat(3, 1fr)',
-                  md: 'repeat(3, 1fr)',
-                },
-                columnGap: {
-                  xs: 1,
-                  sm: 2,
-                  md: 4,
-                },
-                rowGap: {
-                  xs: 2.5,
-                  sm: 3.5,
-                  md: 4,
-                },
-              }}
-            >
-              {serviceItems.map((item) => (
-                <Box
-                  key={item.title}
-                  onClick={() => openService(item.type)}
-                  sx={{
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                    borderRadius: 3,
-                    py: {
-                      xs: 0.5,
-                      sm: 1,
-                    },
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      transform: 'translateY(-3px)',
-                    },
-                    '&:active': {
-                      transform: 'scale(0.97)',
-                    },
-                  }}
-                >
-                  <Box
-                    sx={{
-                      mx: 'auto',
-                      width: {
-                        xs: 66,
-                        sm: 78,
-                        md: 86,
-                      },
-                      height: {
-                        xs: 66,
-                        sm: 78,
-                        md: 86,
-                      },
-                      borderRadius: {
-                        xs: '20px',
-                        sm: '24px',
-                      },
-                      background:
-                        'linear-gradient(145deg, #effcf7 0%, #e1f7ef 100%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#079260',
-                      mb: {
-                        xs: 0.9,
-                        sm: 1.2,
-                      },
-                    }}
-                  >
-                    {React.cloneElement(item.icon, {
-                      sx: {
-                        fontSize: {
-                          xs: 30,
-                          sm: 37,
-                        },
-                      },
-                    })}
-                  </Box>
+            View Verification&nbsp; ›
+          </button>
+        </section>
+      </main>
 
-                  <Typography
-                    sx={{
-                      fontSize: {
-                        xs: 14,
-                        sm: 17,
-                        md: 19,
-                      },
-                      fontWeight: 700,
-                      color: '#162b36',
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {item.title}
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      mt: 0.4,
-                      display: {
-                        xs: 'none',
-                        sm: 'block',
-                      },
-                      fontSize: 12,
-                      color: '#849199',
-                    }}
-                  >
-                    {item.subtitle}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-          </CardContent>
-        </Card>
-
-        {/* =========================================================
-            VERIFICATION
-        ========================================================== */}
-
-        <Card
-          elevation={0}
-          sx={{
-            borderRadius: {
-              xs: '22px',
-              sm: '25px',
-            },
-            border: '1px solid #dff1e9',
-            background:
-              'linear-gradient(100deg, #effbf6 0%, #ffffff 100%)',
-            mb: 2,
-          }}
-        >
-          <CardContent
-            sx={{
-              p: {
-                xs: 2,
-                sm: 2.5,
-                md: 3,
-              },
-              '&:last-child': {
-                pb: {
-                  xs: 2,
-                  sm: 2.5,
-                  md: 3,
-                },
-              },
-            }}
-          >
-            <Stack
-              direction={{
-                xs: 'column',
-                sm: 'row',
-              }}
-              alignItems={{
-                xs: 'flex-start',
-                sm: 'center',
-              }}
-              justifyContent="space-between"
-              spacing={2}
-            >
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={1.8}
-              >
-                <Box
-                  sx={{
-                    width: {
-                      xs: 56,
-                      sm: 68,
-                    },
-                    height: {
-                      xs: 56,
-                      sm: 68,
-                    },
-                    borderRadius: '18px',
-                    backgroundColor: '#e1f7ef',
-                    color: '#079260',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <CheckCircle
-                    sx={{
-                      fontSize: {
-                        xs: 31,
-                        sm: 38,
-                      },
-                    }}
-                  />
-                </Box>
-
-                <Box>
-                  <Typography
-                    sx={{
-                      fontSize: {
-                        xs: 17,
-                        sm: 21,
-                      },
-                      fontWeight: 800,
-                      color: '#124b3a',
-                    }}
-                  >
-                    Account Verification
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      mt: 0.3,
-                      fontSize: {
-                        xs: 13,
-                        sm: 16,
-                      },
-                      color: '#72818b',
-                    }}
-                  >
-                    Complete your KYC to increase your limits.
-                  </Typography>
-                </Box>
-              </Stack>
-
-              <Button
-                onClick={() => navigate('/kyc')}
-                endIcon={<ArrowForward />}
-                sx={{
-                  width: {
-                    xs: '100%',
-                    sm: 'auto',
-                  },
-                  minWidth: {
-                    sm: 215,
-                  },
-                  minHeight: 54,
-                  borderRadius: '16px',
-                  backgroundColor: '#079260',
-                  color: '#ffffff',
-                  textTransform: 'none',
-                  fontWeight: 800,
-                  fontSize: 15,
-                  '&:hover': {
-                    backgroundColor: '#067b52',
-                  },
-                }}
-              >
-                View Verification
-              </Button>
-            </Stack>
-          </CardContent>
-        </Card>
-      </Box>
-
-      {/* =========================================================
-          BOTTOM NAVIGATION
-      ========================================================== */}
-
-      <Paper
-        elevation={0}
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 30,
-          borderTop: '1px solid #edf1ef',
-          backgroundColor: 'rgba(255,255,255,0.97)',
-          backdropFilter: 'blur(15px)',
-        }}
-      >
-        <Box
-          sx={{
-            maxWidth: 700,
-            mx: 'auto',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            px: {
-              xs: 1,
-              sm: 2,
-            },
-            py: {
-              xs: 0.8,
-              sm: 1,
-            },
-          }}
-        >
-          <BottomNavItem
-            active
-            icon={<Home />}
-            label="Home"
+      {/* BOTTOM NAVIGATION */}
+      <nav className="zen-bottom-nav">
+        <div className="zen-bottom-inner">
+          <button
+            type="button"
+            className="zen-bottom-item active"
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          />
+          >
+            <span className="zen-bottom-icon">⌂</span>
+            <span>Home</span>
+          </button>
 
-          <BottomNavItem
-            icon={<SwapHoriz />}
-            label="Transactions"
-            onClick={() =>
-              showMessage('Transactions section is being prepared.')
+          <button
+            type="button"
+            className="zen-bottom-item"
+            onClick={handleTransactions}
+          >
+            <span className="zen-bottom-icon">↕</span>
+            <span>Transactions</span>
+          </button>
+
+          <button
+            type="button"
+            className="zen-bottom-item"
+            onClick={handleWallet}
+          >
+            <span className="zen-bottom-icon">▣</span>
+            <span>Wallet</span>
+          </button>
+
+          <button
+            type="button"
+            className="zen-bottom-item"
+            onClick={handleProfile}
+          >
+            <span className="zen-bottom-icon">♙</span>
+            <span>Profile</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* FEATURE MODAL */}
+      {feature && (
+        <div
+          className="zen-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeFeature();
             }
-          />
-
-          <BottomNavItem
-            icon={<Wallet />}
-            label="Wallet"
-            onClick={() => showMessage('Wallet section is being prepared.')}
-          />
-
-          <BottomNavItem
-            icon={<PersonOutline />}
-            label="Profile"
-            onClick={() => navigate('/profile')}
-          />
-        </Box>
-      </Paper>
-
-      {/* =========================================================
-          SERVICE DIALOG
-      ========================================================== */}
-
-      <Dialog
-        open={service !== null}
-        onClose={closeService}
-        fullWidth
-        maxWidth="sm"
-        PaperProps={{
-          sx: {
-            borderRadius: '24px',
-            m: 2,
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            px: 3,
-            pt: 2.5,
-            pb: 1.5,
-            fontWeight: 800,
-            color: '#14352d',
           }}
         >
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-          >
-            <Typography
-              sx={{
-                fontSize: 21,
-                fontWeight: 800,
-              }}
-            >
-              {service === 'bank' && 'Send to Bank'}
-              {service === 'withdraw' && 'Withdraw Money'}
-              {service === 'airtime' && 'Buy Airtime'}
-              {service === 'data' && 'Buy Data'}
-              {service === 'betting' && 'Betting'}
-              {service === 'tv' && 'Pay TV'}
-              {service === 'bills' && 'Pay Bills'}
-              {service === 'safebox' && 'SafeBox'}
-              {service === 'more' && 'More Services'}
-            </Typography>
+          <div className="zen-modal">
+            <div className="zen-modal-header">
+              <div className="zen-modal-heading">
+                <div className="zen-modal-icon">
+                  {feature.icon}
+                </div>
 
-            <IconButton onClick={closeService}>
-              <Close />
-            </IconButton>
-          </Stack>
-        </DialogTitle>
+                <div>
+                  <h2 className="zen-modal-title">
+                    {feature.title}
+                  </h2>
 
-        <DialogContent sx={{ px: 3, pb: 1 }}>
-          {/* BANK */}
+                  <p className="zen-modal-subtitle">
+                    {feature.description}
+                  </p>
+                </div>
+              </div>
 
-          {service === 'bank' && (
-            <Box>
-              {!selectedBank ? (
-                <>
-                  <TextField
-                    fullWidth
-                    value={bankSearch}
-                    onChange={(e) => setBankSearch(e.target.value)}
-                    placeholder="Search for a bank"
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Search />
-                        </InputAdornment>
-                      ),
-                    }}
-                    sx={{
-                      mb: 1.5,
-                    }}
-                  />
+              <button
+                type="button"
+                className="zen-close"
+                onClick={closeFeature}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
 
-                  <Paper
-                    variant="outlined"
-                    sx={{
-                      maxHeight: 350,
-                      overflowY: 'auto',
-                      borderRadius: 3,
-                    }}
-                  >
-                    <List disablePadding>
-                      {filteredBanks.map((bank) => (
-                        <ListItemButton
-                          key={bank.name}
-                          onClick={() => setSelectedBank(bank)}
-                          sx={{
-                            py: 1.5,
-                            borderBottom: '1px solid #f0f2f2',
-                          }}
-                        >
-                          <Avatar
-                            sx={{
-                              mr: 1.5,
-                              backgroundColor: '#e8f8f1',
-                              color: '#078b5d',
-                              fontWeight: 800,
-                              width: 42,
-                              height: 42,
-                              fontSize: 13,
-                            }}
-                          >
-                            {bank.shortName.slice(0, 2).toUpperCase()}
-                          </Avatar>
+            {/* TO BANK */}
+            {feature.id === 'bank' && (
+              <>
+                <input
+                  className="zen-input"
+                  type="text"
+                  placeholder="Search for a bank..."
+                  value={bankSearch}
+                  onChange={(event) =>
+                    setBankSearch(event.target.value)
+                  }
+                />
 
-                          <ListItemText
-                            primary={bank.name}
-                            primaryTypographyProps={{
-                              fontWeight: 650,
-                              color: '#21353d',
-                            }}
-                          />
+                {selectedBank && (
+                  <div className="zen-selected-bank">
+                    Selected bank: {selectedBank}
+                  </div>
+                )}
 
-                          <KeyboardArrowRight
-                            sx={{
-                              color: '#8b979d',
-                            }}
-                          />
-                        </ListItemButton>
-                      ))}
+                <div className="zen-bank-list">
+                  {filteredBanks.map((bank) => (
+                    <button
+                      type="button"
+                      key={bank}
+                      className="zen-bank"
+                      onClick={() => setSelectedBank(bank)}
+                    >
+                      <span className="zen-bank-logo">
+                        {bank.charAt(0)}
+                      </span>
 
-                      {filteredBanks.length === 0 && (
-                        <Box
-                          sx={{
-                            py: 5,
-                            textAlign: 'center',
-                          }}
-                        >
-                          <Typography color="text.secondary">
-                            No bank found.
-                          </Typography>
-                        </Box>
-                      )}
-                    </List>
-                  </Paper>
-                </>
-              ) : (
-                <Stack spacing={2}>
-                  <Button
-                    startIcon={<ArrowBack />}
-                    onClick={() => setSelectedBank(null)}
-                    sx={{
-                      justifyContent: 'flex-start',
-                      color: '#078b5d',
-                      textTransform: 'none',
-                    }}
-                  >
-                    Choose another bank
-                  </Button>
+                      <span>{bank}</span>
 
-                  <Alert
-                    severity="success"
-                    sx={{
-                      borderRadius: 3,
-                    }}
-                  >
-                    {selectedBank.name} selected
-                  </Alert>
+                      <span style={{ marginLeft: 'auto' }}>
+                        ›
+                      </span>
+                    </button>
+                  ))}
+                </div>
 
-                  <TextField
-                    fullWidth
-                    label="Account Number"
-                    value={accountNumber}
-                    onChange={(e) =>
-                      setAccountNumber(
-                        e.target.value.replace(/\D/g, '').slice(0, 10),
+                {selectedBank && (
+                  <button
+                    type="button"
+                    className="zen-primary-button"
+                    onClick={() =>
+                      alert(
+                        `Continue transfer to ${selectedBank}`
                       )
                     }
-                    inputProps={{
-                      inputMode: 'numeric',
-                    }}
-                  />
-
-                  <TextField
-                    fullWidth
-                    label="Amount"
-                    placeholder="₦0.00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          ₦
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Stack>
-              )}
-            </Box>
-          )}
-
-          {/* WITHDRAW */}
-
-          {service === 'withdraw' && (
-            <Stack spacing={2.2} sx={{ pt: 1 }}>
-              <Alert
-                severity="info"
-                sx={{
-                  borderRadius: 3,
-                }}
-              >
-                Withdraw funds from your Zenimonies account.
-              </Alert>
-
-              <TextField
-                fullWidth
-                label="Amount"
-                placeholder="₦0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-
-              <TextField
-                fullWidth
-                label="Bank Account Number"
-                value={accountNumber}
-                onChange={(e) =>
-                  setAccountNumber(
-                    e.target.value.replace(/\D/g, '').slice(0, 10),
-                  )
-                }
-              />
-            </Stack>
-          )}
-
-          {/* AIRTIME */}
-
-          {service === 'airtime' && (
-            <Stack spacing={2.2} sx={{ pt: 1 }}>
-              <TextField
-                select
-                fullWidth
-                label="Network"
-                value={network}
-                onChange={(e) => setNetwork(e.target.value)}
-              >
-                <MenuItem value="MTN">MTN</MenuItem>
-                <MenuItem value="Airtel">Airtel</MenuItem>
-                <MenuItem value="Glo">Glo</MenuItem>
-                <MenuItem value="9mobile">9mobile</MenuItem>
-              </TextField>
-
-              <TextField
-                fullWidth
-                label="Phone Number"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-              />
-
-              <TextField
-                fullWidth
-                label="Amount"
-                placeholder="₦0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </Stack>
-          )}
-
-          {/* DATA */}
-
-          {service === 'data' && (
-            <Stack spacing={2.2} sx={{ pt: 1 }}>
-              <TextField
-                select
-                fullWidth
-                label="Network"
-                value={network}
-                onChange={(e) => setNetwork(e.target.value)}
-              >
-                <MenuItem value="MTN">MTN</MenuItem>
-                <MenuItem value="Airtel">Airtel</MenuItem>
-                <MenuItem value="Glo">Glo</MenuItem>
-                <MenuItem value="9mobile">9mobile</MenuItem>
-              </TextField>
-
-              <TextField
-                fullWidth
-                label="Phone Number"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-              />
-
-              <TextField
-                select
-                fullWidth
-                label="Data Plan"
-                value={dataPlan}
-                onChange={(e) => setDataPlan(e.target.value)}
-              >
-                <MenuItem value="500MB">500MB</MenuItem>
-                <MenuItem value="1GB">1GB</MenuItem>
-                <MenuItem value="2GB">2GB</MenuItem>
-                <MenuItem value="5GB">5GB</MenuItem>
-                <MenuItem value="10GB">10GB</MenuItem>
-              </TextField>
-            </Stack>
-          )}
-
-          {/* BETTING */}
-
-          {service === 'betting' && (
-            <Stack spacing={2.2} sx={{ pt: 1 }}>
-              <TextField
-                select
-                fullWidth
-                label="Betting Platform"
-                defaultValue=""
-              >
-                <MenuItem value="sportybet">SportyBet</MenuItem>
-                <MenuItem value="bet9ja">Bet9ja</MenuItem>
-                <MenuItem value="1xbet">1xBet</MenuItem>
-                <MenuItem value="betking">BetKing</MenuItem>
-              </TextField>
-
-              <TextField
-                fullWidth
-                label="Customer ID"
-                placeholder="Enter customer ID"
-              />
-
-              <TextField
-                fullWidth
-                label="Amount"
-                value={betAmount}
-                onChange={(e) => setBetAmount(e.target.value)}
-              />
-            </Stack>
-          )}
-
-          {/* TV */}
-
-          {service === 'tv' && (
-            <Stack spacing={2.2} sx={{ pt: 1 }}>
-              <TextField
-                select
-                fullWidth
-                label="TV Provider"
-                value={tvProvider}
-                onChange={(e) => setTvProvider(e.target.value)}
-              >
-                <MenuItem value="DSTV">DStv</MenuItem>
-                <MenuItem value="GOtv">GOtv</MenuItem>
-                <MenuItem value="Startimes">StarTimes</MenuItem>
-              </TextField>
-
-              <TextField
-                fullWidth
-                label="Smart Card / IUC Number"
-                value={smartCard}
-                onChange={(e) => setSmartCard(e.target.value)}
-              />
-
-              <TextField
-                select
-                fullWidth
-                label="Subscription"
-                defaultValue=""
-              >
-                <MenuItem value="basic">Basic</MenuItem>
-                <MenuItem value="standard">Standard</MenuItem>
-                <MenuItem value="premium">Premium</MenuItem>
-              </TextField>
-            </Stack>
-          )}
-
-          {/* BILLS */}
-
-          {service === 'bills' && (
-            <Stack spacing={1.5} sx={{ pt: 1 }}>
-              {[
-                {
-                  title: 'Electricity',
-                  icon: <Payments />,
-                },
-                {
-                  title: 'Internet',
-                  icon: <DataUsage />,
-                },
-                {
-                  title: 'Cable TV',
-                  icon: <Tv />,
-                },
-                {
-                  title: 'Education',
-                  icon: <ReceiptLong />,
-                },
-              ].map((bill) => (
-                <Paper
-                  key={bill.title}
-                  variant="outlined"
-                  onClick={() =>
-                    submitAction(`${bill.title} payment selected.`)
-                  }
-                  sx={{
-                    p: 1.5,
-                    borderRadius: 3,
-                    cursor: 'pointer',
-                    '&:hover': {
-                      backgroundColor: '#f4faf7',
-                    },
-                  }}
-                >
-                  <Stack
-                    direction="row"
-                    alignItems="center"
-                    spacing={1.5}
                   >
-                    <Avatar
-                      sx={{
-                        backgroundColor: '#e5f8f0',
-                        color: '#078b5d',
-                      }}
-                    >
-                      {bill.icon}
-                    </Avatar>
+                    Continue
+                  </button>
+                )}
+              </>
+            )}
 
-                    <Typography
-                      sx={{
-                        fontWeight: 700,
-                      }}
-                    >
-                      {bill.title}
-                    </Typography>
+            {/* ADD MONEY */}
+            {feature.id === 'add-money' && (
+              <div className="zen-info-box">
+                <strong>Add Money</strong>
+                <br />
+                <br />
+                Choose how you want to fund your
+                Zenimonies account.
+                <br />
+                <br />
 
-                    <Box sx={{ ml: 'auto' }}>
-                      <KeyboardArrowRight />
-                    </Box>
-                  </Stack>
-                </Paper>
-              ))}
-            </Stack>
-          )}
-
-          {/* SAFEBOX */}
-
-          {service === 'safebox' && (
-            <Box sx={{ py: 1 }}>
-              <Stack spacing={2} alignItems="center" textAlign="center">
-                <Box
-                  sx={{
-                    width: 78,
-                    height: 78,
-                    borderRadius: '24px',
-                    backgroundColor: '#e6f8f0',
-                    color: '#078b5d',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Lock sx={{ fontSize: 40 }} />
-                </Box>
-
-                <Typography
-                  sx={{
-                    fontSize: 21,
-                    fontWeight: 800,
-                    color: '#14352d',
-                  }}
-                >
-                  Your SafeBox
-                </Typography>
-
-                <Typography color="text.secondary">
-                  Keep money aside and manage your savings securely.
-                </Typography>
-
-                <Button
-                  variant="contained"
+                <button
+                  type="button"
+                  className="zen-primary-button"
                   onClick={() =>
-                    submitAction('SafeBox setup will be available soon.')
+                    alert('Add money options will open here.')
                   }
-                  sx={{
-                    borderRadius: 3,
-                    backgroundColor: '#078b5d',
-                    textTransform: 'none',
-                    fontWeight: 700,
-                  }}
                 >
-                  Create SafeBox
-                </Button>
-              </Stack>
-            </Box>
-          )}
+                  Continue
+                </button>
+              </div>
+            )}
 
-          {/* MORE */}
+            {/* OTHER SERVICES */}
+            {[
+              'withdraw',
+              'airtime',
+              'data',
+              'betting',
+              'tv',
+              'bill',
+              'safebox',
+              'more',
+              'transactions',
+              'wallet',
+            ].includes(feature.id) && (
+              <div className="zen-info-box">
+                <strong>
+                  {feature.title}
+                </strong>
 
-          {service === 'more' && (
-            <Stack spacing={1.5} sx={{ pt: 1 }}>
-              {[
-                'International Transfer',
-                'Gift Cards',
-                'School Payments',
-                'Insurance',
-                'Savings',
-                'Support',
-              ].map((item) => (
-                <Paper
-                  key={item}
-                  variant="outlined"
+                <br />
+                <br />
+
+                {feature.description}.
+
+                <br />
+                <br />
+
+                This section is ready for the
+                {feature.title.toLowerCase()} functionality.
+                
+                <button
+                  type="button"
+                  className="zen-primary-button"
                   onClick={() =>
-                    submitAction(`${item} selected.`)
+                    alert(
+                      `${feature.title} service selected.`
+                    )
                   }
-                  sx={{
-                    p: 1.8,
-                    borderRadius: 3,
-                    cursor: 'pointer',
-                    '&:hover': {
-                      backgroundColor: '#f4faf7',
-                    },
-                  }}
                 >
-                  <Stack
-                    direction="row"
-                    alignItems="center"
-                    justifyContent="space-between"
-                  >
-                    <Typography
-                      sx={{
-                        fontWeight: 700,
-                      }}
-                    >
-                      {item}
-                    </Typography>
-
-                    <KeyboardArrowRight color="action" />
-                  </Stack>
-                </Paper>
-              ))}
-            </Stack>
-          )}
-        </DialogContent>
-
-        <DialogActions
-          sx={{
-            px: 3,
-            pb: 3,
-          }}
-        >
-          {service === 'bank' && selectedBank && (
-            <Button
-              fullWidth
-              variant="contained"
-              disabled={
-                accountNumber.length !== 10 || !amount
-              }
-              onClick={() =>
-                submitAction(
-                  `Transfer to ${selectedBank.name} is ready.`,
-                )
-              }
-              sx={{
-                minHeight: 52,
-                borderRadius: 3,
-                backgroundColor: '#078b5d',
-                textTransform: 'none',
-                fontWeight: 800,
-              }}
-            >
-              Continue
-            </Button>
-          )}
-
-          {service === 'withdraw' && (
-            <Button
-              fullWidth
-              variant="contained"
-              disabled={!amount || accountNumber.length !== 10}
-              onClick={() =>
-                submitAction('Withdrawal request is ready.')
-              }
-              sx={{
-                minHeight: 52,
-                borderRadius: 3,
-                backgroundColor: '#078b5d',
-                textTransform: 'none',
-                fontWeight: 800,
-              }}
-            >
-              Continue
-            </Button>
-          )}
-
-          {service === 'airtime' && (
-            <Button
-              fullWidth
-              variant="contained"
-              disabled={!network || !phoneNumber || !amount}
-              onClick={() =>
-                submitAction('Airtime purchase is ready.')
-              }
-              sx={{
-                minHeight: 52,
-                borderRadius: 3,
-                backgroundColor: '#078b5d',
-                textTransform: 'none',
-                fontWeight: 800,
-              }}
-            >
-              Continue
-            </Button>
-          )}
-
-          {service === 'data' && (
-            <Button
-              fullWidth
-              variant="contained"
-              disabled={!network || !phoneNumber || !dataPlan}
-              onClick={() =>
-                submitAction('Data purchase is ready.')
-              }
-              sx={{
-                minHeight: 52,
-                borderRadius: 3,
-                backgroundColor: '#078b5d',
-                textTransform: 'none',
-                fontWeight: 800,
-              }}
-            >
-              Continue
-            </Button>
-          )}
-
-          {service === 'betting' && (
-            <Button
-              fullWidth
-              variant="contained"
-              onClick={() =>
-                submitAction('Betting funding is ready.')
-              }
-              sx={{
-                minHeight: 52,
-                borderRadius: 3,
-                backgroundColor: '#078b5d',
-                textTransform: 'none',
-                fontWeight: 800,
-              }}
-            >
-              Continue
-            </Button>
-          )}
-
-          {service === 'tv' && (
-            <Button
-              fullWidth
-              variant="contained"
-              disabled={!tvProvider || !smartCard}
-              onClick={() =>
-                submitAction('TV subscription is ready.')
-              }
-              sx={{
-                minHeight: 52,
-                borderRadius: 3,
-                backgroundColor: '#078b5d',
-                textTransform: 'none',
-                fontWeight: 800,
-              }}
-            >
-              Continue
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
-
-      {/* =========================================================
-          SNACKBAR
-      ========================================================== */}
-
-      <Snackbar
-        open={snackbar}
-        autoHideDuration={3500}
-        onClose={() => setSnackbar(false)}
-        message={snackbarMessage}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
-      />
-    </Box>
-  );
-};
-
-/* ===============================================================
-   BOTTOM NAV ITEM
-================================================================ */
-
-interface BottomNavItemProps {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  onClick: () => void;
-}
-
-const BottomNavItem: React.FC<BottomNavItemProps> = ({
-  icon,
-  label,
-  active = false,
-  onClick,
-}) => {
-  return (
-    <Button
-      onClick={onClick}
-      sx={{
-        minWidth: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 0.2,
-        color: active ? '#078b5d' : '#7a8790',
-        textTransform: 'none',
-        borderRadius: 2,
-        py: 0.5,
-        '&:hover': {
-          backgroundColor: '#f4faf7',
-        },
-      }}
-    >
-      {React.cloneElement(icon as React.ReactElement, {
-        sx: {
-          fontSize: {
-            xs: 25,
-            sm: 28,
-          },
-        },
-      })}
-
-      <Typography
-        component="span"
-        sx={{
-          fontSize: {
-            xs: 11,
-            sm: 13,
-          },
-          fontWeight: active ? 700 : 500,
-        }}
-      >
-        {label}
-      </Typography>
-    </Button>
+                  Continue
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
