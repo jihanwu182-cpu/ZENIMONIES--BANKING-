@@ -6,8 +6,8 @@ import {
   Navigate,
 } from 'react-router-dom';
 
-import Login from './pages/Login';
-import Register from './pages/Register';
+import Login from './pages/Login.tsx';
+import Register from './pages/Register.tsx';
 import Dashboard from './pages/Dashboard';
 import Airtime from './pages/Airtime';
 import Bills from './pages/Bills';
