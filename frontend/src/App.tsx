@@ -9,51 +9,87 @@ import {
 import Login from './pages/Login.tsx';
 import Register from './pages/Register.tsx';
 import Dashboard from './pages/Dashboard.tsx';
-import Airtime from './pages/Airtime.tsx';
-import Bills from './pages/Bills.tsx';
-import Data from './pages/Data.tsx';
-import Deposit from './pages/Deposit.tsx';
-import KYC from './pages/KYC.tsx';
 import Profile from './pages/Profile.tsx';
-import Transactions from './pages/Transactions.tsx';
-import Transfer from './pages/Transfer.tsx';
+import KYC from './pages/KYC.tsx';
 import VerifyPhone from './pages/VerifyPhone.tsx';
-import Withdraw from './pages/Withdraw.tsx';
 
 const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
 
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        {/* =====================================================
+            AUTHENTICATION
+        ===================================================== */}
 
-        <Route path="/" element={<Dashboard />} />
+        <Route
+          path="/login"
+          element={<Login />}
+        />
+
+        <Route
+          path="/register"
+          element={<Register />}
+        />
+
+
+        {/* =====================================================
+            MAIN DASHBOARD
+        ===================================================== */}
+
+        <Route
+          path="/"
+          element={<Dashboard />}
+        />
+
         <Route
           path="/dashboard"
-          element={<Navigate to="/" replace />}
+          element={
+            <Navigate
+              to="/"
+              replace
+            />
+          }
         />
 
-        <Route path="/airtime" element={<Airtime />} />
-        <Route path="/bills" element={<Bills />} />
-        <Route path="/data" element={<Data />} />
-        <Route path="/deposit" element={<Deposit />} />
-        <Route path="/kyc" element={<KYC />} />
-        <Route path="/profile" element={<Profile />} />
+
+        {/* =====================================================
+            ACCOUNT
+        ===================================================== */}
+
         <Route
-          path="/transactions"
-          element={<Transactions />}
+          path="/profile"
+          element={<Profile />}
         />
-        <Route path="/transfer" element={<Transfer />} />
+
+
+        {/* =====================================================
+            VERIFICATION
+        ===================================================== */}
+
+        <Route
+          path="/kyc"
+          element={<KYC />}
+        />
+
         <Route
           path="/verify-phone"
           element={<VerifyPhone />}
         />
-        <Route path="/withdraw" element={<Withdraw />} />
+
+
+        {/* =====================================================
+            FALLBACK
+        ===================================================== */}
 
         <Route
           path="*"
-          element={<Navigate to="/" replace />}
+          element={
+            <Navigate
+              to="/"
+              replace
+            />
+          }
         />
 
       </Routes>
