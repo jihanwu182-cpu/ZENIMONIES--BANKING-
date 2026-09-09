@@ -1,51 +1,64 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-type Feature = {
-  id: string;
-  title: string;
+type ServiceKey =
+  | 'add-money'
+  | 'send-money'
+  | 'to-bank'
+  | 'withdraw'
+  | 'airtime'
+  | 'data'
+  | 'betting'
+  | 'tv'
+  | 'bills'
+  | 'safebox'
+  | 'more';
+
+interface Service {
+  key: ServiceKey;
+  label: string;
   description: string;
   icon: string;
-};
+}
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
 
   const [balanceVisible, setBalanceVisible] = useState(true);
-  const [feature, setFeature] = useState<Feature | null>(null);
+  const [activeService, setActiveService] = useState<ServiceKey | null>(null);
   const [bankSearch, setBankSearch] = useState('');
-  const [selectedBank, setSelectedBank] = useState('');
+
+  const userName = 'Harrison';
 
   /*
-   * Nigerian banks + payment institutions.
-   * These are used for the "To Bank" search screen.
+   * Nigerian banks and payment institutions.
+   * OPay is intentionally included here under To Bank,
+   * not as a separate dashboard service.
    */
   const banks = [
     'Access Bank',
-    'Carbon',
     'Citibank Nigeria',
     'Ecobank Nigeria',
-    'FairMoney',
     'Fidelity Bank',
     'First Bank of Nigeria',
     'First City Monument Bank (FCMB)',
     'Globus Bank',
-    'GTBank',
-    'Heritage Bank',
+    'Guaranty Trust Bank (GTBank)',
     'Jaiz Bank',
     'Keystone Bank',
     'Kuda Bank',
+    'Lotus Bank',
     'Moniepoint',
-    'Opay',
+    'OPay',
     'Palmpay',
-    'Parallex Bank',
     'Polaris Bank',
     'Premium Trust Bank',
     'Providus Bank',
     'Stanbic IBTC Bank',
     'Standard Chartered Bank',
     'Sterling Bank',
-    'Taj Bank',
+    'SunTrust Bank',
+    'Tantita',
     'Titan Trust Bank',
     'Union Bank',
     'United Bank for Africa (UBA)',
@@ -66,73 +79,86 @@ const Dashboard: React.FC = () => {
     );
   }, [bankSearch]);
 
-  const features: Feature[] = [
+  const services: Service[] = [
     {
-      id: 'bank',
-      title: 'To Bank',
-      description: 'Send money to any bank',
+      key: 'add-money',
+      label: 'Add Money',
+      description: 'Fund your account',
+      icon: '+',
+    },
+    {
+      key: 'send-money',
+      label: 'Send Money',
+      description: 'Transfer money',
+      icon: '➤',
+    },
+    {
+      key: 'to-bank',
+      label: 'To Bank',
+      description: 'Send to any bank',
       icon: '▥',
     },
     {
-      id: 'withdraw',
-      title: 'Withdraw',
+      key: 'withdraw',
+      label: 'Withdraw',
       description: 'Withdraw funds',
       icon: '↗',
     },
     {
-      id: 'airtime',
-      title: 'Airtime',
+      key: 'airtime',
+      label: 'Airtime',
       description: 'Buy airtime',
       icon: '▥',
     },
     {
-      id: 'data',
-      title: 'Data',
+      key: 'data',
+      label: 'Data',
       description: 'Buy data',
       icon: '↕',
     },
     {
-      id: 'betting',
-      title: 'Betting',
+      key: 'betting',
+      label: 'Betting',
       description: 'Fund your bets',
       icon: '⚽',
     },
     {
-      id: 'tv',
-      title: 'TV',
+      key: 'tv',
+      label: 'TV',
       description: 'Pay TV bills',
       icon: '▣',
     },
     {
-      id: 'bill',
-      title: 'Bills',
+      key: 'bills',
+      label: 'Bills',
       description: 'Pay your bills',
       icon: '▤',
     },
     {
-      id: 'safebox',
-      title: 'SafeBox',
-      description: 'Keep money secure',
+      key: 'safebox',
+      label: 'SafeBox',
+      description: 'Keep money safe',
       icon: '▣',
     },
     {
-      id: 'more',
-      title: 'More',
+      key: 'more',
+      label: 'More',
       description: 'More services',
-      icon: '••',
+      icon: '•••',
     },
   ];
 
-  const openFeature = (item: Feature) => {
-    setFeature(item);
+  const closeService = () => {
+    setActiveService(null);
     setBankSearch('');
-    setSelectedBank('');
   };
 
-  const closeFeature = () => {
-    setFeature(null);
-    setBankSearch('');
-    setSelectedBank('');
+  const handleServiceClick = (key: ServiceKey) => {
+    setActiveService(key);
+
+    if (key !== 'to-bank') {
+      setBankSearch('');
+    }
   };
 
   const handleProfile = () => {
@@ -144,1245 +170,1247 @@ const Dashboard: React.FC = () => {
   };
 
   const handleTransactions = () => {
-    /*
-     * Transactions page is not currently registered in App.tsx.
-     * For now we display it inside the dashboard instead of
-     * sending the user to a missing route.
-     */
-    setFeature({
-      id: 'transactions',
-      title: 'Transactions',
-      description: 'View your recent activity',
-      icon: '↕',
-    });
+    navigate('/transactions');
   };
 
   const handleWallet = () => {
-    /*
-     * Wallet page is also not currently registered in App.tsx.
-     * Keep the user inside the dashboard until that page is created.
-     */
-    setFeature({
-      id: 'wallet',
-      title: 'Wallet',
-      description: 'Manage your wallet',
-      icon: '▣',
-    });
+    navigate('/wallet');
   };
 
+  const activeServiceData = services.find(
+    (service) => service.key === activeService
+  );
+
   return (
-    <div className="zen-dashboard">
-      <style>{`
-        * {
-          box-sizing: border-box;
-        }
-
-        .zen-dashboard {
-          min-height: 100vh;
-          background:
-            radial-gradient(
-              circle at top right,
-              rgba(16, 185, 129, 0.08),
-              transparent 32%
-            ),
-            #f6faf8;
-          color: #10231d;
-          font-family:
-            Inter,
-            -apple-system,
-            BlinkMacSystemFont,
-            "Segoe UI",
-            sans-serif;
-          padding-bottom: 92px;
-        }
-
-        .zen-container {
-          width: min(1100px, calc(100% - 32px));
-          margin: 0 auto;
-        }
-
-        /* HEADER */
-
-        .zen-header {
-          height: 76px;
-          background: rgba(255, 255, 255, 0.96);
-          border-bottom: 1px solid #edf2ef;
-          display: flex;
-          align-items: center;
-          position: sticky;
-          top: 0;
-          z-index: 20;
-          backdrop-filter: blur(14px);
-        }
-
-        .zen-header-inner {
-          width: min(1100px, calc(100% - 32px));
-          margin: 0 auto;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-
-        .zen-brand {
-          display: flex;
-          align-items: center;
-          gap: 13px;
-        }
-
-        .zen-logo {
-          width: 46px;
-          height: 46px;
-          border-radius: 13px;
-          background: linear-gradient(145deg, #12a86f, #07875a);
-          color: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 25px;
-          font-weight: 800;
-          box-shadow: 0 8px 20px rgba(5, 135, 90, 0.18);
-        }
-
-        .zen-brand-name {
-          font-size: 25px;
-          font-weight: 800;
-          letter-spacing: -0.7px;
-          color: #102d25;
-          line-height: 1;
-        }
-
-        .zen-brand-subtitle {
-          margin-top: 4px;
-          color: #9aa6a2;
-          font-size: 11px;
-          letter-spacing: 1.2px;
-          font-weight: 600;
-        }
-
-        .zen-header-actions {
-          display: flex;
-          align-items: center;
-          gap: 18px;
-        }
-
-        .zen-notification {
-          width: 42px;
-          height: 42px;
-          border-radius: 50%;
-          border: 1px solid #edf1ef;
-          background: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 21px;
-          position: relative;
-          cursor: pointer;
-        }
-
-        .zen-notification-dot {
-          position: absolute;
-          width: 8px;
-          height: 8px;
-          background: #e53935;
-          border-radius: 50%;
-          top: 8px;
-          right: 9px;
-          border: 2px solid white;
-        }
-
-        .zen-divider {
-          width: 1px;
-          height: 30px;
-          background: #e4ebe8;
-        }
-
-        .zen-user {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          cursor: pointer;
-          border: 0;
-          background: transparent;
-        }
-
-        .zen-avatar {
-          width: 44px;
-          height: 44px;
-          border-radius: 50%;
-          background: #edf3f1;
-          color: #0a7050;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 800;
-          font-size: 18px;
-        }
-
-        .zen-user-name {
-          font-weight: 700;
-          font-size: 15px;
-        }
-
-        .zen-chevron {
-          color: #74827d;
-          font-size: 17px;
-        }
-
-        /* WELCOME */
-
-        .zen-welcome {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          gap: 20px;
-          padding: 38px 0 22px;
-        }
-
-        .zen-welcome-small {
-          color: #7d8b86;
-          font-size: 18px;
-          margin-bottom: 2px;
-        }
-
-        .zen-welcome-name {
-          margin: 0;
-          font-size: clamp(32px, 5vw, 48px);
-          line-height: 1.05;
-          letter-spacing: -1.8px;
-          color: #0e1820;
-        }
-
-        .zen-welcome-description {
-          margin: 9px 0 0;
-          color: #7b8984;
-          font-size: 17px;
-        }
-
-        .zen-verification {
-          display: inline-flex;
-          align-items: center;
-          gap: 9px;
-          background: #eaf9f2;
-          color: #087151;
-          border: 1px solid #c8eddd;
-          border-radius: 999px;
-          padding: 13px 20px;
-          font-size: 14px;
-          font-weight: 700;
-          white-space: nowrap;
-        }
-
-        .zen-verification-dot {
-          width: 10px;
-          height: 10px;
-          background: #079568;
-          border-radius: 50%;
-        }
-
-        /* BALANCE */
-
-        .zen-balance-card {
-          min-height: 255px;
-          border-radius: 25px;
-          padding: 30px 34px;
-          position: relative;
-          overflow: hidden;
-          background:
-            radial-gradient(
-              circle at 92% 15%,
-              rgba(37, 208, 143, 0.42),
-              transparent 32%
-            ),
-            linear-gradient(
-              135deg,
-              #075d45 0%,
-              #087653 52%,
-              #0aa16d 100%
-            );
-          box-shadow: 0 18px 38px rgba(5, 104, 72, 0.16);
-        }
-
-        .zen-balance-card::before {
-          content: "";
-          position: absolute;
-          width: 450px;
-          height: 450px;
-          right: -180px;
-          top: -250px;
-          border: 1px solid rgba(255,255,255,0.09);
-          border-radius: 50%;
-        }
-
-        .zen-balance-content {
-          position: relative;
-          z-index: 1;
-        }
-
-        .zen-balance-top {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-        }
-
-        .zen-balance-label {
-          color: rgba(255,255,255,0.78);
-          font-size: 17px;
-          font-weight: 500;
-        }
-
-        .zen-balance-value {
-          color: white;
-          font-size: clamp(38px, 6vw, 57px);
-          font-weight: 800;
-          letter-spacing: -2px;
-          margin-top: 7px;
-        }
-
-        .zen-hide {
-          border: 1px solid rgba(255,255,255,0.28);
-          background: rgba(255,255,255,0.06);
-          color: white;
-          padding: 12px 18px;
-          border-radius: 14px;
-          cursor: pointer;
-          font-weight: 700;
-          font-size: 14px;
-        }
-
-        .zen-balance-bottom {
-          display: flex;
-          justify-content: flex-end;
-          margin-top: 23px;
-        }
-
-        .zen-add-money {
-          min-width: 280px;
-          border: none;
-          background: white;
-          color: #07563f;
-          border-radius: 18px;
-          padding: 15px 20px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 15px;
-          font-size: 17px;
-          font-weight: 800;
-          cursor: pointer;
-          box-shadow: 0 8px 22px rgba(0,0,0,0.08);
-        }
-
-        .zen-add-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .zen-plus {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: #079966;
-          color: white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 26px;
-          line-height: 1;
-        }
-
-        .zen-arrow {
-          font-size: 24px;
-        }
-
-        /* SERVICES */
-
-        .zen-services {
-          margin-top: 25px;
-          background: white;
-          border: 1px solid #edf2ef;
-          border-radius: 25px;
-          padding: 27px 25px 30px;
-          box-shadow: 0 10px 30px rgba(16, 47, 36, 0.035);
-        }
-
-        .zen-services-title {
-          margin: 0 0 22px 4px;
-          color: #18362c;
-          font-size: 18px;
-          font-weight: 800;
-        }
-
-        .zen-service-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 28px 18px;
-        }
-
-        .zen-service {
-          border: 0;
-          background: transparent;
-          text-align: center;
-          cursor: pointer;
-          padding: 4px;
-          border-radius: 18px;
-          transition: transform .18s ease, background .18s ease;
-        }
-
-        .zen-service:hover {
-          transform: translateY(-3px);
-          background: #f7fbf9;
-        }
-
-        .zen-service:active {
-          transform: scale(.97);
-        }
-
-        .zen-service-icon {
-          width: 78px;
-          height: 78px;
-          margin: 0 auto 10px;
-          border-radius: 24px;
-          background: #e9f8f2;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #079568;
-          font-size: 31px;
-          font-weight: 800;
-        }
-
-        .zen-service-title {
-          color: #17251f;
-          font-size: 16px;
-          font-weight: 700;
-          margin-bottom: 3px;
-        }
-
-        .zen-service-description {
-          color: #91a09a;
-          font-size: 12px;
-          line-height: 1.35;
-        }
-
-        /* KYC */
-
-        .zen-kyc {
-          margin-top: 23px;
-          background: linear-gradient(110deg, #effbf6, #f9fffc);
-          border: 1px solid #d9f1e6;
-          border-radius: 23px;
-          padding: 20px 22px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 18px;
-        }
-
-        .zen-kyc-left {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
-
-        .zen-kyc-icon {
-          width: 60px;
-          height: 60px;
-          border-radius: 17px;
-          background: #dff6ec;
-          color: #079568;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 27px;
-        }
-
-        .zen-kyc-title {
-          font-size: 17px;
-          font-weight: 800;
-          color: #134c3b;
-        }
-
-        .zen-kyc-text {
-          margin-top: 4px;
-          color: #80918a;
-          font-size: 14px;
-        }
-
-        .zen-kyc-button {
-          border: none;
-          border-radius: 14px;
-          background: #079568;
-          color: white;
-          padding: 14px 21px;
-          font-weight: 800;
-          cursor: pointer;
-          white-space: nowrap;
-        }
-
-        /* BOTTOM NAVIGATION */
-
-        .zen-bottom-nav {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          height: 76px;
-          background: rgba(255,255,255,0.97);
-          border-top: 1px solid #e9efec;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 30;
-          backdrop-filter: blur(15px);
-        }
-
-        .zen-bottom-inner {
-          width: min(600px, 100%);
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-        }
-
-        .zen-bottom-item {
-          border: 0;
-          background: transparent;
-          color: #78857f;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 4px;
-          cursor: pointer;
-          font-size: 12px;
-          font-weight: 600;
-        }
-
-        .zen-bottom-item.active {
-          color: #079568;
-        }
-
-        .zen-bottom-icon {
-          font-size: 22px;
-          line-height: 1;
-        }
-
-        /* MODAL */
-
-        .zen-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(8, 24, 18, 0.48);
-          z-index: 100;
-          display: flex;
-          align-items: flex-end;
-          justify-content: center;
-          padding: 15px;
-          backdrop-filter: blur(4px);
-        }
-
-        .zen-modal {
-          width: min(560px, 100%);
-          max-height: 88vh;
-          overflow-y: auto;
-          background: white;
-          border-radius: 27px 27px 18px 18px;
-          padding: 24px;
-          box-shadow: 0 25px 70px rgba(0,0,0,.2);
-          animation: zenSlide .2s ease;
-        }
-
-        @keyframes zenSlide {
-          from {
-            transform: translateY(20px);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-
-        .zen-modal-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 20px;
-        }
-
-        .zen-modal-heading {
-          display: flex;
-          align-items: center;
-          gap: 13px;
-        }
-
-        .zen-modal-icon {
-          width: 50px;
-          height: 50px;
-          border-radius: 15px;
-          background: #e9f8f2;
-          color: #079568;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 22px;
-          font-weight: 800;
-        }
-
-        .zen-modal-title {
-          margin: 0;
-          font-size: 21px;
-          color: #16372c;
-        }
-
-        .zen-modal-subtitle {
-          margin: 3px 0 0;
-          color: #899790;
-          font-size: 13px;
-        }
-
-        .zen-close {
-          width: 38px;
-          height: 38px;
-          border-radius: 50%;
-          border: 0;
-          background: #f1f5f3;
-          color: #53625d;
-          font-size: 21px;
-          cursor: pointer;
-        }
-
-        .zen-input {
-          width: 100%;
-          border: 1px solid #dfe9e5;
-          background: #f9fbfa;
-          border-radius: 14px;
-          padding: 14px 16px;
-          outline: none;
-          font-size: 15px;
-          color: #19332a;
-          margin-bottom: 15px;
-        }
-
-        .zen-input:focus {
-          border-color: #079568;
-          background: white;
-        }
-
-        .zen-bank-list {
-          display: flex;
-          flex-direction: column;
-          gap: 7px;
-        }
-
-        .zen-bank {
-          width: 100%;
-          border: 1px solid #edf2ef;
-          background: white;
-          padding: 13px;
-          border-radius: 13px;
-          text-align: left;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          font-weight: 600;
-          color: #20372f;
-        }
-
-        .zen-bank:hover {
-          border-color: #bde8d6;
-          background: #f6fcf9;
-        }
-
-        .zen-bank-logo {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
-          background: #e9f8f2;
-          color: #079568;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 800;
-        }
-
-        .zen-selected-bank {
-          padding: 15px;
-          border-radius: 14px;
-          background: #eaf9f2;
-          color: #086d50;
-          font-weight: 700;
-          margin-bottom: 15px;
-        }
-
-        .zen-primary-button {
-          width: 100%;
-          border: none;
-          border-radius: 14px;
-          background: #079568;
-          color: white;
-          padding: 15px;
-          font-size: 15px;
-          font-weight: 800;
-          cursor: pointer;
-          margin-top: 5px;
-        }
-
-        .zen-info-box {
-          background: #f6faf8;
-          border: 1px solid #e9f0ed;
-          border-radius: 16px;
-          padding: 18px;
-          color: #687872;
-          line-height: 1.6;
-          font-size: 14px;
-        }
-
-        /* MOBILE */
-
-        @media (max-width: 700px) {
-          .zen-container {
-            width: min(100% - 24px, 560px);
-          }
-
-          .zen-header {
-            height: 67px;
-          }
-
-          .zen-header-inner {
-            width: calc(100% - 24px);
-          }
-
-          .zen-brand-name {
-            font-size: 19px;
-          }
-
-          .zen-brand-subtitle {
-            font-size: 9px;
-          }
-
-          .zen-logo {
-            width: 40px;
-            height: 40px;
-            font-size: 21px;
-          }
-
-          .zen-notification {
-            width: 36px;
-            height: 36px;
-          }
-
-          .zen-user-name,
-          .zen-divider {
-            display: none;
-          }
-
-          .zen-avatar {
-            width: 38px;
-            height: 38px;
-          }
-
-          .zen-welcome {
-            padding: 25px 0 17px;
-            display: block;
-          }
-
-          .zen-welcome-small {
-            font-size: 15px;
-          }
-
-          .zen-welcome-name {
-            font-size: 36px;
-          }
-
-          .zen-welcome-description {
-            font-size: 14px;
-          }
-
-          .zen-verification {
-            margin-top: 15px;
-            font-size: 12px;
-            padding: 10px 14px;
-          }
-
-          .zen-balance-card {
-            min-height: 215px;
-            padding: 24px 21px;
-            border-radius: 22px;
-          }
-
-          .zen-balance-label {
-            font-size: 15px;
-          }
-
-          .zen-balance-value {
-            font-size: 43px;
-          }
-
-          .zen-hide {
-            padding: 9px 13px;
-            font-size: 12px;
-          }
-
-          .zen-balance-bottom {
-            justify-content: stretch;
-          }
-
-          .zen-add-money {
-            width: 100%;
-            min-width: 0;
-          }
-
-          .zen-services {
-            padding: 20px 13px 23px;
-            border-radius: 22px;
-          }
-
-          .zen-services-title {
-            font-size: 16px;
-          }
-
-          .zen-service-grid {
-            gap: 24px 8px;
-          }
-
-          .zen-service-icon {
-            width: 62px;
-            height: 62px;
-            border-radius: 19px;
-            font-size: 25px;
-          }
-
-          .zen-service-title {
-            font-size: 14px;
-          }
-
-          .zen-service-description {
-            font-size: 10px;
-          }
-
-          .zen-kyc {
-            padding: 16px;
-          }
-
-          .zen-kyc-icon {
-            width: 47px;
-            height: 47px;
-          }
-
-          .zen-kyc-title {
-            font-size: 14px;
-          }
-
-          .zen-kyc-text {
-            font-size: 11px;
-          }
-
-          .zen-kyc-button {
-            padding: 11px 13px;
-            font-size: 11px;
-          }
-
-          .zen-bottom-nav {
-            height: 69px;
-          }
-
-          .zen-overlay {
-            padding: 0;
-          }
-
-          .zen-modal {
-            border-radius: 25px 25px 0 0;
-            max-height: 91vh;
-          }
-        }
-      `}</style>
-
-      {/* HEADER */}
-      <header className="zen-header">
-        <div className="zen-header-inner">
-          <div className="zen-brand">
-            <div className="zen-logo">Z</div>
-
-            <div>
-              <div className="zen-brand-name">
-                Zenimonies
-              </div>
-
-              <div className="zen-brand-subtitle">
-                DIGITAL BANKING
-              </div>
-            </div>
+    <div style={styles.page}>
+      {/* =========================
+          HEADER
+      ========================== */}
+      <header style={styles.header}>
+        <div style={styles.brandArea}>
+          <div style={styles.logo}>Z</div>
+
+          <div>
+            <div style={styles.brandName}>Zenimonies</div>
+            <div style={styles.brandSubtitle}>DIGITAL BANKING</div>
           </div>
+        </div>
 
-          <div className="zen-header-actions">
-            <button
-              className="zen-notification"
-              type="button"
-              aria-label="Notifications"
-              onClick={() =>
-                alert('You have no new notifications.')
-              }
-            >
-              ♧
-              <span className="zen-notification-dot" />
-            </button>
+        <div style={styles.headerRight}>
+          <button
+            type="button"
+            style={styles.notificationButton}
+            aria-label="Notifications"
+          >
+            ♧
+            <span style={styles.notificationDot} />
+          </button>
 
-            <div className="zen-divider" />
+          <div style={styles.headerDivider} />
 
-            <button
-              className="zen-user"
-              type="button"
-              onClick={handleProfile}
-            >
-              <div className="zen-avatar">H</div>
+          <button
+            type="button"
+            style={styles.avatar}
+            onClick={handleProfile}
+            aria-label="Open profile"
+          >
+            {userName.charAt(0)}
+          </button>
 
-              <span className="zen-user-name">
-                Harrison
-              </span>
-
-              <span className="zen-chevron">
-                ˅
-              </span>
-            </button>
-          </div>
+          <button
+            type="button"
+            style={styles.nameButton}
+            onClick={handleProfile}
+          >
+            <span>{userName}</span>
+            <span style={styles.chevron}>⌄</span>
+          </button>
         </div>
       </header>
 
-      <main className="zen-container">
-        {/* WELCOME */}
-        <section className="zen-welcome">
+      <main style={styles.content}>
+        {/* =========================
+            WELCOME
+        ========================== */}
+        <section style={styles.welcomeSection}>
           <div>
-            <div className="zen-welcome-small">
-              Welcome back,
-            </div>
+            <div style={styles.welcomeSmall}>Welcome back,</div>
 
-            <h1 className="zen-welcome-name">
-              Harrison
-            </h1>
+            <h1 style={styles.welcomeName}>{userName}</h1>
 
-            <p className="zen-welcome-description">
-              Here's your financial overview.
+            <p style={styles.welcomeText}>
+              Here’s your financial overview.
             </p>
           </div>
 
-          <div className="zen-verification">
-            <span className="zen-verification-dot" />
-            Email & phone verified
-          </div>
+          <button
+            type="button"
+            style={styles.verifiedBadge}
+            onClick={handleKYC}
+          >
+            <span style={styles.verifiedDot}>✓</span>
+            Tier 1 Verified
+          </button>
         </section>
 
-        {/* BALANCE */}
-        <section className="zen-balance-card">
-          <div className="zen-balance-content">
-            <div className="zen-balance-top">
-              <div>
-                <div className="zen-balance-label">
-                  Available Balance
-                </div>
+        {/* =========================
+            BALANCE CARD
+        ========================== */}
+        <section style={styles.balanceCard}>
+          <div style={styles.balanceGlowOne} />
+          <div style={styles.balanceGlowTwo} />
 
-                <div className="zen-balance-value">
-                  {balanceVisible ? '₦0.00' : '₦••••'}
-                </div>
+          <div style={styles.balanceTop}>
+            <div>
+              <div style={styles.balanceLabel}>
+                Available Balance
               </div>
 
-              <button
-                type="button"
-                className="zen-hide"
-                onClick={() =>
-                  setBalanceVisible((value) => !value)
-                }
-              >
-                {balanceVisible ? '◉ Hide' : '◉ Show'}
-              </button>
+              <div style={styles.balanceAmount}>
+                {balanceVisible ? '₦0.00' : '₦••••'}
+              </div>
             </div>
 
-            <div className="zen-balance-bottom">
-              <button
-                type="button"
-                className="zen-add-money"
-                onClick={() =>
-                  setFeature({
-                    id: 'add-money',
-                    title: 'Add Money',
-                    description: 'Fund your Zenimonies account',
-                    icon: '+',
-                  })
-                }
-              >
-                <span className="zen-add-left">
-                  <span className="zen-plus">+</span>
-                  <span>Add Money</span>
-                </span>
+            <button
+              type="button"
+              style={styles.hideButton}
+              onClick={() =>
+                setBalanceVisible((previous) => !previous)
+              }
+            >
+              <span style={styles.eyeIcon}>
+                {balanceVisible ? '◉' : '○'}
+              </span>
 
-                <span className="zen-arrow">›</span>
-              </button>
-            </div>
+              {balanceVisible ? 'Hide' : 'Show'}
+            </button>
+          </div>
+
+          <div style={styles.balanceActions}>
+            <button
+              type="button"
+              style={styles.addMoneyButton}
+              onClick={() => handleServiceClick('add-money')}
+            >
+              <span style={styles.addCircle}>+</span>
+              <span>Add Money</span>
+              <span style={styles.actionArrow}>›</span>
+            </button>
+
+            <button
+              type="button"
+              style={styles.sendMoneyButton}
+              onClick={() => handleServiceClick('send-money')}
+            >
+              <span style={styles.sendIcon}>➤</span>
+              <span>Send Money</span>
+              <span style={styles.actionArrow}>›</span>
+            </button>
           </div>
         </section>
 
-        {/* SERVICES */}
-        <section className="zen-services">
-          <h2 className="zen-services-title">
-            Services
-          </h2>
+        {/* =========================
+            QUICK ACTIONS
+        ========================== */}
+        <section style={styles.servicesSection}>
+          <div style={styles.servicesHeader}>
+            <h2 style={styles.servicesTitle}>Quick Actions</h2>
 
-          <div className="zen-service-grid">
-            {features.map((item) => (
+            <button
+              type="button"
+              style={styles.seeAllButton}
+              onClick={() => handleServiceClick('more')}
+            >
+              See all
+              <span>›</span>
+            </button>
+          </div>
+
+          <div style={styles.servicesGrid}>
+            {services.map((service) => (
               <button
-                key={item.id}
+                key={service.key}
                 type="button"
-                className="zen-service"
-                onClick={() => openFeature(item)}
+                style={styles.serviceButton}
+                onClick={() => handleServiceClick(service.key)}
               >
-                <div className="zen-service-icon">
-                  {item.icon}
-                </div>
+                <span
+                  style={{
+                    ...styles.serviceIconBox,
+                    ...(service.key === 'send-money'
+                      ? styles.sendServiceIcon
+                      : {}),
+                  }}
+                >
+                  {service.icon}
+                </span>
 
-                <div className="zen-service-title">
-                  {item.title}
-                </div>
+                <span style={styles.serviceLabel}>
+                  {service.label}
+                </span>
 
-                <div className="zen-service-description">
-                  {item.description}
-                </div>
+                <span style={styles.serviceDescription}>
+                  {service.description}
+                </span>
               </button>
             ))}
           </div>
         </section>
 
-        {/* KYC */}
-        <section className="zen-kyc">
-          <div className="zen-kyc-left">
-            <div className="zen-kyc-icon">
-              ✓
-            </div>
+        {/* =========================
+            ACCOUNT VERIFICATION
+        ========================== */}
+        <section style={styles.verificationCard}>
+          <div style={styles.verificationIcon}>✓</div>
 
-            <div>
-              <div className="zen-kyc-title">
-                Account Verification
-              </div>
+          <div style={styles.verificationText}>
+            <h3 style={styles.verificationTitle}>
+              Account Verification
+            </h3>
 
-              <div className="zen-kyc-text">
-                Complete your KYC to increase your limits.
-              </div>
-            </div>
+            <p style={styles.verificationDescription}>
+              Complete your KYC to increase your limits.
+            </p>
           </div>
 
           <button
             type="button"
-            className="zen-kyc-button"
+            style={styles.verifyButton}
             onClick={handleKYC}
           >
-            View Verification&nbsp; ›
+            Verify Now
+            <span>›</span>
           </button>
         </section>
       </main>
 
-      {/* BOTTOM NAVIGATION */}
-      <nav className="zen-bottom-nav">
-        <div className="zen-bottom-inner">
-          <button
-            type="button"
-            className="zen-bottom-item active"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          >
-            <span className="zen-bottom-icon">⌂</span>
-            <span>Home</span>
-          </button>
+      {/* =========================
+          BOTTOM NAVIGATION
+      ========================== */}
+      <nav style={styles.bottomNav}>
+        <button
+          type="button"
+          style={{
+            ...styles.navButton,
+            ...styles.activeNavButton,
+          }}
+          onClick={() => navigate('/')}
+        >
+          <span style={styles.navIcon}>⌂</span>
+          <span>Home</span>
+        </button>
 
-          <button
-            type="button"
-            className="zen-bottom-item"
-            onClick={handleTransactions}
-          >
-            <span className="zen-bottom-icon">↕</span>
-            <span>Transactions</span>
-          </button>
+        <button
+          type="button"
+          style={styles.navButton}
+          onClick={handleTransactions}
+        >
+          <span style={styles.navIcon}>↕</span>
+          <span>Transactions</span>
+        </button>
 
-          <button
-            type="button"
-            className="zen-bottom-item"
-            onClick={handleWallet}
-          >
-            <span className="zen-bottom-icon">▣</span>
-            <span>Wallet</span>
-          </button>
+        <button
+          type="button"
+          style={styles.navButton}
+          onClick={handleWallet}
+        >
+          <span style={styles.navIcon}>▱</span>
+          <span>Wallet</span>
+        </button>
 
-          <button
-            type="button"
-            className="zen-bottom-item"
-            onClick={handleProfile}
-          >
-            <span className="zen-bottom-icon">♙</span>
-            <span>Profile</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          style={styles.navButton}
+          onClick={handleProfile}
+        >
+          <span style={styles.navIcon}>♙</span>
+          <span>Profile</span>
+        </button>
       </nav>
 
-      {/* FEATURE MODAL */}
-      {feature && (
+      {/* =========================
+          SERVICE MODAL
+      ========================== */}
+      {activeService && (
         <div
-          className="zen-overlay"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              closeFeature();
-            }
-          }}
+          style={styles.modalOverlay}
+          onClick={closeService}
+          role="presentation"
         >
-          <div className="zen-modal">
-            <div className="zen-modal-header">
-              <div className="zen-modal-heading">
-                <div className="zen-modal-icon">
-                  {feature.icon}
+          <div
+            style={styles.modal}
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div style={styles.modalHandle} />
+
+            <div style={styles.modalHeader}>
+              <div>
+                <div style={styles.modalEyebrow}>
+                  ZENIMONIES
                 </div>
 
-                <div>
-                  <h2 className="zen-modal-title">
-                    {feature.title}
-                  </h2>
-
-                  <p className="zen-modal-subtitle">
-                    {feature.description}
-                  </p>
-                </div>
+                <h2 style={styles.modalTitle}>
+                  {activeServiceData?.label}
+                </h2>
               </div>
 
               <button
                 type="button"
-                className="zen-close"
-                onClick={closeFeature}
-                aria-label="Close"
+                style={styles.closeButton}
+                onClick={closeService}
               >
                 ×
               </button>
             </div>
 
             {/* TO BANK */}
-            {feature.id === 'bank' && (
+            {activeService === 'to-bank' && (
               <>
-                <input
-                  className="zen-input"
-                  type="text"
-                  placeholder="Search for a bank..."
-                  value={bankSearch}
-                  onChange={(event) =>
-                    setBankSearch(event.target.value)
-                  }
-                />
+                <p style={styles.modalDescription}>
+                  Search and choose the bank you want to send
+                  money to. OPay is included here.
+                </p>
 
-                {selectedBank && (
-                  <div className="zen-selected-bank">
-                    Selected bank: {selectedBank}
-                  </div>
-                )}
+                <div style={styles.searchBox}>
+                  <span style={styles.searchIcon}>⌕</span>
 
-                <div className="zen-bank-list">
-                  {filteredBanks.map((bank) => (
-                    <button
-                      type="button"
-                      key={bank}
-                      className="zen-bank"
-                      onClick={() => setSelectedBank(bank)}
-                    >
-                      <span className="zen-bank-logo">
-                        {bank.charAt(0)}
-                      </span>
-
-                      <span>{bank}</span>
-
-                      <span style={{ marginLeft: 'auto' }}>
-                        ›
-                      </span>
-                    </button>
-                  ))}
+                  <input
+                    type="text"
+                    value={bankSearch}
+                    onChange={(event) =>
+                      setBankSearch(event.target.value)
+                    }
+                    placeholder="Search for a bank"
+                    style={styles.searchInput}
+                    autoFocus
+                  />
                 </div>
 
-                {selectedBank && (
-                  <button
-                    type="button"
-                    className="zen-primary-button"
-                    onClick={() =>
-                      alert(
-                        `Continue transfer to ${selectedBank}`
-                      )
-                    }
-                  >
-                    Continue
-                  </button>
-                )}
+                <div style={styles.bankList}>
+                  {filteredBanks.length === 0 ? (
+                    <div style={styles.noResults}>
+                      No bank found.
+                    </div>
+                  ) : (
+                    filteredBanks.map((bank) => (
+                      <button
+                        type="button"
+                        key={bank}
+                        style={styles.bankItem}
+                        onClick={() => {
+                          alert(
+                            `${bank} selected. Bank transfer form will open here.`
+                          );
+                        }}
+                      >
+                        <span style={styles.bankLogo}>
+                          {bank.charAt(0)}
+                        </span>
+
+                        <span style={styles.bankName}>
+                          {bank}
+                        </span>
+
+                        <span style={styles.bankArrow}>›</span>
+                      </button>
+                    ))
+                  )}
+                </div>
               </>
             )}
 
             {/* ADD MONEY */}
-            {feature.id === 'add-money' && (
-              <div className="zen-info-box">
-                <strong>Add Money</strong>
-                <br />
-                <br />
-                Choose how you want to fund your
-                Zenimonies account.
-                <br />
-                <br />
+            {activeService === 'add-money' && (
+              <>
+                <p style={styles.modalDescription}>
+                  Add funds to your Zenimonies account securely.
+                </p>
+
+                <div style={styles.amountBox}>
+                  <label style={styles.amountLabel}>
+                    Amount
+                  </label>
+
+                  <div style={styles.amountInputWrapper}>
+                    <span style={styles.naira}>₦</span>
+
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      style={styles.amountInput}
+                    />
+                  </div>
+                </div>
 
                 <button
                   type="button"
-                  className="zen-primary-button"
-                  onClick={() =>
-                    alert('Add money options will open here.')
-                  }
-                >
-                  Continue
-                </button>
-              </div>
-            )}
-
-            {/* OTHER SERVICES */}
-            {[
-              'withdraw',
-              'airtime',
-              'data',
-              'betting',
-              'tv',
-              'bill',
-              'safebox',
-              'more',
-              'transactions',
-              'wallet',
-            ].includes(feature.id) && (
-              <div className="zen-info-box">
-                <strong>
-                  {feature.title}
-                </strong>
-
-                <br />
-                <br />
-
-                {feature.description}.
-
-                <br />
-                <br />
-
-                This section is ready for the
-                {feature.title.toLowerCase()} functionality.
-                
-                <button
-                  type="button"
-                  className="zen-primary-button"
+                  style={styles.primaryModalButton}
                   onClick={() =>
                     alert(
-                      `${feature.title} service selected.`
+                      'Add Money payment flow will open here.'
                     )
                   }
                 >
                   Continue
                 </button>
-              </div>
+              </>
             )}
+
+            {/* SEND MONEY */}
+            {activeService === 'send-money' && (
+              <>
+                <p style={styles.modalDescription}>
+                  Choose where you want to send your money.
+                </p>
+
+                <button
+                  type="button"
+                  style={styles.modalOption}
+                  onClick={() => handleServiceClick('to-bank')}
+                >
+                  <span style={styles.modalOptionIcon}>
+                    ▥
+                  </span>
+
+                  <span>
+                    <strong>To Bank</strong>
+                    <small>
+                      Send money to any Nigerian bank
+                    </small>
+                  </span>
+
+                  <span>›</span>
+                </button>
+
+                <button
+                  type="button"
+                  style={styles.modalOption}
+                  onClick={() =>
+                    alert(
+                      'Zenimonies-to-Zenimonies transfer will open here.'
+                    )
+                  }
+                >
+                  <span style={styles.modalOptionIcon}>
+                    Z
+                  </span>
+
+                  <span>
+                    <strong>Zenimonies User</strong>
+                    <small>
+                      Send money to another customer
+                    </small>
+                  </span>
+
+                  <span>›</span>
+                </button>
+              </>
+            )}
+
+            {/* OTHER SERVICES */}
+            {activeService !== 'to-bank' &&
+              activeService !== 'add-money' &&
+              activeService !== 'send-money' && (
+                <>
+                  <div style={styles.largeServiceIcon}>
+                    {activeServiceData?.icon}
+                  </div>
+
+                  <p style={styles.modalDescriptionCenter}>
+                    {activeServiceData?.description}.
+                  </p>
+
+                  <button
+                    type="button"
+                    style={styles.primaryModalButton}
+                    onClick={() =>
+                      alert(
+                        `${activeServiceData?.label} service selected.`
+                      )
+                    }
+                  >
+                    Continue
+                  </button>
+                </>
+              )}
           </div>
         </div>
       )}
     </div>
   );
 };
+
+/* ============================================================
+   STYLES
+============================================================ */
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: '100vh',
+    background:
+      'linear-gradient(180deg, #f7fbfa 0%, #f1f7f5 100%)',
+    color: '#102b28',
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+    paddingBottom: '96px',
+    boxSizing: 'border-box',
+  },
+
+  header: {
+    minHeight: '72px',
+    background: '#ffffff',
+    borderBottom: '1px solid #edf2f0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '10px 5%',
+    boxSizing: 'border-box',
+    position: 'sticky',
+    top: 0,
+    zIndex: 20,
+  },
+
+  brandArea: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+
+  logo: {
+    width: '48px',
+    height: '48px',
+    borderRadius: '14px',
+    background:
+      'linear-gradient(145deg, #087c51, #10a66d)',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '27px',
+    fontWeight: 800,
+  },
+
+  brandName: {
+    fontSize: '21px',
+    lineHeight: 1,
+    fontWeight: 800,
+    color: '#102b28',
+  },
+
+  brandSubtitle: {
+    marginTop: '4px',
+    fontSize: '10px',
+    letterSpacing: '1.5px',
+    color: '#9aa7a4',
+    fontWeight: 700,
+  },
+
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+  },
+
+  notificationButton: {
+    position: 'relative',
+    border: 0,
+    background: 'transparent',
+    fontSize: '25px',
+    color: '#647572',
+    cursor: 'pointer',
+  },
+
+  notificationDot: {
+    position: 'absolute',
+    top: '0px',
+    right: '1px',
+    width: '8px',
+    height: '8px',
+    background: '#e53935',
+    borderRadius: '50%',
+    border: '2px solid #ffffff',
+  },
+
+  headerDivider: {
+    width: '1px',
+    height: '32px',
+    background: '#e2e9e6',
+  },
+
+  avatar: {
+    width: '42px',
+    height: '42px',
+    border: 0,
+    borderRadius: '50%',
+    background: '#e5f3ee',
+    color: '#087c51',
+    fontSize: '18px',
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+
+  nameButton: {
+    border: 0,
+    background: 'transparent',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    color: '#152c2a',
+    fontWeight: 700,
+    fontSize: '14px',
+    cursor: 'pointer',
+  },
+
+  chevron: {
+    fontSize: '20px',
+    color: '#778681',
+  },
+
+  content: {
+    width: '92%',
+    maxWidth: '1050px',
+    margin: '0 auto',
+    paddingTop: '28px',
+  },
+
+  welcomeSection: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '20px',
+    marginBottom: '22px',
+  },
+
+  welcomeSmall: {
+    color: '#71817e',
+    fontSize: '17px',
+    marginBottom: '2px',
+  },
+
+  welcomeName: {
+    margin: 0,
+    fontSize: '39px',
+    lineHeight: 1.05,
+    letterSpacing: '-1.2px',
+    color: '#102b3b',
+  },
+
+  welcomeText: {
+    margin: '7px 0 0',
+    color: '#73817e',
+    fontSize: '16px',
+  },
+
+  verifiedBadge: {
+    border: '1px solid #c7eee0',
+    background: '#edfbf6',
+    color: '#087c51',
+    borderRadius: '30px',
+    padding: '11px 18px',
+    fontSize: '14px',
+    fontWeight: 700,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+
+  verifiedDot: {
+    width: '21px',
+    height: '21px',
+    borderRadius: '50%',
+    background: '#0b9a65',
+    color: '#ffffff',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '12px',
+  },
+
+  balanceCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    minHeight: '190px',
+    borderRadius: '27px',
+    padding: '27px 30px',
+    boxSizing: 'border-box',
+    background:
+      'linear-gradient(135deg, #086a4a 0%, #07865b 50%, #0ca56d 100%)',
+    boxShadow: '0 15px 40px rgba(6, 110, 76, 0.15)',
+    marginBottom: '28px',
+  },
+
+  balanceGlowOne: {
+    position: 'absolute',
+    width: '430px',
+    height: '220px',
+    borderRadius: '50%',
+    right: '-160px',
+    bottom: '-100px',
+    background: 'rgba(255,255,255,0.08)',
+    transform: 'rotate(-12deg)',
+  },
+
+  balanceGlowTwo: {
+    position: 'absolute',
+    width: '280px',
+    height: '180px',
+    borderRadius: '50%',
+    right: '80px',
+    top: '-110px',
+    background: 'rgba(255,255,255,0.06)',
+  },
+
+  balanceTop: {
+    position: 'relative',
+    zIndex: 2,
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+
+  balanceLabel: {
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: '16px',
+    fontWeight: 500,
+  },
+
+  balanceAmount: {
+    marginTop: '8px',
+    color: '#ffffff',
+    fontSize: '45px',
+    lineHeight: 1,
+    fontWeight: 800,
+    letterSpacing: '-1.5px',
+  },
+
+  hideButton: {
+    border: '1px solid rgba(255,255,255,0.22)',
+    background: 'rgba(255,255,255,0.07)',
+    color: '#ffffff',
+    borderRadius: '15px',
+    padding: '10px 15px',
+    fontSize: '13px',
+    fontWeight: 700,
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+
+  eyeIcon: {
+    fontSize: '16px',
+  },
+
+  balanceActions: {
+    position: 'relative',
+    zIndex: 2,
+    display: 'flex',
+    gap: '12px',
+    marginTop: '27px',
+  },
+
+  addMoneyButton: {
+    minHeight: '50px',
+    minWidth: '165px',
+    border: 0,
+    borderRadius: '16px',
+    background: '#ffffff',
+    color: '#0a4e3b',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    fontSize: '15px',
+    fontWeight: 800,
+    cursor: 'pointer',
+    boxShadow: '0 6px 20px rgba(0,0,0,0.08)',
+  },
+
+  sendMoneyButton: {
+    minHeight: '50px',
+    minWidth: '165px',
+    border: '1px solid rgba(255,255,255,0.3)',
+    borderRadius: '16px',
+    background: 'rgba(255,255,255,0.08)',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    fontSize: '15px',
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+
+  addCircle: {
+    width: '28px',
+    height: '28px',
+    borderRadius: '50%',
+    background: '#0a9b66',
+    color: '#ffffff',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '22px',
+  },
+
+  sendIcon: {
+    fontSize: '18px',
+  },
+
+  actionArrow: {
+    fontSize: '22px',
+    marginLeft: '2px',
+  },
+
+  servicesSection: {
+    background: '#ffffff',
+    borderRadius: '25px',
+    padding: '23px',
+    boxSizing: 'border-box',
+    boxShadow: '0 8px 30px rgba(20, 65, 55, 0.05)',
+    marginBottom: '25px',
+  },
+
+  servicesHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '18px',
+  },
+
+  servicesTitle: {
+    margin: 0,
+    fontSize: '22px',
+    color: '#122e3d',
+  },
+
+  seeAllButton: {
+    border: 0,
+    background: 'transparent',
+    color: '#087c51',
+    fontWeight: 800,
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
+    cursor: 'pointer',
+  },
+
+  servicesGrid: {
+    display: 'grid',
+    gridTemplateColumns:
+      'repeat(auto-fit, minmax(115px, 1fr))',
+    gap: '20px 14px',
+  },
+
+  serviceButton: {
+    border: 0,
+    background: 'transparent',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    cursor: 'pointer',
+    minWidth: 0,
+    padding: '3px',
+  },
+
+  serviceIconBox: {
+    width: '68px',
+    height: '68px',
+    borderRadius: '21px',
+    background: '#e9f8f3',
+    color: '#0a9865',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '27px',
+    fontWeight: 800,
+    marginBottom: '9px',
+  },
+
+  sendServiceIcon: {
+    background: '#e1f5ee',
+  },
+
+  serviceLabel: {
+    color: '#102b3b',
+    fontSize: '15px',
+    fontWeight: 750,
+    textAlign: 'center',
+  },
+
+  serviceDescription: {
+    color: '#899692',
+    fontSize: '10px',
+    marginTop: '4px',
+    textAlign: 'center',
+  },
+
+  verificationCard: {
+    background:
+      'linear-gradient(100deg, #effbf7, #ffffff)',
+    border: '1px solid #e1f1ec',
+    borderRadius: '23px',
+    minHeight: '95px',
+    padding: '17px 20px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '15px',
+    boxSizing: 'border-box',
+  },
+
+  verificationIcon: {
+    flexShrink: 0,
+    width: '54px',
+    height: '54px',
+    borderRadius: '17px',
+    background: '#dcf7ed',
+    color: '#079360',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '26px',
+    fontWeight: 800,
+  },
+
+  verificationText: {
+    flex: 1,
+  },
+
+  verificationTitle: {
+    margin: 0,
+    fontSize: '17px',
+    color: '#0b503d',
+  },
+
+  verificationDescription: {
+    margin: '4px 0 0',
+    color: '#758581',
+    fontSize: '13px',
+  },
+
+  verifyButton: {
+    border: 0,
+    background: '#079660',
+    color: '#ffffff',
+    borderRadius: '14px',
+    padding: '13px 18px',
+    fontWeight: 800,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    cursor: 'pointer',
+  },
+
+  bottomNav: {
+    position: 'fixed',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '73px',
+    background: 'rgba(255,255,255,0.97)',
+    backdropFilter: 'blur(15px)',
+    borderTop: '1px solid #e8efec',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    zIndex: 30,
+  },
+
+  navButton: {
+    border: 0,
+    background: 'transparent',
+    color: '#7b8885',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '3px',
+    fontSize: '11px',
+    fontWeight: 650,
+    cursor: 'pointer',
+  },
+
+  activeNavButton: {
+    color: '#078e5d',
+  },
+
+  navIcon: {
+    fontSize: '23px',
+    lineHeight: 1,
+  },
+
+  modalOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(8, 28, 24, 0.48)',
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    zIndex: 100,
+    padding: 0,
+  },
+
+  modal: {
+    width: '100%',
+    maxWidth: '620px',
+    maxHeight: '88vh',
+    overflowY: 'auto',
+    background: '#ffffff',
+    borderRadius: '27px 27px 0 0',
+    padding: '12px 22px 28px',
+    boxSizing: 'border-box',
+    boxShadow: '0 -10px 40px rgba(0,0,0,0.15)',
+  },
+
+  modalHandle: {
+    width: '42px',
+    height: '4px',
+    borderRadius: '10px',
+    background: '#d5dfdc',
+    margin: '0 auto 18px',
+  },
+
+  modalHeader: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: '20px',
+  },
+
+  modalEyebrow: {
+    color: '#0a9562',
+    fontSize: '10px',
+    letterSpacing: '1.5px',
+    fontWeight: 800,
+  },
+
+  modalTitle: {
+    margin: '4px 0 0',
+    color: '#102b3b',
+    fontSize: '25px',
+  },
+
+  closeButton: {
+    border: 0,
+    background: '#f0f5f3',
+    color: '#64736f',
+    width: '34px',
+    height: '34px',
+    borderRadius: '50%',
+    fontSize: '23px',
+    cursor: 'pointer',
+  },
+
+  modalDescription: {
+    color: '#74837f',
+    fontSize: '14px',
+    lineHeight: 1.5,
+    margin: '13px 0 18px',
+  },
+
+  modalDescriptionCenter: {
+    color: '#74837f',
+    fontSize: '14px',
+    textAlign: 'center',
+    margin: '14px 0 22px',
+  },
+
+  searchBox: {
+    height: '51px',
+    border: '1px solid #dce7e3',
+    borderRadius: '15px',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0 15px',
+    gap: '9px',
+    background: '#f8fbfa',
+    boxSizing: 'border-box',
+    marginBottom: '14px',
+  },
+
+  searchIcon: {
+    color: '#778681',
+    fontSize: '23px',
+  },
+
+  searchInput: {
+    border: 0,
+    outline: 0,
+    background: 'transparent',
+    width: '100%',
+    fontSize: '15px',
+    color: '#19312e',
+  },
+
+  bankList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '7px',
+  },
+
+  bankItem: {
+    width: '100%',
+    border: '1px solid #edf2f0',
+    background: '#ffffff',
+    borderRadius: '15px',
+    minHeight: '58px',
+    padding: '8px 11px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '11px',
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+
+  bankLogo: {
+    width: '37px',
+    height: '37px',
+    borderRadius: '11px',
+    background: '#e8f7f1',
+    color: '#078d5c',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800,
+  },
+
+  bankName: {
+    flex: 1,
+    color: '#19312e',
+    fontSize: '13px',
+    fontWeight: 700,
+  },
+
+  bankArrow: {
+    color: '#8a9995',
+    fontSize: '22px',
+  },
+
+  noResults: {
+    textAlign: 'center',
+    padding: '25px',
+    color: '#7d8b87',
+    fontSize: '14px',
+  },
+
+  amountBox: {
+    marginBottom: '18px',
+  },
+
+  amountLabel: {
+    display: 'block',
+    color: '#51635f',
+    fontSize: '13px',
+    fontWeight: 700,
+    marginBottom: '7px',
+  },
+
+  amountInputWrapper: {
+    height: '55px',
+    border: '1px solid #dce7e3',
+    borderRadius: '15px',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0 15px',
+    background: '#f8fbfa',
+  },
+
+  naira: {
+    fontSize: '20px',
+    fontWeight: 700,
+    color: '#0a8e5c',
+  },
+
+  amountInput: {
+    border: 0,
+    outline: 0,
+    background: 'transparent',
+    width: '100%',
+    fontSize: '18px',
+    paddingLeft: '9px',
+  },
+
+  primaryModalButton: {
+    width: '100%',
+    height: '52px',
+    border: 0,
+    borderRadius: '15px',
+    background: '#078f5d',
+    color: '#ffffff',
+    fontSize: '15px',
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+
+  modalOption: {
+    width: '100%',
+    minHeight: '70px',
+    border: '1px solid #e7efec',
+    background: '#ffffff',
+    borderRadius: '17px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '10px 13px',
+    marginBottom: '10px',
+    color: '#172f2c',
+    textAlign: 'left',
+    cursor: 'pointer',
+  },
+
+  modalOptionIcon: {
+    width: '43px',
+    height: '43px',
+    borderRadius: '13px',
+    background: '#e8f8f2',
+    color: '#078f5d',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800,
+    fontSize: '19px',
+  },
+
+  largeServiceIcon: {
+    width: '75px',
+    height: '75px',
+    borderRadius: '22px',
+    background: '#e8f8f2',
+    color: '#078f5d',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: '22px auto 0',
+    fontSize: '30px',
+    fontWeight: 800,
+  },
+};
+
+/* ============================================================
+   MOBILE RESPONSIVE ADJUSTMENTS
+============================================================ */
+
+const responsiveStyle = document.createElement('style');
+
+responsiveStyle.innerHTML = `
+  @media (max-width: 600px) {
+    .zenimonies-mobile-fix {
+      width: 100%;
+    }
+  }
+`;
+
+if (
+  typeof document !== 'undefined' &&
+  !document.getElementById('zenimonies-responsive-style')
+) {
+  responsiveStyle.id = 'zenimonies-responsive-style';
+  document.head.appendChild(responsiveStyle);
+}
 
 export default Dashboard;
