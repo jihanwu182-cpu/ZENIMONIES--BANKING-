@@ -8,17 +8,17 @@ import {
 
 import Login from './pages/Login.tsx';
 import Register from './pages/Register.tsx';
-import Dashboard from './pages/Dashboard';
-import Airtime from './pages/Airtime';
-import Bills from './pages/Bills';
-import Data from './pages/Data';
-import Deposit from './pages/Deposit';
-import KYC from './pages/KYC';
-import Profile from './pages/Profile';
-import Transactions from './pages/Transactions';
-import Transfer from './pages/Transfer';
-import VerifyPhone from './pages/VerifyPhone';
-import Withdraw from './pages/Withdraw';
+import Dashboard from './pages/Dashboard.tsx';
+import Airtime from './pages/Airtime.tsx';
+import Bills from './pages/Bills.tsx';
+import Data from './pages/Data.tsx';
+import Deposit from './pages/Deposit.tsx';
+import KYC from './pages/KYC.tsx';
+import Profile from './pages/Profile.tsx';
+import Transactions from './pages/Transactions.tsx';
+import Transfer from './pages/Transfer.tsx';
+import VerifyPhone from './pages/VerifyPhone.tsx';
+import Withdraw from './pages/Withdraw.tsx';
 
 const App: React.FC = () => {
   return (
