@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 interface Bank {
@@ -37,30 +37,40 @@ const BANKS: Bank[] = [
 const ToBank: React.FC = () => {
   const navigate = useNavigate();
 
-  const [search, setSearch] = useState('');
-  const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
+  const [selectedBankCode, setSelectedBankCode] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [amount, setAmount] = useState('');
   const [narration, setNarration] = useState('');
-  const [showBanks, setShowBanks] = useState(false);
   const [error, setError] = useState('');
 
-  const filteredBanks = useMemo(() => {
-    const value = search.trim().toLowerCase();
+  const selectedBank = BANKS.find(
+    (bank) => bank.code === selectedBankCode
+  );
 
-    if (!value) {
-      return BANKS;
+  const handleAccountNumberChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = event.target.value.replace(/\D/g, '').slice(0, 10);
+
+    setAccountNumber(value);
+    setError('');
+  };
+
+  const handleAmountChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    let value = event.target.value;
+
+    // Allow only numbers and one decimal point
+    value = value.replace(/[^\d.]/g, '');
+
+    const parts = value.split('.');
+
+    if (parts.length > 2) {
+      value = `${parts[0]}.${parts.slice(1).join('')}`;
     }
 
-    return BANKS.filter((bank) =>
-      bank.name.toLowerCase().includes(value)
-    );
-  }, [search]);
-
-  const selectBank = (bank: Bank) => {
-    setSelectedBank(bank);
-    setSearch(bank.name);
-    setShowBanks(false);
+    setAmount(value);
     setError('');
   };
 
@@ -68,7 +78,7 @@ const ToBank: React.FC = () => {
     setError('');
 
     if (!selectedBank) {
-      setError('Please select a bank.');
+      setError('Please select the recipient bank.');
       return;
     }
 
@@ -77,20 +87,12 @@ const ToBank: React.FC = () => {
       return;
     }
 
-    const numericAmount = Number(amount.replace(/,/g, ''));
+    const numericAmount = Number(amount);
 
     if (!numericAmount || numericAmount <= 0) {
       setError('Please enter a valid amount.');
       return;
     }
-
-    /*
-     * This is only the frontend transfer form.
-     *
-     * We do not claim that the recipient account has been
-     * verified until the backend is connected to a legitimate
-     * account-name verification/payment provider.
-     */
 
     navigate('/transfer-confirmation', {
       state: {
@@ -108,10 +110,14 @@ const ToBank: React.FC = () => {
         minHeight: '100vh',
         background: '#f5f8f7',
         color: '#102a25',
-        paddingBottom: '30px',
+        fontFamily:
+          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+        paddingBottom: 40,
       }}
     >
-      {/* Header */}
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
 
       <header
         style={{
@@ -124,26 +130,30 @@ const ToBank: React.FC = () => {
       >
         <div
           style={{
-            maxWidth: '700px',
+            width: 'min(700px, 92%)',
             margin: '0 auto',
-            padding: '16px 20px',
+            padding: '14px 0',
             display: 'flex',
             alignItems: 'center',
-            gap: '14px',
+            gap: 13,
           }}
         >
           <button
             type="button"
             onClick={() => navigate('/')}
+            aria-label="Back to dashboard"
             style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '12px',
+              width: 40,
+              height: 40,
+              borderRadius: 12,
               border: '1px solid #e1e8e5',
               background: '#ffffff',
               color: '#087f5b',
-              fontSize: '22px',
+              fontSize: 22,
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             ←
@@ -152,43 +162,50 @@ const ToBank: React.FC = () => {
           <div>
             <div
               style={{
-                fontSize: '19px',
+                fontSize: 19,
                 fontWeight: 800,
+                color: '#102a25',
               }}
             >
-              To Bank
+              Send to Bank
             </div>
 
             <div
               style={{
                 color: '#7a8a85',
-                fontSize: '12px',
-                marginTop: '2px',
+                fontSize: 12,
+                marginTop: 2,
               }}
             >
-              Send money to a bank account
+              Send money to another bank account
             </div>
           </div>
         </div>
       </header>
 
+      {/* =====================================================
+          MAIN
+      ===================================================== */}
+
       <main
         style={{
-          width: '100%',
-          maxWidth: '700px',
+          width: 'min(700px, 92%)',
           margin: '0 auto',
-          padding: '25px 18px 50px',
-          boxSizing: 'border-box',
+          padding: '24px 0 50px',
         }}
       >
-        {/* Page introduction */}
+        {/* Introduction */}
 
-        <div style={{ marginBottom: '20px' }}>
+        <div
+          style={{
+            marginBottom: 20,
+          }}
+        >
           <div
             style={{
-              fontSize: '14px',
               color: '#71807b',
-              marginBottom: '5px',
+              fontSize: 13,
+              marginBottom: 5,
             }}
           >
             Bank transfer
@@ -197,9 +214,10 @@ const ToBank: React.FC = () => {
           <h1
             style={{
               margin: 0,
-              fontSize: '27px',
+              fontSize: 27,
               lineHeight: 1.2,
               color: '#102a25',
+              fontWeight: 800,
             }}
           >
             Send money
@@ -209,277 +227,261 @@ const ToBank: React.FC = () => {
             style={{
               margin: '8px 0 0',
               color: '#71807b',
-              fontSize: '14px',
+              fontSize: 14,
+              lineHeight: 1.5,
             }}
           >
-            Choose a bank and enter the recipient's details.
+            Enter the bank account details and amount.
           </p>
         </div>
 
-        {/* Main card */}
+        {/* =====================================================
+            TRANSFER CARD
+        ===================================================== */}
 
         <section
           style={{
             background: '#ffffff',
-            borderRadius: '20px',
-            padding: '20px',
+            borderRadius: 20,
+            padding: 20,
             border: '1px solid #e5ebe8',
-            boxShadow: '0 8px 25px rgba(16, 42, 37, 0.05)',
+            boxShadow:
+              '0 8px 25px rgba(16, 42, 37, 0.05)',
           }}
         >
-          {/* Bank */}
+          {/* =================================================
+              BANK NAME
+          ================================================= */}
 
           <label
+            htmlFor="bank-name"
             style={{
               display: 'block',
-              fontSize: '13px',
-              fontWeight: 700,
-              marginBottom: '8px',
               color: '#344c46',
+              fontSize: 13,
+              fontWeight: 700,
+              marginBottom: 8,
             }}
           >
-            Select bank
+            Bank name
           </label>
 
-          <div style={{ position: 'relative' }}>
-            <input
-              value={search}
-              onFocus={() => setShowBanks(true)}
+          <div
+            style={{
+              position: 'relative',
+            }}
+          >
+            <select
+              id="bank-name"
+              value={selectedBankCode}
               onChange={(event) => {
-                setSearch(event.target.value);
-                setSelectedBank(null);
-                setShowBanks(true);
+                setSelectedBankCode(event.target.value);
+                setError('');
               }}
-              placeholder="Search for a bank"
               style={{
                 width: '100%',
-                height: '52px',
+                height: 54,
                 boxSizing: 'border-box',
                 border: '1px solid #d9e3df',
-                borderRadius: '13px',
+                borderRadius: 13,
                 padding: '0 45px 0 15px',
-                fontSize: '15px',
-                outline: 'none',
+                fontSize: 15,
+                color: selectedBankCode
+                  ? '#102a25'
+                  : '#8a9994',
                 background: '#ffffff',
-              }}
-            />
-
-            <span
-              style={{
-                position: 'absolute',
-                right: '15px',
-                top: '15px',
-                color: '#087f5b',
-                fontSize: '18px',
+                outline: 'none',
+                cursor: 'pointer',
+                appearance: 'auto',
               }}
             >
-              ⌕
-            </span>
+              <option value="">
+                Select your bank
+              </option>
 
-            {showBanks && (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  top: '58px',
-                  background: '#ffffff',
-                  border: '1px solid #dfe8e4',
-                  borderRadius: '13px',
-                  boxShadow: '0 12px 30px rgba(16, 42, 37, 0.12)',
-                  maxHeight: '280px',
-                  overflowY: 'auto',
-                  zIndex: 30,
-                }}
-              >
-                {filteredBanks.length === 0 ? (
-                  <div
-                    style={{
-                      padding: '18px',
-                      color: '#71807b',
-                      fontSize: '14px',
-                    }}
-                  >
-                    No bank found.
-                  </div>
-                ) : (
-                  filteredBanks.map((bank) => (
-                    <button
-                      key={`${bank.name}-${bank.code}`}
-                      type="button"
-                      onClick={() => selectBank(bank)}
-                      style={{
-                        width: '100%',
-                        border: 'none',
-                        borderBottom: '1px solid #edf1ef',
-                        background: '#ffffff',
-                        padding: '13px 15px',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          color: '#16352e',
-                          fontSize: '14px',
-                        }}
-                      >
-                        {bank.name}
-                      </div>
-
-                      <div
-                        style={{
-                          color: '#8a9994',
-                          fontSize: '11px',
-                          marginTop: '3px',
-                        }}
-                      >
-                        Bank code: {bank.code}
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+              {BANKS.map((bank) => (
+                <option
+                  key={`${bank.name}-${bank.code}`}
+                  value={bank.code}
+                >
+                  {bank.name}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {/* Selected bank */}
 
           {selectedBank && (
             <div
               style={{
-                marginTop: '10px',
-                padding: '10px 12px',
+                marginTop: 10,
+                padding: '11px 13px',
                 background: '#ecfdf5',
                 border: '1px solid #b7ebd4',
-                borderRadius: '10px',
+                borderRadius: 11,
                 color: '#087f5b',
-                fontSize: '13px',
+                fontSize: 13,
                 fontWeight: 700,
               }}
             >
-              ✓ {selectedBank.name} selected
+              ✓ {selectedBank.name}
             </div>
           )}
 
-          {/* Account number */}
+          {/* =================================================
+              ACCOUNT NUMBER
+          ================================================= */}
 
-          <div style={{ marginTop: '20px' }}>
+          <div
+            style={{
+              marginTop: 20,
+            }}
+          >
             <label
+              htmlFor="account-number"
               style={{
                 display: 'block',
-                fontSize: '13px',
-                fontWeight: 700,
-                marginBottom: '8px',
                 color: '#344c46',
+                fontSize: 13,
+                fontWeight: 700,
+                marginBottom: 8,
               }}
             >
               Account number
             </label>
 
             <input
+              id="account-number"
               type="tel"
               inputMode="numeric"
+              autoComplete="off"
               maxLength={10}
               value={accountNumber}
-              onChange={(event) => {
-                const value = event.target.value.replace(/\D/g, '');
-                setAccountNumber(value);
-              }}
+              onChange={handleAccountNumberChange}
               placeholder="Enter 10-digit account number"
               style={{
                 width: '100%',
-                height: '52px',
+                height: 54,
                 boxSizing: 'border-box',
                 border: '1px solid #d9e3df',
-                borderRadius: '13px',
+                borderRadius: 13,
                 padding: '0 15px',
-                fontSize: '15px',
+                fontSize: 15,
+                color: '#102a25',
+                background: '#ffffff',
                 outline: 'none',
               }}
             />
-          </div>
 
-          {/* Amount */}
-
-          <div style={{ marginTop: '20px' }}>
-            <label
+            <div
               style={{
-                display: 'block',
-                fontSize: '13px',
-                fontWeight: 700,
-                marginBottom: '8px',
-                color: '#344c46',
+                marginTop: 6,
+                color: '#8a9994',
+                fontSize: 11,
               }}
             >
-              Amount
+              {accountNumber.length}/10 digits
+            </div>
+          </div>
+
+          {/* =================================================
+              AMOUNT
+          ================================================= */}
+
+          <div
+            style={{
+              marginTop: 18,
+            }}
+          >
+            <label
+              htmlFor="transfer-amount"
+              style={{
+                display: 'block',
+                color: '#344c46',
+                fontSize: 13,
+                fontWeight: 700,
+                marginBottom: 8,
+              }}
+            >
+              Amount (₦)
             </label>
 
-            <div style={{ position: 'relative' }}>
+            <div
+              style={{
+                position: 'relative',
+              }}
+            >
               <span
                 style={{
                   position: 'absolute',
-                  left: '15px',
-                  top: '15px',
+                  left: 15,
+                  top: 16,
                   color: '#087f5b',
+                  fontSize: 16,
                   fontWeight: 800,
+                  zIndex: 1,
                 }}
               >
                 ₦
               </span>
 
               <input
+                id="transfer-amount"
                 type="text"
                 inputMode="decimal"
                 value={amount}
-                onChange={(event) => {
-                  const value = event.target.value.replace(
-                    /[^\d.]/g,
-                    ''
-                  );
-
-                  setAmount(value);
-                }}
+                onChange={handleAmountChange}
                 placeholder="0.00"
                 style={{
                   width: '100%',
-                  height: '52px',
+                  height: 54,
                   boxSizing: 'border-box',
                   border: '1px solid #d9e3df',
-                  borderRadius: '13px',
-                  padding: '0 15px 0 35px',
-                  fontSize: '18px',
+                  borderRadius: 13,
+                  padding: '0 15px 0 37px',
+                  fontSize: 17,
                   fontWeight: 700,
+                  color: '#102a25',
+                  background: '#ffffff',
                   outline: 'none',
                 }}
               />
             </div>
           </div>
 
-          {/* Narration */}
+          {/* =================================================
+              NARRATION
+          ================================================= */}
 
-          <div style={{ marginTop: '20px' }}>
+          <div
+            style={{
+              marginTop: 18,
+            }}
+          >
             <label
+              htmlFor="narration"
               style={{
                 display: 'block',
-                fontSize: '13px',
-                fontWeight: 700,
-                marginBottom: '8px',
                 color: '#344c46',
+                fontSize: 13,
+                fontWeight: 700,
+                marginBottom: 8,
               }}
             >
-              Narration
+              Narration{' '}
               <span
                 style={{
                   color: '#98a2b3',
                   fontWeight: 400,
                 }}
               >
-                {' '}
                 (optional)
               </span>
             </label>
 
             <input
+              id="narration"
               type="text"
               maxLength={100}
               value={narration}
@@ -489,50 +491,58 @@ const ToBank: React.FC = () => {
               placeholder="What is this payment for?"
               style={{
                 width: '100%',
-                height: '52px',
+                height: 54,
                 boxSizing: 'border-box',
                 border: '1px solid #d9e3df',
-                borderRadius: '13px',
+                borderRadius: 13,
                 padding: '0 15px',
-                fontSize: '15px',
+                fontSize: 15,
+                color: '#102a25',
+                background: '#ffffff',
                 outline: 'none',
               }}
             />
           </div>
 
-          {/* Error */}
+          {/* =================================================
+              ERROR
+          ================================================= */}
 
           {error && (
             <div
+              role="alert"
               style={{
-                marginTop: '18px',
+                marginTop: 18,
                 padding: '12px 14px',
                 background: '#fff4f2',
                 border: '1px solid #fecdca',
                 color: '#b42318',
-                borderRadius: '11px',
-                fontSize: '13px',
+                borderRadius: 11,
+                fontSize: 13,
+                lineHeight: 1.5,
               }}
             >
               {error}
             </div>
           )}
 
-          {/* Continue */}
+          {/* =================================================
+              CONTINUE
+          ================================================= */}
 
           <button
             type="button"
             onClick={handleContinue}
             style={{
               width: '100%',
-              height: '54px',
-              marginTop: '22px',
+              height: 54,
+              marginTop: 22,
               border: 'none',
-              borderRadius: '14px',
+              borderRadius: 14,
               background:
                 'linear-gradient(135deg, #087f5b, #0b9b6d)',
               color: '#ffffff',
-              fontSize: '16px',
+              fontSize: 16,
               fontWeight: 800,
               cursor: 'pointer',
               boxShadow:
@@ -545,22 +555,25 @@ const ToBank: React.FC = () => {
           <div
             style={{
               textAlign: 'center',
-              marginTop: '12px',
+              marginTop: 12,
               color: '#8a9994',
-              fontSize: '11px',
+              fontSize: 11,
               lineHeight: 1.5,
             }}
           >
-            Your transfer will be reviewed before it is sent.
+            Please check the recipient details before
+            continuing.
           </div>
         </section>
 
-        {/* Back to dashboard */}
+        {/* =================================================
+            BACK
+        ================================================= */}
 
         <div
           style={{
             textAlign: 'center',
-            marginTop: '20px',
+            marginTop: 20,
           }}
         >
           <Link
@@ -568,7 +581,7 @@ const ToBank: React.FC = () => {
             style={{
               color: '#087f5b',
               textDecoration: 'none',
-              fontSize: '13px',
+              fontSize: 13,
               fontWeight: 700,
             }}
           >
