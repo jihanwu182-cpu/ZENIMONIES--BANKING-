@@ -60,7 +60,7 @@ type Tier3Method =
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
-  'https://globalmarket-com.onrender.com/api';
+  'https://zenimonies-banking.onrender.com/api';
 
 const KYC: React.FC = () => {
   const navigate = useNavigate();
