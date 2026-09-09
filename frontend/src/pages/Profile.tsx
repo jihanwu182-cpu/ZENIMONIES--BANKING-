@@ -1,1352 +1,1349 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 interface User {
-  id?: string | number;
+  id?: number | string;
   full_name?: string;
+  name?: string;
   first_name?: string;
   last_name?: string;
   email?: string;
   phone?: string;
+  date_of_birth?: string;
+  dob?: string;
+  address?: string;
+  residential_address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
   role?: string;
   status?: string;
-
   kyc_status?: string;
-  kyc_tier?: number | string;
-
-  bvn_verified?: boolean;
-  id_verified?: boolean;
-  tier_3_verified?: boolean;
-  tier_3_method?: string;
-
-  account_limit?: number | string | null;
-  daily_transfer_limit?: number | string;
-  daily_transfer_used?: number | string;
-
   is_verified?: boolean;
-
-  // Compatibility with different API response formats
-  firstName?: string;
-  lastName?: string;
-  emailVerified?: boolean;
-  identityVerificationStatus?: string;
+  kyc_tier?: number;
+  tier?: number;
+  profile_photo?: string;
+  avatar?: string;
 }
 
-interface KycLimits {
-  accountLimit: number | null;
-  dailyTransferLimit: number;
+interface Account {
+  account_number?: string;
+  account_name?: string;
+  account_type?: string;
+  currency?: string;
+  status?: string;
 }
-
-const TIER_LIMITS: Record<number, KycLimits> = {
-  1: {
-    accountLimit: 200000,
-    dailyTransferLimit: 50000,
-  },
-  2: {
-    accountLimit: 500000,
-    dailyTransferLimit: 200000,
-  },
-  3: {
-    accountLimit: null,
-    dailyTransferLimit: 5000000,
-  },
-};
 
 const Profile: React.FC = () => {
   const navigate = useNavigate();
 
   const [user, setUser] = useState<User | null>(null);
+  const [account, setAccount] = useState<Account | null>(null);
+
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const [form, setForm] = useState({
+    email: '',
+    phone: '',
+    dateOfBirth: '',
+    address: '',
+    city: '',
+    state: '',
+    country: 'Nigeria',
+  });
 
   useEffect(() => {
-    try {
-      const storedUser =
-        localStorage.getItem('zenimonies_user');
-
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      }
-    } catch (error) {
-      console.error(
-        'Unable to load profile:',
-        error
-      );
-
-      setUser(null);
-    }
+    loadProfile();
   }, []);
 
-  // ============================================================
-  // LOGOUT
-  // ============================================================
+  const loadProfile = () => {
+    try {
+      const savedUser = JSON.parse(
+        localStorage.getItem('zenimonies_user') || 'null'
+      );
 
-  const logout = () => {
-    localStorage.removeItem('zenimonies_token');
-    localStorage.removeItem('token');
-    localStorage.removeItem('zenimonies_user');
-    localStorage.removeItem('zenimonies_accounts');
+      const savedAccounts = JSON.parse(
+        localStorage.getItem('zenimonies_accounts') || '[]'
+      );
 
-    navigate('/login');
+      if (!savedUser) {
+        navigate('/login');
+        return;
+      }
+
+      setUser(savedUser);
+
+      setForm({
+        email: savedUser.email || '',
+        phone: savedUser.phone || '',
+        dateOfBirth:
+          savedUser.date_of_birth ||
+          savedUser.dob ||
+          '',
+        address:
+          savedUser.address ||
+          savedUser.residential_address ||
+          '',
+        city: savedUser.city || '',
+        state: savedUser.state || '',
+        country: savedUser.country || 'Nigeria',
+      });
+
+      if (
+        Array.isArray(savedAccounts) &&
+        savedAccounts.length > 0
+      ) {
+        setAccount(savedAccounts[0]);
+      }
+    } catch (err) {
+      console.error('Profile loading error:', err);
+      setError('Unable to load your profile.');
+    }
   };
 
-  // ============================================================
-  // USER INFORMATION
-  // ============================================================
+  const displayName = useMemo(() => {
+    return (
+      user?.full_name ||
+      user?.name ||
+      `${user?.first_name || ''} ${
+        user?.last_name || ''
+      }`.trim() ||
+      'Zenimonies User'
+    );
+  }, [user]);
 
-  const displayName =
-    user?.full_name ||
-    `${user?.first_name || user?.firstName || ''} ${
-      user?.last_name || user?.lastName || ''
-    }`.trim() ||
-    'Zenimonies User';
+  const initials = useMemo(() => {
+    const parts = displayName
+      .split(' ')
+      .filter(Boolean);
 
-  const email =
-    user?.email || 'Not available';
-
-  const phone =
-    user?.phone || 'Not available';
-
-  const accountStatus =
-    user?.status?.toUpperCase() || 'ACTIVE';
-
-  const kycStatus =
-    user?.kyc_status ||
-    user?.identityVerificationStatus ||
-    'pending';
-
-  const normalizedKycStatus =
-    String(kycStatus).toLowerCase();
-
-  const phoneVerified =
-    user?.is_verified ??
-    user?.emailVerified ??
-    false;
-
-  // ============================================================
-  // KYC TIER
-  // ============================================================
-
-  const currentTier = useMemo(() => {
-    const tier = Number(user?.kyc_tier);
-
-    if (tier === 2) {
-      return 2;
+    if (parts.length >= 2) {
+      return (
+        parts[0][0] +
+        parts[parts.length - 1][0]
+      ).toUpperCase();
     }
 
-    if (tier === 3) {
-      return 3;
-    }
+    return displayName
+      .slice(0, 2)
+      .toUpperCase();
+  }, [displayName]);
 
-    return 1;
-  }, [user?.kyc_tier]);
+  /*
+   * KYC is considered completed when the backend
+   * reports a verified KYC status or a KYC tier.
+   *
+   * We intentionally do NOT use only is_verified
+   * because email/phone verification is different
+   * from KYC verification.
+   */
+  const kycVerified = useMemo(() => {
+    const status =
+      String(user?.kyc_status || '').toLowerCase();
 
-  const currentLimits =
-    TIER_LIMITS[currentTier];
-
-  const dailyTransferUsed = Number(
-    user?.daily_transfer_used || 0
-  );
-
-  const dailyTransferRemaining =
-    Math.max(
-      currentLimits.dailyTransferLimit -
-        dailyTransferUsed,
-      0
+    const tier = Number(
+      user?.kyc_tier ??
+        user?.tier ??
+        0
     );
 
-  const accountLimitText =
-    currentLimits.accountLimit === null
-      ? 'Unlimited'
-      : `₦${currentLimits.accountLimit.toLocaleString(
-          'en-NG'
-        )}`;
+    return (
+      status === 'verified' ||
+      status === 'approved' ||
+      status === 'completed' ||
+      tier >= 1
+    );
+  }, [user]);
 
-  const dailyTransferLimitText =
-    `₦${currentLimits.dailyTransferLimit.toLocaleString(
-      'en-NG'
-    )}`;
+  const currentTier = useMemo(() => {
+    const tier = Number(
+      user?.kyc_tier ??
+        user?.tier ??
+        0
+    );
 
-  const dailyTransferRemainingText =
-    `₦${dailyTransferRemaining.toLocaleString(
-      'en-NG'
-    )}`;
+    if (tier >= 3) return 3;
+    if (tier === 2) return 2;
+    if (tier === 1) return 1;
 
-  // ============================================================
-  // KYC STATUS
-  // ============================================================
+    return 0;
+  }, [user]);
 
-  const kycApproved =
-    normalizedKycStatus === 'approved' ||
-    normalizedKycStatus === 'verified';
+  const updateField = (
+    field: keyof typeof form,
+    value: string
+  ) => {
+    setForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+  };
 
-  const kycPending =
-    normalizedKycStatus === 'pending' ||
-    normalizedKycStatus === 'under_review';
+  const saveProfile = async () => {
+    setSaving(true);
+    setMessage('');
+    setError('');
 
-  const kycRejected =
-    normalizedKycStatus === 'rejected';
+    try {
+      /*
+       * For now we save the editable profile information
+       * locally. When the backend profile-update endpoint
+       * is connected, this section can send the same fields
+       * to the server.
+       *
+       * IMPORTANT:
+       * The legal name is deliberately NOT included here.
+       * Therefore Profile cannot change the verified name.
+       */
 
-  // ============================================================
-  // TIER INFORMATION
-  // ============================================================
+      const updatedUser: User = {
+        ...(user || {}),
+        email: form.email,
+        phone: form.phone,
+        date_of_birth: form.dateOfBirth,
+        address: form.address,
+        residential_address: form.address,
+        city: form.city,
+        state: form.state,
+        country: form.country,
+      };
 
-  const tierTitle =
-    currentTier === 1
-      ? 'Tier 1'
-      : currentTier === 2
-      ? 'Tier 2'
-      : 'Tier 3';
+      localStorage.setItem(
+        'zenimonies_user',
+        JSON.stringify(updatedUser)
+      );
 
-  const tierDescription =
-    currentTier === 1
-      ? 'BVN verification'
-      : currentTier === 2
-      ? 'ID document + KYC verification'
-      : 'Enhanced verification';
+      setUser(updatedUser);
+      setEditing(false);
+      setMessage('Profile updated successfully.');
 
-  const tier3Method =
-    user?.tier_3_method
-      ? user.tier_3_method
-          .replace(/_/g, ' ')
-          .replace(/\b\w/g, (letter) =>
-            letter.toUpperCase()
-          )
-      : 'Not selected';
+      setTimeout(() => {
+        setMessage('');
+      }, 3500);
+    } catch (err) {
+      console.error('Profile save error:', err);
+      setError(
+        'Unable to save your profile. Please try again.'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelEditing = () => {
+    if (!user) return;
+
+    setForm({
+      email: user.email || '',
+      phone: user.phone || '',
+      dateOfBirth:
+        user.date_of_birth ||
+        user.dob ||
+        '',
+      address:
+        user.address ||
+        user.residential_address ||
+        '',
+      city: user.city || '',
+      state: user.state || '',
+      country: user.country || 'Nigeria',
+    });
+
+    setEditing(false);
+    setError('');
+    setMessage('');
+  };
+
+  const maskAccountNumber = (
+    accountNumber?: string
+  ) => {
+    if (!accountNumber) {
+      return 'Not available';
+    }
+
+    if (accountNumber.length <= 4) {
+      return accountNumber;
+    }
+
+    return `•••• ${accountNumber.slice(-4)}`;
+  };
+
+  const getKycText = () => {
+    if (currentTier >= 3) {
+      return 'Tier 3 Verified';
+    }
+
+    if (currentTier === 2) {
+      return 'Tier 2 Verified';
+    }
+
+    if (currentTier === 1) {
+      return 'Tier 1 Verified';
+    }
+
+    return 'KYC Verification Required';
+  };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: '#f5f7fb',
-      }}
-    >
-      {/* ======================================================
-          HEADER
-      ======================================================= */}
+    <div style={styles.page}>
+      {/* ================= HEADER ================= */}
 
-      <header
-        style={{
-          background: '#ffffff',
-          borderBottom:
-            '1px solid #eaecf0',
-          padding: '18px 24px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '15px',
-          flexWrap: 'wrap',
-        }}
-      >
-        <div>
-          <Link
-            to="/"
-            style={{
-              textDecoration: 'none',
-              color: '#0b5cff',
-              fontSize: '24px',
-              fontWeight: 800,
-            }}
-          >
-            Zenimonies
-          </Link>
+      <header style={styles.header}>
+        <button
+          type="button"
+          style={styles.backButton}
+          onClick={() => navigate('/')}
+        >
+          ←
+        </button>
 
-          <div
-            style={{
-              color: '#667085',
-              fontSize: '13px',
-              marginTop: '2px',
-            }}
-          >
-            Digital Banking
-          </div>
+        <div style={styles.headerTitle}>
+          My Profile
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            gap: '10px',
-            alignItems: 'center',
-          }}
+        <button
+          type="button"
+          style={styles.headerHome}
+          onClick={() => navigate('/')}
         >
-          <Link
-            to="/"
-            style={{
-              textDecoration: 'none',
-              color: '#172033',
-              fontWeight: 600,
-            }}
-          >
-            Dashboard
-          </Link>
+          Home
+        </button>
+      </header>
+
+      <main style={styles.main}>
+        {/* ================= PROFILE HEADER ================= */}
+
+        <section style={styles.profileCard}>
+          <div style={styles.avatar}>
+            {user?.profile_photo ||
+            user?.avatar ? (
+              <img
+                src={
+                  user.profile_photo ||
+                  user.avatar
+                }
+                alt="Profile"
+                style={styles.avatarImage}
+              />
+            ) : (
+              initials
+            )}
+          </div>
+
+          <div style={styles.profileMain}>
+            <h1 style={styles.profileName}>
+              {displayName}
+            </h1>
+
+            <p style={styles.profileEmail}>
+              {user?.email || 'Email not available'}
+            </p>
+
+            <div style={styles.statusRow}>
+              <span
+                style={{
+                  ...styles.statusBadge,
+                  ...(kycVerified
+                    ? styles.verifiedBadge
+                    : styles.pendingBadge),
+                }}
+              >
+                <span>
+                  {kycVerified ? '✓' : '!'}
+                </span>
+
+                {getKycText()}
+              </span>
+
+              {account?.account_number && (
+                <span style={styles.accountBadge}>
+                  Personal Account
+                </span>
+              )}
+            </div>
+          </div>
+
+          {!editing && (
+            <button
+              type="button"
+              style={styles.editButton}
+              onClick={() => {
+                setEditing(true);
+                setMessage('');
+                setError('');
+              }}
+            >
+              Edit Profile
+            </button>
+          )}
+        </section>
+
+        {/* ================= MESSAGES ================= */}
+
+        {message && (
+          <div style={styles.successMessage}>
+            ✓ {message}
+          </div>
+        )}
+
+        {error && (
+          <div style={styles.errorMessage}>
+            {error}
+          </div>
+        )}
+
+        {/* ================= PERSONAL INFORMATION ================= */}
+
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>
+                Personal Information
+              </h2>
+
+              <p style={styles.sectionDescription}>
+                Your basic personal information.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.fieldsGrid}>
+            {/* FULL NAME */}
+
+            <div style={styles.field}>
+              <label style={styles.label}>
+                Full Legal Name
+              </label>
+
+              <div
+                style={{
+                  ...styles.lockedField,
+                  ...(kycVerified
+                    ? styles.lockedVerified
+                    : {}),
+                }}
+              >
+                <span>
+                  {displayName}
+                </span>
+
+                {kycVerified && (
+                  <span
+                    style={styles.lockIcon}
+                    title="Name locked after KYC verification"
+                  >
+                    🔒
+                  </span>
+                )}
+              </div>
+
+              {kycVerified && (
+                <div style={styles.helperText}>
+                  Your legal name is locked because
+                  your KYC verification has been
+                  completed.
+                </div>
+              )}
+            </div>
+
+            {/* DATE OF BIRTH */}
+
+            <div style={styles.field}>
+              <label style={styles.label}>
+                Date of Birth
+              </label>
+
+              <input
+                type="date"
+                value={form.dateOfBirth}
+                disabled={!editing}
+                onChange={(event) =>
+                  updateField(
+                    'dateOfBirth',
+                    event.target.value
+                  )
+                }
+                style={{
+                  ...styles.input,
+                  ...(editing
+                    ? styles.inputEditable
+                    : styles.inputDisabled),
+                }}
+              />
+            </div>
+
+            {/* EMAIL */}
+
+            <div style={styles.field}>
+              <label style={styles.label}>
+                Email Address
+              </label>
+
+              <input
+                type="email"
+                value={form.email}
+                disabled={!editing}
+                onChange={(event) =>
+                  updateField(
+                    'email',
+                    event.target.value
+                  )
+                }
+                style={{
+                  ...styles.input,
+                  ...(editing
+                    ? styles.inputEditable
+                    : styles.inputDisabled),
+                }}
+              />
+            </div>
+
+            {/* PHONE */}
+
+            <div style={styles.field}>
+              <label style={styles.label}>
+                Phone Number
+              </label>
+
+              <input
+                type="tel"
+                value={form.phone}
+                disabled={!editing}
+                onChange={(event) =>
+                  updateField(
+                    'phone',
+                    event.target.value
+                  )
+                }
+                style={{
+                  ...styles.input,
+                  ...(editing
+                    ? styles.inputEditable
+                    : styles.inputDisabled),
+                }}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ================= ADDRESS ================= */}
+
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>
+                Residential Address
+              </h2>
+
+              <p style={styles.sectionDescription}>
+                Keep your residential information
+                up to date.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.fieldsGrid}>
+            <div
+              style={{
+                ...styles.field,
+                gridColumn:
+                  '1 / -1',
+              }}
+            >
+              <label style={styles.label}>
+                Address
+              </label>
+
+              <textarea
+                value={form.address}
+                disabled={!editing}
+                onChange={(event) =>
+                  updateField(
+                    'address',
+                    event.target.value
+                  )
+                }
+                rows={3}
+                style={{
+                  ...styles.textarea,
+                  ...(editing
+                    ? styles.inputEditable
+                    : styles.inputDisabled),
+                }}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>
+                City
+              </label>
+
+              <input
+                type="text"
+                value={form.city}
+                disabled={!editing}
+                onChange={(event) =>
+                  updateField(
+                    'city',
+                    event.target.value
+                  )
+                }
+                style={{
+                  ...styles.input,
+                  ...(editing
+                    ? styles.inputEditable
+                    : styles.inputDisabled),
+                }}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>
+                State
+              </label>
+
+              <input
+                type="text"
+                value={form.state}
+                disabled={!editing}
+                onChange={(event) =>
+                  updateField(
+                    'state',
+                    event.target.value
+                  )
+                }
+                style={{
+                  ...styles.input,
+                  ...(editing
+                    ? styles.inputEditable
+                    : styles.inputDisabled),
+                }}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <label style={styles.label}>
+                Country
+              </label>
+
+              <input
+                type="text"
+                value={form.country}
+                disabled={!editing}
+                onChange={(event) =>
+                  updateField(
+                    'country',
+                    event.target.value
+                  )
+                }
+                style={{
+                  ...styles.input,
+                  ...(editing
+                    ? styles.inputEditable
+                    : styles.inputDisabled),
+                }}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ================= BANK ACCOUNT ================= */}
+
+        <section style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>
+                Account Information
+              </h2>
+
+              <p style={styles.sectionDescription}>
+                Your Zenimonies account details.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.accountGrid}>
+            <div style={styles.accountItem}>
+              <span style={styles.accountLabel}>
+                Account Number
+              </span>
+
+              <strong style={styles.accountValue}>
+                {maskAccountNumber(
+                  account?.account_number
+                )}
+              </strong>
+            </div>
+
+            <div style={styles.accountItem}>
+              <span style={styles.accountLabel}>
+                Account Name
+              </span>
+
+              <strong style={styles.accountValue}>
+                {account?.account_name ||
+                  displayName}
+              </strong>
+            </div>
+
+            <div style={styles.accountItem}>
+              <span style={styles.accountLabel}>
+                Account Type
+              </span>
+
+              <strong style={styles.accountValue}>
+                {account?.account_type ||
+                  'Personal Account'}
+              </strong>
+            </div>
+
+            <div style={styles.accountItem}>
+              <span style={styles.accountLabel}>
+                Currency
+              </span>
+
+              <strong style={styles.accountValue}>
+                {account?.currency || 'NGN'}
+              </strong>
+            </div>
+          </div>
+        </section>
+
+        {/* ================= KYC ================= */}
+
+        <section style={styles.kycCard}>
+          <div style={styles.kycIcon}>
+            {kycVerified ? '✓' : '!'}
+          </div>
+
+          <div style={styles.kycContent}>
+            <h2 style={styles.kycTitle}>
+              KYC Verification
+            </h2>
+
+            <p style={styles.kycDescription}>
+              {kycVerified
+                ? `Your account is ${getKycText()}. Your verified legal name is protected from normal profile changes.`
+                : 'Complete your KYC verification to unlock higher account limits and additional services.'}
+            </p>
+          </div>
 
           <button
             type="button"
-            onClick={logout}
-            style={{
-              border:
-                '1px solid #d0d5dd',
-              background: '#ffffff',
-              borderRadius: '8px',
-              padding: '9px 15px',
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
+            style={styles.kycButton}
+            onClick={() => navigate('/kyc')}
           >
-            Logout
+            {kycVerified
+              ? 'View KYC'
+              : 'Verify Now'}
+            <span>›</span>
           </button>
-        </div>
-      </header>
-
-      {/* ======================================================
-          MAIN
-      ======================================================= */}
-
-      <main
-        style={{
-          maxWidth: '1000px',
-          margin: '0 auto',
-          padding:
-            '30px 20px 50px',
-        }}
-      >
-        {/* ====================================================
-            PAGE TITLE
-        ===================================================== */}
-
-        <section
-          style={{
-            marginBottom: '25px',
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              color: '#667085',
-              fontSize: '14px',
-            }}
-          >
-            Account
-          </p>
-
-          <h1
-            style={{
-              margin:
-                '5px 0 0',
-              color: '#172033',
-              fontSize: '30px',
-            }}
-          >
-            My Profile
-          </h1>
-
-          <p
-            style={{
-              color: '#667085',
-              margin:
-                '8px 0 0',
-              lineHeight: 1.6,
-            }}
-          >
-            Manage your personal information,
-            verification status and account limits.
-          </p>
         </section>
 
-        {/* ====================================================
-            PROFILE CARD
-        ===================================================== */}
+        {/* ================= SECURITY NOTICE ================= */}
 
-        <section
-          style={{
-            background:
-              '#ffffff',
-            border:
-              '1px solid #eaecf0',
-            borderRadius:
-              '18px',
-            padding: '28px',
-            marginBottom:
-              '20px',
-            boxShadow:
-              '0 8px 25px rgba(16, 24, 40, 0.05)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems:
-                'center',
-              gap: '16px',
-              marginBottom:
-                '28px',
-            }}
-          >
-            {/* Avatar */}
-
-            <div
-              style={{
-                width: '64px',
-                height: '64px',
-                minWidth: '64px',
-                borderRadius:
-                  '50%',
-                background:
-                  'linear-gradient(135deg, #0b5cff, #1747c7)',
-                color:
-                  '#ffffff',
-                display: 'flex',
-                alignItems:
-                  'center',
-                justifyContent:
-                  'center',
-                fontSize:
-                  '24px',
-                fontWeight:
-                  800,
-              }}
-            >
-              {displayName
-                .charAt(0)
-                .toUpperCase()}
-            </div>
-
-            <div>
-              <h2
-                style={{
-                  margin: 0,
-                  color:
-                    '#172033',
-                  fontSize:
-                    '22px',
-                }}
-              >
-                {displayName}
-              </h2>
-
-              <p
-                style={{
-                  margin:
-                    '4px 0 0',
-                  color:
-                    '#667085',
-                }}
-              >
-                Zenimonies Customer
-              </p>
-            </div>
+        <section style={styles.securityNotice}>
+          <div style={styles.securityIcon}>
+            🔒
           </div>
 
-          {/* Personal information */}
-
-          <div
-            style={{
-              display:
-                'grid',
-              gridTemplateColumns:
-                'repeat(auto-fit, minmax(240px, 1fr))',
-              gap: '16px',
-            }}
-          >
-            <ProfileItem
-              label="Full Name"
-              value={
-                displayName
-              }
-            />
-
-            <ProfileItem
-              label="Email Address"
-              value={email}
-            />
-
-            <ProfileItem
-              label="Registered Phone"
-              value={phone}
-            />
-
-            <ProfileItem
-              label="Account Status"
-              value={
-                accountStatus
-              }
-            />
-          </div>
-        </section>
-
-        {/* ====================================================
-            KYC TIER CARD
-        ===================================================== */}
-
-        <section
-          style={{
-            background:
-              '#ffffff',
-            border:
-              '1px solid #eaecf0',
-            borderRadius:
-              '18px',
-            padding: '28px',
-            marginBottom:
-              '20px',
-            boxShadow:
-              '0 8px 25px rgba(16, 24, 40, 0.05)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent:
-                'space-between',
-              alignItems:
-                'flex-start',
-              gap: '15px',
-              flexWrap:
-                'wrap',
-              marginBottom:
-                '20px',
-            }}
-          >
-            <div>
-              <h2
-                style={{
-                  margin:
-                    '0 0 7px',
-                  color:
-                    '#172033',
-                  fontSize:
-                    '21px',
-                }}
-              >
-                Verification Level
-              </h2>
-
-              <p
-                style={{
-                  margin: 0,
-                  color:
-                    '#667085',
-                  lineHeight:
-                    1.5,
-                }}
-              >
-                Your current Zenimonies
-                verification tier.
-              </p>
-            </div>
-
-            <span
-              style={{
-                padding:
-                  '8px 14px',
-                borderRadius:
-                  '20px',
-                background:
-                  '#eef4ff',
-                color:
-                  '#175cd3',
-                fontSize:
-                  '14px',
-                fontWeight:
-                  800,
-              }}
-            >
-              {tierTitle}
-            </span>
-          </div>
-
-          <div
-            style={{
-              background:
-                '#f8faff',
-              border:
-                '1px solid #dbe7ff',
-              borderRadius:
-                '14px',
-              padding:
-                '18px',
-              marginBottom:
-                '18px',
-            }}
-          >
-            <strong
-              style={{
-                display:
-                  'block',
-                color:
-                  '#172033',
-                marginBottom:
-                  '5px',
-                fontSize:
-                  '16px',
-              }}
-            >
-              {tierDescription}
+          <div>
+            <strong style={styles.securityTitle}>
+              Your information is protected
             </strong>
 
-            <span
-              style={{
-                color:
-                  '#667085',
-                fontSize:
-                  '14px',
-              }}
+            <p style={styles.securityText}>
+              Passwords, your 6-digit login code,
+              transfer PIN and SafeBox settings are
+              managed separately under Settings.
+            </p>
+
+            <button
+              type="button"
+              style={styles.settingsLink}
+              onClick={() => navigate('/settings')}
             >
-              {currentTier === 1 &&
-                'Verify your BVN to maintain Tier 1 access.'}
-
-              {currentTier === 2 &&
-                'Your account has Tier 2 identity verification.'}
-
-              {currentTier === 3 &&
-                'Your account has completed enhanced Tier 3 verification.'}
-            </span>
+              Open Settings →
+            </button>
           </div>
+        </section>
 
-          {currentTier === 3 &&
-            user?.tier_3_method && (
-              <ProfileItem
-                label="Tier 3 Verification Method"
-                value={
-                  tier3Method
-                }
-              />
-            )}
+        {/* ================= EDIT ACTIONS ================= */}
 
-          <div
-            style={{
-              marginTop:
-                '18px',
-            }}
-          >
-            <Link
-              to="/kyc"
-              style={{
-                display:
-                  'inline-block',
-                textDecoration:
-                  'none',
-                background:
-                  '#0b5cff',
-                color:
-                  '#ffffff',
-                padding:
-                  '11px 18px',
-                borderRadius:
-                  '8px',
-                fontWeight:
-                  700,
-                fontSize:
-                  '14px',
-              }}
+        {editing && (
+          <div style={styles.editActions}>
+            <button
+              type="button"
+              style={styles.cancelButton}
+              onClick={cancelEditing}
+              disabled={saving}
             >
-              Manage KYC
-            </Link>
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              style={styles.saveButton}
+              onClick={saveProfile}
+              disabled={saving}
+            >
+              {saving
+                ? 'Saving...'
+                : 'Save Changes'}
+            </button>
           </div>
-        </section>
-
-        {/* ====================================================
-            ACCOUNT LIMITS
-        ===================================================== */}
-
-        <section
-          style={{
-            background:
-              '#ffffff',
-            border:
-              '1px solid #eaecf0',
-            borderRadius:
-              '18px',
-            padding: '28px',
-            marginBottom:
-              '20px',
-            boxShadow:
-              '0 8px 25px rgba(16, 24, 40, 0.05)',
-          }}
-        >
-          <h2
-            style={{
-              margin:
-                '0 0 8px',
-              color:
-                '#172033',
-              fontSize:
-                '21px',
-            }}
-          >
-            Account Limits
-          </h2>
-
-          <p
-            style={{
-              margin:
-                '0 0 22px',
-              color:
-                '#667085',
-              lineHeight:
-                1.6,
-            }}
-          >
-            Your limits are determined by your
-            verification tier.
-          </p>
-
-          <div
-            style={{
-              display:
-                'grid',
-              gridTemplateColumns:
-                'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '15px',
-            }}
-          >
-            <LimitCard
-              title="Account Limit"
-              value={
-                accountLimitText
-              }
-              description={
-                `Maximum account balance for ${tierTitle}.`
-              }
-            />
-
-            <LimitCard
-              title="Daily Transfer Limit"
-              value={
-                dailyTransferLimitText
-              }
-              description="Maximum transfer amount per day."
-            />
-
-            <LimitCard
-              title="Remaining Today"
-              value={
-                dailyTransferRemainingText
-              }
-              description="Remaining transfer allowance today."
-            />
-          </div>
-        </section>
-
-        {/* ====================================================
-            TIER COMPARISON
-        ===================================================== */}
-
-        <section
-          style={{
-            background:
-              '#ffffff',
-            border:
-              '1px solid #eaecf0',
-            borderRadius:
-              '18px',
-            padding: '28px',
-            marginBottom:
-              '20px',
-            boxShadow:
-              '0 8px 25px rgba(16, 24, 40, 0.05)',
-          }}
-        >
-          <h2
-            style={{
-              margin:
-                '0 0 8px',
-              color:
-                '#172033',
-              fontSize:
-                '21px',
-            }}
-          >
-            Verification Tiers
-          </h2>
-
-          <p
-            style={{
-              margin:
-                '0 0 22px',
-              color:
-                '#667085',
-              lineHeight:
-                1.6,
-            }}
-          >
-            Upgrade your verification level to
-            access higher account limits.
-          </p>
-
-          <TierRow
-            tier={1}
-            requirement="BVN verification"
-            accountLimit="₦200,000"
-            transferLimit="₦50,000 daily"
-            active={
-              currentTier === 1
-            }
-          />
-
-          <TierRow
-            tier={2}
-            requirement="ID document + KYC"
-            accountLimit="₦500,000"
-            transferLimit="₦200,000 daily"
-            active={
-              currentTier === 2
-            }
-          />
-
-          <TierRow
-            tier={3}
-            requirement="Choose bank statement, utility bill, or proof of address"
-            accountLimit="Unlimited"
-            transferLimit="₦5,000,000 daily"
-            active={
-              currentTier === 3
-            }
-          />
-        </section>
-
-        {/* ====================================================
-            VERIFICATION & SECURITY
-        ===================================================== */}
-
-        <section
-          style={{
-            background:
-              '#ffffff',
-            border:
-              '1px solid #eaecf0',
-            borderRadius:
-              '18px',
-            padding: '28px',
-            marginBottom:
-              '20px',
-            boxShadow:
-              '0 8px 25px rgba(16, 24, 40, 0.05)',
-          }}
-        >
-          <h2
-            style={{
-              margin:
-                '0 0 8px',
-              color:
-                '#172033',
-              fontSize:
-                '21px',
-            }}
-          >
-            Verification & Security
-          </h2>
-
-          <p
-            style={{
-              margin:
-                '0 0 22px',
-              color:
-                '#667085',
-              lineHeight:
-                1.6,
-            }}
-          >
-            Keep your Zenimonies account verified
-            and secure.
-          </p>
-
-          {/* Phone */}
-
-          <VerificationRow
-            title="Phone Verification"
-            description={
-              phoneVerified
-                ? 'Your phone number is verified.'
-                : 'Verify your phone number with an OTP.'
-            }
-            verified={
-              phoneVerified
-            }
-            verifiedText="Verified"
-            actionText="Verify Phone"
-            actionLink="/verify-phone"
-          />
-
-          {/* KYC */}
-
-          <VerificationRow
-            title="Identity Verification (KYC)"
-            description={
-              kycApproved
-                ? 'Your identity has been verified.'
-                : kycPending
-                ? 'Complete KYC to verify your identity.'
-                : kycRejected
-                ? 'Your KYC submission was rejected. Please review and resubmit.'
-                : 'Review your KYC verification status.'
-            }
-            verified={
-              kycApproved
-            }
-            verifiedText="Approved"
-            actionText={
-              kycRejected
-                ? 'Resubmit KYC'
-                : 'Manage KYC'
-            }
-            actionLink="/kyc"
-            last
-          />
-        </section>
-
-        {/* ====================================================
-            SECURITY NOTICE
-        ===================================================== */}
-
-        <section
-          style={{
-            background:
-              '#f8faff',
-            border:
-              '1px solid #dbe7ff',
-            borderRadius:
-              '14px',
-            padding:
-              '20px',
-            marginBottom:
-              '20px',
-          }}
-        >
-          <h3
-            style={{
-              margin:
-                '0 0 8px',
-              color:
-                '#172033',
-              fontSize:
-                '17px',
-            }}
-          >
-            Security
-          </h3>
-
-          <p
-            style={{
-              margin: 0,
-              color:
-                '#667085',
-              fontSize:
-                '14px',
-              lineHeight:
-                1.6,
-            }}
-          >
-            Never share your password or
-            verification codes with anyone.
-            Zenimonies will never ask you to send
-            an OTP to another person.
-          </p>
-        </section>
-
-        {/* ====================================================
-            BACK
-        ===================================================== */}
-
-        <Link
-          to="/"
-          style={{
-            display:
-              'inline-block',
-            textDecoration:
-              'none',
-            color:
-              '#0b5cff',
-            fontWeight:
-              700,
-          }}
-        >
-          ← Back to Dashboard
-        </Link>
+        )}
       </main>
+
+      {/* ================= BOTTOM NAV ================= */}
+
+      <nav style={styles.bottomNav}>
+        <button
+          type="button"
+          style={styles.navItem}
+          onClick={() => navigate('/')}
+        >
+          <span style={styles.navIcon}>⌂</span>
+          Home
+        </button>
+
+        <button
+          type="button"
+          style={styles.navItem}
+          onClick={() =>
+            navigate('/transactions')
+          }
+        >
+          <span style={styles.navIcon}>↕</span>
+          Transactions
+        </button>
+
+        <button
+          type="button"
+          style={styles.navItem}
+          onClick={() =>
+            navigate('/wallet')
+          }
+        >
+          <span style={styles.navIcon}>▱</span>
+          Wallet
+        </button>
+
+        <button
+          type="button"
+          style={{
+            ...styles.navItem,
+            ...styles.navActive,
+          }}
+          onClick={() => navigate('/profile')}
+        >
+          <span style={styles.navIcon}>♙</span>
+          Profile
+          <span style={styles.navIndicator} />
+        </button>
+      </nav>
     </div>
   );
 };
 
-// ============================================================
-// PROFILE ITEM
-// ============================================================
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
+  page: {
+    minHeight: '100vh',
+    background: '#f6faf8',
+    color: '#10251d',
+    fontFamily:
+      'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+    paddingBottom: 95,
+  },
 
-interface ProfileItemProps {
-  label: string;
-  value: string;
-}
+  header: {
+    height: 64,
+    background: '#ffffff',
+    borderBottom:
+      '1px solid #e5ebe8',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '0 5%',
+    position: 'sticky',
+    top: 0,
+    zIndex: 20,
+  },
 
-const ProfileItem: React.FC<
-  ProfileItemProps
-> = ({
-  label,
-  value,
-}) => {
-  return (
-    <div
-      style={{
-        background:
-          '#f9fafb',
-        border:
-          '1px solid #eaecf0',
-        borderRadius:
-          '10px',
-        padding:
-          '15px',
-      }}
-    >
-      <div
-        style={{
-          color:
-            '#667085',
-          fontSize:
-            '12px',
-          marginBottom:
-            '6px',
-          fontWeight:
-            600,
-          textTransform:
-            'uppercase',
-        }}
-      >
-        {label}
-      </div>
+  backButton: {
+    border: 'none',
+    background: '#eef8f3',
+    color: '#087c43',
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    fontSize: 21,
+    cursor: 'pointer',
+  },
 
-      <div
-        style={{
-          color:
-            '#172033',
-          fontSize:
-            '15px',
-          fontWeight:
-            600,
-          wordBreak:
-            'break-word',
-        }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-};
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 800,
+  },
 
-// ============================================================
-// LIMIT CARD
-// ============================================================
+  headerHome: {
+    border: 'none',
+    background: 'transparent',
+    color: '#087c43',
+    fontWeight: 700,
+    cursor: 'pointer',
+    fontSize: 13,
+  },
 
-interface LimitCardProps {
-  title: string;
-  value: string;
-  description: string;
-}
+  main: {
+    width: 'min(920px, 92%)',
+    margin: '0 auto',
+    paddingTop: 25,
+  },
 
-const LimitCard: React.FC<
-  LimitCardProps
-> = ({
-  title,
-  value,
-  description,
-}) => {
-  return (
-    <div
-      style={{
-        background:
-          '#f9fafb',
-        border:
-          '1px solid #eaecf0',
-        borderRadius:
-          '12px',
-        padding:
-          '18px',
-      }}
-    >
-      <div
-        style={{
-          color:
-            '#667085',
-          fontSize:
-            '13px',
-          fontWeight:
-            700,
-          marginBottom:
-            '8px',
-        }}
-      >
-        {title}
-      </div>
+  profileCard: {
+    background: '#ffffff',
+    border: '1px solid #e5ebe8',
+    borderRadius: 20,
+    padding: 22,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 16,
+    boxShadow:
+      '0 6px 20px rgba(26,61,47,0.05)',
+    marginBottom: 18,
+  },
 
-      <div
-        style={{
-          color:
-            '#172033',
-          fontSize:
-            '22px',
-          fontWeight:
-            800,
-          marginBottom:
-            '7px',
-        }}
-      >
-        {value}
-      </div>
+  avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: '50%',
+    background: '#dff5e9',
+    color: '#087c43',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 25,
+    fontWeight: 800,
+    flexShrink: 0,
+    overflow: 'hidden',
+  },
 
-      <div
-        style={{
-          color:
-            '#667085',
-          fontSize:
-            '13px',
-          lineHeight:
-            1.5,
-        }}
-      >
-        {description}
-      </div>
-    </div>
-  );
-};
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
 
-// ============================================================
-// TIER ROW
-// ============================================================
+  profileMain: {
+    flex: 1,
+    minWidth: 0,
+  },
 
-interface TierRowProps {
-  tier: number;
-  requirement: string;
-  accountLimit: string;
-  transferLimit: string;
-  active: boolean;
-}
+  profileName: {
+    margin: 0,
+    fontSize: 23,
+    fontWeight: 800,
+  },
 
-const TierRow: React.FC<
-  TierRowProps
-> = ({
-  tier,
-  requirement,
-  accountLimit,
-  transferLimit,
-  active,
-}) => {
-  return (
-    <div
-      style={{
-        border:
-          active
-            ? '2px solid #0b5cff'
-            : '1px solid #eaecf0',
-        borderRadius:
-          '12px',
-        padding:
-          '17px',
-        marginBottom:
-          '12px',
-        background:
-          active
-            ? '#f8faff'
-            : '#ffffff',
-      }}
-    >
-      <div
-        style={{
-          display:
-            'grid',
-          gridTemplateColumns:
-            '70px 1fr',
-          gap:
-            '15px',
-          alignItems:
-            'start',
-        }}
-      >
-        <div
-          style={{
-            fontWeight:
-              800,
-            color:
-              active
-                ? '#0b5cff'
-                : '#172033',
-          }}
-        >
-          Tier {tier}
-        </div>
+  profileEmail: {
+    margin: '5px 0 10px',
+    color: '#75827d',
+    fontSize: 13,
+  },
 
-        <div>
-          <div
-            style={{
-              color:
-                '#172033',
-              fontWeight:
-                700,
-              marginBottom:
-                '6px',
-            }}
-          >
-            {requirement}
-          </div>
+  statusRow: {
+    display: 'flex',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
 
-          <div
-            style={{
-              display:
-                'flex',
-              flexWrap:
-                'wrap',
-              gap:
-                '8px 20px',
-              color:
-                '#667085',
-              fontSize:
-                '13px',
-            }}
-          >
-            <span>
-              Account: {accountLimit}
-            </span>
+  statusBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 9px',
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 700,
+  },
 
-            <span>
-              Daily transfer: {transferLimit}
-            </span>
-          </div>
+  verifiedBadge: {
+    background: '#e9f9f0',
+    color: '#087c43',
+  },
 
-          {active && (
-            <div
-              style={{
-                marginTop:
-                  '8px',
-                color:
-                  '#175cd3',
-                fontSize:
-                  '12px',
-                fontWeight:
-                  700,
-              }}
-            >
-              ✓ Current tier
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+  pendingBadge: {
+    background: '#fff7e8',
+    color: '#a15c00',
+  },
 
-// ============================================================
-// VERIFICATION ROW
-// ============================================================
+  accountBadge: {
+    background: '#f2f5f3',
+    color: '#65736d',
+    padding: '6px 9px',
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 700,
+  },
 
-interface VerificationRowProps {
-  title: string;
-  description: string;
-  verified: boolean;
-  verifiedText: string;
-  actionText: string;
-  actionLink: string;
-  last?: boolean;
-}
+  editButton: {
+    border: 'none',
+    background: '#079447',
+    color: '#ffffff',
+    borderRadius: 11,
+    padding: '10px 14px',
+    fontWeight: 700,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
 
-const VerificationRow: React.FC<
-  VerificationRowProps
-> = ({
-  title,
-  description,
-  verified,
-  verifiedText,
-  actionText,
-  actionLink,
-  last = false,
-}) => {
-  return (
-    <div
-      style={{
-        display:
-          'flex',
-        justifyContent:
-          'space-between',
-        alignItems:
-          'center',
-        gap:
-          '15px',
-        padding:
-          '18px',
-        border:
-          '1px solid #eaecf0',
-        borderRadius:
-          '12px',
-        marginBottom:
-          last ? 0 : '14px',
-        flexWrap:
-          'wrap',
-      }}
-    >
-      <div>
-        <strong
-          style={{
-            display:
-              'block',
-            color:
-              '#172033',
-            marginBottom:
-              '5px',
-          }}
-        >
-          {title}
-        </strong>
+  successMessage: {
+    background: '#eafaf2',
+    border: '1px solid #bce8d1',
+    color: '#087c43',
+    borderRadius: 12,
+    padding: '11px 14px',
+    marginBottom: 16,
+    fontSize: 13,
+    fontWeight: 600,
+  },
 
-        <span
-          style={{
-            color:
-              '#667085',
-            fontSize:
-              '14px',
-          }}
-        >
-          {description}
-        </span>
-      </div>
+  errorMessage: {
+    background: '#fff2f0',
+    border: '1px solid #f5c2bd',
+    color: '#a53227',
+    borderRadius: 12,
+    padding: '11px 14px',
+    marginBottom: 16,
+    fontSize: 13,
+  },
 
-      {verified ? (
-        <span
-          style={{
-            padding:
-              '7px 12px',
-            borderRadius:
-              '20px',
-            background:
-              '#ecfdf3',
-            color:
-              '#027a48',
-            fontSize:
-              '13px',
-            fontWeight:
-              700,
-          }}
-        >
-          {verifiedText}
-        </span>
-      ) : (
-        <Link
-          to={actionLink}
-          style={{
-            textDecoration:
-              'none',
-            background:
-              '#0b5cff',
-            color:
-              '#ffffff',
-            padding:
-              '10px 16px',
-            borderRadius:
-              '8px',
-            fontWeight:
-              600,
-            fontSize:
-              '14px',
-          }}
-        >
-          {actionText}
-        </Link>
-      )}
-    </div>
-  );
+  section: {
+    background: '#ffffff',
+    border: '1px solid #e5ebe8',
+    borderRadius: 18,
+    padding: 20,
+    marginBottom: 18,
+  },
+
+  sectionHeader: {
+    marginBottom: 18,
+  },
+
+  sectionTitle: {
+    margin: 0,
+    fontSize: 17,
+    fontWeight: 800,
+  },
+
+  sectionDescription: {
+    margin: '5px 0 0',
+    color: '#7a8781',
+    fontSize: 12,
+  },
+
+  fieldsGrid: {
+    display: 'grid',
+    gridTemplateColumns:
+      'repeat(auto-fit, minmax(240px, 1fr))',
+    gap: 16,
+  },
+
+  field: {
+    minWidth: 0,
+  },
+
+  label: {
+    display: 'block',
+    marginBottom: 7,
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#4e5c55',
+  },
+
+  input: {
+    width: '100%',
+    height: 44,
+    boxSizing: 'border-box',
+    borderRadius: 10,
+    padding: '0 12px',
+    fontSize: 13,
+    outline: 'none',
+    fontFamily: 'inherit',
+  },
+
+  inputEditable: {
+    border:
+      '1px solid #9bd5b9',
+    background: '#ffffff',
+    color: '#10251d',
+  },
+
+  inputDisabled: {
+    border:
+      '1px solid #e3e9e5',
+    background: '#f7f9f8',
+    color: '#66736d',
+  },
+
+  textarea: {
+    width: '100%',
+    boxSizing: 'border-box',
+    borderRadius: 10,
+    padding: '11px 12px',
+    fontSize: 13,
+    outline: 'none',
+    resize: 'vertical',
+    fontFamily: 'inherit',
+  },
+
+  lockedField: {
+    minHeight: 44,
+    boxSizing: 'border-box',
+    border:
+      '1px solid #e3e9e5',
+    background: '#f7f9f8',
+    borderRadius: 10,
+    padding: '0 12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    color: '#66736d',
+    fontSize: 13,
+  },
+
+  lockedVerified: {
+    background: '#f2f7f4',
+    border:
+      '1px solid #d5e7dc',
+    color: '#253b31',
+    fontWeight: 700,
+  },
+
+  lockIcon: {
+    fontSize: 14,
+  },
+
+  helperText: {
+    marginTop: 6,
+    color: '#7a8781',
+    fontSize: 10,
+    lineHeight: 1.4,
+  },
+
+  accountGrid: {
+    display: 'grid',
+    gridTemplateColumns:
+      'repeat(auto-fit, minmax(190px, 1fr))',
+    gap: 10,
+  },
+
+  accountItem: {
+    background: '#f7faf8',
+    border: '1px solid #e6eee9',
+    borderRadius: 12,
+    padding: 14,
+  },
+
+  accountLabel: {
+    display: 'block',
+    color: '#7a8781',
+    fontSize: 11,
+    marginBottom: 5,
+  },
+
+  accountValue: {
+    display: 'block',
+    color: '#17352a',
+    fontSize: 13,
+  },
+
+  kycCard: {
+    background: '#effbf5',
+    border:
+      '1px solid #d4eee0',
+    borderRadius: 18,
+    padding: 18,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 13,
+    marginBottom: 18,
+  },
+
+  kycIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    background: '#d9f5e7',
+    color: '#087c43',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 21,
+    fontWeight: 800,
+    flexShrink: 0,
+  },
+
+  kycContent: {
+    flex: 1,
+  },
+
+  kycTitle: {
+    margin: 0,
+    fontSize: 15,
+    fontWeight: 800,
+  },
+
+  kycDescription: {
+    margin: '5px 0 0',
+    color: '#68776f',
+    fontSize: 12,
+    lineHeight: 1.5,
+  },
+
+  kycButton: {
+    border: 'none',
+    background: '#079447',
+    color: '#ffffff',
+    borderRadius: 10,
+    padding: '10px 13px',
+    fontWeight: 700,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 7,
+    whiteSpace: 'nowrap',
+  },
+
+  securityNotice: {
+    background: '#ffffff',
+    border:
+      '1px solid #e5ebe8',
+    borderRadius: 18,
+    padding: 18,
+    display: 'flex',
+    gap: 13,
+    marginBottom: 18,
+  },
+
+  securityIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 12,
+    background: '#eef8f3',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+
+  securityTitle: {
+    display: 'block',
+    fontSize: 13,
+  },
+
+  securityText: {
+    margin: '5px 0 7px',
+    color: '#748079',
+    fontSize: 11,
+    lineHeight: 1.5,
+  },
+
+  settingsLink: {
+    border: 'none',
+    background: 'transparent',
+    color: '#087c43',
+    padding: 0,
+    fontWeight: 700,
+    fontSize: 11,
+    cursor: 'pointer',
+  },
+
+  editActions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginBottom: 25,
+  },
+
+  cancelButton: {
+    border:
+      '1px solid #d3ddd8',
+    background: '#ffffff',
+    color: '#4d5b54',
+    borderRadius: 11,
+    padding: '11px 18px',
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+
+  saveButton: {
+    border: 'none',
+    background: '#079447',
+    color: '#ffffff',
+    borderRadius: 11,
+    padding: '11px 20px',
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+
+  bottomNav: {
+    position: 'fixed',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 70,
+    background: 'rgba(255,255,255,0.98)',
+    borderTop:
+      '1px solid #e2e9e5',
+    display: 'grid',
+    gridTemplateColumns:
+      'repeat(4, 1fr)',
+    zIndex: 30,
+    boxShadow:
+      '0 -5px 18px rgba(25,55,43,0.05)',
+  },
+
+  navItem: {
+    border: 'none',
+    background: 'transparent',
+    color: '#7a8781',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    fontSize: 10,
+    fontWeight: 600,
+    cursor: 'pointer',
+    position: 'relative',
+  },
+
+  navActive: {
+    color: '#078b4a',
+  },
+
+  navIcon: {
+    fontSize: 21,
+    lineHeight: 1,
+  },
+
+  navIndicator: {
+    position: 'absolute',
+    bottom: 4,
+    width: 34,
+    height: 3,
+    borderRadius: 5,
+    background: '#079447',
+  },
 };
 
 export default Profile;
