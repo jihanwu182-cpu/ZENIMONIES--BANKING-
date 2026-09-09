@@ -8,13 +8,22 @@ import {
   useLocation,
 } from 'react-router-dom';
 
-import Login from './pages/Login.tsx';
-import Register from './pages/Register.tsx';
-import Dashboard from './pages/Dashboard.tsx';
-import Profile from './pages/Profile.tsx';
-import Settings from './pages/Settings.tsx';
-import KYC from './pages/KYC.tsx';
-import VerifyPhone from './pages/VerifyPhone.tsx';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import Profile from './pages/Profile';
+import Settings from './pages/Settings';
+import KYC from './pages/KYC';
+import VerifyPhone from './pages/VerifyPhone';
+import VerifyOTP from './pages/VerifyOTP';
+import Transfer from './pages/Transfer';
+import ToBank from './pages/ToBank';
+import Deposit from './pages/Deposit';
+import Withdraw from './pages/Withdraw';
+import Transactions from './pages/Transactions';
+import Airtime from './pages/Airtime';
+import Data from './pages/Data';
+import Bills from './pages/Bills';
 
 /* ============================================================
    SIMPLE SERVICE PAGE
