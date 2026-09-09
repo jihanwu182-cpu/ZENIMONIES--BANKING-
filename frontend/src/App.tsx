@@ -481,12 +481,8 @@ const App: React.FC = () => {
         ==================================================== */}
 
         <Route
-          path="/betting"
-          element={
-            <ServicePage
-              title="Betting"
-              icon="⚽"
-              description="Access the betting service area."
+           path="/betting"
+           element={<Betting />}
             />
           }
         />
