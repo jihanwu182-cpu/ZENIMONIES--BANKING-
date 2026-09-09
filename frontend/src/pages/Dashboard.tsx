@@ -43,12 +43,13 @@ const Dashboard: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [showBalance, setShowBalance] = useState(true);
+  const [error, setError] = useState('');
 
   /*
    * This will later come from the backend.
-   * For now, a new/unused account starts at ₦0 transferred today.
+   * Keeping it separate from balance is important because
+   * account limit and daily transfer limit are different.
    */
   const dailyTransferUsed = 0;
 
@@ -66,7 +67,7 @@ const Dashboard: React.FC = () => {
         localStorage.getItem('token');
 
       /*
-       * Load cached information first.
+       * Load cached data first.
        */
       try {
         const savedUser = JSON.parse(
@@ -97,7 +98,7 @@ const Dashboard: React.FC = () => {
       }
 
       /*
-       * Get the latest account information.
+       * Get latest information from backend.
        */
       const response = await axios.get<MeResponse>(
         `${API_URL}/api/auth/me`,
@@ -187,15 +188,7 @@ const Dashboard: React.FC = () => {
   }, [displayName]);
 
   /*
-   * KYC TIER
-   *
-   * IMPORTANT:
-   * We do NOT treat is_verified as Tier 1.
-   *
-   * Email + phone verification = Basic.
-   * BVN + face verification = Tier 1.
-   * ID + face verification = Tier 2.
-   * Proof of residence = Tier 3.
+   * KYC tier.
    */
   const currentTier = useMemo(() => {
     const tier = Number(
@@ -210,7 +203,7 @@ const Dashboard: React.FC = () => {
   }, [user]);
 
   /*
-   * ACCOUNT AND TRANSFER LIMITS
+   * Zenimonies verification limits.
    */
   const limits = useMemo(() => {
     if (currentTier === 3) {
@@ -220,7 +213,7 @@ const Dashboard: React.FC = () => {
         accountLimitLabel: 'Unlimited',
         dailyTransferLimit: 5000000,
         dailyTransferLabel: '₦5,000,000',
-        description: 'Proof of residence verified',
+        description: 'Fully verified account',
       };
     }
 
@@ -252,7 +245,7 @@ const Dashboard: React.FC = () => {
       accountLimitLabel: '₦50,000',
       dailyTransferLimit: 50000,
       dailyTransferLabel: '₦50,000',
-      description: 'Email + phone verified',
+      description: 'Email + phone verification',
     };
   }, [currentTier]);
 
@@ -317,12 +310,9 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  /*
-   * Correct verification message.
-   */
   const verificationText =
     currentTier === 3
-      ? 'Tier 3 verified'
+      ? 'Fully verified'
       : currentTier === 2
       ? 'Tier 2 verified'
       : currentTier === 1
@@ -331,41 +321,39 @@ const Dashboard: React.FC = () => {
       ? 'Email & phone verified'
       : 'Verification required';
 
-  const verificationDescription =
-    currentTier === 0
-      ? 'Complete your BVN and face verification to unlock Tier 1.'
-      : currentTier === 1
-      ? 'Upgrade with an ID document and face verification.'
-      : currentTier === 2
-      ? 'Complete proof of residence to reach Tier 3.'
-      : 'Your account has completed all verification levels.';
-
+  /*
+   * Loading screen.
+   */
   if (loading) {
     return (
       <div
         style={{
           minHeight: '100vh',
-          background: '#f5f8f7',
+          background: '#f4f7fc',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '24px',
+          padding: '20px',
         }}
       >
         <div
           style={{
+            background: '#ffffff',
+            padding: '30px',
+            borderRadius: '18px',
             textAlign: 'center',
-            color: '#063b2c',
+            boxShadow:
+              '0 10px 30px rgba(15, 23, 42, 0.08)',
           }}
         >
           <div
             style={{
-              width: '42px',
-              height: '42px',
+              width: '40px',
+              height: '40px',
               borderRadius: '50%',
-              border: '4px solid #d9eee7',
-              borderTopColor: '#079455',
-              margin: '0 auto 16px',
+              border: '4px solid #dbe5f5',
+              borderTopColor: '#123b7a',
+              margin: '0 auto 15px',
               animation: 'zenimoniesSpin 1s linear infinite',
             }}
           />
@@ -392,9 +380,10 @@ const Dashboard: React.FC = () => {
     <div
       style={{
         minHeight: '100vh',
-        background: '#f5f8f7',
-        color: '#102a24',
-        paddingBottom: '90px',
+        background: '#f4f7fc',
+        color: '#172033',
+        fontFamily:
+          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
       {/* =====================================================
@@ -404,7 +393,7 @@ const Dashboard: React.FC = () => {
       <header
         style={{
           background: '#ffffff',
-          borderBottom: '1px solid #e7eeeb',
+          borderBottom: '1px solid #e6eaf0',
           position: 'sticky',
           top: 0,
           zIndex: 50,
@@ -412,9 +401,9 @@ const Dashboard: React.FC = () => {
       >
         <div
           style={{
-            maxWidth: '1200px',
+            maxWidth: '1180px',
             margin: '0 auto',
-            padding: '14px 22px',
+            padding: '13px 20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -427,22 +416,22 @@ const Dashboard: React.FC = () => {
               textDecoration: 'none',
               display: 'flex',
               alignItems: 'center',
-              gap: '11px',
+              gap: '10px',
             }}
           >
             <div
               style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '13px',
+                width: '38px',
+                height: '38px',
+                borderRadius: '11px',
                 background:
-                  'linear-gradient(135deg, #079455, #087443)',
+                  'linear-gradient(135deg, #123b7a, #1e63b8)',
                 color: '#ffffff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontWeight: 900,
-                fontSize: '22px',
+                fontSize: '18px',
+                fontWeight: 800,
               }}
             >
               Z
@@ -451,9 +440,10 @@ const Dashboard: React.FC = () => {
             <div>
               <div
                 style={{
-                  color: '#073b2d',
-                  fontSize: '19px',
-                  fontWeight: 850,
+                  color: '#123b7a',
+                  fontSize: '17px',
+                  fontWeight: 800,
+                  lineHeight: 1,
                 }}
               >
                 Zenimonies
@@ -461,10 +451,10 @@ const Dashboard: React.FC = () => {
 
               <div
                 style={{
-                  color: '#83928d',
-                  fontSize: '10px',
-                  letterSpacing: '0.8px',
-                  fontWeight: 700,
+                  color: '#98a2b3',
+                  fontSize: '9px',
+                  marginTop: '4px',
+                  letterSpacing: '1px',
                 }}
               >
                 DIGITAL BANKING
@@ -476,23 +466,23 @@ const Dashboard: React.FC = () => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
+              gap: '8px',
             }}
           >
             <button
               type="button"
               onClick={() => loadAccount()}
-              title="Refresh"
               style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '11px',
-                border: '1px solid #e4ebe8',
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                border: '1px solid #e4e7ec',
                 background: '#ffffff',
-                color: '#087443',
+                color: '#344054',
                 cursor: 'pointer',
-                fontSize: '20px',
+                fontSize: '18px',
               }}
+              title="Refresh account"
             >
               ↻
             </button>
@@ -501,49 +491,27 @@ const Dashboard: React.FC = () => {
               to="/profile"
               style={{
                 textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                color: '#102a24',
+                color: '#344054',
                 fontWeight: 700,
+                fontSize: '13px',
+                padding: '9px 10px',
               }}
             >
-              <span
-                style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '50%',
-                  background: '#e7f4ef',
-                  color: '#087443',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 800,
-                }}
-              >
-                {firstName.charAt(0).toUpperCase()}
-              </span>
-
-              <span
-                style={{
-                  display: 'none',
-                }}
-              >
-                {firstName}
-              </span>
+              Profile
             </Link>
 
             <button
               type="button"
               onClick={logout}
               style={{
-                border: '1px solid #d9e3df',
+                border: '1px solid #d0d5dd',
                 background: '#ffffff',
-                borderRadius: '10px',
-                padding: '9px 13px',
+                color: '#344054',
+                borderRadius: '9px',
+                padding: '8px 13px',
                 cursor: 'pointer',
                 fontWeight: 700,
-                color: '#344d46',
+                fontSize: '13px',
               }}
             >
               Logout
@@ -558,20 +526,23 @@ const Dashboard: React.FC = () => {
 
       <main
         style={{
-          maxWidth: '1200px',
+          width: '100%',
+          maxWidth: '1180px',
           margin: '0 auto',
-          padding: '28px 22px 40px',
+          padding: '25px 20px 50px',
+          boxSizing: 'border-box',
         }}
       >
         {error && (
           <div
             style={{
               marginBottom: '18px',
-              padding: '13px 15px',
-              borderRadius: '12px',
+              padding: '12px 14px',
+              borderRadius: '10px',
               background: '#fff4ed',
               border: '1px solid #fed7aa',
               color: '#9a3412',
+              fontSize: '13px',
             }}
           >
             {error}
@@ -584,13 +555,13 @@ const Dashboard: React.FC = () => {
 
         <section
           style={{
-            marginBottom: '22px',
+            marginBottom: '20px',
           }}
         >
           <div
             style={{
-              color: '#71817b',
-              fontSize: '14px',
+              color: '#667085',
+              fontSize: '13px',
               marginBottom: '4px',
             }}
           >
@@ -600,9 +571,9 @@ const Dashboard: React.FC = () => {
           <div
             style={{
               display: 'flex',
-              alignItems: 'center',
               justifyContent: 'space-between',
-              gap: '20px',
+              alignItems: 'center',
+              gap: '15px',
               flexWrap: 'wrap',
             }}
           >
@@ -610,9 +581,10 @@ const Dashboard: React.FC = () => {
               <h1
                 style={{
                   margin: 0,
-                  color: '#071f18',
-                  fontSize: '34px',
-                  lineHeight: 1.15,
+                  color: '#172033',
+                  fontSize: '27px',
+                  lineHeight: 1.2,
+                  fontWeight: 800,
                 }}
               >
                 {firstName}
@@ -620,24 +592,24 @@ const Dashboard: React.FC = () => {
 
               <p
                 style={{
-                  margin: '7px 0 0',
-                  color: '#71817b',
-                  fontSize: '16px',
+                  margin: '5px 0 0',
+                  color: '#667085',
+                  fontSize: '13px',
                 }}
               >
-                Here's your financial overview.
+                Manage your money securely with Zenimonies.
               </p>
             </div>
 
             <div
               style={{
-                background: '#eaf8f2',
-                border: '1px solid #c7eddf',
-                color: '#087443',
-                padding: '9px 14px',
+                background: '#ecfdf3',
+                color: '#027a48',
+                border: '1px solid #abefc6',
+                padding: '7px 11px',
                 borderRadius: '999px',
-                fontSize: '13px',
-                fontWeight: 750,
+                fontSize: '12px',
+                fontWeight: 700,
               }}
             >
               ● {verificationText}
@@ -646,58 +618,76 @@ const Dashboard: React.FC = () => {
         </section>
 
         {/* ===================================================
-            BALANCE CARD
+            BALANCE + ADD FUNDS
         =================================================== */}
 
         <section
           style={{
             background:
-              'linear-gradient(135deg, #064b39 0%, #078a58 65%, #06a56b 100%)',
-            borderRadius: '24px',
-            padding: '27px',
+              'linear-gradient(135deg, #102f5c 0%, #155aa8 100%)',
+            borderRadius: '20px',
+            padding: '24px',
             color: '#ffffff',
+            boxShadow:
+              '0 14px 35px rgba(16, 47, 92, 0.18)',
+            marginBottom: '18px',
             position: 'relative',
             overflow: 'hidden',
-            boxShadow:
-              '0 18px 45px rgba(4, 108, 75, 0.22)',
-            marginBottom: '22px',
           }}
         >
           <div
             style={{
               position: 'absolute',
-              width: '300px',
-              height: '300px',
+              width: '200px',
+              height: '200px',
               borderRadius: '50%',
               background:
-                'rgba(255,255,255,0.055)',
-              right: '-90px',
-              top: '-150px',
+                'rgba(255,255,255,0.06)',
+              right: '-80px',
+              top: '-90px',
             }}
           />
 
           <div
             style={{
               position: 'relative',
-              zIndex: 2,
+              zIndex: 1,
             }}
           >
             <div
               style={{
                 display: 'flex',
-                justifyContent: 'space-between',
                 alignItems: 'center',
+                justifyContent: 'space-between',
                 gap: '15px',
               }}
             >
-              <span
-                style={{
-                  fontSize: '15px',
-                  opacity: 0.86,
-                }}
-              >
-                Available Balance
-              </span>
+              <div>
+                <div
+                  style={{
+                    fontSize: '13px',
+                    opacity: 0.78,
+                  }}
+                >
+                  Available Balance
+                </div>
+
+                <div
+                  style={{
+                    fontSize: '31px',
+                    fontWeight: 800,
+                    marginTop: '7px',
+                    letterSpacing: '-0.5px',
+                  }}
+                >
+                  {showBalance
+                    ? formatCurrency(
+                        balance,
+                        account?.currency || 'NGN'
+                      )
+                    : '••••••••'}
+                </div>
+              </div>
 
               <button
                 type="button"
@@ -705,242 +695,174 @@ const Dashboard: React.FC = () => {
                   setShowBalance((value) => !value)
                 }
                 style={{
-                  border: '1px solid rgba(255,255,255,0.30)',
+                  border:
+                    '1px solid rgba(255,255,255,0.25)',
                   background:
                     'rgba(255,255,255,0.10)',
                   color: '#ffffff',
-                  borderRadius: '11px',
-                  padding: '8px 13px',
+                  borderRadius: '9px',
+                  padding: '7px 10px',
                   cursor: 'pointer',
-                  fontWeight: 700,
+                  fontSize: '12px',
+                  fontWeight: 600,
                 }}
               >
-                {showBalance ? '◉ Hide' : '○ Show'}
+                {showBalance ? 'Hide' : 'Show'}
               </button>
             </div>
 
+            {/* ADD FUNDS */}
             <div
               style={{
-                fontSize: '40px',
-                fontWeight: 850,
-                marginTop: '8px',
-                letterSpacing: '-1.5px',
-              }}
-            >
-              {showBalance
-                ? formatCurrency(
-                    balance,
-                    account?.currency || 'NGN'
-                  )
-                : '••••••••'}
-            </div>
-
-            {/* ADD MONEY */}
-
-            <Link
-              to="/deposit"
-              style={{
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '12px',
-                background: '#ffffff',
-                color: '#075b43',
-                borderRadius: '15px',
-                padding: '13px 19px',
                 marginTop: '20px',
-                fontWeight: 800,
-                minWidth: '190px',
+                display: 'flex',
+                gap: '9px',
+                flexWrap: 'wrap',
               }}
             >
-              <span
+              <Link
+                to="/deposit"
                 style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '50%',
-                  background: '#0a9b63',
+                  textDecoration: 'none',
+                  background: '#ffffff',
+                  color: '#123b7a',
+                  borderRadius: '9px',
+                  padding: '10px 15px',
+                  fontWeight: 800,
+                  fontSize: '13px',
+                }}
+              >
+                + Add Funds
+              </Link>
+
+              <Link
+                to="/transfer"
+                style={{
+                  textDecoration: 'none',
+                  background:
+                    'rgba(255,255,255,0.12)',
+                  border:
+                    '1px solid rgba(255,255,255,0.22)',
                   color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '24px',
+                  borderRadius: '9px',
+                  padding: '10px 15px',
+                  fontWeight: 700,
+                  fontSize: '13px',
                 }}
               >
-                +
-              </span>
-
-              <span>
-                Add Money
-              </span>
-
-              <span
-                style={{
-                  marginLeft: 'auto',
-                  fontSize: '21px',
-                }}
-              >
-                ›
-              </span>
-            </Link>
+                Send Money
+              </Link>
+            </div>
           </div>
         </section>
 
         {/* ===================================================
-            SERVICES GRID
+            QUICK ACTIONS
+        =================================================== */}
+
+        <section
+          style={{
+            display: 'grid',
+            gridTemplateColumns:
+              'repeat(auto-fit, minmax(150px, 1fr))',
+            gap: '10px',
+            marginBottom: '20px',
+          }}
+        >
+          <QuickAction
+            to="/transfer"
+            icon="↗"
+            title="Send Money"
+            description="Transfer funds"
+          />
+
+          <QuickAction
+            to="/deposit"
+            icon="+"
+            title="Add Funds"
+            description="Fund your account"
+          />
+
+          <QuickAction
+            to="/withdraw"
+            icon="↙"
+            title="Withdraw"
+            description="Withdraw funds"
+          />
+
+          <QuickAction
+            to="/transactions"
+            icon="↕"
+            title="Transactions"
+            description="View activity"
+          />
+        </section>
+
+        {/* ===================================================
+            SEND MONEY
         =================================================== */}
 
         <section
           style={{
             background: '#ffffff',
-            border: '1px solid #e7eeeb',
-            borderRadius: '22px',
-            padding: '22px 15px',
-            marginBottom: '20px',
-          }}
-        >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns:
-                'repeat(3, 1fr)',
-              gap: '25px 12px',
-            }}
-          >
-            <ServiceIcon
-              to="/transfer"
-              icon="🏦"
-              title="To Bank"
-            />
-
-            <ServiceIcon
-              to="/withdraw"
-              icon="↗"
-              title="Withdraw"
-            />
-
-            <ServiceIcon
-              to="/airtime"
-              icon="▥"
-              title="Airtime"
-            />
-
-            <ServiceIcon
-              to="/data"
-              icon="⇅"
-              title="Data"
-            />
-
-            <ServiceIcon
-              to="/betting"
-              icon="⚽"
-              title="Betting"
-            />
-
-            <ServiceIcon
-              to="/tv"
-              icon="▻"
-              title="TV"
-            />
-
-            <ServiceIcon
-              to="/safebox"
-              icon="◉"
-              title="SafeBox"
-            />
-
-            <ServiceIcon
-              to="/more"
-              icon="••"
-              title="More"
-            />
-          </div>
-        </section>
-
-        {/* ===================================================
-            KYC VERIFICATION
-        =================================================== */}
-
-        <section
-          style={{
-            background:
-              'linear-gradient(135deg, #f0fbf7, #ffffff)',
-            border: '1px solid #d8eee5',
-            borderRadius: '20px',
-            padding: '17px',
-            marginBottom: '20px',
+            border: '1px solid #e6eaf0',
+            borderRadius: '16px',
+            padding: '19px',
+            marginBottom: '18px',
           }}
         >
           <div
             style={{
               display: 'flex',
+              justifyContent: 'space-between',
               alignItems: 'center',
-              gap: '14px',
-              flexWrap: 'wrap',
+              marginBottom: '13px',
             }}
           >
-            <div
-              style={{
-                width: '54px',
-                height: '54px',
-                borderRadius: '15px',
-                background: '#dff5eb',
-                color: '#079455',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '25px',
-                fontWeight: 900,
-              }}
-            >
-              ✓
-            </div>
-
-            <div
-              style={{
-                flex: 1,
-                minWidth: '190px',
-              }}
-            >
-              <div
+            <div>
+              <h2
                 style={{
-                  color: '#075b43',
-                  fontWeight: 850,
-                  fontSize: '17px',
+                  margin: 0,
+                  fontSize: '18px',
+                  color: '#172033',
                 }}
               >
-                Account Verification
-              </div>
+                Send Money
+              </h2>
 
-              <div
+              <p
                 style={{
-                  color: '#71817b',
-                  fontSize: '14px',
-                  marginTop: '3px',
-                  lineHeight: 1.4,
+                  margin: '4px 0 0',
+                  color: '#667085',
+                  fontSize: '12px',
                 }}
               >
-                {verificationDescription}
-              </div>
+                Choose where you want to send your money.
+              </p>
             </div>
+          </div>
 
-            <Link
-              to="/kyc"
-              style={{
-                textDecoration: 'none',
-                background: '#079455',
-                color: '#ffffff',
-                padding: '12px 17px',
-                borderRadius: '11px',
-                fontWeight: 800,
-                fontSize: '14px',
-              }}
-            >
-              {currentTier >= 3
-                ? 'View Verification'
-                : 'Verify Account'}{' '}
-              ›
-            </Link>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                'repeat(auto-fit, minmax(230px, 1fr))',
+              gap: '10px',
+            }}
+          >
+            <TransferCard
+              to="/transfer?type=zenimonies"
+              icon="Z"
+              title="Zenimonies User"
+              description="Send money to another Zenimonies customer."
+            />
+
+            <TransferCard
+              to="/transfer?type=bank"
+              icon="₦"
+              title="Other Bank"
+              description="Send money to a Nigerian bank account."
+            />
           </div>
         </section>
 
@@ -952,118 +874,229 @@ const Dashboard: React.FC = () => {
           style={{
             display: 'grid',
             gridTemplateColumns:
-              'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '15px',
-            marginBottom: '25px',
+              'repeat(auto-fit, minmax(270px, 1fr))',
+            gap: '12px',
+            marginBottom: '18px',
           }}
         >
-          {/* ACCOUNT LIMIT */}
-
           <LimitCard
             title="Account Limit"
             value={limits.accountLimitLabel}
             badge={limits.label}
-            percentage={
+            percentage={accountLimitPercentage}
+            usedText={
               limits.accountLimit === null
-                ? 0
-                : accountLimitPercentage
-            }
-            leftText={
-              limits.accountLimit === null
-                ? 'Unlimited'
-                : formatCurrency(balance)
+                ? 'Unlimited account balance'
+                : `${formatCurrency(balance)} used`
             }
             rightText={
               limits.accountLimit === null
                 ? 'No limit'
                 : `${accountLimitPercentage}% used`
             }
-            unlimited={
-              limits.accountLimit === null
-            }
+            unlimited={limits.accountLimit === null}
           />
-
-          {/* DAILY TRANSFER LIMIT */}
 
           <LimitCard
             title="Daily Transfer Limit"
             value={limits.dailyTransferLabel}
             badge="Today"
             percentage={dailyTransferPercentage}
-            leftText={formatCurrency(
+            usedText={`Used ${formatCurrency(
               dailyTransferUsed
-            )}
+            )}`}
             rightText={`${formatCurrency(
               remainingDailyTransfer
             )} remaining`}
-            unlimited={false}
           />
         </section>
+
+        {/* ===================================================
+            VERIFICATION
+        =================================================== */}
+
+        <section
+          style={{
+            background: '#ffffff',
+            border: '1px solid #e6eaf0',
+            borderRadius: '16px',
+            padding: '19px',
+            marginBottom: '18px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '15px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  color: '#667085',
+                  fontSize: '12px',
+                }}
+              >
+                Verification
+              </div>
+
+              <h2
+                style={{
+                  margin: '4px 0',
+                  fontSize: '18px',
+                }}
+              >
+                {limits.label}
+              </h2>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: '#667085',
+                  fontSize: '12px',
+                }}
+              >
+                {limits.description}
+              </p>
+            </div>
+
+            <Link
+              to="/kyc"
+              style={{
+                textDecoration: 'none',
+                background: '#eef4ff',
+                color: '#123b7a',
+                padding: '9px 13px',
+                borderRadius: '9px',
+                fontWeight: 800,
+                fontSize: '12px',
+              }}
+            >
+              {currentTier >= 3
+                ? 'View KYC'
+                : 'Upgrade'}
+            </Link>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                'repeat(4, 1fr)',
+              gap: '7px',
+              marginTop: '17px',
+            }}
+          >
+            <TierStep
+              label="Basic"
+              active={currentTier >= 0}
+              completed={currentTier >= 0}
+            />
+
+            <TierStep
+              label="Tier 1"
+              active={currentTier >= 1}
+              completed={currentTier >= 1}
+            />
+
+            <TierStep
+              label="Tier 2"
+              active={currentTier >= 2}
+              completed={currentTier >= 2}
+            />
+
+            <TierStep
+              label="Tier 3"
+              active={currentTier >= 3}
+              completed={currentTier >= 3}
+            />
+          </div>
+        </section>
+
+        {/* ===================================================
+            SERVICES
+        =================================================== */}
+
+        <section>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '12px',
+            }}
+          >
+            <h2
+              style={{
+                margin: 0,
+                fontSize: '18px',
+              }}
+            >
+              Services
+            </h2>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns:
+                'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '10px',
+            }}
+          >
+            <ServiceCard
+              to="/transactions"
+              icon="↕"
+              title="Transactions"
+              description="View your transaction history."
+            />
+
+            <ServiceCard
+              to="/wallet"
+              icon="◈"
+              title="Wallet"
+              description="Manage your wallet."
+            />
+
+            <ServiceCard
+              to="/market"
+              icon="↗"
+              title="Market"
+              description="Explore market information."
+            />
+
+            <ServiceCard
+              to="/profile"
+              icon="●"
+              title="Profile"
+              description="Manage your account."
+            />
+          </div>
+        </section>
       </main>
-
-      {/* =====================================================
-          BOTTOM NAVIGATION
-      ===================================================== */}
-
-      <nav
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '76px',
-          background: 'rgba(255,255,255,0.97)',
-          borderTop: '1px solid #e4ebe8',
-          display: 'grid',
-          gridTemplateColumns:
-            'repeat(4, 1fr)',
-          zIndex: 100,
-          backdropFilter: 'blur(10px)',
-        }}
-      >
-        <BottomNavItem
-          to="/"
-          icon="⌂"
-          label="Home"
-          active
-        />
-
-        <BottomNavItem
-          to="/transactions"
-          icon="↕"
-          label="Transactions"
-        />
-
-        <BottomNavItem
-          to="/wallet"
-          icon="▣"
-          label="Wallet"
-        />
-
-        <BottomNavItem
-          to="/profile"
-          icon="♙"
-          label="Profile"
-        />
-      </nav>
     </div>
   );
 };
 
 /* ============================================================
-   SERVICE ICON
+   QUICK ACTION
 ============================================================ */
 
-interface ServiceIconProps {
+interface QuickActionProps {
   to: string;
   icon: string;
   title: string;
+  description: string;
 }
 
-const ServiceIcon: React.FC<ServiceIconProps> = ({
+const QuickAction: React.FC<QuickActionProps> = ({
   to,
   icon,
   title,
+  description,
 }) => {
   return (
     <Link
@@ -1071,36 +1104,141 @@ const ServiceIcon: React.FC<ServiceIconProps> = ({
       style={{
         textDecoration: 'none',
         color: 'inherit',
-        textAlign: 'center',
       }}
     >
       <div
         style={{
-          width: '72px',
-          height: '72px',
-          margin: '0 auto 8px',
-          borderRadius: '22px',
-          background:
-            'linear-gradient(145deg, #eaf9f3, #dff4ec)',
+          background: '#ffffff',
+          border: '1px solid #e6eaf0',
+          borderRadius: '13px',
+          padding: '14px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          color: '#079455',
-          fontSize: '27px',
-          fontWeight: 900,
+          gap: '10px',
+          minHeight: '62px',
+          boxSizing: 'border-box',
         }}
       >
-        {icon}
-      </div>
+        <div
+          style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '9px',
+            background: '#edf3fa',
+            color: '#123b7a',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '17px',
+            fontWeight: 800,
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </div>
 
+        <div>
+          <div
+            style={{
+              fontWeight: 800,
+              fontSize: '13px',
+              color: '#172033',
+            }}
+          >
+            {title}
+          </div>
+
+          <div
+            style={{
+              color: '#667085',
+              fontSize: '11px',
+              marginTop: '2px',
+            }}
+          >
+            {description}
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+};
+
+/* ============================================================
+   TRANSFER CARD
+============================================================ */
+
+interface TransferCardProps {
+  to: string;
+  icon: string;
+  title: string;
+  description: string;
+}
+
+const TransferCard: React.FC<TransferCardProps> = ({
+  to,
+  icon,
+  title,
+  description,
+}) => {
+  return (
+    <Link
+      to={to}
+      style={{
+        textDecoration: 'none',
+        color: 'inherit',
+      }}
+    >
       <div
         style={{
-          fontSize: '15px',
-          fontWeight: 650,
-          color: '#172b26',
+          border: '1px solid #e1e7ef',
+          borderRadius: '13px',
+          padding: '15px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          background: '#fbfcfe',
         }}
       >
-        {title}
+        <div
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            background: '#eaf1f9',
+            color: '#123b7a',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 900,
+            fontSize: '17px',
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </div>
+
+        <div>
+          <div
+            style={{
+              fontWeight: 800,
+              fontSize: '14px',
+              color: '#172033',
+            }}
+          >
+            {title}
+          </div>
+
+          <div
+            style={{
+              color: '#667085',
+              fontSize: '11px',
+              lineHeight: 1.45,
+              marginTop: '3px',
+            }}
+          >
+            {description}
+          </div>
+        </div>
       </div>
     </Link>
   );
@@ -1115,9 +1253,9 @@ interface LimitCardProps {
   value: string;
   badge: string;
   percentage: number;
-  leftText: string;
+  usedText: string;
   rightText: string;
-  unlimited: boolean;
+  unlimited?: boolean;
 }
 
 const LimitCard: React.FC<LimitCardProps> = ({
@@ -1125,32 +1263,32 @@ const LimitCard: React.FC<LimitCardProps> = ({
   value,
   badge,
   percentage,
-  leftText,
+  usedText,
   rightText,
-  unlimited,
+  unlimited = false,
 }) => {
   return (
     <div
       style={{
         background: '#ffffff',
-        border: '1px solid #e7eeeb',
-        borderRadius: '18px',
-        padding: '19px',
+        border: '1px solid #e6eaf0',
+        borderRadius: '16px',
+        padding: '18px',
       }}
     >
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          gap: '12px',
           alignItems: 'flex-start',
+          gap: '10px',
         }}
       >
         <div>
           <div
             style={{
-              color: '#71817b',
-              fontSize: '13px',
+              color: '#667085',
+              fontSize: '12px',
             }}
           >
             {title}
@@ -1158,10 +1296,10 @@ const LimitCard: React.FC<LimitCardProps> = ({
 
           <div
             style={{
-              color: '#102a24',
-              fontSize: '23px',
-              fontWeight: 850,
-              marginTop: '5px',
+              marginTop: '4px',
+              fontSize: '21px',
+              fontWeight: 800,
+              color: '#172033',
             }}
           >
             {value}
@@ -1170,11 +1308,11 @@ const LimitCard: React.FC<LimitCardProps> = ({
 
         <span
           style={{
-            background: '#eaf8f2',
-            color: '#087443',
-            borderRadius: '9px',
-            padding: '6px 9px',
-            fontSize: '11px',
+            background: '#edf3fa',
+            color: '#123b7a',
+            padding: '6px 8px',
+            borderRadius: '8px',
+            fontSize: '10px',
             fontWeight: 800,
           }}
         >
@@ -1185,13 +1323,13 @@ const LimitCard: React.FC<LimitCardProps> = ({
       {unlimited ? (
         <div
           style={{
-            marginTop: '17px',
-            padding: '10px',
-            borderRadius: '10px',
-            background: '#eaf8f2',
-            color: '#087443',
-            fontSize: '13px',
-            fontWeight: 750,
+            marginTop: '16px',
+            background: '#ecfdf3',
+            color: '#027a48',
+            padding: '9px',
+            borderRadius: '9px',
+            fontSize: '11px',
+            fontWeight: 700,
           }}
         >
           ✓ Unlimited account balance
@@ -1200,20 +1338,19 @@ const LimitCard: React.FC<LimitCardProps> = ({
         <>
           <div
             style={{
-              height: '7px',
-              background: '#e8efec',
-              borderRadius: '99px',
+              height: '6px',
+              background: '#edf0f4',
+              borderRadius: '999px',
               overflow: 'hidden',
-              marginTop: '17px',
+              marginTop: '16px',
             }}
           >
             <div
               style={{
                 width: `${percentage}%`,
                 height: '100%',
-                background:
-                  'linear-gradient(90deg, #079455, #16b879)',
-                borderRadius: '99px',
+                background: '#1e63b8',
+                borderRadius: '999px',
               }}
             />
           </div>
@@ -1223,12 +1360,12 @@ const LimitCard: React.FC<LimitCardProps> = ({
               display: 'flex',
               justifyContent: 'space-between',
               gap: '10px',
-              marginTop: '8px',
-              color: '#71817b',
-              fontSize: '11px',
+              marginTop: '7px',
+              color: '#667085',
+              fontSize: '10px',
             }}
           >
-            <span>{leftText}</span>
+            <span>{usedText}</span>
             <span>{rightText}</span>
           </div>
         </>
@@ -1238,55 +1375,124 @@ const LimitCard: React.FC<LimitCardProps> = ({
 };
 
 /* ============================================================
-   BOTTOM NAVIGATION
+   SERVICE CARD
 ============================================================ */
 
-interface BottomNavItemProps {
+interface ServiceCardProps {
   to: string;
   icon: string;
-  label: string;
-  active?: boolean;
+  title: string;
+  description: string;
 }
 
-const BottomNavItem: React.FC<BottomNavItemProps> = ({
+const ServiceCard: React.FC<ServiceCardProps> = ({
   to,
   icon,
-  label,
-  active = false,
+  title,
+  description,
 }) => {
   return (
     <Link
       to={to}
       style={{
         textDecoration: 'none',
-        color: active
-          ? '#079455'
-          : '#7a8984',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '3px',
-        fontWeight: active ? 800 : 600,
+        color: 'inherit',
       }}
     >
       <div
         style={{
-          fontSize: '25px',
-          lineHeight: 1,
+          background: '#ffffff',
+          border: '1px solid #e6eaf0',
+          borderRadius: '14px',
+          padding: '16px',
+          minHeight: '105px',
+          boxSizing: 'border-box',
         }}
       >
-        {icon}
-      </div>
+        <div
+          style={{
+            width: '34px',
+            height: '34px',
+            borderRadius: '9px',
+            background: '#f0f3f7',
+            color: '#344054',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '16px',
+            marginBottom: '10px',
+          }}
+        >
+          {icon}
+        </div>
 
-      <div
-        style={{
-          fontSize: '11px',
-        }}
-      >
-        {label}
+        <h3
+          style={{
+            margin: '0 0 4px',
+            fontSize: '14px',
+            color: '#172033',
+          }}
+        >
+          {title}
+        </h3>
+
+        <p
+          style={{
+            margin: 0,
+            color: '#667085',
+            fontSize: '11px',
+            lineHeight: 1.4,
+          }}
+        >
+          {description}
+        </p>
       </div>
     </Link>
+  );
+};
+
+/* ============================================================
+   KYC TIER STEP
+============================================================ */
+
+interface TierStepProps {
+  label: string;
+  active: boolean;
+  completed: boolean;
+}
+
+const TierStep: React.FC<TierStepProps> = ({
+  label,
+  active,
+  completed,
+}) => {
+  return (
+    <div
+      style={{
+        textAlign: 'center',
+        padding: '8px 4px',
+        borderRadius: '9px',
+        background: active
+          ? '#edf3fa'
+          : '#f8f9fb',
+        color: active
+          ? '#123b7a'
+          : '#98a2b3',
+        fontSize: '10px',
+        fontWeight: 800,
+      }}
+    >
+      <div
+        style={{
+          fontSize: '14px',
+          marginBottom: '2px',
+        }}
+      >
+        {completed ? '✓' : '○'}
+      </div>
+
+      {label}
+    </div>
   );
 };
 
