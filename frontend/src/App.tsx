@@ -24,6 +24,7 @@ import Transactions from './pages/Transactions.tsx';
 import Airtime from './pages/Airtime.tsx';
 import Data from './pages/Data.tsx';
 import Bills from './pages/Bills.tsx';
+import Betting from './pages/Betting';
 
 /* ============================================================
    SIMPLE SERVICE PAGE
