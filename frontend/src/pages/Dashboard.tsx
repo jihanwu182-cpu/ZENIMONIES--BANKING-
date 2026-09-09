@@ -1,110 +1,132 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
 import {
+  Alert,
+  Avatar,
   Box,
   Button,
   Card,
   CardContent,
-  Container,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Grid,
+  Divider,
   IconButton,
   InputAdornment,
+  List,
+  ListItemButton,
+  ListItemText,
+  MenuItem,
   Paper,
+  Snackbar,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 
 import {
+  AccountBalance,
   Add,
   ArrowBack,
   ArrowForward,
-  ArrowUpward,
-  AccountBalance,
+  ArrowOutward,
   BarChart,
   CheckCircle,
   Close,
+  ContentCopy,
+  DataUsage,
   ExpandMore,
+  GridView,
   Home,
+  KeyboardArrowRight,
   Lock,
+  Logout,
   MoreHoriz,
   NotificationsNone,
+  Payments,
   PhoneAndroid,
   ReceiptLong,
+  Search,
   SportsSoccer,
-  SwapVert,
   Tv,
   Visibility,
   VisibilityOff,
-  Wallet as WalletIcon,
+  Wallet,
+  SwapHoriz,
+  PersonOutline,
 } from '@mui/icons-material';
 
-type Service =
-  | 'to-bank'
+type ServiceType =
+  | 'bank'
   | 'withdraw'
   | 'airtime'
   | 'data'
   | 'betting'
   | 'tv'
-  | 'bill'
+  | 'bills'
+  | 'safebox'
   | 'more'
   | null;
 
-interface ServiceItem {
-  id: Exclude<Service, null>;
-  title: string;
-  description: string;
-  icon: React.ReactNode;
+interface Bank {
+  name: string;
+  shortName: string;
 }
 
+const banks: Bank[] = [
+  { name: 'Access Bank', shortName: 'Access' },
+  { name: 'Citibank Nigeria', shortName: 'Citibank' },
+  { name: 'Ecobank Nigeria', shortName: 'Ecobank' },
+  { name: 'Fidelity Bank', shortName: 'Fidelity' },
+  { name: 'First Bank of Nigeria', shortName: 'FirstBank' },
+  { name: 'First City Monument Bank', shortName: 'FCMB' },
+  { name: 'Globus Bank', shortName: 'Globus' },
+  { name: 'Guaranty Trust Bank', shortName: 'GTBank' },
+  { name: 'Heritage Bank', shortName: 'Heritage' },
+  { name: 'Jaiz Bank', shortName: 'Jaiz' },
+  { name: 'Keystone Bank', shortName: 'Keystone' },
+  { name: 'Kuda Bank', shortName: 'Kuda' },
+  { name: 'Moniepoint', shortName: 'Moniepoint' },
+  { name: 'OPay', shortName: 'OPay' },
+  { name: 'Optimus Bank', shortName: 'Optimus' },
+  { name: 'Parallex Bank', shortName: 'Parallex' },
+  { name: 'Polaris Bank', shortName: 'Polaris' },
+  { name: 'PremiumTrust Bank', shortName: 'PremiumTrust' },
+  { name: 'Providus Bank', shortName: 'Providus' },
+  { name: 'Stanbic IBTC Bank', shortName: 'Stanbic' },
+  { name: 'Standard Chartered Bank', shortName: 'Standard Chartered' },
+  { name: 'Sterling Bank', shortName: 'Sterling' },
+  { name: 'SunTrust Bank', shortName: 'SunTrust' },
+  { name: 'Titan Trust Bank', shortName: 'Titan' },
+  { name: 'Union Bank of Nigeria', shortName: 'Union' },
+  { name: 'United Bank for Africa', shortName: 'UBA' },
+  { name: 'Unity Bank', shortName: 'Unity' },
+  { name: 'Wema Bank', shortName: 'Wema' },
+  { name: 'Zenith Bank', shortName: 'Zenith' },
+];
+
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
+
   const [balanceVisible, setBalanceVisible] = useState(true);
-  const [activeService, setActiveService] = useState<Service>(null);
-  const [addFundsOpen, setAddFundsOpen] = useState(false);
-  const [amount, setAmount] = useState('');
-
+  const [service, setService] = useState<ServiceType>(null);
   const [bankSearch, setBankSearch] = useState('');
-  const [selectedBank, setSelectedBank] = useState('');
+  const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
 
-  const userName = 'Harrison';
+  const [amount, setAmount] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [network, setNetwork] = useState('');
+  const [dataPlan, setDataPlan] = useState('');
+  const [tvProvider, setTvProvider] = useState('');
+  const [smartCard, setSmartCard] = useState('');
+  const [betAmount, setBetAmount] = useState('');
 
-  /*
-   * Nigerian banks and payment institutions.
-   * OPay is intentionally included under "To Bank".
-   */
-  const banks = [
-    'Access Bank',
-    'Citibank Nigeria',
-    'Ecobank Nigeria',
-    'Fidelity Bank',
-    'First Bank of Nigeria',
-    'First City Monument Bank (FCMB)',
-    'Globus Bank',
-    'Guaranty Trust Bank (GTBank)',
-    'Heritage Bank',
-    'Jaiz Bank',
-    'Keystone Bank',
-    'Kuda Bank',
-    'Moniepoint',
-    'Opay',
-    'Parallex Bank',
-    'Polaris Bank',
-    'Premium Trust Bank',
-    'Providus Bank',
-    'Stanbic IBTC Bank',
-    'Standard Chartered Bank',
-    'Sterling Bank',
-    'SunTrust Bank',
-    'Taj Bank',
-    'Union Bank',
-    'United Bank for Africa (UBA)',
-    'Unity Bank',
-    'Wema Bank',
-    'Zenith Bank',
-  ];
+  const [snackbar, setSnackbar] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   const filteredBanks = useMemo(() => {
     const search = bankSearch.trim().toLowerCase();
@@ -113,545 +135,339 @@ const Dashboard: React.FC = () => {
       return banks;
     }
 
-    return banks.filter((bank) =>
-      bank.toLowerCase().includes(search)
+    return banks.filter(
+      (bank) =>
+        bank.name.toLowerCase().includes(search) ||
+        bank.shortName.toLowerCase().includes(search),
     );
   }, [bankSearch]);
 
-  const services: ServiceItem[] = [
-    {
-      id: 'to-bank',
-      title: 'To Bank',
-      description: 'Send to any bank',
-      icon: <AccountBalance />,
-    },
-    {
-      id: 'withdraw',
-      title: 'Withdraw',
-      description: 'Withdraw funds',
-      icon: <ArrowUpward />,
-    },
-    {
-      id: 'airtime',
-      title: 'Airtime',
-      description: 'Buy airtime',
-      icon: <PhoneAndroid />,
-    },
-    {
-      id: 'data',
-      title: 'Data',
-      description: 'Buy data',
-      icon: <SwapVert />,
-    },
-    {
-      id: 'betting',
-      title: 'Betting',
-      description: 'Fund your bets',
-      icon: <SportsSoccer />,
-    },
-    {
-      id: 'tv',
-      title: 'TV',
-      description: 'Pay TV bills',
-      icon: <Tv />,
-    },
-    {
-      id: 'bill',
-      title: 'Bill Payment',
-      description: 'Pay your bills',
-      icon: <ReceiptLong />,
-    },
-    {
-      id: 'more',
-      title: 'More',
-      description: 'More services',
-      icon: <MoreHoriz />,
-    },
-  ];
+  const showMessage = (message: string) => {
+    setSnackbarMessage(message);
+    setSnackbar(true);
+  };
 
-  const openService = (service: Service) => {
-    setActiveService(service);
+  const openService = (type: ServiceType) => {
+    setService(type);
+    setBankSearch('');
+    setSelectedBank(null);
+    setAmount('');
+    setAccountNumber('');
+    setPhoneNumber('');
+    setNetwork('');
+    setDataPlan('');
+    setTvProvider('');
+    setSmartCard('');
+    setBetAmount('');
   };
 
   const closeService = () => {
-    setActiveService(null);
-    setBankSearch('');
-    setSelectedBank('');
+    setService(null);
   };
 
-  const handleAddFunds = () => {
-    if (!amount.trim()) {
-      return;
-    }
-
-    setAddFundsOpen(false);
-    setAmount('');
+  const submitAction = (message: string) => {
+    closeService();
+    showMessage(message);
   };
 
-  /*
-   * Shared styling
-   */
-  const pageBackground = '#f5f8f7';
-  const primaryGreen = '#087f5b';
-  const darkGreen = '#075b45';
-  const lightGreen = '#e9f8f2';
-  const textDark = '#102a2a';
-  const textMuted = '#718096';
+  const serviceItems = [
+    {
+      title: 'To Bank',
+      subtitle: 'Send to any bank',
+      icon: <AccountBalance />,
+      type: 'bank' as ServiceType,
+    },
+    {
+      title: 'Withdraw',
+      subtitle: 'Withdraw funds',
+      icon: <ArrowOutward />,
+      type: 'withdraw' as ServiceType,
+    },
+    {
+      title: 'Airtime',
+      subtitle: 'Buy airtime',
+      icon: <BarChart />,
+      type: 'airtime' as ServiceType,
+    },
+    {
+      title: 'Data',
+      subtitle: 'Buy data',
+      icon: <DataUsage />,
+      type: 'data' as ServiceType,
+    },
+    {
+      title: 'Betting',
+      subtitle: 'Fund your bets',
+      icon: <SportsSoccer />,
+      type: 'betting' as ServiceType,
+    },
+    {
+      title: 'TV',
+      subtitle: 'Pay TV bills',
+      icon: <Tv />,
+      type: 'tv' as ServiceType,
+    },
+    {
+      title: 'Bills',
+      subtitle: 'Pay your bills',
+      icon: <ReceiptLong />,
+      type: 'bills' as ServiceType,
+    },
+    {
+      title: 'SafeBox',
+      subtitle: 'Protect your money',
+      icon: <Lock />,
+      type: 'safebox' as ServiceType,
+    },
+    {
+      title: 'More',
+      subtitle: 'More services',
+      icon: <GridView />,
+      type: 'more' as ServiceType,
+    },
+  ];
 
-  /*
-   * SERVICE SCREEN
-   */
-  if (activeService) {
-    const active = services.find(
-      (item) => item.id === activeService
-    );
-
-    return (
-      <Box
-        sx={{
-          minHeight: '100vh',
-          backgroundColor: pageBackground,
-          pb: 4,
-        }}
-      >
-        <Container
-          maxWidth="sm"
-          sx={{
-            px: { xs: 2, sm: 3 },
-            pt: 2,
-          }}
-        >
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={1}
-            sx={{ mb: 3 }}
-          >
-            <IconButton
-              onClick={closeService}
-              sx={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #e6eeeb',
-              }}
-            >
-              <ArrowBack />
-            </IconButton>
-
-            <Typography
-              sx={{
-                fontSize: 22,
-                fontWeight: 800,
-                color: textDark,
-              }}
-            >
-              {active?.title}
-            </Typography>
-          </Stack>
-
-          {activeService === 'to-bank' && (
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                borderRadius: 4,
-                border: '1px solid #e4eee9',
-                backgroundColor: '#ffffff',
-              }}
-            >
-              <Stack spacing={2.5}>
-                <Box>
-                  <Typography
-                    sx={{
-                      fontSize: 24,
-                      fontWeight: 800,
-                      color: textDark,
-                    }}
-                  >
-                    Send money to a bank
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      color: textMuted,
-                      mt: 0.5,
-                    }}
-                  >
-                    Search and select the bank you want to pay.
-                  </Typography>
-                </Box>
-
-                <TextField
-                  fullWidth
-                  value={bankSearch}
-                  onChange={(event) =>
-                    setBankSearch(event.target.value)
-                  }
-                  placeholder="Search bank"
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <AccountBalance />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-
-                {selectedBank && (
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      borderRadius: 3,
-                      backgroundColor: lightGreen,
-                      border: '1px solid #ccecdf',
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        fontSize: 13,
-                        color: textMuted,
-                      }}
-                    >
-                      Selected bank
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        fontWeight: 800,
-                        color: darkGreen,
-                      }}
-                    >
-                      {selectedBank}
-                    </Typography>
-                  </Paper>
-                )}
-
-                <Box
-                  sx={{
-                    maxHeight: 430,
-                    overflowY: 'auto',
-                    pr: 0.5,
-                  }}
-                >
-                  <Stack spacing={1}>
-                    {filteredBanks.map((bank) => (
-                      <Button
-                        key={bank}
-                        fullWidth
-                        onClick={() => setSelectedBank(bank)}
-                        sx={{
-                          justifyContent: 'space-between',
-                          textTransform: 'none',
-                          color: textDark,
-                          backgroundColor:
-                            selectedBank === bank
-                              ? lightGreen
-                              : '#f8faf9',
-                          borderRadius: 3,
-                          p: 1.7,
-                          '&:hover': {
-                            backgroundColor: lightGreen,
-                          },
-                        }}
-                      >
-                        <Stack
-                          direction="row"
-                          spacing={1.5}
-                          alignItems="center"
-                        >
-                          <Box
-                            sx={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: 2,
-                              backgroundColor: '#dff5ec',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: primaryGreen,
-                            }}
-                          >
-                            <AccountBalance fontSize="small" />
-                          </Box>
-
-                          <Typography
-                            sx={{
-                              fontWeight: 700,
-                              textAlign: 'left',
-                            }}
-                          >
-                            {bank}
-                          </Typography>
-                        </Stack>
-
-                        <ArrowForward fontSize="small" />
-                      </Button>
-                    ))}
-
-                    {filteredBanks.length === 0 && (
-                      <Typography
-                        sx={{
-                          textAlign: 'center',
-                          py: 4,
-                          color: textMuted,
-                        }}
-                      >
-                        No bank found.
-                      </Typography>
-                    )}
-                  </Stack>
-                </Box>
-
-                {selectedBank && (
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    sx={{
-                      py: 1.5,
-                      borderRadius: 3,
-                      backgroundColor: primaryGreen,
-                      textTransform: 'none',
-                      fontWeight: 800,
-                      '&:hover': {
-                        backgroundColor: darkGreen,
-                      },
-                    }}
-                  >
-                    Continue with {selectedBank}
-                  </Button>
-                )}
-              </Stack>
-            </Paper>
-          )}
-
-          {activeService !== 'to-bank' && (
-            <Paper
-              elevation={0}
-              sx={{
-                p: 4,
-                borderRadius: 4,
-                border: '1px solid #e4eee9',
-                backgroundColor: '#ffffff',
-                textAlign: 'center',
-              }}
-            >
-              <Box
-                sx={{
-                  width: 78,
-                  height: 78,
-                  mx: 'auto',
-                  mb: 2,
-                  borderRadius: 3,
-                  backgroundColor: lightGreen,
-                  color: primaryGreen,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {active?.icon}
-              </Box>
-
-              <Typography
-                sx={{
-                  fontSize: 25,
-                  fontWeight: 800,
-                  color: textDark,
-                }}
-              >
-                {active?.title}
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 1,
-                  color: textMuted,
-                  lineHeight: 1.6,
-                }}
-              >
-                {active?.description}
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 3,
-                  color: textMuted,
-                }}
-              >
-                This service is ready to be connected to your
-                transaction system.
-              </Typography>
-
-              <Button
-                fullWidth
-                variant="contained"
-                sx={{
-                  mt: 3,
-                  py: 1.5,
-                  borderRadius: 3,
-                  backgroundColor: primaryGreen,
-                  textTransform: 'none',
-                  fontWeight: 800,
-                  '&:hover': {
-                    backgroundColor: darkGreen,
-                  },
-                }}
-              >
-                Continue
-              </Button>
-            </Paper>
-          )}
-        </Container>
-      </Box>
-    );
-  }
-
-  /*
-   * MAIN DASHBOARD
-   */
   return (
     <Box
       sx={{
         minHeight: '100vh',
-        backgroundColor: pageBackground,
-        color: textDark,
-        pb: { xs: 10, sm: 4 },
+        background:
+          'linear-gradient(180deg, #f8fafb 0%, #f4f7f7 50%, #ffffff 100%)',
+        pb: {
+          xs: 10,
+          sm: 12,
+        },
       }}
     >
-      {/* HEADER */}
-      <Box
+      {/* =========================================================
+          TOP HEADER
+      ========================================================== */}
+
+      <Paper
+        elevation={0}
         sx={{
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #edf2f0',
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
+          borderBottom: '1px solid #edf1ef',
+          backgroundColor: 'rgba(255,255,255,0.96)',
+          backdropFilter: 'blur(12px)',
         }}
       >
-        <Container
-          maxWidth="lg"
+        <Box
           sx={{
-            px: { xs: 2, sm: 3, md: 4 },
-            py: 1.5,
+            maxWidth: 1180,
+            mx: 'auto',
+            px: {
+              xs: 2,
+              sm: 3,
+              md: 4,
+            },
+            py: {
+              xs: 1.3,
+              sm: 1.5,
+            },
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 2,
           }}
         >
           <Stack
             direction="row"
             alignItems="center"
-            justifyContent="space-between"
+            spacing={{
+              xs: 1,
+              sm: 1.5,
+            }}
           >
-            <Stack
-              direction="row"
-              alignItems="center"
-              spacing={1.5}
+            <Box
+              sx={{
+                width: {
+                  xs: 46,
+                  sm: 52,
+                },
+                height: {
+                  xs: 46,
+                  sm: 52,
+                },
+                borderRadius: '14px',
+                background:
+                  'linear-gradient(145deg, #08a96c 0%, #078653 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#ffffff',
+                fontSize: {
+                  xs: 25,
+                  sm: 29,
+                },
+                fontWeight: 800,
+                boxShadow: '0 8px 20px rgba(7,134,83,0.18)',
+              }}
             >
-              <Box
+              Z
+            </Box>
+
+            <Box>
+              <Typography
                 sx={{
-                  width: { xs: 48, sm: 54 },
-                  height: { xs: 48, sm: 54 },
-                  borderRadius: 2.5,
-                  backgroundColor: '#079669',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: { xs: 26, sm: 30 },
-                  fontWeight: 900,
-                }}
-              >
-                Z
-              </Box>
-
-              <Box>
-                <Typography
-                  sx={{
-                    fontSize: { xs: 20, sm: 24 },
-                    fontWeight: 900,
-                    lineHeight: 1,
-                    color: '#073b32',
-                  }}
-                >
-                  Zenimonies
-                </Typography>
-
-                <Typography
-                  sx={{
-                    fontSize: { xs: 9, sm: 11 },
-                    letterSpacing: 1.2,
-                    color: '#9aa6a3',
-                    mt: 0.4,
-                  }}
-                >
-                  DIGITAL BANKING
-                </Typography>
-              </Box>
-            </Stack>
-
-            <Stack
-              direction="row"
-              alignItems="center"
-              spacing={{ xs: 1, sm: 2 }}
-            >
-              <IconButton>
-                <NotificationsNone />
-              </IconButton>
-
-              <Box
-                sx={{
-                  width: 1,
-                  height: 28,
-                  backgroundColor: '#dce5e1',
-                }}
-              />
-
-              <Box
-                sx={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: '50%',
-                  backgroundColor: '#e8eff2',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  fontSize: {
+                    xs: 21,
+                    sm: 25,
+                  },
                   fontWeight: 800,
-                  color: textDark,
+                  lineHeight: 1,
+                  color: '#123c31',
+                  letterSpacing: '-0.5px',
                 }}
               >
-                H
-              </Box>
+                Zenimonies
+              </Typography>
 
               <Typography
                 sx={{
-                  display: { xs: 'none', sm: 'block' },
-                  fontWeight: 800,
+                  mt: 0.35,
+                  fontSize: {
+                    xs: 9,
+                    sm: 10,
+                  },
+                  fontWeight: 700,
+                  color: '#8b949b',
+                  letterSpacing: 1.4,
                 }}
               >
-                {userName}
+                DIGITAL BANKING
               </Typography>
-
-              <ExpandMore />
-            </Stack>
+            </Box>
           </Stack>
-        </Container>
-      </Box>
 
-      <Container
-        maxWidth="lg"
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={{
+              xs: 0.5,
+              sm: 1.5,
+            }}
+          >
+            <IconButton
+              onClick={() => showMessage('You have no new notifications.')}
+              sx={{
+                color: '#52636b',
+              }}
+            >
+              <NotificationsNone />
+            </IconButton>
+
+            <Divider
+              orientation="vertical"
+              flexItem
+              sx={{
+                mx: {
+                  xs: 0.5,
+                  sm: 1,
+                },
+              }}
+            />
+
+            <Avatar
+              sx={{
+                width: {
+                  xs: 38,
+                  sm: 46,
+                },
+                height: {
+                  xs: 38,
+                  sm: 46,
+                },
+                backgroundColor: '#e8eef1',
+                color: '#173d34',
+                fontWeight: 700,
+              }}
+            >
+              H
+            </Avatar>
+
+            <Box
+              sx={{
+                display: {
+                  xs: 'none',
+                  sm: 'block',
+                },
+              }}
+            >
+              <Typography
+                sx={{
+                  fontWeight: 700,
+                  color: '#182e39',
+                }}
+              >
+                Harrison
+              </Typography>
+            </Box>
+
+            <IconButton
+              onClick={() => navigate('/profile')}
+              sx={{
+                color: '#65747c',
+              }}
+            >
+              <ExpandMore />
+            </IconButton>
+          </Stack>
+        </Box>
+      </Paper>
+
+      {/* =========================================================
+          MAIN CONTENT
+      ========================================================== */}
+
+      <Box
         sx={{
-          px: { xs: 2, sm: 3, md: 4 },
-          pt: { xs: 3, md: 4 },
+          maxWidth: 1180,
+          mx: 'auto',
+          px: {
+            xs: 2,
+            sm: 3,
+            md: 4,
+          },
+          pt: {
+            xs: 3,
+            sm: 4,
+            md: 5,
+          },
         }}
       >
-        {/* WELCOME */}
-        <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          alignItems={{ xs: 'flex-start', md: 'center' }}
-          justifyContent="space-between"
-          spacing={2}
-          sx={{ mb: 3 }}
+        {/* Welcome */}
+
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: {
+              xs: 'flex-start',
+              md: 'center',
+            },
+            flexDirection: {
+              xs: 'column',
+              md: 'row',
+            },
+            gap: 2,
+            mb: {
+              xs: 2.5,
+              sm: 3,
+            },
+          }}
         >
           <Box>
             <Typography
               sx={{
-                color: '#737e91',
-                fontSize: { xs: 16, sm: 19 },
+                fontSize: {
+                  xs: 18,
+                  sm: 21,
+                },
+                color: '#687986',
+                fontWeight: 500,
               }}
             >
               Welcome back,
@@ -659,107 +475,140 @@ const Dashboard: React.FC = () => {
 
             <Typography
               sx={{
-                fontSize: { xs: 36, sm: 46 },
-                fontWeight: 900,
-                lineHeight: 1.05,
-                color: '#102033',
+                mt: 0.1,
+                fontSize: {
+                  xs: 35,
+                  sm: 43,
+                  md: 48,
+                },
+                lineHeight: 1,
+                fontWeight: 800,
+                color: '#132536',
+                letterSpacing: '-1.8px',
               }}
             >
-              {userName}
+              Harrison
             </Typography>
 
             <Typography
               sx={{
-                mt: 0.7,
-                color: '#737e91',
-                fontSize: { xs: 16, sm: 19 },
+                mt: 1,
+                fontSize: {
+                  xs: 16,
+                  sm: 19,
+                },
+                color: '#71808b',
               }}
             >
-              Here's your financial overview.
+              Here&apos;s your financial overview.
             </Typography>
           </Box>
 
-          <Paper
-            elevation={0}
-            sx={{
-              px: 2.2,
-              py: 1.1,
-              borderRadius: 5,
-              backgroundColor: '#e9f9f3',
-              border: '1px solid #ccefe1',
-            }}
-          >
-            <Stack
-              direction="row"
-              alignItems="center"
-              spacing={1}
-            >
-              <Box
+          <Chip
+            icon={
+              <CheckCircle
                 sx={{
-                  width: 13,
-                  height: 13,
-                  borderRadius: '50%',
-                  backgroundColor: primaryGreen,
+                  fontSize: '18px !important',
                 }}
               />
+            }
+            label="Tier 1 verified"
+            sx={{
+              alignSelf: {
+                xs: 'flex-start',
+                md: 'center',
+              },
+              height: 48,
+              px: 1.5,
+              borderRadius: 5,
+              backgroundColor: '#e9faf3',
+              color: '#126448',
+              border: '1px solid #d3f1e4',
+              fontWeight: 700,
+              fontSize: 15,
+            }}
+          />
+        </Box>
 
-              <Typography
-                sx={{
-                  color: '#075b45',
-                  fontWeight: 800,
-                  fontSize: { xs: 13, sm: 15 },
-                }}
-              >
-                Email & phone verified
-              </Typography>
-            </Stack>
-          </Paper>
-        </Stack>
+        {/* =========================================================
+            BALANCE CARD
+        ========================================================== */}
 
-        {/* BALANCE CARD */}
         <Card
           elevation={0}
           sx={{
-            borderRadius: { xs: 4, sm: 5 },
+            borderRadius: {
+              xs: '25px',
+              sm: '28px',
+            },
             overflow: 'hidden',
             background:
-              'linear-gradient(135deg, #056b4d 0%, #07865f 58%, #0aa06e 100%)',
+              'radial-gradient(circle at 90% 15%, rgba(22,188,124,0.55) 0%, rgba(8,151,94,0.2) 28%, transparent 50%), linear-gradient(135deg, #08734e 0%, #05845a 50%, #0aa56d 100%)',
             color: '#ffffff',
-            mb: 3,
             position: 'relative',
+            minHeight: {
+              xs: 245,
+              sm: 265,
+            },
+            boxShadow: '0 16px 40px rgba(0,99,65,0.16)',
+            mb: {
+              xs: 2.5,
+              sm: 3,
+            },
           }}
         >
           <Box
             sx={{
               position: 'absolute',
-              width: 260,
-              height: 260,
+              width: 300,
+              height: 300,
               borderRadius: '50%',
-              backgroundColor: 'rgba(255,255,255,0.04)',
-              right: -80,
-              top: -100,
+              right: -100,
+              top: -170,
+              background: 'rgba(255,255,255,0.06)',
             }}
           />
 
           <CardContent
             sx={{
               position: 'relative',
-              p: { xs: 3, sm: 4 },
-              '&:last-child': {
-                pb: { xs: 3, sm: 4 },
+              height: '100%',
+              minHeight: {
+                xs: 245,
+                sm: 265,
               },
+              p: {
+                xs: 3,
+                sm: 4,
+                md: 4.5,
+              },
+              '&:last-child': {
+                pb: {
+                  xs: 3,
+                  sm: 4,
+                },
+              },
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
             }}
           >
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              justifyContent="space-between"
-              spacing={3}
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+              }}
             >
               <Box>
                 <Typography
                   sx={{
-                    fontSize: { xs: 16, sm: 19 },
-                    opacity: 0.85,
+                    fontSize: {
+                      xs: 16,
+                      sm: 19,
+                    },
+                    fontWeight: 500,
+                    color: 'rgba(255,255,255,0.82)',
                   }}
                 >
                   Available Balance
@@ -768,428 +617,1187 @@ const Dashboard: React.FC = () => {
                 <Typography
                   sx={{
                     mt: 1,
-                    fontSize: { xs: 38, sm: 50 },
-                    fontWeight: 900,
-                    letterSpacing: -1.5,
+                    fontSize: {
+                      xs: 40,
+                      sm: 50,
+                      md: 56,
+                    },
+                    lineHeight: 1,
+                    fontWeight: 800,
+                    letterSpacing: '-2px',
                   }}
                 >
-                  {balanceVisible ? '₦0.00' : '₦••••'}
+                  {balanceVisible ? '₦0.00' : '₦••••••'}
                 </Typography>
               </Box>
 
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                alignItems={{ xs: 'stretch', sm: 'center' }}
-                spacing={2}
+              <Button
+                onClick={() => setBalanceVisible((value) => !value)}
+                startIcon={
+                  balanceVisible ? <Visibility /> : <VisibilityOff />
+                }
+                sx={{
+                  color: '#ffffff',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  borderRadius: '15px',
+                  px: {
+                    xs: 1.5,
+                    sm: 2,
+                  },
+                  py: 1,
+                  minWidth: {
+                    xs: 88,
+                    sm: 105,
+                  },
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.12)',
+                  },
+                }}
               >
-                <Button
-                  onClick={() =>
-                    setBalanceVisible((current) => !current)
-                  }
-                  startIcon={
-                    balanceVisible ? (
-                      <Visibility />
-                    ) : (
-                      <VisibilityOff />
-                    )
-                  }
-                  sx={{
-                    color: '#ffffff',
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    borderRadius: 3,
-                    px: 2,
-                    textTransform: 'none',
-                    fontWeight: 800,
-                    minWidth: 120,
-                  }}
-                >
-                  {balanceVisible ? 'Hide' : 'Show'}
-                </Button>
+                {balanceVisible ? 'Hide' : 'Show'}
+              </Button>
+            </Box>
 
-                <Button
-                  onClick={() => setAddFundsOpen(true)}
-                  endIcon={<ArrowForward />}
-                  startIcon={<Add />}
-                  sx={{
-                    backgroundColor: '#ffffff',
-                    color: '#075b45',
-                    borderRadius: 3,
-                    px: { xs: 2.5, sm: 3.5 },
-                    py: 1.6,
-                    textTransform: 'none',
-                    fontWeight: 900,
-                    fontSize: 16,
-                    minWidth: { xs: '100%', sm: 210 },
-                    '&:hover': {
-                      backgroundColor: '#f1fffa',
-                    },
-                  }}
-                >
-                  Add Money
-                </Button>
-              </Stack>
-            </Stack>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                mt: 3,
+              }}
+            >
+              <Button
+                onClick={() => submitAction('Add Funds is ready to use.')}
+                endIcon={<KeyboardArrowRight />}
+                startIcon={<Add />}
+                sx={{
+                  backgroundColor: '#ffffff',
+                  color: '#074d39',
+                  borderRadius: '18px',
+                  minHeight: {
+                    xs: 58,
+                    sm: 66,
+                  },
+                  px: {
+                    xs: 2.5,
+                    sm: 3.5,
+                  },
+                  minWidth: {
+                    xs: 185,
+                    sm: 235,
+                  },
+                  fontSize: {
+                    xs: 15,
+                    sm: 18,
+                  },
+                  fontWeight: 800,
+                  textTransform: 'none',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
+                  '&:hover': {
+                    backgroundColor: '#f4fffa',
+                  },
+                }}
+              >
+                Add Money
+              </Button>
+            </Box>
           </CardContent>
         </Card>
 
-        {/* SERVICES */}
-        <Paper
+        {/* =========================================================
+            SERVICES
+        ========================================================== */}
+
+        <Card
           elevation={0}
           sx={{
-            borderRadius: { xs: 4, sm: 5 },
-            p: { xs: 2, sm: 3, md: 4 },
+            borderRadius: {
+              xs: '24px',
+              sm: '28px',
+            },
             backgroundColor: '#ffffff',
-            border: '1px solid #e9efed',
-            mb: 3,
+            border: '1px solid #edf1ef',
+            boxShadow: '0 8px 30px rgba(31,55,48,0.045)',
+            mb: {
+              xs: 2.5,
+              sm: 3,
+            },
           }}
         >
-          <Grid container spacing={{ xs: 1.5, sm: 2.5 }}>
-            {services.map((service) => (
-              <Grid
-                item
-                xs={4}
-                sm={3}
-                md={3}
-                key={service.id}
-              >
-                <Button
-                  fullWidth
-                  onClick={() => openService(service.id)}
+          <CardContent
+            sx={{
+              p: {
+                xs: 2,
+                sm: 3,
+                md: 3.5,
+              },
+              '&:last-child': {
+                pb: {
+                  xs: 2.5,
+                  sm: 3.5,
+                },
+              },
+            }}
+          >
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: 'repeat(3, 1fr)',
+                  sm: 'repeat(3, 1fr)',
+                  md: 'repeat(3, 1fr)',
+                },
+                columnGap: {
+                  xs: 1,
+                  sm: 2,
+                  md: 4,
+                },
+                rowGap: {
+                  xs: 2.5,
+                  sm: 3.5,
+                  md: 4,
+                },
+              }}
+            >
+              {serviceItems.map((item) => (
+                <Box
+                  key={item.title}
+                  onClick={() => openService(item.type)}
                   sx={{
-                    minHeight: { xs: 125, sm: 145 },
-                    p: { xs: 1, sm: 1.5 },
+                    cursor: 'pointer',
+                    textAlign: 'center',
                     borderRadius: 3,
-                    flexDirection: 'column',
-                    justifyContent: 'flex-start',
-                    textTransform: 'none',
-                    color: textDark,
+                    py: {
+                      xs: 0.5,
+                      sm: 1,
+                    },
+                    transition: 'all 0.2s ease',
                     '&:hover': {
-                      backgroundColor: '#f3fbf8',
+                      transform: 'translateY(-3px)',
+                    },
+                    '&:active': {
+                      transform: 'scale(0.97)',
                     },
                   }}
                 >
                   <Box
                     sx={{
-                      width: { xs: 58, sm: 72 },
-                      height: { xs: 58, sm: 72 },
-                      borderRadius: 3,
-                      backgroundColor: lightGreen,
-                      color: primaryGreen,
+                      mx: 'auto',
+                      width: {
+                        xs: 66,
+                        sm: 78,
+                        md: 86,
+                      },
+                      height: {
+                        xs: 66,
+                        sm: 78,
+                        md: 86,
+                      },
+                      borderRadius: {
+                        xs: '20px',
+                        sm: '24px',
+                      },
+                      background:
+                        'linear-gradient(145deg, #effcf7 0%, #e1f7ef 100%)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      mb: 1.1,
+                      color: '#079260',
+                      mb: {
+                        xs: 0.9,
+                        sm: 1.2,
+                      },
                     }}
                   >
-                    {React.cloneElement(
-                      service.icon as React.ReactElement,
-                      {
-                        sx: {
-                          fontSize: { xs: 28, sm: 34 },
+                    {React.cloneElement(item.icon, {
+                      sx: {
+                        fontSize: {
+                          xs: 30,
+                          sm: 37,
                         },
-                      }
-                    )}
+                      },
+                    })}
                   </Box>
 
                   <Typography
                     sx={{
-                      fontSize: { xs: 13, sm: 17 },
-                      fontWeight: 800,
+                      fontSize: {
+                        xs: 14,
+                        sm: 17,
+                        md: 19,
+                      },
+                      fontWeight: 700,
+                      color: '#162b36',
                       lineHeight: 1.2,
                     }}
                   >
-                    {service.title}
+                    {item.title}
                   </Typography>
 
                   <Typography
                     sx={{
-                      display: { xs: 'none', sm: 'block' },
-                      color: textMuted,
-                      fontSize: 12,
                       mt: 0.4,
+                      display: {
+                        xs: 'none',
+                        sm: 'block',
+                      },
+                      fontSize: 12,
+                      color: '#849199',
                     }}
                   >
-                    {service.description}
+                    {item.subtitle}
                   </Typography>
-                </Button>
-              </Grid>
-            ))}
-          </Grid>
-        </Paper>
+                </Box>
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
 
-        {/* ACCOUNT VERIFICATION */}
-        <Paper
+        {/* =========================================================
+            VERIFICATION
+        ========================================================== */}
+
+        <Card
           elevation={0}
           sx={{
-            borderRadius: { xs: 4, sm: 5 },
-            p: { xs: 2, sm: 2.5 },
-            background:
-              'linear-gradient(90deg, #effbf7 0%, #f8fffc 100%)',
+            borderRadius: {
+              xs: '22px',
+              sm: '25px',
+            },
             border: '1px solid #dff1e9',
-            mb: 3,
+            background:
+              'linear-gradient(100deg, #effbf6 0%, #ffffff 100%)',
+            mb: 2,
           }}
         >
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            alignItems={{ xs: 'flex-start', sm: 'center' }}
-            justifyContent="space-between"
-            spacing={2}
-          >
-            <Stack
-              direction="row"
-              alignItems="center"
-              spacing={1.5}
-            >
-              <Box
-                sx={{
-                  width: 58,
-                  height: 58,
-                  borderRadius: 3,
-                  backgroundColor: '#e2f7ef',
-                  color: primaryGreen,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <CheckCircle fontSize="large" />
-              </Box>
-
-              <Box>
-                <Typography
-                  sx={{
-                    fontSize: { xs: 17, sm: 21 },
-                    fontWeight: 900,
-                    color: '#075b45',
-                  }}
-                >
-                  Account Verification
-                </Typography>
-
-                <Typography
-                  sx={{
-                    color: textMuted,
-                    fontSize: { xs: 13, sm: 16 },
-                  }}
-                >
-                  Complete your KYC to increase your limits.
-                </Typography>
-              </Box>
-            </Stack>
-
-            <Button
-              onClick={() => {
-                window.location.href = '/kyc';
-              }}
-              endIcon={<ArrowForward />}
-              sx={{
-                width: { xs: '100%', sm: 'auto' },
-                backgroundColor: primaryGreen,
-                color: '#ffffff',
-                borderRadius: 3,
-                px: 3,
-                py: 1.4,
-                textTransform: 'none',
-                fontWeight: 800,
-                '&:hover': {
-                  backgroundColor: darkGreen,
+          <CardContent
+            sx={{
+              p: {
+                xs: 2,
+                sm: 2.5,
+                md: 3,
+              },
+              '&:last-child': {
+                pb: {
+                  xs: 2,
+                  sm: 2.5,
+                  md: 3,
                 },
-              }}
-            >
-              View Verification
-            </Button>
-          </Stack>
-        </Paper>
-
-        {/* BOTTOM NAVIGATION */}
-        <Paper
-          elevation={8}
-          sx={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            zIndex: 100,
-            borderRadius: '24px 24px 0 0',
-            backgroundColor: 'rgba(255,255,255,0.97)',
-            borderTop: '1px solid #edf1ef',
-          }}
-        >
-          <Container maxWidth="lg">
-            <Grid container>
-              <Grid item xs={3}>
-                <Button
-                  fullWidth
-                  sx={{
-                    py: 1.3,
-                    flexDirection: 'column',
-                    color: primaryGreen,
-                    textTransform: 'none',
-                  }}
-                >
-                  <Home />
-                  <Typography
-                    sx={{
-                      fontSize: 12,
-                      fontWeight: 800,
-                    }}
-                  >
-                    Home
-                  </Typography>
-                </Button>
-              </Grid>
-
-              <Grid item xs={3}>
-                <Button
-                  fullWidth
-                  onClick={() => openService('bill')}
-                  sx={{
-                    py: 1.3,
-                    flexDirection: 'column',
-                    color: '#718096',
-                    textTransform: 'none',
-                  }}
-                >
-                  <SwapVert />
-                  <Typography sx={{ fontSize: 12 }}>
-                    Transactions
-                  </Typography>
-                </Button>
-              </Grid>
-
-              <Grid item xs={3}>
-                <Button
-                  fullWidth
-                  onClick={() => setAddFundsOpen(true)}
-                  sx={{
-                    py: 1.3,
-                    flexDirection: 'column',
-                    color: '#718096',
-                    textTransform: 'none',
-                  }}
-                >
-                  <WalletIcon />
-                  <Typography sx={{ fontSize: 12 }}>
-                    Wallet
-                  </Typography>
-                </Button>
-              </Grid>
-
-              <Grid item xs={3}>
-                <Button
-                  fullWidth
-                  onClick={() => {
-                    window.location.href = '/profile';
-                  }}
-                  sx={{
-                    py: 1.3,
-                    flexDirection: 'column',
-                    color: '#718096',
-                    textTransform: 'none',
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: '50%',
-                      border: '2px solid currentColor',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      fontWeight: 800,
-                    }}
-                  >
-                    H
-                  </Typography>
-
-                  <Typography sx={{ fontSize: 12 }}>
-                    Profile
-                  </Typography>
-                </Button>
-              </Grid>
-            </Grid>
-          </Container>
-        </Paper>
-      </Container>
-
-      {/* ADD FUNDS DIALOG */}
-      <Dialog
-        open={addFundsOpen}
-        onClose={() => setAddFundsOpen(false)}
-        fullWidth
-        maxWidth="xs"
-      >
-        <DialogTitle
-          sx={{
-            fontWeight: 900,
-          }}
-        >
-          Add Money
-        </DialogTitle>
-
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <Typography
-              sx={{
-                color: textMuted,
-                fontSize: 14,
-              }}
-            >
-              Enter the amount you want to add to your
-              Zenimonies account.
-            </Typography>
-
-            <TextField
-              fullWidth
-              label="Amount"
-              type="number"
-              value={amount}
-              onChange={(event) =>
-                setAmount(event.target.value)
-              }
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    ₦
-                  </InputAdornment>
-                ),
-              }}
-            />
-          </Stack>
-        </DialogContent>
-
-        <DialogActions sx={{ p: 2 }}>
-          <Button
-            onClick={() => setAddFundsOpen(false)}
-            sx={{
-              textTransform: 'none',
-              color: textMuted,
-            }}
-          >
-            Cancel
-          </Button>
-
-          <Button
-            onClick={handleAddFunds}
-            variant="contained"
-            sx={{
-              backgroundColor: primaryGreen,
-              textTransform: 'none',
-              fontWeight: 800,
-              borderRadius: 2.5,
-              px: 3,
-              '&:hover': {
-                backgroundColor: darkGreen,
               },
             }}
           >
-            Continue
-          </Button>
+            <Stack
+              direction={{
+                xs: 'column',
+                sm: 'row',
+              }}
+              alignItems={{
+                xs: 'flex-start',
+                sm: 'center',
+              }}
+              justifyContent="space-between"
+              spacing={2}
+            >
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={1.8}
+              >
+                <Box
+                  sx={{
+                    width: {
+                      xs: 56,
+                      sm: 68,
+                    },
+                    height: {
+                      xs: 56,
+                      sm: 68,
+                    },
+                    borderRadius: '18px',
+                    backgroundColor: '#e1f7ef',
+                    color: '#079260',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <CheckCircle
+                    sx={{
+                      fontSize: {
+                        xs: 31,
+                        sm: 38,
+                      },
+                    }}
+                  />
+                </Box>
+
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: {
+                        xs: 17,
+                        sm: 21,
+                      },
+                      fontWeight: 800,
+                      color: '#124b3a',
+                    }}
+                  >
+                    Account Verification
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.3,
+                      fontSize: {
+                        xs: 13,
+                        sm: 16,
+                      },
+                      color: '#72818b',
+                    }}
+                  >
+                    Complete your KYC to increase your limits.
+                  </Typography>
+                </Box>
+              </Stack>
+
+              <Button
+                onClick={() => navigate('/kyc')}
+                endIcon={<ArrowForward />}
+                sx={{
+                  width: {
+                    xs: '100%',
+                    sm: 'auto',
+                  },
+                  minWidth: {
+                    sm: 215,
+                  },
+                  minHeight: 54,
+                  borderRadius: '16px',
+                  backgroundColor: '#079260',
+                  color: '#ffffff',
+                  textTransform: 'none',
+                  fontWeight: 800,
+                  fontSize: 15,
+                  '&:hover': {
+                    backgroundColor: '#067b52',
+                  },
+                }}
+              >
+                View Verification
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Box>
+
+      {/* =========================================================
+          BOTTOM NAVIGATION
+      ========================================================== */}
+
+      <Paper
+        elevation={0}
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 30,
+          borderTop: '1px solid #edf1ef',
+          backgroundColor: 'rgba(255,255,255,0.97)',
+          backdropFilter: 'blur(15px)',
+        }}
+      >
+        <Box
+          sx={{
+            maxWidth: 700,
+            mx: 'auto',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            px: {
+              xs: 1,
+              sm: 2,
+            },
+            py: {
+              xs: 0.8,
+              sm: 1,
+            },
+          }}
+        >
+          <BottomNavItem
+            active
+            icon={<Home />}
+            label="Home"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          />
+
+          <BottomNavItem
+            icon={<SwapHoriz />}
+            label="Transactions"
+            onClick={() =>
+              showMessage('Transactions section is being prepared.')
+            }
+          />
+
+          <BottomNavItem
+            icon={<Wallet />}
+            label="Wallet"
+            onClick={() => showMessage('Wallet section is being prepared.')}
+          />
+
+          <BottomNavItem
+            icon={<PersonOutline />}
+            label="Profile"
+            onClick={() => navigate('/profile')}
+          />
+        </Box>
+      </Paper>
+
+      {/* =========================================================
+          SERVICE DIALOG
+      ========================================================== */}
+
+      <Dialog
+        open={service !== null}
+        onClose={closeService}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{
+          sx: {
+            borderRadius: '24px',
+            m: 2,
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            px: 3,
+            pt: 2.5,
+            pb: 1.5,
+            fontWeight: 800,
+            color: '#14352d',
+          }}
+        >
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <Typography
+              sx={{
+                fontSize: 21,
+                fontWeight: 800,
+              }}
+            >
+              {service === 'bank' && 'Send to Bank'}
+              {service === 'withdraw' && 'Withdraw Money'}
+              {service === 'airtime' && 'Buy Airtime'}
+              {service === 'data' && 'Buy Data'}
+              {service === 'betting' && 'Betting'}
+              {service === 'tv' && 'Pay TV'}
+              {service === 'bills' && 'Pay Bills'}
+              {service === 'safebox' && 'SafeBox'}
+              {service === 'more' && 'More Services'}
+            </Typography>
+
+            <IconButton onClick={closeService}>
+              <Close />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent sx={{ px: 3, pb: 1 }}>
+          {/* BANK */}
+
+          {service === 'bank' && (
+            <Box>
+              {!selectedBank ? (
+                <>
+                  <TextField
+                    fullWidth
+                    value={bankSearch}
+                    onChange={(e) => setBankSearch(e.target.value)}
+                    placeholder="Search for a bank"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{
+                      mb: 1.5,
+                    }}
+                  />
+
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      maxHeight: 350,
+                      overflowY: 'auto',
+                      borderRadius: 3,
+                    }}
+                  >
+                    <List disablePadding>
+                      {filteredBanks.map((bank) => (
+                        <ListItemButton
+                          key={bank.name}
+                          onClick={() => setSelectedBank(bank)}
+                          sx={{
+                            py: 1.5,
+                            borderBottom: '1px solid #f0f2f2',
+                          }}
+                        >
+                          <Avatar
+                            sx={{
+                              mr: 1.5,
+                              backgroundColor: '#e8f8f1',
+                              color: '#078b5d',
+                              fontWeight: 800,
+                              width: 42,
+                              height: 42,
+                              fontSize: 13,
+                            }}
+                          >
+                            {bank.shortName.slice(0, 2).toUpperCase()}
+                          </Avatar>
+
+                          <ListItemText
+                            primary={bank.name}
+                            primaryTypographyProps={{
+                              fontWeight: 650,
+                              color: '#21353d',
+                            }}
+                          />
+
+                          <KeyboardArrowRight
+                            sx={{
+                              color: '#8b979d',
+                            }}
+                          />
+                        </ListItemButton>
+                      ))}
+
+                      {filteredBanks.length === 0 && (
+                        <Box
+                          sx={{
+                            py: 5,
+                            textAlign: 'center',
+                          }}
+                        >
+                          <Typography color="text.secondary">
+                            No bank found.
+                          </Typography>
+                        </Box>
+                      )}
+                    </List>
+                  </Paper>
+                </>
+              ) : (
+                <Stack spacing={2}>
+                  <Button
+                    startIcon={<ArrowBack />}
+                    onClick={() => setSelectedBank(null)}
+                    sx={{
+                      justifyContent: 'flex-start',
+                      color: '#078b5d',
+                      textTransform: 'none',
+                    }}
+                  >
+                    Choose another bank
+                  </Button>
+
+                  <Alert
+                    severity="success"
+                    sx={{
+                      borderRadius: 3,
+                    }}
+                  >
+                    {selectedBank.name} selected
+                  </Alert>
+
+                  <TextField
+                    fullWidth
+                    label="Account Number"
+                    value={accountNumber}
+                    onChange={(e) =>
+                      setAccountNumber(
+                        e.target.value.replace(/\D/g, '').slice(0, 10),
+                      )
+                    }
+                    inputProps={{
+                      inputMode: 'numeric',
+                    }}
+                  />
+
+                  <TextField
+                    fullWidth
+                    label="Amount"
+                    placeholder="₦0.00"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          ₦
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Stack>
+              )}
+            </Box>
+          )}
+
+          {/* WITHDRAW */}
+
+          {service === 'withdraw' && (
+            <Stack spacing={2.2} sx={{ pt: 1 }}>
+              <Alert
+                severity="info"
+                sx={{
+                  borderRadius: 3,
+                }}
+              >
+                Withdraw funds from your Zenimonies account.
+              </Alert>
+
+              <TextField
+                fullWidth
+                label="Amount"
+                placeholder="₦0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+
+              <TextField
+                fullWidth
+                label="Bank Account Number"
+                value={accountNumber}
+                onChange={(e) =>
+                  setAccountNumber(
+                    e.target.value.replace(/\D/g, '').slice(0, 10),
+                  )
+                }
+              />
+            </Stack>
+          )}
+
+          {/* AIRTIME */}
+
+          {service === 'airtime' && (
+            <Stack spacing={2.2} sx={{ pt: 1 }}>
+              <TextField
+                select
+                fullWidth
+                label="Network"
+                value={network}
+                onChange={(e) => setNetwork(e.target.value)}
+              >
+                <MenuItem value="MTN">MTN</MenuItem>
+                <MenuItem value="Airtel">Airtel</MenuItem>
+                <MenuItem value="Glo">Glo</MenuItem>
+                <MenuItem value="9mobile">9mobile</MenuItem>
+              </TextField>
+
+              <TextField
+                fullWidth
+                label="Phone Number"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+              />
+
+              <TextField
+                fullWidth
+                label="Amount"
+                placeholder="₦0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </Stack>
+          )}
+
+          {/* DATA */}
+
+          {service === 'data' && (
+            <Stack spacing={2.2} sx={{ pt: 1 }}>
+              <TextField
+                select
+                fullWidth
+                label="Network"
+                value={network}
+                onChange={(e) => setNetwork(e.target.value)}
+              >
+                <MenuItem value="MTN">MTN</MenuItem>
+                <MenuItem value="Airtel">Airtel</MenuItem>
+                <MenuItem value="Glo">Glo</MenuItem>
+                <MenuItem value="9mobile">9mobile</MenuItem>
+              </TextField>
+
+              <TextField
+                fullWidth
+                label="Phone Number"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+              />
+
+              <TextField
+                select
+                fullWidth
+                label="Data Plan"
+                value={dataPlan}
+                onChange={(e) => setDataPlan(e.target.value)}
+              >
+                <MenuItem value="500MB">500MB</MenuItem>
+                <MenuItem value="1GB">1GB</MenuItem>
+                <MenuItem value="2GB">2GB</MenuItem>
+                <MenuItem value="5GB">5GB</MenuItem>
+                <MenuItem value="10GB">10GB</MenuItem>
+              </TextField>
+            </Stack>
+          )}
+
+          {/* BETTING */}
+
+          {service === 'betting' && (
+            <Stack spacing={2.2} sx={{ pt: 1 }}>
+              <TextField
+                select
+                fullWidth
+                label="Betting Platform"
+                defaultValue=""
+              >
+                <MenuItem value="sportybet">SportyBet</MenuItem>
+                <MenuItem value="bet9ja">Bet9ja</MenuItem>
+                <MenuItem value="1xbet">1xBet</MenuItem>
+                <MenuItem value="betking">BetKing</MenuItem>
+              </TextField>
+
+              <TextField
+                fullWidth
+                label="Customer ID"
+                placeholder="Enter customer ID"
+              />
+
+              <TextField
+                fullWidth
+                label="Amount"
+                value={betAmount}
+                onChange={(e) => setBetAmount(e.target.value)}
+              />
+            </Stack>
+          )}
+
+          {/* TV */}
+
+          {service === 'tv' && (
+            <Stack spacing={2.2} sx={{ pt: 1 }}>
+              <TextField
+                select
+                fullWidth
+                label="TV Provider"
+                value={tvProvider}
+                onChange={(e) => setTvProvider(e.target.value)}
+              >
+                <MenuItem value="DSTV">DStv</MenuItem>
+                <MenuItem value="GOtv">GOtv</MenuItem>
+                <MenuItem value="Startimes">StarTimes</MenuItem>
+              </TextField>
+
+              <TextField
+                fullWidth
+                label="Smart Card / IUC Number"
+                value={smartCard}
+                onChange={(e) => setSmartCard(e.target.value)}
+              />
+
+              <TextField
+                select
+                fullWidth
+                label="Subscription"
+                defaultValue=""
+              >
+                <MenuItem value="basic">Basic</MenuItem>
+                <MenuItem value="standard">Standard</MenuItem>
+                <MenuItem value="premium">Premium</MenuItem>
+              </TextField>
+            </Stack>
+          )}
+
+          {/* BILLS */}
+
+          {service === 'bills' && (
+            <Stack spacing={1.5} sx={{ pt: 1 }}>
+              {[
+                {
+                  title: 'Electricity',
+                  icon: <Payments />,
+                },
+                {
+                  title: 'Internet',
+                  icon: <DataUsage />,
+                },
+                {
+                  title: 'Cable TV',
+                  icon: <Tv />,
+                },
+                {
+                  title: 'Education',
+                  icon: <ReceiptLong />,
+                },
+              ].map((bill) => (
+                <Paper
+                  key={bill.title}
+                  variant="outlined"
+                  onClick={() =>
+                    submitAction(`${bill.title} payment selected.`)
+                  }
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 3,
+                    cursor: 'pointer',
+                    '&:hover': {
+                      backgroundColor: '#f4faf7',
+                    },
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={1.5}
+                  >
+                    <Avatar
+                      sx={{
+                        backgroundColor: '#e5f8f0',
+                        color: '#078b5d',
+                      }}
+                    >
+                      {bill.icon}
+                    </Avatar>
+
+                    <Typography
+                      sx={{
+                        fontWeight: 700,
+                      }}
+                    >
+                      {bill.title}
+                    </Typography>
+
+                    <Box sx={{ ml: 'auto' }}>
+                      <KeyboardArrowRight />
+                    </Box>
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+
+          {/* SAFEBOX */}
+
+          {service === 'safebox' && (
+            <Box sx={{ py: 1 }}>
+              <Stack spacing={2} alignItems="center" textAlign="center">
+                <Box
+                  sx={{
+                    width: 78,
+                    height: 78,
+                    borderRadius: '24px',
+                    backgroundColor: '#e6f8f0',
+                    color: '#078b5d',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Lock sx={{ fontSize: 40 }} />
+                </Box>
+
+                <Typography
+                  sx={{
+                    fontSize: 21,
+                    fontWeight: 800,
+                    color: '#14352d',
+                  }}
+                >
+                  Your SafeBox
+                </Typography>
+
+                <Typography color="text.secondary">
+                  Keep money aside and manage your savings securely.
+                </Typography>
+
+                <Button
+                  variant="contained"
+                  onClick={() =>
+                    submitAction('SafeBox setup will be available soon.')
+                  }
+                  sx={{
+                    borderRadius: 3,
+                    backgroundColor: '#078b5d',
+                    textTransform: 'none',
+                    fontWeight: 700,
+                  }}
+                >
+                  Create SafeBox
+                </Button>
+              </Stack>
+            </Box>
+          )}
+
+          {/* MORE */}
+
+          {service === 'more' && (
+            <Stack spacing={1.5} sx={{ pt: 1 }}>
+              {[
+                'International Transfer',
+                'Gift Cards',
+                'School Payments',
+                'Insurance',
+                'Savings',
+                'Support',
+              ].map((item) => (
+                <Paper
+                  key={item}
+                  variant="outlined"
+                  onClick={() =>
+                    submitAction(`${item} selected.`)
+                  }
+                  sx={{
+                    p: 1.8,
+                    borderRadius: 3,
+                    cursor: 'pointer',
+                    '&:hover': {
+                      backgroundColor: '#f4faf7',
+                    },
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                  >
+                    <Typography
+                      sx={{
+                        fontWeight: 700,
+                      }}
+                    >
+                      {item}
+                    </Typography>
+
+                    <KeyboardArrowRight color="action" />
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            pb: 3,
+          }}
+        >
+          {service === 'bank' && selectedBank && (
+            <Button
+              fullWidth
+              variant="contained"
+              disabled={
+                accountNumber.length !== 10 || !amount
+              }
+              onClick={() =>
+                submitAction(
+                  `Transfer to ${selectedBank.name} is ready.`,
+                )
+              }
+              sx={{
+                minHeight: 52,
+                borderRadius: 3,
+                backgroundColor: '#078b5d',
+                textTransform: 'none',
+                fontWeight: 800,
+              }}
+            >
+              Continue
+            </Button>
+          )}
+
+          {service === 'withdraw' && (
+            <Button
+              fullWidth
+              variant="contained"
+              disabled={!amount || accountNumber.length !== 10}
+              onClick={() =>
+                submitAction('Withdrawal request is ready.')
+              }
+              sx={{
+                minHeight: 52,
+                borderRadius: 3,
+                backgroundColor: '#078b5d',
+                textTransform: 'none',
+                fontWeight: 800,
+              }}
+            >
+              Continue
+            </Button>
+          )}
+
+          {service === 'airtime' && (
+            <Button
+              fullWidth
+              variant="contained"
+              disabled={!network || !phoneNumber || !amount}
+              onClick={() =>
+                submitAction('Airtime purchase is ready.')
+              }
+              sx={{
+                minHeight: 52,
+                borderRadius: 3,
+                backgroundColor: '#078b5d',
+                textTransform: 'none',
+                fontWeight: 800,
+              }}
+            >
+              Continue
+            </Button>
+          )}
+
+          {service === 'data' && (
+            <Button
+              fullWidth
+              variant="contained"
+              disabled={!network || !phoneNumber || !dataPlan}
+              onClick={() =>
+                submitAction('Data purchase is ready.')
+              }
+              sx={{
+                minHeight: 52,
+                borderRadius: 3,
+                backgroundColor: '#078b5d',
+                textTransform: 'none',
+                fontWeight: 800,
+              }}
+            >
+              Continue
+            </Button>
+          )}
+
+          {service === 'betting' && (
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={() =>
+                submitAction('Betting funding is ready.')
+              }
+              sx={{
+                minHeight: 52,
+                borderRadius: 3,
+                backgroundColor: '#078b5d',
+                textTransform: 'none',
+                fontWeight: 800,
+              }}
+            >
+              Continue
+            </Button>
+          )}
+
+          {service === 'tv' && (
+            <Button
+              fullWidth
+              variant="contained"
+              disabled={!tvProvider || !smartCard}
+              onClick={() =>
+                submitAction('TV subscription is ready.')
+              }
+              sx={{
+                minHeight: 52,
+                borderRadius: 3,
+                backgroundColor: '#078b5d',
+                textTransform: 'none',
+                fontWeight: 800,
+              }}
+            >
+              Continue
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
+
+      {/* =========================================================
+          SNACKBAR
+      ========================================================== */}
+
+      <Snackbar
+        open={snackbar}
+        autoHideDuration={3500}
+        onClose={() => setSnackbar(false)}
+        message={snackbarMessage}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'center',
+        }}
+      />
     </Box>
+  );
+};
+
+/* ===============================================================
+   BOTTOM NAV ITEM
+================================================================ */
+
+interface BottomNavItemProps {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}
+
+const BottomNavItem: React.FC<BottomNavItemProps> = ({
+  icon,
+  label,
+  active = false,
+  onClick,
+}) => {
+  return (
+    <Button
+      onClick={onClick}
+      sx={{
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.2,
+        color: active ? '#078b5d' : '#7a8790',
+        textTransform: 'none',
+        borderRadius: 2,
+        py: 0.5,
+        '&:hover': {
+          backgroundColor: '#f4faf7',
+        },
+      }}
+    >
+      {React.cloneElement(icon as React.ReactElement, {
+        sx: {
+          fontSize: {
+            xs: 25,
+            sm: 28,
+          },
+        },
+      })}
+
+      <Typography
+        component="span"
+        sx={{
+          fontSize: {
+            xs: 11,
+            sm: 13,
+          },
+          fontWeight: active ? 700 : 500,
+        }}
+      >
+        {label}
+      </Typography>
+    </Button>
   );
 };
 
