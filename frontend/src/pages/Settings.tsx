@@ -311,7 +311,7 @@ const Settings: React.FC = () => {
           <SettingItem
             icon="₦"
             title="Payment Settings"
-            description="Manage your 6-digit Transfer PIN and payment security."
+            description="Create and manage your 4-digit Transaction PIN and payment security."
             onClick={() => openSection('Payment Settings')}
           />
         </section>
@@ -589,46 +589,38 @@ const Settings: React.FC = () => {
             {activeSection === 'Payment Settings' && (
               <div style={{ marginTop: 20 }}>
                 <div style={styles.infoBox}>
-                  <strong>Transfer PIN</strong>
+                  <strong>Transaction PIN</strong>
+
                   <p style={styles.infoText}>
-                    Your 6-digit Transfer PIN will be used to
-                    authorize transfers and payments.
+                    Create a 4-digit Transaction PIN. This PIN
+                    will be used to authorize transfers and
+                    payments.
                   </p>
                 </div>
 
                 <label style={styles.label}>
-                  Current Transfer PIN
+                  Create Transaction PIN
                 </label>
 
                 <input
                   type="password"
                   inputMode="numeric"
-                  maxLength={6}
-                  placeholder="Enter current PIN"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  placeholder="Enter 4-digit PIN"
                   style={styles.input}
                 />
 
                 <label style={styles.label}>
-                  New Transfer PIN
+                  Confirm Transaction PIN
                 </label>
 
                 <input
                   type="password"
                   inputMode="numeric"
-                  maxLength={6}
-                  placeholder="Enter 6-digit PIN"
-                  style={styles.input}
-                />
-
-                <label style={styles.label}>
-                  Confirm Transfer PIN
-                </label>
-
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="Confirm 6-digit PIN"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  placeholder="Confirm 4-digit PIN"
                   style={styles.input}
                 />
 
@@ -637,11 +629,11 @@ const Settings: React.FC = () => {
                   style={styles.primaryButton}
                   onClick={() =>
                     alert(
-                      'Transfer PIN will be securely connected to the backend next.'
+                      'Your 4-digit Transaction PIN will be securely connected to the backend next.'
                     )
                   }
                 >
-                  Save Transfer PIN
+                  Create Transaction PIN
                 </button>
               </div>
             )}
@@ -652,6 +644,7 @@ const Settings: React.FC = () => {
               <div style={{ marginTop: 20 }}>
                 <div style={styles.infoBox}>
                   <strong>Login Password</strong>
+
                   <p style={styles.infoText}>
                     Your password and Login Code are separate
                     security credentials.
@@ -726,7 +719,7 @@ const Settings: React.FC = () => {
                 >
                   Create a separate 6-digit code for quick
                   login. This is different from your password
-                  and Transfer PIN.
+                  and Transaction PIN.
                 </p>
 
                 <label style={styles.label}>
@@ -773,6 +766,7 @@ const Settings: React.FC = () => {
               <div style={{ marginTop: 20 }}>
                 <div style={styles.infoBox}>
                   <strong>SafeBox</strong>
+
                   <p style={styles.infoText}>
                     Set an amount you want to save regularly
                     in your Zenimonies SafeBox.
@@ -826,12 +820,15 @@ const Settings: React.FC = () => {
                   <option>
                     Select a security question
                   </option>
+
                   <option>
                     What was the name of your first school?
                   </option>
+
                   <option>
                     What is your childhood nickname?
                   </option>
+
                   <option>
                     What was the name of your first pet?
                   </option>
@@ -931,6 +928,7 @@ const Settings: React.FC = () => {
 
                   <div>
                     <strong>Account Security</strong>
+
                     <p style={styles.infoText}>
                       Your account security center is ready.
                     </p>
@@ -943,7 +941,7 @@ const Settings: React.FC = () => {
                 </div>
 
                 <div style={styles.securityRow}>
-                  <span>Transfer PIN</span>
+                  <span>Transaction PIN</span>
                   <strong>Protected</strong>
                 </div>
 
@@ -968,6 +966,9 @@ const Settings: React.FC = () => {
                   style={{
                     ...styles.input,
                     resize: 'vertical',
+                    height: 'auto',
+                    paddingTop: 12,
+                    paddingBottom: 12,
                   }}
                 />
 
