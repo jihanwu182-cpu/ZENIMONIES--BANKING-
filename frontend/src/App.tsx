@@ -27,10 +27,6 @@ import Bills from './pages/Bills.tsx';
 import Betting from './pages/Betting.tsx';
 import VirtualCard from './pages/VirtualCard.tsx';
 
-/* ============================================================
-   SIMPLE SERVICE PAGE
-   ============================================================ */
-
 interface ServicePageProps {
   title: string;
   description: string;
@@ -55,8 +51,6 @@ const ServicePage: React.FC<ServicePageProps> = ({
         paddingBottom: '40px',
       }}
     >
-      {/* ================= HEADER ================= */}
-
       <header
         style={{
           background: '#ffffff',
@@ -140,8 +134,6 @@ const ServicePage: React.FC<ServicePageProps> = ({
         </div>
       </header>
 
-      {/* ================= CONTENT ================= */}
-
       <main
         style={{
           width: 'min(700px, 92%)',
@@ -175,8 +167,6 @@ const ServicePage: React.FC<ServicePageProps> = ({
               '0 8px 25px rgba(26, 61, 47, 0.05)',
           }}
         >
-          {/* ICON */}
-
           <div
             style={{
               width: '58px',
@@ -194,8 +184,6 @@ const ServicePage: React.FC<ServicePageProps> = ({
             {icon}
           </div>
 
-          {/* TITLE */}
-
           <h1
             style={{
               margin: '0 0 8px',
@@ -207,8 +195,6 @@ const ServicePage: React.FC<ServicePageProps> = ({
             {title}
           </h1>
 
-          {/* DESCRIPTION */}
-
           <p
             style={{
               margin: '0 0 20px',
@@ -219,8 +205,6 @@ const ServicePage: React.FC<ServicePageProps> = ({
           >
             {description}
           </p>
-
-          {/* STATUS */}
 
           <div
             style={{
@@ -236,8 +220,6 @@ const ServicePage: React.FC<ServicePageProps> = ({
             This service is ready for the next setup
             stage.
           </div>
-
-          {/* ACTIONS */}
 
           <div
             style={{
@@ -296,18 +278,12 @@ const ServicePage: React.FC<ServicePageProps> = ({
   );
 };
 
-/* ============================================================
-   APP
-   ============================================================ */
-
 const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* ====================================================
-            AUTHENTICATION
-        ==================================================== */}
+        {/* AUTHENTICATION */}
 
         <Route
           path="/login"
@@ -319,9 +295,7 @@ const App: React.FC = () => {
           element={<Register />}
         />
 
-        {/* ====================================================
-            DASHBOARD
-        ==================================================== */}
+        {/* DASHBOARD */}
 
         <Route
           path="/"
@@ -338,9 +312,7 @@ const App: React.FC = () => {
           }
         />
 
-        {/* ====================================================
-            ACCOUNT
-        ==================================================== */}
+        {/* ACCOUNT */}
 
         <Route
           path="/profile"
@@ -362,52 +334,36 @@ const App: React.FC = () => {
           element={<VerifyPhone />}
         />
 
-        {/* ====================================================
-            MONEY
-        ==================================================== */}
+        <Route
+          path="/verify-otp"
+          element={<VerifyOTP />}
+        />
+
+        {/* MONEY */}
 
         <Route
           path="/transfer"
-          element={
-            <ServicePage
-              title="Send Money"
-              icon="➤"
-              description="Send money securely to another Zenimonies customer or to a bank account."
-            />
-          }
+          element={<Transfer />}
+        />
+
+        <Route
+          path="/to-bank"
+          element={<ToBank />}
         />
 
         <Route
           path="/deposit"
-          element={
-            <ServicePage
-              title="Add Money"
-              icon="+"
-              description="Add funds securely to your Zenimonies account."
-            />
-          }
+          element={<Deposit />}
         />
 
         <Route
           path="/withdraw"
-          element={
-            <ServicePage
-              title="Withdraw"
-              icon="↙"
-              description="Withdraw funds from your Zenimonies account."
-            />
-          }
+          element={<Withdraw />}
         />
 
         <Route
           path="/transactions"
-          element={
-            <ServicePage
-              title="Transactions"
-              icon="↕"
-              description="View your account activity and transaction history."
-            />
-          }
+          element={<Transactions />}
         />
 
         <Route
@@ -420,44 +376,29 @@ const App: React.FC = () => {
             />
           }
         />
+
+        {/* ================= VIRTUAL CARD ================= */}
+
         <Route
           path="/virtual-card"
-          element={
-           <ProtectedRoute>
-           <VirtualCard />
-          </ProtectedRoute>
-         }
-       />
+          element={<VirtualCard />}
+        />
 
-        {/* ====================================================
-            AIRTIME & DATA
-        ==================================================== */}
+        {/* AIRTIME */}
 
         <Route
           path="/airtime"
-          element={
-            <ServicePage
-              title="Airtime"
-              icon="▥"
-              description="Purchase airtime for your mobile line."
-            />
-          }
+          element={<Airtime />}
         />
+
+        {/* DATA */}
 
         <Route
           path="/data"
-          element={
-            <ServicePage
-              title="Data"
-              icon="⇅"
-              description="Purchase mobile data bundles."
-            />
-          }
+          element={<Data />}
         />
 
-        {/* ====================================================
-            TV
-        ==================================================== */}
+        {/* TV */}
 
         <Route
           path="/tv"
@@ -470,32 +411,21 @@ const App: React.FC = () => {
           }
         />
 
-        {/* ====================================================
-            BILL PAYMENT
-        ==================================================== */}
+        {/* BILLS */}
 
         <Route
           path="/bills"
-          element={
-            <ServicePage
-              title="Bill Payment"
-              icon="▣"
-              description="Pay supported utility and service bills from your Zenimonies account."
-            />
-          }
+          element={<Bills />}
         />
 
-        {/* ====================================================
-            BETTING
-        ==================================================== */}
+        {/* BETTING */}
 
         <Route
           path="/betting"
           element={<Betting />}
         />
-        {/* ====================================================
-            SAFEBOX
-        ==================================================== */}
+
+        {/* SAFEBOX */}
 
         <Route
           path="/safebox"
@@ -508,9 +438,7 @@ const App: React.FC = () => {
           }
         />
 
-        {/* ====================================================
-            MORE
-        ==================================================== */}
+        {/* MORE */}
 
         <Route
           path="/more"
@@ -523,9 +451,7 @@ const App: React.FC = () => {
           }
         />
 
-        {/* ====================================================
-            FALLBACK
-        ==================================================== */}
+        {/* FALLBACK */}
 
         <Route
           path="*"
