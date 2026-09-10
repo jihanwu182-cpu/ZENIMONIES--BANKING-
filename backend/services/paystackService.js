@@ -2,11 +2,13 @@ const axios = require('axios');
 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
+// ============================================================
+// PAYSTACK HEADERS
+// ============================================================
+
 const getPaystackHeaders = () => {
   if (!process.env.PAYSTACK_SECRET_KEY) {
-    throw new Error(
-      'PAYSTACK_SECRET_KEY is not configured'
-    );
+    throw new Error('PAYSTACK_SECRET_KEY is not configured');
   }
 
   return {
@@ -37,13 +39,19 @@ const getBanks = async () => {
 
 
 // ============================================================
-// RESOLVE NIGERIAN BANK ACCOUNT
+// RESOLVE BANK ACCOUNT
 // ============================================================
 
 const resolveBankAccount = async (
   accountNumber,
   bankCode
 ) => {
+  if (!accountNumber || !bankCode) {
+    throw new Error(
+      'Account number and bank code are required'
+    );
+  }
+
   const response = await axios.get(
     `${PAYSTACK_BASE_URL}/bank/resolve`,
     {
@@ -69,6 +77,12 @@ const createPaystackCustomer = async ({
   lastName,
   phone,
 }) => {
+  if (!email) {
+    throw new Error(
+      'Email is required to create Paystack customer'
+    );
+  }
+
   const response = await axios.post(
     `${PAYSTACK_BASE_URL}/customer`,
     {
@@ -93,6 +107,12 @@ const createPaystackCustomer = async ({
 const getPaystackCustomer = async (
   customerCode
 ) => {
+  if (!customerCode) {
+    throw new Error(
+      'Paystack customer code is required'
+    );
+  }
+
   const response = await axios.get(
     `${PAYSTACK_BASE_URL}/customer/${encodeURIComponent(
       customerCode
@@ -109,12 +129,25 @@ const getPaystackCustomer = async (
 // ============================================================
 // CREATE DEDICATED VIRTUAL ACCOUNT
 //
-// This is the permanent receiving account assigned to
-// the customer by Paystack.
-//
 // IMPORTANT:
-// The account number returned by Paystack is NOT generated
-// by ZENIMONIES.
+// ZENIMONIES DOES NOT GENERATE THE ACCOUNT NUMBER.
+//
+// Paystack generates/issues the receiving account number.
+// The returned account_number becomes the customer's
+// ZENIMONIES receiving account number.
+//
+// Example Paystack response:
+//
+// data: {
+//   id: 123,
+//   account_name: "...",
+//   account_number: "9930000737",
+//   bank: {
+//     name: "Paystack-Titan"
+//   },
+//   currency: "NGN"
+// }
+//
 // ============================================================
 
 const createDedicatedVirtualAccount = async ({
@@ -154,6 +187,12 @@ const createDedicatedVirtualAccount = async ({
 const getDedicatedVirtualAccount = async (
   dedicatedAccountId
 ) => {
+  if (!dedicatedAccountId) {
+    throw new Error(
+      'Dedicated account ID is required'
+    );
+  }
+
   const response = await axios.get(
     `${PAYSTACK_BASE_URL}/dedicated_account/${encodeURIComponent(
       dedicatedAccountId
@@ -174,6 +213,12 @@ const getDedicatedVirtualAccount = async (
 const getCustomerDedicatedAccounts = async (
   customerCode
 ) => {
+  if (!customerCode) {
+    throw new Error(
+      'Paystack customer code is required'
+    );
+  }
+
   const response = await axios.get(
     `${PAYSTACK_BASE_URL}/dedicated_account`,
     {
@@ -185,6 +230,64 @@ const getCustomerDedicatedAccounts = async (
   );
 
   return response.data;
+};
+
+
+// ============================================================
+// EXTRACT PROVIDER-ISSUED ACCOUNT
+//
+// This helper prevents us from accidentally treating a
+// locally generated account number as the real receiving
+// account.
+//
+// ============================================================
+
+const extractDedicatedAccount = (
+  paystackResponse
+) => {
+  const data =
+    paystackResponse?.data;
+
+  if (!data) {
+    throw new Error(
+      'Paystack did not return dedicated account data'
+    );
+  }
+
+  if (!data.account_number) {
+    throw new Error(
+      'Paystack did not return an account number'
+    );
+  }
+
+  return {
+    providerAccountId:
+      data.id,
+
+    accountNumber:
+      data.account_number,
+
+    accountName:
+      data.account_name,
+
+    bankName:
+      data.bank?.name || null,
+
+    bankCode:
+      data.bank?.slug || null,
+
+    currency:
+      data.currency || 'NGN',
+
+    active:
+      data.active,
+
+    assigned:
+      data.assigned,
+
+    customerCode:
+      data.customer?.customer_code || null,
+  };
 };
 
 
@@ -202,4 +305,6 @@ module.exports = {
   createDedicatedVirtualAccount,
   getDedicatedVirtualAccount,
   getCustomerDedicatedAccounts,
+
+  extractDedicatedAccount,
 };
