@@ -18,6 +18,7 @@ const transferRoutes = require('./routes/transfer');
 const internalTransferRoutes = require('./routes/internalTransfer');
 const depositRoutes = require('./routes/deposit');
 const bankRoutes = require('./routes/bankRoutes');
+const virtualCardRoutes = require('./routes/virtualCard');
 
 // ============================================================
 // PAYSTACK WEBHOOK
