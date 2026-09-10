@@ -10,6 +10,7 @@ const getDashboard = async (req, res) => {
     const [
       usersResult,
       activeUsersResult,
+      suspendedUsersResult,
       pendingKycResult,
       approvedKycResult,
       rejectedKycResult,
@@ -28,6 +29,12 @@ const getDashboard = async (req, res) => {
         SELECT COUNT(*)::int AS total
         FROM users
         WHERE status = 'active'
+      `),
+
+      pool.query(`
+        SELECT COUNT(*)::int AS total
+        FROM users
+        WHERE status IN ('suspended', 'blocked')
       `),
 
       pool.query(`
@@ -87,10 +94,12 @@ const getDashboard = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+
       dashboard: {
         users: {
           total: usersResult.rows[0].total,
           active: activeUsersResult.rows[0].total,
+          suspended: suspendedUsersResult.rows[0].total,
         },
 
         kyc: {
@@ -117,8 +126,11 @@ const getDashboard = async (req, res) => {
         },
 
         transactions: {
-          pending: pendingTransactionsResult.rows[0].total,
-          failed: failedTransactionsResult.rows[0].total,
+          pending:
+            pendingTransactionsResult.rows[0].total,
+
+          failed:
+            failedTransactionsResult.rows[0].total,
         },
       },
     });
@@ -434,6 +446,7 @@ const getKycRecords = async (req, res) => {
       SELECT
         k.id,
         k.user_id,
+
         u.full_name,
         u.email,
         u.phone,
@@ -495,23 +508,172 @@ const getKycRecords = async (req, res) => {
 
 const getTransactions = async (req, res) => {
   try {
-    const result = await pool.query(`
+    const status =
+      String(req.query.status || '').trim();
+
+    const type =
+      String(req.query.type || '').trim();
+
+    const search =
+      String(req.query.search || '').trim();
+
+    const values = [];
+    const conditions = [];
+
+    if (status) {
+      values.push(status);
+
+      conditions.push(
+        `t.status = $${values.length}`
+      );
+    }
+
+    if (type) {
+      values.push(type);
+
+      conditions.push(
+        `t.type = $${values.length}`
+      );
+    }
+
+    if (search) {
+      values.push(`%${search}%`);
+
+      conditions.push(`
+        (
+          t.reference ILIKE $${values.length}
+          OR u.full_name ILIKE $${values.length}
+          OR u.email ILIKE $${values.length}
+          OR a.account_number ILIKE $${values.length}
+        )
+      `);
+    }
+
+    const whereClause =
+      conditions.length > 0
+        ? `WHERE ${conditions.join(' AND ')}`
+        : '';
+
+    const result = await pool.query(
+      `
       SELECT
         t.id,
         t.account_id,
+
         a.account_number,
+
+        u.id AS user_id,
         u.full_name,
         u.email,
+
         t.type,
         t.amount,
         t.currency,
         t.reference,
         t.description,
         t.status,
+
         t.balance_before,
         t.balance_after,
+
         t.created_at
+
       FROM transactions t
 
       INNER JOIN accounts a
-       
+        ON a.id = t.account_id
+
+      INNER JOIN users u
+        ON u.id = a.user_id
+
+      ${whereClause}
+
+      ORDER BY t.created_at DESC
+
+      LIMIT 300
+      `,
+      values
+    );
+
+    return res.status(200).json({
+      success: true,
+      transactions: result.rows,
+    });
+  } catch (error) {
+    console.error(
+      'Admin transactions error:',
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to load transactions',
+    });
+  }
+};
+
+
+// ============================================================
+// GET AUDIT LOGS
+// GET /api/admin/audit-logs
+// ============================================================
+
+const getAuditLogs = async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        al.id,
+        al.user_id,
+
+        u.full_name,
+        u.email,
+
+        al.action,
+        al.description,
+        al.ip_address,
+        al.user_agent,
+        al.created_at
+
+      FROM audit_logs al
+
+      LEFT JOIN users u
+        ON u.id = al.user_id
+
+      ORDER BY al.created_at DESC
+
+      LIMIT 300
+      `
+    );
+
+    return res.status(200).json({
+      success: true,
+      audit_logs: result.rows,
+    });
+  } catch (error) {
+    console.error(
+      'Admin audit logs error:',
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to load audit logs',
+    });
+  }
+};
+
+
+// ============================================================
+// EXPORTS
+// ============================================================
+
+module.exports = {
+  getDashboard,
+  getUsers,
+  getUser,
+  updateUserStatus,
+  getKycRecords,
+  getTransactions,
+  getAuditLogs,
+};
