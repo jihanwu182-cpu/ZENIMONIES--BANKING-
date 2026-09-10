@@ -19,18 +19,6 @@ const getPaystackHeaders = () => {
   };
 };
 
-// ============================================================
-// PAYSTACK ERROR HANDLER
-// ============================================================
-
-const getPaystackErrorMessage = (error) => {
-  return (
-    error?.response?.data?.message ||
-    error?.response?.data?.error ||
-    error?.message ||
-    'Paystack request failed'
-  );
-};
 
 // ============================================================
 // GET SUPPORTED BANKS
@@ -51,11 +39,18 @@ const getBanks = async () => {
 
     return response.data;
   } catch (error) {
+    console.error(
+      'Paystack get banks error:',
+      error.response?.data || error.message
+    );
+
     throw new Error(
-      `Unable to retrieve Paystack banks: ${getPaystackErrorMessage(error)}`
+      error.response?.data?.message ||
+      'Unable to retrieve supported banks'
     );
   }
 };
+
 
 // ============================================================
 // RESOLVE BANK ACCOUNT
@@ -85,14 +80,30 @@ const resolveBankAccount = async (
 
     return response.data;
   } catch (error) {
+    console.error(
+      'Paystack resolve bank account error:',
+      error.response?.data || error.message
+    );
+
     throw new Error(
-      `Unable to resolve bank account: ${getPaystackErrorMessage(error)}`
+      error.response?.data?.message ||
+      'Unable to resolve bank account'
     );
   }
 };
 
+
 // ============================================================
 // CREATE PAYSTACK CUSTOMER
+// ============================================================
+//
+// Creates the customer on Paystack.
+//
+// IMPORTANT:
+// This does NOT create a bank account number.
+// Paystack customer creation and dedicated account
+// creation are separate operations.
+//
 // ============================================================
 
 const createPaystackCustomer = async ({
@@ -107,45 +118,66 @@ const createPaystackCustomer = async ({
     );
   }
 
-  if (!firstName) {
-    throw new Error(
-      'First name is required to create Paystack customer'
-    );
-  }
-
-  if (!lastName) {
-    throw new Error(
-      'Last name is required to create Paystack customer'
-    );
-  }
-
-  if (!phone) {
-    throw new Error(
-      'Phone number is required to create Paystack customer'
-    );
-  }
-
   try {
+    const payload = {
+      email,
+    };
+
+    if (firstName) {
+      payload.first_name = firstName;
+    }
+
+    if (lastName) {
+      payload.last_name = lastName;
+    }
+
+    if (phone) {
+      payload.phone = phone;
+    }
+
     const response = await axios.post(
       `${PAYSTACK_BASE_URL}/customer`,
-      {
-        email,
-        first_name: firstName,
-        last_name: lastName,
-        phone,
-      },
+      payload,
       {
         headers: getPaystackHeaders(),
       }
     );
 
+    if (
+      !response.data ||
+      !response.data.status ||
+      !response.data.data
+    ) {
+      throw new Error(
+        response.data?.message ||
+        'Paystack customer creation failed'
+      );
+    }
+
+    if (
+      !response.data.data.customer_code
+    ) {
+      throw new Error(
+        'Paystack customer code was not returned'
+      );
+    }
+
     return response.data;
+
   } catch (error) {
+    console.error(
+      'Paystack create customer error:',
+      error.response?.data || error.message
+    );
+
     throw new Error(
-      `Unable to create Paystack customer: ${getPaystackErrorMessage(error)}`
+      error.response?.data?.message ||
+      error.message ||
+      'Unable to create Paystack customer'
     );
   }
 };
+
 
 // ============================================================
 // GET PAYSTACK CUSTOMER
@@ -171,91 +203,35 @@ const getPaystackCustomer = async (
     );
 
     return response.data;
+
   } catch (error) {
+    console.error(
+      'Paystack get customer error:',
+      error.response?.data || error.message
+    );
+
     throw new Error(
-      `Unable to retrieve Paystack customer: ${getPaystackErrorMessage(error)}`
+      error.response?.data?.message ||
+      'Unable to retrieve Paystack customer'
     );
   }
 };
 
-// ============================================================
-// VALIDATE PAYSTACK CUSTOMER
-//
-// Required by Paystack for certain Nigerian business
-// categories, including Financial Services.
-//
-// The customer's BVN and a bank account connected to
-// that BVN are required for bank-account validation.
-// ============================================================
-
-const validatePaystackCustomer = async ({
-  customerCode,
-  bvn,
-  accountNumber,
-  bankCode,
-}) => {
-  if (!customerCode) {
-    throw new Error(
-      'Paystack customer code is required'
-    );
-  }
-
-  if (!bvn) {
-    throw new Error(
-      'BVN is required to validate the Paystack customer'
-    );
-  }
-
-  if (!accountNumber) {
-    throw new Error(
-      'Bank account number is required for Paystack customer validation'
-    );
-  }
-
-  if (!bankCode) {
-    throw new Error(
-      'Bank code is required for Paystack customer validation'
-    );
-  }
-
-  try {
-    const response = await axios.post(
-      `${PAYSTACK_BASE_URL}/customer/${encodeURIComponent(
-        customerCode
-      )}/identification`,
-      {
-        country: 'NG',
-        type: 'bank_account',
-        account_number: accountNumber,
-        bvn,
-        bank_code: bankCode,
-      },
-      {
-        headers: getPaystackHeaders(),
-      }
-    );
-
-    return response.data;
-  } catch (error) {
-    throw new Error(
-      `Unable to validate Paystack customer: ${getPaystackErrorMessage(error)}`
-    );
-  }
-};
 
 // ============================================================
 // CREATE DEDICATED VIRTUAL ACCOUNT
+// ============================================================
 //
 // IMPORTANT:
 //
 // ZENIMONIES DOES NOT GENERATE ACCOUNT NUMBERS.
 //
-// Paystack is the source of truth.
+// This function asks Paystack to create/assign a dedicated
+// receiving account for the Paystack customer.
 //
-// The account number saved in the ZENIMONIES database must
-// come directly from:
-//
-// paystackResponse.data.account_number
+// The account number returned by Paystack is the ONLY account
+// number that should be stored as the customer's receiving
+// account.
 //
 // ============================================================
 
@@ -269,27 +245,16 @@ const createDedicatedVirtualAccount = async ({
     );
   }
 
-  const payload = {
-    customer: customerCode,
-  };
-
-  // ----------------------------------------------------------
-  // TEST MODE
-  //
-  // Paystack documents test-bank for Nigerian test DVAs.
-  // ----------------------------------------------------------
-
-  const isTestKey = String(
-    process.env.PAYSTACK_SECRET_KEY || ''
-  ).startsWith('sk_test_');
-
-  if (preferredBank) {
-    payload.preferred_bank = preferredBank;
-  } else if (isTestKey) {
-    payload.preferred_bank = 'test-bank';
-  }
-
   try {
+    const payload = {
+      customer: customerCode,
+    };
+
+    // Optional Paystack preferred bank.
+    if (preferredBank) {
+      payload.preferred_bank = preferredBank;
+    }
+
     const response = await axios.post(
       `${PAYSTACK_BASE_URL}/dedicated_account`,
       payload,
@@ -298,13 +263,49 @@ const createDedicatedVirtualAccount = async ({
       }
     );
 
+    if (
+      !response.data ||
+      !response.data.status ||
+      !response.data.data
+    ) {
+      throw new Error(
+        response.data?.message ||
+        'Paystack dedicated account creation failed'
+      );
+    }
+
+    // --------------------------------------------------------
+    // CRITICAL SAFETY CHECK
+    // --------------------------------------------------------
+    //
+    // Never allow registration to continue if Paystack did
+    // not return a real account number.
+    //
+
+    if (
+      !response.data.data.account_number
+    ) {
+      throw new Error(
+        'Paystack did not return a real dedicated account number'
+      );
+    }
+
     return response.data;
+
   } catch (error) {
+    console.error(
+      'Paystack dedicated account error:',
+      error.response?.data || error.message
+    );
+
     throw new Error(
-      `Unable to create Paystack dedicated account: ${getPaystackErrorMessage(error)}`
+      error.response?.data?.message ||
+      error.message ||
+      'Unable to create Paystack dedicated account'
     );
   }
 };
+
 
 // ============================================================
 // GET DEDICATED VIRTUAL ACCOUNT
@@ -330,12 +331,20 @@ const getDedicatedVirtualAccount = async (
     );
 
     return response.data;
+
   } catch (error) {
+    console.error(
+      'Paystack get dedicated account error:',
+      error.response?.data || error.message
+    );
+
     throw new Error(
-      `Unable to retrieve dedicated account: ${getPaystackErrorMessage(error)}`
+      error.response?.data?.message ||
+      'Unable to retrieve dedicated account'
     );
   }
 };
+
 
 // ============================================================
 // LIST CUSTOMER DEDICATED ACCOUNTS
@@ -362,18 +371,30 @@ const getCustomerDedicatedAccounts = async (
     );
 
     return response.data;
+
   } catch (error) {
+    console.error(
+      'Paystack list dedicated accounts error:',
+      error.response?.data || error.message
+    );
+
     throw new Error(
-      `Unable to retrieve customer dedicated accounts: ${getPaystackErrorMessage(error)}`
+      error.response?.data?.message ||
+      'Unable to retrieve customer dedicated accounts'
     );
   }
 };
 
+
 // ============================================================
-// EXTRACT REAL PROVIDER ACCOUNT
+// EXTRACT PROVIDER-ISSUED ACCOUNT
+// ============================================================
 //
-// This function deliberately refuses to return an account
-// unless Paystack supplied account_number.
+// This function takes the Paystack response and extracts
+// ONLY provider-issued account information.
+//
+// There is NO account-number generation here.
+//
 // ============================================================
 
 const extractDedicatedAccount = (
@@ -388,9 +409,13 @@ const extractDedicatedAccount = (
     );
   }
 
+  // ----------------------------------------------------------
+  // ACCOUNT NUMBER MUST COME FROM PAYSTACK
+  // ----------------------------------------------------------
+
   if (!data.account_number) {
     throw new Error(
-      'Paystack did not return a real account number. No ZENIMONIES account number will be created.'
+      'Paystack did not return an account number'
     );
   }
 
@@ -401,34 +426,119 @@ const extractDedicatedAccount = (
         : null,
 
     accountNumber:
-      String(data.account_number),
+      data.account_number,
 
     accountName:
       data.account_name || null,
 
     bankName:
       data.bank?.name ||
+      data.bank_name ||
       null,
 
     bankCode:
-      data.bank?.slug ||
-      null,
+      data.bank?.id
+        ? String(data.bank.id)
+        : data.bank_code
+          ? String(data.bank_code)
+          : null,
 
     currency:
       data.currency ||
       'NGN',
 
     active:
-      data.active === true,
+      data.active,
 
     assigned:
-      data.assigned === true,
+      data.assigned,
 
     customerCode:
       data.customer?.customer_code ||
       null,
   };
 };
+
+
+// ============================================================
+// CREATE OR GET CUSTOMER DEDICATED ACCOUNT
+// ============================================================
+//
+// This helper is useful if registration is retried.
+//
+// First we ask Paystack whether the customer already has a
+// dedicated account.
+//
+// If one exists, we return the existing provider-issued
+// account instead of creating another one.
+//
+// If none exists, we ask Paystack to create one.
+//
+// ============================================================
+
+const getOrCreateDedicatedVirtualAccount = async ({
+  customerCode,
+  preferredBank,
+}) => {
+  if (!customerCode) {
+    throw new Error(
+      'Paystack customer code is required'
+    );
+  }
+
+  // ----------------------------------------------------------
+  // CHECK EXISTING PAYSTACK DEDICATED ACCOUNTS
+  // ----------------------------------------------------------
+
+  const existingResponse =
+    await getCustomerDedicatedAccounts(
+      customerCode
+    );
+
+  if (
+    existingResponse?.status &&
+    Array.isArray(existingResponse.data) &&
+    existingResponse.data.length > 0
+  ) {
+    const activeAccount =
+      existingResponse.data.find(
+        (account) =>
+          account &&
+          account.account_number &&
+          (
+            account.active === true ||
+            account.assigned === true
+          )
+      );
+
+    const account =
+      activeAccount ||
+      existingResponse.data.find(
+        (item) =>
+          item &&
+          item.account_number
+      );
+
+    if (account) {
+      return {
+        status: true,
+        message:
+          'Existing Paystack dedicated account found',
+        data: account,
+      };
+    }
+  }
+
+  // ----------------------------------------------------------
+  // CREATE NEW PROVIDER ACCOUNT
+  // ----------------------------------------------------------
+
+  return createDedicatedVirtualAccount({
+    customerCode,
+    preferredBank,
+  });
+};
+
 
 // ============================================================
 // EXPORTS
@@ -440,11 +550,12 @@ module.exports = {
 
   createPaystackCustomer,
   getPaystackCustomer,
-  validatePaystackCustomer,
 
   createDedicatedVirtualAccount,
   getDedicatedVirtualAccount,
   getCustomerDedicatedAccounts,
+
+  getOrCreateDedicatedVirtualAccount,
 
   extractDedicatedAccount,
 };
