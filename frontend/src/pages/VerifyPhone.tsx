@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const VerifyPhone: React.FC = () => {
@@ -6,8 +6,38 @@ const VerifyPhone: React.FC = () => {
 
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  const [countdown, setCountdown] = useState(0);
+
+  // Countdown for resend button
+  useEffect(() => {
+    if (countdown <= 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setCountdown((previous) => {
+        if (previous <= 1) {
+          window.clearInterval(timer);
+          return 0;
+        }
+
+        return previous - 1;
+      });
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [countdown]);
+
+  // ============================================================
+  // VERIFY OTP
+  // ============================================================
 
   const handleVerify = async (
     event: React.FormEvent
@@ -31,17 +61,19 @@ const VerifyPhone: React.FC = () => {
         localStorage.getItem('zenimonies_token') ||
         localStorage.getItem('token');
 
+      if (!token) {
+        throw new Error(
+          'Your session has expired. Please log in again.'
+        );
+      }
+
       const response = await fetch(
-        '/api/auth/verify-phone',
+        '/api/auth/verify-phone-otp',
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token
-              ? {
-                  Authorization: `Bearer ${token}`,
-                }
-              : {}),
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             otp,
@@ -73,8 +105,7 @@ const VerifyPhone: React.FC = () => {
           const updatedUser = {
             ...user,
             is_verified: true,
-            emailVerified:
-              user.emailVerified ?? true,
+            phoneVerified: true,
           };
 
           localStorage.setItem(
@@ -97,6 +128,71 @@ const VerifyPhone: React.FC = () => {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ============================================================
+  // RESEND OTP
+  // ============================================================
+
+  const handleResend = async () => {
+    if (resending || countdown > 0) {
+      return;
+    }
+
+    setError('');
+    setMessage('');
+    setResending(true);
+
+    try {
+      const token =
+        localStorage.getItem('zenimonies_token') ||
+        localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'Your session has expired. Please log in again.'
+        );
+      }
+
+      const response = await fetch(
+        '/api/auth/send-phone-otp',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to resend verification code.'
+        );
+      }
+
+      setMessage(
+        data?.message ||
+          'A new verification code has been sent to your phone.'
+      );
+
+      // Start 60-second cooldown
+      setCountdown(60);
+
+      // Clear any old OTP
+      setOtp('');
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to resend verification code.'
+      );
+    } finally {
+      setResending(false);
     }
   };
 
@@ -123,6 +219,8 @@ const VerifyPhone: React.FC = () => {
             '0 10px 30px rgba(16, 24, 40, 0.08)',
         }}
       >
+        {/* HEADER */}
+
         <div
           style={{
             textAlign: 'center',
@@ -163,6 +261,8 @@ const VerifyPhone: React.FC = () => {
           </p>
         </div>
 
+        {/* ERROR */}
+
         {error && (
           <div
             style={{
@@ -179,6 +279,8 @@ const VerifyPhone: React.FC = () => {
           </div>
         )}
 
+        {/* SUCCESS */}
+
         {message && (
           <div
             style={{
@@ -194,6 +296,8 @@ const VerifyPhone: React.FC = () => {
             {message}
           </div>
         )}
+
+        {/* OTP FORM */}
 
         <form onSubmit={handleVerify}>
           <label
@@ -239,6 +343,8 @@ const VerifyPhone: React.FC = () => {
             }}
           />
 
+          {/* VERIFY */}
+
           <button
             type="submit"
             disabled={
@@ -269,10 +375,50 @@ const VerifyPhone: React.FC = () => {
           </button>
         </form>
 
+        {/* RESEND */}
+
         <div
           style={{
             textAlign: 'center',
-            marginTop: '22px',
+            marginTop: '20px',
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={
+              resending || countdown > 0
+            }
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color:
+                resending || countdown > 0
+                  ? '#98a2b3'
+                  : '#0b5cff',
+              fontSize: '14px',
+              fontWeight: 700,
+              cursor:
+                resending || countdown > 0
+                  ? 'not-allowed'
+                  : 'pointer',
+              padding: '8px',
+            }}
+          >
+            {resending
+              ? 'Sending new code...'
+              : countdown > 0
+              ? `Resend code in ${countdown}s`
+              : 'Resend code'}
+          </button>
+        </div>
+
+        {/* BACK */}
+
+        <div
+          style={{
+            textAlign: 'center',
+            marginTop: '12px',
           }}
         >
           <Link
@@ -287,6 +433,8 @@ const VerifyPhone: React.FC = () => {
             ← Back to Profile
           </Link>
         </div>
+
+        {/* SECURITY */}
 
         <div
           style={{
