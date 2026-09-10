@@ -1,93 +1,165 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  'https://globalmarket-com.onrender.com';
+
 const CARD_FEE = 1000;
 
-type Step = 'start' | 'pin' | 'confirm' | 'created';
+type Step =
+  | 'loading'
+  | 'start'
+  | 'pin'
+  | 'confirm'
+  | 'created';
 
-interface SavedVirtualCard {
-  cardNumber: string;
-  expiry: string;
-  cvv: string;
-  created: boolean;
+interface VirtualCardData {
+  id: string;
+  card_number: string;
+  card_number_last4: string;
+  expiry_month: string;
+  expiry_year: string;
+  status: string;
+  card_fee: number;
+  created_at: string;
 }
-
-const STORAGE_KEY = 'zenimonies_virtual_card';
 
 const VirtualCard: React.FC = () => {
   const navigate = useNavigate();
 
-  const [step, setStep] = useState<Step>('start');
+  const [step, setStep] = useState<Step>('loading');
 
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
 
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvv, setCvv] = useState('');
+  const [card, setCard] =
+    useState<VirtualCardData | null>(null);
 
-  const [showCardDetails, setShowCardDetails] = useState(false);
+  const [cardCvv, setCardCvv] = useState('');
 
-  /*
-   * ============================================================
-   * LOAD EXISTING CARD
-   * ============================================================
-   *
-   * If the user has already created a card, do NOT show the
-   * creation screen again.
-   */
+  /* ==========================================================
+     GET AUTH TOKEN
+  ========================================================== */
 
-  useEffect(() => {
+  const getToken = (): string | null => {
+    return (
+      localStorage.getItem('token') ||
+      localStorage.getItem('accessToken') ||
+      localStorage.getItem('authToken')
+    );
+  };
+
+  /* ==========================================================
+     LOAD EXISTING CARD
+  ========================================================== */
+
+  const loadVirtualCard = async () => {
     try {
-      const savedCard = localStorage.getItem(STORAGE_KEY);
+      setError('');
+      setStep('loading');
 
-      if (!savedCard) {
-        setStep('start');
+      const token = getToken();
+
+      if (!token) {
+        navigate('/login');
         return;
       }
 
-      const parsedCard: SavedVirtualCard = JSON.parse(savedCard);
+      const response = await fetch(
+        `${API_BASE_URL}/api/virtual-card`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('authToken');
+
+        navigate('/login');
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to load virtual card'
+        );
+      }
+
+      /* ======================================================
+         EXISTING CARD FOUND
+      ====================================================== */
 
       if (
-        parsedCard &&
-        parsedCard.created &&
-        parsedCard.cardNumber &&
-        parsedCard.expiry &&
-        parsedCard.cvv
+        data.success === true &&
+        data.has_card === true &&
+        data.card
       ) {
-        setCardNumber(parsedCard.cardNumber);
-        setExpiry(parsedCard.expiry);
-        setCvv(parsedCard.cvv);
+        setCard(data.card);
         setStep('created');
+        return;
       }
-    } catch (storageError) {
+
+      /* ======================================================
+         NO CARD YET
+      ====================================================== */
+
+      setCard(null);
+      setStep('start');
+    } catch (err) {
       console.error(
-        'Unable to load virtual card:',
-        storageError
+        'Load virtual card error:',
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to load virtual card'
       );
 
       setStep('start');
     }
+  };
+
+  /* ==========================================================
+     LOAD CARD WHEN PAGE OPENS
+  ========================================================== */
+
+  useEffect(() => {
+    loadVirtualCard();
   }, []);
 
-  /*
-   * ============================================================
-   * START CARD CREATION
-   * ============================================================
-   */
+  /* ==========================================================
+     START CARD CREATION
+  ========================================================== */
 
   const handleStart = () => {
     setError('');
+
+    if (card) {
+      setStep('created');
+      return;
+    }
+
     setStep('pin');
   };
 
-  /*
-   * ============================================================
-   * FIRST PIN
-   * ============================================================
-   */
+  /* ==========================================================
+     FIRST PIN STEP
+  ========================================================== */
 
   const handlePinContinue = () => {
     setError('');
@@ -102,19 +174,18 @@ const VirtualCard: React.FC = () => {
     setStep('confirm');
   };
 
-  /*
-   * ============================================================
-   * CREATE CARD
-   * ============================================================
-   */
+  /* ==========================================================
+     CREATE CARD
+  ========================================================== */
 
-  const handleConfirm = () => {
+  const handleCreateCard = async () => {
     setError('');
 
-    if (!/^\d{4}$/.test(confirmPin)) {
+    if (!/^\d{4}$/.test(pin)) {
       setError(
-        'Please enter your 4-digit card PIN again.'
+        'Your card PIN must contain exactly 4 digits.'
       );
+      setStep('pin');
       return;
     }
 
@@ -123,123 +194,154 @@ const VirtualCard: React.FC = () => {
       return;
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * This frontend version generates demonstration card
-     * details and remembers the card in localStorage.
-     *
-     * The REAL ₦1,000 debit must be performed by the
-     * Zenimonies backend after checking the user's balance.
-     *
-     * The card PIN must NEVER be stored in localStorage.
-     */
+    const token = getToken();
 
-    const generatedCardNumber =
-      '5399 ' +
-      Math.floor(1000 + Math.random() * 9000) +
-      ' ' +
-      Math.floor(1000 + Math.random() * 9000) +
-      ' ' +
-      Math.floor(1000 + Math.random() * 9000);
+    if (!token) {
+      navigate('/login');
+      return;
+    }
 
-    const generatedCvv = String(
-      Math.floor(100 + Math.random() * 900)
-    );
-
-    const today = new Date();
-
-    const expiryMonth = String(
-      today.getMonth() + 1
-    ).padStart(2, '0');
-
-    const expiryYear = String(
-      today.getFullYear() + 3
-    ).slice(-2);
-
-    const generatedExpiry =
-      `${expiryMonth}/${expiryYear}`;
-
-    /*
-     * Save the card so that returning to this page later
-     * shows the existing card.
-     */
-
-    const savedCard: SavedVirtualCard = {
-      cardNumber: generatedCardNumber,
-      expiry: generatedExpiry,
-      cvv: generatedCvv,
-      created: true,
-    };
+    setLoading(true);
 
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(savedCard)
+      const response = await fetch(
+        `${API_BASE_URL}/api/virtual-card`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            pin,
+          }),
+        }
       );
-    } catch (storageError) {
+
+      const data = await response.json();
+
+      /* ======================================================
+         ALREADY HAS CARD
+      ====================================================== */
+
+      if (response.status === 409) {
+        if (data?.card) {
+          setCard(data.card);
+          setStep('created');
+          setError('');
+          return;
+        }
+
+        await loadVirtualCard();
+        return;
+      }
+
+      /* ======================================================
+         INSUFFICIENT BALANCE / OTHER ERROR
+      ====================================================== */
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to create virtual card'
+        );
+      }
+
+      /* ======================================================
+         SUCCESS
+      ====================================================== */
+
+      if (
+        data.success === true &&
+        data.card
+      ) {
+        setCard(data.card);
+
+        /*
+         * CVV is returned only during card creation.
+         * We keep it in component state so it can be shown
+         * during this session.
+         */
+        if (data.card_cvv) {
+          setCardCvv(String(data.card_cvv));
+        }
+
+        setStep('created');
+
+        setPin('');
+        setConfirmPin('');
+
+        return;
+      }
+
+      throw new Error(
+        'The card was not returned by the server.'
+      );
+    } catch (err) {
       console.error(
-        'Unable to save virtual card:',
-        storageError
+        'Create virtual card error:',
+        err
       );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to create virtual card'
+      );
+    } finally {
+      setLoading(false);
     }
-
-    setCardNumber(generatedCardNumber);
-    setExpiry(generatedExpiry);
-    setCvv(generatedCvv);
-
-    /*
-     * Clear PIN values from React state after creation.
-     */
-
-    setPin('');
-    setConfirmPin('');
-
-    setStep('created');
   };
 
-  /*
-   * ============================================================
-   * MASK CARD NUMBER
-   * ============================================================
-   */
+  /* ==========================================================
+     GO HOME
+  ========================================================== */
 
-  const maskedCardNumber = () => {
-    if (!cardNumber) {
-      return '•••• •••• •••• ••••';
-    }
+  const goHome = () => {
+    navigate('/');
+  };
 
-    const parts = cardNumber.split(' ');
+  /* ==========================================================
+     LOADING SCREEN
+  ========================================================== */
 
-    if (parts.length !== 4) {
-      return '•••• •••• •••• ••••';
-    }
-
+  if (step === 'loading') {
     return (
-      '•••• •••• •••• ' +
-      parts[3]
+      <div style={styles.page}>
+        <header style={styles.header}>
+          <button
+            type="button"
+            style={styles.backButton}
+            onClick={goHome}
+          >
+            ←
+          </button>
+
+          <div style={styles.headerTitle}>
+            Virtual Card
+          </div>
+
+          <div style={styles.headerSpacer} />
+        </header>
+
+        <main style={styles.main}>
+          <div style={styles.loadingContainer}>
+            <div style={styles.spinner}>
+              ⟳
+            </div>
+
+            <h2 style={styles.loadingTitle}>
+              Loading your card
+            </h2>
+
+            <p style={styles.loadingText}>
+              Checking your Zenimonies account...
+            </p>
+          </div>
+        </main>
+      </div>
     );
-  };
-
-  /*
-   * ============================================================
-   * MASK CVV
-   * ============================================================
-   */
-
-  const displayedCvv = showCardDetails
-    ? cvv
-    : '•••';
-
-  /*
-   * ============================================================
-   * MASK EXPIRY
-   * ============================================================
-   */
-
-  const displayedExpiry = showCardDetails
-    ? expiry
-    : '••/••';
+  }
 
   return (
     <div style={styles.page}>
@@ -249,12 +351,10 @@ const VirtualCard: React.FC = () => {
       ====================================================== */}
 
       <header style={styles.header}>
-
         <button
           type="button"
           style={styles.backButton}
-          onClick={() => navigate('/')}
-          aria-label="Back"
+          onClick={goHome}
         >
           ←
         </button>
@@ -264,22 +364,20 @@ const VirtualCard: React.FC = () => {
         </div>
 
         <div style={styles.headerSpacer} />
-
       </header>
 
       {/* ======================================================
-          MAIN
+          CONTENT
       ====================================================== */}
 
       <main style={styles.main}>
 
         {/* ====================================================
-            START
+            CREATE CARD
         ==================================================== */}
 
         {step === 'start' && (
           <>
-
             <div style={styles.iconCircle}>
               ▣
             </div>
@@ -289,8 +387,8 @@ const VirtualCard: React.FC = () => {
             </h1>
 
             <p style={styles.description}>
-              Create a virtual card that you can use for
-              supported online payments.
+              Create a virtual card that you can use
+              for supported online payments.
             </p>
 
             <div style={styles.infoCard}>
@@ -320,17 +418,40 @@ const VirtualCard: React.FC = () => {
             </div>
 
             <div style={styles.notice}>
-
               <strong>
                 Before you continue
               </strong>
 
               <p style={styles.noticeText}>
-                A ₦{CARD_FEE.toLocaleString()} card creation
-                fee applies when your virtual card is created.
+                A one-time fee of ₦1,000 will be
+                deducted from your Zenimonies account
+                when your virtual card is successfully
+                created.
               </p>
-
             </div>
+
+            <div style={styles.oneTimeNotice}>
+              <span style={styles.checkCircle}>
+                ✓
+              </span>
+
+              <div>
+                <strong>
+                  One-time card creation
+                </strong>
+
+                <p style={styles.oneTimeText}>
+                  You can only create one virtual card
+                  on this account.
+                </p>
+              </div>
+            </div>
+
+            {error && (
+              <div style={styles.error}>
+                {error}
+              </div>
+            )}
 
             <button
               type="button"
@@ -343,11 +464,10 @@ const VirtualCard: React.FC = () => {
             <button
               type="button"
               style={styles.secondaryButton}
-              onClick={() => navigate('/')}
+              onClick={goHome}
             >
               Cancel
             </button>
-
           </>
         )}
 
@@ -357,7 +477,6 @@ const VirtualCard: React.FC = () => {
 
         {step === 'pin' && (
           <>
-
             <div style={styles.iconCircle}>
               🔐
             </div>
@@ -367,7 +486,8 @@ const VirtualCard: React.FC = () => {
             </h1>
 
             <p style={styles.description}>
-              Choose a secure 4-digit PIN for your virtual card.
+              Choose a secure 4-digit PIN for your
+              virtual card.
             </p>
 
             <div style={styles.formCard}>
@@ -384,7 +504,10 @@ const VirtualCard: React.FC = () => {
                 value={pin}
                 onChange={(event) => {
                   const value =
-                    event.target.value.replace(/\D/g, '');
+                    event.target.value.replace(
+                      /\D/g,
+                      ''
+                    );
 
                   setPin(value);
                   setError('');
@@ -416,11 +539,10 @@ const VirtualCard: React.FC = () => {
             <button
               type="button"
               style={styles.secondaryButton}
-              onClick={() => navigate('/')}
+              onClick={goHome}
             >
               Cancel
             </button>
-
           </>
         )}
 
@@ -430,7 +552,6 @@ const VirtualCard: React.FC = () => {
 
         {step === 'confirm' && (
           <>
-
             <div style={styles.iconCircle}>
               ✓
             </div>
@@ -440,7 +561,8 @@ const VirtualCard: React.FC = () => {
             </h1>
 
             <p style={styles.description}>
-              Enter the same 4-digit PIN again to confirm.
+              Enter the same 4-digit PIN again to
+              confirm.
             </p>
 
             <div style={styles.formCard}>
@@ -457,7 +579,10 @@ const VirtualCard: React.FC = () => {
                 value={confirmPin}
                 onChange={(event) => {
                   const value =
-                    event.target.value.replace(/\D/g, '');
+                    event.target.value.replace(
+                      /\D/g,
+                      ''
+                    );
 
                   setConfirmPin(value);
                   setError('');
@@ -469,15 +594,26 @@ const VirtualCard: React.FC = () => {
             </div>
 
             <div style={styles.feeCard}>
-
               <span>
-                Card creation fee
+                One-time card creation fee
               </span>
 
               <strong>
                 ₦{CARD_FEE.toLocaleString()}
               </strong>
+            </div>
 
+            <div style={styles.warningCard}>
+              <strong>
+                Please confirm
+              </strong>
+
+              <p>
+                Once your card is successfully
+                created, ₦1,000 will be deducted
+                from your account. You will not be
+                charged again for creating this card.
+              </p>
             </div>
 
             {error && (
@@ -488,10 +624,16 @@ const VirtualCard: React.FC = () => {
 
             <button
               type="button"
-              style={styles.primaryButton}
-              onClick={handleConfirm}
+              style={{
+                ...styles.primaryButton,
+                opacity: loading ? 0.7 : 1,
+              }}
+              onClick={handleCreateCard}
+              disabled={loading}
             >
-              Create Virtual Card
+              {loading
+                ? 'Creating Card...'
+                : 'Create Virtual Card'}
             </button>
 
             <button
@@ -501,10 +643,10 @@ const VirtualCard: React.FC = () => {
                 setError('');
                 setStep('pin');
               }}
+              disabled={loading}
             >
               Back
             </button>
-
           </>
         )}
 
@@ -512,9 +654,8 @@ const VirtualCard: React.FC = () => {
             EXISTING / CREATED CARD
         ==================================================== */}
 
-        {step === 'created' && (
+        {step === 'created' && card && (
           <>
-
             <div style={styles.successIcon}>
               ✓
             </div>
@@ -524,8 +665,8 @@ const VirtualCard: React.FC = () => {
             </h1>
 
             <p style={styles.description}>
-              Your virtual card is already created.
-              Card creation is a one-time process.
+              Your virtual card is active and ready
+              for supported online payments.
             </p>
 
             {/* ==================================================
@@ -534,94 +675,161 @@ const VirtualCard: React.FC = () => {
 
             <div style={styles.virtualCard}>
 
-              <div style={styles.cardTop}>
+              <div style={styles.cardGlowOne} />
+              <div style={styles.cardGlowTwo} />
 
-                <div style={styles.cardBrand}>
-                  ZENIMONIES
+              <div style={styles.cardContent}>
+
+                <div style={styles.cardTop}>
+
+                  <div style={styles.cardBrand}>
+                    ZENIMONIES
+                  </div>
+
+                  <div style={styles.cardChip}>
+                    ▦
+                  </div>
+
                 </div>
 
-                <div style={styles.cardChip}>
-                  ▦
+                <div style={styles.cardType}>
+                  VIRTUAL
+                </div>
+
+                <div style={styles.cardNumber}>
+                  {card.card_number}
+                </div>
+
+                <div style={styles.cardBottom}>
+
+                  <div>
+                    <div style={styles.cardSmallLabel}>
+                      VALID THRU
+                    </div>
+
+                    <div style={styles.cardValue}>
+                      {card.expiry_month}/
+                      {card.expiry_year}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={styles.cardSmallLabel}>
+                      CVV
+                    </div>
+
+                    <div style={styles.cardValue}>
+                      {cardCvv || '•••'}
+                    </div>
+                  </div>
+
+                  <div style={styles.activeBadge}>
+                    ACTIVE
+                  </div>
+
                 </div>
 
               </div>
+            </div>
 
-              <div style={styles.cardNumber}>
-                {showCardDetails
-                  ? cardNumber
-                  : maskedCardNumber()}
+            {/* ==================================================
+                CARD DETAILS
+            ================================================== */}
+
+            <div style={styles.detailsCard}>
+
+              <div style={styles.detailRow}>
+                <span>
+                  Card number
+                </span>
+
+                <strong>
+                  {card.card_number}
+                </strong>
               </div>
 
-              <div style={styles.cardBottom}>
+              <div style={styles.divider} />
 
-                <div>
-                  <div style={styles.cardSmallLabel}>
-                    VALID THRU
-                  </div>
+              <div style={styles.detailRow}>
+                <span>
+                  Expiry
+                </span>
 
-                  <div style={styles.cardValue}>
-                    {displayedExpiry}
-                  </div>
-                </div>
+                <strong>
+                  {card.expiry_month}/
+                  {card.expiry_year}
+                </strong>
+              </div>
 
-                <div>
-                  <div style={styles.cardSmallLabel}>
-                    CVV
-                  </div>
+              <div style={styles.divider} />
 
-                  <div style={styles.cardValue}>
-                    {displayedCvv}
-                  </div>
-                </div>
+              <div style={styles.detailRow}>
+                <span>
+                  Status
+                </span>
 
+                <strong style={styles.activeText}>
+                  {card.status}
+                </strong>
+              </div>
+
+              <div style={styles.divider} />
+
+              <div style={styles.detailRow}>
+                <span>
+                  Card creation fee
+                </span>
+
+                <strong>
+                  ₦{Number(
+                    card.card_fee || CARD_FEE
+                  ).toLocaleString()}
+                </strong>
               </div>
 
             </div>
 
             {/* ==================================================
-                CARD ACTIONS
+                SECURITY NOTICE
             ================================================== */}
 
-            <button
-              type="button"
-              style={styles.secondaryButton}
-              onClick={() =>
-                setShowCardDetails(
-                  (previous) => !previous
-                )
-              }
-            >
-              {showCardDetails
-                ? 'Hide Card Details'
-                : 'Show Card Details'}
-            </button>
+            <div style={styles.securityNotice}>
+              <div style={styles.securityIcon}>
+                🔒
+              </div>
 
-            <div style={styles.successNotice}>
+              <div>
+                <strong>
+                  Keep your card details secure
+                </strong>
 
-              <strong>
-                Virtual card created successfully
-              </strong>
-
-              <p style={styles.noticeText}>
-                Card creation fee: ₦
-                {CARD_FEE.toLocaleString()}
-              </p>
-
-              <p style={styles.noticeText}>
-                You can return to this page at any time
-                to access your existing virtual card.
-              </p>
-
+                <p>
+                  Never share your card PIN or CVV
+                  with anyone.
+                </p>
+              </div>
             </div>
+
+            {cardCvv && (
+              <div style={styles.cvvNotice}>
+                <strong>
+                  Your CVV is shown for this session
+                </strong>
+
+                <p>
+                  For security, the CVV is not stored
+                  as plain text by Zenimonies.
+                </p>
+              </div>
+            )}
 
             <button
               type="button"
               style={styles.primaryButton}
-              onClick={() => navigate('/')}
+              onClick={goHome}
             >
               Back to Dashboard
             </button>
-
           </>
         )}
 
@@ -648,7 +856,6 @@ const VirtualCard: React.FC = () => {
         </div>
 
       </main>
-
     </div>
   );
 };
@@ -657,7 +864,10 @@ const VirtualCard: React.FC = () => {
    STYLES
 ============================================================ */
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
 
   page: {
     minHeight: '100vh',
@@ -706,6 +916,37 @@ const styles: Record<string, React.CSSProperties> = {
     width: 'min(620px, 92%)',
     margin: '0 auto',
     paddingTop: 30,
+  },
+
+  loadingContainer: {
+    textAlign: 'center',
+    paddingTop: 100,
+  },
+
+  spinner: {
+    width: 60,
+    height: 60,
+    margin: '0 auto 20px',
+    borderRadius: '50%',
+    background: '#e0f5e9',
+    color: '#078b4a',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 30,
+  },
+
+  loadingTitle: {
+    margin: 0,
+    color: '#063b2d',
+    fontSize: 21,
+    fontWeight: 800,
+  },
+
+  loadingText: {
+    color: '#66756e',
+    fontSize: 13,
+    marginTop: 8,
   },
 
   iconCircle: {
@@ -790,6 +1031,38 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '5px 0 0',
   },
 
+  oneTimeNotice: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 11,
+    background: '#effbf5',
+    border: '1px solid #d1eddf',
+    borderRadius: 15,
+    padding: 15,
+    marginTop: 12,
+    color: '#075e38',
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+
+  checkCircle: {
+    width: 24,
+    height: 24,
+    flexShrink: 0,
+    borderRadius: '50%',
+    background: '#079447',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800,
+  },
+
+  oneTimeText: {
+    margin: '4px 0 0',
+    color: '#557064',
+  },
+
   primaryButton: {
     width: '100%',
     border: 'none',
@@ -859,6 +1132,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 12,
     marginTop: 14,
     fontSize: 13,
+    lineHeight: 1.5,
   },
 
   feeCard: {
@@ -870,14 +1144,26 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 15,
     color: '#075e38',
     fontSize: 14,
+  },
+
+  warningCard: {
+    marginTop: 12,
+    background: '#fff9e8',
+    border: '1px solid #f1dfaa',
+    borderRadius: 14,
+    padding: 15,
+    color: '#755c18',
+    fontSize: 13,
+    lineHeight: 1.5,
   },
 
   virtualCard: {
     position: 'relative',
     overflow: 'hidden',
-    minHeight: 220,
+    minHeight: 235,
     borderRadius: 23,
     padding: 24,
     boxSizing: 'border-box',
@@ -886,6 +1172,33 @@ const styles: Record<string, React.CSSProperties> = {
       'linear-gradient(135deg, #063b2d 0%, #087c43 55%, #09a65a 100%)',
     boxShadow:
       '0 16px 35px rgba(0,91,48,0.22)',
+  },
+
+  cardContent: {
+    position: 'relative',
+    zIndex: 2,
+  },
+
+  cardGlowOne: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: '50%',
+    background:
+      'rgba(255,255,255,0.08)',
+    right: -70,
+    top: -70,
+  },
+
+  cardGlowTwo: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: '50%',
+    background:
+      'rgba(255,255,255,0.06)',
+    left: -80,
+    bottom: -80,
   },
 
   cardTop: {
@@ -904,18 +1217,27 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 28,
   },
 
+  cardType: {
+    marginTop: 7,
+    fontSize: 8,
+    letterSpacing: 2,
+    opacity: 0.65,
+  },
+
   cardNumber: {
-    marginTop: 45,
-    fontSize: 'clamp(20px, 5vw, 27px)',
+    marginTop: 42,
+    fontSize:
+      'clamp(17px, 5vw, 27px)',
     fontWeight: 700,
     letterSpacing: 2,
     whiteSpace: 'nowrap',
   },
 
   cardBottom: {
-    marginTop: 28,
+    marginTop: 25,
     display: 'flex',
-    gap: 50,
+    alignItems: 'flex-end',
+    gap: 30,
   },
 
   cardSmallLabel: {
@@ -931,14 +1253,73 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 1,
   },
 
-  successNotice: {
-    background: '#effbf5',
-    border: '1px solid #d1eddf',
+  activeBadge: {
+    marginLeft: 'auto',
+    fontSize: 9,
+    fontWeight: 800,
+    letterSpacing: 1,
+    background:
+      'rgba(255,255,255,0.16)',
+    border:
+      '1px solid rgba(255,255,255,0.25)',
+    padding: '5px 8px',
+    borderRadius: 7,
+  },
+
+  detailsCard: {
+    marginTop: 15,
+    background: '#ffffff',
+    border: '1px solid #e1ebe6',
+    borderRadius: 17,
+    padding: 17,
+    boxShadow:
+      '0 7px 22px rgba(26,61,47,0.05)',
+  },
+
+  detailRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 15,
+    fontSize: 13,
+    color: '#66756e',
+  },
+
+  activeText: {
+    color: '#078b4a',
+    textTransform: 'capitalize',
+  },
+
+  securityNotice: {
+    marginTop: 14,
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 11,
+    background: '#f5f7f6',
+    border: '1px solid #e1e7e4',
     borderRadius: 15,
     padding: 15,
-    marginTop: 15,
-    color: '#075e38',
+    color: '#344054',
     fontSize: 13,
+    lineHeight: 1.5,
+  },
+
+  securityIcon: {
+    fontSize: 20,
+  },
+
+  securityNoticeP: {
+    margin: '4px 0 0',
+  },
+
+  cvvNotice: {
+    marginTop: 12,
+    background: '#effbf5',
+    border: '1px solid #d1eddf',
+    borderRadius: 14,
+    padding: 14,
+    color: '#075e38',
+    fontSize: 12,
     lineHeight: 1.5,
   },
 
