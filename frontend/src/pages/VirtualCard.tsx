@@ -1,41 +1,122 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const CARD_FEE = 1000;
 
+type Step = 'start' | 'pin' | 'confirm' | 'created';
+
+interface SavedVirtualCard {
+  cardNumber: string;
+  expiry: string;
+  cvv: string;
+  created: boolean;
+}
+
+const STORAGE_KEY = 'zenimonies_virtual_card';
+
 const VirtualCard: React.FC = () => {
   const navigate = useNavigate();
 
-  const [step, setStep] = useState<'start' | 'pin' | 'confirm' | 'created'>(
-    'start'
-  );
+  const [step, setStep] = useState<Step>('start');
 
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+
   const [error, setError] = useState('');
 
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
 
+  const [showCardDetails, setShowCardDetails] = useState(false);
+
+  /*
+   * ============================================================
+   * LOAD EXISTING CARD
+   * ============================================================
+   *
+   * If the user has already created a card, do NOT show the
+   * creation screen again.
+   */
+
+  useEffect(() => {
+    try {
+      const savedCard = localStorage.getItem(STORAGE_KEY);
+
+      if (!savedCard) {
+        setStep('start');
+        return;
+      }
+
+      const parsedCard: SavedVirtualCard = JSON.parse(savedCard);
+
+      if (
+        parsedCard &&
+        parsedCard.created &&
+        parsedCard.cardNumber &&
+        parsedCard.expiry &&
+        parsedCard.cvv
+      ) {
+        setCardNumber(parsedCard.cardNumber);
+        setExpiry(parsedCard.expiry);
+        setCvv(parsedCard.cvv);
+        setStep('created');
+      }
+    } catch (storageError) {
+      console.error(
+        'Unable to load virtual card:',
+        storageError
+      );
+
+      setStep('start');
+    }
+  }, []);
+
+  /*
+   * ============================================================
+   * START CARD CREATION
+   * ============================================================
+   */
+
   const handleStart = () => {
     setError('');
     setStep('pin');
   };
 
+  /*
+   * ============================================================
+   * FIRST PIN
+   * ============================================================
+   */
+
   const handlePinContinue = () => {
     setError('');
 
     if (!/^\d{4}$/.test(pin)) {
-      setError('Your card PIN must contain exactly 4 digits.');
+      setError(
+        'Your card PIN must contain exactly 4 digits.'
+      );
       return;
     }
 
     setStep('confirm');
   };
 
+  /*
+   * ============================================================
+   * CREATE CARD
+   * ============================================================
+   */
+
   const handleConfirm = () => {
     setError('');
+
+    if (!/^\d{4}$/.test(confirmPin)) {
+      setError(
+        'Please enter your 4-digit card PIN again.'
+      );
+      return;
+    }
 
     if (pin !== confirmPin) {
       setError('The PINs do not match.');
@@ -43,19 +124,16 @@ const VirtualCard: React.FC = () => {
     }
 
     /*
-      FRONTEND DEMO ONLY
-
-      In production, this action must call the backend.
-      The backend must:
-      1. Verify the logged-in user.
-      2. Check the account balance.
-      3. Debit ₦1,000.
-      4. Create the virtual card.
-      5. Store the PIN securely.
-      6. Return the card details securely.
-
-      Never trust a frontend-only balance check for real money.
-    */
+     * IMPORTANT:
+     *
+     * This frontend version generates demonstration card
+     * details and remembers the card in localStorage.
+     *
+     * The REAL ₦1,000 debit must be performed by the
+     * Zenimonies backend after checking the user's balance.
+     *
+     * The card PIN must NEVER be stored in localStorage.
+     */
 
     const generatedCardNumber =
       '5399 ' +
@@ -70,20 +148,105 @@ const VirtualCard: React.FC = () => {
     );
 
     const today = new Date();
-    const expiryYear = String(today.getFullYear() + 3).slice(-2);
-    const expiryMonth = String(today.getMonth() + 1).padStart(2, '0');
+
+    const expiryMonth = String(
+      today.getMonth() + 1
+    ).padStart(2, '0');
+
+    const expiryYear = String(
+      today.getFullYear() + 3
+    ).slice(-2);
+
+    const generatedExpiry =
+      `${expiryMonth}/${expiryYear}`;
+
+    /*
+     * Save the card so that returning to this page later
+     * shows the existing card.
+     */
+
+    const savedCard: SavedVirtualCard = {
+      cardNumber: generatedCardNumber,
+      expiry: generatedExpiry,
+      cvv: generatedCvv,
+      created: true,
+    };
+
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(savedCard)
+      );
+    } catch (storageError) {
+      console.error(
+        'Unable to save virtual card:',
+        storageError
+      );
+    }
 
     setCardNumber(generatedCardNumber);
+    setExpiry(generatedExpiry);
     setCvv(generatedCvv);
-    setExpiry(`${expiryMonth}/${expiryYear}`);
+
+    /*
+     * Clear PIN values from React state after creation.
+     */
+
+    setPin('');
+    setConfirmPin('');
 
     setStep('created');
   };
 
+  /*
+   * ============================================================
+   * MASK CARD NUMBER
+   * ============================================================
+   */
+
+  const maskedCardNumber = () => {
+    if (!cardNumber) {
+      return '•••• •••• •••• ••••';
+    }
+
+    const parts = cardNumber.split(' ');
+
+    if (parts.length !== 4) {
+      return '•••• •••• •••• ••••';
+    }
+
+    return (
+      '•••• •••• •••• ' +
+      parts[3]
+    );
+  };
+
+  /*
+   * ============================================================
+   * MASK CVV
+   * ============================================================
+   */
+
+  const displayedCvv = showCardDetails
+    ? cvv
+    : '•••';
+
+  /*
+   * ============================================================
+   * MASK EXPIRY
+   * ============================================================
+   */
+
+  const displayedExpiry = showCardDetails
+    ? expiry
+    : '••/••';
+
   return (
     <div style={styles.page}>
 
-      {/* ================= HEADER ================= */}
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
 
       <header style={styles.header}>
 
@@ -91,6 +254,7 @@ const VirtualCard: React.FC = () => {
           type="button"
           style={styles.backButton}
           onClick={() => navigate('/')}
+          aria-label="Back"
         >
           ←
         </button>
@@ -103,12 +267,19 @@ const VirtualCard: React.FC = () => {
 
       </header>
 
-      {/* ================= CONTENT ================= */}
+      {/* ======================================================
+          MAIN
+      ====================================================== */}
 
       <main style={styles.main}>
 
+        {/* ====================================================
+            START
+        ==================================================== */}
+
         {step === 'start' && (
           <>
+
             <div style={styles.iconCircle}>
               ▣
             </div>
@@ -118,8 +289,8 @@ const VirtualCard: React.FC = () => {
             </h1>
 
             <p style={styles.description}>
-              Create a virtual card that you can use for supported
-              online payments.
+              Create a virtual card that you can use for
+              supported online payments.
             </p>
 
             <div style={styles.infoCard}>
@@ -142,21 +313,23 @@ const VirtualCard: React.FC = () => {
                 </span>
 
                 <strong>
-                  ₦1,000
+                  ₦{CARD_FEE.toLocaleString()}
                 </strong>
               </div>
 
             </div>
 
             <div style={styles.notice}>
+
               <strong>
                 Before you continue
               </strong>
 
               <p style={styles.noticeText}>
-                ₦1,000 will be charged from your Zenimonies
-                account when the card is successfully created.
+                A ₦{CARD_FEE.toLocaleString()} card creation
+                fee applies when your virtual card is created.
               </p>
+
             </div>
 
             <button
@@ -174,11 +347,17 @@ const VirtualCard: React.FC = () => {
             >
               Cancel
             </button>
+
           </>
         )}
 
+        {/* ====================================================
+            PIN
+        ==================================================== */}
+
         {step === 'pin' && (
           <>
+
             <div style={styles.iconCircle}>
               🔐
             </div>
@@ -200,10 +379,13 @@ const VirtualCard: React.FC = () => {
               <input
                 type="password"
                 inputMode="numeric"
+                autoComplete="new-password"
                 maxLength={4}
                 value={pin}
                 onChange={(event) => {
-                  const value = event.target.value.replace(/\D/g, '');
+                  const value =
+                    event.target.value.replace(/\D/g, '');
+
                   setPin(value);
                   setError('');
                 }}
@@ -238,11 +420,17 @@ const VirtualCard: React.FC = () => {
             >
               Cancel
             </button>
+
           </>
         )}
 
+        {/* ====================================================
+            CONFIRM PIN
+        ==================================================== */}
+
         {step === 'confirm' && (
           <>
+
             <div style={styles.iconCircle}>
               ✓
             </div>
@@ -264,10 +452,13 @@ const VirtualCard: React.FC = () => {
               <input
                 type="password"
                 inputMode="numeric"
+                autoComplete="new-password"
                 maxLength={4}
                 value={confirmPin}
                 onChange={(event) => {
-                  const value = event.target.value.replace(/\D/g, '');
+                  const value =
+                    event.target.value.replace(/\D/g, '');
+
                   setConfirmPin(value);
                   setError('');
                 }}
@@ -278,13 +469,15 @@ const VirtualCard: React.FC = () => {
             </div>
 
             <div style={styles.feeCard}>
+
               <span>
                 Card creation fee
               </span>
 
               <strong>
-                ₦1,000
+                ₦{CARD_FEE.toLocaleString()}
               </strong>
+
             </div>
 
             {error && (
@@ -304,28 +497,40 @@ const VirtualCard: React.FC = () => {
             <button
               type="button"
               style={styles.secondaryButton}
-              onClick={() => setStep('pin')}
+              onClick={() => {
+                setError('');
+                setStep('pin');
+              }}
             >
               Back
             </button>
+
           </>
         )}
 
+        {/* ====================================================
+            EXISTING / CREATED CARD
+        ==================================================== */}
+
         {step === 'created' && (
           <>
+
             <div style={styles.successIcon}>
               ✓
             </div>
 
             <h1 style={styles.title}>
-              Virtual Card Created
+              Your Virtual Card
             </h1>
 
             <p style={styles.description}>
-              Your virtual card has been created successfully.
+              Your virtual card is already created.
+              Card creation is a one-time process.
             </p>
 
-            {/* ================= VIRTUAL CARD ================= */}
+            {/* ==================================================
+                CARD
+            ================================================== */}
 
             <div style={styles.virtualCard}>
 
@@ -342,7 +547,9 @@ const VirtualCard: React.FC = () => {
               </div>
 
               <div style={styles.cardNumber}>
-                {cardNumber}
+                {showCardDetails
+                  ? cardNumber
+                  : maskedCardNumber()}
               </div>
 
               <div style={styles.cardBottom}>
@@ -353,7 +560,7 @@ const VirtualCard: React.FC = () => {
                   </div>
 
                   <div style={styles.cardValue}>
-                    {expiry}
+                    {displayedExpiry}
                   </div>
                 </div>
 
@@ -363,7 +570,7 @@ const VirtualCard: React.FC = () => {
                   </div>
 
                   <div style={styles.cardValue}>
-                    {cvv}
+                    {displayedCvv}
                   </div>
                 </div>
 
@@ -371,16 +578,40 @@ const VirtualCard: React.FC = () => {
 
             </div>
 
+            {/* ==================================================
+                CARD ACTIONS
+            ================================================== */}
+
+            <button
+              type="button"
+              style={styles.secondaryButton}
+              onClick={() =>
+                setShowCardDetails(
+                  (previous) => !previous
+                )
+              }
+            >
+              {showCardDetails
+                ? 'Hide Card Details'
+                : 'Show Card Details'}
+            </button>
+
             <div style={styles.successNotice}>
+
               <strong>
-                Card creation fee: ₦1,000
+                Virtual card created successfully
               </strong>
 
               <p style={styles.noticeText}>
-                Your card fee will be deducted from your
-                Zenimonies account when this feature is
-                connected to the live banking backend.
+                Card creation fee: ₦
+                {CARD_FEE.toLocaleString()}
               </p>
+
+              <p style={styles.noticeText}>
+                You can return to this page at any time
+                to access your existing virtual card.
+              </p>
+
             </div>
 
             <button
@@ -390,10 +621,13 @@ const VirtualCard: React.FC = () => {
             >
               Back to Dashboard
             </button>
+
           </>
         )}
 
-        {/* ================= PHYSICAL CARD ================= */}
+        {/* ====================================================
+            PHYSICAL CARD
+        ==================================================== */}
 
         <div style={styles.physicalCard}>
 
@@ -419,9 +653,9 @@ const VirtualCard: React.FC = () => {
   );
 };
 
-/* =========================================================
+/* ============================================================
    STYLES
-========================================================= */
+============================================================ */
 
 const styles: Record<string, React.CSSProperties> = {
 
@@ -523,7 +757,8 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #e1ebe6',
     borderRadius: 18,
     padding: 18,
-    boxShadow: '0 7px 22px rgba(26,61,47,0.05)',
+    boxShadow:
+      '0 7px 22px rgba(26,61,47,0.05)',
   },
 
   infoRow: {
@@ -586,7 +821,8 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #e1ebe6',
     borderRadius: 18,
     padding: 20,
-    boxShadow: '0 7px 22px rgba(26,61,47,0.05)',
+    boxShadow:
+      '0 7px 22px rgba(26,61,47,0.05)',
   },
 
   label: {
@@ -648,7 +884,8 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#ffffff',
     background:
       'linear-gradient(135deg, #063b2d 0%, #087c43 55%, #09a65a 100%)',
-    boxShadow: '0 16px 35px rgba(0,91,48,0.22)',
+    boxShadow:
+      '0 16px 35px rgba(0,91,48,0.22)',
   },
 
   cardTop: {
