@@ -26,7 +26,7 @@ import Data from './pages/Data.tsx';
 import Bills from './pages/Bills.tsx';
 import Betting from './pages/Betting.tsx';
 import VirtualCard from './pages/VirtualCard.tsx';
-import Admin from './pages/Admin.tsx';
+import Admin from './pages/AdminDashboard.tsx';
 
 interface ServicePageProps {
   title: string;
@@ -314,7 +314,7 @@ const App: React.FC = () => {
         />
         <Route
           path="/admin"
-          element={<Admin />}
+          element={<AdminDashboard />}
         />
 
         {/* ACCOUNT */}
