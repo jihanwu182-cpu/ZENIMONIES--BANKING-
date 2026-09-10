@@ -885,12 +885,12 @@ SET
 WHERE kyc_tier = 2;
 
 
+
 UPDATE users
 SET
-    account_limit = NULL,
+    account_limit = 999999999999.99,
     daily_transfer_limit = 5000000.00
 WHERE kyc_tier = 3;
-
 
 -- ============================================================
 -- END OF ZENIMONIES DATABASE SCHEMA
