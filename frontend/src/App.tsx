@@ -25,6 +25,7 @@ import Airtime from './pages/Airtime.tsx';
 import Data from './pages/Data.tsx';
 import Bills from './pages/Bills.tsx';
 import Betting from './pages/Betting.tsx';
+import VirtualCard from './pages/VirtualCard.tsx';
 
 /* ============================================================
    SIMPLE SERVICE PAGE
@@ -419,6 +420,14 @@ const App: React.FC = () => {
             />
           }
         />
+        <Route
+          path="/virtual-card"
+          element={
+           <ProtectedRoute>
+           <VirtualCard />
+          </ProtectedRoute>
+         }
+       />
 
         {/* ====================================================
             AIRTIME & DATA
