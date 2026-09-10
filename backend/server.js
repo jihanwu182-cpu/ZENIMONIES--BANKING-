@@ -19,6 +19,7 @@ const internalTransferRoutes = require('./routes/internalTransfer');
 const depositRoutes = require('./routes/deposit');
 const bankRoutes = require('./routes/bankRoutes');
 const virtualCardRoutes = require('./routes/virtualCard');
+const adminRoutes = require('./routes/admin');
 
 // ============================================================
 // PAYSTACK WEBHOOK
@@ -40,9 +41,23 @@ const PORT = process.env.PORT || 5000;
 // MIDDLEWARE
 // ============================================================
 
-app.use(cors());
+// Allow frontend requests
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
 
+// Parse JSON requests
 app.use(express.json());
+
+// Parse URL-encoded requests
+app.use(
+  express.urlencoded({
+    extended: true,
+  })
+);
 
 // ============================================================
 // PAYSTACK WEBHOOK
@@ -57,11 +72,23 @@ app.post(
 // API ROUTES
 // ============================================================
 
-app.use('/api/auth', authRoutes);
+// Authentication
+app.use(
+  '/api/auth',
+  authRoutes
+);
 
-app.use('/api/account', accountRoutes);
+// Customer accounts
+app.use(
+  '/api/account',
+  accountRoutes
+);
 
-app.use('/api/transfers', transferRoutes);
+// External bank transfers
+app.use(
+  '/api/transfers',
+  transferRoutes
+);
 
 // Zenimonies-to-Zenimonies transfers
 app.use(
@@ -69,9 +96,32 @@ app.use(
   internalTransferRoutes
 );
 
-app.use('/api/deposits', depositRoutes);
+// Deposits
+app.use(
+  '/api/deposits',
+  depositRoutes
+);
 
-app.use('/api/banks', bankRoutes);
+// Banks
+app.use(
+  '/api/banks',
+  bankRoutes
+);
+
+// Virtual cards
+app.use(
+  '/api/virtual-cards',
+  virtualCardRoutes
+);
+
+// ============================================================
+// ADMIN DASHBOARD
+// ============================================================
+
+app.use(
+  '/api/admin',
+  adminRoutes
+);
 
 // ============================================================
 // ROOT ROUTE
@@ -80,7 +130,8 @@ app.use('/api/banks', bankRoutes);
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Zenimonies Banking API is running',
+    message:
+      'Zenimonies Banking API is running',
   });
 });
 
@@ -91,7 +142,8 @@ app.get('/', (req, res) => {
 app.get('/api', (req, res) => {
   res.json({
     success: true,
-    message: 'Zenimonies Banking API is running',
+    message:
+      'Zenimonies Banking API is running',
   });
 });
 
@@ -104,7 +156,8 @@ app.get('/health.json', (req, res) => {
     success: true,
     status: 'ok',
     platform: 'Zenimonies',
-    timestamp: new Date().toISOString(),
+    timestamp:
+      new Date().toISOString(),
   });
 });
 
@@ -128,13 +181,16 @@ app.get(
   async (req, res) => {
     try {
       const result =
-        await pool.query('SELECT NOW()');
+        await pool.query(
+          'SELECT NOW()'
+        );
 
       res.json({
         success: true,
         status: 'healthy',
         database: 'connected',
-        time: result.rows[0].now,
+        time:
+          result.rows[0].now,
       });
     } catch (error) {
       console.error(
@@ -155,28 +211,42 @@ app.get(
 // 404 HANDLER
 // ============================================================
 
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route not found',
-    path: req.originalUrl,
-  });
-});
+app.use(
+  (req, res) => {
+    res.status(404).json({
+      success: false,
+      message:
+        'Route not found',
+      path:
+        req.originalUrl,
+    });
+  }
+);
 
 // ============================================================
 // GLOBAL ERROR HANDLER
 // ============================================================
 
 app.use(
-  (err, req, res, next) => {
+  (
+    err,
+    req,
+    res,
+    next
+  ) => {
     console.error(
       'Server error:',
       err
     );
 
+    if (res.headersSent) {
+      return next(err);
+    }
+
     res.status(500).json({
       success: false,
-      message: 'Internal server error',
+      message:
+        'Internal server error',
     });
   }
 );
@@ -187,21 +257,84 @@ app.use(
 
 const startServer = async () => {
   try {
+    // --------------------------------------------------------
+    // INITIALIZE DATABASE
+    // --------------------------------------------------------
+
     await initializeDatabase();
 
-    app.listen(PORT, () => {
-      console.log(
-        `Zenimonies Banking API running on port ${PORT}`
-      );
+    // --------------------------------------------------------
+    // START EXPRESS SERVER
+    // --------------------------------------------------------
 
-      console.log(
-        'Paystack webhook endpoint: /api/paystack/webhook'
-      );
+    app.listen(
+      PORT,
+      () => {
+        console.log(
+          `Zenimonies Banking API running on port ${PORT}`
+        );
 
-      console.log(
-        'Zenimonies internal transfer endpoint: /api/internal-transfers'
-      );
-    });
+        console.log(
+          'API:',
+          '/api'
+        );
+
+        console.log(
+          'Health:',
+          '/api/health'
+        );
+
+        console.log(
+          'Database Health:',
+          '/api/health/database'
+        );
+
+        console.log(
+          'Auth:',
+          '/api/auth'
+        );
+
+        console.log(
+          'Accounts:',
+          '/api/account'
+        );
+
+        console.log(
+          'Transfers:',
+          '/api/transfers'
+        );
+
+        console.log(
+          'Internal Transfers:',
+          '/api/internal-transfers'
+        );
+
+        console.log(
+          'Deposits:',
+          '/api/deposits'
+        );
+
+        console.log(
+          'Banks:',
+          '/api/banks'
+        );
+
+        console.log(
+          'Virtual Cards:',
+          '/api/virtual-cards'
+        );
+
+        console.log(
+          'Admin:',
+          '/api/admin'
+        );
+
+        console.log(
+          'Paystack Webhook:',
+          '/api/paystack/webhook'
+        );
+      }
+    );
   } catch (error) {
     console.error(
       'Unable to start Zenimonies Banking API:',
@@ -211,5 +344,9 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+
+// ============================================================
+// START
+// ============================================================
 
 startServer();
