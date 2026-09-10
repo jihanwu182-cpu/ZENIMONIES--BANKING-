@@ -3,9 +3,11 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
 const pool = require('../config/database');
+
 const {
-  generateAccountNumber,
-} = require('../utils/accountNumber');
+  createPaystackCustomer,
+  createDedicatedVirtualAccount,
+} = require('../services/paystackService');
 
 
 // ============================================================
@@ -60,6 +62,76 @@ const createAccessToken = (user) => {
 };
 
 
+const getBearerToken = (req) => {
+  const authHeader =
+    req.headers.authorization;
+
+  if (
+    !authHeader ||
+    !authHeader.startsWith('Bearer ')
+  ) {
+    return null;
+  }
+
+  return authHeader.substring(7).trim();
+};
+
+
+const verifyJwt = (req) => {
+  const token = getBearerToken(req);
+
+  if (!token) {
+    return {
+      valid: false,
+      status: 401,
+      message:
+        'Authentication token is required',
+    };
+  }
+
+  if (!process.env.JWT_SECRET) {
+    return {
+      valid: false,
+      status: 500,
+      message:
+        'Authentication service is not configured',
+    };
+  }
+
+  try {
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
+
+    if (
+      !decoded ||
+      !decoded.userId
+    ) {
+      return {
+        valid: false,
+        status: 401,
+        message:
+          'Invalid authentication token',
+      };
+    }
+
+    return {
+      valid: true,
+      decoded,
+    };
+
+  } catch (error) {
+    return {
+      valid: false,
+      status: 401,
+      message:
+        'Invalid or expired authentication token',
+    };
+  }
+};
+
+
 // ============================================================
 // CREATE PHONE OTP
 // ============================================================
@@ -70,7 +142,7 @@ const createPhoneOtp = async (
 ) => {
 
   // ----------------------------------------------------------
-  // INVALIDATE PREVIOUS PHONE OTPs
+  // Invalidate previous unused OTPs
   // ----------------------------------------------------------
 
   await client.query(
@@ -86,7 +158,7 @@ const createPhoneOtp = async (
 
 
   // ----------------------------------------------------------
-  // GENERATE OTP
+  // Generate OTP
   // ----------------------------------------------------------
 
   const otp = generateOtp();
@@ -95,7 +167,7 @@ const createPhoneOtp = async (
 
 
   // ----------------------------------------------------------
-  // EXPIRATION
+  // Expiration
   // ----------------------------------------------------------
 
   const expiresAt = new Date(
@@ -105,7 +177,7 @@ const createPhoneOtp = async (
 
 
   // ----------------------------------------------------------
-  // STORE HASH
+  // Store hashed OTP
   // ----------------------------------------------------------
 
   await client.query(
@@ -140,8 +212,13 @@ const createPhoneOtp = async (
 // POST /api/auth/register
 // ============================================================
 
-const register = async (req, res) => {
-  const client = await pool.connect();
+const register = async (
+  req,
+  res
+) => {
+
+  const client =
+    await pool.connect();
 
   try {
 
@@ -217,7 +294,9 @@ const register = async (req, res) => {
     }
 
 
-    if (normalizedPassword.length < 8) {
+    if (
+      normalizedPassword.length < 8
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -227,10 +306,28 @@ const register = async (req, res) => {
 
 
     // --------------------------------------------------------
-    // TRANSACTION
+    // SPLIT NAME FOR PAYSTACK
     // --------------------------------------------------------
 
-    await client.query('BEGIN');
+    const nameParts =
+      normalizedFullName.split(/\s+/);
+
+    const firstName =
+      nameParts.shift() ||
+      normalizedFullName;
+
+    const lastName =
+      nameParts.join(' ') ||
+      undefined;
+
+
+    // --------------------------------------------------------
+    // START TRANSACTION
+    // --------------------------------------------------------
+
+    await client.query(
+      'BEGIN'
+    );
 
 
     // --------------------------------------------------------
@@ -256,7 +353,9 @@ const register = async (req, res) => {
       );
 
 
-    if (existingUser.rows.length > 0) {
+    if (
+      existingUser.rows.length > 0
+    ) {
 
       await client.query(
         'ROLLBACK'
@@ -356,6 +455,7 @@ const register = async (req, res) => {
           account_limit,
           daily_transfer_limit,
           daily_transfer_used,
+          daily_transfer_reset_at,
           created_at
         `,
         [
@@ -371,54 +471,124 @@ const register = async (req, res) => {
       userResult.rows[0];
 
 
-    // --------------------------------------------------------
-    // GENERATE UNIQUE ACCOUNT NUMBER
-    // --------------------------------------------------------
+    // ========================================================
+    // CREATE PAYSTACK CUSTOMER
+    // ========================================================
 
-    let accountNumber = null;
+    const paystackCustomer =
+      await createPaystackCustomer({
+        email:
+          normalizedEmail,
+
+        firstName,
+
+        lastName,
+
+        phone:
+          normalizedPhone,
+      });
 
 
-    for (
-      let attempt = 0;
-      attempt < 10;
-      attempt += 1
+    if (
+      !paystackCustomer ||
+      !paystackCustomer.status ||
+      !paystackCustomer.data
     ) {
-
-      const candidate =
-        generateAccountNumber('10');
-
-
-      const existingAccount =
-        await client.query(
-          `
-          SELECT id
-          FROM accounts
-          WHERE account_number = $1
-          LIMIT 1
-          `,
-          [candidate]
-        );
-
-
-      if (
-        existingAccount.rows.length === 0
-      ) {
-        accountNumber = candidate;
-        break;
-      }
-    }
-
-
-    if (!accountNumber) {
       throw new Error(
-        'Unable to generate a unique account number'
+        'Paystack customer could not be created'
       );
     }
 
 
+    const paystackCustomerCode =
+      paystackCustomer.data.customer_code;
+
+
+    if (!paystackCustomerCode) {
+      throw new Error(
+        'Paystack customer code was not returned'
+      );
+    }
+
+
+    // ========================================================
+    // CREATE REAL PAYSTACK DEDICATED ACCOUNT
+    // ========================================================
+
+    const paystackAccount =
+      await createDedicatedVirtualAccount({
+        customerCode:
+          paystackCustomerCode,
+      });
+
+
+    if (
+      !paystackAccount ||
+      !paystackAccount.status ||
+      !paystackAccount.data
+    ) {
+      throw new Error(
+        'Paystack dedicated account could not be created'
+      );
+    }
+
+
+    const providerAccount =
+      paystackAccount.data;
+
+
     // --------------------------------------------------------
-    // CREATE ACCOUNT
+    // EXTRACT REAL PROVIDER ACCOUNT
     // --------------------------------------------------------
+
+    const providerAccountNumber =
+      providerAccount.account_number;
+
+    const providerAccountName =
+      providerAccount.account_name ||
+      normalizedFullName;
+
+    const providerBankName =
+      providerAccount.bank &&
+      providerAccount.bank.name
+        ? providerAccount.bank.name
+        : providerAccount.bank_name ||
+          null;
+
+    const providerBankCode =
+      providerAccount.bank &&
+      providerAccount.bank.id
+        ? String(
+            providerAccount.bank.id
+          )
+        : providerAccount.bank_code ||
+          null;
+
+    const providerAccountId =
+      providerAccount.id
+        ? String(providerAccount.id)
+        : null;
+
+
+    // --------------------------------------------------------
+    // CRITICAL VALIDATION
+    //
+    // We never create an account number ourselves.
+    // Paystack MUST return one.
+    // --------------------------------------------------------
+
+    if (!providerAccountNumber) {
+      throw new Error(
+        'Paystack did not return a real dedicated account number'
+      );
+    }
+
+
+    // ========================================================
+    // CREATE ZENIMONIES ACCOUNT
+    //
+    // account_number is the real Paystack-issued number.
+    // ========================================================
 
     const accountResult =
       await client.query(
@@ -450,7 +620,7 @@ const register = async (req, res) => {
         `,
         [
           user.id,
-          accountNumber,
+          providerAccountNumber,
         ]
       );
 
@@ -459,9 +629,59 @@ const register = async (req, res) => {
       accountResult.rows[0];
 
 
-    // --------------------------------------------------------
+    // ========================================================
+    // SAVE PROVIDER DEPOSIT ACCOUNT
+    // ========================================================
+
+    await client.query(
+      `
+      INSERT INTO deposit_accounts (
+        user_id,
+        account_number,
+        account_name,
+        bank_name,
+        bank_code,
+        currency,
+        status,
+        provider,
+        provider_customer_code,
+        provider_account_id
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        'NGN',
+        'active',
+        'paystack',
+        $6,
+        $7
+      )
+      `,
+      [
+        user.id,
+
+        providerAccountNumber,
+
+        providerAccountName,
+
+        providerBankName ||
+          'Paystack',
+
+        providerBankCode,
+
+        paystackCustomerCode,
+
+        providerAccountId,
+      ]
+    );
+
+
+    // ========================================================
     // CREATE PHONE OTP
-    // --------------------------------------------------------
+    // ========================================================
 
     const otp =
       await createPhoneOtp(
@@ -470,9 +690,9 @@ const register = async (req, res) => {
       );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // AUDIT LOG
-    // --------------------------------------------------------
+    // ========================================================
 
     await client.query(
       `
@@ -493,25 +713,31 @@ const register = async (req, res) => {
       `,
       [
         user.id,
-        'Customer account created successfully. Phone verification OTP generated.',
-        req.ip || null,
-        req.get('user-agent') || null,
+
+        'Customer account created with a real provider-issued dedicated receiving account. Phone verification OTP generated.',
+
+        req.ip ||
+          null,
+
+        req.get(
+          'user-agent'
+        ) || null,
       ]
     );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // COMMIT
-    // --------------------------------------------------------
+    // ========================================================
 
     await client.query(
       'COMMIT'
     );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // RESPONSE
-    // --------------------------------------------------------
+    // ========================================================
 
     return res.status(201).json({
 
@@ -524,6 +750,7 @@ const register = async (req, res) => {
         true,
 
       user: {
+
         id:
           user.id,
 
@@ -569,21 +796,57 @@ const register = async (req, res) => {
         daily_transfer_used:
           user.daily_transfer_used,
 
+        daily_transfer_reset_at:
+          user.daily_transfer_reset_at,
+
         created_at:
           user.created_at,
       },
 
-      account,
+      // ------------------------------------------------------
+      // REAL PAYSTACK-ISSUED ACCOUNT
+      // ------------------------------------------------------
+
+      account: {
+
+        id:
+          account.id,
+
+        account_number:
+          account.account_number,
+
+        account_name:
+          providerAccountName,
+
+        account_type:
+          account.account_type,
+
+        bank_name:
+          providerBankName,
+
+        bank_code:
+          providerBankCode,
+
+        currency:
+          account.currency,
+
+        balance:
+          account.balance,
+
+        status:
+          account.status,
+
+        created_at:
+          account.created_at,
+      },
 
       // ------------------------------------------------------
-      // TESTING ONLY
-      //
-      // REMOVE THIS BEFORE PRODUCTION.
-      // The SMS provider will send the OTP instead.
+      // DEVELOPMENT TESTING ONLY
       // ------------------------------------------------------
 
       development_otp:
-        process.env.NODE_ENV !== 'production'
+        process.env.NODE_ENV !==
+        'production'
           ? otp
           : undefined,
     });
@@ -623,6 +886,7 @@ const register = async (req, res) => {
     return res.status(500).json({
       success: false,
       message:
+        error?.message ||
         'Unable to create account',
     });
 
@@ -635,8 +899,8 @@ const register = async (req, res) => {
 
 
 // ============================================================
-// VERIFY PHONE
-// POST /api/auth/verify-phone
+// VERIFY PHONE OTP
+// POST /api/auth/verify-phone-otp
 // ============================================================
 
 const verifyPhone = async (
@@ -647,66 +911,34 @@ const verifyPhone = async (
   const client =
     await pool.connect();
 
-
   try {
 
-    const token =
-      req.headers.authorization
-        ?.startsWith('Bearer ')
-        ? req.headers.authorization.substring(7)
-        : null;
+    // --------------------------------------------------------
+    // AUTHENTICATION
+    // --------------------------------------------------------
+
+    const auth =
+      verifyJwt(req);
 
 
-    if (!token) {
-      return res.status(401).json({
+    if (!auth.valid) {
+      return res.status(
+        auth.status
+      ).json({
         success: false,
         message:
-          'Authentication token is required',
-      });
-    }
-
-
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({
-        success: false,
-        message:
-          'Authentication service is not configured',
-      });
-    }
-
-
-    let decoded;
-
-
-    try {
-
-      decoded =
-        jwt.verify(
-          token,
-          process.env.JWT_SECRET
-        );
-
-    } catch {
-      return res.status(401).json({
-        success: false,
-        message:
-          'Invalid or expired authentication token',
+          auth.message,
       });
     }
 
 
     const userId =
-      decoded?.userId;
+      auth.decoded.userId;
 
 
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message:
-          'Invalid authentication token',
-      });
-    }
-
+    // --------------------------------------------------------
+    // OTP
+    // --------------------------------------------------------
 
     const otp =
       String(
@@ -714,7 +946,9 @@ const verifyPhone = async (
       ).trim();
 
 
-    if (!/^\d{6}$/.test(otp)) {
+    if (
+      !/^\d{6}$/.test(otp)
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -769,6 +1003,23 @@ const verifyPhone = async (
 
 
     // --------------------------------------------------------
+    // HASH PROVIDED OTP
+    // --------------------------------------------------------
+
+    const suppliedHash =
+      hashToken(otp);
+
+
+    // --------------------------------------------------------
+    // START TRANSACTION
+    // --------------------------------------------------------
+
+    await client.query(
+      'BEGIN'
+    );
+
+
+    // --------------------------------------------------------
     // FIND VALID OTP
     // --------------------------------------------------------
 
@@ -786,6 +1037,7 @@ const verifyPhone = async (
           AND expires_at > CURRENT_TIMESTAMP
         ORDER BY created_at DESC
         LIMIT 1
+        FOR UPDATE
         `,
         [userId]
       );
@@ -794,6 +1046,11 @@ const verifyPhone = async (
     if (
       otpResult.rows.length === 0
     ) {
+
+      await client.query(
+        'ROLLBACK'
+      );
+
       return res.status(400).json({
         success: false,
         message:
@@ -806,14 +1063,18 @@ const verifyPhone = async (
       otpResult.rows[0];
 
 
-    const suppliedHash =
-      hashToken(otp);
-
+    // --------------------------------------------------------
+    // COMPARE HASHES
+    // --------------------------------------------------------
 
     if (
       suppliedHash !==
       storedOtp.token_hash
     ) {
+
+      await client.query(
+        'ROLLBACK'
+      );
 
       return res.status(400).json({
         success: false,
@@ -821,15 +1082,6 @@ const verifyPhone = async (
           'Invalid verification code.',
       });
     }
-
-
-    // --------------------------------------------------------
-    // TRANSACTION
-    // --------------------------------------------------------
-
-    await client.query(
-      'BEGIN'
-    );
 
 
     // --------------------------------------------------------
@@ -863,7 +1115,7 @@ const verifyPhone = async (
 
 
     // --------------------------------------------------------
-    // AUDIT
+    // AUDIT LOG
     // --------------------------------------------------------
 
     await client.query(
@@ -885,11 +1137,20 @@ const verifyPhone = async (
       `,
       [
         userId,
-        req.ip || null,
-        req.get('user-agent') || null,
+
+        req.ip ||
+          null,
+
+        req.get(
+          'user-agent'
+        ) || null,
       ]
     );
 
+
+    // --------------------------------------------------------
+    // COMMIT
+    // --------------------------------------------------------
 
     await client.query(
       'COMMIT'
@@ -897,10 +1158,14 @@ const verifyPhone = async (
 
 
     return res.status(200).json({
+
       success: true,
+
       message:
         'Phone number verified successfully.',
-      is_verified: true,
+
+      is_verified:
+        true,
     });
 
   } catch (error) {
@@ -950,65 +1215,29 @@ const resendPhoneOtp = async (
   const client =
     await pool.connect();
 
-
   try {
 
-    const token =
-      req.headers.authorization
-        ?.startsWith('Bearer ')
-        ? req.headers.authorization.substring(7)
-        : null;
+    // --------------------------------------------------------
+    // AUTHENTICATION
+    // --------------------------------------------------------
+
+    const auth =
+      verifyJwt(req);
 
 
-    if (!token) {
-      return res.status(401).json({
+    if (!auth.valid) {
+      return res.status(
+        auth.status
+      ).json({
         success: false,
         message:
-          'Authentication token is required',
-      });
-    }
-
-
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({
-        success: false,
-        message:
-          'Authentication service is not configured',
-      });
-    }
-
-
-    let decoded;
-
-
-    try {
-
-      decoded =
-        jwt.verify(
-          token,
-          process.env.JWT_SECRET
-        );
-
-    } catch {
-      return res.status(401).json({
-        success: false,
-        message:
-          'Invalid or expired authentication token',
+          auth.message,
       });
     }
 
 
     const userId =
-      decoded?.userId;
-
-
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message:
-          'Invalid authentication token',
-      });
-    }
+      auth.decoded.userId;
 
 
     // --------------------------------------------------------
@@ -1054,7 +1283,7 @@ const resendPhoneOtp = async (
 
 
     // --------------------------------------------------------
-    // CHECK RESEND COOLDOWN
+    // RESEND COOLDOWN
     // --------------------------------------------------------
 
     const recentOtp =
@@ -1081,6 +1310,7 @@ const resendPhoneOtp = async (
           recentOtp.rows[0].created_at
         );
 
+
       const secondsSinceCreation =
         Math.floor(
           (
@@ -1101,9 +1331,12 @@ const resendPhoneOtp = async (
 
 
         return res.status(429).json({
+
           success: false,
+
           message:
             `Please wait ${retryAfter} seconds before requesting another code.`,
+
           retry_after_seconds:
             retryAfter,
         });
@@ -1112,7 +1345,7 @@ const resendPhoneOtp = async (
 
 
     // --------------------------------------------------------
-    // CREATE NEW OTP
+    // START TRANSACTION
     // --------------------------------------------------------
 
     await client.query(
@@ -1120,12 +1353,20 @@ const resendPhoneOtp = async (
     );
 
 
+    // --------------------------------------------------------
+    // CREATE OTP
+    // --------------------------------------------------------
+
     const otp =
       await createPhoneOtp(
         client,
         userId
       );
 
+
+    // --------------------------------------------------------
+    // AUDIT LOG
+    // --------------------------------------------------------
 
     await client.query(
       `
@@ -1146,11 +1387,20 @@ const resendPhoneOtp = async (
       `,
       [
         userId,
-        req.ip || null,
-        req.get('user-agent') || null,
+
+        req.ip ||
+          null,
+
+        req.get(
+          'user-agent'
+        ) || null,
       ]
     );
 
+
+    // --------------------------------------------------------
+    // COMMIT
+    // --------------------------------------------------------
 
     await client.query(
       'COMMIT'
@@ -1164,9 +1414,9 @@ const resendPhoneOtp = async (
       message:
         'A new verification code has been generated.',
 
-      // TESTING ONLY
       development_otp:
-        process.env.NODE_ENV !== 'production'
+        process.env.NODE_ENV !==
+        'production'
           ? otp
           : undefined,
     });
@@ -1206,6 +1456,276 @@ const resendPhoneOtp = async (
 
 
 // ============================================================
+// SEND PHONE OTP
+// POST /api/auth/send-phone-otp
+// ============================================================
+//
+// This is kept as a separate endpoint because your existing
+// auth routes already expose /send-phone-otp.
+//
+// ============================================================
+
+const sendPhoneOtp = async (
+  req,
+  res
+) => {
+
+  const client =
+    await pool.connect();
+
+  try {
+
+    const auth =
+      verifyJwt(req);
+
+
+    if (!auth.valid) {
+      return res.status(
+        auth.status
+      ).json({
+        success: false,
+        message:
+          auth.message,
+      });
+    }
+
+
+    const userId =
+      auth.decoded.userId;
+
+
+    // --------------------------------------------------------
+    // GET USER
+    // --------------------------------------------------------
+
+    const userResult =
+      await client.query(
+        `
+        SELECT
+          id,
+          phone,
+          is_verified
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [userId]
+      );
+
+
+    if (
+      userResult.rows.length === 0
+    ) {
+      return res.status(404).json({
+        success: false,
+        message:
+          'User account not found',
+      });
+    }
+
+
+    const user =
+      userResult.rows[0];
+
+
+    if (!user.phone) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'No phone number is registered on this account',
+      });
+    }
+
+
+    if (user.is_verified) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Phone number is already verified',
+      });
+    }
+
+
+    // --------------------------------------------------------
+    // COOLDOWN
+    // --------------------------------------------------------
+
+    const recentOtp =
+      await client.query(
+        `
+        SELECT
+          created_at
+        FROM security_tokens
+        WHERE user_id = $1
+          AND token_type = 'phone_verification'
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [userId]
+      );
+
+
+    if (
+      recentOtp.rows.length > 0
+    ) {
+
+      const createdAt =
+        new Date(
+          recentOtp.rows[0].created_at
+        );
+
+
+      const secondsSinceCreation =
+        Math.floor(
+          (
+            Date.now() -
+            createdAt.getTime()
+          ) / 1000
+        );
+
+
+      if (
+        secondsSinceCreation <
+        OTP_RESEND_COOLDOWN_SECONDS
+      ) {
+
+        const retryAfter =
+          OTP_RESEND_COOLDOWN_SECONDS -
+          secondsSinceCreation;
+
+
+        return res.status(429).json({
+
+          success: false,
+
+          message:
+            `Please wait ${retryAfter} seconds before requesting another code.`,
+
+          retry_after_seconds:
+            retryAfter,
+        });
+      }
+    }
+
+
+    // --------------------------------------------------------
+    // TRANSACTION
+    // --------------------------------------------------------
+
+    await client.query(
+      'BEGIN'
+    );
+
+
+    const otp =
+      await createPhoneOtp(
+        client,
+        userId
+      );
+
+
+    // --------------------------------------------------------
+    // AUDIT
+    // --------------------------------------------------------
+
+    await client.query(
+      `
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description,
+        ip_address,
+        user_agent
+      )
+      VALUES (
+        $1,
+        'phone_otp_requested',
+        'Phone verification OTP requested',
+        $2,
+        $3
+      )
+      `,
+      [
+        userId,
+
+        req.ip ||
+          null,
+
+        req.get(
+          'user-agent'
+        ) || null,
+      ]
+    );
+
+
+    await client.query(
+      'COMMIT'
+    );
+
+
+    const response = {
+
+      success: true,
+
+      message:
+        'Verification code sent to your registered phone number',
+
+      expires_in:
+        OTP_EXPIRY_MINUTES * 60,
+    };
+
+
+    // --------------------------------------------------------
+    // DEVELOPMENT ONLY
+    // --------------------------------------------------------
+
+    if (
+      process.env.NODE_ENV !==
+      'production'
+    ) {
+      response.test_otp = otp;
+    }
+
+
+    return res.status(200).json(
+      response
+    );
+
+  } catch (error) {
+
+    try {
+      await client.query(
+        'ROLLBACK'
+      );
+    } catch (rollbackError) {
+      console.error(
+        'Rollback error:',
+        rollbackError
+      );
+    }
+
+
+    console.error(
+      'Send phone OTP error:',
+      error
+    );
+
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Unable to send verification code',
+    });
+
+  } finally {
+
+    client.release();
+
+  }
+};
+
+
+// ============================================================
 // LOGIN
 // POST /api/auth/login
 // ============================================================
@@ -1223,7 +1743,14 @@ const login = async (
     } = req.body || {};
 
 
-    if (!email || !password) {
+    // --------------------------------------------------------
+    // VALIDATION
+    // --------------------------------------------------------
+
+    if (
+      !email ||
+      !password
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -1264,7 +1791,8 @@ const login = async (
           daily_transfer_limit,
           daily_transfer_used,
           daily_transfer_reset_at,
-          created_at
+          created_at,
+          updated_at
         FROM users
         WHERE email = $1
         LIMIT 1
@@ -1293,7 +1821,8 @@ const login = async (
     // --------------------------------------------------------
 
     if (
-      user.status !== 'active'
+      user.status !==
+      'active'
     ) {
       return res.status(403).json({
         success: false,
@@ -1327,19 +1856,6 @@ const login = async (
     // JWT
     // --------------------------------------------------------
 
-    if (!process.env.JWT_SECRET) {
-      console.error(
-        'JWT_SECRET is not configured'
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          'Authentication service is not configured',
-      });
-    }
-
-
     const token =
       createAccessToken(user);
 
@@ -1358,7 +1874,8 @@ const login = async (
           currency,
           balance,
           status,
-          created_at
+          created_at,
+          updated_at
         FROM accounts
         WHERE user_id = $1
         ORDER BY created_at ASC
@@ -1426,6 +1943,9 @@ const login = async (
 
       created_at:
         user.created_at,
+
+      updated_at:
+        user.updated_at,
     };
 
 
@@ -1443,7 +1963,6 @@ const login = async (
 
       accounts:
         accountResult.rows,
-
     });
 
   } catch (error) {
@@ -1474,22 +1993,27 @@ const getMe = async (
 
   try {
 
-    const userId =
-      req.user &&
-      req.user.id;
+    const auth =
+      verifyJwt(req);
 
 
-    if (!userId) {
-      return res.status(401).json({
+    if (!auth.valid) {
+      return res.status(
+        auth.status
+      ).json({
         success: false,
         message:
-          'Authentication required',
+          auth.message,
       });
     }
 
 
+    const userId =
+      auth.decoded.userId;
+
+
     // --------------------------------------------------------
-    // USER
+    // GET USER
     // --------------------------------------------------------
 
     const userResult =
@@ -1539,7 +2063,7 @@ const getMe = async (
 
 
     // --------------------------------------------------------
-    // ACCOUNT
+    // GET ACCOUNTS
     // --------------------------------------------------------
 
     const accountResult =
@@ -1664,14 +2188,12 @@ const getMe = async (
           account
             ? account.status
             : null,
-
       },
 
       account,
 
       accounts:
         accountResult.rows,
-
     });
 
   } catch (error) {
@@ -1695,9 +2217,17 @@ const getMe = async (
 // ============================================================
 
 module.exports = {
+
   register,
+
   login,
+
   getMe,
+
+  sendPhoneOtp,
+
   verifyPhone,
+
   resendPhoneOtp,
+
 };
