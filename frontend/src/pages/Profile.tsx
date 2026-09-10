@@ -18,10 +18,35 @@ interface User {
   country?: string;
   role?: string;
   status?: string;
+
+  /*
+   * KYC fields
+   *
+   * IMPORTANT:
+   * kyc_tier alone does NOT mean the user is verified.
+   * Actual verification comes from kyc_status.
+   */
   kyc_status?: string;
-  is_verified?: boolean;
   kyc_tier?: number;
   tier?: number;
+
+  /*
+   * This is separate from KYC.
+   * It may represent phone/email/account verification.
+   */
+  is_verified?: boolean;
+
+  bvn_verified?: boolean;
+  id_verified?: boolean;
+  tier_3_verified?: boolean;
+  tier_3_method?: string;
+
+  account_limit?: number;
+  daily_transfer_limit?: number;
+  daily_transfer_used?: number;
+  daily_transfer_reset_at?: string;
+  created_at?: string;
+
   profile_photo?: string;
   avatar?: string;
 }
@@ -105,6 +130,10 @@ const Profile: React.FC = () => {
     }
   };
 
+  // ============================================================
+  // DISPLAY NAME
+  // ============================================================
+
   const displayName = useMemo(() => {
     return (
       user?.full_name ||
@@ -115,6 +144,10 @@ const Profile: React.FC = () => {
       'Zenimonies User'
     );
   }, [user]);
+
+  // ============================================================
+  // INITIALS
+  // ============================================================
 
   const initials = useMemo(() => {
     const parts = displayName
@@ -133,31 +166,39 @@ const Profile: React.FC = () => {
       .toUpperCase();
   }, [displayName]);
 
-  /*
-   * KYC is considered completed when the backend
-   * reports a verified KYC status or a KYC tier.
-   *
-   * We intentionally do NOT use only is_verified
-   * because email/phone verification is different
-   * from KYC verification.
-   */
+  // ============================================================
+  // KYC VERIFICATION
+  //
+  // IMPORTANT:
+  //
+  // kyc_tier DOES NOT automatically mean verified.
+  //
+  // Tier 1 may simply mean the account is currently at
+  // the Tier 1 level or eligible for Tier 1.
+  //
+  // Actual KYC verification requires the backend to return
+  // an approved/verified/completed KYC status.
+  //
+  // is_verified is deliberately NOT used here because
+  // it is separate from KYC verification.
+  // ============================================================
+
   const kycVerified = useMemo(() => {
     const status =
-      String(user?.kyc_status || '').toLowerCase();
-
-    const tier = Number(
-      user?.kyc_tier ??
-        user?.tier ??
-        0
-    );
+      String(user?.kyc_status || '')
+        .toLowerCase()
+        .trim();
 
     return (
       status === 'verified' ||
       status === 'approved' ||
-      status === 'completed' ||
-      tier >= 1
+      status === 'completed'
     );
   }, [user]);
+
+  // ============================================================
+  // CURRENT KYC TIER
+  // ============================================================
 
   const currentTier = useMemo(() => {
     const tier = Number(
@@ -173,6 +214,81 @@ const Profile: React.FC = () => {
     return 0;
   }, [user]);
 
+  // ============================================================
+  // KYC STATUS
+  // ============================================================
+
+  const normalizedKycStatus = useMemo(() => {
+    return String(
+      user?.kyc_status || ''
+    )
+      .toLowerCase()
+      .trim();
+  }, [user]);
+
+  // ============================================================
+  // KYC DISPLAY TEXT
+  // ============================================================
+
+  const getKycText = () => {
+    /*
+     * If the backend has explicitly verified KYC,
+     * show the appropriate verified tier.
+     */
+
+    if (kycVerified) {
+      if (currentTier >= 3) {
+        return 'Tier 3 Verified';
+      }
+
+      if (currentTier === 2) {
+        return 'Tier 2 Verified';
+      }
+
+      if (currentTier === 1) {
+        return 'Tier 1 Verified';
+      }
+
+      return 'KYC Verified';
+    }
+
+    /*
+     * If KYC has not been verified yet,
+     * never display "Verified".
+     */
+
+    if (
+      normalizedKycStatus === 'pending' ||
+      normalizedKycStatus === 'submitted' ||
+      normalizedKycStatus === 'processing' ||
+      normalizedKycStatus === 'under_review' ||
+      normalizedKycStatus === 'review'
+    ) {
+      if (currentTier >= 1) {
+        return `Tier ${currentTier} — KYC Pending`;
+      }
+
+      return 'KYC Verification Pending';
+    }
+
+    if (
+      normalizedKycStatus === 'rejected' ||
+      normalizedKycStatus === 'failed'
+    ) {
+      return 'KYC Verification Failed';
+    }
+
+    if (currentTier >= 1) {
+      return `Tier ${currentTier} — KYC Not Verified`;
+    }
+
+    return 'KYC Verification Required';
+  };
+
+  // ============================================================
+  // UPDATE FORM FIELD
+  // ============================================================
+
   const updateField = (
     field: keyof typeof form,
     value: string
@@ -183,6 +299,10 @@ const Profile: React.FC = () => {
     }));
   };
 
+  // ============================================================
+  // SAVE PROFILE
+  // ============================================================
+
   const saveProfile = async () => {
     setSaving(true);
     setMessage('');
@@ -190,14 +310,12 @@ const Profile: React.FC = () => {
 
     try {
       /*
-       * For now we save the editable profile information
-       * locally. When the backend profile-update endpoint
-       * is connected, this section can send the same fields
-       * to the server.
+       * For now, profile information is stored locally.
        *
        * IMPORTANT:
-       * The legal name is deliberately NOT included here.
-       * Therefore Profile cannot change the verified name.
+       * The legal name is deliberately NOT editable here.
+       * Once KYC is completed, the verified legal name remains
+       * protected from normal profile editing.
        */
 
       const updatedUser: User = {
@@ -219,13 +337,20 @@ const Profile: React.FC = () => {
 
       setUser(updatedUser);
       setEditing(false);
-      setMessage('Profile updated successfully.');
+
+      setMessage(
+        'Profile updated successfully.'
+      );
 
       setTimeout(() => {
         setMessage('');
       }, 3500);
     } catch (err) {
-      console.error('Profile save error:', err);
+      console.error(
+        'Profile save error:',
+        err
+      );
+
       setError(
         'Unable to save your profile. Please try again.'
       );
@@ -233,6 +358,10 @@ const Profile: React.FC = () => {
       setSaving(false);
     }
   };
+
+  // ============================================================
+  // CANCEL EDITING
+  // ============================================================
 
   const cancelEditing = () => {
     if (!user) return;
@@ -258,6 +387,10 @@ const Profile: React.FC = () => {
     setMessage('');
   };
 
+  // ============================================================
+  // MASK ACCOUNT NUMBER
+  // ============================================================
+
   const maskAccountNumber = (
     accountNumber?: string
   ) => {
@@ -272,27 +405,15 @@ const Profile: React.FC = () => {
     return `•••• ${accountNumber.slice(-4)}`;
   };
 
-  const getKycText = () => {
-    if (currentTier >= 3) {
-      return 'Tier 3 Verified';
-    }
-
-    if (currentTier === 2) {
-      return 'Tier 2 Verified';
-    }
-
-    if (currentTier === 1) {
-      return 'Tier 1 Verified';
-    }
-
-    return 'KYC Verification Required';
-  };
-
   return (
     <div style={styles.page}>
-      {/* ================= HEADER ================= */}
+
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
 
       <header style={styles.header}>
+
         <button
           type="button"
           style={styles.backButton}
@@ -312,15 +433,22 @@ const Profile: React.FC = () => {
         >
           Home
         </button>
+
       </header>
 
       <main style={styles.main}>
-        {/* ================= PROFILE HEADER ================= */}
+
+        {/* ====================================================
+            PROFILE HEADER
+        ==================================================== */}
 
         <section style={styles.profileCard}>
+
           <div style={styles.avatar}>
+
             {user?.profile_photo ||
             user?.avatar ? (
+
               <img
                 src={
                   user.profile_photo ||
@@ -329,42 +457,56 @@ const Profile: React.FC = () => {
                 alt="Profile"
                 style={styles.avatarImage}
               />
+
             ) : (
+
               initials
+
             )}
+
           </div>
 
           <div style={styles.profileMain}>
+
             <h1 style={styles.profileName}>
               {displayName}
             </h1>
 
             <p style={styles.profileEmail}>
-              {user?.email || 'Email not available'}
+              {user?.email ||
+                'Email not available'}
             </p>
 
             <div style={styles.statusRow}>
+
               <span
                 style={{
                   ...styles.statusBadge,
+
                   ...(kycVerified
                     ? styles.verifiedBadge
                     : styles.pendingBadge),
                 }}
               >
+
                 <span>
                   {kycVerified ? '✓' : '!'}
                 </span>
 
                 {getKycText()}
+
               </span>
 
               {account?.account_number && (
-                <span style={styles.accountBadge}>
+                <span
+                  style={styles.accountBadge}
+                >
                   Personal Account
                 </span>
               )}
+
             </div>
+
           </div>
 
           {!editing && (
@@ -380,9 +522,12 @@ const Profile: React.FC = () => {
               Edit Profile
             </button>
           )}
+
         </section>
 
-        {/* ================= MESSAGES ================= */}
+        {/* ====================================================
+            MESSAGES
+        ==================================================== */}
 
         {message && (
           <div style={styles.successMessage}>
@@ -396,25 +541,36 @@ const Profile: React.FC = () => {
           </div>
         )}
 
-        {/* ================= PERSONAL INFORMATION ================= */}
+        {/* ====================================================
+            PERSONAL INFORMATION
+        ==================================================== */}
 
         <section style={styles.section}>
+
           <div style={styles.sectionHeader}>
+
             <div>
+
               <h2 style={styles.sectionTitle}>
                 Personal Information
               </h2>
 
-              <p style={styles.sectionDescription}>
+              <p
+                style={styles.sectionDescription}
+              >
                 Your basic personal information.
               </p>
+
             </div>
+
           </div>
 
           <div style={styles.fieldsGrid}>
+
             {/* FULL NAME */}
 
             <div style={styles.field}>
+
               <label style={styles.label}>
                 Full Legal Name
               </label>
@@ -422,11 +578,13 @@ const Profile: React.FC = () => {
               <div
                 style={{
                   ...styles.lockedField,
+
                   ...(kycVerified
                     ? styles.lockedVerified
                     : {}),
                 }}
               >
+
                 <span>
                   {displayName}
                 </span>
@@ -439,6 +597,7 @@ const Profile: React.FC = () => {
                     🔒
                   </span>
                 )}
+
               </div>
 
               {kycVerified && (
@@ -448,11 +607,13 @@ const Profile: React.FC = () => {
                   completed.
                 </div>
               )}
+
             </div>
 
             {/* DATE OF BIRTH */}
 
             <div style={styles.field}>
+
               <label style={styles.label}>
                 Date of Birth
               </label>
@@ -469,16 +630,19 @@ const Profile: React.FC = () => {
                 }
                 style={{
                   ...styles.input,
+
                   ...(editing
                     ? styles.inputEditable
                     : styles.inputDisabled),
                 }}
               />
+
             </div>
 
             {/* EMAIL */}
 
             <div style={styles.field}>
+
               <label style={styles.label}>
                 Email Address
               </label>
@@ -495,16 +659,19 @@ const Profile: React.FC = () => {
                 }
                 style={{
                   ...styles.input,
+
                   ...(editing
                     ? styles.inputEditable
                     : styles.inputDisabled),
                 }}
               />
+
             </div>
 
             {/* PHONE */}
 
             <div style={styles.field}>
+
               <label style={styles.label}>
                 Phone Number
               </label>
@@ -521,39 +688,53 @@ const Profile: React.FC = () => {
                 }
                 style={{
                   ...styles.input,
+
                   ...(editing
                     ? styles.inputEditable
                     : styles.inputDisabled),
                 }}
               />
+
             </div>
+
           </div>
+
         </section>
 
-        {/* ================= ADDRESS ================= */}
+        {/* ====================================================
+            ADDRESS
+        ==================================================== */}
 
         <section style={styles.section}>
+
           <div style={styles.sectionHeader}>
+
             <div>
+
               <h2 style={styles.sectionTitle}>
                 Residential Address
               </h2>
 
-              <p style={styles.sectionDescription}>
+              <p
+                style={styles.sectionDescription}
+              >
                 Keep your residential information
                 up to date.
               </p>
+
             </div>
+
           </div>
 
           <div style={styles.fieldsGrid}>
+
             <div
               style={{
                 ...styles.field,
-                gridColumn:
-                  '1 / -1',
+                gridColumn: '1 / -1',
               }}
             >
+
               <label style={styles.label}>
                 Address
               </label>
@@ -570,14 +751,19 @@ const Profile: React.FC = () => {
                 rows={3}
                 style={{
                   ...styles.textarea,
+
                   ...(editing
                     ? styles.inputEditable
                     : styles.inputDisabled),
                 }}
               />
+
             </div>
 
+            {/* CITY */}
+
             <div style={styles.field}>
+
               <label style={styles.label}>
                 City
               </label>
@@ -594,14 +780,19 @@ const Profile: React.FC = () => {
                 }
                 style={{
                   ...styles.input,
+
                   ...(editing
                     ? styles.inputEditable
                     : styles.inputDisabled),
                 }}
               />
+
             </div>
 
+            {/* STATE */}
+
             <div style={styles.field}>
+
               <label style={styles.label}>
                 State
               </label>
@@ -618,14 +809,19 @@ const Profile: React.FC = () => {
                 }
                 style={{
                   ...styles.input,
+
                   ...(editing
                     ? styles.inputEditable
                     : styles.inputDisabled),
                 }}
               />
+
             </div>
 
+            {/* COUNTRY */}
+
             <div style={styles.field}>
+
               <label style={styles.label}>
                 Country
               </label>
@@ -642,32 +838,47 @@ const Profile: React.FC = () => {
                 }
                 style={{
                   ...styles.input,
+
                   ...(editing
                     ? styles.inputEditable
                     : styles.inputDisabled),
                 }}
               />
+
             </div>
+
           </div>
+
         </section>
 
-        {/* ================= BANK ACCOUNT ================= */}
+        {/* ====================================================
+            BANK ACCOUNT
+        ==================================================== */}
 
         <section style={styles.section}>
+
           <div style={styles.sectionHeader}>
+
             <div>
+
               <h2 style={styles.sectionTitle}>
                 Account Information
               </h2>
 
-              <p style={styles.sectionDescription}>
+              <p
+                style={styles.sectionDescription}
+              >
                 Your Zenimonies account details.
               </p>
+
             </div>
+
           </div>
 
           <div style={styles.accountGrid}>
+
             <div style={styles.accountItem}>
+
               <span style={styles.accountLabel}>
                 Account Number
               </span>
@@ -677,9 +888,11 @@ const Profile: React.FC = () => {
                   account?.account_number
                 )}
               </strong>
+
             </div>
 
             <div style={styles.accountItem}>
+
               <span style={styles.accountLabel}>
                 Account Name
               </span>
@@ -688,9 +901,11 @@ const Profile: React.FC = () => {
                 {account?.account_name ||
                   displayName}
               </strong>
+
             </div>
 
             <div style={styles.accountItem}>
+
               <span style={styles.accountLabel}>
                 Account Type
               </span>
@@ -699,9 +914,11 @@ const Profile: React.FC = () => {
                 {account?.account_type ||
                   'Personal Account'}
               </strong>
+
             </div>
 
             <div style={styles.accountItem}>
+
               <span style={styles.accountLabel}>
                 Currency
               </span>
@@ -709,27 +926,55 @@ const Profile: React.FC = () => {
               <strong style={styles.accountValue}>
                 {account?.currency || 'NGN'}
               </strong>
+
             </div>
+
           </div>
+
         </section>
 
-        {/* ================= KYC ================= */}
+        {/* ====================================================
+            KYC
+        ==================================================== */}
 
-        <section style={styles.kycCard}>
-          <div style={styles.kycIcon}>
+        <section
+          style={{
+            ...styles.kycCard,
+
+            ...(kycVerified
+              ? styles.kycVerifiedCard
+              : styles.kycPendingCard),
+          }}
+        >
+
+          <div
+            style={{
+              ...styles.kycIcon,
+
+              ...(kycVerified
+                ? styles.kycVerifiedIcon
+                : styles.kycPendingIcon),
+            }}
+          >
             {kycVerified ? '✓' : '!'}
           </div>
 
           <div style={styles.kycContent}>
+
             <h2 style={styles.kycTitle}>
               KYC Verification
             </h2>
 
             <p style={styles.kycDescription}>
+
               {kycVerified
                 ? `Your account is ${getKycText()}. Your verified legal name is protected from normal profile changes.`
+                : currentTier >= 1
+                ? `Your account is currently at Tier ${currentTier}, but KYC verification has not been completed. Complete verification to unlock higher account limits and additional services.`
                 : 'Complete your KYC verification to unlock higher account limits and additional services.'}
+
             </p>
+
           </div>
 
           <button
@@ -737,22 +982,32 @@ const Profile: React.FC = () => {
             style={styles.kycButton}
             onClick={() => navigate('/kyc')}
           >
+
             {kycVerified
               ? 'View KYC'
               : 'Verify Now'}
+
             <span>›</span>
+
           </button>
+
         </section>
 
-        {/* ================= SECURITY NOTICE ================= */}
+        {/* ====================================================
+            SECURITY NOTICE
+        ==================================================== */}
 
         <section style={styles.securityNotice}>
+
           <div style={styles.securityIcon}>
             🔒
           </div>
 
           <div>
-            <strong style={styles.securityTitle}>
+
+            <strong
+              style={styles.securityTitle}
+            >
               Your information is protected
             </strong>
 
@@ -765,17 +1020,25 @@ const Profile: React.FC = () => {
             <button
               type="button"
               style={styles.settingsLink}
-              onClick={() => navigate('/settings')}
+              onClick={() =>
+                navigate('/settings')
+              }
             >
               Open Settings →
             </button>
+
           </div>
+
         </section>
 
-        {/* ================= EDIT ACTIONS ================= */}
+        {/* ====================================================
+            EDIT ACTIONS
+        ==================================================== */}
 
         {editing && (
+
           <div style={styles.editActions}>
+
             <button
               type="button"
               style={styles.cancelButton}
@@ -795,19 +1058,28 @@ const Profile: React.FC = () => {
                 ? 'Saving...'
                 : 'Save Changes'}
             </button>
+
           </div>
+
         )}
+
       </main>
 
-      {/* ================= BOTTOM NAV ================= */}
+      {/* ======================================================
+          BOTTOM NAVIGATION
+      ====================================================== */}
 
       <nav style={styles.bottomNav}>
+
         <button
           type="button"
           style={styles.navItem}
           onClick={() => navigate('/')}
         >
-          <span style={styles.navIcon}>⌂</span>
+          <span style={styles.navIcon}>
+            ⌂
+          </span>
+
           Home
         </button>
 
@@ -818,7 +1090,10 @@ const Profile: React.FC = () => {
             navigate('/transactions')
           }
         >
-          <span style={styles.navIcon}>↕</span>
+          <span style={styles.navIcon}>
+            ↕
+          </span>
+
           Transactions
         </button>
 
@@ -829,7 +1104,10 @@ const Profile: React.FC = () => {
             navigate('/wallet')
           }
         >
-          <span style={styles.navIcon}>▱</span>
+          <span style={styles.navIcon}>
+            ▱
+          </span>
+
           Wallet
         </button>
 
@@ -839,21 +1117,35 @@ const Profile: React.FC = () => {
             ...styles.navItem,
             ...styles.navActive,
           }}
-          onClick={() => navigate('/profile')}
+          onClick={() =>
+            navigate('/profile')
+          }
         >
-          <span style={styles.navIcon}>♙</span>
+          <span style={styles.navIcon}>
+            ♙
+          </span>
+
           Profile
+
           <span style={styles.navIndicator} />
+
         </button>
+
       </nav>
+
     </div>
   );
 };
+
+// ============================================================
+// STYLES
+// ============================================================
 
 const styles: Record<
   string,
   React.CSSProperties
 > = {
+
   page: {
     minHeight: '100vh',
     background: '#f6faf8',
@@ -1167,9 +1459,6 @@ const styles: Record<
   },
 
   kycCard: {
-    background: '#effbf5',
-    border:
-      '1px solid #d4eee0',
     borderRadius: 18,
     padding: 18,
     display: 'flex',
@@ -1178,18 +1467,38 @@ const styles: Record<
     marginBottom: 18,
   },
 
+  kycVerifiedCard: {
+    background: '#effbf5',
+    border:
+      '1px solid #d4eee0',
+  },
+
+  kycPendingCard: {
+    background: '#fffaf0',
+    border:
+      '1px solid #f0dfb9',
+  },
+
   kycIcon: {
     width: 48,
     height: 48,
     borderRadius: 14,
-    background: '#d9f5e7',
-    color: '#087c43',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: 21,
     fontWeight: 800,
     flexShrink: 0,
+  },
+
+  kycVerifiedIcon: {
+    background: '#d9f5e7',
+    color: '#087c43',
+  },
+
+  kycPendingIcon: {
+    background: '#ffedc8',
+    color: '#a15c00',
   },
 
   kycContent: {
@@ -1344,6 +1653,7 @@ const styles: Record<
     borderRadius: 5,
     background: '#079447',
   },
+
 };
 
 export default Profile;
