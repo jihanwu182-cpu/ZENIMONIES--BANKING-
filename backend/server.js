@@ -21,6 +21,9 @@ const bankRoutes = require('./routes/bankRoutes');
 const virtualCardRoutes = require('./routes/virtualCard');
 const adminRoutes = require('./routes/adminRoutes');
 
+// IMPORTANT: KYC ROUTES
+const kycRoutes = require('./routes/kycRoutes');
+
 // ============================================================
 // PAYSTACK WEBHOOK
 // ============================================================
@@ -41,7 +44,6 @@ const PORT = process.env.PORT || 5000;
 // MIDDLEWARE
 // ============================================================
 
-// Allow frontend requests
 app.use(
   cors({
     origin: true,
@@ -49,10 +51,8 @@ app.use(
   })
 );
 
-// Parse JSON requests
 app.use(express.json());
 
-// Parse URL-encoded requests
 app.use(
   express.urlencoded({
     extended: true,
@@ -112,6 +112,26 @@ app.use(
 app.use(
   '/api/virtual-cards',
   virtualCardRoutes
+);
+
+// ============================================================
+// KYC VERIFICATION
+// ============================================================
+//
+// GET  /api/kyc/status
+// POST /api/kyc/bvn
+// POST /api/kyc/tier-2
+// POST /api/kyc/tier-3
+//
+// IMPORTANT:
+// KYC is NOT automatically marked verified.
+// Verification must come from the actual verification
+// process/provider or authorized admin approval.
+// ============================================================
+
+app.use(
+  '/api/kyc',
+  kycRoutes
 );
 
 // ============================================================
@@ -257,15 +277,7 @@ app.use(
 
 const startServer = async () => {
   try {
-    // --------------------------------------------------------
-    // INITIALIZE DATABASE
-    // --------------------------------------------------------
-
     await initializeDatabase();
-
-    // --------------------------------------------------------
-    // START EXPRESS SERVER
-    // --------------------------------------------------------
 
     app.listen(
       PORT,
@@ -322,6 +334,11 @@ const startServer = async () => {
         console.log(
           'Virtual Cards:',
           '/api/virtual-cards'
+        );
+
+        console.log(
+          'KYC:',
+          '/api/kyc'
         );
 
         console.log(
