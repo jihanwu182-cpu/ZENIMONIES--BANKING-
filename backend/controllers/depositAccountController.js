@@ -1,18 +1,40 @@
 const pool = require('../config/database');
 
-/*
- * Get the logged-in user's dedicated deposit account.
- *
- * This endpoint does NOT create or invent an account number.
- * It only returns an account that has already been created
- * and stored in the deposit_accounts table.
- */
+// ============================================================
+// GET DEDICATED DEPOSIT ACCOUNT
+// GET /api/deposits/account
+//
+// Requires:
+// Authorization: Bearer YOUR_JWT_TOKEN
+//
+// IMPORTANT:
+// This endpoint NEVER generates an account number.
+// It only returns the real provider-issued account that
+// was previously stored in deposit_accounts.
+// ============================================================
+
 const getDepositAccount = async (req, res) => {
   try {
+    // ----------------------------------------------------------
+    // AUTHENTICATED USER
+    // ----------------------------------------------------------
+
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required',
+      });
+    }
+
     const userId = req.user.id;
 
+    // ----------------------------------------------------------
+    // GET USER'S ACTIVE DEPOSIT ACCOUNT
+    // ----------------------------------------------------------
+
     const result = await pool.query(
-      `SELECT
+      `
+      SELECT
         id,
         account_number,
         account_name,
@@ -25,13 +47,18 @@ const getDepositAccount = async (req, res) => {
         provider_account_id,
         created_at,
         updated_at
-       FROM deposit_accounts
-       WHERE user_id = $1
-         AND status = 'active'
-       ORDER BY created_at ASC
-       LIMIT 1`,
+      FROM deposit_accounts
+      WHERE user_id = $1
+        AND status = 'active'
+      ORDER BY created_at ASC
+      LIMIT 1
+      `,
       [userId]
     );
+
+    // ----------------------------------------------------------
+    // NO ACCOUNT FOUND
+    // ----------------------------------------------------------
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -41,10 +68,17 @@ const getDepositAccount = async (req, res) => {
       });
     }
 
+    const depositAccount = result.rows[0];
+
+    // ----------------------------------------------------------
+    // RESPONSE
+    // ----------------------------------------------------------
+
     return res.status(200).json({
       success: true,
-      depositAccount: result.rows[0],
+      depositAccount,
     });
+
   } catch (error) {
     console.error(
       'GET DEPOSIT ACCOUNT ERROR:',
@@ -58,6 +92,11 @@ const getDepositAccount = async (req, res) => {
     });
   }
 };
+
+
+// ============================================================
+// EXPORT
+// ============================================================
 
 module.exports = {
   getDepositAccount,
