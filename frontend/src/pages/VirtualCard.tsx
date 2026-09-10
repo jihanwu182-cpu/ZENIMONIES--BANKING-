@@ -1,380 +1,430 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 const CARD_FEE = 1000;
 
 const VirtualCard: React.FC = () => {
-  const [hasCard, setHasCard] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
-  const [frozen, setFrozen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
-  const [balance, setBalance] = useState(0);
+  const [step, setStep] = useState<'start' | 'pin' | 'confirm' | 'created'>(
+    'start'
+  );
+
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [error, setError] = useState('');
 
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
 
-  const createVirtualCard = async () => {
-    if (balance < CARD_FEE) {
-      alert(
-        'Insufficient balance. You need at least ₦1,000 to create a virtual card.'
-      );
-      return;
-    }
-
-    const confirmed = window.confirm(
-      'Create your virtual card for ₦1,000?\n\n₦1,000 will be deducted from your Zenimonies account.'
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      /*
-       * IMPORTANT:
-       * The real implementation must call your backend.
-       *
-       * Example:
-       *
-       * const token = localStorage.getItem('token');
-       *
-       * const response = await fetch(
-       *   '/api/cards/virtual/create',
-       *   {
-       *     method: 'POST',
-       *     headers: {
-       *       'Content-Type': 'application/json',
-       *       Authorization: `Bearer ${token}`,
-       *     },
-       *   }
-       * );
-       *
-       * const data = await response.json();
-       *
-       * if (!response.ok) {
-       *   throw new Error(data.message || 'Unable to create card');
-       * }
-       *
-       * setBalance(data.balance);
-       * setCardNumber(data.card.number);
-       * setExpiry(data.card.expiry);
-       * setCvv(data.card.cvv);
-       * setHasCard(true);
-       */
-
-      /*
-       * TEMPORARY FRONTEND DEMO
-       *
-       * Remove this section once the backend endpoint
-       * is connected.
-       */
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-
-      setBalance((previous) => previous - CARD_FEE);
-
-      setCardNumber('5399 8421 7356 4821');
-      setExpiry('09/29');
-      setCvv('•••');
-
-      setHasCard(true);
-      setShowDetails(false);
-
-      alert('Virtual card created successfully.');
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Unable to create virtual card.';
-
-      alert(message);
-    } finally {
-      setLoading(false);
-    }
+  const handleStart = () => {
+    setError('');
+    setStep('pin');
   };
 
-  const copyCardNumber = async () => {
-    if (!cardNumber) {
+  const handlePinContinue = () => {
+    setError('');
+
+    if (!/^\d{4}$/.test(pin)) {
+      setError('Your card PIN must contain exactly 4 digits.');
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(cardNumber);
-      alert('Card number copied.');
-    } catch {
-      alert('Unable to copy card number.');
+    setStep('confirm');
+  };
+
+  const handleConfirm = () => {
+    setError('');
+
+    if (pin !== confirmPin) {
+      setError('The PINs do not match.');
+      return;
     }
+
+    /*
+      FRONTEND DEMO ONLY
+
+      In production, this action must call the backend.
+      The backend must:
+      1. Verify the logged-in user.
+      2. Check the account balance.
+      3. Debit ₦1,000.
+      4. Create the virtual card.
+      5. Store the PIN securely.
+      6. Return the card details securely.
+
+      Never trust a frontend-only balance check for real money.
+    */
+
+    const generatedCardNumber =
+      '5399 ' +
+      Math.floor(1000 + Math.random() * 9000) +
+      ' ' +
+      Math.floor(1000 + Math.random() * 9000) +
+      ' ' +
+      Math.floor(1000 + Math.random() * 9000);
+
+    const generatedCvv = String(
+      Math.floor(100 + Math.random() * 900)
+    );
+
+    const today = new Date();
+    const expiryYear = String(today.getFullYear() + 3).slice(-2);
+    const expiryMonth = String(today.getMonth() + 1).padStart(2, '0');
+
+    setCardNumber(generatedCardNumber);
+    setCvv(generatedCvv);
+    setExpiry(`${expiryMonth}/${expiryYear}`);
+
+    setStep('created');
   };
 
   return (
     <div style={styles.page}>
-      {/* HEADER */}
+
+      {/* ================= HEADER ================= */}
 
       <header style={styles.header}>
-        <Link to="/" style={styles.backButton}>
+
+        <button
+          type="button"
+          style={styles.backButton}
+          onClick={() => navigate('/')}
+        >
           ←
-        </Link>
+        </button>
 
         <div style={styles.headerTitle}>
           Virtual Card
         </div>
 
-        <div style={{ width: 40 }} />
+        <div style={styles.headerSpacer} />
+
       </header>
 
+      {/* ================= CONTENT ================= */}
+
       <main style={styles.main}>
-        {!hasCard ? (
+
+        {step === 'start' && (
           <>
-            {/* CREATE CARD */}
+            <div style={styles.iconCircle}>
+              ▣
+            </div>
 
-            <section style={styles.intro}>
-              <div style={styles.cardIcon}>
-                ▣
-              </div>
+            <h1 style={styles.title}>
+              Create your Virtual Card
+            </h1>
 
-              <h1 style={styles.title}>
-                Create your Virtual Card
-              </h1>
+            <p style={styles.description}>
+              Create a virtual card that you can use for supported
+              online payments.
+            </p>
 
-              <p style={styles.description}>
-                Create a virtual card for online payments and
-                supported digital purchases.
-              </p>
-            </section>
+            <div style={styles.infoCard}>
 
-            {/* FEE CARD */}
-
-            <section style={styles.infoCard}>
               <div style={styles.infoRow}>
-                <span style={styles.infoLabel}>
-                  Card creation fee
+                <span>
+                  Card type
                 </span>
 
-                <strong style={styles.fee}>
-                  ₦1,000
+                <strong>
+                  Virtual Card
                 </strong>
               </div>
 
               <div style={styles.divider} />
 
               <div style={styles.infoRow}>
-                <span style={styles.infoLabel}>
-                  Your balance
+                <span>
+                  Card creation fee
                 </span>
 
-                <strong style={styles.balance}>
-                  ₦{balance.toLocaleString()}
+                <strong>
+                  ₦1,000
                 </strong>
               </div>
-            </section>
 
-            {/* WARNING */}
-
-            <div style={styles.warning}>
-              <div style={styles.warningIcon}>
-                !
-              </div>
-
-              <div>
-                <strong style={styles.warningTitle}>
-                  Before you continue
-                </strong>
-
-                <p style={styles.warningText}>
-                  ₦1,000 will be deducted from your account
-                  when you create the virtual card.
-                </p>
-              </div>
             </div>
 
-            {/* CREATE BUTTON */}
+            <div style={styles.notice}>
+              <strong>
+                Before you continue
+              </strong>
+
+              <p style={styles.noticeText}>
+                ₦1,000 will be charged from your Zenimonies
+                account when the card is successfully created.
+              </p>
+            </div>
 
             <button
               type="button"
-              onClick={createVirtualCard}
-              disabled={loading}
-              style={{
-                ...styles.createButton,
-                opacity: loading ? 0.65 : 1,
-              }}
+              style={styles.primaryButton}
+              onClick={handleStart}
             >
-              {loading
-                ? 'Creating Card...'
-                : 'Create Virtual Card — ₦1,000'}
+              Continue
             </button>
 
-            {/* PHYSICAL CARD */}
-
-            <section style={styles.comingSoon}>
-              <div style={styles.physicalIcon}>
-                ▭
-              </div>
-
-              <div style={{ flex: 1 }}>
-                <strong style={styles.comingTitle}>
-                  Physical Card
-                </strong>
-
-                <p style={styles.comingText}>
-                  Physical cards are coming soon.
-                </p>
-              </div>
-
-              <span style={styles.comingBadge}>
-                Coming Soon
-              </span>
-            </section>
+            <button
+              type="button"
+              style={styles.secondaryButton}
+              onClick={() => navigate('/')}
+            >
+              Cancel
+            </button>
           </>
-        ) : (
+        )}
+
+        {step === 'pin' && (
           <>
-            {/* CARD CREATED */}
-
-            <div style={styles.successMessage}>
-              <div style={styles.successIcon}>
-                ✓
-              </div>
-
-              <div>
-                <strong>
-                  Virtual Card Ready
-                </strong>
-
-                <p>
-                  Your virtual card has been created.
-                </p>
-              </div>
+            <div style={styles.iconCircle}>
+              🔐
             </div>
 
-            {/* VIRTUAL CARD */}
+            <h1 style={styles.title}>
+              Create your Card PIN
+            </h1>
 
-            <section
-              style={{
-                ...styles.virtualCard,
-                opacity: frozen ? 0.65 : 1,
-              }}
+            <p style={styles.description}>
+              Choose a secure 4-digit PIN for your virtual card.
+            </p>
+
+            <div style={styles.formCard}>
+
+              <label style={styles.label}>
+                Card PIN
+              </label>
+
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                value={pin}
+                onChange={(event) => {
+                  const value = event.target.value.replace(/\D/g, '');
+                  setPin(value);
+                  setError('');
+                }}
+                placeholder="••••"
+                style={styles.pinInput}
+              />
+
+              <p style={styles.helperText}>
+                Your PIN must contain exactly 4 digits.
+              </p>
+
+            </div>
+
+            {error && (
+              <div style={styles.error}>
+                {error}
+              </div>
+            )}
+
+            <button
+              type="button"
+              style={styles.primaryButton}
+              onClick={handlePinContinue}
             >
+              Continue
+            </button>
+
+            <button
+              type="button"
+              style={styles.secondaryButton}
+              onClick={() => navigate('/')}
+            >
+              Cancel
+            </button>
+          </>
+        )}
+
+        {step === 'confirm' && (
+          <>
+            <div style={styles.iconCircle}>
+              ✓
+            </div>
+
+            <h1 style={styles.title}>
+              Confirm your Card PIN
+            </h1>
+
+            <p style={styles.description}>
+              Enter the same 4-digit PIN again to confirm.
+            </p>
+
+            <div style={styles.formCard}>
+
+              <label style={styles.label}>
+                Confirm Card PIN
+              </label>
+
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                value={confirmPin}
+                onChange={(event) => {
+                  const value = event.target.value.replace(/\D/g, '');
+                  setConfirmPin(value);
+                  setError('');
+                }}
+                placeholder="••••"
+                style={styles.pinInput}
+              />
+
+            </div>
+
+            <div style={styles.feeCard}>
+              <span>
+                Card creation fee
+              </span>
+
+              <strong>
+                ₦1,000
+              </strong>
+            </div>
+
+            {error && (
+              <div style={styles.error}>
+                {error}
+              </div>
+            )}
+
+            <button
+              type="button"
+              style={styles.primaryButton}
+              onClick={handleConfirm}
+            >
+              Create Virtual Card
+            </button>
+
+            <button
+              type="button"
+              style={styles.secondaryButton}
+              onClick={() => setStep('pin')}
+            >
+              Back
+            </button>
+          </>
+        )}
+
+        {step === 'created' && (
+          <>
+            <div style={styles.successIcon}>
+              ✓
+            </div>
+
+            <h1 style={styles.title}>
+              Virtual Card Created
+            </h1>
+
+            <p style={styles.description}>
+              Your virtual card has been created successfully.
+            </p>
+
+            {/* ================= VIRTUAL CARD ================= */}
+
+            <div style={styles.virtualCard}>
+
               <div style={styles.cardTop}>
-                <strong style={styles.cardBrand}>
+
+                <div style={styles.cardBrand}>
                   ZENIMONIES
-                </strong>
+                </div>
 
                 <div style={styles.cardChip}>
-                  ▣
+                  ▦
                 </div>
+
               </div>
 
               <div style={styles.cardNumber}>
-                {showDetails
-                  ? cardNumber
-                  : '•••• •••• •••• ••••'}
+                {cardNumber}
               </div>
 
               <div style={styles.cardBottom}>
-                <div>
-                  <span style={styles.cardLabel}>
-                    CARD HOLDER
-                  </span>
 
-                  <strong style={styles.cardValue}>
-                    HARRISON
-                  </strong>
+                <div>
+                  <div style={styles.cardSmallLabel}>
+                    VALID THRU
+                  </div>
+
+                  <div style={styles.cardValue}>
+                    {expiry}
+                  </div>
                 </div>
 
                 <div>
-                  <span style={styles.cardLabel}>
-                    EXPIRES
-                  </span>
-
-                  <strong style={styles.cardValue}>
-                    {showDetails ? expiry : '••/••'}
-                  </strong>
-                </div>
-
-                <div>
-                  <span style={styles.cardLabel}>
+                  <div style={styles.cardSmallLabel}>
                     CVV
-                  </span>
+                  </div>
 
-                  <strong style={styles.cardValue}>
-                    {showDetails ? cvv : '•••'}
-                  </strong>
+                  <div style={styles.cardValue}>
+                    {cvv}
+                  </div>
                 </div>
+
               </div>
 
-              <div style={styles.cardFooter}>
-                <span>
-                  VIRTUAL CARD
-                </span>
-
-                <span>
-                  {frozen ? 'FROZEN' : 'ACTIVE'}
-                </span>
-              </div>
-            </section>
-
-            {/* DETAILS BUTTONS */}
-
-            <div style={styles.actionRow}>
-              <button
-                type="button"
-                style={styles.secondaryButton}
-                onClick={() =>
-                  setShowDetails((previous) => !previous)
-                }
-              >
-                {showDetails
-                  ? 'Hide Details'
-                  : 'Show Details'}
-              </button>
-
-              <button
-                type="button"
-                style={styles.secondaryButton}
-                onClick={copyCardNumber}
-              >
-                Copy Number
-              </button>
             </div>
 
-            {/* FREEZE */}
+            <div style={styles.successNotice}>
+              <strong>
+                Card creation fee: ₦1,000
+              </strong>
+
+              <p style={styles.noticeText}>
+                Your card fee will be deducted from your
+                Zenimonies account when this feature is
+                connected to the live banking backend.
+              </p>
+            </div>
 
             <button
               type="button"
-              style={{
-                ...styles.freezeButton,
-                color: frozen ? '#087c43' : '#c62828',
-                borderColor: frozen
-                  ? '#bfe5d2'
-                  : '#f0caca',
-              }}
-              onClick={() =>
-                setFrozen((previous) => !previous)
-              }
+              style={styles.primaryButton}
+              onClick={() => navigate('/')}
             >
-              {frozen
-                ? 'Unfreeze Card'
-                : 'Freeze Card'}
+              Back to Dashboard
             </button>
-
-            {/* MANAGEMENT */}
-
-            <Link
-              to="/"
-              style={styles.manageButton}
-            >
-              ← Back to Dashboard
-            </Link>
           </>
         )}
+
+        {/* ================= PHYSICAL CARD ================= */}
+
+        <div style={styles.physicalCard}>
+
+          <div style={styles.physicalIcon}>
+            ▣
+          </div>
+
+          <div>
+            <strong style={styles.physicalTitle}>
+              Physical Card
+            </strong>
+
+            <p style={styles.physicalText}>
+              Physical cards are coming soon.
+            </p>
+          </div>
+
+        </div>
+
       </main>
+
     </div>
   );
 };
 
+/* =========================================================
+   STYLES
+========================================================= */
+
 const styles: Record<string, React.CSSProperties> = {
+
   page: {
     minHeight: '100vh',
     background: '#f6faf8',
@@ -385,329 +435,309 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   header: {
-    height: 68,
+    height: 64,
     background: '#ffffff',
     borderBottom: '1px solid #e5ebe8',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 5%',
+    padding: '0 4%',
     position: 'sticky',
     top: 0,
-    zIndex: 20,
+    zIndex: 10,
   },
 
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    border: 'none',
     background: '#eef7f2',
     color: '#087c43',
-    textDecoration: 'none',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 12,
     fontSize: 22,
-    fontWeight: 700,
+    cursor: 'pointer',
   },
 
   headerTitle: {
+    flex: 1,
+    textAlign: 'center',
     fontSize: 18,
     fontWeight: 800,
   },
 
+  headerSpacer: {
+    width: 40,
+  },
+
   main: {
-    width: 'min(560px, 92%)',
+    width: 'min(620px, 92%)',
     margin: '0 auto',
-    paddingTop: 28,
+    paddingTop: 30,
   },
 
-  intro: {
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-
-  cardIcon: {
-    width: 62,
-    height: 62,
-    margin: '0 auto 15px',
-    borderRadius: 18,
+  iconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
     background: '#dff5e9',
     color: '#078b4a',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 28,
+    fontSize: 30,
+    margin: '0 auto 18px',
+  },
+
+  successIcon: {
+    width: 68,
+    height: 68,
+    borderRadius: '50%',
+    background: '#079447',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 32,
+    fontWeight: 800,
+    margin: '0 auto 18px',
   },
 
   title: {
-    margin: '0 0 8px',
+    margin: '0 0 9px',
+    textAlign: 'center',
     fontSize: 27,
     fontWeight: 800,
+    color: '#063b2d',
   },
 
   description: {
-    margin: 0,
-    color: '#718078',
+    margin: '0 auto 22px',
+    maxWidth: 500,
+    textAlign: 'center',
+    color: '#66756e',
     fontSize: 14,
     lineHeight: 1.6,
   },
 
   infoCard: {
     background: '#ffffff',
-    border: '1px solid #e0ebe5',
+    border: '1px solid #e1ebe6',
     borderRadius: 18,
     padding: 18,
-    boxShadow: '0 6px 20px rgba(26,61,47,0.05)',
+    boxShadow: '0 7px 22px rgba(26,61,47,0.05)',
   },
 
   infoRow: {
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 15,
-  },
-
-  infoLabel: {
-    color: '#68766f',
     fontSize: 14,
-  },
-
-  fee: {
-    color: '#c62828',
-    fontSize: 17,
-  },
-
-  balance: {
-    color: '#087c43',
-    fontSize: 17,
   },
 
   divider: {
     height: 1,
-    background: '#edf2ef',
-    margin: '16px 0',
+    background: '#e7eeeb',
+    margin: '15px 0',
   },
 
-  warning: {
-    marginTop: 14,
-    padding: 14,
+  notice: {
+    background: '#fff9e8',
+    border: '1px solid #f1dfaa',
     borderRadius: 15,
-    background: '#fff9ed',
-    border: '1px solid #f4dfad',
-    display: 'flex',
-    gap: 11,
-    alignItems: 'flex-start',
-  },
-
-  warningIcon: {
-    width: 25,
-    height: 25,
-    borderRadius: '50%',
-    background: '#f2b233',
-    color: '#ffffff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 800,
-    flexShrink: 0,
-  },
-
-  warningTitle: {
+    padding: 15,
+    marginTop: 15,
+    color: '#755c18',
     fontSize: 13,
-  },
-
-  warningText: {
-    margin: '4px 0 0',
-    color: '#776d59',
-    fontSize: 12,
     lineHeight: 1.5,
   },
 
-  createButton: {
+  noticeText: {
+    margin: '5px 0 0',
+  },
+
+  primaryButton: {
     width: '100%',
     border: 'none',
     background: '#079447',
     color: '#ffffff',
     borderRadius: 13,
-    padding: '14px 16px',
-    marginTop: 18,
-    fontSize: 14,
+    padding: '14px 18px',
+    marginTop: 20,
     fontWeight: 800,
+    fontSize: 14,
     cursor: 'pointer',
   },
 
-  comingSoon: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 17,
+  secondaryButton: {
+    width: '100%',
+    border: '1px solid #d3ded9',
     background: '#ffffff',
-    border: '1px solid #e2ebe7',
+    color: '#344054',
+    borderRadius: 13,
+    padding: '13px 18px',
+    marginTop: 10,
+    fontWeight: 700,
+    fontSize: 14,
+    cursor: 'pointer',
+  },
+
+  formCard: {
+    background: '#ffffff',
+    border: '1px solid #e1ebe6',
+    borderRadius: 18,
+    padding: 20,
+    boxShadow: '0 7px 22px rgba(26,61,47,0.05)',
+  },
+
+  label: {
+    display: 'block',
+    fontSize: 13,
+    fontWeight: 700,
+    marginBottom: 8,
+    color: '#344054',
+  },
+
+  pinInput: {
+    width: '100%',
+    boxSizing: 'border-box',
+    border: '1px solid #cfdad5',
+    borderRadius: 12,
+    padding: '14px',
+    fontSize: 24,
+    letterSpacing: 9,
+    textAlign: 'center',
+    outline: 'none',
+  },
+
+  helperText: {
+    margin: '8px 0 0',
+    color: '#7b8782',
+    fontSize: 12,
+  },
+
+  error: {
+    background: '#fff0f0',
+    border: '1px solid #f0caca',
+    color: '#a42626',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 14,
+    fontSize: 13,
+  },
+
+  feeCard: {
+    marginTop: 15,
+    background: '#effbf5',
+    border: '1px solid #d1eddf',
+    borderRadius: 14,
+    padding: 15,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    color: '#075e38',
+    fontSize: 14,
+  },
+
+  virtualCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    minHeight: 220,
+    borderRadius: 23,
+    padding: 24,
+    boxSizing: 'border-box',
+    color: '#ffffff',
+    background:
+      'linear-gradient(135deg, #063b2d 0%, #087c43 55%, #09a65a 100%)',
+    boxShadow: '0 16px 35px rgba(0,91,48,0.22)',
+  },
+
+  cardTop: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  cardBrand: {
+    fontSize: 15,
+    fontWeight: 900,
+    letterSpacing: 1.5,
+  },
+
+  cardChip: {
+    fontSize: 28,
+  },
+
+  cardNumber: {
+    marginTop: 45,
+    fontSize: 'clamp(20px, 5vw, 27px)',
+    fontWeight: 700,
+    letterSpacing: 2,
+    whiteSpace: 'nowrap',
+  },
+
+  cardBottom: {
+    marginTop: 28,
+    display: 'flex',
+    gap: 50,
+  },
+
+  cardSmallLabel: {
+    fontSize: 8,
+    opacity: 0.7,
+    letterSpacing: 1,
+    marginBottom: 3,
+  },
+
+  cardValue: {
+    fontSize: 13,
+    fontWeight: 700,
+    letterSpacing: 1,
+  },
+
+  successNotice: {
+    background: '#effbf5',
+    border: '1px solid #d1eddf',
+    borderRadius: 15,
+    padding: 15,
+    marginTop: 15,
+    color: '#075e38',
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+
+  physicalCard: {
     display: 'flex',
     alignItems: 'center',
     gap: 12,
+    background: '#ffffff',
+    border: '1px solid #e1ebe6',
+    borderRadius: 17,
+    padding: 15,
+    marginTop: 25,
   },
 
   physicalIcon: {
     width: 45,
     height: 45,
     borderRadius: 13,
-    background: '#f1f4f3',
+    background: '#f0f3f2',
+    color: '#89958f',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 22,
-    color: '#6f7b76',
+    fontSize: 21,
   },
 
-  comingTitle: {
+  physicalTitle: {
+    display: 'block',
+    color: '#344054',
     fontSize: 14,
   },
 
-  comingText: {
-    margin: '4px 0 0',
-    color: '#7a8781',
-    fontSize: 11,
-  },
-
-  comingBadge: {
-    fontSize: 10,
-    fontWeight: 800,
-    color: '#6e7974',
-    background: '#f0f3f2',
-    padding: '6px 8px',
-    borderRadius: 8,
-    whiteSpace: 'nowrap',
-  },
-
-  successMessage: {
-    background: '#eaf9f1',
-    border: '1px solid #ccebd9',
-    borderRadius: 15,
-    padding: 13,
-    display: 'flex',
-    gap: 10,
-    alignItems: 'center',
-    marginBottom: 17,
-    color: '#075f37',
-  },
-
-  successIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: '50%',
-    background: '#079447',
-    color: '#ffffff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 800,
-  },
-
-  virtualCard: {
-    minHeight: 245,
-    borderRadius: 23,
-    padding: 23,
-    boxSizing: 'border-box',
-    background:
-      'linear-gradient(135deg, #007a3f 0%, #079b52 55%, #04ad60 100%)',
-    color: '#ffffff',
-    boxShadow: '0 15px 35px rgba(0,112,58,0.18)',
-  },
-
-  cardTop: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-
-  cardBrand: {
-    fontSize: 18,
-    letterSpacing: 1,
-  },
-
-  cardChip: {
-    width: 43,
-    height: 32,
-    borderRadius: 8,
-    background: '#e6bd54',
-    color: '#80651f',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  cardNumber: {
-    marginTop: 42,
-    fontSize: 22,
-    fontWeight: 700,
-    letterSpacing: 2,
-  },
-
-  cardBottom: {
-    marginTop: 28,
-    display: 'flex',
-    gap: 28,
-  },
-
-  cardLabel: {
-    display: 'block',
-    fontSize: 8,
-    opacity: 0.7,
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-
-  cardValue: {
-    display: 'block',
+  physicalText: {
+    margin: '3px 0 0',
+    color: '#89958f',
     fontSize: 12,
-  },
-
-  cardFooter: {
-    marginTop: 20,
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: 9,
-    letterSpacing: 1,
-    opacity: 0.8,
-  },
-
-  actionRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 10,
-    marginTop: 13,
-  },
-
-  secondaryButton: {
-    border: '1px solid #d6e2dc',
-    background: '#ffffff',
-    color: '#087c43',
-    borderRadius: 12,
-    padding: '12px',
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-
-  freezeButton: {
-    width: '100%',
-    background: '#ffffff',
-    border: '1px solid',
-    borderRadius: 12,
-    padding: '12px',
-    marginTop: 10,
-    fontWeight: 800,
-    cursor: 'pointer',
-  },
-
-  manageButton: {
-    display: 'block',
-    textAlign: 'center',
-    marginTop: 15,
-    color: '#087c43',
-    textDecoration: 'none',
-    fontSize: 13,
-    fontWeight: 700,
   },
 };
 
