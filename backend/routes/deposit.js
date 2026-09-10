@@ -14,19 +14,10 @@ const {
 
 const router = express.Router();
 
-// ============================================================
-// DEPOSIT ROUTES
-// Base URL:
-// /api/deposits
-// ============================================================
-
 
 // ============================================================
-// DEPOSIT API TEST
+// DEPOSIT ROUTE TEST
 // GET /api/deposits
-//
-// This is a public route used to confirm that the
-// deposit router is loaded correctly.
 // ============================================================
 
 router.get('/', (req, res) => {
@@ -38,14 +29,8 @@ router.get('/', (req, res) => {
 
 
 // ============================================================
-// GET DEDICATED DEPOSIT ACCOUNT
+// GET USER'S DEDICATED DEPOSIT ACCOUNT
 // GET /api/deposits/account
-//
-// Requires:
-// Authorization: Bearer YOUR_JWT_TOKEN
-//
-// Returns the logged-in user's dedicated receiving
-// account information.
 // ============================================================
 
 router.get(
@@ -56,13 +41,8 @@ router.get(
 
 
 // ============================================================
-// CREATE DEPOSIT
+// CREATE DEPOSIT REQUEST
 // POST /api/deposits
-//
-// Requires:
-// Authorization: Bearer YOUR_JWT_TOKEN
-//
-// Creates a deposit request for the authenticated user.
 // ============================================================
 
 router.post(
