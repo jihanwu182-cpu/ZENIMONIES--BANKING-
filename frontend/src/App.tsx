@@ -314,7 +314,7 @@ const App: React.FC = () => {
         />
         <Route
           path="/admin"
-          element={<AdminDashboard />}
+          element={<AdminDashboard/>}
         />
 
         {/* ACCOUNT */}
