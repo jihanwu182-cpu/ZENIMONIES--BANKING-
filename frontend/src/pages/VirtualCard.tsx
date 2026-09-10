@@ -1,138 +1,254 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+
+const CARD_FEE = 1000;
 
 const VirtualCard: React.FC = () => {
-  const navigate = useNavigate();
-
-  const [cardCreated, setCardCreated] = useState(false);
-  const [showNumber, setShowNumber] = useState(false);
-  const [showCVV, setShowCVV] = useState(false);
+  const [hasCard, setHasCard] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [frozen, setFrozen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const cardNumber = '5399 2847 6135 2048';
-  const expiry = '09/30';
-  const cvv = '482';
+  const [balance, setBalance] = useState(0);
+
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvv, setCvv] = useState('');
+
+  const createVirtualCard = async () => {
+    if (balance < CARD_FEE) {
+      alert(
+        'Insufficient balance. You need at least ₦1,000 to create a virtual card.'
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Create your virtual card for ₦1,000?\n\n₦1,000 will be deducted from your Zenimonies account.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      /*
+       * IMPORTANT:
+       * The real implementation must call your backend.
+       *
+       * Example:
+       *
+       * const token = localStorage.getItem('token');
+       *
+       * const response = await fetch(
+       *   '/api/cards/virtual/create',
+       *   {
+       *     method: 'POST',
+       *     headers: {
+       *       'Content-Type': 'application/json',
+       *       Authorization: `Bearer ${token}`,
+       *     },
+       *   }
+       * );
+       *
+       * const data = await response.json();
+       *
+       * if (!response.ok) {
+       *   throw new Error(data.message || 'Unable to create card');
+       * }
+       *
+       * setBalance(data.balance);
+       * setCardNumber(data.card.number);
+       * setExpiry(data.card.expiry);
+       * setCvv(data.card.cvv);
+       * setHasCard(true);
+       */
+
+      /*
+       * TEMPORARY FRONTEND DEMO
+       *
+       * Remove this section once the backend endpoint
+       * is connected.
+       */
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+
+      setBalance((previous) => previous - CARD_FEE);
+
+      setCardNumber('5399 8421 7356 4821');
+      setExpiry('09/29');
+      setCvv('•••');
+
+      setHasCard(true);
+      setShowDetails(false);
+
+      alert('Virtual card created successfully.');
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to create virtual card.';
+
+      alert(message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const copyCardNumber = async () => {
+    if (!cardNumber) {
+      return;
+    }
+
     try {
-      await navigator.clipboard.writeText(
-        cardNumber.replace(/\s/g, '')
-      );
-
-      setCopied(true);
-
-      setTimeout(() => {
-        setCopied(false);
-      }, 2000);
+      await navigator.clipboard.writeText(cardNumber);
+      alert('Card number copied.');
     } catch {
       alert('Unable to copy card number.');
     }
   };
 
-  const displayedCardNumber = showNumber
-    ? cardNumber
-    : '•••• •••• •••• 2048';
-
   return (
     <div style={styles.page}>
-
-      {/* ================= HEADER ================= */}
+      {/* HEADER */}
 
       <header style={styles.header}>
-
-        <button
-          type="button"
-          style={styles.backButton}
-          onClick={() => navigate('/')}
-        >
+        <Link to="/" style={styles.backButton}>
           ←
-        </button>
+        </Link>
 
         <div style={styles.headerTitle}>
           Virtual Card
         </div>
 
-        <div style={styles.headerSpacer} />
-
+        <div style={{ width: 40 }} />
       </header>
 
-      {/* ================= CONTENT ================= */}
-
       <main style={styles.main}>
+        {!hasCard ? (
+          <>
+            {/* CREATE CARD */}
 
-        <div style={styles.intro}>
+            <section style={styles.intro}>
+              <div style={styles.cardIcon}>
+                ▣
+              </div>
 
-          <div>
-            <h1 style={styles.title}>
-              Your Virtual Card
-            </h1>
+              <h1 style={styles.title}>
+                Create your Virtual Card
+              </h1>
 
-            <p style={styles.subtitle}>
-              Use your Zenimonies virtual card for
-              secure online payments.
-            </p>
-          </div>
+              <p style={styles.description}>
+                Create a virtual card for online payments and
+                supported digital purchases.
+              </p>
+            </section>
 
-          <div style={styles.cardIcon}>
-            💳
-          </div>
+            {/* FEE CARD */}
 
-        </div>
+            <section style={styles.infoCard}>
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>
+                  Card creation fee
+                </span>
 
-        {/* ================= CARD ================= */}
+                <strong style={styles.fee}>
+                  ₦1,000
+                </strong>
+              </div>
 
-        {!cardCreated ? (
+              <div style={styles.divider} />
 
-          <section style={styles.createCard}>
+              <div style={styles.infoRow}>
+                <span style={styles.infoLabel}>
+                  Your balance
+                </span>
 
-            <div style={styles.createIcon}>
-              💳
+                <strong style={styles.balance}>
+                  ₦{balance.toLocaleString()}
+                </strong>
+              </div>
+            </section>
+
+            {/* WARNING */}
+
+            <div style={styles.warning}>
+              <div style={styles.warningIcon}>
+                !
+              </div>
+
+              <div>
+                <strong style={styles.warningTitle}>
+                  Before you continue
+                </strong>
+
+                <p style={styles.warningText}>
+                  ₦1,000 will be deducted from your account
+                  when you create the virtual card.
+                </p>
+              </div>
             </div>
 
-            <h2 style={styles.createTitle}>
-              Create your Virtual Card
-            </h2>
-
-            <p style={styles.createText}>
-              Create a virtual card for online
-              payments and subscriptions.
-            </p>
-
-            <div style={styles.featureList}>
-
-              <div style={styles.feature}>
-                <span style={styles.featureCheck}>✓</span>
-                Secure online payments
-              </div>
-
-              <div style={styles.feature}>
-                <span style={styles.featureCheck}>✓</span>
-                Easy to manage
-              </div>
-
-              <div style={styles.feature}>
-                <span style={styles.featureCheck}>✓</span>
-                Freeze or unfreeze anytime
-              </div>
-
-            </div>
+            {/* CREATE BUTTON */}
 
             <button
               type="button"
-              style={styles.primaryButton}
-              onClick={() => setCardCreated(true)}
+              onClick={createVirtualCard}
+              disabled={loading}
+              style={{
+                ...styles.createButton,
+                opacity: loading ? 0.65 : 1,
+              }}
             >
-              Create Virtual Card
+              {loading
+                ? 'Creating Card...'
+                : 'Create Virtual Card — ₦1,000'}
             </button>
 
-          </section>
+            {/* PHYSICAL CARD */}
 
+            <section style={styles.comingSoon}>
+              <div style={styles.physicalIcon}>
+                ▭
+              </div>
+
+              <div style={{ flex: 1 }}>
+                <strong style={styles.comingTitle}>
+                  Physical Card
+                </strong>
+
+                <p style={styles.comingText}>
+                  Physical cards are coming soon.
+                </p>
+              </div>
+
+              <span style={styles.comingBadge}>
+                Coming Soon
+              </span>
+            </section>
+          </>
         ) : (
-
           <>
+            {/* CARD CREATED */}
 
-            {/* ================= VIRTUAL CARD ================= */}
+            <div style={styles.successMessage}>
+              <div style={styles.successIcon}>
+                ✓
+              </div>
+
+              <div>
+                <strong>
+                  Virtual Card Ready
+                </strong>
+
+                <p>
+                  Your virtual card has been created.
+                </p>
+              </div>
+            </div>
+
+            {/* VIRTUAL CARD */}
 
             <section
               style={{
@@ -140,339 +256,132 @@ const VirtualCard: React.FC = () => {
                 opacity: frozen ? 0.65 : 1,
               }}
             >
-
               <div style={styles.cardTop}>
-
-                <div>
-                  <div style={styles.cardBrand}>
-                    Zenimonies
-                  </div>
-
-                  <div style={styles.cardType}>
-                    VIRTUAL
-                  </div>
-                </div>
+                <strong style={styles.cardBrand}>
+                  ZENIMONIES
+                </strong>
 
                 <div style={styles.cardChip}>
-                  ▦
+                  ▣
                 </div>
-
               </div>
 
               <div style={styles.cardNumber}>
-                {displayedCardNumber}
+                {showDetails
+                  ? cardNumber
+                  : '•••• •••• •••• ••••'}
               </div>
 
               <div style={styles.cardBottom}>
-
                 <div>
-                  <div style={styles.cardLabel}>
+                  <span style={styles.cardLabel}>
                     CARD HOLDER
-                  </div>
+                  </span>
 
-                  <div style={styles.cardValue}>
+                  <strong style={styles.cardValue}>
                     HARRISON
-                  </div>
+                  </strong>
                 </div>
 
                 <div>
-                  <div style={styles.cardLabel}>
+                  <span style={styles.cardLabel}>
                     EXPIRES
-                  </div>
+                  </span>
 
-                  <div style={styles.cardValue}>
-                    {expiry}
-                  </div>
+                  <strong style={styles.cardValue}>
+                    {showDetails ? expiry : '••/••'}
+                  </strong>
                 </div>
 
                 <div>
-                  <div style={styles.cardLabel}>
+                  <span style={styles.cardLabel}>
                     CVV
-                  </div>
+                  </span>
 
-                  <div style={styles.cardValue}>
-                    {showCVV ? cvv : '•••'}
-                  </div>
+                  <strong style={styles.cardValue}>
+                    {showDetails ? cvv : '•••'}
+                  </strong>
                 </div>
-
-                <div style={styles.cardNetwork}>
-                  VISA
-                </div>
-
               </div>
 
-              {frozen && (
-                <div style={styles.frozenOverlay}>
-                  CARD FROZEN
-                </div>
-              )}
+              <div style={styles.cardFooter}>
+                <span>
+                  VIRTUAL CARD
+                </span>
 
+                <span>
+                  {frozen ? 'FROZEN' : 'ACTIVE'}
+                </span>
+              </div>
             </section>
 
-            {/* ================= CARD STATUS ================= */}
+            {/* DETAILS BUTTONS */}
 
-            <div
-              style={{
-                ...styles.status,
-                ...(frozen
-                  ? styles.statusFrozen
-                  : styles.statusActive),
-              }}
-            >
-
-              <span
-                style={{
-                  ...styles.statusDot,
-                  background: frozen
-                    ? '#d92d20'
-                    : '#079447',
-                }}
-              />
-
-              {frozen
-                ? 'Your card is frozen'
-                : 'Your card is active'}
-
-            </div>
-
-            {/* ================= CARD ACTIONS ================= */}
-
-            <section style={styles.actionsCard}>
-
+            <div style={styles.actionRow}>
               <button
                 type="button"
-                style={styles.actionButton}
+                style={styles.secondaryButton}
                 onClick={() =>
-                  setShowNumber((previous) => !previous)
+                  setShowDetails((previous) => !previous)
                 }
               >
-                <span style={styles.actionIcon}>
-                  {showNumber ? '○' : '◉'}
-                </span>
-
-                <span>
-                  {showNumber
-                    ? 'Hide card number'
-                    : 'Show card number'}
-                </span>
+                {showDetails
+                  ? 'Hide Details'
+                  : 'Show Details'}
               </button>
 
               <button
                 type="button"
-                style={styles.actionButton}
-                onClick={() =>
-                  setShowCVV((previous) => !previous)
-                }
-              >
-                <span style={styles.actionIcon}>
-                  🔐
-                </span>
-
-                <span>
-                  {showCVV
-                    ? 'Hide CVV'
-                    : 'Show CVV'}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                style={styles.actionButton}
+                style={styles.secondaryButton}
                 onClick={copyCardNumber}
               >
-                <span style={styles.actionIcon}>
-                  📋
-                </span>
-
-                <span>
-                  {copied
-                    ? 'Card number copied'
-                    : 'Copy card number'}
-                </span>
+                Copy Number
               </button>
-
-              <button
-                type="button"
-                style={styles.actionButton}
-                onClick={() =>
-                  setFrozen((previous) => !previous)
-                }
-              >
-                <span style={styles.actionIcon}>
-                  🔒
-                </span>
-
-                <span>
-                  {frozen
-                    ? 'Unfreeze card'
-                    : 'Freeze card'}
-                </span>
-              </button>
-
-            </section>
-
-            {/* ================= CARD INFORMATION ================= */}
-
-            <section style={styles.infoCard}>
-
-              <h2 style={styles.infoTitle}>
-                Card Information
-              </h2>
-
-              <div style={styles.infoRow}>
-                <span>Card type</span>
-                <strong>Virtual Visa</strong>
-              </div>
-
-              <div style={styles.infoRow}>
-                <span>Status</span>
-
-                <strong
-                  style={{
-                    color: frozen
-                      ? '#d92d20'
-                      : '#079447',
-                  }}
-                >
-                  {frozen
-                    ? 'Frozen'
-                    : 'Active'}
-                </strong>
-              </div>
-
-              <div style={styles.infoRow}>
-                <span>Currency</span>
-                <strong>NGN</strong>
-              </div>
-
-              <div style={styles.infoRow}>
-                <span>Expiry</span>
-                <strong>{expiry}</strong>
-              </div>
-
-            </section>
-
-          </>
-
-        )}
-
-        {/* ================= PHYSICAL CARD ================= */}
-
-        <section style={styles.physicalCard}>
-
-          <div style={styles.physicalIcon}>
-            💳
-          </div>
-
-          <div style={styles.physicalContent}>
-
-            <div style={styles.comingSoon}>
-              COMING SOON
             </div>
 
-            <h2 style={styles.physicalTitle}>
-              Physical Card
-            </h2>
+            {/* FREEZE */}
 
-            <p style={styles.physicalText}>
-              Get a physical Zenimonies card for
-              ATM withdrawals and everyday
-              payments.
-            </p>
+            <button
+              type="button"
+              style={{
+                ...styles.freezeButton,
+                color: frozen ? '#087c43' : '#c62828',
+                borderColor: frozen
+                  ? '#bfe5d2'
+                  : '#f0caca',
+              }}
+              onClick={() =>
+                setFrozen((previous) => !previous)
+              }
+            >
+              {frozen
+                ? 'Unfreeze Card'
+                : 'Freeze Card'}
+            </button>
 
-          </div>
+            {/* MANAGEMENT */}
 
-        </section>
-
-        {/* ================= SECURITY NOTICE ================= */}
-
-        <section style={styles.securityCard}>
-
-          <div style={styles.securityIcon}>
-            🔐
-          </div>
-
-          <div>
-
-            <h3 style={styles.securityTitle}>
-              Keep your card details safe
-            </h3>
-
-            <p style={styles.securityText}>
-              Never share your card number, expiry
-              date or CVV with anyone you do not
-              trust.
-            </p>
-
-          </div>
-
-        </section>
-
+            <Link
+              to="/"
+              style={styles.manageButton}
+            >
+              ← Back to Dashboard
+            </Link>
+          </>
+        )}
       </main>
-
-      {/* ================= BOTTOM NAV ================= */}
-
-      <nav style={styles.bottomNav}>
-
-        <button
-          type="button"
-          style={styles.navItem}
-          onClick={() => navigate('/')}
-        >
-          <span style={styles.navIcon}>⌂</span>
-          <span>Home</span>
-        </button>
-
-        <button
-          type="button"
-          style={styles.navItem}
-          onClick={() => navigate('/transactions')}
-        >
-          <span style={styles.navIcon}>↕</span>
-          <span>Transactions</span>
-        </button>
-
-        <button
-          type="button"
-          style={{
-            ...styles.navItem,
-            ...styles.navActive,
-          }}
-          onClick={() => navigate('/virtual-card')}
-        >
-          <span style={styles.navIcon}>▣</span>
-          <span>Card</span>
-          <span style={styles.activeIndicator} />
-        </button>
-
-        <button
-          type="button"
-          style={styles.navItem}
-          onClick={() => navigate('/profile')}
-        >
-          <span style={styles.navIcon}>♙</span>
-          <span>Profile</span>
-        </button>
-
-      </nav>
-
     </div>
   );
 };
 
-/* =========================================================
-   STYLES
-========================================================= */
-
 const styles: Record<string, React.CSSProperties> = {
-
   page: {
     minHeight: '100vh',
     background: '#f6faf8',
     color: '#10251d',
     fontFamily:
       'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-    paddingBottom: 88,
+    paddingBottom: 40,
   },
 
   header: {
@@ -481,7 +390,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: '1px solid #e5ebe8',
     display: 'flex',
     alignItems: 'center',
-    padding: '0 4%',
+    justifyContent: 'space-between',
+    padding: '0 5%',
     position: 'sticky',
     top: 0,
     zIndex: 20,
@@ -490,445 +400,314 @@ const styles: Record<string, React.CSSProperties> = {
   backButton: {
     width: 40,
     height: 40,
-    border: 'none',
     borderRadius: 12,
     background: '#eef7f2',
     color: '#087c43',
-    fontSize: 23,
-    cursor: 'pointer',
+    textDecoration: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 22,
+    fontWeight: 700,
   },
 
   headerTitle: {
-    flex: 1,
-    textAlign: 'center',
     fontSize: 18,
     fontWeight: 800,
-  },
-
-  headerSpacer: {
-    width: 40,
   },
 
   main: {
-    width: 'min(650px, 92%)',
+    width: 'min(560px, 92%)',
     margin: '0 auto',
-    paddingTop: 24,
+    paddingTop: 28,
   },
 
   intro: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 15,
-    marginBottom: 20,
-  },
-
-  title: {
-    margin: 0,
-    fontSize: 28,
-    fontWeight: 800,
-  },
-
-  subtitle: {
-    margin: '7px 0 0',
-    color: '#718079',
-    fontSize: 13,
-    lineHeight: 1.5,
+    textAlign: 'center',
+    marginBottom: 24,
   },
 
   cardIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    background: '#e4f7ed',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 25,
-    flexShrink: 0,
-  },
-
-  createCard: {
-    background: '#ffffff',
-    borderRadius: 22,
-    padding: 28,
-    textAlign: 'center',
-    border: '1px solid #e0ebe5',
-    boxShadow: '0 8px 25px rgba(26,61,47,0.05)',
-  },
-
-  createIcon: {
-    width: 70,
-    height: 70,
-    margin: '0 auto 17px',
-    borderRadius: 22,
-    background: '#e4f7ed',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 32,
-  },
-
-  createTitle: {
-    margin: 0,
-    fontSize: 22,
-    fontWeight: 800,
-  },
-
-  createText: {
-    color: '#718079',
-    fontSize: 13,
-    lineHeight: 1.6,
-    margin: '9px auto 20px',
-    maxWidth: 420,
-  },
-
-  featureList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-    textAlign: 'left',
-    maxWidth: 360,
-    margin: '0 auto 22px',
-  },
-
-  feature: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 9,
-    fontSize: 13,
-    fontWeight: 600,
-  },
-
-  featureCheck: {
-    width: 22,
-    height: 22,
-    borderRadius: '50%',
-    background: '#dff5e9',
-    color: '#087c43',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 12,
-    fontWeight: 800,
-  },
-
-  primaryButton: {
-    width: '100%',
-    height: 48,
-    border: 'none',
-    borderRadius: 13,
-    background: '#079447',
-    color: '#ffffff',
-    fontWeight: 800,
-    fontSize: 14,
-    cursor: 'pointer',
-  },
-
-  virtualCard: {
-    minHeight: 220,
-    borderRadius: 24,
-    padding: 23,
-    boxSizing: 'border-box',
-    background:
-      'linear-gradient(135deg, #064c31 0%, #078b4a 52%, #10a85c 100%)',
-    color: '#ffffff',
-    position: 'relative',
-    overflow: 'hidden',
-    boxShadow: '0 18px 35px rgba(0,100,55,0.2)',
-    transition: 'opacity 0.2s ease',
-  },
-
-  cardTop: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-
-  cardBrand: {
-    fontSize: 19,
-    fontWeight: 800,
-  },
-
-  cardType: {
-    fontSize: 8,
-    letterSpacing: 2,
-    marginTop: 3,
-    opacity: 0.75,
-  },
-
-  cardChip: {
-    width: 45,
-    height: 33,
-    borderRadius: 8,
-    background: 'rgba(255,255,255,0.8)',
-    color: '#456',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 19,
-  },
-
-  cardNumber: {
-    fontSize: 'clamp(20px, 5vw, 27px)',
-    letterSpacing: 2,
-    fontWeight: 600,
-    marginTop: 45,
-    whiteSpace: 'nowrap',
-  },
-
-  cardBottom: {
-    display: 'flex',
-    alignItems: 'flex-end',
-    gap: 25,
-    marginTop: 22,
-  },
-
-  cardLabel: {
-    fontSize: 7,
-    letterSpacing: 1.3,
-    opacity: 0.7,
-    marginBottom: 3,
-  },
-
-  cardValue: {
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: 0.5,
-  },
-
-  cardNetwork: {
-    marginLeft: 'auto',
-    fontSize: 18,
-    fontWeight: 900,
-    fontStyle: 'italic',
-  },
-
-  frozenOverlay: {
-    position: 'absolute',
-    inset: 0,
-    background: 'rgba(20,30,25,0.35)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 20,
-    fontWeight: 900,
-    letterSpacing: 2,
-  },
-
-  status: {
-    marginTop: 12,
-    borderRadius: 12,
-    padding: '10px 13px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    fontSize: 12,
-    fontWeight: 700,
-  },
-
-  statusActive: {
-    background: '#eafaf2',
-    color: '#087c43',
-  },
-
-  statusFrozen: {
-    background: '#fff1f0',
-    color: '#b42318',
-  },
-
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-  },
-
-  actionsCard: {
-    marginTop: 14,
-    background: '#ffffff',
+    width: 62,
+    height: 62,
+    margin: '0 auto 15px',
     borderRadius: 18,
-    border: '1px solid #e2ebe6',
-    overflow: 'hidden',
-  },
-
-  actionButton: {
-    width: '100%',
-    minHeight: 51,
-    border: 'none',
-    borderBottom: '1px solid #edf2ef',
-    background: '#ffffff',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    padding: '0 16px',
-    cursor: 'pointer',
-    color: '#17352a',
-    fontSize: 13,
-    fontWeight: 650,
-    textAlign: 'left',
-  },
-
-  actionIcon: {
-    width: 31,
-    height: 31,
-    borderRadius: 9,
-    background: '#eaf8f1',
-    color: '#087c43',
+    background: '#dff5e9',
+    color: '#078b4a',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
+    fontSize: 28,
+  },
+
+  title: {
+    margin: '0 0 8px',
+    fontSize: 27,
+    fontWeight: 800,
+  },
+
+  description: {
+    margin: 0,
+    color: '#718078',
+    fontSize: 14,
+    lineHeight: 1.6,
   },
 
   infoCard: {
-    marginTop: 14,
     background: '#ffffff',
+    border: '1px solid #e0ebe5',
     borderRadius: 18,
-    border: '1px solid #e2ebe6',
-    padding: 17,
-  },
-
-  infoTitle: {
-    margin: '0 0 12px',
-    fontSize: 16,
-    fontWeight: 800,
+    padding: 18,
+    boxShadow: '0 6px 20px rgba(26,61,47,0.05)',
   },
 
   infoRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '11px 0',
-    borderBottom: '1px solid #edf2ef',
-    color: '#718079',
-    fontSize: 12,
+    gap: 15,
   },
 
-  physicalCard: {
-    marginTop: 16,
-    background: '#ffffff',
-    borderRadius: 18,
-    border: '1px solid #e2ebe6',
-    padding: 17,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 13,
+  infoLabel: {
+    color: '#68766f',
+    fontSize: 14,
   },
 
-  physicalIcon: {
-    width: 50,
-    height: 50,
+  fee: {
+    color: '#c62828',
+    fontSize: 17,
+  },
+
+  balance: {
+    color: '#087c43',
+    fontSize: 17,
+  },
+
+  divider: {
+    height: 1,
+    background: '#edf2ef',
+    margin: '16px 0',
+  },
+
+  warning: {
+    marginTop: 14,
+    padding: 14,
     borderRadius: 15,
-    background: '#f0f4f2',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 24,
-    flexShrink: 0,
-  },
-
-  physicalContent: {
-    minWidth: 0,
-  },
-
-  comingSoon: {
-    display: 'inline-block',
-    background: '#fff4d6',
-    color: '#8a5a00',
-    borderRadius: 6,
-    padding: '4px 7px',
-    fontSize: 8,
-    fontWeight: 800,
-    letterSpacing: 0.8,
-    marginBottom: 5,
-  },
-
-  physicalTitle: {
-    margin: 0,
-    fontSize: 16,
-    fontWeight: 800,
-  },
-
-  physicalText: {
-    margin: '4px 0 0',
-    color: '#718079',
-    fontSize: 11.5,
-    lineHeight: 1.45,
-  },
-
-  securityCard: {
-    marginTop: 16,
-    background: '#eef8f3',
-    border: '1px solid #d5eee1',
-    borderRadius: 17,
-    padding: 15,
+    background: '#fff9ed',
+    border: '1px solid #f4dfad',
     display: 'flex',
     gap: 11,
     alignItems: 'flex-start',
   },
 
-  securityIcon: {
-    fontSize: 20,
-  },
-
-  securityTitle: {
-    margin: 0,
-    fontSize: 13,
+  warningIcon: {
+    width: 25,
+    height: 25,
+    borderRadius: '50%',
+    background: '#f2b233',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     fontWeight: 800,
+    flexShrink: 0,
   },
 
-  securityText: {
+  warningTitle: {
+    fontSize: 13,
+  },
+
+  warningText: {
     margin: '4px 0 0',
-    color: '#64746d',
-    fontSize: 11,
+    color: '#776d59',
+    fontSize: 12,
     lineHeight: 1.5,
   },
 
-  bottomNav: {
-    position: 'fixed',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 68,
-    background: 'rgba(255,255,255,0.98)',
-    borderTop: '1px solid #e5ebe8',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    zIndex: 30,
-    boxShadow: '0 -5px 18px rgba(25,55,43,0.05)',
+  createButton: {
+    width: '100%',
+    border: 'none',
+    background: '#079447',
+    color: '#ffffff',
+    borderRadius: 13,
+    padding: '14px 16px',
+    marginTop: 18,
+    fontSize: 14,
+    fontWeight: 800,
+    cursor: 'pointer',
   },
 
-  navItem: {
-    border: 'none',
-    background: 'transparent',
-    color: '#78847f',
+  comingSoon: {
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 17,
+    background: '#ffffff',
+    border: '1px solid #e2ebe7',
     display: 'flex',
-    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  physicalIcon: {
+    width: 45,
+    height: 45,
+    borderRadius: 13,
+    background: '#f1f4f3',
+    display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    fontSize: 22,
+    color: '#6f7b76',
+  },
+
+  comingTitle: {
+    fontSize: 14,
+  },
+
+  comingText: {
+    margin: '4px 0 0',
+    color: '#7a8781',
+    fontSize: 11,
+  },
+
+  comingBadge: {
     fontSize: 10,
-    fontWeight: 600,
-    cursor: 'pointer',
-    position: 'relative',
+    fontWeight: 800,
+    color: '#6e7974',
+    background: '#f0f3f2',
+    padding: '6px 8px',
+    borderRadius: 8,
+    whiteSpace: 'nowrap',
   },
 
-  navActive: {
-    color: '#078b4a',
+  successMessage: {
+    background: '#eaf9f1',
+    border: '1px solid #ccebd9',
+    borderRadius: 15,
+    padding: 13,
+    display: 'flex',
+    gap: 10,
+    alignItems: 'center',
+    marginBottom: 17,
+    color: '#075f37',
   },
 
-  navIcon: {
-    fontSize: 21,
-    lineHeight: 1,
-  },
-
-  activeIndicator: {
-    position: 'absolute',
-    bottom: 3,
-    width: 40,
-    height: 3,
-    borderRadius: 5,
+  successIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: '50%',
     background: '#079447',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800,
+  },
+
+  virtualCard: {
+    minHeight: 245,
+    borderRadius: 23,
+    padding: 23,
+    boxSizing: 'border-box',
+    background:
+      'linear-gradient(135deg, #007a3f 0%, #079b52 55%, #04ad60 100%)',
+    color: '#ffffff',
+    boxShadow: '0 15px 35px rgba(0,112,58,0.18)',
+  },
+
+  cardTop: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  cardBrand: {
+    fontSize: 18,
+    letterSpacing: 1,
+  },
+
+  cardChip: {
+    width: 43,
+    height: 32,
+    borderRadius: 8,
+    background: '#e6bd54',
+    color: '#80651f',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  cardNumber: {
+    marginTop: 42,
+    fontSize: 22,
+    fontWeight: 700,
+    letterSpacing: 2,
+  },
+
+  cardBottom: {
+    marginTop: 28,
+    display: 'flex',
+    gap: 28,
+  },
+
+  cardLabel: {
+    display: 'block',
+    fontSize: 8,
+    opacity: 0.7,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+
+  cardValue: {
+    display: 'block',
+    fontSize: 12,
+  },
+
+  cardFooter: {
+    marginTop: 20,
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: 9,
+    letterSpacing: 1,
+    opacity: 0.8,
+  },
+
+  actionRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 10,
+    marginTop: 13,
+  },
+
+  secondaryButton: {
+    border: '1px solid #d6e2dc',
+    background: '#ffffff',
+    color: '#087c43',
+    borderRadius: 12,
+    padding: '12px',
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+
+  freezeButton: {
+    width: '100%',
+    background: '#ffffff',
+    border: '1px solid',
+    borderRadius: 12,
+    padding: '12px',
+    marginTop: 10,
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+
+  manageButton: {
+    display: 'block',
+    textAlign: 'center',
+    marginTop: 15,
+    color: '#087c43',
+    textDecoration: 'none',
+    fontSize: 13,
+    fontWeight: 700,
   },
 };
 
