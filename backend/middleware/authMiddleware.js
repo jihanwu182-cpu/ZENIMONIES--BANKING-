@@ -4,7 +4,7 @@ const pool = require('../config/database');
 const authMiddleware = async (req, res, next) => {
   try {
     // ============================================================
-    // CHECK AUTHORIZATION HEADER
+    // 1. CHECK AUTHORIZATION HEADER
     // ============================================================
 
     const authHeader = req.headers.authorization;
@@ -16,7 +16,9 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    const token = authHeader.substring(7).trim();
+    const token = authHeader
+      .substring(7)
+      .trim();
 
     if (!token) {
       return res.status(401).json({
@@ -26,41 +28,74 @@ const authMiddleware = async (req, res, next) => {
     }
 
     // ============================================================
-    // CHECK JWT SECRET
+    // 2. CHECK JWT SECRET
     // ============================================================
 
     if (!process.env.JWT_SECRET) {
-      console.error('JWT_SECRET is not configured');
+      console.error(
+        'JWT_SECRET is not configured'
+      );
 
       return res.status(500).json({
         success: false,
-        message: 'Authentication service is not configured',
+        message:
+          'Authentication service is not configured',
       });
     }
 
     // ============================================================
-    // VERIFY JWT
+    // 3. VERIFY JWT
     // ============================================================
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET
-    );
+    let decoded;
+
+    try {
+      decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET
+      );
+    } catch (jwtError) {
+      console.error(
+        'JWT verification failed:',
+        jwtError.message
+      );
+
+      return res.status(401).json({
+        success: false,
+        message:
+          'Invalid or expired authentication token',
+      });
+    }
+
+    // ============================================================
+    // 4. GET USER ID FROM TOKEN
+    // ============================================================
 
     const userId =
       decoded.userId ||
       decoded.id ||
-      decoded.user_id;
+      decoded.user_id ||
+      decoded.sub;
 
     if (!userId) {
+      console.error(
+        'JWT does not contain a user ID:',
+        decoded
+      );
+
       return res.status(401).json({
         success: false,
-        message: 'Invalid authentication token',
+        message:
+          'Invalid authentication token',
       });
     }
 
     // ============================================================
-    // GET CURRENT USER
+    // 5. LOAD USER
+    //
+    // IMPORTANT:
+    // Only use columns that are required for authentication.
+    // KYC-specific fields are loaded separately by KYC routes.
     // ============================================================
 
     const result = await pool.query(
@@ -71,11 +106,7 @@ const authMiddleware = async (req, res, next) => {
         email,
         phone,
         role,
-        status,
-        kyc_status,
-        kyc_tier,
-        tier,
-        is_verified
+        status
       FROM users
       WHERE id = $1
       LIMIT 1
@@ -93,7 +124,7 @@ const authMiddleware = async (req, res, next) => {
     const user = result.rows[0];
 
     // ============================================================
-    // CHECK ACCOUNT STATUS
+    // 6. CHECK ACCOUNT STATUS
     // ============================================================
 
     if (
@@ -102,18 +133,21 @@ const authMiddleware = async (req, res, next) => {
     ) {
       return res.status(403).json({
         success: false,
-        message: 'Your account is not active',
+        message:
+          'Your account is not active',
       });
     }
 
     // ============================================================
-    // ATTACH USER TO REQUEST
+    // 7. ATTACH USER TO REQUEST
     // ============================================================
 
     req.user = user;
-
-    // Keep the authenticated user ID easily available.
     req.userId = user.id;
+
+    // ============================================================
+    // 8. CONTINUE
+    // ============================================================
 
     next();
   } catch (error) {
@@ -122,28 +156,10 @@ const authMiddleware = async (req, res, next) => {
       error
     );
 
-    // ============================================================
-    // JWT ERRORS
-    // ============================================================
-
-    if (
-      error.name === 'JsonWebTokenError' ||
-      error.name === 'TokenExpiredError' ||
-      error.name === 'NotBeforeError'
-    ) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid or expired authentication token',
-      });
-    }
-
-    // ============================================================
-    // DATABASE / SERVER ERROR
-    // ============================================================
-
     return res.status(500).json({
       success: false,
-      message: 'Unable to authenticate user',
+      message:
+        'Unable to authenticate user',
     });
   }
 };
