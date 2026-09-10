@@ -20,9 +20,9 @@ const Dashboard: React.FC = () => {
       description: 'Fund your account',
     },
     {
-      name: 'Send Money',
+      name: 'Send to ZENIMONIES',
       icon: '➤',
-      description: 'Send money',
+      description: 'Send to another ZENIMONIES user',
     },
     {
       name: 'To Bank',
@@ -77,7 +77,7 @@ const Dashboard: React.FC = () => {
         navigate('/deposit');
         break;
 
-      case 'Send Money':
+      case 'Send to ZENIMONIES':
         navigate('/transfer');
         break;
 
