@@ -147,6 +147,7 @@ CREATE TABLE IF NOT EXISTS deposit_accounts (
 
 -- ============================================================
 -- VIRTUAL CARDS
+-- One virtual card per user
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS virtual_cards (
@@ -160,37 +161,38 @@ CREATE TABLE IF NOT EXISTS virtual_cards (
         REFERENCES accounts(id)
         ON DELETE CASCADE,
 
-    card_number TEXT NOT NULL,
+    card_number VARCHAR(19) UNIQUE NOT NULL,
 
-    expiry_month INTEGER NOT NULL,
+    card_number_last4 VARCHAR(4) NOT NULL,
 
-    expiry_year INTEGER NOT NULL,
+    expiry_month VARCHAR(2) NOT NULL,
 
-    cvv TEXT NOT NULL,
+    expiry_year VARCHAR(2) NOT NULL,
+
+    cvv_hash TEXT NOT NULL,
 
     pin_hash TEXT NOT NULL,
 
     status VARCHAR(30) NOT NULL DEFAULT 'active',
 
-    creation_fee NUMERIC(18,2) NOT NULL DEFAULT 1000.00,
+    card_fee NUMERIC(18,2) NOT NULL DEFAULT 1000.00,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT virtual_cards_status_check
-        CHECK (status IN ('active', 'blocked', 'cancelled')),
-
-    CONSTRAINT virtual_cards_unique_user
+    CONSTRAINT virtual_cards_one_per_user
         UNIQUE (user_id)
 );
-
 
 CREATE INDEX IF NOT EXISTS idx_virtual_cards_user_id
 ON virtual_cards(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_virtual_cards_account_id
 ON virtual_cards(account_id);
+
+CREATE INDEX IF NOT EXISTS idx_virtual_cards_status
+ON virtual_cards(status);
 -- ============================================================
 -- TRANSACTIONS
 -- ============================================================
