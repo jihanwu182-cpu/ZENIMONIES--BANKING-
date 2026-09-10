@@ -8,7 +8,9 @@ const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
 const getPaystackHeaders = () => {
   if (!process.env.PAYSTACK_SECRET_KEY) {
-    throw new Error('PAYSTACK_SECRET_KEY is not configured');
+    throw new Error(
+      'PAYSTACK_SECRET_KEY is not configured'
+    );
   }
 
   return {
@@ -17,26 +19,43 @@ const getPaystackHeaders = () => {
   };
 };
 
+// ============================================================
+// PAYSTACK ERROR HANDLER
+// ============================================================
+
+const getPaystackErrorMessage = (error) => {
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.message ||
+    'Paystack request failed'
+  );
+};
 
 // ============================================================
 // GET SUPPORTED BANKS
 // ============================================================
 
 const getBanks = async () => {
-  const response = await axios.get(
-    `${PAYSTACK_BASE_URL}/bank`,
-    {
-      params: {
-        country: 'nigeria',
-        perPage: 100,
-      },
-      headers: getPaystackHeaders(),
-    }
-  );
+  try {
+    const response = await axios.get(
+      `${PAYSTACK_BASE_URL}/bank`,
+      {
+        params: {
+          country: 'nigeria',
+          perPage: 100,
+        },
+        headers: getPaystackHeaders(),
+      }
+    );
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      `Unable to retrieve Paystack banks: ${getPaystackErrorMessage(error)}`
+    );
+  }
 };
-
 
 // ============================================================
 // RESOLVE BANK ACCOUNT
@@ -52,20 +71,25 @@ const resolveBankAccount = async (
     );
   }
 
-  const response = await axios.get(
-    `${PAYSTACK_BASE_URL}/bank/resolve`,
-    {
-      params: {
-        account_number: accountNumber,
-        bank_code: bankCode,
-      },
-      headers: getPaystackHeaders(),
-    }
-  );
+  try {
+    const response = await axios.get(
+      `${PAYSTACK_BASE_URL}/bank/resolve`,
+      {
+        params: {
+          account_number: accountNumber,
+          bank_code: bankCode,
+        },
+        headers: getPaystackHeaders(),
+      }
+    );
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      `Unable to resolve bank account: ${getPaystackErrorMessage(error)}`
+    );
+  }
 };
-
 
 // ============================================================
 // CREATE PAYSTACK CUSTOMER
@@ -83,22 +107,45 @@ const createPaystackCustomer = async ({
     );
   }
 
-  const response = await axios.post(
-    `${PAYSTACK_BASE_URL}/customer`,
-    {
-      email,
-      first_name: firstName || undefined,
-      last_name: lastName || undefined,
-      phone: phone || undefined,
-    },
-    {
-      headers: getPaystackHeaders(),
-    }
-  );
+  if (!firstName) {
+    throw new Error(
+      'First name is required to create Paystack customer'
+    );
+  }
 
-  return response.data;
+  if (!lastName) {
+    throw new Error(
+      'Last name is required to create Paystack customer'
+    );
+  }
+
+  if (!phone) {
+    throw new Error(
+      'Phone number is required to create Paystack customer'
+    );
+  }
+
+  try {
+    const response = await axios.post(
+      `${PAYSTACK_BASE_URL}/customer`,
+      {
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+      },
+      {
+        headers: getPaystackHeaders(),
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      `Unable to create Paystack customer: ${getPaystackErrorMessage(error)}`
+    );
+  }
 };
-
 
 // ============================================================
 // GET PAYSTACK CUSTOMER
@@ -113,40 +160,102 @@ const getPaystackCustomer = async (
     );
   }
 
-  const response = await axios.get(
-    `${PAYSTACK_BASE_URL}/customer/${encodeURIComponent(
-      customerCode
-    )}`,
-    {
-      headers: getPaystackHeaders(),
-    }
-  );
+  try {
+    const response = await axios.get(
+      `${PAYSTACK_BASE_URL}/customer/${encodeURIComponent(
+        customerCode
+      )}`,
+      {
+        headers: getPaystackHeaders(),
+      }
+    );
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      `Unable to retrieve Paystack customer: ${getPaystackErrorMessage(error)}`
+    );
+  }
 };
 
+// ============================================================
+// VALIDATE PAYSTACK CUSTOMER
+//
+// Required by Paystack for certain Nigerian business
+// categories, including Financial Services.
+//
+// The customer's BVN and a bank account connected to
+// that BVN are required for bank-account validation.
+// ============================================================
+
+const validatePaystackCustomer = async ({
+  customerCode,
+  bvn,
+  accountNumber,
+  bankCode,
+}) => {
+  if (!customerCode) {
+    throw new Error(
+      'Paystack customer code is required'
+    );
+  }
+
+  if (!bvn) {
+    throw new Error(
+      'BVN is required to validate the Paystack customer'
+    );
+  }
+
+  if (!accountNumber) {
+    throw new Error(
+      'Bank account number is required for Paystack customer validation'
+    );
+  }
+
+  if (!bankCode) {
+    throw new Error(
+      'Bank code is required for Paystack customer validation'
+    );
+  }
+
+  try {
+    const response = await axios.post(
+      `${PAYSTACK_BASE_URL}/customer/${encodeURIComponent(
+        customerCode
+      )}/identification`,
+      {
+        country: 'NG',
+        type: 'bank_account',
+        account_number: accountNumber,
+        bvn,
+        bank_code: bankCode,
+      },
+      {
+        headers: getPaystackHeaders(),
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      `Unable to validate Paystack customer: ${getPaystackErrorMessage(error)}`
+    );
+  }
+};
 
 // ============================================================
 // CREATE DEDICATED VIRTUAL ACCOUNT
 //
 // IMPORTANT:
-// ZENIMONIES DOES NOT GENERATE THE ACCOUNT NUMBER.
 //
-// Paystack generates/issues the receiving account number.
-// The returned account_number becomes the customer's
-// ZENIMONIES receiving account number.
+// ZENIMONIES DOES NOT GENERATE ACCOUNT NUMBERS.
 //
-// Example Paystack response:
+// Paystack is the source of truth.
 //
-// data: {
-//   id: 123,
-//   account_name: "...",
-//   account_number: "9930000737",
-//   bank: {
-//     name: "Paystack-Titan"
-//   },
-//   currency: "NGN"
-// }
+// The account number saved in the ZENIMONIES database must
+// come directly from:
+//
+// paystackResponse.data.account_number
 //
 // ============================================================
 
@@ -164,21 +273,38 @@ const createDedicatedVirtualAccount = async ({
     customer: customerCode,
   };
 
+  // ----------------------------------------------------------
+  // TEST MODE
+  //
+  // Paystack documents test-bank for Nigerian test DVAs.
+  // ----------------------------------------------------------
+
+  const isTestKey = String(
+    process.env.PAYSTACK_SECRET_KEY || ''
+  ).startsWith('sk_test_');
+
   if (preferredBank) {
     payload.preferred_bank = preferredBank;
+  } else if (isTestKey) {
+    payload.preferred_bank = 'test-bank';
   }
 
-  const response = await axios.post(
-    `${PAYSTACK_BASE_URL}/dedicated_account`,
-    payload,
-    {
-      headers: getPaystackHeaders(),
-    }
-  );
+  try {
+    const response = await axios.post(
+      `${PAYSTACK_BASE_URL}/dedicated_account`,
+      payload,
+      {
+        headers: getPaystackHeaders(),
+      }
+    );
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      `Unable to create Paystack dedicated account: ${getPaystackErrorMessage(error)}`
+    );
+  }
 };
-
 
 // ============================================================
 // GET DEDICATED VIRTUAL ACCOUNT
@@ -193,18 +319,23 @@ const getDedicatedVirtualAccount = async (
     );
   }
 
-  const response = await axios.get(
-    `${PAYSTACK_BASE_URL}/dedicated_account/${encodeURIComponent(
-      dedicatedAccountId
-    )}`,
-    {
-      headers: getPaystackHeaders(),
-    }
-  );
+  try {
+    const response = await axios.get(
+      `${PAYSTACK_BASE_URL}/dedicated_account/${encodeURIComponent(
+        dedicatedAccountId
+      )}`,
+      {
+        headers: getPaystackHeaders(),
+      }
+    );
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      `Unable to retrieve dedicated account: ${getPaystackErrorMessage(error)}`
+    );
+  }
 };
-
 
 // ============================================================
 // LIST CUSTOMER DEDICATED ACCOUNTS
@@ -219,27 +350,30 @@ const getCustomerDedicatedAccounts = async (
     );
   }
 
-  const response = await axios.get(
-    `${PAYSTACK_BASE_URL}/dedicated_account`,
-    {
-      params: {
-        customer: customerCode,
-      },
-      headers: getPaystackHeaders(),
-    }
-  );
+  try {
+    const response = await axios.get(
+      `${PAYSTACK_BASE_URL}/dedicated_account`,
+      {
+        params: {
+          customer: customerCode,
+        },
+        headers: getPaystackHeaders(),
+      }
+    );
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      `Unable to retrieve customer dedicated accounts: ${getPaystackErrorMessage(error)}`
+    );
+  }
 };
 
-
 // ============================================================
-// EXTRACT PROVIDER-ISSUED ACCOUNT
+// EXTRACT REAL PROVIDER ACCOUNT
 //
-// This helper prevents us from accidentally treating a
-// locally generated account number as the real receiving
-// account.
-//
+// This function deliberately refuses to return an account
+// unless Paystack supplied account_number.
 // ============================================================
 
 const extractDedicatedAccount = (
@@ -256,40 +390,45 @@ const extractDedicatedAccount = (
 
   if (!data.account_number) {
     throw new Error(
-      'Paystack did not return an account number'
+      'Paystack did not return a real account number. No ZENIMONIES account number will be created.'
     );
   }
 
   return {
     providerAccountId:
-      data.id,
+      data.id
+        ? String(data.id)
+        : null,
 
     accountNumber:
-      data.account_number,
+      String(data.account_number),
 
     accountName:
-      data.account_name,
+      data.account_name || null,
 
     bankName:
-      data.bank?.name || null,
+      data.bank?.name ||
+      null,
 
     bankCode:
-      data.bank?.slug || null,
+      data.bank?.slug ||
+      null,
 
     currency:
-      data.currency || 'NGN',
+      data.currency ||
+      'NGN',
 
     active:
-      data.active,
+      data.active === true,
 
     assigned:
-      data.assigned,
+      data.assigned === true,
 
     customerCode:
-      data.customer?.customer_code || null,
+      data.customer?.customer_code ||
+      null,
   };
 };
-
 
 // ============================================================
 // EXPORTS
@@ -301,6 +440,7 @@ module.exports = {
 
   createPaystackCustomer,
   getPaystackCustomer,
+  validatePaystackCustomer,
 
   createDedicatedVirtualAccount,
   getDedicatedVirtualAccount,
