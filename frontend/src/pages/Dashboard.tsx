@@ -12,14 +12,9 @@ const Dashboard: React.FC = () => {
 
   const [showBalance, setShowBalance] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
-  const [activeService, setActiveService] = useState<string | null>(null);
-
-  const [sendType, setSendType] = useState<
-    'zenimonies' | 'bank' | null
-  >(null);
-
-  const [recipient, setRecipient] = useState('');
-  const [amount, setAmount] = useState('');
+  const [showCardNumber, setShowCardNumber] = useState(false);
+  const [cardFrozen, setCardFrozen] = useState(false);
+  const [cardCreated, setCardCreated] = useState(true);
 
   const services: Service[] = [
     {
@@ -80,76 +75,90 @@ const Dashboard: React.FC = () => {
   ];
 
   const handleServiceClick = (service: string) => {
-    if (service === 'More') {
-      setShowMenu((previous) => !previous);
-      return;
-    }
+    switch (service) {
+      case 'Add Money':
+        navigate('/deposit');
+        break;
 
-    if (service === 'Betting') {
-      navigate('/betting');
-      return;
-   }
-    
-    if (service === 'Send Money') {
-      setActiveService('Send Money');
-      setSendType(null);
-      return;
-    }
+      case 'Send Money':
+        navigate('/transfer');
+        break;
 
-    if (service === 'To Bank') {
-      setActiveService('To Bank');
-      setSendType('bank');
-      return;
-    }
+      case 'To Bank':
+        navigate('/to-bank');
+        break;
 
-    setActiveService(service);
+      case 'Withdraw':
+        navigate('/withdraw');
+        break;
+
+      case 'Airtime':
+        navigate('/airtime');
+        break;
+
+      case 'Data':
+        navigate('/data');
+        break;
+
+      case 'Betting':
+        navigate('/betting');
+        break;
+
+      case 'TV':
+        navigate('/tv');
+        break;
+
+      case 'Bills':
+        navigate('/bills');
+        break;
+
+      case 'SafeBox':
+        navigate('/safebox');
+        break;
+
+      case 'More':
+        setShowMenu((previous) => !previous);
+        break;
+
+      default:
+        break;
+    }
   };
 
-  const closeService = () => {
-    setActiveService(null);
-    setSendType(null);
-    setRecipient('');
-    setAmount('');
+  const handleCreateCard = () => {
+    setCardCreated(true);
+    alert('Your virtual card has been created.');
   };
 
-  const selectSendType = (
-    type: 'zenimonies' | 'bank'
-  ) => {
-    setSendType(type);
-  };
-
-  const handleContinueSend = () => {
-    if (!recipient || !amount) {
-      alert('Please enter the required information.');
-      return;
-    }
-
-    if (Number(amount) <= 0) {
-      alert('Please enter a valid amount.');
-      return;
-    }
-
-    if (sendType === 'zenimonies') {
-      alert(
-        `Zenimonies transfer prepared for ${recipient} - ₦${amount}`
+  const handleCopyCard = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        '5399 8421 7356 4821'
       );
-    } else if (sendType === 'bank') {
-      alert(
-        `Bank transfer prepared for ${recipient} - ₦${amount}`
-      );
+
+      alert('Virtual card number copied.');
+    } catch {
+      alert('Unable to copy card number.');
     }
   };
 
   return (
     <div style={styles.page}>
 
-      {/* ================= HEADER ================= */}
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
 
       <header style={styles.header}>
+
         <div style={styles.brandArea}>
-          <div style={styles.logo}>Z</div>
+
+          <div style={styles.logo}>
+            Z
+          </div>
 
           <div>
+
             <div style={styles.brandName}>
               Zenimonies
             </div>
@@ -157,10 +166,13 @@ const Dashboard: React.FC = () => {
             <div style={styles.brandSubtitle}>
               DIGITAL BANKING
             </div>
+
           </div>
+
         </div>
 
         <div style={styles.headerRight}>
+
           <button
             type="button"
             style={styles.notificationButton}
@@ -170,31 +182,49 @@ const Dashboard: React.FC = () => {
             aria-label="Notifications"
           >
             ♧
-            <span style={styles.notificationDot} />
+
+            <span
+              style={styles.notificationDot}
+            />
+
           </button>
 
           <button
             type="button"
             style={styles.profileButton}
-            onClick={() => navigate('/profile')}
+            onClick={() =>
+              navigate('/profile')
+            }
           >
-            <div style={styles.avatar}>H</div>
+
+            <div style={styles.avatar}>
+              H
+            </div>
 
             <span style={styles.headerName}>
               Harrison
             </span>
+
           </button>
+
         </div>
+
       </header>
 
-      {/* ================= MAIN ================= */}
+      {/* =====================================================
+          MAIN
+      ===================================================== */}
 
       <main style={styles.main}>
 
-        {/* ================= WELCOME ================= */}
+        {/* ===================================================
+            WELCOME
+        =================================================== */}
 
         <section style={styles.welcomeSection}>
+
           <div>
+
             <div style={styles.welcomeSmall}>
               Welcome back,
             </div>
@@ -206,30 +236,42 @@ const Dashboard: React.FC = () => {
             <p style={styles.subtitle}>
               Here&apos;s your financial overview.
             </p>
+
           </div>
 
           <button
             type="button"
             style={styles.verifiedBadge}
-            onClick={() => navigate('/kyc')}
+            onClick={() =>
+              navigate('/kyc')
+            }
           >
+
             <span style={styles.checkCircle}>
               ✓
             </span>
 
-            <span>Tier 1 Verified</span>
+            <span>
+              Tier 1 Verified
+            </span>
+
           </button>
+
         </section>
 
-        {/* ================= BALANCE CARD ================= */}
+        {/* ===================================================
+            BALANCE
+        =================================================== */}
 
         <section style={styles.balanceCard}>
+
           <div style={styles.waveOne} />
           <div style={styles.waveTwo} />
 
           <div style={styles.balanceContent}>
 
             <div style={styles.balanceTop}>
+
               <span style={styles.balanceLabel}>
                 Available Balance
               </span>
@@ -238,31 +280,265 @@ const Dashboard: React.FC = () => {
                 type="button"
                 style={styles.hideButton}
                 onClick={() =>
-                  setShowBalance(!showBalance)
+                  setShowBalance(
+                    (previous) => !previous
+                  )
                 }
               >
+
                 <span style={styles.eyeIcon}>
                   {showBalance ? '◉' : '○'}
                 </span>
 
-                {showBalance ? 'Hide' : 'Show'}
+                {showBalance
+                  ? 'Hide'
+                  : 'Show'}
+
               </button>
+
             </div>
 
             <div style={styles.balanceAmount}>
+
               {showBalance
                 ? '₦0.00'
                 : '₦••••'}
+
             </div>
 
           </div>
+
         </section>
 
-        {/* ================= QUICK ACTIONS ================= */}
+        {/* ===================================================
+            VIRTUAL CARD
+        =================================================== */}
+
+        <section style={styles.virtualCardSection}>
+
+          <div style={styles.virtualCardHeading}>
+
+            <div>
+
+              <h2 style={styles.virtualCardTitle}>
+                Virtual Card
+              </h2>
+
+              <p style={styles.virtualCardSubtitle}>
+                Use your Zenimonies virtual card
+                for supported online payments.
+              </p>
+
+            </div>
+
+            <button
+              type="button"
+              style={styles.cardViewButton}
+              onClick={() =>
+                navigate('/virtual-card')
+              }
+            >
+              View
+            </button>
+
+          </div>
+
+          {!cardCreated ? (
+
+            <div style={styles.createCardPanel}>
+
+              <div style={styles.createCardIcon}>
+                💳
+              </div>
+
+              <div style={styles.createCardText}>
+
+                <h3 style={styles.createCardTitle}>
+                  Create your virtual card
+                </h3>
+
+                <p style={styles.createCardDescription}>
+                  Create a virtual card for
+                  supported online payments.
+                </p>
+
+              </div>
+
+              <button
+                type="button"
+                style={styles.createCardButton}
+                onClick={handleCreateCard}
+              >
+                Create Card
+              </button>
+
+            </div>
+
+          ) : (
+
+            <div
+              style={{
+                ...styles.virtualCard,
+                ...(cardFrozen
+                  ? styles.virtualCardFrozen
+                  : {}),
+              }}
+            >
+
+              <div style={styles.cardTopRow}>
+
+                <div style={styles.cardBrand}>
+                  ZENIMONIES
+                </div>
+
+                <div style={styles.cardChip}>
+                  ◈
+                </div>
+
+              </div>
+
+              <div style={styles.cardMiddle}>
+
+                <div style={styles.cardNumber}>
+
+                  {showCardNumber
+                    ? '5399 8421 7356 4821'
+                    : '•••• •••• •••• 4821'}
+
+                </div>
+
+                <div style={styles.cardDetails}>
+
+                  <div>
+
+                    <span style={styles.cardLabel}>
+                      CARD HOLDER
+                    </span>
+
+                    <strong style={styles.cardValue}>
+                      HARRISON
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span style={styles.cardLabel}>
+                      VALID THRU
+                    </span>
+
+                    <strong style={styles.cardValue}>
+                      09/29
+                    </strong>
+
+                  </div>
+
+                  <div>
+
+                    <span style={styles.cardLabel}>
+                      CVV
+                    </span>
+
+                    <strong style={styles.cardValue}>
+                      {showCardNumber
+                        ? '•••'
+                        : '•••'}
+                    </strong>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+              <div style={styles.cardBottomRow}>
+
+                <span style={styles.cardStatus}>
+                  {cardFrozen
+                    ? 'CARD FROZEN'
+                    : 'VIRTUAL CARD'}
+                </span>
+
+                <span style={styles.cardCurrency}>
+                  NGN
+                </span>
+
+              </div>
+
+            </div>
+
+          )}
+
+          {cardCreated && (
+
+            <div style={styles.cardActions}>
+
+              <button
+                type="button"
+                style={styles.cardActionButton}
+                onClick={() =>
+                  setShowCardNumber(
+                    (previous) => !previous
+                  )
+                }
+              >
+                {showCardNumber
+                  ? 'Hide Details'
+                  : 'Show Details'}
+              </button>
+
+              <button
+                type="button"
+                style={styles.cardActionButton}
+                onClick={handleCopyCard}
+              >
+                Copy Number
+              </button>
+
+              <button
+                type="button"
+                style={{
+                  ...styles.cardActionButton,
+                  ...(cardFrozen
+                    ? styles.unfreezeButton
+                    : styles.freezeButton),
+                }}
+                onClick={() =>
+                  setCardFrozen(
+                    (previous) => !previous
+                  )
+                }
+              >
+                {cardFrozen
+                  ? 'Unfreeze'
+                  : 'Freeze Card'}
+              </button>
+
+            </div>
+
+          )}
+
+          <button
+            type="button"
+            style={styles.manageCardButton}
+            onClick={() =>
+              navigate('/virtual-card')
+            }
+          >
+            Manage Virtual Card
+            <span>›</span>
+          </button>
+
+        </section>
+
+        {/* ===================================================
+            QUICK ACTIONS
+        =================================================== */}
 
         <section style={styles.quickSection}>
 
           <div style={styles.sectionHeading}>
+
             <h2 style={styles.quickTitle}>
               Quick Actions
             </h2>
@@ -271,16 +547,21 @@ const Dashboard: React.FC = () => {
               type="button"
               style={styles.seeAllButton}
               onClick={() =>
-                setShowMenu(!showMenu)
+                setShowMenu(
+                  (previous) => !previous
+                )
               }
             >
-              See all <span>›</span>
+              See all
+              <span>›</span>
             </button>
+
           </div>
 
           <div style={styles.servicesGrid}>
 
             {services.map((service) => (
+
               <button
                 type="button"
                 key={service.name}
@@ -290,11 +571,16 @@ const Dashboard: React.FC = () => {
                     service.name
                   )
                 }
+                aria-label={
+                  service.description
+                }
               >
+
                 <div
                   style={{
                     ...styles.serviceIcon,
-                    ...(service.name === 'Betting'
+                    ...(service.name ===
+                    'Betting'
                       ? styles.bettingIcon
                       : {}),
                   }}
@@ -305,19 +591,27 @@ const Dashboard: React.FC = () => {
                 <div style={styles.serviceName}>
                   {service.name}
                 </div>
+
               </button>
+
             ))}
 
           </div>
+
         </section>
 
-        {/* ================= MORE MENU ================= */}
+        {/* ===================================================
+            MORE MENU
+        =================================================== */}
 
         {showMenu && (
+
           <section style={styles.morePanel}>
 
             <div style={styles.moreHeader}>
+
               <div>
+
                 <h3 style={styles.moreTitle}>
                   More Services
                 </h3>
@@ -325,6 +619,7 @@ const Dashboard: React.FC = () => {
                 <p style={styles.moreSubtitle}>
                   Choose a service to continue.
                 </p>
+
               </div>
 
               <button
@@ -336,6 +631,7 @@ const Dashboard: React.FC = () => {
               >
                 ×
               </button>
+
             </div>
 
             <div style={styles.moreItems}>
@@ -344,13 +640,33 @@ const Dashboard: React.FC = () => {
                 type="button"
                 style={styles.moreItem}
                 onClick={() =>
-                  setActiveService(
-                    'Transactions'
-                  )
+                  navigate('/transactions')
                 }
               >
                 <span>↕</span>
                 Transactions
+              </button>
+
+              <button
+                type="button"
+                style={styles.moreItem}
+                onClick={() =>
+                  navigate('/wallet')
+                }
+              >
+                <span>▱</span>
+                Wallet
+              </button>
+
+              <button
+                type="button"
+                style={styles.moreItem}
+                onClick={() =>
+                  navigate('/virtual-card')
+                }
+              >
+                <span>💳</span>
+                Virtual Card
               </button>
 
               <button
@@ -368,6 +684,17 @@ const Dashboard: React.FC = () => {
                 type="button"
                 style={styles.moreItem}
                 onClick={() =>
+                  navigate('/settings')
+                }
+              >
+                <span>⚙</span>
+                Settings
+              </button>
+
+              <button
+                type="button"
+                style={styles.moreItem}
+                onClick={() =>
                   navigate('/verify-phone')
                 }
               >
@@ -376,10 +703,14 @@ const Dashboard: React.FC = () => {
               </button>
 
             </div>
+
           </section>
+
         )}
 
-        {/* ================= KYC ================= */}
+        {/* ===================================================
+            KYC
+        =================================================== */}
 
         <section style={styles.verificationCard}>
 
@@ -388,20 +719,24 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div style={styles.verificationText}>
+
             <h3 style={styles.verificationTitle}>
               Account Verification
             </h3>
 
             <p style={styles.verificationDescription}>
-              Complete your KYC to increase your
-              limits.
+              Complete your KYC to increase
+              your limits.
             </p>
+
           </div>
 
           <button
             type="button"
             style={styles.verifyButton}
-            onClick={() => navigate('/kyc')}
+            onClick={() =>
+              navigate('/kyc')
+            }
           >
             Verify Now
             <span>›</span>
@@ -409,7 +744,9 @@ const Dashboard: React.FC = () => {
 
         </section>
 
-        {/* ================= RECENT TRANSACTIONS ================= */}
+        {/* ===================================================
+            RECENT TRANSACTIONS
+        =================================================== */}
 
         <section style={styles.transactionsSection}>
 
@@ -423,40 +760,49 @@ const Dashboard: React.FC = () => {
               type="button"
               style={styles.seeAllButton}
               onClick={() =>
-                setActiveService(
-                  'Transactions'
-                )
+                navigate('/transactions')
               }
             >
-              See all <span>›</span>
+              See all
+              <span>›</span>
             </button>
 
           </div>
 
-          <div style={styles.emptyTransactions}>
+          <button
+            type="button"
+            style={styles.emptyTransactions}
+            onClick={() =>
+              navigate('/transactions')
+            }
+          >
 
             <div style={styles.emptyIcon}>
               ▤
             </div>
 
-            <div>
+            <div style={styles.emptyTransactionText}>
+
               <strong>
                 No transactions yet
               </strong>
 
               <p style={styles.emptyDescription}>
-                Your transactions will appear
-                here.
+                Your transactions will
+                appear here.
               </p>
+
             </div>
 
-          </div>
+          </button>
 
         </section>
 
       </main>
 
-      {/* ================= BOTTOM NAVIGATION ================= */}
+      {/* =====================================================
+          BOTTOM NAVIGATION
+      ===================================================== */}
 
       <nav style={styles.bottomNav}>
 
@@ -466,45 +812,57 @@ const Dashboard: React.FC = () => {
             ...styles.navItem,
             ...styles.navItemActive,
           }}
-          onClick={() => navigate('/')}
+          onClick={() =>
+            navigate('/')
+          }
         >
+
           <span style={styles.navIcon}>
             ⌂
           </span>
 
-          <span>Home</span>
+          <span>
+            Home
+          </span>
 
           <span style={styles.activeIndicator} />
+
         </button>
 
         <button
           type="button"
           style={styles.navItem}
           onClick={() =>
-            setActiveService(
-              'Transactions'
-            )
+            navigate('/transactions')
           }
         >
+
           <span style={styles.navIcon}>
             ↕
           </span>
 
-          <span>Transactions</span>
+          <span>
+            Transactions
+          </span>
+
         </button>
 
         <button
           type="button"
           style={styles.navItem}
           onClick={() =>
-            setActiveService('Wallet')
+            navigate('/wallet')
           }
         >
+
           <span style={styles.navIcon}>
             ▱
           </span>
 
-          <span>Wallet</span>
+          <span>
+            Wallet
+          </span>
+
         </button>
 
         <button
@@ -514,329 +872,18 @@ const Dashboard: React.FC = () => {
             navigate('/profile')
           }
         >
+
           <span style={styles.navIcon}>
             ♙
           </span>
 
-          <span>Profile</span>
+          <span>
+            Profile
+          </span>
+
         </button>
 
       </nav>
-
-      {/* ================= SERVICE MODAL ================= */}
-
-      {activeService && (
-        <div style={styles.overlay}>
-
-          <div style={styles.serviceModal}>
-
-            <button
-              type="button"
-              style={styles.modalClose}
-              onClick={closeService}
-              aria-label="Close"
-            >
-              ×
-            </button>
-
-            {/* SEND MONEY */}
-
-            {activeService ===
-              'Send Money' && (
-              <>
-                {!sendType && (
-                  <>
-                    <div style={styles.modalIcon}>
-                      ➤
-                    </div>
-
-                    <h2 style={styles.modalTitle}>
-                      Send Money
-                    </h2>
-
-                    <p style={styles.modalText}>
-                      Choose where you want to
-                      send your money.
-                    </p>
-
-                    <div style={styles.sendOptions}>
-
-                      <button
-                        type="button"
-                        style={styles.sendOption}
-                        onClick={() =>
-                          selectSendType(
-                            'zenimonies'
-                          )
-                        }
-                      >
-                        <div style={styles.optionIcon}>
-                          Z
-                        </div>
-
-                        <div>
-                          <strong>
-                            Send to Zenimonies User
-                          </strong>
-
-                          <span>
-                            Send instantly to another
-                            Zenimonies user
-                          </span>
-                        </div>
-
-                        <span style={styles.optionArrow}>
-                          ›
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        style={styles.sendOption}
-                        onClick={() =>
-                          selectSendType('bank')
-                        }
-                      >
-                        <div style={styles.optionIcon}>
-                          ▥
-                        </div>
-
-                        <div>
-                          <strong>
-                            Send to Bank
-                          </strong>
-
-                          <span>
-                            Transfer to a Nigerian bank
-                            account
-                          </span>
-                        </div>
-
-                        <span style={styles.optionArrow}>
-                          ›
-                        </span>
-                      </button>
-
-                    </div>
-                  </>
-                )}
-
-                {sendType && (
-                  <>
-                    <div style={styles.modalIcon}>
-                      {sendType ===
-                      'zenimonies'
-                        ? 'Z'
-                        : '▥'}
-                    </div>
-
-                    <h2 style={styles.modalTitle}>
-                      {sendType ===
-                      'zenimonies'
-                        ? 'Send to Zenimonies User'
-                        : 'Send to Bank'}
-                    </h2>
-
-                    <p style={styles.modalText}>
-                      {sendType ===
-                      'zenimonies'
-                        ? 'Enter the recipient details and amount.'
-                        : 'Enter the bank account details and amount.'}
-                    </p>
-
-                    <input
-                      type="text"
-                      value={recipient}
-                      onChange={(event) =>
-                        setRecipient(
-                          event.target.value
-                        )
-                      }
-                      placeholder={
-                        sendType ===
-                        'zenimonies'
-                          ? 'Phone number or username'
-                          : 'Account number'
-                      }
-                      style={styles.modalInput}
-                    />
-
-                    {sendType === 'bank' && (
-                      <input
-                        type="text"
-                        placeholder="Bank name"
-                        style={styles.modalInput}
-                      />
-                    )}
-
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(event) =>
-                        setAmount(
-                          event.target.value
-                        )
-                      }
-                      placeholder="Amount (₦)"
-                      min="1"
-                      style={styles.modalInput}
-                    />
-
-                    <button
-                      type="button"
-                      style={styles.modalPrimaryButton}
-                      onClick={
-                        handleContinueSend
-                      }
-                    >
-                      Continue
-                    </button>
-
-                    <button
-                      type="button"
-                      style={styles.backButton}
-                      onClick={() =>
-                        setSendType(null)
-                      }
-                    >
-                      ← Back
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-
-            {/* ADD MONEY */}
-
-            {activeService ===
-              'Add Money' && (
-              <>
-                <div style={styles.modalIcon}>
-                  +
-                </div>
-
-                <h2 style={styles.modalTitle}>
-                  Add Money
-                </h2>
-
-                <p style={styles.modalText}>
-                  Fund your Zenimonies account
-                  securely.
-                </p>
-
-                <button
-                  type="button"
-                  style={styles.modalPrimaryButton}
-                  onClick={() => {
-                    closeService();
-                    alert(
-                      'Add Money will be connected next.'
-                    );
-                  }}
-                >
-                  Continue
-                </button>
-              </>
-            )}
-
-            {/* TO BANK */}
-
-            {activeService ===
-              'To Bank' && (
-              <>
-                <div style={styles.modalIcon}>
-                  ▥
-                </div>
-
-                <h2 style={styles.modalTitle}>
-                  Send to Bank
-                </h2>
-
-                <p style={styles.modalText}>
-                  Transfer money securely to any
-                  supported Nigerian bank.
-                </p>
-
-                <button
-                  type="button"
-                  style={styles.modalPrimaryButton}
-                  onClick={() => {
-                    setActiveService(
-                      'Send Money'
-                    );
-                    setSendType('bank');
-                  }}
-                >
-                  Continue
-                </button>
-              </>
-            )}
-
-            {/* OTHER SERVICES */}
-
-            {activeService !==
-              'Send Money' &&
-              activeService !==
-                'Add Money' &&
-              activeService !==
-                'To Bank' && (
-              <>
-                <div style={styles.modalIcon}>
-                  {services.find(
-                    (item) =>
-                      item.name ===
-                      activeService
-                  )?.icon || '✓'}
-                </div>
-
-                <h2 style={styles.modalTitle}>
-                  {activeService}
-                </h2>
-
-                <p style={styles.modalText}>
-                  {activeService ===
-                  'Withdraw'
-                    ? 'Withdraw money from your Zenimonies account.'
-                    : activeService ===
-                      'Airtime'
-                    ? 'Buy airtime for your mobile line.'
-                    : activeService ===
-                      'Data'
-                    ? 'Purchase mobile data bundles.'
-                    : activeService ===
-                      'Betting'
-                    ? 'Fund your betting wallet.'
-                    : activeService ===
-                      'TV'
-                    ? 'Pay your television subscription.'
-                    : activeService ===
-                      'Bills'
-                    ? 'Pay supported bills and services.'
-                    : activeService ===
-                      'SafeBox'
-                    ? 'Save money securely in your SafeBox.'
-                    : activeService ===
-                      'Transactions'
-                    ? 'Your transaction history will appear here.'
-                    : activeService ===
-                      'Wallet'
-                    ? 'Your wallet information will appear here.'
-                    : 'This service is ready to be connected.'}
-                </p>
-
-                <button
-                  type="button"
-                  style={styles.modalPrimaryButton}
-                  onClick={closeService}
-                >
-                  Continue
-                </button>
-              </>
-            )}
-
-          </div>
-        </div>
-      )}
 
     </div>
   );
@@ -1103,6 +1150,255 @@ const styles: Record<
     marginTop: 13,
   },
 
+  /* =====================================================
+     VIRTUAL CARD
+  ===================================================== */
+
+  virtualCardSection: {
+    background: '#ffffff',
+    borderRadius: 21,
+    padding: 18,
+    marginBottom: 22,
+    boxShadow:
+      '0 7px 22px rgba(26,61,47,0.05)',
+  },
+
+  virtualCardHeading: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 14,
+  },
+
+  virtualCardTitle: {
+    margin: 0,
+    fontSize: 19,
+    fontWeight: 800,
+  },
+
+  virtualCardSubtitle: {
+    margin: '4px 0 0',
+    color: '#78857f',
+    fontSize: 12,
+    lineHeight: 1.45,
+  },
+
+  cardViewButton: {
+    border: 'none',
+    background: '#e9f8f1',
+    color: '#087c43',
+    borderRadius: 10,
+    padding: '8px 13px',
+    fontWeight: 700,
+    cursor: 'pointer',
+    fontSize: 12,
+  },
+
+  createCardPanel: {
+    border:
+      '1px dashed #bcded0',
+    background: '#f8fcfa',
+    borderRadius: 17,
+    padding: 16,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  createCardIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    background: '#e5f7ee',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 23,
+    flexShrink: 0,
+  },
+
+  createCardText: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  createCardTitle: {
+    margin: 0,
+    fontSize: 14,
+    fontWeight: 800,
+  },
+
+  createCardDescription: {
+    margin: '4px 0 0',
+    color: '#78857f',
+    fontSize: 11.5,
+    lineHeight: 1.4,
+  },
+
+  createCardButton: {
+    border: 'none',
+    background: '#079447',
+    color: '#ffffff',
+    borderRadius: 11,
+    padding: '10px 13px',
+    fontWeight: 700,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    fontSize: 12,
+  },
+
+  virtualCard: {
+    minHeight: 210,
+    borderRadius: 22,
+    padding: 21,
+    boxSizing: 'border-box',
+    background:
+      'linear-gradient(135deg, #063b2d 0%, #087c43 52%, #079b52 100%)',
+    color: '#ffffff',
+    boxShadow:
+      '0 14px 32px rgba(0,90,50,0.18)',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+
+  virtualCardFrozen: {
+    opacity: 0.7,
+    filter: 'grayscale(0.25)',
+  },
+
+  cardTopRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+
+  cardBrand: {
+    fontSize: 14,
+    fontWeight: 800,
+    letterSpacing: 1.2,
+  },
+
+  cardChip: {
+    width: 42,
+    height: 31,
+    borderRadius: 8,
+    background:
+      'linear-gradient(135deg, #d7b76c, #f0d98d)',
+    color: '#6b5726',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 18,
+  },
+
+  cardMiddle: {
+    marginTop: 24,
+  },
+
+  cardNumber: {
+    fontSize:
+      'clamp(18px, 4vw, 25px)',
+    letterSpacing: 2,
+    fontWeight: 700,
+    wordSpacing: 4,
+  },
+
+  cardDetails: {
+    display: 'flex',
+    gap: 25,
+    marginTop: 18,
+  },
+
+  cardLabel: {
+    display: 'block',
+    fontSize: 7,
+    letterSpacing: 1,
+    opacity: 0.7,
+    marginBottom: 3,
+  },
+
+  cardValue: {
+    fontSize: 10,
+    letterSpacing: 0.7,
+  },
+
+  cardBottomRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 18,
+  },
+
+  cardStatus: {
+    fontSize: 9,
+    letterSpacing: 1.2,
+    opacity: 0.8,
+  },
+
+  cardCurrency: {
+    fontSize: 9,
+    fontWeight: 700,
+    opacity: 0.8,
+  },
+
+  cardActions: {
+    display: 'flex',
+    gap: 7,
+    flexWrap: 'wrap',
+    marginTop: 10,
+  },
+
+  cardActionButton: {
+    flex: 1,
+    minWidth: 100,
+    border:
+      '1px solid #dcebe4',
+    background: '#f8fcfa',
+    color: '#075e38',
+    borderRadius: 10,
+    padding: '9px 10px',
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+
+  freezeButton: {
+    color: '#b42318',
+    border:
+      '1px solid #f2c8c5',
+    background: '#fff8f7',
+  },
+
+  unfreezeButton: {
+    color: '#087c43',
+    border:
+      '1px solid #bfe9d4',
+    background: '#effbf5',
+  },
+
+  manageCardButton: {
+    width: '100%',
+    marginTop: 10,
+    border: 'none',
+    background: 'transparent',
+    color: '#087c43',
+    fontWeight: 700,
+    fontSize: 12,
+    cursor: 'pointer',
+    padding: '7px 0 0',
+    display: 'flex',
+    justifyContent: 'center',
+    gap: 6,
+  },
+
+  /* =====================================================
+     QUICK ACTIONS
+  ===================================================== */
+
   quickSection: {
     marginBottom: 21,
   },
@@ -1177,6 +1473,10 @@ const styles: Record<
     textAlign: 'center',
   },
 
+  /* =====================================================
+     MORE
+  ===================================================== */
+
   morePanel: {
     background: '#ffffff',
     borderRadius: 18,
@@ -1231,6 +1531,10 @@ const styles: Record<
     fontWeight: 600,
     fontSize: 12,
   },
+
+  /* =====================================================
+     KYC
+  ===================================================== */
 
   verificationCard: {
     background: '#ffffff',
@@ -1290,6 +1594,10 @@ const styles: Record<
     fontSize: 12,
   },
 
+  /* =====================================================
+     TRANSACTIONS
+  ===================================================== */
+
   transactionsSection: {
     marginBottom: 25,
   },
@@ -1300,6 +1608,9 @@ const styles: Record<
   },
 
   emptyTransactions: {
+    width: '100%',
+    boxSizing: 'border-box',
+    border: 'none',
     background: '#ffffff',
     borderRadius: 18,
     padding: 17,
@@ -1308,6 +1619,12 @@ const styles: Record<
     gap: 12,
     boxShadow:
       '0 5px 17px rgba(26,61,47,0.04)',
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+
+  emptyTransactionText: {
+    flex: 1,
   },
 
   emptyIcon: {
@@ -1320,6 +1637,7 @@ const styles: Record<
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: 20,
+    flexShrink: 0,
   },
 
   emptyDescription: {
@@ -1327,6 +1645,10 @@ const styles: Record<
     color: '#78857f',
     fontSize: 12,
   },
+
+  /* =====================================================
+     BOTTOM NAVIGATION
+  ===================================================== */
 
   bottomNav: {
     position: 'fixed',
@@ -1377,147 +1699,6 @@ const styles: Record<
     height: 3,
     borderRadius: 5,
     background: '#079447',
-  },
-
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background:
-      'rgba(10,30,22,0.48)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    zIndex: 100,
-  },
-
-  serviceModal: {
-    width: 'min(430px, 100%)',
-    maxHeight: '90vh',
-    overflowY: 'auto',
-    background: '#ffffff',
-    borderRadius: 23,
-    padding: 23,
-    position: 'relative',
-    textAlign: 'center',
-    boxShadow:
-      '0 25px 70px rgba(0,0,0,0.2)',
-  },
-
-  modalClose: {
-    position: 'absolute',
-    right: 14,
-    top: 12,
-    border: 'none',
-    background: '#f1f5f3',
-    width: 32,
-    height: 32,
-    borderRadius: '50%',
-    fontSize: 21,
-    cursor: 'pointer',
-  },
-
-  modalIcon: {
-    width: 62,
-    height: 62,
-    margin: '6px auto 13px',
-    borderRadius: 18,
-    background: '#e5f7ee',
-    color: '#078b4a',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 28,
-    fontWeight: 800,
-  },
-
-  modalTitle: {
-    margin: 0,
-    fontSize: 21,
-  },
-
-  modalText: {
-    color: '#6f7c76',
-    lineHeight: 1.5,
-    fontSize: 13,
-    margin: '9px 0 18px',
-  },
-
-  sendOptions: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 9,
-  },
-
-  sendOption: {
-    width: '100%',
-    border:
-      '1px solid #dcebe4',
-    background: '#f8fcfa',
-    borderRadius: 15,
-    padding: 12,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 11,
-    textAlign: 'left',
-    cursor: 'pointer',
-  },
-
-  optionIcon: {
-    width: 43,
-    height: 43,
-    flexShrink: 0,
-    borderRadius: 13,
-    background: '#dff6e9',
-    color: '#078b4a',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 800,
-    fontSize: 19,
-  },
-
-  optionArrow: {
-    marginLeft: 'auto',
-    fontSize: 23,
-    color: '#078b4a',
-  },
-
-  modalInput: {
-    width: '100%',
-    height: 47,
-    boxSizing: 'border-box',
-    border:
-      '1px solid #d8e5df',
-    borderRadius: 12,
-    padding: '0 13px',
-    marginBottom: 10,
-    fontSize: 14,
-    outline: 'none',
-  },
-
-  modalPrimaryButton: {
-    width: '100%',
-    height: 47,
-    border: 'none',
-    borderRadius: 13,
-    background: '#079447',
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: 'pointer',
-    marginTop: 3,
-  },
-
-  backButton: {
-    width: '100%',
-    border: 'none',
-    background: 'transparent',
-    color: '#087c43',
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer',
-    padding: '12px 0 0',
   },
 };
 
