@@ -193,6 +193,7 @@ ON virtual_cards(account_id);
 
 CREATE INDEX IF NOT EXISTS idx_virtual_cards_status
 ON virtual_cards(status);
+
 -- ============================================================
 -- TRANSACTIONS
 -- ============================================================
