@@ -145,7 +145,52 @@ CREATE TABLE IF NOT EXISTS deposit_accounts (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ============================================================
+-- VIRTUAL CARDS
+-- ============================================================
 
+CREATE TABLE IF NOT EXISTS virtual_cards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    account_id UUID NOT NULL
+        REFERENCES accounts(id)
+        ON DELETE CASCADE,
+
+    card_number TEXT NOT NULL,
+
+    expiry_month INTEGER NOT NULL,
+
+    expiry_year INTEGER NOT NULL,
+
+    cvv TEXT NOT NULL,
+
+    pin_hash TEXT NOT NULL,
+
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+
+    creation_fee NUMERIC(18,2) NOT NULL DEFAULT 1000.00,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT virtual_cards_status_check
+        CHECK (status IN ('active', 'blocked', 'cancelled')),
+
+    CONSTRAINT virtual_cards_unique_user
+        UNIQUE (user_id)
+);
+
+
+CREATE INDEX IF NOT EXISTS idx_virtual_cards_user_id
+ON virtual_cards(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_virtual_cards_account_id
+ON virtual_cards(account_id);
 -- ============================================================
 -- TRANSACTIONS
 -- ============================================================
