@@ -12,20 +12,18 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-
 // ============================================================
 // MULTER CONFIGURATION
 // ============================================================
 //
 // Files are received directly from the user's device.
 //
-// We use memory storage here so the backend can pass the
-// uploaded files to secure cloud/object storage or a KYC
-// verification provider.
+// Memory storage is used so uploaded KYC files are not written
+// to Render's temporary/local filesystem.
 //
-// DO NOT save sensitive KYC files permanently to Render's
-// local filesystem.
-//
+// The controller should pass files to secure storage or an
+// approved verification provider.
+// ============================================================
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -34,7 +32,7 @@ const upload = multer({
     // Maximum individual file size: 10 MB
     fileSize: 10 * 1024 * 1024,
 
-    // Maximum number of uploaded files in one request
+    // Maximum files in one request
     files: 5,
   },
 
@@ -43,13 +41,14 @@ const upload = multer({
       'image/jpeg',
       'image/jpg',
       'image/png',
+      'image/webp',
       'application/pdf',
     ];
 
     if (!allowedMimeTypes.includes(file.mimetype)) {
       return cb(
         new Error(
-          'Unsupported file type. Please upload JPG, PNG, or PDF.'
+          'Unsupported file type. Please upload JPG, PNG, WEBP, or PDF.'
         )
       );
     }
@@ -57,7 +56,6 @@ const upload = multer({
     cb(null, true);
   },
 });
-
 
 // ============================================================
 // GET KYC STATUS
@@ -69,7 +67,6 @@ router.get(
   getKycStatus
 );
 
-
 // ============================================================
 // TIER 1 — BVN
 // ============================================================
@@ -80,69 +77,66 @@ router.post(
   submitBvn
 );
 
-
 // ============================================================
-// TIER 2
+// TIER 2 — ID + SELFIE
+// ============================================================
 //
-// Actual files:
+// IMPORTANT:
+// These names MUST match the FormData names in the frontend.
 //
-// id_front  -> front of government ID
-// id_back   -> back of ID where applicable
+// Frontend sends:
 //
-// selfie is NOT treated as successful liveness by itself.
+// document_front
+// document_back
+// selfie
 //
-// Real liveness verification must happen through the approved
-// liveness/identity verification provider.
+// The selfie is only an uploaded image. It must NOT automatically
+// be treated as successful liveness verification.
+//
+// Actual identity/liveness verification must be performed by
+// the backend/provider before the account becomes verified.
 // ============================================================
 
 router.post(
   '/tier-2',
   authMiddleware,
-
   upload.fields([
     {
-      upload.fields([
-  {
-    name: 'id_front',
-    maxCount: 1,
-  },
-  {
-    name: 'id_back',
-    maxCount: 1,
-  },
-  {
-    name: 'selfie',
-    maxCount: 1,
-  },
-]),
+      name: 'document_front',
+      maxCount: 1,
+    },
+    {
+      name: 'document_back',
+      maxCount: 1,
+    },
+    {
+      name: 'selfie',
+      maxCount: 1,
+    },
+  ]),
   submitTier2
 );
 
-
 // ============================================================
-// TIER 3
+// TIER 3 — PROOF OF ADDRESS
+// ============================================================
 //
-// Actual proof-of-address file.
+// IMPORTANT:
+// This matches the frontend:
 //
-// Field:
+// formData.append('tier_3_document', tier3Document)
 //
-// proof_of_address
-//
-// Accepted formats are controlled by the controller/provider.
 // ============================================================
 
 router.post(
   '/tier-3',
   authMiddleware,
-
-  upload.single('proof_of_address'),
-
+  upload.single('tier_3_document'),
   submitTier3
 );
 
-
 // ============================================================
-// MULTER ERROR HANDLER
+// MULTER / FILE UPLOAD ERROR HANDLER
 // ============================================================
 
 router.use((error, req, res, next) => {
@@ -153,6 +147,24 @@ router.use((error, req, res, next) => {
         code: 'FILE_TOO_LARGE',
         message:
           'File is too large. Maximum allowed size is 10 MB.',
+      });
+    }
+
+    if (error.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        success: false,
+        code: 'TOO_MANY_FILES',
+        message:
+          'Too many files were uploaded.',
+      });
+    }
+
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({
+        success: false,
+        code: 'UNEXPECTED_FILE',
+        message:
+          'An unexpected file field was received.',
       });
     }
 
@@ -174,5 +186,8 @@ router.use((error, req, res, next) => {
   next();
 });
 
+// ============================================================
+// EXPORT
+// ============================================================
 
 module.exports = router;
