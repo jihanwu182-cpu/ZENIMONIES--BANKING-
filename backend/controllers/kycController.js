@@ -878,10 +878,40 @@ const submitTier2 = async (req, res) => {
 // ============================================================
 // SUBMIT TIER 3
 //
-// Actual uploaded file:
+// POST /api/kyc/tier-3
+//
+// multipart/form-data
+//
+// Fields:
+//
+// tier_3_method
+//
+// Files:
 //
 // tier_3_document
+// tier_3_selfie
 //
+// ============================================================
+//
+// ACCEPTED METHODS
+//
+// 1. bank_statement
+// 2. utility_bill
+// 3. proof_of_address
+//
+// ============================================================
+//
+// IMPORTANT:
+//
+// Tier 3 requires BOTH:
+//
+// - Proof-of-address document
+// - Liveness submission
+//
+// Uploading the files DOES NOT mean verification succeeded.
+//
+// Both remain pending until the actual verification process
+// confirms them.
 // ============================================================
 
 const submitTier3 = async (req, res) => {
@@ -891,50 +921,137 @@ const submitTier3 = async (req, res) => {
     req.body?.tier_3_method || ''
   ).trim();
 
+  // ==========================================================
+  // ALLOWED TIER 3 METHODS
+  // ==========================================================
+
   const allowedMethods = [
     'bank_statement',
     'utility_bill',
     'proof_of_address',
   ];
 
-  if (
-    !allowedMethods.includes(method)
-  ) {
+  if (!allowedMethods.includes(method)) {
     return res.status(400).json({
       success: false,
       code: 'INVALID_TIER_3_METHOD',
       message:
-        'Choose bank statement, utility bill, or proof of address',
+        'Choose bank statement, utility bill, or proof of address.',
     });
   }
 
-  const proofOfAddressFile =
-    req.file || null;
+  // ==========================================================
+  // FILES
+  // ==========================================================
 
-  const validation =
+  const tier3Document =
+    req.files?.tier_3_document?.[0] ||
+    null;
+
+  const tier3Selfie =
+    req.files?.tier_3_selfie?.[0] ||
+    null;
+
+  // ==========================================================
+  // DOCUMENT VALIDATION
+  // ==========================================================
+
+  const documentValidation =
     validateProofOfAddressFile(
-      proofOfAddressFile
+      tier3Document
     );
 
-  if (!validation.valid) {
+  if (!documentValidation.valid) {
     return res.status(400).json({
       success: false,
-      code: 'INVALID_PROOF_OF_ADDRESS',
+      code: 'INVALID_TIER_3_DOCUMENT',
       message:
-        validation.message,
+        documentValidation.message,
     });
   }
+
+  // ==========================================================
+  // LIVENESS / SELFIE VALIDATION
+  // ==========================================================
+  //
+  // This confirms that a selfie file was submitted.
+  //
+  // It does NOT claim that liveness succeeded.
+  //
+  // Actual liveness verification must be performed by the
+  // approved verification provider.
+  // ==========================================================
+
+  const selfieValidation =
+    validateSelfieFile(
+      tier3Selfie
+    );
+
+  if (!selfieValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      code: 'INVALID_TIER_3_SELFIE',
+      message:
+        selfieValidation.message,
+    });
+  }
+
+  // ==========================================================
+  // TIER 3 DOCUMENT REQUIREMENTS
+  // ==========================================================
+  //
+  // These requirements describe what our review process accepts.
+  //
+  // Automated code should NOT falsely claim that a document
+  // contains a genuine stamp, belongs to the user, or is
+  // authentic.
+  //
+  // Those checks require document analysis/provider/manual review.
+  // ==========================================================
+
+  const tier3Requirements = {
+    bank_statement: {
+      accepted:
+        'Stamped PDF from bank app, dated within 90 days.',
+      rejected:
+        'Screenshots or statements older than 90 days.',
+    },
+
+    utility_bill: {
+      accepted:
+        'Provider-issued PHED, water, DSTV, or gas bill.',
+      rejected:
+        'Old bills or bills not in the user’s name.',
+    },
+
+    proof_of_address: {
+      accepted:
+        'Stamped tenancy agreement or government letter.',
+      rejected:
+        'Letters from friends or documents without an address.',
+    },
+  };
+
+  // ==========================================================
+  // DATABASE
+  // ==========================================================
 
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
+    // ========================================================
+    // LOCK USER
+    // ========================================================
+
     const userResult =
       await client.query(
         `
         SELECT
           id,
+          full_name,
+          date_of_birth,
           kyc_status,
           kyc_tier,
           tier_3_verified
@@ -950,11 +1067,16 @@ const submitTier3 = async (req, res) => {
 
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message:
+          'User not found.',
       });
     }
 
     const user = userResult.rows[0];
+
+    // ========================================================
+    // ALREADY VERIFIED
+    // ========================================================
 
     if (user.tier_3_verified === true) {
       await client.query('ROLLBACK');
@@ -965,6 +1087,10 @@ const submitTier3 = async (req, res) => {
           'Your Tier 3 verification has already been completed.',
       });
     }
+
+    // ========================================================
+    // FIND EXISTING KYC RECORD
+    // ========================================================
 
     const existingKyc =
       await client.query(
@@ -980,6 +1106,10 @@ const submitTier3 = async (req, res) => {
 
     let kycId;
 
+    // ========================================================
+    // UPDATE EXISTING RECORD
+    // ========================================================
+
     if (existingKyc.rows.length > 0) {
       kycId =
         existingKyc.rows[0].id;
@@ -989,12 +1119,23 @@ const submitTier3 = async (req, res) => {
         UPDATE kyc_records
         SET
           tier_3_method = $1,
+
           tier_3_verification_status = 'pending',
+
           tier_3_verified_at = NULL,
+
           tier_3_rejection_reason = NULL,
+
+          liveness_status = 'pending',
+
+          liveness_provider_reference = NULL,
+
           verification_status = 'pending',
+
           rejection_reason = NULL,
+
           updated_at = CURRENT_TIMESTAMP
+
         WHERE id = $2
         `,
         [
@@ -1002,7 +1143,13 @@ const submitTier3 = async (req, res) => {
           kycId,
         ]
       );
-    } else {
+    }
+
+    // ========================================================
+    // CREATE NEW RECORD
+    // ========================================================
+
+    else {
       const insertResult =
         await client.query(
           `
@@ -1010,11 +1157,13 @@ const submitTier3 = async (req, res) => {
             user_id,
             tier_3_method,
             tier_3_verification_status,
+            liveness_status,
             verification_status
           )
           VALUES (
             $1,
             $2,
+            'pending',
             'pending',
             'pending'
           )
@@ -1030,19 +1179,41 @@ const submitTier3 = async (req, res) => {
         insertResult.rows[0].id;
     }
 
+    // ========================================================
+    // UPDATE USER
+    // ========================================================
+    //
+    // IMPORTANT:
+    //
+    // Submission is NOT verification.
+    //
+    // ========================================================
+
     await client.query(
       `
       UPDATE users
       SET
         tier_3_verified = false,
+
         tier_3_method = $1,
+
         kyc_status = 'pending',
+
         kyc_tier = 3,
+
         updated_at = CURRENT_TIMESTAMP
+
       WHERE id = $2
       `,
-      [method, userId]
+      [
+        method,
+        userId,
+      ]
     );
+
+    // ========================================================
+    // AUDIT LOG
+    // ========================================================
 
     await client.query(
       `
@@ -1059,19 +1230,24 @@ const submitTier3 = async (req, res) => {
       `,
       [
         userId,
-        `Tier 3 proof-of-address document received using ${method}. Awaiting review.`,
+        `Tier 3 ${method} document and liveness selfie were received. Document review and liveness verification are pending.`,
       ]
     );
 
     await client.query('COMMIT');
 
+    // ========================================================
+    // RESPONSE
+    // ========================================================
+
     return res.status(200).json({
       success: true,
 
       message:
-        'Your proof-of-address document has been received and is awaiting review.',
+        'Your Tier 3 document and liveness submission have been received. Verification is pending.',
 
-      kyc_record_id: kycId,
+      kyc_record_id:
+        kycId,
 
       tier: 3,
 
@@ -1081,9 +1257,16 @@ const submitTier3 = async (req, res) => {
 
       method,
 
-      verification_status:
+      tier_3_verification_status:
         'pending',
+
+      liveness_status:
+        'pending',
+
+      requirements:
+        tier3Requirements[method],
     });
+
   } catch (error) {
     try {
       await client.query('ROLLBACK');
@@ -1097,7 +1280,7 @@ const submitTier3 = async (req, res) => {
     return res.status(500).json({
       success: false,
       message:
-        'Unable to submit Tier 3 verification',
+        'Unable to submit Tier 3 verification.',
     });
   } finally {
     client.release();
