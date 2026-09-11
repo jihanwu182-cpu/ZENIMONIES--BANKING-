@@ -1,36 +1,30 @@
 const pool = require('../config/database');
 
-
 // ============================================================
 // KYC / ACCOUNT LIMITS
 // ============================================================
 
 const TIER_LIMITS = {
-  // NOT VERIFIED
   0: {
     accountLimit: 50000,
     dailyTransferLimit: 25000,
   },
 
-  // TIER 1
   1: {
     accountLimit: 200000,
     dailyTransferLimit: 50000,
   },
 
-  // TIER 2
   2: {
     accountLimit: 500000,
     dailyTransferLimit: 200000,
   },
 
-  // TIER 3
   3: {
     accountLimit: null,
     dailyTransferLimit: 5000000,
   },
 };
-
 
 // ============================================================
 // GET TIER LIMITS
@@ -39,26 +33,12 @@ const TIER_LIMITS = {
 const getTierLimits = (tier) => {
   const numericTier = Number(tier);
 
-  return (
-    TIER_LIMITS[numericTier] ||
-    TIER_LIMITS[0]
-  );
+  return TIER_LIMITS[numericTier] || TIER_LIMITS[0];
 };
-
 
 // ============================================================
 // NORMALIZE KYC STATUS
 // ============================================================
-//
-// IMPORTANT:
-//
-// pending       = NOT verified
-// rejected      = NOT verified
-// not_verified  = NOT verified
-// under_review  = NOT verified
-//
-// Only approved / verified / completed are treated as verified.
-//
 
 const normalizeKycStatus = (status) => {
   const value = String(status || '')
@@ -87,15 +67,15 @@ const normalizeKycStatus = (status) => {
   return 'not_verified';
 };
 
-
 // ============================================================
-// FILE VALIDATION HELPERS
+// FILE TYPES
 // ============================================================
 
 const ALLOWED_IMAGE_TYPES = [
   'image/jpeg',
   'image/jpg',
   'image/png',
+  'image/webp',
 ];
 
 const ALLOWED_DOCUMENT_TYPES = [
@@ -103,8 +83,8 @@ const ALLOWED_DOCUMENT_TYPES = [
   'image/jpeg',
   'image/jpg',
   'image/png',
+  'image/webp',
 ];
-
 
 // ============================================================
 // VALIDATE ID FILE
@@ -118,15 +98,11 @@ const validateIdFile = (file) => {
     };
   }
 
-  if (
-    !ALLOWED_IMAGE_TYPES.includes(
-      file.mimetype
-    )
-  ) {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
     return {
       valid: false,
       message:
-        'ID document must be a JPG, JPEG, or PNG image.',
+        'ID document must be a JPG, JPEG, PNG, or WEBP image.',
     };
   }
 
@@ -143,9 +119,40 @@ const validateIdFile = (file) => {
   };
 };
 
+// ============================================================
+// VALIDATE SELFIE
+// ============================================================
+
+const validateSelfieFile = (file) => {
+  if (!file) {
+    return {
+      valid: false,
+      message: 'Selfie photo is required.',
+    };
+  }
+
+  if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+    return {
+      valid: false,
+      message:
+        'Selfie must be a JPG, JPEG, PNG, or WEBP image.',
+    };
+  }
+
+  if (!file.buffer || file.buffer.length === 0) {
+    return {
+      valid: false,
+      message: 'The uploaded selfie is empty.',
+    };
+  }
+
+  return {
+    valid: true,
+  };
+};
 
 // ============================================================
-// VALIDATE PROOF OF ADDRESS FILE
+// VALIDATE PROOF OF ADDRESS
 // ============================================================
 
 const validateProofOfAddressFile = (file) => {
@@ -165,7 +172,7 @@ const validateProofOfAddressFile = (file) => {
     return {
       valid: false,
       message:
-        'Proof of address must be a PDF, JPG, JPEG, or PNG document.',
+        'Proof of address must be a PDF, JPG, JPEG, PNG, or WEBP document.',
     };
   }
 
@@ -182,11 +189,8 @@ const validateProofOfAddressFile = (file) => {
   };
 };
 
-
 // ============================================================
 // GET CURRENT KYC STATUS
-//
-// GET /api/kyc/status
 // ============================================================
 
 const getKycStatus = async (req, res) => {
@@ -229,12 +233,9 @@ const getKycStatus = async (req, res) => {
       user.kyc_status
     );
 
-    const verified =
-      kycStatus === 'verified';
+    const verified = kycStatus === 'verified';
 
-    const tier = Number(
-      user.kyc_tier || 0
-    );
+    const tier = Number(user.kyc_tier || 0);
 
     const limits = getTierLimits(
       verified ? tier : 0
@@ -244,38 +245,27 @@ const getKycStatus = async (req, res) => {
       `
       SELECT
         id,
-
         bvn_verification_status,
         bvn_verified_at,
         bvn_rejection_reason,
-
         document_type,
         document_number,
-
         id_verification_status,
         id_verified_at,
         id_rejection_reason,
-
         liveness_status,
         liveness_provider_reference,
-
         tier_3_method,
         tier_3_verification_status,
         tier_3_verified_at,
         tier_3_rejection_reason,
-
         verification_status,
         rejection_reason,
-
         created_at,
         updated_at
-
       FROM kyc_records
-
       WHERE user_id = $1
-
       ORDER BY created_at DESC
-
       LIMIT 1
       `,
       [userId]
@@ -294,10 +284,7 @@ const getKycStatus = async (req, res) => {
       kyc: {
         status: kycStatus,
 
-        tier:
-          verified
-            ? tier
-            : 0,
+        tier: verified ? tier : 0,
 
         submitted_tier: tier,
 
@@ -343,7 +330,6 @@ const getKycStatus = async (req, res) => {
           ? kycResult.rows[0]
           : null,
     });
-
   } catch (error) {
     console.error(
       'Get KYC status error:',
@@ -358,30 +344,8 @@ const getKycStatus = async (req, res) => {
   }
 };
 
-
 // ============================================================
 // SUBMIT BVN
-//
-// POST /api/kyc/bvn
-//
-// IMPORTANT:
-//
-// This endpoint ONLY submits the BVN.
-//
-// It DOES NOT verify the BVN.
-//
-// The actual BVN provider must confirm:
-//
-// - BVN exists
-// - BVN belongs to the user
-// - name matches
-// - date of birth matches
-//
-// Until provider confirmation:
-//
-// bvn_verified = false
-// kyc_status = pending
-//
 // ============================================================
 
 const submitBvn = async (req, res) => {
@@ -400,8 +364,7 @@ const submitBvn = async (req, res) => {
     });
   }
 
-  const client =
-    await pool.connect();
+  const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
@@ -423,22 +386,16 @@ const submitBvn = async (req, res) => {
         [userId]
       );
 
-    if (
-      userResult.rows.length === 0
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
+    if (userResult.rows.length === 0) {
+      await client.query('ROLLBACK');
 
       return res.status(404).json({
         success: false,
-        message:
-          'User not found',
+        message: 'User not found',
       });
     }
 
-    const user =
-      userResult.rows[0];
+    const user = userResult.rows[0];
 
     if (
       normalizeKycStatus(
@@ -446,9 +403,7 @@ const submitBvn = async (req, res) => {
       ) === 'verified' &&
       user.bvn_verified === true
     ) {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
 
       return res.status(400).json({
         success: false,
@@ -471,9 +426,7 @@ const submitBvn = async (req, res) => {
 
     let kycId;
 
-    if (
-      existingKyc.rows.length > 0
-    ) {
+    if (existingKyc.rows.length > 0) {
       kycId =
         existingKyc.rows[0].id;
 
@@ -490,10 +443,7 @@ const submitBvn = async (req, res) => {
           updated_at = CURRENT_TIMESTAMP
         WHERE id = $2
         `,
-        [
-          bvn,
-          kycId,
-        ]
+        [bvn, kycId]
       );
     } else {
       const insertResult =
@@ -513,10 +463,7 @@ const submitBvn = async (req, res) => {
           )
           RETURNING id
           `,
-          [
-            userId,
-            bvn,
-          ]
+          [userId, bvn]
         );
 
       kycId =
@@ -534,10 +481,7 @@ const submitBvn = async (req, res) => {
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
       `,
-      [
-        bvn,
-        userId,
-      ]
+      [bvn, userId]
     );
 
     await client.query(
@@ -559,9 +503,7 @@ const submitBvn = async (req, res) => {
       ]
     );
 
-    await client.query(
-      'COMMIT'
-    );
+    await client.query('COMMIT');
 
     return res.status(200).json({
       success: true,
@@ -569,8 +511,7 @@ const submitBvn = async (req, res) => {
       message:
         'BVN submitted successfully. Your account remains pending until the BVN is verified.',
 
-      kyc_record_id:
-        kycId,
+      kyc_record_id: kycId,
 
       tier: 1,
 
@@ -578,12 +519,9 @@ const submitBvn = async (req, res) => {
 
       verified: false,
     });
-
   } catch (error) {
     try {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
     } catch {}
 
     console.error(
@@ -601,44 +539,27 @@ const submitBvn = async (req, res) => {
   }
 };
 
-
 // ============================================================
 // SUBMIT TIER 2
 //
-// POST /api/kyc/tier-2
+// Actual uploaded files:
 //
-// multipart/form-data
-//
-// Fields:
-//
-// document_type
-// document_number
-//
-// Files:
-//
-// id_front
-// id_back (optional)
-//
-// IMPORTANT:
-//
-// There are NO document URLs.
-//
-// The frontend uploads the actual files.
+// document_front
+// document_back
+// selfie
 //
 // ============================================================
 
 const submitTier2 = async (req, res) => {
   const userId = req.user.id;
 
-  const documentType =
-    String(
-      req.body?.document_type || ''
-    ).trim();
+  const documentType = String(
+    req.body?.document_type || ''
+  ).trim();
 
-  const documentNumber =
-    String(
-      req.body?.document_number || ''
-    ).trim();
+  const documentNumber = String(
+    req.body?.document_number || ''
+  ).trim();
 
   const allowedDocumentTypes = [
     'national_id',
@@ -647,10 +568,6 @@ const submitTier2 = async (req, res) => {
     'international_passport',
     'voters_card',
   ];
-
-  // ----------------------------------------------------------
-  // DOCUMENT TYPE
-  // ----------------------------------------------------------
 
   if (
     !allowedDocumentTypes.includes(
@@ -665,10 +582,6 @@ const submitTier2 = async (req, res) => {
     });
   }
 
-  // ----------------------------------------------------------
-  // DOCUMENT NUMBER
-  // ----------------------------------------------------------
-
   if (!documentNumber) {
     return res.status(400).json({
       success: false,
@@ -678,22 +591,24 @@ const submitTier2 = async (req, res) => {
     });
   }
 
-  // ----------------------------------------------------------
-  // FILES
-  // ----------------------------------------------------------
-
   const idFrontFile =
-    req.files?.id_front?.[0] ||
+    req.files?.document_front?.[0] ||
     null;
 
   const idBackFile =
-    req.files?.id_back?.[0] ||
+    req.files?.document_back?.[0] ||
     null;
 
+  const selfieFile =
+    req.files?.selfie?.[0] ||
+    null;
+
+  // ----------------------------------------------------------
+  // FRONT
+  // ----------------------------------------------------------
+
   const frontValidation =
-    validateIdFile(
-      idFrontFile
-    );
+    validateIdFile(idFrontFile);
 
   if (!frontValidation.valid) {
     return res.status(400).json({
@@ -705,10 +620,23 @@ const submitTier2 = async (req, res) => {
   }
 
   // ----------------------------------------------------------
-  // BACK OF ID
-  //
-  // Passport generally does not require a back.
-  // Other IDs may require one.
+  // SELFIE
+  // ----------------------------------------------------------
+
+  const selfieValidation =
+    validateSelfieFile(selfieFile);
+
+  if (!selfieValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      code: 'INVALID_SELFIE',
+      message:
+        selfieValidation.message,
+    });
+  }
+
+  // ----------------------------------------------------------
+  // BACK
   // ----------------------------------------------------------
 
   const documentsWithoutBack = [
@@ -732,9 +660,7 @@ const submitTier2 = async (req, res) => {
 
   if (idBackFile) {
     const backValidation =
-      validateIdFile(
-        idBackFile
-      );
+      validateIdFile(idBackFile);
 
     if (!backValidation.valid) {
       return res.status(400).json({
@@ -746,33 +672,10 @@ const submitTier2 = async (req, res) => {
     }
   }
 
-  // ----------------------------------------------------------
-  // REAL LIVENESS
-  // ----------------------------------------------------------
-  //
-  // We intentionally DO NOT accept:
-  //
-  // req.body.liveness_status
-  // req.body.selfie_url
-  // req.body.selfie
-  //
-  // A user cannot tell the backend that they passed liveness.
-  //
-  // A real liveness provider must return the result.
-  //
-  // Until provider integration is connected:
-  //
-  // liveness_status = pending
-  //
-  // ==========================================================
-
-  const client =
-    await pool.connect();
+  const client = await pool.connect();
 
   try {
-    await client.query(
-      'BEGIN'
-    );
+    await client.query('BEGIN');
 
     const userResult =
       await client.query(
@@ -791,33 +694,19 @@ const submitTier2 = async (req, res) => {
         [userId]
       );
 
-    if (
-      userResult.rows.length === 0
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
+    if (userResult.rows.length === 0) {
+      await client.query('ROLLBACK');
 
       return res.status(404).json({
         success: false,
-        message:
-          'User not found',
+        message: 'User not found',
       });
     }
 
-    const user =
-      userResult.rows[0];
+    const user = userResult.rows[0];
 
-    // --------------------------------------------------------
-    // PREVENT RESUBMISSION AFTER SUCCESSFUL VERIFICATION
-    // --------------------------------------------------------
-
-    if (
-      user.id_verified === true
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
+    if (user.id_verified === true) {
+      await client.query('ROLLBACK');
 
       return res.status(400).json({
         success: false,
@@ -825,10 +714,6 @@ const submitTier2 = async (req, res) => {
           'Your identity verification has already been completed.',
       });
     }
-
-    // --------------------------------------------------------
-    // FIND EXISTING KYC RECORD
-    // --------------------------------------------------------
 
     const existingKyc =
       await client.query(
@@ -844,26 +729,7 @@ const submitTier2 = async (req, res) => {
 
     let kycId;
 
-    /*
-     * IMPORTANT SECURITY NOTE:
-     *
-     * We do not put the actual image bytes into PostgreSQL.
-     *
-     * The files are currently held in multer memory.
-     *
-     * Before production verification is enabled, these files
-     * should be securely sent to an approved KYC provider or
-     * encrypted object storage.
-     *
-     * Only the resulting secure provider/storage reference
-     * should be stored in document_front_url/document_back_url.
-     *
-     * The frontend never supplies those URLs.
-     */
-
-    if (
-      existingKyc.rows.length > 0
-    ) {
+    if (existingKyc.rows.length > 0) {
       kycId =
         existingKyc.rows[0].id;
 
@@ -873,19 +739,14 @@ const submitTier2 = async (req, res) => {
         SET
           document_type = $1,
           document_number = $2,
-
           id_verification_status = 'pending',
           id_verified_at = NULL,
           id_rejection_reason = NULL,
-
           liveness_status = 'pending',
           liveness_provider_reference = NULL,
-
           verification_status = 'pending',
           rejection_reason = NULL,
-
           updated_at = CURRENT_TIMESTAMP
-
         WHERE id = $3
         `,
         [
@@ -931,13 +792,13 @@ const submitTier2 = async (req, res) => {
     // IMPORTANT
     // --------------------------------------------------------
     //
-    // Submission does NOT verify identity.
+    // Files are received successfully by Multer.
     //
-    // We explicitly set:
+    // We DO NOT mark the user as verified merely because files
+    // were uploaded.
     //
-    // id_verified = false
-    // liveness_status = pending
-    // kyc_status = pending
+    // Real identity/liveness verification must happen through
+    // an approved verification process.
     //
     // --------------------------------------------------------
 
@@ -969,22 +830,19 @@ const submitTier2 = async (req, res) => {
       `,
       [
         userId,
-        `Tier 2 government ID submitted using ${documentType}. Actual ID files received. Awaiting identity and liveness verification.`,
+        `Tier 2 government ID and selfie received using ${documentType}. Awaiting identity and liveness verification.`,
       ]
     );
 
-    await client.query(
-      'COMMIT'
-    );
+    await client.query('COMMIT');
 
     return res.status(200).json({
       success: true,
 
       message:
-        'Your ID documents have been received. Facial liveness and identity verification must be completed before your account can be verified.',
+        'Your ID documents and selfie have been received. Identity and liveness verification are pending.',
 
-      kyc_record_id:
-        kycId,
+      kyc_record_id: kycId,
 
       tier: 2,
 
@@ -992,18 +850,14 @@ const submitTier2 = async (req, res) => {
 
       verified: false,
 
-      liveness_status:
-        'pending',
+      liveness_status: 'pending',
 
       id_verification_status:
         'pending',
     });
-
   } catch (error) {
     try {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
     } catch {}
 
     console.error(
@@ -1021,33 +875,21 @@ const submitTier2 = async (req, res) => {
   }
 };
 
-
 // ============================================================
 // SUBMIT TIER 3
 //
-// POST /api/kyc/tier-3
+// Actual uploaded file:
 //
-// multipart/form-data
-//
-// Fields:
-//
-// tier_3_method
-//
-// File:
-//
-// proof_of_address
-//
-// NO URL IS ACCEPTED FROM THE FRONTEND.
+// tier_3_document
 //
 // ============================================================
 
 const submitTier3 = async (req, res) => {
   const userId = req.user.id;
 
-  const method =
-    String(
-      req.body?.tier_3_method || ''
-    ).trim();
+  const method = String(
+    req.body?.tier_3_method || ''
+  ).trim();
 
   const allowedMethods = [
     'bank_statement',
@@ -1055,14 +897,8 @@ const submitTier3 = async (req, res) => {
     'proof_of_address',
   ];
 
-  // ----------------------------------------------------------
-  // METHOD
-  // ----------------------------------------------------------
-
   if (
-    !allowedMethods.includes(
-      method
-    )
+    !allowedMethods.includes(method)
   ) {
     return res.status(400).json({
       success: false,
@@ -1071,10 +907,6 @@ const submitTier3 = async (req, res) => {
         'Choose bank statement, utility bill, or proof of address',
     });
   }
-
-  // ----------------------------------------------------------
-  // ACTUAL FILE
-  // ----------------------------------------------------------
 
   const proofOfAddressFile =
     req.file || null;
@@ -1093,13 +925,10 @@ const submitTier3 = async (req, res) => {
     });
   }
 
-  const client =
-    await pool.connect();
+  const client = await pool.connect();
 
   try {
-    await client.query(
-      'BEGIN'
-    );
+    await client.query('BEGIN');
 
     const userResult =
       await client.query(
@@ -1116,33 +945,19 @@ const submitTier3 = async (req, res) => {
         [userId]
       );
 
-    if (
-      userResult.rows.length === 0
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
+    if (userResult.rows.length === 0) {
+      await client.query('ROLLBACK');
 
       return res.status(404).json({
         success: false,
-        message:
-          'User not found',
+        message: 'User not found',
       });
     }
 
-    const user =
-      userResult.rows[0];
+    const user = userResult.rows[0];
 
-    // --------------------------------------------------------
-    // PREVENT RESUBMISSION AFTER SUCCESSFUL VERIFICATION
-    // --------------------------------------------------------
-
-    if (
-      user.tier_3_verified === true
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
+    if (user.tier_3_verified === true) {
+      await client.query('ROLLBACK');
 
       return res.status(400).json({
         success: false,
@@ -1150,10 +965,6 @@ const submitTier3 = async (req, res) => {
           'Your Tier 3 verification has already been completed.',
       });
     }
-
-    // --------------------------------------------------------
-    // FIND EXISTING KYC RECORD
-    // --------------------------------------------------------
 
     const existingKyc =
       await client.query(
@@ -1169,25 +980,7 @@ const submitTier3 = async (req, res) => {
 
     let kycId;
 
-    /*
-     * IMPORTANT:
-     *
-     * We do NOT accept tier_3_document_url from the client.
-     *
-     * The actual file is in:
-     *
-     * req.file
-     *
-     * The file should be securely uploaded to approved storage
-     * or a KYC provider.
-     *
-     * The resulting secure reference can then be stored in
-     * tier_3_document_url.
-     */
-
-    if (
-      existingKyc.rows.length > 0
-    ) {
+    if (existingKyc.rows.length > 0) {
       kycId =
         existingKyc.rows[0].id;
 
@@ -1196,16 +989,12 @@ const submitTier3 = async (req, res) => {
         UPDATE kyc_records
         SET
           tier_3_method = $1,
-
           tier_3_verification_status = 'pending',
           tier_3_verified_at = NULL,
           tier_3_rejection_reason = NULL,
-
           verification_status = 'pending',
           rejection_reason = NULL,
-
           updated_at = CURRENT_TIMESTAMP
-
         WHERE id = $2
         `,
         [
@@ -1241,10 +1030,6 @@ const submitTier3 = async (req, res) => {
         insertResult.rows[0].id;
     }
 
-    // --------------------------------------------------------
-    // SUBMISSION ≠ VERIFICATION
-    // --------------------------------------------------------
-
     await client.query(
       `
       UPDATE users
@@ -1256,10 +1041,7 @@ const submitTier3 = async (req, res) => {
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
       `,
-      [
-        method,
-        userId,
-      ]
+      [method, userId]
     );
 
     await client.query(
@@ -1281,9 +1063,7 @@ const submitTier3 = async (req, res) => {
       ]
     );
 
-    await client.query(
-      'COMMIT'
-    );
+    await client.query('COMMIT');
 
     return res.status(200).json({
       success: true,
@@ -1291,8 +1071,7 @@ const submitTier3 = async (req, res) => {
       message:
         'Your proof-of-address document has been received and is awaiting review.',
 
-      kyc_record_id:
-        kycId,
+      kyc_record_id: kycId,
 
       tier: 3,
 
@@ -1305,12 +1084,9 @@ const submitTier3 = async (req, res) => {
       verification_status:
         'pending',
     });
-
   } catch (error) {
     try {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
     } catch {}
 
     console.error(
@@ -1327,7 +1103,6 @@ const submitTier3 = async (req, res) => {
     client.release();
   }
 };
-
 
 // ============================================================
 // EXPORTS
