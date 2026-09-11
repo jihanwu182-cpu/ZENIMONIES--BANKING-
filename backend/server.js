@@ -51,21 +51,34 @@ app.use(
   })
 );
 
+// ============================================================
+// PAYSTACK WEBHOOK
+// ============================================================
+//
+// IMPORTANT:
+// Paystack signature verification requires the raw body.
+//
+// This MUST come before express.json().
+// ============================================================
+
+app.post(
+  '/api/paystack/webhook',
+  express.raw({
+    type: 'application/json',
+  }),
+  handlePaystackWebhook
+);
+
+// ============================================================
+// NORMAL JSON BODY PARSING
+// ============================================================
+
 app.use(express.json());
 
 app.use(
   express.urlencoded({
     extended: true,
   })
-);
-
-// ============================================================
-// PAYSTACK WEBHOOK
-// ============================================================
-
-app.post(
-  '/api/paystack/webhook',
-  handlePaystackWebhook
 );
 
 // ============================================================
