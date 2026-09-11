@@ -6,7 +6,7 @@ const pool = require('../config/database');
 
 const {
   createPaystackCustomer,
-  createDedicatedVirtualAccount,
+  getOrCreateDedicatedVirtualAccount,
 } = require('../services/paystackService');
 
 
@@ -516,10 +516,10 @@ const register = async (
     // ========================================================
 
     const paystackAccount =
-      await createDedicatedVirtualAccount({
-        customerCode:
-          paystackCustomerCode,
-      });
+  await getOrCreateDedicatedVirtualAccount({
+    customerCode:
+      paystackCustomerCode,
+  });
 
 
     if (
