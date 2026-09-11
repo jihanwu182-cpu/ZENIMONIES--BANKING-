@@ -27,12 +27,24 @@ CREATE TABLE IF NOT EXISTS users (
     status VARCHAR(30) NOT NULL DEFAULT 'active',
 
     -- ========================================================
+    -- LEGAL IDENTITY
+    -- ========================================================
+
+    date_of_birth DATE,
+
+    legal_name VARCHAR(150),
+
+    legal_name_locked BOOLEAN NOT NULL DEFAULT false,
+
+    legal_dob_locked BOOLEAN NOT NULL DEFAULT false,
+
+    -- ========================================================
     -- KYC / VERIFICATION
     -- ========================================================
 
-    kyc_status VARCHAR(30) NOT NULL DEFAULT 'pending',
+    kyc_status VARCHAR(30) NOT NULL DEFAULT 'not_verified',
 
-    kyc_tier INTEGER NOT NULL DEFAULT 1,
+    kyc_tier INTEGER NOT NULL DEFAULT 0,
 
     bvn VARCHAR(11),
 
@@ -50,9 +62,9 @@ CREATE TABLE IF NOT EXISTS users (
     -- ACCOUNT / TRANSFER LIMITS
     -- ========================================================
 
-    account_limit NUMERIC(18,2) NOT NULL DEFAULT 200000.00,
+    account_limit NUMERIC(18,2) NOT NULL DEFAULT 50000.00,
 
-    daily_transfer_limit NUMERIC(18,2) NOT NULL DEFAULT 50000.00,
+    daily_transfer_limit NUMERIC(18,2) NOT NULL DEFAULT 25000.00,
 
     daily_transfer_used NUMERIC(18,2) NOT NULL DEFAULT 0.00,
 
@@ -64,14 +76,16 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT users_kyc_tier_check
-        CHECK (kyc_tier IN (1, 2, 3)),
+        CHECK (kyc_tier IN (0, 1, 2, 3)),
 
     CONSTRAINT users_kyc_status_check
         CHECK (
             kyc_status IN (
+                'not_verified',
                 'pending',
                 'under_review',
                 'approved',
+                'verified',
                 'rejected'
             )
         )
@@ -107,12 +121,6 @@ CREATE TABLE IF NOT EXISTS accounts (
 
 -- ============================================================
 -- DEPOSIT ACCOUNTS
---
--- Provider-issued customer deposit accounts.
---
--- This table does NOT create fake bank accounts.
--- It stores real provider-issued account information after
--- an approved banking/payment provider supplies it.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS deposit_accounts (
@@ -145,9 +153,9 @@ CREATE TABLE IF NOT EXISTS deposit_accounts (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+
 -- ============================================================
 -- VIRTUAL CARDS
--- One virtual card per user
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS virtual_cards (
@@ -193,6 +201,7 @@ ON virtual_cards(account_id);
 
 CREATE INDEX IF NOT EXISTS idx_virtual_cards_status
 ON virtual_cards(status);
+
 
 -- ============================================================
 -- TRANSACTIONS
@@ -509,6 +518,14 @@ CREATE TABLE IF NOT EXISTS kyc_records (
 
     bvn_verified_at TIMESTAMP,
 
+    bvn_rejection_reason TEXT,
+
+    bvn_provider_reference VARCHAR(150),
+
+    bvn_verified_name VARCHAR(150),
+
+    bvn_verified_date_of_birth DATE,
+
     -- ========================================================
     -- TIER 2 - ID DOCUMENT
     -- ========================================================
@@ -523,18 +540,20 @@ CREATE TABLE IF NOT EXISTS kyc_records (
 
     selfie_url TEXT,
 
+    liveness_status VARCHAR(30)
+        NOT NULL DEFAULT 'pending',
+
+    liveness_provider_reference VARCHAR(150),
+
     id_verification_status VARCHAR(30)
         NOT NULL DEFAULT 'pending',
 
     id_verified_at TIMESTAMP,
 
+    id_rejection_reason TEXT,
+
     -- ========================================================
     -- TIER 3
-    --
-    -- User chooses ONE:
-    -- bank_statement
-    -- utility_bill
-    -- proof_of_address
     -- ========================================================
 
     tier_3_method VARCHAR(50),
@@ -545,6 +564,8 @@ CREATE TABLE IF NOT EXISTS kyc_records (
         NOT NULL DEFAULT 'pending',
 
     tier_3_verified_at TIMESTAMP,
+
+    tier_3_rejection_reason TEXT,
 
     -- ========================================================
     -- GENERAL KYC STATUS
@@ -632,9 +653,6 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 -- ============================================================
 -- COMPATIBILITY / EXISTING DATABASES
---
--- These ALTER statements make the schema safe to run against
--- a database that was created using an older version.
 -- ============================================================
 
 ALTER TABLE users
@@ -642,12 +660,26 @@ ADD COLUMN IF NOT EXISTS status VARCHAR(30)
 NOT NULL DEFAULT 'active';
 
 ALTER TABLE users
+ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS legal_name VARCHAR(150);
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS legal_name_locked BOOLEAN
+NOT NULL DEFAULT false;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS legal_dob_locked BOOLEAN
+NOT NULL DEFAULT false;
+
+ALTER TABLE users
 ADD COLUMN IF NOT EXISTS kyc_status VARCHAR(30)
-NOT NULL DEFAULT 'pending';
+NOT NULL DEFAULT 'not_verified';
 
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS kyc_tier INTEGER
-NOT NULL DEFAULT 1;
+NOT NULL DEFAULT 0;
 
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS bvn VARCHAR(11);
@@ -669,11 +701,11 @@ ADD COLUMN IF NOT EXISTS tier_3_method VARCHAR(50);
 
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS account_limit NUMERIC(18,2)
-NOT NULL DEFAULT 200000.00;
+NOT NULL DEFAULT 50000.00;
 
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS daily_transfer_limit NUMERIC(18,2)
-NOT NULL DEFAULT 50000.00;
+NOT NULL DEFAULT 25000.00;
 
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS daily_transfer_used NUMERIC(18,2)
@@ -705,6 +737,31 @@ NOT NULL DEFAULT 'pending';
 
 ALTER TABLE kyc_records
 ADD COLUMN IF NOT EXISTS bvn_verified_at TIMESTAMP;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn_rejection_reason TEXT;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn_provider_reference VARCHAR(150);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn_verified_name VARCHAR(150);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn_verified_date_of_birth DATE;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS liveness_status VARCHAR(30)
+NOT NULL DEFAULT 'pending';
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS liveness_provider_reference VARCHAR(150);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS id_rejection_reason TEXT;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS tier_3_rejection_reason TEXT;
 
 ALTER TABLE kyc_records
 ADD COLUMN IF NOT EXISTS id_verification_status VARCHAR(30)
@@ -748,18 +805,6 @@ NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 
 -- ============================================================
--- BANK TRANSFER COMPATIBILITY
--- ============================================================
-
-ALTER TABLE bank_transfers
-ADD COLUMN IF NOT EXISTS beneficiary_id UUID;
-
--- Add the foreign key only when possible.
--- Existing databases that already have this relationship
--- will simply retain their existing constraint.
-
-
--- ============================================================
 -- INDEXES
 -- ============================================================
 
@@ -771,6 +816,9 @@ ON users(kyc_status);
 
 CREATE INDEX IF NOT EXISTS idx_users_bvn
 ON users(bvn);
+
+CREATE INDEX IF NOT EXISTS idx_users_date_of_birth
+ON users(date_of_birth);
 
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id
 ON accounts(user_id);
@@ -844,53 +892,92 @@ INSERT INTO billers
     (name, category, provider_code)
 VALUES
     ('Electricity', 'electricity', 'ELECTRICITY'),
-
     ('Cable TV', 'cable_tv', 'CABLE_TV'),
-
     ('Internet', 'internet', 'INTERNET'),
-
     ('Other Bills', 'other', 'OTHER')
-
 ON CONFLICT (provider_code)
 DO NOTHING;
 
 
 -- ============================================================
--- DEFAULT LIMITS FOR EXISTING USERS
+-- EXISTING USER NORMALIZATION
 --
--- Existing users are treated as Tier 1 until they are
--- successfully upgraded.
+-- IMPORTANT:
+-- Existing users are NOT automatically marked verified.
+--
+-- If their KYC status was previously "approved", it remains
+-- approved and can later be normalized by the KYC controller.
+-- ============================================================
+
+UPDATE users
+SET kyc_status = 'not_verified'
+WHERE kyc_status IS NULL
+   OR TRIM(kyc_status) = '';
+
+
+-- ============================================================
+-- NORMALIZE EXISTING USERS WHO HAVE NO SUCCESSFUL VERIFICATION
 -- ============================================================
 
 UPDATE users
 SET
+    kyc_status = 'not_verified',
+    kyc_tier = 0,
+    account_limit = 50000.00,
+    daily_transfer_limit = 25000.00
+WHERE COALESCE(bvn_verified, false) = false
+  AND COALESCE(id_verified, false) = false
+  AND COALESCE(tier_3_verified, false) = false
+  AND (
+      kyc_status IN (
+          'pending',
+          'under_review'
+      )
+      OR kyc_status IS NULL
+  );
+
+
+-- ============================================================
+-- VERIFIED TIER 1
+-- ============================================================
+
+UPDATE users
+SET
+    kyc_status = 'approved',
     kyc_tier = 1,
     account_limit = 200000.00,
     daily_transfer_limit = 50000.00
-WHERE kyc_tier IS NULL
-   OR kyc_tier NOT IN (1, 2, 3);
+WHERE bvn_verified = true
+  AND id_verified = false
+  AND tier_3_verified = false;
 
 
-UPDATE users
-SET
-    account_limit = 200000.00,
-    daily_transfer_limit = 50000.00
-WHERE kyc_tier = 1;
-
+-- ============================================================
+-- VERIFIED TIER 2
+-- ============================================================
 
 UPDATE users
 SET
+    kyc_status = 'approved',
+    kyc_tier = 2,
     account_limit = 500000.00,
     daily_transfer_limit = 200000.00
-WHERE kyc_tier = 2;
+WHERE id_verified = true
+  AND tier_3_verified = false;
 
 
+-- ============================================================
+-- VERIFIED TIER 3
+-- ============================================================
 
 UPDATE users
 SET
+    kyc_status = 'approved',
+    kyc_tier = 3,
     account_limit = 999999999999.99,
     daily_transfer_limit = 5000000.00
-WHERE kyc_tier = 3;
+WHERE tier_3_verified = true;
+
 
 -- ============================================================
 -- END OF ZENIMONIES DATABASE SCHEMA
