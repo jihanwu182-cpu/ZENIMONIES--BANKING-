@@ -133,7 +133,7 @@ const verifyJwt = (req) => {
 
 
 // ============================================================
-// CREATE PHONE OTP
+// PHONE OTP CREATION
 // ============================================================
 
 const createPhoneOtp = async (
@@ -158,7 +158,7 @@ const createPhoneOtp = async (
 
 
   // ----------------------------------------------------------
-  // Generate OTP
+  // Generate secure 6-digit OTP
   // ----------------------------------------------------------
 
   const otp = generateOtp();
@@ -177,7 +177,7 @@ const createPhoneOtp = async (
 
 
   // ----------------------------------------------------------
-  // Store hashed OTP
+  // Store HASH only
   // ----------------------------------------------------------
 
   await client.query(
@@ -230,9 +230,9 @@ const register = async (
     } = req.body || {};
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // VALIDATION
-    // --------------------------------------------------------
+    // ========================================================
 
     if (
       !full_name ||
@@ -305,9 +305,9 @@ const register = async (
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // SPLIT NAME FOR PAYSTACK
-    // --------------------------------------------------------
+    // ========================================================
 
     const nameParts =
       normalizedFullName.split(/\s+/);
@@ -321,18 +321,16 @@ const register = async (
       undefined;
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // START TRANSACTION
-    // --------------------------------------------------------
+    // ========================================================
 
-    await client.query(
-      'BEGIN'
-    );
+    await client.query('BEGIN');
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // CHECK EXISTING USER
-    // --------------------------------------------------------
+    // ========================================================
 
     const existingUser =
       await client.query(
@@ -357,9 +355,7 @@ const register = async (
       existingUser.rows.length > 0
     ) {
 
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
 
       const existing =
         existingUser.rows[0];
@@ -385,9 +381,9 @@ const register = async (
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // HASH PASSWORD
-    // --------------------------------------------------------
+    // ========================================================
 
     const passwordHash =
       await bcrypt.hash(
@@ -396,9 +392,17 @@ const register = async (
       );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // CREATE USER
-    // --------------------------------------------------------
+    //
+    // IMPORTANT:
+    //
+    // kyc_tier = 1 means STARTING TIER.
+    //
+    // It does NOT mean verified.
+    //
+    // is_verified remains FALSE until actual KYC verification.
+    // ========================================================
 
     const userResult =
       await client.query(
@@ -410,12 +414,16 @@ const register = async (
           password_hash,
           role,
           status,
+
           kyc_status,
           kyc_tier,
+
           bvn_verified,
           id_verified,
           tier_3_verified,
+
           is_verified,
+
           account_limit,
           daily_transfer_limit,
           daily_transfer_used,
@@ -426,14 +434,19 @@ const register = async (
           $2,
           $3,
           $4,
+
           'user',
           'active',
+
           'pending',
           1,
+
           false,
           false,
           false,
+
           false,
+
           200000.00,
           50000.00,
           0.00,
@@ -446,16 +459,21 @@ const register = async (
           phone,
           role,
           status,
+
           kyc_status,
           kyc_tier,
+
           bvn_verified,
           id_verified,
           tier_3_verified,
+
           is_verified,
+
           account_limit,
           daily_transfer_limit,
           daily_transfer_used,
           daily_transfer_reset_at,
+
           created_at
         `,
         [
@@ -516,10 +534,10 @@ const register = async (
     // ========================================================
 
     const paystackAccount =
-  await getOrCreateDedicatedVirtualAccount({
-    customerCode:
-      paystackCustomerCode,
-  });
+      await getOrCreateDedicatedVirtualAccount({
+        customerCode:
+          paystackCustomerCode,
+      });
 
 
     if (
@@ -537,9 +555,9 @@ const register = async (
       paystackAccount.data;
 
 
-    // --------------------------------------------------------
-    // EXTRACT REAL PROVIDER ACCOUNT
-    // --------------------------------------------------------
+    // ========================================================
+    // EXTRACT PROVIDER ACCOUNT
+    // ========================================================
 
     const providerAccountNumber =
       providerAccount.account_number;
@@ -570,12 +588,9 @@ const register = async (
         : null;
 
 
-    // --------------------------------------------------------
-    // CRITICAL VALIDATION
-    //
-    // We never create an account number ourselves.
-    // Paystack MUST return one.
-    // --------------------------------------------------------
+    // ========================================================
+    // NEVER INVENT ACCOUNT NUMBER
+    // ========================================================
 
     if (!providerAccountNumber) {
       throw new Error(
@@ -586,8 +601,6 @@ const register = async (
 
     // ========================================================
     // CREATE ZENIMONIES ACCOUNT
-    //
-    // account_number is the real Paystack-issued number.
     // ========================================================
 
     const accountResult =
@@ -662,18 +675,11 @@ const register = async (
       `,
       [
         user.id,
-
         providerAccountNumber,
-
         providerAccountName,
-
-        providerBankName ||
-          'Paystack',
-
+        providerBankName || 'Paystack',
         providerBankCode,
-
         paystackCustomerCode,
-
         providerAccountId,
       ]
     );
@@ -691,7 +697,7 @@ const register = async (
 
 
     // ========================================================
-    // AUDIT LOG
+    // AUDIT
     // ========================================================
 
     await client.query(
@@ -714,14 +720,11 @@ const register = async (
       [
         user.id,
 
-        'Customer account created with a real provider-issued dedicated receiving account. Phone verification OTP generated.',
+        'Customer account created with real provider-issued dedicated account. Phone verification OTP generated. KYC remains unverified.',
 
-        req.ip ||
-          null,
+        req.ip || null,
 
-        req.get(
-          'user-agent'
-        ) || null,
+        req.get('user-agent') || null,
       ]
     );
 
@@ -730,9 +733,7 @@ const register = async (
     // COMMIT
     // ========================================================
 
-    await client.query(
-      'COMMIT'
-    );
+    await client.query('COMMIT');
 
 
     // ========================================================
@@ -803,10 +804,6 @@ const register = async (
           user.created_at,
       },
 
-      // ------------------------------------------------------
-      // REAL PAYSTACK-ISSUED ACCOUNT
-      // ------------------------------------------------------
-
       account: {
 
         id:
@@ -841,7 +838,7 @@ const register = async (
       },
 
       // ------------------------------------------------------
-      // DEVELOPMENT TESTING ONLY
+      // DEVELOPMENT ONLY
       // ------------------------------------------------------
 
       development_otp:
@@ -854,9 +851,7 @@ const register = async (
   } catch (error) {
 
     try {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
     } catch (rollbackError) {
       console.error(
         'Rollback error:',
@@ -902,6 +897,16 @@ const register = async (
 // VERIFY PHONE OTP
 // POST /api/auth/verify-phone-otp
 // ============================================================
+//
+// IMPORTANT:
+//
+// This verifies ONLY the phone number.
+//
+// It does NOT verify identity/KYC.
+//
+// is_verified remains FALSE.
+//
+// ============================================================
 
 const verifyPhone = async (
   req,
@@ -913,9 +918,9 @@ const verifyPhone = async (
 
   try {
 
-    // --------------------------------------------------------
+    // ========================================================
     // AUTHENTICATION
-    // --------------------------------------------------------
+    // ========================================================
 
     const auth =
       verifyJwt(req);
@@ -936,9 +941,9 @@ const verifyPhone = async (
       auth.decoded.userId;
 
 
-    // --------------------------------------------------------
-    // OTP
-    // --------------------------------------------------------
+    // ========================================================
+    // OTP VALIDATION
+    // ========================================================
 
     const otp =
       String(
@@ -957,9 +962,9 @@ const verifyPhone = async (
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // GET USER
-    // --------------------------------------------------------
+    // ========================================================
 
     const userResult =
       await client.query(
@@ -969,6 +974,7 @@ const verifyPhone = async (
           full_name,
           email,
           phone,
+          phone_verified,
           is_verified
         FROM users
         WHERE id = $1
@@ -993,7 +999,11 @@ const verifyPhone = async (
       userResult.rows[0];
 
 
-    if (user.is_verified) {
+    // ========================================================
+    // PHONE ALREADY VERIFIED
+    // ========================================================
+
+    if (user.phone_verified) {
       return res.status(400).json({
         success: false,
         message:
@@ -1002,26 +1012,24 @@ const verifyPhone = async (
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // HASH PROVIDED OTP
-    // --------------------------------------------------------
+    // ========================================================
 
     const suppliedHash =
       hashToken(otp);
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // START TRANSACTION
-    // --------------------------------------------------------
+    // ========================================================
 
-    await client.query(
-      'BEGIN'
-    );
+    await client.query('BEGIN');
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // FIND VALID OTP
-    // --------------------------------------------------------
+    // ========================================================
 
     const otpResult =
       await client.query(
@@ -1047,9 +1055,7 @@ const verifyPhone = async (
       otpResult.rows.length === 0
     ) {
 
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
 
       return res.status(400).json({
         success: false,
@@ -1063,18 +1069,16 @@ const verifyPhone = async (
       otpResult.rows[0];
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // COMPARE HASHES
-    // --------------------------------------------------------
+    // ========================================================
 
     if (
       suppliedHash !==
       storedOtp.token_hash
     ) {
 
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
 
       return res.status(400).json({
         success: false,
@@ -1084,9 +1088,9 @@ const verifyPhone = async (
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // MARK OTP USED
-    // --------------------------------------------------------
+    // ========================================================
 
     await client.query(
       `
@@ -1098,15 +1102,17 @@ const verifyPhone = async (
     );
 
 
-    // --------------------------------------------------------
-    // VERIFY USER
-    // --------------------------------------------------------
+    // ========================================================
+    // VERIFY PHONE ONLY
+    //
+    // DO NOT SET is_verified = true.
+    // ========================================================
 
     await client.query(
       `
       UPDATE users
       SET
-        is_verified = true,
+        phone_verified = true,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
       `,
@@ -1114,9 +1120,9 @@ const verifyPhone = async (
     );
 
 
-    // --------------------------------------------------------
-    // AUDIT LOG
-    // --------------------------------------------------------
+    // ========================================================
+    // AUDIT
+    // ========================================================
 
     await client.query(
       `
@@ -1130,7 +1136,7 @@ const verifyPhone = async (
       VALUES (
         $1,
         'phone_verified',
-        'Phone number verified successfully',
+        'Phone number verified successfully. KYC verification remains unchanged.',
         $2,
         $3
       )
@@ -1138,23 +1144,18 @@ const verifyPhone = async (
       [
         userId,
 
-        req.ip ||
-          null,
+        req.ip || null,
 
-        req.get(
-          'user-agent'
-        ) || null,
+        req.get('user-agent') || null,
       ]
     );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // COMMIT
-    // --------------------------------------------------------
+    // ========================================================
 
-    await client.query(
-      'COMMIT'
-    );
+    await client.query('COMMIT');
 
 
     return res.status(200).json({
@@ -1164,16 +1165,20 @@ const verifyPhone = async (
       message:
         'Phone number verified successfully.',
 
-      is_verified:
+      phone_verified:
         true,
+
+      // IMPORTANT:
+      // This is intentionally FALSE unless
+      // actual KYC verification has been completed.
+      is_verified:
+        user.is_verified === true,
     });
 
   } catch (error) {
 
     try {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
     } catch (rollbackError) {
       console.error(
         'Rollback error:',
@@ -1217,9 +1222,9 @@ const resendPhoneOtp = async (
 
   try {
 
-    // --------------------------------------------------------
+    // ========================================================
     // AUTHENTICATION
-    // --------------------------------------------------------
+    // ========================================================
 
     const auth =
       verifyJwt(req);
@@ -1240,16 +1245,16 @@ const resendPhoneOtp = async (
       auth.decoded.userId;
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // GET USER
-    // --------------------------------------------------------
+    // ========================================================
 
     const userResult =
       await client.query(
         `
         SELECT
           id,
-          is_verified
+          phone_verified
         FROM users
         WHERE id = $1
         LIMIT 1
@@ -1273,7 +1278,7 @@ const resendPhoneOtp = async (
       userResult.rows[0];
 
 
-    if (user.is_verified) {
+    if (user.phone_verified) {
       return res.status(400).json({
         success: false,
         message:
@@ -1282,9 +1287,9 @@ const resendPhoneOtp = async (
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // RESEND COOLDOWN
-    // --------------------------------------------------------
+    // ========================================================
 
     const recentOtp =
       await client.query(
@@ -1344,18 +1349,12 @@ const resendPhoneOtp = async (
     }
 
 
-    // --------------------------------------------------------
-    // START TRANSACTION
-    // --------------------------------------------------------
+    // ========================================================
+    // TRANSACTION
+    // ========================================================
 
-    await client.query(
-      'BEGIN'
-    );
+    await client.query('BEGIN');
 
-
-    // --------------------------------------------------------
-    // CREATE OTP
-    // --------------------------------------------------------
 
     const otp =
       await createPhoneOtp(
@@ -1364,9 +1363,9 @@ const resendPhoneOtp = async (
       );
 
 
-    // --------------------------------------------------------
-    // AUDIT LOG
-    // --------------------------------------------------------
+    // ========================================================
+    // AUDIT
+    // ========================================================
 
     await client.query(
       `
@@ -1388,23 +1387,14 @@ const resendPhoneOtp = async (
       [
         userId,
 
-        req.ip ||
-          null,
+        req.ip || null,
 
-        req.get(
-          'user-agent'
-        ) || null,
+        req.get('user-agent') || null,
       ]
     );
 
 
-    // --------------------------------------------------------
-    // COMMIT
-    // --------------------------------------------------------
-
-    await client.query(
-      'COMMIT'
-    );
+    await client.query('COMMIT');
 
 
     return res.status(200).json({
@@ -1424,9 +1414,7 @@ const resendPhoneOtp = async (
   } catch (error) {
 
     try {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
     } catch (rollbackError) {
       console.error(
         'Rollback error:',
@@ -1459,11 +1447,6 @@ const resendPhoneOtp = async (
 // SEND PHONE OTP
 // POST /api/auth/send-phone-otp
 // ============================================================
-//
-// This is kept as a separate endpoint because your existing
-// auth routes already expose /send-phone-otp.
-//
-// ============================================================
 
 const sendPhoneOtp = async (
   req,
@@ -1474,6 +1457,10 @@ const sendPhoneOtp = async (
     await pool.connect();
 
   try {
+
+    // ========================================================
+    // AUTHENTICATION
+    // ========================================================
 
     const auth =
       verifyJwt(req);
@@ -1494,9 +1481,9 @@ const sendPhoneOtp = async (
       auth.decoded.userId;
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // GET USER
-    // --------------------------------------------------------
+    // ========================================================
 
     const userResult =
       await client.query(
@@ -1504,7 +1491,7 @@ const sendPhoneOtp = async (
         SELECT
           id,
           phone,
-          is_verified
+          phone_verified
         FROM users
         WHERE id = $1
         LIMIT 1
@@ -1537,7 +1524,7 @@ const sendPhoneOtp = async (
     }
 
 
-    if (user.is_verified) {
+    if (user.phone_verified) {
       return res.status(400).json({
         success: false,
         message:
@@ -1546,9 +1533,9 @@ const sendPhoneOtp = async (
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // COOLDOWN
-    // --------------------------------------------------------
+    // ========================================================
 
     const recentOtp =
       await client.query(
@@ -1608,13 +1595,11 @@ const sendPhoneOtp = async (
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // TRANSACTION
-    // --------------------------------------------------------
+    // ========================================================
 
-    await client.query(
-      'BEGIN'
-    );
+    await client.query('BEGIN');
 
 
     const otp =
@@ -1624,9 +1609,9 @@ const sendPhoneOtp = async (
       );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // AUDIT
-    // --------------------------------------------------------
+    // ========================================================
 
     await client.query(
       `
@@ -1648,19 +1633,14 @@ const sendPhoneOtp = async (
       [
         userId,
 
-        req.ip ||
-          null,
+        req.ip || null,
 
-        req.get(
-          'user-agent'
-        ) || null,
+        req.get('user-agent') || null,
       ]
     );
 
 
-    await client.query(
-      'COMMIT'
-    );
+    await client.query('COMMIT');
 
 
     const response = {
@@ -1675,9 +1655,9 @@ const sendPhoneOtp = async (
     };
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // DEVELOPMENT ONLY
-    // --------------------------------------------------------
+    // ========================================================
 
     if (
       process.env.NODE_ENV !==
@@ -1694,9 +1674,7 @@ const sendPhoneOtp = async (
   } catch (error) {
 
     try {
-      await client.query(
-        'ROLLBACK'
-      );
+      await client.query('ROLLBACK');
     } catch (rollbackError) {
       console.error(
         'Rollback error:',
@@ -1743,9 +1721,9 @@ const login = async (
     } = req.body || {};
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // VALIDATION
-    // --------------------------------------------------------
+    // ========================================================
 
     if (
       !email ||
@@ -1765,9 +1743,9 @@ const login = async (
         .toLowerCase();
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // FIND USER
-    // --------------------------------------------------------
+    // ========================================================
 
     const userResult =
       await pool.query(
@@ -1780,19 +1758,26 @@ const login = async (
           password_hash,
           role,
           status,
+
           kyc_status,
           kyc_tier,
+
           bvn_verified,
           id_verified,
           tier_3_verified,
           tier_3_method,
+
           is_verified,
+          phone_verified,
+
           account_limit,
           daily_transfer_limit,
           daily_transfer_used,
           daily_transfer_reset_at,
+
           created_at,
           updated_at
+
         FROM users
         WHERE email = $1
         LIMIT 1
@@ -1816,9 +1801,9 @@ const login = async (
       userResult.rows[0];
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // ACCOUNT STATUS
-    // --------------------------------------------------------
+    // ========================================================
 
     if (
       user.status !==
@@ -1832,9 +1817,9 @@ const login = async (
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // PASSWORD
-    // --------------------------------------------------------
+    // ========================================================
 
     const passwordMatches =
       await bcrypt.compare(
@@ -1852,17 +1837,17 @@ const login = async (
     }
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // JWT
-    // --------------------------------------------------------
+    // ========================================================
 
     const token =
       createAccessToken(user);
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // ACCOUNTS
-    // --------------------------------------------------------
+    // ========================================================
 
     const accountResult =
       await pool.query(
@@ -1884,9 +1869,9 @@ const login = async (
       );
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // SAFE USER
-    // --------------------------------------------------------
+    // ========================================================
 
     const safeUser = {
 
@@ -1908,6 +1893,17 @@ const login = async (
       status:
         user.status,
 
+      // ------------------------------------------------------
+      // PHONE VERIFICATION
+      // ------------------------------------------------------
+
+      phone_verified:
+        user.phone_verified,
+
+      // ------------------------------------------------------
+      // KYC
+      // ------------------------------------------------------
+
       kyc_status:
         user.kyc_status,
 
@@ -1926,8 +1922,17 @@ const login = async (
       tier_3_method:
         user.tier_3_method,
 
+      // ------------------------------------------------------
+      // IMPORTANT
+      // is_verified is ONLY for actual KYC verification.
+      // ------------------------------------------------------
+
       is_verified:
         user.is_verified,
+
+      // ------------------------------------------------------
+      // LIMITS
+      // ------------------------------------------------------
 
       account_limit:
         user.account_limit,
@@ -1993,6 +1998,10 @@ const getMe = async (
 
   try {
 
+    // ========================================================
+    // AUTHENTICATION
+    // ========================================================
+
     const auth =
       verifyJwt(req);
 
@@ -2012,9 +2021,9 @@ const getMe = async (
       auth.decoded.userId;
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // GET USER
-    // --------------------------------------------------------
+    // ========================================================
 
     const userResult =
       await pool.query(
@@ -2026,19 +2035,27 @@ const getMe = async (
           phone,
           role,
           status,
+
+          phone_verified,
+
           kyc_status,
           kyc_tier,
+
           bvn_verified,
           id_verified,
           tier_3_verified,
           tier_3_method,
+
           is_verified,
+
           account_limit,
           daily_transfer_limit,
           daily_transfer_used,
           daily_transfer_reset_at,
+
           created_at,
           updated_at
+
         FROM users
         WHERE id = $1
         LIMIT 1
@@ -2062,9 +2079,9 @@ const getMe = async (
       userResult.rows[0];
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // GET ACCOUNTS
-    // --------------------------------------------------------
+    // ========================================================
 
     const accountResult =
       await pool.query(
@@ -2091,9 +2108,9 @@ const getMe = async (
       null;
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // RESPONSE
-    // --------------------------------------------------------
+    // ========================================================
 
     return res.status(200).json({
 
@@ -2122,6 +2139,17 @@ const getMe = async (
         status:
           user.status,
 
+        // ----------------------------------------------------
+        // PHONE
+        // ----------------------------------------------------
+
+        phone_verified:
+          user.phone_verified,
+
+        // ----------------------------------------------------
+        // KYC
+        // ----------------------------------------------------
+
         kyc_status:
           user.kyc_status,
 
@@ -2143,6 +2171,10 @@ const getMe = async (
         is_verified:
           user.is_verified,
 
+        // ----------------------------------------------------
+        // LIMITS
+        // ----------------------------------------------------
+
         account_limit:
           user.account_limit,
 
@@ -2160,6 +2192,10 @@ const getMe = async (
 
         updated_at:
           user.updated_at,
+
+        // ----------------------------------------------------
+        // ACCOUNT INFORMATION
+        // ----------------------------------------------------
 
         account_number:
           account
