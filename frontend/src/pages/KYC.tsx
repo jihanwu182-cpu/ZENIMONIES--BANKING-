@@ -40,6 +40,9 @@ interface KycRecord {
 
   verification_status?: string;
   rejection_reason?: string | null;
+
+  liveness_status?: string;
+  liveness_verified_at?: string | null;
 }
 
 interface KycResponse {
@@ -125,13 +128,16 @@ const KYC: React.FC = () => {
     useState<File | null>(null);
 
   /* ==========================================================
-     TIER 3
+     TIER 3 — ADDRESS + LIVENESS
      ========================================================== */
 
   const [tier3Method, setTier3Method] =
     useState<Tier3Method>('bank_statement');
 
   const [tier3Document, setTier3Document] =
+    useState<File | null>(null);
+
+  const [tier3Selfie, setTier3Selfie] =
     useState<File | null>(null);
 
   const [message, setMessage] = useState('');
@@ -359,14 +365,19 @@ const KYC: React.FC = () => {
           status:
             data.kyc.status ||
             'not_verified',
+
           tier:
             Number(data.kyc.tier) || 0,
+
           bvn_verified:
             Boolean(data.kyc.bvn_verified),
+
           id_verified:
             Boolean(data.kyc.id_verified),
+
           tier_3_verified:
             Boolean(data.kyc.tier_3_verified),
+
           tier_3_method:
             data.kyc.tier_3_method || null,
         });
@@ -411,7 +422,7 @@ const KYC: React.FC = () => {
   }, []);
 
   /* ==========================================================
-     TIER 1 — BVN SUBMISSION
+     TIER 1 — BVN
      ========================================================== */
 
   const submitBvn = async (
@@ -490,7 +501,7 @@ const KYC: React.FC = () => {
   };
 
   /* ==========================================================
-     FILE HANDLERS
+     TIER 2 FILE HANDLERS
      ========================================================== */
 
   const handleFrontDocument = (
@@ -574,6 +585,10 @@ const KYC: React.FC = () => {
     setSelfie(file);
   };
 
+  /* ==========================================================
+     TIER 3 FILE HANDLERS
+     ========================================================== */
+
   const handleTier3Document = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -596,8 +611,35 @@ const KYC: React.FC = () => {
     setTier3Document(file);
   };
 
+  const handleTier3Selfie = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setError('');
+
+    const file =
+      event.target.files?.[0] || null;
+
+    if (!file) {
+      setTier3Selfie(null);
+      return;
+    }
+
+    if (
+      !validateImageFile(
+        file,
+        'Liveness selfie'
+      )
+    ) {
+      event.target.value = '';
+      setTier3Selfie(null);
+      return;
+    }
+
+    setTier3Selfie(file);
+  };
+
   /* ==========================================================
-     TIER 2 — ID + SELFIE
+     TIER 2 — SUBMIT
      ========================================================== */
 
   const submitTier2 = async (
@@ -650,12 +692,6 @@ const KYC: React.FC = () => {
     try {
       const formData =
         new FormData();
-
-      /*
-       * These are actual uploaded files.
-       * No document URLs are entered by
-       * the customer.
-       */
 
       formData.append(
         'document_type',
@@ -735,7 +771,7 @@ const KYC: React.FC = () => {
   };
 
   /* ==========================================================
-     TIER 3 — ADDRESS DOCUMENT
+     TIER 3 — SUBMIT DOCUMENT + LIVENESS
      ========================================================== */
 
   const submitTier3 = async (
@@ -761,6 +797,15 @@ const KYC: React.FC = () => {
       return;
     }
 
+    if (
+      !validateImageFile(
+        tier3Selfie,
+        'Liveness selfie'
+      )
+    ) {
+      return;
+    }
+
     if (!token) {
       navigate('/login');
       return;
@@ -772,6 +817,17 @@ const KYC: React.FC = () => {
       const formData =
         new FormData();
 
+      /*
+       * IMPORTANT:
+       *
+       * These field names exactly match
+       * the backend Tier 3 route:
+       *
+       * tier_3_method
+       * tier_3_document
+       * tier_3_selfie
+       */
+
       formData.append(
         'tier_3_method',
         tier3Method
@@ -780,6 +836,11 @@ const KYC: React.FC = () => {
       formData.append(
         'tier_3_document',
         tier3Document as File
+      );
+
+      formData.append(
+        'tier_3_selfie',
+        tier3Selfie as File
       );
 
       const response = await fetch(
@@ -805,10 +866,11 @@ const KYC: React.FC = () => {
 
       setMessage(
         data.message ||
-          'Your Tier 3 document has been submitted for review.'
+          'Your proof-of-address document and liveness selfie have been submitted for review.'
       );
 
       setTier3Document(null);
+      setTier3Selfie(null);
 
       clearFileInputs();
 
@@ -1261,8 +1323,8 @@ const KYC: React.FC = () => {
 
             <TierCard
               tier="Tier 3"
-              title="Address Verification"
-              description="Submit an accepted proof-of-address document for review."
+              title="Address + Liveness Verification"
+              description="Submit an accepted proof-of-address document and complete liveness verification."
               accountLimit="Unlimited"
               transferLimit="₦5,000,000 daily"
               verified={
@@ -1480,8 +1542,6 @@ const KYC: React.FC = () => {
                   Take a clear selfie using your
                   device. Your selfie will be sent
                   for facial/liveness verification.
-                  Uploading a selfie does not
-                  automatically approve your account.
                 </p>
 
                 <FileUploadBox
@@ -1542,8 +1602,8 @@ const KYC: React.FC = () => {
         >
           <SectionHeading
             number="3"
-            title="Tier 3 — Address Verification"
-            description="Choose one accepted proof-of-address method and upload the actual document."
+            title="Tier 3 — Address + Liveness Verification"
+            description="Choose one accepted proof-of-address method, upload the actual PDF document, and complete liveness verification."
           />
 
           {kyc.tier_3_verified ? (
@@ -1554,6 +1614,8 @@ const KYC: React.FC = () => {
             <form
               onSubmit={submitTier3}
             >
+              {/* METHOD */}
+
               <label
                 style={labelStyle}
               >
@@ -1575,7 +1637,7 @@ const KYC: React.FC = () => {
                     'bank_statement'
                   }
                   title="Bank Statement"
-                  description="Upload a recent bank statement."
+                  description="Stamped PDF from your bank app. Must be dated within the last 90 days."
                   onClick={() =>
                     setTier3Method(
                       'bank_statement'
@@ -1589,7 +1651,7 @@ const KYC: React.FC = () => {
                     'utility_bill'
                   }
                   title="Utility Bill"
-                  description="Upload an eligible recent utility bill."
+                  description="PHED, Water, DSTV, or Gas bill. Upload the PDF issued by the provider."
                   onClick={() =>
                     setTier3Method(
                       'utility_bill'
@@ -1603,7 +1665,7 @@ const KYC: React.FC = () => {
                     'proof_of_address'
                   }
                   title="Proof of Address"
-                  description="Upload an accepted proof of your residential address."
+                  description="Stamped tenancy agreement or government-issued address letter."
                   onClick={() =>
                     setTier3Method(
                       'proof_of_address'
@@ -1612,9 +1674,81 @@ const KYC: React.FC = () => {
                 />
               </div>
 
+              {/* ACCEPTANCE RULES */}
+
+              <div
+                style={{
+                  background: '#f8faff',
+                  border:
+                    '1px solid #dbe7ff',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  marginBottom: '20px',
+                }}
+              >
+                <h3
+                  style={{
+                    margin:
+                      '0 0 10px',
+                    color: '#172033',
+                    fontSize: '16px',
+                  }}
+                >
+                  Accepted Documents
+                </h3>
+
+                <div
+                  style={{
+                    color: '#475467',
+                    fontSize: '13px',
+                    lineHeight: 1.7,
+                  }}
+                >
+                  <p
+                    style={{
+                      margin:
+                        '0 0 8px',
+                    }}
+                  >
+                    <strong>
+                      Bank Statement:
+                    </strong>{' '}
+                    Stamped PDF from your bank app,
+                    dated within the last 90 days.
+                  </p>
+
+                  <p
+                    style={{
+                      margin:
+                        '0 0 8px',
+                    }}
+                  >
+                    <strong>
+                      Utility Bill:
+                    </strong>{' '}
+                    PHED, Water, DSTV, or Gas.
+                    PDF issued by the provider.
+                  </p>
+
+                  <p
+                    style={{
+                      margin: 0,
+                    }}
+                  >
+                    <strong>
+                      Proof of Address:
+                    </strong>{' '}
+                    Stamped tenancy agreement or
+                    government-issued address letter.
+                  </p>
+                </div>
+              </div>
+
+              {/* DOCUMENT */}
+
               <FileUploadBox
                 label="Proof-of-Address Document"
-                description="Upload the actual PDF document. The document is uploaded directly to Zenimonies for review."
+                description="Upload the actual PDF document. Do not enter a document URL. Maximum file size is 10 MB."
                 accept="application/pdf,.pdf"
                 file={tier3Document}
                 onChange={
@@ -1623,18 +1757,80 @@ const KYC: React.FC = () => {
                 required
               />
 
-              <p
+              {/* LIVENESS */}
+
+              <div
                 style={{
-                  color: '#667085',
-                  fontSize: '13px',
-                  lineHeight: 1.5,
-                  marginTop: '10px',
+                  marginTop: '22px',
+                  marginBottom: '18px',
+                  padding: '18px',
+                  border:
+                    '1px solid #dbe7ff',
+                  background: '#f8faff',
+                  borderRadius: '14px',
                 }}
               >
-                Only one Tier 3 document is required.
-                Your document remains pending until
-                it has been reviewed and approved.
-              </p>
+                <h3
+                  style={{
+                    margin:
+                      '0 0 7px',
+                    color: '#172033',
+                    fontSize: '17px',
+                  }}
+                >
+                  Liveness Verification
+                </h3>
+
+                <p
+                  style={{
+                    margin:
+                      '0 0 14px',
+                    color: '#667085',
+                    fontSize: '13px',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Take a current selfie using your
+                  device camera. Keep your face fully
+                  visible. Remove sunglasses, masks,
+                  hats, or anything covering your face.
+                </p>
+
+                <FileUploadBox
+                  label="Liveness Selfie"
+                  description="Use your device camera to take a current selfie for liveness verification."
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="user"
+                  file={tier3Selfie}
+                  onChange={
+                    handleTier3Selfie
+                  }
+                  required
+                />
+              </div>
+
+              <div
+                style={{
+                  background: '#fffaeb',
+                  border:
+                    '1px solid #fedf89',
+                  color: '#7a2e0b',
+                  borderRadius: '10px',
+                  padding: '13px 15px',
+                  marginBottom: '18px',
+                  fontSize: '13px',
+                  lineHeight: 1.5,
+                }}
+              >
+                <strong>
+                  Important:
+                </strong>{' '}
+                Uploading the document and selfie
+                does not automatically approve Tier 3.
+                Your submission remains pending until
+                it has been reviewed and the required
+                verification checks are completed.
+              </div>
 
               <button
                 type="submit"
@@ -1691,12 +1887,14 @@ const KYC: React.FC = () => {
                   color:
                     getStatusColor(
                       record.verification_status ||
+                        record.tier_3_verification_status ||
                         'not_verified'
                     ),
                 }}
               >
                 {displayStatus(
                   record.verification_status ||
+                    record.tier_3_verification_status ||
                     'not_verified'
                 )}
               </strong>
@@ -1746,6 +1944,24 @@ const KYC: React.FC = () => {
                   /_/g,
                   ' '
                 )}
+              </p>
+            )}
+
+            {record.liveness_status && (
+              <p
+                style={{
+                  margin:
+                    '7px 0 0',
+                  color: '#667085',
+                  fontSize: '14px',
+                }}
+              >
+                Liveness:{' '}
+                <strong>
+                  {displayStatus(
+                    record.liveness_status
+                  )}
+                </strong>
               </p>
             )}
           </section>
