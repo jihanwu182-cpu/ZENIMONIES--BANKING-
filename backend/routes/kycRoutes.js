@@ -15,24 +15,12 @@ const router = express.Router();
 // ============================================================
 // MULTER CONFIGURATION
 // ============================================================
-//
-// Files are received directly from the user's device.
-//
-// Memory storage is used so uploaded KYC files are not written
-// to Render's temporary/local filesystem.
-//
-// The controller should pass files to secure storage or an
-// approved verification provider.
-// ============================================================
 
 const upload = multer({
   storage: multer.memoryStorage(),
 
   limits: {
-    // Maximum individual file size: 10 MB
     fileSize: 10 * 1024 * 1024,
-
-    // Maximum files in one request
     files: 5,
   },
 
@@ -78,23 +66,15 @@ router.post(
 );
 
 // ============================================================
-// TIER 2 — ID + SELFIE
+// TIER 2 — GOVERNMENT ID + SELFIE
 // ============================================================
 //
-// IMPORTANT:
-// These names MUST match the FormData names in the frontend.
-//
-// Frontend sends:
+// Frontend field names:
 //
 // document_front
 // document_back
 // selfie
 //
-// The selfie is only an uploaded image. It must NOT automatically
-// be treated as successful liveness verification.
-//
-// Actual identity/liveness verification must be performed by
-// the backend/provider before the account becomes verified.
 // ============================================================
 
 router.post(
@@ -121,10 +101,9 @@ router.post(
 // TIER 3 — PROOF OF ADDRESS
 // ============================================================
 //
-// IMPORTANT:
-// This matches the frontend:
+// Frontend field name:
 //
-// formData.append('tier_3_document', tier3Document)
+// tier_3_document
 //
 // ============================================================
 
@@ -136,7 +115,7 @@ router.post(
 );
 
 // ============================================================
-// MULTER / FILE UPLOAD ERROR HANDLER
+// MULTER ERROR HANDLER
 // ============================================================
 
 router.use((error, req, res, next) => {
@@ -185,9 +164,5 @@ router.use((error, req, res, next) => {
 
   next();
 });
-
-// ============================================================
-// EXPORT
-// ============================================================
 
 module.exports = router;
