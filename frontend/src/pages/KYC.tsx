@@ -19,14 +19,21 @@ interface KycLimits {
 
 interface KycRecord {
   id?: string;
+
   bvn_verification_status?: string;
   bvn_verified_at?: string | null;
 
   document_type?: string;
   document_number?: string;
+
+  /*
+   * These are returned by the backend/storage system.
+   * The user never enters these URLs manually.
+   */
   document_front_url?: string;
   document_back_url?: string;
   selfie_url?: string;
+
   id_verification_status?: string;
   id_verified_at?: string | null;
 
@@ -41,12 +48,14 @@ interface KycRecord {
 
 interface KycResponse {
   success: boolean;
+
   user?: {
     id: string;
     full_name: string;
     email: string;
     phone: string;
   };
+
   kyc?: KycStatus;
   limits?: KycLimits;
   record?: KycRecord | null;
@@ -62,6 +71,9 @@ const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com/api';
 
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+const MAX_PDF_SIZE = 10 * 1024 * 1024;
+
 const KYC: React.FC = () => {
   const navigate = useNavigate();
 
@@ -69,8 +81,8 @@ const KYC: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const [kyc, setKyc] = useState<KycStatus>({
-    status: 'pending',
-    tier: 1,
+    status: 'not_verified',
+    tier: 0,
     bvn_verified: false,
     id_verified: false,
     tier_3_verified: false,
@@ -78,17 +90,28 @@ const KYC: React.FC = () => {
   });
 
   const [limits, setLimits] = useState<KycLimits>({
-    account_limit: 200000,
-    daily_transfer_limit: 50000,
+    account_limit: 50000,
+    daily_transfer_limit: 25000,
     daily_transfer_used: 0,
-    daily_transfer_remaining: 50000,
+    daily_transfer_remaining: 25000,
   });
 
-  const [record, setRecord] = useState<KycRecord | null>(
-    null
-  );
+  const [record, setRecord] =
+    useState<KycRecord | null>(null);
+
+  /*
+   * ==========================================================
+   * TIER 1
+   * ==========================================================
+   */
 
   const [bvn, setBvn] = useState('');
+
+  /*
+   * ==========================================================
+   * TIER 2
+   * ==========================================================
+   */
 
   const [documentType, setDocumentType] =
     useState('national_id');
@@ -96,26 +119,42 @@ const KYC: React.FC = () => {
   const [documentNumber, setDocumentNumber] =
     useState('');
 
-  const [documentFrontUrl, setDocumentFrontUrl] =
-    useState('');
+  const [documentFront, setDocumentFront] =
+    useState<File | null>(null);
 
-  const [documentBackUrl, setDocumentBackUrl] =
-    useState('');
+  const [documentBack, setDocumentBack] =
+    useState<File | null>(null);
 
-  const [selfieUrl, setSelfieUrl] = useState('');
+  const [selfie, setSelfie] =
+    useState<File | null>(null);
+
+  /*
+   * ==========================================================
+   * TIER 3
+   * ==========================================================
+   */
 
   const [tier3Method, setTier3Method] =
     useState<Tier3Method>('bank_statement');
 
-  const [tier3DocumentUrl, setTier3DocumentUrl] =
+  const [tier3Document, setTier3Document] =
+    useState<File | null>(null);
+
+  const [message, setMessage] =
     useState('');
 
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] =
+    useState('');
 
   const token =
     localStorage.getItem('zenimonies_token') ||
     localStorage.getItem('token');
+
+  /*
+   * ==========================================================
+   * HELPERS
+   * ==========================================================
+   */
 
   const formatMoney = (
     amount: number | null
@@ -138,7 +177,8 @@ const KYC: React.FC = () => {
 
     if (
       normalized === 'approved' ||
-      normalized === 'verified'
+      normalized === 'verified' ||
+      normalized === 'completed'
     ) {
       return '#027a48';
     }
@@ -165,7 +205,8 @@ const KYC: React.FC = () => {
 
     if (
       normalized === 'approved' ||
-      normalized === 'verified'
+      normalized === 'verified' ||
+      normalized === 'completed'
     ) {
       return '#ecfdf3';
     }
@@ -184,75 +225,213 @@ const KYC: React.FC = () => {
     return '#f2f4f7';
   };
 
-  const loadKycStatus = async () => {
-    if (!token) {
-      navigate('/login');
-      return;
+  const formatFileSize = (
+    size: number
+  ): string => {
+    if (size < 1024) {
+      return `${size} B`;
     }
 
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/kyc/status`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      const data: KycResponse =
-        await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.message ||
-            'Unable to load KYC status'
-        );
-      }
-
-      if (data.kyc) {
-        setKyc(data.kyc);
-      }
-
-      if (data.limits) {
-        setLimits(data.limits);
-      }
-
-      setRecord(
-        data.record || null
-      );
-
-      if (data.record?.tier_3_method) {
-        setTier3Method(
-          data.record
-            .tier_3_method as Tier3Method
-        );
-      }
-    } catch (err) {
-      console.error(
-        'KYC status error:',
-        err
-      );
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to load KYC status'
-      );
-    } finally {
-      setLoading(false);
+    if (size < 1024 * 1024) {
+      return `${(
+        size / 1024
+      ).toFixed(1)} KB`;
     }
+
+    return `${(
+      size /
+      (1024 * 1024)
+    ).toFixed(1)} MB`;
   };
+
+  /*
+   * ==========================================================
+   * IMAGE VALIDATION
+   * ==========================================================
+   */
+
+  const validateImageFile = (
+    file: File | null,
+    fieldName: string
+  ): boolean => {
+    if (!file) {
+      setError(
+        `${fieldName} is required.`
+      );
+
+      return false;
+    }
+
+    const allowedTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+    ];
+
+    if (
+      !allowedTypes.includes(
+        file.type
+      )
+    ) {
+      setError(
+        `${fieldName} must be a JPG, JPEG, PNG, or WEBP image.`
+      );
+
+      return false;
+    }
+
+    if (
+      file.size >
+      MAX_IMAGE_SIZE
+    ) {
+      setError(
+        `${fieldName} must not exceed 10 MB.`
+      );
+
+      return false;
+    }
+
+    return true;
+  };
+
+  /*
+   * ==========================================================
+   * PDF VALIDATION
+   * ==========================================================
+   */
+
+  const validatePdfFile = (
+    file: File | null
+  ): boolean => {
+    if (!file) {
+      setError(
+        'Tier 3 proof-of-address document is required.'
+      );
+
+      return false;
+    }
+
+    const isPdf =
+      file.type ===
+        'application/pdf' ||
+      file.name
+        .toLowerCase()
+        .endsWith('.pdf');
+
+    if (!isPdf) {
+      setError(
+        'Tier 3 accepts PDF documents only.'
+      );
+
+      return false;
+    }
+
+    if (
+      file.size >
+      MAX_PDF_SIZE
+    ) {
+      setError(
+        'Tier 3 document must not exceed 10 MB.'
+      );
+
+      return false;
+    }
+
+    return true;
+  };
+
+  /*
+   * ==========================================================
+   * LOAD KYC STATUS
+   * ==========================================================
+   */
+
+  const loadKycStatus =
+    async () => {
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      setLoading(true);
+      setError('');
+
+      try {
+        const response =
+          await fetch(
+            `${API_BASE_URL}/kyc/status`,
+            {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type':
+                  'application/json',
+              },
+            }
+          );
+
+        const data: KycResponse =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !data.success
+        ) {
+          throw new Error(
+            data.message ||
+              'Unable to load KYC status'
+          );
+        }
+
+        if (data.kyc) {
+          setKyc(data.kyc);
+        }
+
+        if (data.limits) {
+          setLimits(data.limits);
+        }
+
+        setRecord(
+          data.record || null
+        );
+
+        if (
+          data.record
+            ?.tier_3_method
+        ) {
+          setTier3Method(
+            data.record
+              .tier_3_method as Tier3Method
+          );
+        }
+      } catch (err) {
+        console.error(
+          'KYC status error:',
+          err
+        );
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Unable to load KYC status'
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
     loadKycStatus();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /*
+   * ==========================================================
+   * TIER 1 — BVN
+   * ==========================================================
+   */
 
   const submitBvn = async (
     event: React.FormEvent
@@ -265,10 +444,15 @@ const KYC: React.FC = () => {
     const cleanBvn =
       bvn.replace(/\D/g, '');
 
-    if (!/^\d{11}$/.test(cleanBvn)) {
+    if (
+      !/^\d{11}$/.test(
+        cleanBvn
+      )
+    ) {
       setError(
         'BVN must contain exactly 11 digits.'
       );
+
       return;
     }
 
@@ -280,23 +464,29 @@ const KYC: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/kyc/bvn`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            bvn: cleanBvn,
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          `${API_BASE_URL}/kyc/bvn`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              bvn: cleanBvn,
+            }),
+          }
+        );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
-      if (!response.ok || !data.success) {
+      if (
+        !response.ok ||
+        !data.success
+      ) {
         throw new Error(
           data.message ||
             'Unable to submit BVN'
@@ -305,8 +495,10 @@ const KYC: React.FC = () => {
 
       setMessage(
         data.message ||
-          'BVN submitted successfully.'
+          'BVN submitted successfully. Verification is pending.'
       );
+
+      setBvn('');
 
       await loadKycStatus();
     } catch (err) {
@@ -325,6 +517,131 @@ const KYC: React.FC = () => {
     }
   };
 
+  /*
+   * ==========================================================
+   * FILE HANDLERS
+   * ==========================================================
+   */
+
+  const handleFrontDocument =
+    (
+      event: React.ChangeEvent<HTMLInputElement>
+    ) => {
+      setError('');
+
+      const file =
+        event.target.files?.[0] ||
+        null;
+
+      if (!file) {
+        setDocumentFront(null);
+        return;
+      }
+
+      if (
+        !validateImageFile(
+          file,
+          'Front of ID'
+        )
+      ) {
+        event.target.value = '';
+        setDocumentFront(null);
+        return;
+      }
+
+      setDocumentFront(file);
+    };
+
+  const handleBackDocument =
+    (
+      event: React.ChangeEvent<HTMLInputElement>
+    ) => {
+      setError('');
+
+      const file =
+        event.target.files?.[0] ||
+        null;
+
+      if (!file) {
+        setDocumentBack(null);
+        return;
+      }
+
+      if (
+        !validateImageFile(
+          file,
+          'Back of ID'
+        )
+      ) {
+        event.target.value = '';
+        setDocumentBack(null);
+        return;
+      }
+
+      setDocumentBack(file);
+    };
+
+  const handleSelfie =
+    (
+      event: React.ChangeEvent<HTMLInputElement>
+    ) => {
+      setError('');
+
+      const file =
+        event.target.files?.[0] ||
+        null;
+
+      if (!file) {
+        setSelfie(null);
+        return;
+      }
+
+      if (
+        !validateImageFile(
+          file,
+          'Selfie'
+        )
+      ) {
+        event.target.value = '';
+        setSelfie(null);
+        return;
+      }
+
+      setSelfie(file);
+    };
+
+  const handleTier3Document =
+    (
+      event: React.ChangeEvent<HTMLInputElement>
+    ) => {
+      setError('');
+
+      const file =
+        event.target.files?.[0] ||
+        null;
+
+      if (!file) {
+        setTier3Document(null);
+        return;
+      }
+
+      if (
+        !validatePdfFile(file)
+      ) {
+        event.target.value = '';
+        setTier3Document(null);
+        return;
+      }
+
+      setTier3Document(file);
+    };
+
+  /*
+   * ==========================================================
+   * TIER 2 — ID + REAL SELFIE
+   * ==========================================================
+   */
+
   const submitTier2 = async (
     event: React.FormEvent
   ) => {
@@ -337,29 +654,53 @@ const KYC: React.FC = () => {
       setError(
         'Please select your ID document type.'
       );
+
       return;
     }
 
-    if (!documentNumber.trim()) {
+    if (
+      !documentNumber.trim()
+    ) {
       setError(
         'Please enter your ID document number.'
       );
+
       return;
     }
 
-    if (!documentFrontUrl.trim()) {
-      setError(
-        'Please provide the front document URL.'
-      );
+    if (
+      !validateImageFile(
+        documentFront,
+        'Front of ID'
+      )
+    ) {
       return;
     }
 
-    if (!selfieUrl.trim()) {
-      setError(
-        'Please provide your selfie URL.'
-      );
+    /*
+     * We intentionally require the selfie.
+     *
+     * This is a real image captured/selected
+     * from the user's device.
+     *
+     * The backend/provider must still perform
+     * actual liveness and face verification.
+     */
+
+    if (
+      !validateImageFile(
+        selfie,
+        'Selfie'
+      )
+    ) {
       return;
     }
+
+    /*
+     * The back of the ID is optional because
+     * some government documents do not have
+     * a reverse side.
+     */
 
     if (!token) {
       navigate('/login');
@@ -369,32 +710,62 @@ const KYC: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/kyc/tier-2`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            document_type:
-              documentType,
-            document_number:
-              documentNumber.trim(),
-            document_front_url:
-              documentFrontUrl.trim(),
-            document_back_url:
-              documentBackUrl.trim(),
-            selfie_url:
-              selfieUrl.trim(),
-          }),
-        }
+      const formData =
+        new FormData();
+
+      formData.append(
+        'document_type',
+        documentType
       );
 
-      const data = await response.json();
+      formData.append(
+        'document_number',
+        documentNumber.trim()
+      );
 
-      if (!response.ok || !data.success) {
+      formData.append(
+        'document_front',
+        documentFront as File
+      );
+
+      if (documentBack) {
+        formData.append(
+          'document_back',
+          documentBack
+        );
+      }
+
+      formData.append(
+        'selfie',
+        selfie as File
+      );
+
+      /*
+       * DO NOT manually set Content-Type here.
+       *
+       * The browser sets multipart/form-data
+       * together with the required boundary.
+       */
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/kyc/tier-2`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
         throw new Error(
           data.message ||
             'Unable to submit Tier 2 verification'
@@ -403,7 +774,28 @@ const KYC: React.FC = () => {
 
       setMessage(
         data.message ||
-          'Tier 2 verification submitted successfully.'
+          'Your ID and facial verification have been submitted and are pending verification.'
+      );
+
+      setDocumentNumber('');
+      setDocumentFront(null);
+      setDocumentBack(null);
+      setSelfie(null);
+
+      /*
+       * Reset file inputs visually.
+       */
+      const fileInputs =
+        document.querySelectorAll(
+          'input[type="file"]'
+        );
+
+      fileInputs.forEach(
+        (input) => {
+          (
+            input as HTMLInputElement
+          ).value = '';
+        }
       );
 
       await loadKycStatus();
@@ -423,6 +815,12 @@ const KYC: React.FC = () => {
     }
   };
 
+  /*
+   * ==========================================================
+   * TIER 3 — PDF DOCUMENT
+   * ==========================================================
+   */
+
   const submitTier3 = async (
     event: React.FormEvent
   ) => {
@@ -435,13 +833,15 @@ const KYC: React.FC = () => {
       setError(
         'Please choose a Tier 3 verification method.'
       );
+
       return;
     }
 
-    if (!tier3DocumentUrl.trim()) {
-      setError(
-        'Please provide the verification document URL.'
-      );
+    if (
+      !validatePdfFile(
+        tier3Document
+      )
+    ) {
       return;
     }
 
@@ -453,26 +853,45 @@ const KYC: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/kyc/tier-3`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            tier_3_method:
-              tier3Method,
-            tier_3_document_url:
-              tier3DocumentUrl.trim(),
-          }),
-        }
+      const formData =
+        new FormData();
+
+      formData.append(
+        'tier_3_method',
+        tier3Method
       );
 
-      const data = await response.json();
+      formData.append(
+        'tier_3_document',
+        tier3Document as File
+      );
 
-      if (!response.ok || !data.success) {
+      /*
+       * The backend receives the actual PDF.
+       *
+       * There is NO document URL entered by
+       * the customer.
+       */
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/kyc/tier-3`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
         throw new Error(
           data.message ||
             'Unable to submit Tier 3 verification'
@@ -481,7 +900,22 @@ const KYC: React.FC = () => {
 
       setMessage(
         data.message ||
-          'Tier 3 verification submitted successfully.'
+          'Your Tier 3 document has been submitted and is pending review.'
+      );
+
+      setTier3Document(null);
+
+      const fileInputs =
+        document.querySelectorAll(
+          'input[type="file"]'
+        );
+
+      fileInputs.forEach(
+        (input) => {
+          (
+            input as HTMLInputElement
+          ).value = '';
+        }
       );
 
       await loadKycStatus();
@@ -501,20 +935,37 @@ const KYC: React.FC = () => {
     }
   };
 
+  /*
+   * ==========================================================
+   * LOGOUT
+   * ==========================================================
+   */
+
   const logout = () => {
     localStorage.removeItem(
       'zenimonies_token'
     );
-    localStorage.removeItem('token');
+
+    localStorage.removeItem(
+      'token'
+    );
+
     localStorage.removeItem(
       'zenimonies_user'
     );
+
     localStorage.removeItem(
       'zenimonies_accounts'
     );
 
     navigate('/login');
   };
+
+  /*
+   * ==========================================================
+   * LOADING
+   * ==========================================================
+   */
 
   if (loading) {
     return (
@@ -533,6 +984,12 @@ const KYC: React.FC = () => {
       </div>
     );
   }
+
+  /*
+   * ==========================================================
+   * PAGE
+   * ==========================================================
+   */
 
   return (
     <div
@@ -779,7 +1236,7 @@ const KYC: React.FC = () => {
               }}
             >
               {kyc.status.replace(
-                '_',
+                /_/g,
                 ' '
               )}
             </span>
@@ -870,8 +1327,8 @@ const KYC: React.FC = () => {
 
             <TierCard
               tier="Tier 2"
-              title="ID + KYC"
-              description="Submit an accepted identity document and required KYC information."
+              title="ID + Facial Verification"
+              description="Submit a government-issued ID and complete real facial/liveness verification."
               accountLimit="₦500,000"
               transferLimit="₦200,000 daily"
               verified={
@@ -886,7 +1343,7 @@ const KYC: React.FC = () => {
             <TierCard
               tier="Tier 3"
               title="Address Verification"
-              description="Choose one verification method: bank statement, utility bill, or proof of address."
+              description="Submit one accepted proof-of-address document for review."
               accountLimit="Unlimited"
               transferLimit="₦5,000,000 daily"
               verified={
@@ -900,7 +1357,10 @@ const KYC: React.FC = () => {
           </div>
         </section>
 
-        {/* TIER 1 */}
+        {/* ==================================================
+            TIER 1
+            ================================================== */}
+
         <section
           style={{
             background: '#ffffff',
@@ -916,13 +1376,17 @@ const KYC: React.FC = () => {
           <SectionHeading
             number="1"
             title="Tier 1 — BVN Verification"
-            description="Submit your 11-digit BVN. Verification must be confirmed by an approved verification provider before the account is marked verified."
+            description="Submit your 11-digit BVN. Your account remains pending until an approved verification provider confirms the BVN."
           />
 
           {kyc.bvn_verified ? (
-            <VerifiedMessage text="Your BVN has been verified." />
+            <VerifiedMessage
+              text="Your BVN has been verified."
+            />
           ) : (
-            <form onSubmit={submitBvn}>
+            <form
+              onSubmit={submitBvn}
+            >
               <label
                 style={labelStyle}
               >
@@ -944,6 +1408,7 @@ const KYC: React.FC = () => {
                 }
                 placeholder="Enter your 11-digit BVN"
                 style={inputStyle}
+                autoComplete="off"
               />
 
               <p
@@ -954,8 +1419,8 @@ const KYC: React.FC = () => {
                 }}
               >
                 Your BVN is sensitive information.
-                Submit it only through the secure
-                Zenimonies verification process.
+                It will remain pending until the
+                verification provider confirms it.
               </p>
 
               <button
@@ -973,7 +1438,10 @@ const KYC: React.FC = () => {
           )}
         </section>
 
-        {/* TIER 2 */}
+        {/* ==================================================
+            TIER 2
+            ================================================== */}
+
         <section
           style={{
             background: '#ffffff',
@@ -988,14 +1456,20 @@ const KYC: React.FC = () => {
         >
           <SectionHeading
             number="2"
-            title="Tier 2 — ID Document + KYC"
-            description="Submit your identity document and required verification information. Your submission will remain pending until reviewed and approved."
+            title="Tier 2 — ID + Facial Verification"
+            description="Upload your actual government-issued ID and complete a real facial/liveness verification. Uploading the files does not automatically approve your account."
           />
 
           {kyc.id_verified ? (
-            <VerifiedMessage text="Your identity document has been verified." />
+            <VerifiedMessage
+              text="Your identity verification has been approved."
+            />
           ) : (
-            <form onSubmit={submitTier2}>
+            <form
+              onSubmit={submitTier2}
+            >
+              {/* DOCUMENT TYPE */}
+
               <label
                 style={labelStyle}
               >
@@ -1014,16 +1488,25 @@ const KYC: React.FC = () => {
                 <option value="national_id">
                   National ID
                 </option>
+
+                <option value="nin">
+                  NIN
+                </option>
+
                 <option value="international_passport">
                   International Passport
                 </option>
+
                 <option value="drivers_license">
                   Driver's License
                 </option>
+
                 <option value="voters_card">
                   Voter's Card
                 </option>
               </select>
+
+              {/* DOCUMENT NUMBER */}
 
               <label
                 style={labelStyle}
@@ -1041,73 +1524,108 @@ const KYC: React.FC = () => {
                 }
                 placeholder="Enter document number"
                 style={inputStyle}
+                autoComplete="off"
               />
 
-              <label
-                style={labelStyle}
-              >
-                Front Document URL
-              </label>
+              {/* FRONT */}
 
-              <input
-                type="url"
-                value={documentFrontUrl}
-                onChange={(event) =>
-                  setDocumentFrontUrl(
-                    event.target.value
-                  )
+              <FileUploadBox
+                label="Front of ID"
+                description="Upload a clear photo of the front of your government-issued ID."
+                accept="image/jpeg,image/png,image/webp"
+                file={documentFront}
+                onChange={
+                  handleFrontDocument
                 }
-                placeholder="https://..."
-                style={inputStyle}
+                required
               />
 
-              <label
-                style={labelStyle}
-              >
-                Back Document URL
-              </label>
+              {/* BACK */}
 
-              <input
-                type="url"
-                value={documentBackUrl}
-                onChange={(event) =>
-                  setDocumentBackUrl(
-                    event.target.value
-                  )
+              <FileUploadBox
+                label="Back of ID"
+                description="Upload the back of your ID if your document has a reverse side."
+                accept="image/jpeg,image/png,image/webp"
+                file={documentBack}
+                onChange={
+                  handleBackDocument
                 }
-                placeholder="https://... (if required)"
-                style={inputStyle}
+                required={false}
               />
 
-              <label
-                style={labelStyle}
-              >
-                Selfie URL
-              </label>
+              {/* SELFIE / LIVENESS */}
 
-              <input
-                type="url"
-                value={selfieUrl}
-                onChange={(event) =>
-                  setSelfieUrl(
-                    event.target.value
-                  )
-                }
-                placeholder="https://..."
-                style={inputStyle}
-              />
-
-              <p
+              <div
                 style={{
-                  color: '#667085',
+                  marginTop: '20px',
+                  marginBottom: '18px',
+                  padding: '18px',
+                  border:
+                    '1px solid #dbe7ff',
+                  background: '#f8faff',
+                  borderRadius: '14px',
+                }}
+              >
+                <h3
+                  style={{
+                    margin:
+                      '0 0 7px',
+                    color: '#172033',
+                    fontSize: '17px',
+                  }}
+                >
+                  Facial Verification
+                </h3>
+
+                <p
+                  style={{
+                    margin:
+                      '0 0 14px',
+                    color: '#667085',
+                    fontSize: '13px',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Take a clear selfie using your
+                  device. Your selfie will be sent
+                  for facial/liveness verification.
+                  A submitted selfie does not mean
+                  that you have passed verification.
+                </p>
+
+                <FileUploadBox
+                  label="Live Selfie"
+                  description="Use a clear image of your face. Remove sunglasses, masks, and anything covering your face."
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="user"
+                  file={selfie}
+                  onChange={handleSelfie}
+                  required
+                />
+              </div>
+
+              <div
+                style={{
+                  background: '#fffaeb',
+                  border:
+                    '1px solid #fedf89',
+                  color: '#7a2e0b',
+                  borderRadius: '10px',
+                  padding: '13px 15px',
+                  marginBottom: '18px',
                   fontSize: '13px',
                   lineHeight: 1.5,
                 }}
               >
-                The document URLs above should point
-                to files uploaded through your approved
-                secure document-storage system.
-              </p>
+                <strong>
+                  Important:
+                </strong>{' '}
+                Your ID and selfie are submitted
+                for verification. Zenimonies must
+                receive a successful verification
+                result before your Tier 2 status
+                changes to verified.
+              </div>
 
               <button
                 type="submit"
@@ -1117,14 +1635,17 @@ const KYC: React.FC = () => {
                 }
               >
                 {submitting
-                  ? 'Submitting...'
-                  : 'Submit Tier 2 KYC'}
+                  ? 'Uploading and submitting...'
+                  : 'Submit Tier 2 Verification'}
               </button>
             </form>
           )}
         </section>
 
-        {/* TIER 3 */}
+        {/* ==================================================
+            TIER 3
+            ================================================== */}
+
         <section
           style={{
             background: '#ffffff',
@@ -1139,14 +1660,18 @@ const KYC: React.FC = () => {
         >
           <SectionHeading
             number="3"
-            title="Tier 3 — Choose One Verification Method"
-            description="To request Tier 3, choose ONE of the available verification methods and submit the corresponding document."
+            title="Tier 3 — Address Verification"
+            description="Choose one accepted proof-of-address method and upload the actual document."
           />
 
           {kyc.tier_3_verified ? (
-            <VerifiedMessage text="Your Tier 3 verification has been approved." />
+            <VerifiedMessage
+              text="Your Tier 3 verification has been approved."
+            />
           ) : (
-            <form onSubmit={submitTier3}>
+            <form
+              onSubmit={submitTier3}
+            >
               <label
                 style={labelStyle}
               >
@@ -1169,7 +1694,7 @@ const KYC: React.FC = () => {
                     'bank_statement'
                   }
                   title="Bank Statement"
-                  description="Submit a recent bank statement."
+                  description="Upload a recent bank statement."
                   onClick={() =>
                     setTier3Method(
                       'bank_statement'
@@ -1184,7 +1709,7 @@ const KYC: React.FC = () => {
                     'utility_bill'
                   }
                   title="Utility Bill"
-                  description="Submit an eligible recent utility bill."
+                  description="Upload an eligible recent utility bill."
                   onClick={() =>
                     setTier3Method(
                       'utility_bill'
@@ -1199,7 +1724,7 @@ const KYC: React.FC = () => {
                     'proof_of_address'
                   }
                   title="Proof of Address"
-                  description="Submit an accepted proof of your residential address."
+                  description="Upload an accepted proof of your residential address."
                   onClick={() =>
                     setTier3Method(
                       'proof_of_address'
@@ -1208,22 +1733,15 @@ const KYC: React.FC = () => {
                 />
               </div>
 
-              <label
-                style={labelStyle}
-              >
-                Document URL
-              </label>
-
-              <input
-                type="url"
-                value={tier3DocumentUrl}
-                onChange={(event) =>
-                  setTier3DocumentUrl(
-                    event.target.value
-                  )
+              <FileUploadBox
+                label="Proof-of-Address Document"
+                description="Upload the actual PDF document. Screenshots and ordinary photos are not accepted."
+                accept="application/pdf,.pdf"
+                file={tier3Document}
+                onChange={
+                  handleTier3Document
                 }
-                placeholder="https://..."
-                style={inputStyle}
+                required
               />
 
               <p
@@ -1231,11 +1749,12 @@ const KYC: React.FC = () => {
                   color: '#667085',
                   fontSize: '13px',
                   lineHeight: 1.5,
+                  marginTop: '10px',
                 }}
               >
-                You only need to submit one Tier 3
-                method. Your submission will be reviewed
-                before Tier 3 is approved.
+                Only one Tier 3 document is required.
+                Your document will remain pending
+                until it is reviewed and approved.
               </p>
 
               <button
@@ -1246,14 +1765,17 @@ const KYC: React.FC = () => {
                 }
               >
                 {submitting
-                  ? 'Submitting...'
+                  ? 'Uploading and submitting...'
                   : 'Submit Tier 3 Verification'}
               </button>
             </form>
           )}
         </section>
 
-        {/* LAST RECORD */}
+        {/* ==================================================
+            LAST RECORD
+            ================================================== */}
+
         {record && (
           <section
             style={{
@@ -1298,7 +1820,7 @@ const KYC: React.FC = () => {
                   record.verification_status ||
                   'pending'
                 ).replace(
-                  '_',
+                  /_/g,
                   ' '
                 )}
               </strong>
@@ -1314,6 +1836,23 @@ const KYC: React.FC = () => {
               >
                 Reason:{' '}
                 {record.rejection_reason}
+              </p>
+            )}
+
+            {record.document_type && (
+              <p
+                style={{
+                  margin:
+                    '7px 0 0',
+                  color: '#667085',
+                  fontSize: '14px',
+                }}
+              >
+                ID type:{' '}
+                {record.document_type.replace(
+                  /_/g,
+                  ' '
+                )}
               </p>
             )}
 
@@ -1354,7 +1893,122 @@ const KYC: React.FC = () => {
 };
 
 /* ============================================================
-   COMPONENTS
+   FILE UPLOAD COMPONENT
+   ============================================================ */
+
+interface FileUploadBoxProps {
+  label: string;
+  description: string;
+  accept: string;
+  file: File | null;
+  onChange: (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => void;
+  required: boolean;
+  capture?: 'user' | 'environment';
+}
+
+const FileUploadBox: React.FC<
+  FileUploadBoxProps
+> = ({
+  label,
+  description,
+  accept,
+  file,
+  onChange,
+  required,
+  capture,
+}) => {
+  return (
+    <div
+      style={{
+        marginBottom: '18px',
+      }}
+    >
+      <label
+        style={labelStyle}
+      >
+        {label}{' '}
+        {required && (
+          <span
+            style={{
+              color: '#b42318',
+            }}
+          >
+            *
+          </span>
+        )}
+      </label>
+
+      <div
+        style={{
+          border:
+            '1px dashed #98a2b3',
+          borderRadius: '12px',
+          padding: '18px',
+          background: '#fcfcfd',
+        }}
+      >
+        <input
+          type="file"
+          accept={accept}
+          capture={capture}
+          onChange={onChange}
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            fontSize: '14px',
+          }}
+        />
+
+        <p
+          style={{
+            margin:
+              '9px 0 0',
+            color: '#667085',
+            fontSize: '12px',
+            lineHeight: 1.5,
+          }}
+        >
+          {description}
+        </p>
+
+        {file && (
+          <div
+            style={{
+              marginTop: '12px',
+              padding: '10px 12px',
+              background: '#ecfdf3',
+              border:
+                '1px solid #abefc6',
+              borderRadius: '8px',
+              color: '#027a48',
+              fontSize: '13px',
+              fontWeight: 600,
+            }}
+          >
+            ✓ {file.name}
+            <span
+              style={{
+                display: 'block',
+                marginTop: '3px',
+                fontSize: '12px',
+                fontWeight: 400,
+              }}
+            >
+              {formatFileSizeStatic(
+                file.size
+              )}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ============================================================
+   INFO BOX
    ============================================================ */
 
 interface InfoBoxProps {
@@ -1362,7 +2016,9 @@ interface InfoBoxProps {
   value: string;
 }
 
-const InfoBox: React.FC<InfoBoxProps> = ({
+const InfoBox: React.FC<
+  InfoBoxProps
+> = ({
   label,
   value,
 }) => {
@@ -1401,6 +2057,10 @@ const InfoBox: React.FC<InfoBoxProps> = ({
     </div>
   );
 };
+
+/* ============================================================
+   TIER CARD
+   ============================================================ */
 
 interface TierCardProps {
   tier: string;
@@ -1441,6 +2101,7 @@ const TierCard: React.FC<
             'space-between',
           alignItems: 'center',
           marginBottom: '12px',
+          gap: '8px',
         }}
       >
         <strong
@@ -1538,6 +2199,10 @@ const TierCard: React.FC<
   );
 };
 
+/* ============================================================
+   SECTION HEADING
+   ============================================================ */
+
 interface SectionHeadingProps {
   number: string;
   title: string;
@@ -1604,6 +2269,10 @@ const SectionHeading: React.FC<
   );
 };
 
+/* ============================================================
+   METHOD CARD
+   ============================================================ */
+
 interface MethodCardProps {
   value: Tier3Method;
   selected: boolean;
@@ -1660,6 +2329,10 @@ const MethodCard: React.FC<
   );
 };
 
+/* ============================================================
+   VERIFIED MESSAGE
+   ============================================================ */
+
 interface VerifiedMessageProps {
   text: string;
 }
@@ -1682,6 +2355,29 @@ const VerifiedMessage: React.FC<
       ✓ {text}
     </div>
   );
+};
+
+/* ============================================================
+   STATIC FILE SIZE FORMATTER
+   ============================================================ */
+
+const formatFileSizeStatic = (
+  size: number
+): string => {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+
+  if (size < 1024 * 1024) {
+    return `${(
+      size / 1024
+    ).toFixed(1)} KB`;
+  }
+
+  return `${(
+    size /
+    (1024 * 1024)
+  ).toFixed(1)} MB`;
 };
 
 /* ============================================================
