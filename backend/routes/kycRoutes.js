@@ -15,23 +15,13 @@ const router = express.Router();
 // ============================================================
 // MULTER CONFIGURATION
 // ============================================================
-//
-// KYC files are received directly from the user's device.
-//
-// Memory storage prevents sensitive KYC documents from being
-// permanently written to Render's local filesystem.
-//
-// IMPORTANT:
-// The files must eventually be passed to an approved KYC
-// provider / secure encrypted storage before production use.
-// ============================================================
 
 const upload = multer({
   storage: multer.memoryStorage(),
 
   limits: {
     fileSize: 10 * 1024 * 1024,
-    files: 5,
+    files: 3,
   },
 
   fileFilter: (req, file, cb) => {
@@ -79,12 +69,17 @@ router.post(
 // TIER 2 — GOVERNMENT ID + SELFIE
 // ============================================================
 //
-// Frontend field names:
+// Expected frontend fields:
 //
+// document_type
+// document_number
 // document_front
-// document_back
+// document_back   (optional)
 // selfie
 //
+// The selfie is the facial/liveness verification input.
+// Later, the backend can send the relevant information
+// to Dojah for actual verification.
 // ============================================================
 
 router.post(
@@ -108,21 +103,22 @@ router.post(
 );
 
 // ============================================================
-// TIER 3 — PROOF OF ADDRESS + LIVENESS
+// TIER 3 — PROOF OF ADDRESS
 // ============================================================
 //
-// Frontend MUST send:
+// Expected frontend fields:
 //
 // tier_3_method
 // tier_3_document
-// tier_3_selfie
 //
-// Methods:
+// Accepted methods:
 //
 // bank_statement
 // utility_bill
 // proof_of_address
 //
+// Tier 3 does NOT require a separate selfie here.
+// Facial/liveness verification belongs to Tier 2.
 // ============================================================
 
 router.post(
@@ -133,16 +129,12 @@ router.post(
       name: 'tier_3_document',
       maxCount: 1,
     },
-    {
-      name: 'tier_3_selfie',
-      maxCount: 1,
-    },
   ]),
   submitTier3
 );
 
 // ============================================================
-// MULTER ERROR HANDLER
+// MULTER / FILE UPLOAD ERROR HANDLER
 // ============================================================
 
 router.use((error, req, res, next) => {
@@ -185,11 +177,13 @@ router.use((error, req, res, next) => {
     return res.status(400).json({
       success: false,
       code: 'FILE_UPLOAD_ERROR',
-      message: error.message,
+      message:
+        error.message ||
+        'Unable to process uploaded file.',
     });
   }
 
-  next();
+  next(error);
 });
 
 module.exports = router;
