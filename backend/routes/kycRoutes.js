@@ -15,6 +15,16 @@ const router = express.Router();
 // ============================================================
 // MULTER CONFIGURATION
 // ============================================================
+//
+// KYC files are received directly from the user's device.
+//
+// Memory storage prevents sensitive KYC documents from being
+// permanently written to Render's local filesystem.
+//
+// IMPORTANT:
+// The files must eventually be passed to an approved KYC
+// provider / secure encrypted storage before production use.
+// ============================================================
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -98,19 +108,36 @@ router.post(
 );
 
 // ============================================================
-// TIER 3 — PROOF OF ADDRESS
+// TIER 3 — PROOF OF ADDRESS + LIVENESS
 // ============================================================
 //
-// Frontend field name:
+// Frontend MUST send:
 //
+// tier_3_method
 // tier_3_document
+// tier_3_selfie
+//
+// Methods:
+//
+// bank_statement
+// utility_bill
+// proof_of_address
 //
 // ============================================================
 
 router.post(
   '/tier-3',
   authMiddleware,
-  upload.single('tier_3_document'),
+  upload.fields([
+    {
+      name: 'tier_3_document',
+      maxCount: 1,
+    },
+    {
+      name: 'tier_3_selfie',
+      maxCount: 1,
+    },
+  ]),
   submitTier3
 );
 
