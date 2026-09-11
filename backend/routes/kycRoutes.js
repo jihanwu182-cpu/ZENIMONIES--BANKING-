@@ -101,15 +101,20 @@ router.post(
 
   upload.fields([
     {
-      name: 'id_front',
-      maxCount: 1,
-    },
-    {
-      name: 'id_back',
-      maxCount: 1,
-    },
-  ]),
-
+      upload.fields([
+  {
+    name: 'id_front',
+    maxCount: 1,
+  },
+  {
+    name: 'id_back',
+    maxCount: 1,
+  },
+  {
+    name: 'selfie',
+    maxCount: 1,
+  },
+]),
   submitTier2
 );
 
