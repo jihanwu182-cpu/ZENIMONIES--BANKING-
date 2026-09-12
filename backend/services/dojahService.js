@@ -14,7 +14,7 @@ const DOJAH_SECRET_KEY =
   process.env.DOJAH_SECRET_KEY;
 
 // ============================================================
-// VALIDATE CONFIGURATION
+// CHECK DOJAH CONFIGURATION
 // ============================================================
 
 const validateDojahConfig = () => {
@@ -32,40 +32,23 @@ const validateDojahConfig = () => {
 };
 
 // ============================================================
-// DOJAH CLIENT
+// DOJAH HEADERS
 // ============================================================
 
-const dojahClient = axios.create({
-  baseURL: DOJAH_BASE_URL,
-
-  timeout: 30000,
-
-  headers: {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  },
-});
-
-// ============================================================
-// ADD DOJAH AUTHENTICATION
-// ============================================================
-
-const getHeaders = () => {
+const getDojahHeaders = () => {
   validateDojahConfig();
 
   return {
     Accept: 'application/json',
-    'Content-Type': 'application/json',
 
     AppId: DOJAH_APP_ID,
 
-    Authorization:
-      `Bearer ${DOJAH_SECRET_KEY}`,
+    Authorization: DOJAH_SECRET_KEY,
   };
 };
 
 // ============================================================
-// GENERIC DOJAH REQUEST
+// DOJAH API REQUEST
 // ============================================================
 
 const dojahRequest = async ({
@@ -76,18 +59,20 @@ const dojahRequest = async ({
   headers = {},
 }) => {
   try {
-    const response =
-      await dojahClient.request({
-        method,
-        url,
-        data,
-        params,
+    const response = await axios({
+      method,
+      baseURL: DOJAH_BASE_URL,
+      url,
+      data,
+      params,
 
-        headers: {
-          ...getHeaders(),
-          ...headers,
-        },
-      });
+      headers: {
+        ...getDojahHeaders(),
+        ...headers,
+      },
+
+      timeout: 30000,
+    });
 
     return {
       success: true,
@@ -119,33 +104,22 @@ const dojahRequest = async ({
 };
 
 // ============================================================
-// TEST DOJAH CONNECTION
-// ============================================================
-//
-// This does NOT verify a customer.
-//
-// It simply confirms that Zenimonies can communicate with
-// the configured Dojah environment.
-//
+// TEST DOJAH CONFIGURATION
 // ============================================================
 
-const testDojahConnection = async () => {
+const testDojahConnection = () => {
   try {
     validateDojahConfig();
 
     return {
       success: true,
-
       configured: true,
-
       baseUrl: DOJAH_BASE_URL,
     };
   } catch (error) {
     return {
       success: false,
-
       configured: false,
-
       message: error.message,
     };
   }
