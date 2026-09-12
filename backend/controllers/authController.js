@@ -5,10 +5,8 @@ const crypto = require('crypto');
 const pool = require('../config/database');
 
 const {
-  createPaystackCustomer,
-  getOrCreateDedicatedVirtualAccount,
-} = require('../services/paystackService');
-
+  sendPhoneOtp,
+} = require('../services/termiiService');
 
 // ============================================================
 // CONFIGURATION
@@ -42,6 +40,35 @@ const normalizePhone = (phone) => {
 };
 
 
+// ============================================================
+// GENERATE ZENIMONIES ACCOUNT NUMBER
+// ============================================================
+//
+// IMPORTANT:
+//
+// This is a Zenimonies internal account number.
+//
+// It is NOT a bank NUBAN.
+// It is NOT a Paystack dedicated virtual account.
+//
+// A real deposit/bank account will be provisioned separately
+// when Paystack allows the business to use that feature.
+// ============================================================
+
+const generateZenimoniesAccountNumber = () => {
+  return String(
+    crypto.randomInt(
+      1000000000,
+      9999999999
+    )
+  );
+};
+
+
+// ============================================================
+// CREATE JWT
+// ============================================================
+
 const createAccessToken = (user) => {
   if (!process.env.JWT_SECRET) {
     throw new Error(
@@ -62,6 +89,10 @@ const createAccessToken = (user) => {
 };
 
 
+// ============================================================
+// GET BEARER TOKEN
+// ============================================================
+
 const getBearerToken = (req) => {
   const authHeader =
     req.headers.authorization;
@@ -78,6 +109,10 @@ const getBearerToken = (req) => {
     .trim();
 };
 
+
+// ============================================================
+// VERIFY JWT
+// ============================================================
 
 const verifyJwt = (req) => {
   const token =
@@ -137,7 +172,7 @@ const verifyJwt = (req) => {
 
 
 // ============================================================
-// PHONE OTP CREATION
+// CREATE PHONE OTP
 // ============================================================
 
 const createPhoneOtp = async (
@@ -162,7 +197,7 @@ const createPhoneOtp = async (
 
 
   // ----------------------------------------------------------
-  // Generate secure six-digit OTP
+  // Generate secure OTP
   // ----------------------------------------------------------
 
   const otp =
@@ -174,7 +209,7 @@ const createPhoneOtp = async (
 
 
   // ----------------------------------------------------------
-  // Expiration
+  // Expiry
   // ----------------------------------------------------------
 
   const expiresAt =
@@ -316,23 +351,7 @@ const register = async (
 
 
     // ========================================================
-    // SPLIT NAME FOR PAYSTACK
-    // ========================================================
-
-    const nameParts =
-      normalizedFullName.split(/\s+/);
-
-    const firstName =
-      nameParts.shift() ||
-      normalizedFullName;
-
-    const lastName =
-      nameParts.join(' ') ||
-      undefined;
-
-
-    // ========================================================
-    // START DATABASE TRANSACTION
+    // START TRANSACTION
     // ========================================================
 
     await client.query('BEGIN');
@@ -406,14 +425,6 @@ const register = async (
 
     // ========================================================
     // CREATE USER
-    //
-    // IMPORTANT:
-    //
-    // kyc_tier = 1 means the account starts at Tier 1.
-    //
-    // It does NOT mean the user has been KYC verified.
-    //
-    // is_verified remains FALSE.
     // ========================================================
 
     const userResult =
@@ -459,8 +470,8 @@ const register = async (
 
           false,
 
-          200000.00,
           50000.00,
+          25000.00,
           0.00,
           CURRENT_TIMESTAMP
         )
@@ -502,214 +513,93 @@ const register = async (
 
 
     // ========================================================
-    // CREATE PAYSTACK CUSTOMER
+    // CREATE INTERNAL ZENIMONIES ACCOUNT
+    // ========================================================
+    //
+    // This is NOT a bank NUBAN.
+    //
+    // It is the user's Zenimonies account identifier.
     // ========================================================
 
-    const paystackCustomer =
-      await createPaystackCustomer({
-        email:
-          normalizedEmail,
+    let account = null;
 
-        firstName,
+    let accountCreated = false;
 
-        lastName,
-
-        phone:
-          normalizedPhone,
-      });
-
-
-    if (
-      !paystackCustomer ||
-      !paystackCustomer.status ||
-      !paystackCustomer.data
+    for (
+      let attempt = 0;
+      attempt < 5;
+      attempt++
     ) {
-      throw new Error(
-        'Paystack customer could not be created'
-      );
+
+      const accountNumber =
+        generateZenimoniesAccountNumber();
+
+      try {
+
+        const accountResult =
+          await client.query(
+            `
+            INSERT INTO accounts (
+              user_id,
+              account_number,
+              account_type,
+              currency,
+              balance,
+              status
+            )
+            VALUES (
+              $1,
+              $2,
+              'personal',
+              'NGN',
+              0.00,
+              'active'
+            )
+            RETURNING
+              id,
+              account_number,
+              account_type,
+              currency,
+              balance,
+              status,
+              created_at
+            `,
+            [
+              user.id,
+              accountNumber,
+            ]
+          );
+
+
+        account =
+          accountResult.rows[0];
+
+        accountCreated = true;
+
+        break;
+
+      } catch (error) {
+
+        // Retry if account number happens
+        // to collide with an existing number.
+
+        if (
+          error &&
+          error.code === '23505'
+        ) {
+          continue;
+        }
+
+        throw error;
+      }
     }
 
 
-    const paystackCustomerCode =
-      paystackCustomer
-        .data
-        .customer_code;
-
-
-    if (!paystackCustomerCode) {
+    if (!accountCreated) {
       throw new Error(
-        'Paystack customer code was not returned'
+        'Unable to create Zenimonies account number'
       );
     }
-
-
-    // ========================================================
-    // CREATE REAL PAYSTACK DEDICATED ACCOUNT
-    // ========================================================
-
-    const paystackAccount =
-      await getOrCreateDedicatedVirtualAccount({
-        customerCode:
-          paystackCustomerCode,
-      });
-
-
-    if (
-      !paystackAccount ||
-      !paystackAccount.status ||
-      !paystackAccount.data
-    ) {
-      throw new Error(
-        'Paystack dedicated account could not be created'
-      );
-    }
-
-
-    const providerAccount =
-      paystackAccount.data;
-
-
-    // ========================================================
-    // PROVIDER ACCOUNT DETAILS
-    // ========================================================
-
-    const providerAccountNumber =
-      providerAccount.account_number;
-
-
-    const providerAccountName =
-      providerAccount.account_name ||
-      normalizedFullName;
-
-
-    const providerBankName =
-      providerAccount.bank &&
-      providerAccount.bank.name
-        ? providerAccount.bank.name
-        : providerAccount.bank_name ||
-          null;
-
-
-    const providerBankCode =
-      providerAccount.bank &&
-      providerAccount.bank.id
-        ? String(
-            providerAccount.bank.id
-          )
-        : providerAccount.bank_code ||
-          null;
-
-
-    const providerAccountId =
-      providerAccount.id
-        ? String(
-            providerAccount.id
-          )
-        : null;
-
-
-    // ========================================================
-    // NEVER INVENT ACCOUNT NUMBER
-    // ========================================================
-
-    if (!providerAccountNumber) {
-      throw new Error(
-        'Paystack did not return a real dedicated account number'
-      );
-    }
-
-
-    // ========================================================
-    // CREATE ZENIMONIES ACCOUNT
-    // ========================================================
-
-    const accountResult =
-      await client.query(
-        `
-        INSERT INTO accounts (
-          user_id,
-          account_number,
-          account_type,
-          currency,
-          balance,
-          status
-        )
-        VALUES (
-          $1,
-          $2,
-          'personal',
-          'NGN',
-          0.00,
-          'active'
-        )
-        RETURNING
-          id,
-          account_number,
-          account_type,
-          currency,
-          balance,
-          status,
-          created_at
-        `,
-        [
-          user.id,
-          providerAccountNumber,
-        ]
-      );
-
-
-    const account =
-      accountResult.rows[0];
-
-
-    // ========================================================
-    // SAVE PROVIDER DEPOSIT ACCOUNT
-    // ========================================================
-
-    await client.query(
-      `
-      INSERT INTO deposit_accounts (
-        user_id,
-        account_number,
-        account_name,
-        bank_name,
-        bank_code,
-        currency,
-        status,
-        provider,
-        provider_customer_code,
-        provider_account_id
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        'NGN',
-        'active',
-        'paystack',
-        $6,
-        $7
-      )
-      `,
-      [
-        user.id,
-
-        providerAccountNumber,
-
-        providerAccountName,
-
-        providerBankName ||
-          'Paystack',
-
-        providerBankCode,
-
-        paystackCustomerCode,
-
-        providerAccountId,
-      ]
-    );
 
 
     // ========================================================
@@ -724,15 +614,17 @@ const register = async (
 
 
     // ========================================================
-    // CREATE AUTHENTICATION TOKEN
-    //
-    // IMPORTANT:
-    //
-    // The user needs a JWT to call:
-    //
-    // POST /api/auth/verify-phone-otp
-    //
-    // Phone verification does NOT mean KYC verification.
+    // SEND OTP THROUGH TERMII
+    // ========================================================
+
+    await sendPhoneOtp({
+      phone: normalizedPhone,
+      otp,
+    });
+
+
+    // ========================================================
+    // CREATE JWT
     // ========================================================
 
     const token =
@@ -763,7 +655,7 @@ const register = async (
       [
         user.id,
 
-        'Customer account created with real provider-issued dedicated account. Phone verification OTP generated. KYC remains unverified.',
+        'Zenimonies account created. Phone verification OTP generated and sent. Bank deposit account has not yet been provisioned.',
 
         req.ip ||
           null,
@@ -793,24 +685,12 @@ const register = async (
       success: true,
 
       message:
-        'Account created successfully. Please verify your phone number.',
-
-      // ------------------------------------------------------
-      // AUTHENTICATION TOKEN
-      // ------------------------------------------------------
+        'Account created successfully. A verification code has been sent to your phone.',
 
       token,
 
-      // ------------------------------------------------------
-      // PHONE VERIFICATION
-      // ------------------------------------------------------
-
       requires_phone_verification:
         true,
-
-      // ------------------------------------------------------
-      // USER
-      // ------------------------------------------------------
 
       user: {
 
@@ -869,29 +749,31 @@ const register = async (
           user.created_at,
       },
 
-      // ------------------------------------------------------
-      // REAL PROVIDER ACCOUNT
-      // ------------------------------------------------------
-
       account: {
 
         id:
           account.id,
 
+        // ----------------------------------------------------
+        // IMPORTANT:
+        // This is a Zenimonies account number.
+        // It is NOT a bank NUBAN.
+        // ----------------------------------------------------
+
         account_number:
           account.account_number,
 
         account_name:
-          providerAccountName,
+          user.full_name,
 
         account_type:
           account.account_type,
 
         bank_name:
-          providerBankName,
+          null,
 
         bank_code:
-          providerBankCode,
+          null,
 
         currency:
           account.currency,
@@ -905,6 +787,14 @@ const register = async (
         created_at:
           account.created_at,
       },
+
+      // ------------------------------------------------------
+      // Deposit account status
+      // ------------------------------------------------------
+
+      deposit_account_status:
+        'not_provisioned',
+
     };
 
 
@@ -978,22 +868,6 @@ const register = async (
 
 // ============================================================
 // VERIFY PHONE OTP
-// POST /api/auth/verify-phone-otp
-// ============================================================
-//
-// IMPORTANT:
-//
-// This verifies ONLY the phone number.
-//
-// It does NOT verify:
-//
-// - BVN
-// - Government ID
-// - Selfie
-// - Liveness
-// - KYC
-//
-// is_verified remains FALSE.
 // ============================================================
 
 const verifyPhone = async (
@@ -1005,10 +879,6 @@ const verifyPhone = async (
     await pool.connect();
 
   try {
-
-    // ========================================================
-    // AUTHENTICATION
-    // ========================================================
 
     const auth =
       verifyJwt(req);
@@ -1029,10 +899,6 @@ const verifyPhone = async (
       auth.decoded.userId;
 
 
-    // ========================================================
-    // OTP VALIDATION
-    // ========================================================
-
     const otp =
       String(
         req.body?.otp || ''
@@ -1049,10 +915,6 @@ const verifyPhone = async (
       });
     }
 
-
-    // ========================================================
-    // GET USER
-    // ========================================================
 
     const userResult =
       await client.query(
@@ -1087,10 +949,6 @@ const verifyPhone = async (
       userResult.rows[0];
 
 
-    // ========================================================
-    // PHONE ALREADY VERIFIED
-    // ========================================================
-
     if (user.phone_verified) {
       return res.status(400).json({
         success: false,
@@ -1100,26 +958,14 @@ const verifyPhone = async (
     }
 
 
-    // ========================================================
-    // HASH PROVIDED OTP
-    // ========================================================
-
     const suppliedHash =
       hashToken(otp);
 
-
-    // ========================================================
-    // START TRANSACTION
-    // ========================================================
 
     await client.query(
       'BEGIN'
     );
 
-
-    // ========================================================
-    // FIND VALID OTP
-    // ========================================================
 
     const otpResult =
       await client.query(
@@ -1161,10 +1007,6 @@ const verifyPhone = async (
       otpResult.rows[0];
 
 
-    // ========================================================
-    // COMPARE HASHES
-    // ========================================================
-
     if (
       suppliedHash !==
       storedOtp.token_hash
@@ -1182,10 +1024,6 @@ const verifyPhone = async (
     }
 
 
-    // ========================================================
-    // MARK OTP USED
-    // ========================================================
-
     await client.query(
       `
       UPDATE security_tokens
@@ -1195,10 +1033,6 @@ const verifyPhone = async (
       [storedOtp.id]
     );
 
-
-    // ========================================================
-    // VERIFY PHONE ONLY
-    // ========================================================
 
     await client.query(
       `
@@ -1211,10 +1045,6 @@ const verifyPhone = async (
       [userId]
     );
 
-
-    // ========================================================
-    // AUDIT
-    // ========================================================
 
     await client.query(
       `
@@ -1235,20 +1065,11 @@ const verifyPhone = async (
       `,
       [
         userId,
-
-        req.ip ||
-          null,
-
-        req.get(
-          'user-agent'
-        ) || null,
+        req.ip || null,
+        req.get('user-agent') || null,
       ]
     );
 
-
-    // ========================================================
-    // COMMIT
-    // ========================================================
 
     await client.query(
       'COMMIT'
@@ -1264,12 +1085,6 @@ const verifyPhone = async (
 
       phone_verified:
         true,
-
-      // ------------------------------------------------------
-      // IMPORTANT
-      //
-      // Phone verification does NOT make the user KYC verified.
-      // ------------------------------------------------------
 
       is_verified:
         user.is_verified === true,
@@ -1311,7 +1126,6 @@ const verifyPhone = async (
 
 // ============================================================
 // RESEND PHONE OTP
-// POST /api/auth/resend-phone-otp
 // ============================================================
 
 const resendPhoneOtp = async (
@@ -1323,10 +1137,6 @@ const resendPhoneOtp = async (
     await pool.connect();
 
   try {
-
-    // ========================================================
-    // AUTHENTICATION
-    // ========================================================
 
     const auth =
       verifyJwt(req);
@@ -1347,15 +1157,12 @@ const resendPhoneOtp = async (
       auth.decoded.userId;
 
 
-    // ========================================================
-    // GET USER
-    // ========================================================
-
     const userResult =
       await client.query(
         `
         SELECT
           id,
+          phone,
           phone_verified
         FROM users
         WHERE id = $1
@@ -1388,10 +1195,6 @@ const resendPhoneOtp = async (
       });
     }
 
-
-    // ========================================================
-    // CHECK COOLDOWN
-    // ========================================================
 
     const recentOtp =
       await client.query(
@@ -1451,10 +1254,6 @@ const resendPhoneOtp = async (
     }
 
 
-    // ========================================================
-    // TRANSACTION
-    // ========================================================
-
     await client.query(
       'BEGIN'
     );
@@ -1467,9 +1266,11 @@ const resendPhoneOtp = async (
       );
 
 
-    // ========================================================
-    // AUDIT
-    // ========================================================
+    await sendPhoneOtp({
+      phone: user.phone,
+      otp,
+    });
+
 
     await client.query(
       `
@@ -1483,20 +1284,15 @@ const resendPhoneOtp = async (
       VALUES (
         $1,
         'phone_otp_resent',
-        'Phone verification OTP regenerated',
+        'Phone verification OTP regenerated and sent',
         $2,
         $3
       )
       `,
       [
         userId,
-
-        req.ip ||
-          null,
-
-        req.get(
-          'user-agent'
-        ) || null,
+        req.ip || null,
+        req.get('user-agent') || null,
       ]
     );
 
@@ -1511,16 +1307,12 @@ const resendPhoneOtp = async (
       success: true,
 
       message:
-        'A new verification code has been generated.',
+        'A new verification code has been sent to your phone.',
 
       expires_in:
         OTP_EXPIRY_MINUTES * 60,
     };
 
-
-    // ========================================================
-    // DEVELOPMENT ONLY
-    // ========================================================
 
     if (
       process.env.NODE_ENV !==
@@ -1571,10 +1363,9 @@ const resendPhoneOtp = async (
 
 // ============================================================
 // SEND PHONE OTP
-// POST /api/auth/send-phone-otp
 // ============================================================
 
-const sendPhoneOtp = async (
+const sendPhoneOtpController = async (
   req,
   res
 ) => {
@@ -1583,10 +1374,6 @@ const sendPhoneOtp = async (
     await pool.connect();
 
   try {
-
-    // ========================================================
-    // AUTHENTICATION
-    // ========================================================
 
     const auth =
       verifyJwt(req);
@@ -1606,10 +1393,6 @@ const sendPhoneOtp = async (
     const userId =
       auth.decoded.userId;
 
-
-    // ========================================================
-    // GET USER
-    // ========================================================
 
     const userResult =
       await client.query(
@@ -1658,10 +1441,6 @@ const sendPhoneOtp = async (
       });
     }
 
-
-    // ========================================================
-    // COOLDOWN
-    // ========================================================
 
     const recentOtp =
       await client.query(
@@ -1721,10 +1500,6 @@ const sendPhoneOtp = async (
     }
 
 
-    // ========================================================
-    // TRANSACTION
-    // ========================================================
-
     await client.query(
       'BEGIN'
     );
@@ -1737,9 +1512,11 @@ const sendPhoneOtp = async (
       );
 
 
-    // ========================================================
-    // AUDIT
-    // ========================================================
+    await sendPhoneOtp({
+      phone: user.phone,
+      otp,
+    });
+
 
     await client.query(
       `
@@ -1753,20 +1530,15 @@ const sendPhoneOtp = async (
       VALUES (
         $1,
         'phone_otp_requested',
-        'Phone verification OTP requested',
+        'Phone verification OTP generated and sent',
         $2,
         $3
       )
       `,
       [
         userId,
-
-        req.ip ||
-          null,
-
-        req.get(
-          'user-agent'
-        ) || null,
+        req.ip || null,
+        req.get('user-agent') || null,
       ]
     );
 
@@ -1788,15 +1560,11 @@ const sendPhoneOtp = async (
     };
 
 
-    // ========================================================
-    // DEVELOPMENT ONLY
-    // ========================================================
-
     if (
       process.env.NODE_ENV !==
       'production'
     ) {
-      response.test_otp =
+      response.development_otp =
         otp;
     }
 
@@ -1841,7 +1609,6 @@ const sendPhoneOtp = async (
 
 // ============================================================
 // LOGIN
-// POST /api/auth/login
 // ============================================================
 
 const login = async (
@@ -1856,10 +1623,6 @@ const login = async (
       password,
     } = req.body || {};
 
-
-    // ========================================================
-    // VALIDATION
-    // ========================================================
 
     if (
       !email ||
@@ -1878,10 +1641,6 @@ const login = async (
         .trim()
         .toLowerCase();
 
-
-    // ========================================================
-    // FIND USER
-    // ========================================================
 
     const userResult =
       await pool.query(
@@ -1937,10 +1696,6 @@ const login = async (
       userResult.rows[0];
 
 
-    // ========================================================
-    // ACCOUNT STATUS
-    // ========================================================
-
     if (
       user.status !==
       'active'
@@ -1952,10 +1707,6 @@ const login = async (
       });
     }
 
-
-    // ========================================================
-    // PASSWORD
-    // ========================================================
 
     const passwordMatches =
       await bcrypt.compare(
@@ -1973,17 +1724,9 @@ const login = async (
     }
 
 
-    // ========================================================
-    // JWT
-    // ========================================================
-
     const token =
       createAccessToken(user);
 
-
-    // ========================================================
-    // ACCOUNTS
-    // ========================================================
 
     const accountResult =
       await pool.query(
@@ -2005,10 +1748,6 @@ const login = async (
       );
 
 
-    // ========================================================
-    // SAFE USER
-    // ========================================================
-
     const safeUser = {
 
       id:
@@ -2029,16 +1768,8 @@ const login = async (
       status:
         user.status,
 
-      // ------------------------------------------------------
-      // PHONE
-      // ------------------------------------------------------
-
       phone_verified:
         user.phone_verified,
-
-      // ------------------------------------------------------
-      // KYC
-      // ------------------------------------------------------
 
       kyc_status:
         user.kyc_status,
@@ -2058,18 +1789,8 @@ const login = async (
       tier_3_method:
         user.tier_3_method,
 
-      // ------------------------------------------------------
-      // IMPORTANT
-      //
-      // is_verified is ONLY for actual KYC verification.
-      // ------------------------------------------------------
-
       is_verified:
         user.is_verified,
-
-      // ------------------------------------------------------
-      // LIMITS
-      // ------------------------------------------------------
 
       account_limit:
         user.account_limit,
@@ -2125,7 +1846,6 @@ const login = async (
 
 // ============================================================
 // GET CURRENT USER
-// GET /api/auth/me
 // ============================================================
 
 const getMe = async (
@@ -2134,10 +1854,6 @@ const getMe = async (
 ) => {
 
   try {
-
-    // ========================================================
-    // AUTHENTICATION
-    // ========================================================
 
     const auth =
       verifyJwt(req);
@@ -2157,10 +1873,6 @@ const getMe = async (
     const userId =
       auth.decoded.userId;
 
-
-    // ========================================================
-    // GET USER
-    // ========================================================
 
     const userResult =
       await pool.query(
@@ -2216,10 +1928,6 @@ const getMe = async (
       userResult.rows[0];
 
 
-    // ========================================================
-    // GET ACCOUNTS
-    // ========================================================
-
     const accountResult =
       await pool.query(
         `
@@ -2244,10 +1952,6 @@ const getMe = async (
       accountResult.rows[0] ||
       null;
 
-
-    // ========================================================
-    // RESPONSE
-    // ========================================================
 
     return res.status(200).json({
 
@@ -2276,16 +1980,8 @@ const getMe = async (
         status:
           user.status,
 
-        // ----------------------------------------------------
-        // PHONE
-        // ----------------------------------------------------
-
         phone_verified:
           user.phone_verified,
-
-        // ----------------------------------------------------
-        // KYC
-        // ----------------------------------------------------
 
         kyc_status:
           user.kyc_status,
@@ -2308,10 +2004,6 @@ const getMe = async (
         is_verified:
           user.is_verified,
 
-        // ----------------------------------------------------
-        // LIMITS
-        // ----------------------------------------------------
-
         account_limit:
           user.account_limit,
 
@@ -2329,10 +2021,6 @@ const getMe = async (
 
         updated_at:
           user.updated_at,
-
-        // ----------------------------------------------------
-        // ACCOUNT INFORMATION
-        // ----------------------------------------------------
 
         account_number:
           account
@@ -2361,6 +2049,9 @@ const getMe = async (
           account
             ? account.status
             : null,
+
+        deposit_account_status:
+          'not_provisioned',
       },
 
       account,
@@ -2397,7 +2088,8 @@ module.exports = {
 
   getMe,
 
-  sendPhoneOtp,
+  sendPhoneOtp:
+    sendPhoneOtpController,
 
   verifyPhone,
 
