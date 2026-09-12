@@ -1,5 +1,6 @@
 -- ============================================================
 -- ZENIMONIES BANKING DATABASE
+-- Complete production-ready base schema
 -- No investment functionality
 -- ============================================================
 
@@ -25,18 +26,77 @@ CREATE TABLE IF NOT EXISTS users (
 
     status VARCHAR(30) NOT NULL DEFAULT 'active',
 
+    -- ========================================================
+    -- LEGAL IDENTITY
+    -- ========================================================
+
+    date_of_birth DATE,
+
+    legal_name VARCHAR(150),
+
+    legal_name_locked BOOLEAN NOT NULL DEFAULT false,
+
+    legal_dob_locked BOOLEAN NOT NULL DEFAULT false,
+
+    -- ========================================================
+    -- KYC / VERIFICATION
+    -- ========================================================
+
     kyc_status VARCHAR(30) NOT NULL DEFAULT 'pending',
+
+    kyc_tier INTEGER NOT NULL DEFAULT 1,
+
+    bvn VARCHAR(11),
+
+    bvn_verified BOOLEAN NOT NULL DEFAULT false,
+
+    id_verified BOOLEAN NOT NULL DEFAULT false,
+
+    tier_3_verified BOOLEAN NOT NULL DEFAULT false,
+
+    tier_3_method VARCHAR(50),
 
     is_verified BOOLEAN NOT NULL DEFAULT false,
 
+    phone_verified BOOLEAN NOT NULL DEFAULT false,
+
+    -- ========================================================
+    -- ACCOUNT / TRANSFER LIMITS
+    -- ========================================================
+
+    account_limit NUMERIC(18,2) NOT NULL DEFAULT 50000.00,
+
+    daily_transfer_limit NUMERIC(18,2) NOT NULL DEFAULT 25000.00,
+
+    daily_transfer_used NUMERIC(18,2) NOT NULL DEFAULT 0.00,
+
+    daily_transfer_reset_at TIMESTAMP
+        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT users_kyc_tier_check
+        CHECK (kyc_tier IN (0, 1, 2, 3)),
+
+    CONSTRAINT users_kyc_status_check
+        CHECK (
+            kyc_status IN (
+                'not_verified',
+                'pending',
+                'under_review',
+                'approved',
+                'verified',
+                'rejected'
+            )
+        )
 );
 
 
 -- ============================================================
 -- ACCOUNTS
+-- Internal Zenimonies customer accounts
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS accounts (
@@ -59,6 +119,82 @@ CREATE TABLE IF NOT EXISTS accounts (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- ============================================================
+-- DEPOSIT ACCOUNTS
+-- Real external deposit account information
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS deposit_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    account_number VARCHAR(50) UNIQUE NOT NULL,
+
+    account_name VARCHAR(150) NOT NULL,
+
+    bank_name VARCHAR(150) NOT NULL,
+
+    bank_code VARCHAR(30),
+
+    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
+
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+
+    provider VARCHAR(50),
+
+    provider_customer_code VARCHAR(150),
+
+    provider_account_id VARCHAR(150),
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- ============================================================
+-- VIRTUAL CARDS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS virtual_cards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    account_id UUID NOT NULL
+        REFERENCES accounts(id)
+        ON DELETE CASCADE,
+
+    card_number VARCHAR(19) UNIQUE NOT NULL,
+
+    card_number_last4 VARCHAR(4) NOT NULL,
+
+    expiry_month VARCHAR(2) NOT NULL,
+
+    expiry_year VARCHAR(2) NOT NULL,
+
+    cvv_hash TEXT NOT NULL,
+
+    pin_hash TEXT NOT NULL,
+
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+
+    card_fee NUMERIC(18,2) NOT NULL DEFAULT 1000.00,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT virtual_cards_one_per_user
+        UNIQUE (user_id)
 );
 
 
@@ -96,7 +232,6 @@ CREATE TABLE IF NOT EXISTS transactions (
 
 -- ============================================================
 -- BENEFICIARIES
--- Saved bank recipients
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS beneficiaries (
@@ -228,7 +363,7 @@ CREATE TABLE IF NOT EXISTS withdrawals (
 
 
 -- ============================================================
--- AIRTIME PURCHASES
+-- AIRTIME
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS airtime_transactions (
@@ -261,7 +396,7 @@ CREATE TABLE IF NOT EXISTS airtime_transactions (
 
 
 -- ============================================================
--- DATA PURCHASES
+-- DATA
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS data_transactions (
@@ -299,7 +434,6 @@ CREATE TABLE IF NOT EXISTS data_transactions (
 
 -- ============================================================
 -- BILLERS
--- Electricity, TV, internet and other bill providers
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS billers (
@@ -369,6 +503,29 @@ CREATE TABLE IF NOT EXISTS kyc_records (
         REFERENCES users(id)
         ON DELETE CASCADE,
 
+    -- ========================================================
+    -- TIER 1
+    -- ========================================================
+
+    bvn VARCHAR(11),
+
+    bvn_verification_status VARCHAR(30)
+        NOT NULL DEFAULT 'pending',
+
+    bvn_verified_at TIMESTAMP,
+
+    bvn_rejection_reason TEXT,
+
+    bvn_provider_reference VARCHAR(150),
+
+    bvn_verified_name VARCHAR(150),
+
+    bvn_verified_date_of_birth DATE,
+
+    -- ========================================================
+    -- TIER 2
+    -- ========================================================
+
     document_type VARCHAR(50),
 
     document_number VARCHAR(100),
@@ -379,7 +536,39 @@ CREATE TABLE IF NOT EXISTS kyc_records (
 
     selfie_url TEXT,
 
-    verification_status VARCHAR(30) NOT NULL DEFAULT 'pending',
+    liveness_status VARCHAR(30)
+        NOT NULL DEFAULT 'pending',
+
+    liveness_provider_reference VARCHAR(150),
+
+    id_verification_status VARCHAR(30)
+        NOT NULL DEFAULT 'pending',
+
+    id_verified_at TIMESTAMP,
+
+    id_rejection_reason TEXT,
+
+    -- ========================================================
+    -- TIER 3
+    -- ========================================================
+
+    tier_3_method VARCHAR(50),
+
+    tier_3_document_url TEXT,
+
+    tier_3_verification_status VARCHAR(30)
+        NOT NULL DEFAULT 'pending',
+
+    tier_3_verified_at TIMESTAMP,
+
+    tier_3_rejection_reason TEXT,
+
+    -- ========================================================
+    -- GENERAL STATUS
+    -- ========================================================
+
+    verification_status VARCHAR(30)
+        NOT NULL DEFAULT 'pending',
 
     rejection_reason TEXT,
 
@@ -413,8 +602,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 
 -- ============================================================
--- LOGIN / SECURITY TOKENS
--- Used later for OTP/password reset/security flows
+-- SECURITY TOKENS / OTP
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS security_tokens (
@@ -438,7 +626,6 @@ CREATE TABLE IF NOT EXISTS security_tokens (
 
 -- ============================================================
 -- AUDIT LOG
--- Records important account actions
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -467,78 +654,147 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id
 ON accounts(user_id);
 
+CREATE INDEX IF NOT EXISTS idx_accounts_status
+ON accounts(status);
 
 CREATE INDEX IF NOT EXISTS idx_transactions_account_id
 ON transactions(account_id);
 
-
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at
 ON transactions(created_at);
-
 
 CREATE INDEX IF NOT EXISTS idx_beneficiaries_user_id
 ON beneficiaries(user_id);
 
-
 CREATE INDEX IF NOT EXISTS idx_bank_transfers_account_id
 ON bank_transfers(account_id);
-
 
 CREATE INDEX IF NOT EXISTS idx_bank_transfers_reference
 ON bank_transfers(reference);
 
-
 CREATE INDEX IF NOT EXISTS idx_bank_transfers_created_at
 ON bank_transfers(created_at);
-
 
 CREATE INDEX IF NOT EXISTS idx_deposits_account_id
 ON deposits(account_id);
 
-
 CREATE INDEX IF NOT EXISTS idx_withdrawals_account_id
 ON withdrawals(account_id);
-
 
 CREATE INDEX IF NOT EXISTS idx_airtime_account_id
 ON airtime_transactions(account_id);
 
-
 CREATE INDEX IF NOT EXISTS idx_data_account_id
 ON data_transactions(account_id);
-
 
 CREATE INDEX IF NOT EXISTS idx_bill_payments_account_id
 ON bill_payments(account_id);
 
-
 CREATE INDEX IF NOT EXISTS idx_billers_category
 ON billers(category);
-
 
 CREATE INDEX IF NOT EXISTS idx_kyc_user_id
 ON kyc_records(user_id);
 
-
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id
 ON notifications(user_id);
-
 
 CREATE INDEX IF NOT EXISTS idx_security_tokens_user_id
 ON security_tokens(user_id);
 
-
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id
 ON audit_logs(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_deposit_accounts_user_id
+ON deposit_accounts(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_virtual_cards_user_id
+ON virtual_cards(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_virtual_cards_account_id
+ON virtual_cards(account_id);
+
+CREATE INDEX IF NOT EXISTS idx_virtual_cards_status
+ON virtual_cards(status);
 
 
 -- ============================================================
 -- EXISTING DATABASE COMPATIBILITY
+-- IMPORTANT
+-- This updates an already-existing Render PostgreSQL database.
 -- ============================================================
 
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS status VARCHAR(30)
 NOT NULL DEFAULT 'active';
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS legal_name VARCHAR(150);
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS legal_name_locked BOOLEAN
+NOT NULL DEFAULT false;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS legal_dob_locked BOOLEAN
+NOT NULL DEFAULT false;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS kyc_status VARCHAR(30)
+NOT NULL DEFAULT 'pending';
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS kyc_tier INTEGER
+NOT NULL DEFAULT 1;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS bvn VARCHAR(11);
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS bvn_verified BOOLEAN
+NOT NULL DEFAULT false;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS id_verified BOOLEAN
+NOT NULL DEFAULT false;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS tier_3_verified BOOLEAN
+NOT NULL DEFAULT false;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS tier_3_method VARCHAR(50);
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS is_verified BOOLEAN
+NOT NULL DEFAULT false;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN
+NOT NULL DEFAULT false;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS account_limit NUMERIC(18,2)
+NOT NULL DEFAULT 50000.00;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS daily_transfer_limit NUMERIC(18,2)
+NOT NULL DEFAULT 25000.00;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS daily_transfer_used NUMERIC(18,2)
+NOT NULL DEFAULT 0.00;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS daily_transfer_reset_at TIMESTAMP
+NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
+NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 
 ALTER TABLE accounts
@@ -550,6 +806,92 @@ ALTER TABLE bank_transfers
 ADD COLUMN IF NOT EXISTS beneficiary_id UUID
 REFERENCES beneficiaries(id)
 ON DELETE SET NULL;
+
+
+-- ============================================================
+-- KYC COMPATIBILITY
+-- ============================================================
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn VARCHAR(11);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn_verification_status VARCHAR(30)
+NOT NULL DEFAULT 'pending';
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn_verified_at TIMESTAMP;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn_rejection_reason TEXT;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn_provider_reference VARCHAR(150);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn_verified_name VARCHAR(150);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn_verified_date_of_birth DATE;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS document_type VARCHAR(50);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS document_number VARCHAR(100);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS document_front_url TEXT;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS document_back_url TEXT;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS selfie_url TEXT;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS liveness_status VARCHAR(30)
+NOT NULL DEFAULT 'pending';
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS liveness_provider_reference VARCHAR(150);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS id_verification_status VARCHAR(30)
+NOT NULL DEFAULT 'pending';
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS id_verified_at TIMESTAMP;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS id_rejection_reason TEXT;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS tier_3_method VARCHAR(50);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS tier_3_document_url TEXT;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS tier_3_verification_status VARCHAR(30)
+NOT NULL DEFAULT 'pending';
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS tier_3_verified_at TIMESTAMP;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS tier_3_rejection_reason TEXT;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS verification_status VARCHAR(30)
+NOT NULL DEFAULT 'pending';
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
+NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 
 -- ============================================================
@@ -565,3 +907,11 @@ VALUES
     ('Other Bills', 'other', 'OTHER')
 ON CONFLICT (provider_code)
 DO NOTHING;
+
+
+-- ============================================================
+-- COMPLETE
+-- ============================================================
+
+SELECT 'Zenimonies database schema initialized successfully'
+AS message;
