@@ -20,13 +20,13 @@ const depositRoutes = require('./routes/deposit');
 const bankRoutes = require('./routes/bankRoutes');
 const virtualCardRoutes = require('./routes/virtualCard');
 const adminRoutes = require('./routes/adminRoutes');
-
-// KYC
 const kycRoutes = require('./routes/kycRoutes');
 
 // ============================================================
-// PAYSTACK WEBHOOK
+// PAYSTACK
 // ============================================================
+
+const paystackRoutes = require('./routes/paystack');
 
 const {
   handlePaystackWebhook,
@@ -56,9 +56,11 @@ app.use(
 // ============================================================
 //
 // IMPORTANT:
-// Paystack signature verification requires the raw request body.
 //
-// Therefore this route MUST appear before express.json().
+// This MUST remain BEFORE express.json().
+//
+// Paystack signature verification requires the original
+// raw request body.
 // ============================================================
 
 app.post(
@@ -128,6 +130,23 @@ app.use(
 );
 
 // ============================================================
+// PAYSTACK
+// ============================================================
+//
+// POST /api/paystack/initialize
+// POST /api/paystack/webhook
+//
+// The initialize route creates a Paystack Checkout session.
+//
+// The webhook is the ONLY mechanism that credits the account.
+// ============================================================
+
+app.use(
+  '/api/paystack',
+  paystackRoutes
+);
+
+// ============================================================
 // KYC
 // ============================================================
 //
@@ -135,8 +154,6 @@ app.use(
 // POST /api/kyc/bvn
 // POST /api/kyc/tier-2
 // POST /api/kyc/tier-3
-//
-// KYC submissions remain pending until actual verification.
 // ============================================================
 
 app.use(
@@ -240,16 +257,6 @@ app.get(
 // ============================================================
 // DOJAH CONFIGURATION HEALTH CHECK
 // ============================================================
-//
-// This endpoint ONLY checks whether the Dojah credentials
-// exist in the server environment.
-//
-// It does NOT perform BVN verification.
-// It does NOT perform ID verification.
-// It does NOT perform facial/liveness verification.
-//
-// It also does NOT return the secret key.
-// ============================================================
 
 app.get(
   '/api/health/dojah',
@@ -279,7 +286,8 @@ app.get(
           'Dojah configuration is loaded.',
         dojah: {
           configured: true,
-          baseUrl: result.baseUrl,
+          baseUrl:
+            result.baseUrl,
         },
       });
     } catch (error) {
@@ -418,6 +426,21 @@ const startServer = async () => {
         );
 
         console.log(
+          'Paystack:',
+          '/api/paystack'
+        );
+
+        console.log(
+          'Paystack Initialize:',
+          '/api/paystack/initialize'
+        );
+
+        console.log(
+          'Paystack Webhook:',
+          '/api/paystack/webhook'
+        );
+
+        console.log(
           'KYC:',
           '/api/kyc'
         );
@@ -425,11 +448,6 @@ const startServer = async () => {
         console.log(
           'Admin:',
           '/api/admin'
-        );
-
-        console.log(
-          'Paystack Webhook:',
-          '/api/paystack/webhook'
         );
       }
     );
