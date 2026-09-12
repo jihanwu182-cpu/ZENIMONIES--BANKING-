@@ -1609,6 +1609,7 @@ const sendPhoneOtpController = async (
 
 // ============================================================
 // LOGIN
+// POST /api/auth/login
 // ============================================================
 
 const login = async (
@@ -1618,16 +1619,24 @@ const login = async (
 
   try {
 
+    console.log('LOGIN: request received');
+
     const {
       email,
       password,
     } = req.body || {};
 
 
-    if (
-      !email ||
-      !password
-    ) {
+    // ========================================================
+    // VALIDATION
+    // ========================================================
+
+    if (!email || !password) {
+
+      console.log(
+        'LOGIN: email or password missing'
+      );
+
       return res.status(400).json({
         success: false,
         message:
@@ -1641,6 +1650,15 @@ const login = async (
         .trim()
         .toLowerCase();
 
+
+    console.log(
+      'LOGIN: looking up user'
+    );
+
+
+    // ========================================================
+    // FIND USER
+    // ========================================================
 
     const userResult =
       await pool.query(
@@ -1674,16 +1692,28 @@ const login = async (
           updated_at
 
         FROM users
-        WHERE email = $1
+
+        WHERE LOWER(email) = $1
+
         LIMIT 1
         `,
         [normalizedEmail]
       );
 
 
+    console.log(
+      'LOGIN: user query completed'
+    );
+
+
     if (
       userResult.rows.length === 0
     ) {
+
+      console.log(
+        'LOGIN: user not found'
+      );
+
       return res.status(401).json({
         success: false,
         message:
@@ -1696,16 +1726,34 @@ const login = async (
       userResult.rows[0];
 
 
+    // ========================================================
+    // ACCOUNT STATUS
+    // ========================================================
+
     if (
       user.status !==
       'active'
     ) {
+
+      console.log(
+        'LOGIN: account is not active'
+      );
+
       return res.status(403).json({
         success: false,
         message:
           'Your account is not currently active',
       });
     }
+
+
+    // ========================================================
+    // PASSWORD
+    // ========================================================
+
+    console.log(
+      'LOGIN: checking password'
+    );
 
 
     const passwordMatches =
@@ -1716,6 +1764,11 @@ const login = async (
 
 
     if (!passwordMatches) {
+
+      console.log(
+        'LOGIN: password does not match'
+      );
+
       return res.status(401).json({
         success: false,
         message:
@@ -1724,8 +1777,36 @@ const login = async (
     }
 
 
+    console.log(
+      'LOGIN: password verified'
+    );
+
+
+    // ========================================================
+    // JWT
+    // ========================================================
+
+    console.log(
+      'LOGIN: creating token'
+    );
+
+
     const token =
       createAccessToken(user);
+
+
+    console.log(
+      'LOGIN: token created'
+    );
+
+
+    // ========================================================
+    // LOAD ACCOUNTS
+    // ========================================================
+
+    console.log(
+      'LOGIN: loading accounts'
+    );
 
 
     const accountResult =
@@ -1740,13 +1821,25 @@ const login = async (
           status,
           created_at,
           updated_at
+
         FROM accounts
+
         WHERE user_id = $1
+
         ORDER BY created_at ASC
         `,
         [user.id]
       );
 
+
+    console.log(
+      'LOGIN: accounts loaded'
+    );
+
+
+    // ========================================================
+    // SAFE USER OBJECT
+    // ========================================================
 
     const safeUser = {
 
@@ -1809,7 +1902,17 @@ const login = async (
 
       updated_at:
         user.updated_at,
+
     };
+
+
+    // ========================================================
+    // SUCCESS
+    // ========================================================
+
+    console.log(
+      'LOGIN: successful'
+    );
 
 
     return res.status(200).json({
@@ -1826,20 +1929,48 @@ const login = async (
 
       accounts:
         accountResult.rows,
+
     });
+
 
   } catch (error) {
 
+    // ========================================================
+    // SAFE ERROR LOGGING
+    // ========================================================
+
     console.error(
-      'Login error:',
-      error
+      'LOGIN FAILED'
     );
 
+    console.error(
+      'Login error name:',
+      error?.name || 'Unknown'
+    );
+
+    console.error(
+      'Login error code:',
+      error?.code || 'No code'
+    );
+
+    console.error(
+      'Login error message:',
+      error?.message || 'Unknown error'
+    );
+
+
     return res.status(500).json({
+
       success: false,
+
       message:
-        'Unable to login',
+        'Login service error',
+
+      error_code:
+        error?.code || 'LOGIN_ERROR',
+
     });
+
   }
 };
 
