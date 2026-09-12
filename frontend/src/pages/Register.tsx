@@ -4,39 +4,46 @@ import { Link, useNavigate } from 'react-router-dom';
 
 const API_URL = 'https://zenimonies-banking.onrender.com';
 
+type User = {
+  id?: string;
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  status?: string;
+  phone_verified?: boolean;
+  kyc_status?: string;
+  kyc_tier?: number;
+  bvn_verified?: boolean;
+  id_verified?: boolean;
+  tier_3_verified?: boolean;
+  is_verified?: boolean;
+};
+
+type Account = {
+  id?: string;
+  account_number?: string;
+  account_name?: string;
+  account_type?: string;
+  bank_name?: string | null;
+  bank_code?: string | null;
+  currency?: string;
+  balance?: string | number;
+  status?: string;
+};
+
 type RegisterResponse = {
   success?: boolean;
   message?: string;
-  requires_phone_verification?: boolean;
   token?: string;
-  accessToken?: string;
-  access_token?: string;
-  user?: any;
-  account?: any;
-  accounts?: any[];
+  requires_phone_verification?: boolean;
+  user?: User;
+  account?: Account;
+  accounts?: Account[];
   development_otp?: string;
-  data?: RegisterResponse;
 };
 
-function unwrapResponse(
-  raw: RegisterResponse
-): RegisterResponse {
-  if (
-    raw?.data &&
-    typeof raw.data === 'object'
-  ) {
-    return {
-      ...raw,
-      ...raw.data,
-    };
-  }
-
-  return raw || {};
-}
-
-function getErrorMessage(
-  error: unknown
-): string {
+function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const axiosError =
       error as AxiosError<RegisterResponse>;
@@ -57,27 +64,18 @@ function getErrorMessage(
     }
 
     if (response.status === 409) {
-      return (
-        response.data?.message ||
-        'An account with these details already exists.'
-      );
+      return 'An account with this email or phone number already exists.';
     }
 
     if (response.status === 400) {
-      return (
-        response.data?.message ||
-        'Please check your registration details.'
-      );
+      return 'Please check your registration details.';
     }
 
     if (response.status === 503) {
       return 'The Zenimonies server is waking up. Please wait a few seconds and try again.';
     }
 
-    return (
-      response.data?.message ||
-      `Registration failed. Server returned HTTP ${response.status}.`
-    );
+    return `Registration failed. Server returned HTTP ${response.status}.`;
   }
 
   if (error instanceof Error) {
@@ -90,29 +88,16 @@ function getErrorMessage(
 const Register: React.FC = () => {
   const navigate = useNavigate();
 
-  const [fullName, setFullName] =
-    useState('');
-
-  const [email, setEmail] =
-    useState('');
-
-  const [phone, setPhone] =
-    useState('');
-
-  const [password, setPassword] =
-    useState('');
-
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] =
     useState('');
 
-  const [loading, setLoading] =
-    useState(false);
-
-  const [error, setError] =
-    useState('');
-
-  const [success, setSuccess] =
-    useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const handleSubmit = async (
     event: React.FormEvent<HTMLFormElement>
@@ -145,9 +130,7 @@ const Register: React.FC = () => {
     }
 
     if (cleanFullName.length < 2) {
-      setError(
-        'Please enter your full name.'
-      );
+      setError('Please enter your full name.');
       return;
     }
 
@@ -168,9 +151,7 @@ const Register: React.FC = () => {
     }
 
     if (!cleanPhone) {
-      setError(
-        'Phone number is required.'
-      );
+      setError('Phone number is required.');
       return;
     }
 
@@ -182,15 +163,20 @@ const Register: React.FC = () => {
     }
 
     if (!password) {
-      setError(
-        'Password is required.'
-      );
+      setError('Password is required.');
       return;
     }
 
     if (password.length < 8) {
       setError(
         'Password must be at least 8 characters.'
+      );
+      return;
+    }
+
+    if (!confirmPassword) {
+      setError(
+        'Please confirm your password.'
       );
       return;
     }
@@ -209,15 +195,6 @@ const Register: React.FC = () => {
     try {
       setLoading(true);
 
-      console.log(
-        'Zenimonies registration request:',
-        {
-          full_name: cleanFullName,
-          email: cleanEmail,
-          phone: cleanPhone,
-        }
-      );
-
       const response =
         await axios.post<RegisterResponse>(
           `${API_URL}/api/auth/register`,
@@ -230,27 +207,23 @@ const Register: React.FC = () => {
           {
             timeout: 60000,
             headers: {
-              'Content-Type':
-                'application/json',
+              'Content-Type': 'application/json',
             },
           }
         );
 
+      const data = response.data;
+
       console.log(
         'Zenimonies registration response:',
-        response.data
+        data
       );
-
-      const data =
-        unwrapResponse(
-          response.data
-        );
 
       // ======================================================
       // SERVER REJECTED REGISTRATION
       // ======================================================
 
-      if (data.success === false) {
+      if (data.success !== true) {
         setError(
           data.message ||
             'Registration failed.'
@@ -259,7 +232,23 @@ const Register: React.FC = () => {
       }
 
       // ======================================================
-      // SAVE USER
+      // TOKEN
+      // ======================================================
+
+      if (data.token) {
+        localStorage.setItem(
+          'zenimonies_token',
+          data.token
+        );
+
+        localStorage.setItem(
+          'token',
+          data.token
+        );
+      }
+
+      // ======================================================
+      // USER
       // ======================================================
 
       if (data.user) {
@@ -270,7 +259,7 @@ const Register: React.FC = () => {
       }
 
       // ======================================================
-      // SAVE ACCOUNT
+      // ACCOUNT
       // ======================================================
 
       if (data.account) {
@@ -286,27 +275,6 @@ const Register: React.FC = () => {
           JSON.stringify(
             data.accounts || []
           )
-        );
-      }
-
-      // ======================================================
-      // TOKEN
-      // ======================================================
-
-      const token =
-        data.token ||
-        data.accessToken ||
-        data.access_token;
-
-      if (token) {
-        localStorage.setItem(
-          'zenimonies_token',
-          token
-        );
-
-        localStorage.setItem(
-          'token',
-          token
         );
       }
 
@@ -328,12 +296,21 @@ const Register: React.FC = () => {
           cleanEmail
         );
 
+        // ----------------------------------------------------
+        // DEVELOPMENT TEST OTP
+        // ----------------------------------------------------
+        //
+        // This is useful only when the backend is running
+        // with NODE_ENV other than production.
+        //
+        // It must NOT be used as the actual production
+        // phone-delivery mechanism.
+        //
+
         if (data.development_otp) {
           sessionStorage.setItem(
             'zenimonies_development_otp',
-            String(
-              data.development_otp
-            )
+            String(data.development_otp)
           );
         }
 
@@ -342,8 +319,6 @@ const Register: React.FC = () => {
             'Account created successfully. Please verify your phone number.'
         );
 
-        // Give the success message
-        // a moment to display.
         setTimeout(() => {
           navigate('/verify-phone');
         }, 800);
@@ -352,10 +327,10 @@ const Register: React.FC = () => {
       }
 
       // ======================================================
-      // REGISTRATION WITHOUT PHONE VERIFICATION
+      // FALLBACK
       // ======================================================
 
-      if (token) {
+      if (data.token) {
         setSuccess(
           data.message ||
             'Account created successfully.'
@@ -368,10 +343,6 @@ const Register: React.FC = () => {
         return;
       }
 
-      // ======================================================
-      // NO TOKEN / NO PHONE VERIFICATION
-      // ======================================================
-
       setSuccess(
         data.message ||
           'Account created successfully. Please sign in.'
@@ -380,9 +351,10 @@ const Register: React.FC = () => {
       setTimeout(() => {
         navigate('/login');
       }, 1000);
+
     } catch (error: unknown) {
       console.error(
-        'FULL ZENIMONIES REGISTRATION ERROR:',
+        'Zenimonies registration error:',
         error
       );
 
@@ -416,9 +388,7 @@ const Register: React.FC = () => {
             '0 8px 30px rgba(0, 0, 0, 0.08)',
         }}
       >
-        {/* ================================================== */}
         {/* HEADER */}
-        {/* ================================================== */}
 
         <h1
           style={{
@@ -441,9 +411,7 @@ const Register: React.FC = () => {
           Create your banking account
         </p>
 
-        {/* ================================================== */}
         {/* ERROR */}
-        {/* ================================================== */}
 
         {error && (
           <div
@@ -463,9 +431,7 @@ const Register: React.FC = () => {
           </div>
         )}
 
-        {/* ================================================== */}
         {/* SUCCESS */}
-        {/* ================================================== */}
 
         {success && (
           <div
@@ -484,17 +450,13 @@ const Register: React.FC = () => {
           </div>
         )}
 
-        {/* ================================================== */}
         {/* FORM */}
-        {/* ================================================== */}
 
         <form
           onSubmit={handleSubmit}
           noValidate
         >
-          {/* ================================================= */}
           {/* FULL NAME */}
-          {/* ================================================= */}
 
           <label
             htmlFor="fullName"
@@ -533,9 +495,7 @@ const Register: React.FC = () => {
             }}
           />
 
-          {/* ================================================= */}
           {/* EMAIL */}
-          {/* ================================================= */}
 
           <label
             htmlFor="email"
@@ -574,9 +534,7 @@ const Register: React.FC = () => {
             }}
           />
 
-          {/* ================================================= */}
           {/* PHONE */}
-          {/* ================================================= */}
 
           <label
             htmlFor="phone"
@@ -615,9 +573,7 @@ const Register: React.FC = () => {
             }}
           />
 
-          {/* ================================================= */}
           {/* PASSWORD */}
-          {/* ================================================= */}
 
           <label
             htmlFor="password"
@@ -656,9 +612,7 @@ const Register: React.FC = () => {
             }}
           />
 
-          {/* ================================================= */}
           {/* CONFIRM PASSWORD */}
-          {/* ================================================= */}
 
           <label
             htmlFor="confirmPassword"
@@ -697,9 +651,7 @@ const Register: React.FC = () => {
             }}
           />
 
-          {/* ================================================= */}
           {/* SUBMIT */}
-          {/* ================================================= */}
 
           <button
             type="submit"
@@ -727,9 +679,7 @@ const Register: React.FC = () => {
           </button>
         </form>
 
-        {/* ================================================== */}
-        {/* LOGIN LINK */}
-        {/* ================================================== */}
+        {/* LOGIN */}
 
         <p
           style={{
