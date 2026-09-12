@@ -1,603 +1,759 @@
-const register = async (req, res) => {
-  const client = await pool.connect();
+import React, { useState } from 'react';
+import axios, { AxiosError } from 'axios';
+import { Link, useNavigate } from 'react-router-dom';
 
-  let paystackCustomerCreated = false;
-  let paystackCustomerCode = null;
+const API_URL = 'https://zenimonies-banking.onrender.com';
 
-  try {
-    const {
-      full_name,
-      email,
-      phone,
-      password,
-    } = req.body || {};
+type RegisterResponse = {
+  success?: boolean;
+  message?: string;
+  requires_phone_verification?: boolean;
+  token?: string;
+  accessToken?: string;
+  access_token?: string;
+  user?: any;
+  account?: any;
+  accounts?: any[];
+  development_otp?: string;
+  data?: RegisterResponse;
+};
 
-    // --------------------------------------------------------
-    // VALIDATION
-    // --------------------------------------------------------
+function unwrapResponse(
+  raw: RegisterResponse
+): RegisterResponse {
+  if (
+    raw?.data &&
+    typeof raw.data === 'object'
+  ) {
+    return {
+      ...raw,
+      ...raw.data,
+    };
+  }
 
-    if (
-      !full_name ||
-      !email ||
-      !phone ||
-      !password
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          'Full name, email, phone number, and password are required',
-      });
+  return raw || {};
+}
+
+function getErrorMessage(
+  error: unknown
+): string {
+  if (axios.isAxiosError(error)) {
+    const axiosError =
+      error as AxiosError<RegisterResponse>;
+
+    const response =
+      axiosError.response;
+
+    if (response?.data?.message) {
+      return response.data.message;
     }
 
-    const normalizedFullName =
-      String(full_name).trim();
+    if (axiosError.code === 'ECONNABORTED') {
+      return 'The server took too long to respond. Please try again.';
+    }
 
-    const normalizedEmail =
-      String(email)
-        .trim()
-        .toLowerCase();
+    if (!response) {
+      return 'Unable to reach the Zenimonies server. Check your internet connection and try again.';
+    }
 
-    const normalizedPhone =
-      normalizePhone(phone);
+    if (response.status === 409) {
+      return (
+        response.data?.message ||
+        'An account with these details already exists.'
+      );
+    }
 
-    const normalizedPassword =
-      String(password);
+    if (response.status === 400) {
+      return (
+        response.data?.message ||
+        'Please check your registration details.'
+      );
+    }
 
-    if (!normalizedFullName) {
-      return res.status(400).json({
-        success: false,
-        message: 'Full name is required',
-      });
+    if (response.status === 503) {
+      return 'The Zenimonies server is waking up. Please wait a few seconds and try again.';
+    }
+
+    return (
+      response.data?.message ||
+      `Registration failed. Server returned HTTP ${response.status}.`
+    );
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Unable to create your account. Please try again.';
+}
+
+const Register: React.FC = () => {
+  const navigate = useNavigate();
+
+  const [fullName, setFullName] =
+    useState('');
+
+  const [email, setEmail] =
+    useState('');
+
+  const [phone, setPhone] =
+    useState('');
+
+  const [password, setPassword] =
+    useState('');
+
+  const [confirmPassword, setConfirmPassword] =
+    useState('');
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  const [success, setSuccess] =
+    useState('');
+
+  const handleSubmit = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    setError('');
+    setSuccess('');
+
+    // ========================================================
+    // CLEAN INPUTS
+    // ========================================================
+
+    const cleanFullName =
+      fullName.trim();
+
+    const cleanEmail =
+      email.trim().toLowerCase();
+
+    const cleanPhone =
+      phone.trim();
+
+    // ========================================================
+    // VALIDATION
+    // ========================================================
+
+    if (!cleanFullName) {
+      setError('Full name is required.');
+      return;
+    }
+
+    if (cleanFullName.length < 2) {
+      setError(
+        'Please enter your full name.'
+      );
+      return;
+    }
+
+    if (!cleanEmail) {
+      setError('Email is required.');
+      return;
     }
 
     if (
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        normalizedEmail
+        cleanEmail
       )
     ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          'Please enter a valid email address',
-      });
+      setError(
+        'Please enter a valid email address.'
+      );
+      return;
     }
 
-    if (!normalizedPhone) {
-      return res.status(400).json({
-        success: false,
-        message:
-          'Phone number is required',
-      });
+    if (!cleanPhone) {
+      setError(
+        'Phone number is required.'
+      );
+      return;
     }
 
-    if (normalizedPassword.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message:
-          'Password must be at least 8 characters',
-      });
+    if (cleanPhone.length < 7) {
+      setError(
+        'Please enter a valid phone number.'
+      );
+      return;
     }
 
-    // --------------------------------------------------------
-    // SPLIT NAME FOR PAYSTACK
-    // --------------------------------------------------------
-
-    const nameParts =
-      normalizedFullName.split(/\s+/);
-
-    const firstName =
-      nameParts.shift() || normalizedFullName;
-
-    const lastName =
-      nameParts.join(' ') || undefined;
-
-    // --------------------------------------------------------
-    // START DATABASE TRANSACTION
-    // --------------------------------------------------------
-
-    await client.query('BEGIN');
-
-    // --------------------------------------------------------
-    // CHECK EXISTING USER
-    // --------------------------------------------------------
-
-    const existingUser =
-      await client.query(
-        `
-        SELECT
-          id,
-          email,
-          phone
-        FROM users
-        WHERE email = $1
-           OR phone = $2
-        LIMIT 1
-        `,
-        [
-          normalizedEmail,
-          normalizedPhone,
-        ]
+    if (!password) {
+      setError(
+        'Password is required.'
       );
-
-    if (existingUser.rows.length > 0) {
-      await client.query('ROLLBACK');
-
-      const existing =
-        existingUser.rows[0];
-
-      if (
-        existing.email ===
-        normalizedEmail
-      ) {
-        return res.status(409).json({
-          success: false,
-          message:
-            'An account with this email already exists',
-        });
-      }
-
-      return res.status(409).json({
-        success: false,
-        message:
-          'An account with this phone number already exists',
-      });
+      return;
     }
 
-    // --------------------------------------------------------
-    // HASH PASSWORD
-    // --------------------------------------------------------
-
-    const passwordHash =
-      await bcrypt.hash(
-        normalizedPassword,
-        12
+    if (password.length < 8) {
+      setError(
+        'Password must be at least 8 characters.'
       );
-
-    // --------------------------------------------------------
-    // CREATE USER
-    // --------------------------------------------------------
-
-    const userResult =
-      await client.query(
-        `
-        INSERT INTO users (
-          full_name,
-          email,
-          phone,
-          password_hash,
-          role,
-          status,
-          kyc_status,
-          kyc_tier,
-          bvn_verified,
-          id_verified,
-          tier_3_verified,
-          is_verified,
-          account_limit,
-          daily_transfer_limit,
-          daily_transfer_used,
-          daily_transfer_reset_at
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          'user',
-          'active',
-          'pending',
-          1,
-          false,
-          false,
-          false,
-          false,
-          200000.00,
-          50000.00,
-          0.00,
-          CURRENT_TIMESTAMP
-        )
-        RETURNING
-          id,
-          full_name,
-          email,
-          phone,
-          role,
-          status,
-          kyc_status,
-          kyc_tier,
-          bvn_verified,
-          id_verified,
-          tier_3_verified,
-          is_verified,
-          account_limit,
-          daily_transfer_limit,
-          daily_transfer_used,
-          created_at
-        `,
-        [
-          normalizedFullName,
-          normalizedEmail,
-          normalizedPhone,
-          passwordHash,
-        ]
-      );
-
-    const user =
-      userResult.rows[0];
-
-    // ========================================================
-    // PAYSTACK CUSTOMER
-    // ========================================================
-
-    const {
-      createPaystackCustomer,
-      createDedicatedVirtualAccount,
-    } = require('../services/paystackService');
-
-    const paystackCustomer =
-      await createPaystackCustomer({
-        email: normalizedEmail,
-        firstName,
-        lastName,
-        phone: normalizedPhone,
-      });
-
-    if (
-      !paystackCustomer ||
-      !paystackCustomer.status ||
-      !paystackCustomer.data
-    ) {
-      throw new Error(
-        'Paystack customer could not be created'
-      );
+      return;
     }
 
-    paystackCustomerCreated = true;
-
-    paystackCustomerCode =
-      paystackCustomer.data.customer_code;
-
-    if (!paystackCustomerCode) {
-      throw new Error(
-        'Paystack customer code was not returned'
+    if (password !== confirmPassword) {
+      setError(
+        'Passwords do not match.'
       );
+      return;
     }
 
     // ========================================================
-    // CREATE REAL PAYSTACK DEDICATED ACCOUNT
+    // SUBMIT REGISTRATION
     // ========================================================
-
-    const paystackAccount =
-      await createDedicatedVirtualAccount({
-        customerCode:
-          paystackCustomerCode,
-      });
-
-    if (
-      !paystackAccount ||
-      !paystackAccount.status ||
-      !paystackAccount.data
-    ) {
-      throw new Error(
-        'Paystack dedicated account could not be created'
-      );
-    }
-
-    const providerAccount =
-      paystackAccount.data;
-
-    // --------------------------------------------------------
-    // REAL PROVIDER ACCOUNT DETAILS
-    // --------------------------------------------------------
-
-    const providerAccountNumber =
-      providerAccount.account_number;
-
-    const providerAccountName =
-      providerAccount.account_name ||
-      normalizedFullName;
-
-    const providerBankName =
-      providerAccount.bank &&
-      providerAccount.bank.name
-        ? providerAccount.bank.name
-        : providerAccount.bank_name || null;
-
-    const providerBankCode =
-      providerAccount.bank &&
-      providerAccount.bank.id
-        ? String(providerAccount.bank.id)
-        : providerAccount.bank_code || null;
-
-    const providerAccountId =
-      providerAccount.id
-        ? String(providerAccount.id)
-        : null;
-
-    if (!providerAccountNumber) {
-      throw new Error(
-        'Paystack did not return a real dedicated account number'
-      );
-    }
-
-    // ========================================================
-    // CREATE ZENIMONIES ACCOUNT
-    //
-    // IMPORTANT:
-    // We DO NOT generate an account number.
-    //
-    // The account number below is the real provider-issued
-    // account number returned by Paystack.
-    // ========================================================
-
-    const accountResult =
-      await client.query(
-        `
-        INSERT INTO accounts (
-          user_id,
-          account_number,
-          account_type,
-          currency,
-          balance,
-          status
-        )
-        VALUES (
-          $1,
-          $2,
-          'personal',
-          'NGN',
-          0.00,
-          'active'
-        )
-        RETURNING
-          id,
-          account_number,
-          account_type,
-          currency,
-          balance,
-          status,
-          created_at
-        `,
-        [
-          user.id,
-          providerAccountNumber,
-        ]
-      );
-
-    const account =
-      accountResult.rows[0];
-
-    // ========================================================
-    // SAVE PROVIDER DEPOSIT ACCOUNT
-    // ========================================================
-
-    await client.query(
-      `
-      INSERT INTO deposit_accounts (
-        user_id,
-        account_number,
-        account_name,
-        bank_name,
-        bank_code,
-        currency,
-        status,
-        provider,
-        provider_customer_code,
-        provider_account_id
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        'NGN',
-        'active',
-        'paystack',
-        $6,
-        $7
-      )
-      `,
-      [
-        user.id,
-        providerAccountNumber,
-        providerAccountName,
-        providerBankName || 'Paystack',
-        providerBankCode,
-        paystackCustomerCode,
-        providerAccountId,
-      ]
-    );
-
-    // ========================================================
-    // CREATE PHONE OTP
-    // ========================================================
-
-    const otp =
-      await createPhoneOtp(
-        client,
-        user.id
-      );
-
-    // ========================================================
-    // AUDIT LOG
-    // ========================================================
-
-    await client.query(
-      `
-      INSERT INTO audit_logs (
-        user_id,
-        action,
-        description,
-        ip_address,
-        user_agent
-      )
-      VALUES (
-        $1,
-        'account_created',
-        $2,
-        $3,
-        $4
-      )
-      `,
-      [
-        user.id,
-        'Customer account created with a real provider-issued dedicated receiving account. Phone verification OTP generated.',
-        req.ip || null,
-        req.get('user-agent') || null,
-      ]
-    );
-
-    // ========================================================
-    // COMMIT
-    // ========================================================
-
-    await client.query('COMMIT');
-
-    // ========================================================
-    // RESPONSE
-    // ========================================================
-
-    return res.status(201).json({
-      success: true,
-
-      message:
-        'Account created successfully. Please verify your phone number.',
-
-      requires_phone_verification:
-        true,
-
-      user: {
-        id: user.id,
-
-        full_name:
-          user.full_name,
-
-        email:
-          user.email,
-
-        phone:
-          user.phone,
-
-        role:
-          user.role,
-
-        status:
-          user.status,
-
-        kyc_status:
-          user.kyc_status,
-
-        kyc_tier:
-          user.kyc_tier,
-
-        bvn_verified:
-          user.bvn_verified,
-
-        id_verified:
-          user.id_verified,
-
-        tier_3_verified:
-          user.tier_3_verified,
-
-        is_verified:
-          user.is_verified,
-
-        account_limit:
-          user.account_limit,
-
-        daily_transfer_limit:
-          user.daily_transfer_limit,
-
-        daily_transfer_used:
-          user.daily_transfer_used,
-
-        created_at:
-          user.created_at,
-      },
-
-      // ======================================================
-      // THIS IS THE REAL PROVIDER-ISSUED ACCOUNT
-      // ======================================================
-
-      account: {
-        id:
-          account.id,
-
-        account_number:
-          account.account_number,
-
-        account_name:
-          providerAccountName,
-
-        account_type:
-          account.account_type,
-
-        bank_name:
-          providerBankName,
-
-        bank_code:
-          providerBankCode,
-
-        currency:
-          account.currency,
-
-        balance:
-          account.balance,
-
-        status:
-          account.status,
-
-        created_at:
-          account.created_at,
-      },
-
-      // ------------------------------------------------------
-      // TESTING ONLY
-      // REMOVE BEFORE PRODUCTION
-      // ------------------------------------------------------
-
-      development_otp:
-        process.env.NODE_ENV !== 'production'
-          ? otp
-          : undefined,
-    });
-
-  } catch (error) {
 
     try {
-      await client.query('ROLLBACK');
-    } catch (rollbackError) {
-      console.error(
-        'Rollback error:',
-        rollbackError
+      setLoading(true);
+
+      console.log(
+        'Zenimonies registration request:',
+        {
+          full_name: cleanFullName,
+          email: cleanEmail,
+          phone: cleanPhone,
+        }
       );
+
+      const response =
+        await axios.post<RegisterResponse>(
+          `${API_URL}/api/auth/register`,
+          {
+            full_name: cleanFullName,
+            email: cleanEmail,
+            phone: cleanPhone,
+            password,
+          },
+          {
+            timeout: 60000,
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+          }
+        );
+
+      console.log(
+        'Zenimonies registration response:',
+        response.data
+      );
+
+      const data =
+        unwrapResponse(
+          response.data
+        );
+
+      // ======================================================
+      // SERVER REJECTED REGISTRATION
+      // ======================================================
+
+      if (data.success === false) {
+        setError(
+          data.message ||
+            'Registration failed.'
+        );
+        return;
+      }
+
+      // ======================================================
+      // SAVE USER
+      // ======================================================
+
+      if (data.user) {
+        localStorage.setItem(
+          'zenimonies_user',
+          JSON.stringify(data.user)
+        );
+      }
+
+      // ======================================================
+      // SAVE ACCOUNT
+      // ======================================================
+
+      if (data.account) {
+        localStorage.setItem(
+          'zenimonies_accounts',
+          JSON.stringify([
+            data.account,
+          ])
+        );
+      } else {
+        localStorage.setItem(
+          'zenimonies_accounts',
+          JSON.stringify(
+            data.accounts || []
+          )
+        );
+      }
+
+      // ======================================================
+      // TOKEN
+      // ======================================================
+
+      const token =
+        data.token ||
+        data.accessToken ||
+        data.access_token;
+
+      if (token) {
+        localStorage.setItem(
+          'zenimonies_token',
+          token
+        );
+
+        localStorage.setItem(
+          'token',
+          token
+        );
+      }
+
+      // ======================================================
+      // PHONE VERIFICATION
+      // ======================================================
+
+      if (
+        data.requires_phone_verification ===
+        true
+      ) {
+        sessionStorage.setItem(
+          'zenimonies_phone',
+          cleanPhone
+        );
+
+        sessionStorage.setItem(
+          'zenimonies_otp_email',
+          cleanEmail
+        );
+
+        if (data.development_otp) {
+          sessionStorage.setItem(
+            'zenimonies_development_otp',
+            String(
+              data.development_otp
+            )
+          );
+        }
+
+        setSuccess(
+          data.message ||
+            'Account created successfully. Please verify your phone number.'
+        );
+
+        // Give the success message
+        // a moment to display.
+        setTimeout(() => {
+          navigate('/verify-phone');
+        }, 800);
+
+        return;
+      }
+
+      // ======================================================
+      // REGISTRATION WITHOUT PHONE VERIFICATION
+      // ======================================================
+
+      if (token) {
+        setSuccess(
+          data.message ||
+            'Account created successfully.'
+        );
+
+        setTimeout(() => {
+          navigate('/');
+        }, 800);
+
+        return;
+      }
+
+      // ======================================================
+      // NO TOKEN / NO PHONE VERIFICATION
+      // ======================================================
+
+      setSuccess(
+        data.message ||
+          'Account created successfully. Please sign in.'
+      );
+
+      setTimeout(() => {
+        navigate('/login');
+      }, 1000);
+    } catch (error: unknown) {
+      console.error(
+        'FULL ZENIMONIES REGISTRATION ERROR:',
+        error
+      );
+
+      setError(
+        getErrorMessage(error)
+      );
+    } finally {
+      setLoading(false);
     }
+  };
 
-    console.error(
-      'Registration error:',
-      error
-    );
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+        background: '#f5f7fb',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '440px',
+          background: '#ffffff',
+          padding: '32px',
+          borderRadius: '16px',
+          boxShadow:
+            '0 8px 30px rgba(0, 0, 0, 0.08)',
+        }}
+      >
+        {/* ================================================== */}
+        {/* HEADER */}
+        {/* ================================================== */}
 
-    if (
-      error &&
-      error.code === '23505'
-    ) {
-      return res.status(409).json({
-        success: false,
-        message:
-          'Email, phone number, or provider account number is already registered',
-      });
-    }
+        <h1
+          style={{
+            marginTop: 0,
+            marginBottom: '8px',
+            textAlign: 'center',
+            color: '#172033',
+          }}
+        >
+          Zenimonies
+        </h1>
 
-    return res.status(500).json({
-      success: false,
-      message:
-        error?.message ||
-        'Unable to create account',
-    });
+        <p
+          style={{
+            textAlign: 'center',
+            color: '#667085',
+            marginBottom: '28px',
+          }}
+        >
+          Create your banking account
+        </p>
 
-  } finally {
-    client.release();
-  }
+        {/* ================================================== */}
+        {/* ERROR */}
+        {/* ================================================== */}
+
+        {error && (
+          <div
+            role="alert"
+            style={{
+              padding: '14px',
+              marginBottom: '18px',
+              borderRadius: '8px',
+              background: '#fee4e2',
+              color: '#b42318',
+              fontSize: '14px',
+              lineHeight: 1.5,
+              wordBreak: 'break-word',
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* ================================================== */}
+        {/* SUCCESS */}
+        {/* ================================================== */}
+
+        {success && (
+          <div
+            role="status"
+            style={{
+              padding: '14px',
+              marginBottom: '18px',
+              borderRadius: '8px',
+              background: '#ecfdf3',
+              color: '#027a48',
+              fontSize: '14px',
+              lineHeight: 1.5,
+            }}
+          >
+            {success}
+          </div>
+        )}
+
+        {/* ================================================== */}
+        {/* FORM */}
+        {/* ================================================== */}
+
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+        >
+          {/* ================================================= */}
+          {/* FULL NAME */}
+          {/* ================================================= */}
+
+          <label
+            htmlFor="fullName"
+            style={{
+              display: 'block',
+              marginBottom: '6px',
+              fontWeight: 600,
+              color: '#172033',
+            }}
+          >
+            Full Name
+          </label>
+
+          <input
+            id="fullName"
+            type="text"
+            value={fullName}
+            onChange={(event) =>
+              setFullName(
+                event.target.value
+              )
+            }
+            placeholder="Enter your full name"
+            autoComplete="name"
+            disabled={loading}
+            style={{
+              boxSizing: 'border-box',
+              width: '100%',
+              padding: '12px',
+              marginBottom: '18px',
+              border:
+                '1px solid #d0d5dd',
+              borderRadius: '8px',
+              outline: 'none',
+              fontSize: '15px',
+            }}
+          />
+
+          {/* ================================================= */}
+          {/* EMAIL */}
+          {/* ================================================= */}
+
+          <label
+            htmlFor="email"
+            style={{
+              display: 'block',
+              marginBottom: '6px',
+              fontWeight: 600,
+              color: '#172033',
+            }}
+          >
+            Email
+          </label>
+
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(event) =>
+              setEmail(
+                event.target.value
+              )
+            }
+            placeholder="Enter your email"
+            autoComplete="email"
+            disabled={loading}
+            style={{
+              boxSizing: 'border-box',
+              width: '100%',
+              padding: '12px',
+              marginBottom: '18px',
+              border:
+                '1px solid #d0d5dd',
+              borderRadius: '8px',
+              outline: 'none',
+              fontSize: '15px',
+            }}
+          />
+
+          {/* ================================================= */}
+          {/* PHONE */}
+          {/* ================================================= */}
+
+          <label
+            htmlFor="phone"
+            style={{
+              display: 'block',
+              marginBottom: '6px',
+              fontWeight: 600,
+              color: '#172033',
+            }}
+          >
+            Phone Number
+          </label>
+
+          <input
+            id="phone"
+            type="tel"
+            value={phone}
+            onChange={(event) =>
+              setPhone(
+                event.target.value
+              )
+            }
+            placeholder="Enter your phone number"
+            autoComplete="tel"
+            disabled={loading}
+            style={{
+              boxSizing: 'border-box',
+              width: '100%',
+              padding: '12px',
+              marginBottom: '18px',
+              border:
+                '1px solid #d0d5dd',
+              borderRadius: '8px',
+              outline: 'none',
+              fontSize: '15px',
+            }}
+          />
+
+          {/* ================================================= */}
+          {/* PASSWORD */}
+          {/* ================================================= */}
+
+          <label
+            htmlFor="password"
+            style={{
+              display: 'block',
+              marginBottom: '6px',
+              fontWeight: 600,
+              color: '#172033',
+            }}
+          >
+            Password
+          </label>
+
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(event) =>
+              setPassword(
+                event.target.value
+              )
+            }
+            placeholder="Minimum 8 characters"
+            autoComplete="new-password"
+            disabled={loading}
+            style={{
+              boxSizing: 'border-box',
+              width: '100%',
+              padding: '12px',
+              marginBottom: '18px',
+              border:
+                '1px solid #d0d5dd',
+              borderRadius: '8px',
+              outline: 'none',
+              fontSize: '15px',
+            }}
+          />
+
+          {/* ================================================= */}
+          {/* CONFIRM PASSWORD */}
+          {/* ================================================= */}
+
+          <label
+            htmlFor="confirmPassword"
+            style={{
+              display: 'block',
+              marginBottom: '6px',
+              fontWeight: 600,
+              color: '#172033',
+            }}
+          >
+            Confirm Password
+          </label>
+
+          <input
+            id="confirmPassword"
+            type="password"
+            value={confirmPassword}
+            onChange={(event) =>
+              setConfirmPassword(
+                event.target.value
+              )
+            }
+            placeholder="Enter your password again"
+            autoComplete="new-password"
+            disabled={loading}
+            style={{
+              boxSizing: 'border-box',
+              width: '100%',
+              padding: '12px',
+              marginBottom: '22px',
+              border:
+                '1px solid #d0d5dd',
+              borderRadius: '8px',
+              outline: 'none',
+              fontSize: '15px',
+            }}
+          />
+
+          {/* ================================================= */}
+          {/* SUBMIT */}
+          {/* ================================================= */}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '13px',
+              border: 'none',
+              borderRadius: '8px',
+              background: '#0b5cff',
+              color: '#ffffff',
+              fontWeight: 600,
+              fontSize: '15px',
+              cursor: loading
+                ? 'not-allowed'
+                : 'pointer',
+              opacity: loading
+                ? 0.7
+                : 1,
+            }}
+          >
+            {loading
+              ? 'Creating Account...'
+              : 'Create Account'}
+          </button>
+        </form>
+
+        {/* ================================================== */}
+        {/* LOGIN LINK */}
+        {/* ================================================== */}
+
+        <p
+          style={{
+            textAlign: 'center',
+            marginTop: '24px',
+            color: '#667085',
+          }}
+        >
+          Already have an account?{' '}
+
+          <Link
+            to="/login"
+            style={{
+              color: '#0b5cff',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            Sign In
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
 };
+
+export default Register;
