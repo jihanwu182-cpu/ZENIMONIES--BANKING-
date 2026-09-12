@@ -15,6 +15,13 @@ const router = express.Router();
 // ============================================================
 // MULTER CONFIGURATION
 // ============================================================
+//
+// Files are kept in memory temporarily.
+//
+// IMPORTANT:
+// These files must NOT be treated as verified merely because
+// they were uploaded. The KYC provider must verify them.
+// ============================================================
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -58,6 +65,14 @@ router.get(
 // ============================================================
 // TIER 1 — BVN
 // ============================================================
+//
+// POST /api/kyc/bvn
+//
+// Body:
+// bvn
+//
+// BVN submission does NOT automatically verify the user.
+// ============================================================
 
 router.post(
   '/bvn',
@@ -66,20 +81,23 @@ router.post(
 );
 
 // ============================================================
-// TIER 2 — GOVERNMENT ID + SELFIE
+// TIER 2 — GOVERNMENT ID + SELFIE/LIVENESS
 // ============================================================
 //
-// Expected frontend fields:
+// POST /api/kyc/tier-2
+//
+// Expected fields:
 //
 // document_type
 // document_number
+//
+// Files:
+//
 // document_front
-// document_back   (optional)
+// document_back
 // selfie
 //
-// The selfie is the facial/liveness verification input.
-// Later, the backend can send the relevant information
-// to Dojah for actual verification.
+// document_back is optional for passports.
 // ============================================================
 
 router.post(
@@ -103,13 +121,21 @@ router.post(
 );
 
 // ============================================================
-// TIER 3 — PROOF OF ADDRESS
+// TIER 3 — PROOF OF ADDRESS + LIVENESS
 // ============================================================
 //
-// Expected frontend fields:
+// POST /api/kyc/tier-3
+//
+// Expected field:
 //
 // tier_3_method
+//
+// Files:
+//
 // tier_3_document
+// tier_3_selfie
+//
+// ============================================================
 //
 // Accepted methods:
 //
@@ -117,8 +143,19 @@ router.post(
 // utility_bill
 // proof_of_address
 //
-// Tier 3 does NOT require a separate selfie here.
-// Facial/liveness verification belongs to Tier 2.
+// ============================================================
+//
+// IMPORTANT:
+//
+// Tier 3 requires:
+//
+// 1. Proof-of-address document
+// 2. Liveness/selfie submission
+//
+// Uploading either file DOES NOT mean verification succeeded.
+//
+// The actual document and liveness verification must happen
+// through the approved KYC verification process/provider.
 // ============================================================
 
 router.post(
@@ -127,6 +164,10 @@ router.post(
   upload.fields([
     {
       name: 'tier_3_document',
+      maxCount: 1,
+    },
+    {
+      name: 'tier_3_selfie',
       maxCount: 1,
     },
   ]),
@@ -179,7 +220,7 @@ router.use((error, req, res, next) => {
       code: 'FILE_UPLOAD_ERROR',
       message:
         error.message ||
-        'Unable to process uploaded file.',
+        'Unable to process file upload.',
     });
   }
 
