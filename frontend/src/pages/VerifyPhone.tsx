@@ -1,5 +1,28 @@
 import React, { useEffect, useState } from 'react';
+import axios, { AxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
+
+const API_URL = 'https://zenimonies-banking.onrender.com';
+
+type VerifyResponse = {
+  success?: boolean;
+  message?: string;
+  user?: {
+    id?: string;
+    full_name?: string;
+    email?: string;
+    phone?: string;
+    phone_verified?: boolean;
+    is_verified?: boolean;
+    kyc_status?: string;
+    kyc_tier?: number;
+  };
+};
+
+type ErrorResponse = {
+  success?: boolean;
+  message?: string;
+};
 
 const VerifyPhone: React.FC = () => {
   const navigate = useNavigate();
@@ -13,7 +36,10 @@ const VerifyPhone: React.FC = () => {
 
   const [countdown, setCountdown] = useState(0);
 
-  // Countdown for resend button
+  // ============================================================
+  // RESEND COUNTDOWN
+  // ============================================================
+
   useEffect(() => {
     if (countdown <= 0) {
       return;
@@ -36,16 +62,31 @@ const VerifyPhone: React.FC = () => {
   }, [countdown]);
 
   // ============================================================
-  // VERIFY OTP
+  // GET TOKEN
+  // ============================================================
+
+  const getToken = (): string | null => {
+    return (
+      localStorage.getItem('zenimonies_token') ||
+      localStorage.getItem('token')
+    );
+  };
+
+  // ============================================================
+  // VERIFY PHONE
   // ============================================================
 
   const handleVerify = async (
-    event: React.FormEvent
+    event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
 
     setError('');
     setMessage('');
+
+    // ----------------------------------------------------------
+    // VALIDATE OTP
+    // ----------------------------------------------------------
 
     if (!/^\d{6}$/.test(otp)) {
       setError(
@@ -54,49 +95,71 @@ const VerifyPhone: React.FC = () => {
       return;
     }
 
+    const token = getToken();
+
+    if (!token) {
+      setError(
+        'Your registration session has expired. Please log in again.'
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const token =
-        localStorage.getItem('zenimonies_token') ||
-        localStorage.getItem('token');
-
-      if (!token) {
-        throw new Error(
-          'Your session has expired. Please log in again.'
-        );
-      }
-
-      const response = await fetch(
-        '/api/auth/verify-phone-otp',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            otp,
-          }),
-        }
+      console.log(
+        'Zenimonies phone verification request'
       );
 
-      const data = await response.json();
+      const response =
+        await axios.post<VerifyResponse>(
+          `${API_URL}/api/auth/verify-phone-otp`,
+          {
+            otp,
+          },
+          {
+            timeout: 30000,
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-      if (!response.ok) {
+      const data = response.data;
+
+      console.log(
+        'Zenimonies phone verification response:',
+        data
+      );
+
+      if (data.success !== true) {
         throw new Error(
-          data?.message ||
+          data.message ||
             'Phone verification failed.'
         );
       }
 
-      setMessage(
-        data?.message ||
-          'Phone number verified successfully.'
-      );
+      // --------------------------------------------------------
+      // UPDATE LOCAL USER
+      // --------------------------------------------------------
+      //
+      // IMPORTANT:
+      // Phone verification does NOT mean KYC verification.
+      //
+      // Therefore:
+      //
+      // phone_verified = true
+      // is_verified    = unchanged
+      //
+      // KYC will later be verified through the actual
+      // identity verification process.
+      // --------------------------------------------------------
 
       const storedUser =
-        localStorage.getItem('zenimonies_user');
+        localStorage.getItem(
+          'zenimonies_user'
+        );
 
       if (storedUser) {
         try {
@@ -104,8 +167,14 @@ const VerifyPhone: React.FC = () => {
 
           const updatedUser = {
             ...user,
-            is_verified: true,
+
+            // Phone verification only.
+            phone_verified: true,
             phoneVerified: true,
+
+            // Do NOT automatically mark identity/KYC verified.
+            is_verified:
+              user.is_verified ?? false,
           };
 
           localStorage.setItem(
@@ -113,19 +182,83 @@ const VerifyPhone: React.FC = () => {
             JSON.stringify(updatedUser)
           );
         } catch {
-          // Ignore invalid local user data.
+          console.warn(
+            'Unable to update stored user information.'
+          );
         }
       }
+
+      // --------------------------------------------------------
+      // CLEAR OLD DEVELOPMENT OTP
+      // --------------------------------------------------------
+
+      sessionStorage.removeItem(
+        'zenimonies_development_otp'
+      );
+
+      // --------------------------------------------------------
+      // SUCCESS
+      // --------------------------------------------------------
+
+      setOtp('');
+
+      setMessage(
+        data.message ||
+          'Phone number verified successfully.'
+      );
+
+      // --------------------------------------------------------
+      // GO TO PROFILE
+      // --------------------------------------------------------
 
       setTimeout(() => {
         navigate('/profile');
       }, 1200);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to verify phone number.'
+
+    } catch (error: unknown) {
+      console.error(
+        'Zenimonies phone verification error:',
+        error
       );
+
+      if (axios.isAxiosError(error)) {
+        const axiosError =
+          error as AxiosError<ErrorResponse>;
+
+        const response =
+          axiosError.response;
+
+        if (response?.status === 401) {
+          setError(
+            'Your authentication session is invalid or expired. Please log in again.'
+          );
+        } else if (response?.data?.message) {
+          setError(
+            response.data.message
+          );
+        } else if (
+          axiosError.code ===
+          'ECONNABORTED'
+        ) {
+          setError(
+            'The server took too long to respond. Please try again.'
+          );
+        } else if (!response) {
+          setError(
+            'Unable to reach the Zenimonies server. Check your internet connection and try again.'
+          );
+        } else {
+          setError(
+            `Phone verification failed. Server returned HTTP ${response.status}.`
+          );
+        }
+      } else if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError(
+          'Unable to verify phone number. Please try again.'
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -142,59 +275,137 @@ const VerifyPhone: React.FC = () => {
 
     setError('');
     setMessage('');
+
+    const token = getToken();
+
+    if (!token) {
+      setError(
+        'Your registration session has expired. Please log in again.'
+      );
+      return;
+    }
+
     setResending(true);
 
     try {
-      const token =
-        localStorage.getItem('zenimonies_token') ||
-        localStorage.getItem('token');
-
-      if (!token) {
-        throw new Error(
-          'Your session has expired. Please log in again.'
-        );
-      }
-
-      const response = await fetch(
-        '/api/auth/send-phone-otp',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      console.log(
+        'Zenimonies resend phone OTP request'
       );
 
-      const data = await response.json();
+      const response =
+        await axios.post<VerifyResponse>(
+          `${API_URL}/api/auth/send-phone-otp`,
+          {},
+          {
+            timeout: 30000,
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-      if (!response.ok) {
+      const data = response.data;
+
+      console.log(
+        'Zenimonies resend OTP response:',
+        data
+      );
+
+      if (data.success !== true) {
         throw new Error(
-          data?.message ||
+          data.message ||
             'Unable to resend verification code.'
         );
       }
 
       setMessage(
-        data?.message ||
+        data.message ||
           'A new verification code has been sent to your phone.'
       );
 
-      // Start 60-second cooldown
       setCountdown(60);
 
-      // Clear any old OTP
       setOtp('');
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to resend verification code.'
+
+      // --------------------------------------------------------
+      // DEVELOPMENT OTP
+      // --------------------------------------------------------
+      //
+      // If the backend provides a development OTP during
+      // sandbox/testing, store it for testing.
+      //
+      // Production should deliver the OTP through SMS.
+      // --------------------------------------------------------
+
+      const responseWithOtp =
+        data as VerifyResponse & {
+          development_otp?: string;
+        };
+
+      if (
+        responseWithOtp.development_otp
+      ) {
+        sessionStorage.setItem(
+          'zenimonies_development_otp',
+          String(
+            responseWithOtp.development_otp
+          )
+        );
+      }
+
+    } catch (error: unknown) {
+      console.error(
+        'Zenimonies resend OTP error:',
+        error
       );
+
+      if (axios.isAxiosError(error)) {
+        const axiosError =
+          error as AxiosError<ErrorResponse>;
+
+        const response =
+          axiosError.response;
+
+        if (response?.status === 401) {
+          setError(
+            'Your authentication session is invalid or expired. Please log in again.'
+          );
+        } else if (response?.data?.message) {
+          setError(
+            response.data.message
+          );
+        } else if (
+          axiosError.code ===
+          'ECONNABORTED'
+        ) {
+          setError(
+            'The server took too long to respond. Please try again.'
+          );
+        } else if (!response) {
+          setError(
+            'Unable to reach the Zenimonies server.'
+          );
+        } else {
+          setError(
+            `Unable to resend the code. Server returned HTTP ${response.status}.`
+          );
+        }
+      } else if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError(
+          'Unable to resend verification code.'
+        );
+      }
     } finally {
       setResending(false);
     }
   };
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <div
@@ -219,7 +430,9 @@ const VerifyPhone: React.FC = () => {
             '0 10px 30px rgba(16, 24, 40, 0.08)',
         }}
       >
+        {/* ================================================== */}
         {/* HEADER */}
+        {/* ================================================== */}
 
         <div
           style={{
@@ -261,10 +474,13 @@ const VerifyPhone: React.FC = () => {
           </p>
         </div>
 
+        {/* ================================================== */}
         {/* ERROR */}
+        {/* ================================================== */}
 
         {error && (
           <div
+            role="alert"
             style={{
               background: '#fef3f2',
               border: '1px solid #fecdca',
@@ -273,16 +489,20 @@ const VerifyPhone: React.FC = () => {
               padding: '12px 14px',
               marginBottom: '18px',
               fontSize: '14px',
+              lineHeight: 1.5,
             }}
           >
             {error}
           </div>
         )}
 
+        {/* ================================================== */}
         {/* SUCCESS */}
+        {/* ================================================== */}
 
         {message && (
           <div
+            role="status"
             style={{
               background: '#ecfdf3',
               border: '1px solid #abefc6',
@@ -291,15 +511,21 @@ const VerifyPhone: React.FC = () => {
               padding: '12px 14px',
               marginBottom: '18px',
               fontSize: '14px',
+              lineHeight: 1.5,
             }}
           >
             {message}
           </div>
         )}
 
+        {/* ================================================== */}
         {/* OTP FORM */}
+        {/* ================================================== */}
 
-        <form onSubmit={handleVerify}>
+        <form
+          onSubmit={handleVerify}
+          noValidate
+        >
           <label
             htmlFor="otp"
             style={{
@@ -315,6 +541,7 @@ const VerifyPhone: React.FC = () => {
 
           <input
             id="otp"
+            name="otp"
             type="text"
             inputMode="numeric"
             autoComplete="one-time-code"
@@ -330,6 +557,7 @@ const VerifyPhone: React.FC = () => {
               setError('');
             }}
             placeholder="Enter 6-digit code"
+            disabled={loading}
             style={{
               width: '100%',
               boxSizing: 'border-box',
@@ -343,12 +571,13 @@ const VerifyPhone: React.FC = () => {
             }}
           />
 
-          {/* VERIFY */}
+          {/* VERIFY BUTTON */}
 
           <button
             type="submit"
             disabled={
-              loading || otp.length !== 6
+              loading ||
+              otp.length !== 6
             }
             style={{
               width: '100%',
@@ -357,14 +586,16 @@ const VerifyPhone: React.FC = () => {
               border: 'none',
               borderRadius: '10px',
               background:
-                loading || otp.length !== 6
+                loading ||
+                otp.length !== 6
                   ? '#98a2b3'
                   : '#0b5cff',
               color: '#ffffff',
               fontSize: '15px',
               fontWeight: 700,
               cursor:
-                loading || otp.length !== 6
+                loading ||
+                otp.length !== 6
                   ? 'not-allowed'
                   : 'pointer',
             }}
@@ -375,7 +606,9 @@ const VerifyPhone: React.FC = () => {
           </button>
         </form>
 
+        {/* ================================================== */}
         {/* RESEND */}
+        {/* ================================================== */}
 
         <div
           style={{
@@ -387,19 +620,22 @@ const VerifyPhone: React.FC = () => {
             type="button"
             onClick={handleResend}
             disabled={
-              resending || countdown > 0
+              resending ||
+              countdown > 0
             }
             style={{
               background: 'transparent',
               border: 'none',
               color:
-                resending || countdown > 0
+                resending ||
+                countdown > 0
                   ? '#98a2b3'
                   : '#0b5cff',
               fontSize: '14px',
               fontWeight: 700,
               cursor:
-                resending || countdown > 0
+                resending ||
+                countdown > 0
                   ? 'not-allowed'
                   : 'pointer',
               padding: '8px',
@@ -413,7 +649,9 @@ const VerifyPhone: React.FC = () => {
           </button>
         </div>
 
+        {/* ================================================== */}
         {/* BACK */}
+        {/* ================================================== */}
 
         <div
           style={{
@@ -434,7 +672,9 @@ const VerifyPhone: React.FC = () => {
           </Link>
         </div>
 
-        {/* SECURITY */}
+        {/* ================================================== */}
+        {/* SECURITY NOTICE */}
+        {/* ================================================== */}
 
         <div
           style={{
