@@ -9,6 +9,8 @@ const {
   resendPhoneOtp,
 } = require('../controllers/authController');
 
+const authMiddleware = require('../middleware/authMiddleware');
+
 const router = express.Router();
 
 // ============================================================
@@ -22,13 +24,7 @@ const router = express.Router();
 // REGISTER
 // POST /api/auth/register
 //
-// Body:
-// {
-//   "full_name": "John Doe",
-//   "email": "john@example.com",
-//   "phone": "08012345678",
-//   "password": "password123"
-// }
+// Public route
 // ============================================================
 
 router.post(
@@ -41,11 +37,7 @@ router.post(
 // LOGIN
 // POST /api/auth/login
 //
-// Body:
-// {
-//   "email": "john@example.com",
-//   "password": "password123"
-// }
+// Public route
 // ============================================================
 
 router.post(
@@ -58,12 +50,15 @@ router.post(
 // CURRENT USER
 // GET /api/auth/me
 //
+// Protected route
+//
 // Header:
 // Authorization: Bearer YOUR_JWT_TOKEN
 // ============================================================
 
 router.get(
   '/me',
+  authMiddleware,
   getMe
 );
 
@@ -72,14 +67,15 @@ router.get(
 // SEND PHONE OTP
 // POST /api/auth/send-phone-otp
 //
+// Protected route
+//
 // Header:
 // Authorization: Bearer YOUR_JWT_TOKEN
-//
-// Generates a new phone verification OTP.
 // ============================================================
 
 router.post(
   '/send-phone-otp',
+  authMiddleware,
   sendPhoneOtp
 );
 
@@ -87,6 +83,8 @@ router.post(
 // ============================================================
 // VERIFY PHONE
 // POST /api/auth/verify-phone
+//
+// Protected route
 //
 // Header:
 // Authorization: Bearer YOUR_JWT_TOKEN
@@ -99,6 +97,7 @@ router.post(
 
 router.post(
   '/verify-phone',
+  authMiddleware,
   verifyPhone
 );
 
@@ -107,18 +106,14 @@ router.post(
 // VERIFY PHONE OTP
 // POST /api/auth/verify-phone-otp
 //
-// This alias is kept so the frontend can use either:
+// Protected route
 //
-// /api/auth/verify-phone
-//
-// or:
-//
-// /api/auth/verify-phone-otp
-//
+// This is the endpoint currently used by VerifyPhone.tsx.
 // ============================================================
 
 router.post(
   '/verify-phone-otp',
+  authMiddleware,
   verifyPhone
 );
 
@@ -127,18 +122,21 @@ router.post(
 // RESEND PHONE OTP
 // POST /api/auth/resend-phone-otp
 //
+// Protected route
+//
 // Header:
 // Authorization: Bearer YOUR_JWT_TOKEN
 // ============================================================
 
 router.post(
   '/resend-phone-otp',
+  authMiddleware,
   resendPhoneOtp
 );
 
 
 // ============================================================
-// EXPORT ROUTER
+// EXPORT
 // ============================================================
 
 module.exports = router;
