@@ -1,59 +1,35 @@
 const express = require('express');
 
-const {
-  createDeposit,
-} = require('../controllers/depositController');
+const router = express.Router();
 
 const {
   getDepositAccount,
 } = require('../controllers/depositAccountController');
 
 const {
-  authenticateToken,
-} = require('../utils/authMiddleware');
+  createDeposit,
+  getDeposits,
+} = require('../controllers/depositController');
 
-const router = express.Router();
-
-
-// ============================================================
-// DEPOSIT ROUTE TEST
-// GET /api/deposits
-// ============================================================
-
-router.get('/', (req, res) => {
-  return res.status(200).json({
-    success: true,
-    message: 'Deposit route is working',
-  });
-});
-
-
-// ============================================================
-// GET USER'S DEDICATED DEPOSIT ACCOUNT
-// GET /api/deposits/account
-// ============================================================
+const authMiddleware =
+  require('../middleware/authMiddleware');
 
 router.get(
   '/account',
-  authenticateToken,
+  authMiddleware,
   getDepositAccount
 );
 
-
-// ============================================================
-// CREATE DEPOSIT REQUEST
-// POST /api/deposits
-// ============================================================
-
 router.post(
   '/',
-  authenticateToken,
+  authMiddleware,
   createDeposit
 );
 
-
-// ============================================================
-// EXPORT ROUTER
-// ============================================================
+router.get(
+  '/',
+  authMiddleware,
+  getDeposits
+);
 
 module.exports = router;
