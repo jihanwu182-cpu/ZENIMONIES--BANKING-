@@ -32,8 +32,9 @@ const Deposit: React.FC = () => {
     useState<Deposit[]>([]);
 
   const [amount, setAmount] = useState('');
+
   const [method, setMethod] =
-    useState('bank_transfer');
+    useState('paystack');
 
   const [loading, setLoading] =
     useState(true);
@@ -82,7 +83,7 @@ const Deposit: React.FC = () => {
 
       try {
         // ======================================================
-        // LOAD REAL DEDICATED DEPOSIT ACCOUNT
+        // LOAD REAL BANK DEPOSIT ACCOUNT
         // ======================================================
 
         try {
@@ -103,23 +104,13 @@ const Deposit: React.FC = () => {
             setDepositAccount(
               accountResponse.data
                 .deposit_account ||
-                accountResponse.data
-                  .depositAccount ||
                 null
             );
           } else {
             setDepositAccount(null);
           }
-
         } catch (accountError: any) {
-
           if (
-            accountError?.response
-              ?.status === 404
-          ) {
-            // No Paystack DVA yet.
-            setDepositAccount(null);
-          } else if (
             accountError?.response
               ?.status === 401
           ) {
@@ -127,6 +118,8 @@ const Deposit: React.FC = () => {
               'Your authentication session has expired. Please log in again.'
             );
           } else {
+            setDepositAccount(null);
+
             console.error(
               'Deposit account error:',
               accountError
@@ -136,17 +129,6 @@ const Deposit: React.FC = () => {
 
         // ======================================================
         // LOAD DEPOSIT HISTORY
-        // ======================================================
-        //
-        // IMPORTANT:
-        //
-        // Backend route:
-        //
-        // GET /api/deposits
-        //
-        // NOT:
-        //
-        // /api/deposits/history
         // ======================================================
 
         try {
@@ -172,9 +154,7 @@ const Deposit: React.FC = () => {
           } else {
             setDeposits([]);
           }
-
         } catch (historyError: any) {
-
           if (
             historyError?.response
               ?.status === 401
@@ -182,19 +162,14 @@ const Deposit: React.FC = () => {
             setError(
               'Your authentication session has expired. Please log in again.'
             );
-          } else if (
-            historyError?.response
-              ?.status !== 404
-          ) {
+          } else {
             console.error(
               'Deposit history error:',
               historyError
             );
           }
         }
-
       } catch (err) {
-
         console.error(
           'Load deposit information error:',
           err
@@ -203,7 +178,6 @@ const Deposit: React.FC = () => {
         setError(
           'Unable to load deposit information. Please try again.'
         );
-
       } finally {
         setLoading(false);
       }
@@ -218,14 +192,106 @@ const Deposit: React.FC = () => {
   }, []);
 
   // ============================================================
-  // CREATE DEPOSIT REQUEST
+  // CREATE BANK TRANSFER DEPOSIT
+  // ============================================================
+
+  const createBankTransferDeposit =
+    async (
+      numericAmount: number,
+      token: string
+    ) => {
+      const response =
+        await axios.post(
+          `${API_URL}/api/deposits`,
+          {
+            amount:
+              numericAmount,
+
+            payment_method:
+              'bank_transfer',
+          },
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+
+              'Content-Type':
+                'application/json',
+            },
+          }
+        );
+
+      if (
+        !response.data?.success
+      ) {
+        throw new Error(
+          response.data?.message ||
+          'Unable to create bank transfer deposit.'
+        );
+      }
+
+      return response.data;
+    };
+
+  // ============================================================
+  // INITIALIZE PAYSTACK PAYMENT
+  // ============================================================
+
+  const initializePaystackPayment =
+    async (
+      numericAmount: number,
+      token: string
+    ) => {
+      const response =
+        await axios.post(
+          `${API_URL}/api/paystack/initialize`,
+          {
+            amount:
+              numericAmount,
+          },
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+
+              'Content-Type':
+                'application/json',
+            },
+          }
+        );
+
+      if (
+        !response.data?.success
+      ) {
+        throw new Error(
+          response.data?.message ||
+          'Unable to initialize Paystack payment.'
+        );
+      }
+
+      const authorizationUrl =
+        response.data?.payment
+          ?.authorization_url;
+
+      if (
+        !authorizationUrl
+      ) {
+        throw new Error(
+          'Paystack did not return a payment checkout URL.'
+        );
+      }
+
+      return response.data;
+    };
+
+  // ============================================================
+  // SUBMIT DEPOSIT
   // ============================================================
 
   const handleCreateDeposit =
     async (
       event: React.FormEvent<HTMLFormElement>
     ) => {
-
       event.preventDefault();
 
       setError('');
@@ -259,7 +325,7 @@ const Deposit: React.FC = () => {
         numericAmount > 5000000
       ) {
         setError(
-          'Deposit amount cannot exceed ₦5,000,000 per request.'
+          'Deposit amount cannot exceed ₦5,000,000 per transaction.'
         );
         return;
       }
@@ -277,68 +343,88 @@ const Deposit: React.FC = () => {
       setSubmitting(true);
 
       try {
-
         // ======================================================
-        // BACKEND EXPECTS payment_method
+        // PAYSTACK
         // ======================================================
-
-        const response =
-          await axios.post(
-            `${API_URL}/api/deposits`,
-            {
-              amount:
-                numericAmount,
-
-              payment_method:
-                method,
-            },
-            {
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
-
-                'Content-Type':
-                  'application/json',
-              },
-            }
-          );
 
         if (
-          response.data?.success
+          method === 'paystack'
         ) {
+          const response =
+            await initializePaystackPayment(
+              numericAmount,
+              token
+            );
+
+          const authorizationUrl =
+            response.payment
+              ?.authorization_url;
+
+          /*
+           * IMPORTANT:
+           *
+           * We redirect to Paystack.
+           *
+           * We DO NOT change the user's balance here.
+           *
+           * The Paystack webhook is responsible for
+           * confirming and crediting the deposit.
+           */
+
+          window.location.href =
+            authorizationUrl;
+
+          return;
+        }
+
+        // ======================================================
+        // BANK TRANSFER
+        // ======================================================
+
+        if (
+          method ===
+          'bank_transfer'
+        ) {
+          if (
+            !depositAccount
+              ?.account_number
+          ) {
+            setError(
+              'A dedicated bank deposit account is not available yet. Bank Transfer funding cannot be used until an official bank account is provisioned.'
+            );
+
+            return;
+          }
+
+          const response =
+            await createBankTransferDeposit(
+              numericAmount,
+              token
+            );
 
           setMessage(
-            response.data.message ||
-              'Deposit request created successfully.'
+            response.message ||
+              'Bank transfer deposit request created successfully.'
           );
 
           setAmount('');
 
           if (
-            response.data.deposit
+            response.deposit
           ) {
             setDeposits(
-              (previous) => [
-                response.data.deposit,
+              previous => [
+                response.deposit,
                 ...previous,
               ]
             );
           }
 
           await loadDepositInformation();
-
-        } else {
-
-          setError(
-            response.data?.message ||
-              'Unable to create deposit request.'
-          );
         }
-
       } catch (err: any) {
-
         console.error(
-          'Create deposit error:',
+          'Deposit payment error:',
           err
         );
 
@@ -353,10 +439,10 @@ const Deposit: React.FC = () => {
           setError(
             err?.response?.data
               ?.message ||
-              'Unable to create deposit request. Please try again.'
+              err?.message ||
+              'Unable to process the deposit. Please try again.'
           );
         }
-
       } finally {
         setSubmitting(false);
       }
@@ -370,7 +456,6 @@ const Deposit: React.FC = () => {
     value: string | number,
     currency = 'NGN'
   ) => {
-
     const numericAmount =
       Number(value);
 
@@ -393,7 +478,6 @@ const Deposit: React.FC = () => {
       ).format(
         numericAmount
       );
-
     } catch {
       return `${currency} ${numericAmount.toFixed(
         2
@@ -408,7 +492,6 @@ const Deposit: React.FC = () => {
   const formatDate = (
     date: string
   ) => {
-
     try {
       return new Date(
         date
@@ -419,7 +502,6 @@ const Deposit: React.FC = () => {
           timeStyle: 'short',
         }
       );
-
     } catch {
       return date;
     }
@@ -432,7 +514,6 @@ const Deposit: React.FC = () => {
   const getStatusStyle = (
     status: string
   ) => {
-
     const normalizedStatus =
       String(status || '')
         .toLowerCase();
@@ -468,12 +549,11 @@ const Deposit: React.FC = () => {
   };
 
   // ============================================================
-  // COPY DEPOSIT ACCOUNT
+  // COPY BANK ACCOUNT
   // ============================================================
 
   const copyAccountNumber =
     async () => {
-
       if (
         !depositAccount
           ?.account_number
@@ -482,7 +562,6 @@ const Deposit: React.FC = () => {
       }
 
       try {
-
         await navigator.clipboard.writeText(
           depositAccount.account_number
         );
@@ -494,9 +573,7 @@ const Deposit: React.FC = () => {
         window.setTimeout(() => {
           setMessage('');
         }, 3000);
-
       } catch {
-
         setError(
           'Unable to copy account number. Please copy it manually.'
         );
@@ -571,11 +648,13 @@ const Deposit: React.FC = () => {
 
           <p
             style={{
-              color: '#667085',
+              color:
+                '#667085',
               marginTop: 0,
               marginBottom:
                 '28px',
-              lineHeight: 1.6,
+              lineHeight:
+                1.6,
             }}
           >
             Add money to your
@@ -650,43 +729,35 @@ const Deposit: React.FC = () => {
             }}
           >
 
-            <div
+            <h2
               style={{
-                marginBottom:
-                  '18px',
+                margin: 0,
+                fontSize:
+                  '20px',
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize:
-                    '20px',
-                }}
-              >
-                Bank Deposit Account
-              </h2>
+              Bank Deposit Account
+            </h2>
 
-              <p
-                style={{
-                  margin:
-                    '6px 0 0 0',
-                  color:
-                    '#667085',
-                  fontSize:
-                    '14px',
-                  lineHeight:
-                    1.5,
-                }}
-              >
-                Your dedicated bank
-                deposit account will
-                appear here once it
-                has been provisioned.
-              </p>
-            </div>
+            <p
+              style={{
+                margin:
+                  '6px 0 18px 0',
+                color:
+                  '#667085',
+                fontSize:
+                  '14px',
+                lineHeight:
+                  1.5,
+              }}
+            >
+              Your dedicated bank
+              deposit account will
+              appear here once it has
+              been officially provisioned.
+            </p>
 
             {loading ? (
-
               <div
                 style={{
                   padding:
@@ -700,10 +771,8 @@ const Deposit: React.FC = () => {
                 Checking deposit
                 account status...
               </div>
-
             ) : depositAccount
               ?.account_number ? (
-
               <>
                 <div
                   style={{
@@ -713,8 +782,6 @@ const Deposit: React.FC = () => {
                       '16px',
                   }}
                 >
-
-                  {/* BANK */}
 
                   <div>
                     <div
@@ -736,8 +803,6 @@ const Deposit: React.FC = () => {
                     </strong>
                   </div>
 
-                  {/* ACCOUNT NAME */}
-
                   <div>
                     <div
                       style={{
@@ -757,8 +822,6 @@ const Deposit: React.FC = () => {
                         '—'}
                     </strong>
                   </div>
-
-                  {/* ACCOUNT NUMBER */}
 
                   <div>
                     <div
@@ -827,8 +890,6 @@ const Deposit: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* CURRENCY */}
-
                   <div>
                     <div
                       style={{
@@ -870,38 +931,12 @@ const Deposit: React.FC = () => {
                   <strong>
                     Deposit account active.
                   </strong>{' '}
-                  Use the official bank
-                  details shown above when
-                  making a bank transfer.
-                </div>
-
-                <div
-                  style={{
-                    marginTop:
-                      '12px',
-                    padding:
-                      '15px',
-                    borderRadius:
-                      '10px',
-                    background:
-                      '#fffaeb',
-                    color:
-                      '#7a2e0b',
-                    lineHeight:
-                      1.6,
-                  }}
-                >
-                  Your Zenimonies balance
-                  is credited only after
-                  the payment provider
-                  confirms the incoming
-                  transaction.
+                  Use only the official
+                  bank details shown above.
                 </div>
 
               </>
-
             ) : (
-
               <div
                 style={{
                   padding:
@@ -916,7 +951,6 @@ const Deposit: React.FC = () => {
                     1.6,
                 }}
               >
-
                 <strong>
                   Bank deposit account
                   not yet available.
@@ -925,28 +959,24 @@ const Deposit: React.FC = () => {
                 <br />
 
                 Your Zenimonies account
-                has been created, but a
-                dedicated bank deposit
-                account has not yet been
-                provisioned.
+                exists, but a dedicated
+                bank deposit account has
+                not yet been provisioned.
 
                 <br />
                 <br />
 
-                You should not transfer
-                money to an account
-                claiming to belong to
-                Zenimonies unless the
-                official bank details
-                appear in this section.
-
+                Do not transfer money to
+                an account claiming to
+                belong to Zenimonies unless
+                the official bank details
+                appear above.
               </div>
             )}
-
           </div>
 
           {/* ==================================================
-              INTERNAL ACCOUNT NOTICE
+              ACCOUNT NOTICE
           ================================================== */}
 
           <div
@@ -968,23 +998,21 @@ const Deposit: React.FC = () => {
             }}
           >
             <strong>
-              About your Zenimonies
-              account
+              Important
             </strong>
 
             <br />
 
-            Your Zenimonies account is
-            separate from a dedicated
-            bank deposit account. A
-            dedicated bank account will
-            only be displayed here after
-            it has been officially
-            provisioned.
+            Your Zenimonies balance is
+            updated only after the payment
+            provider confirms a successful
+            payment. Starting a deposit
+            request does not add money to
+            your balance.
           </div>
 
           {/* ==================================================
-              DEPOSIT REQUEST
+              START DEPOSIT
           ================================================== */}
 
           <div
@@ -1016,11 +1044,8 @@ const Deposit: React.FC = () => {
                   1.6,
               }}
             >
-              Create a deposit request.
-              Your balance is not
-              increased until the
-              payment provider confirms
-              the payment.
+              Choose how you want to
+              fund your account.
             </p>
 
             <form
@@ -1051,12 +1076,9 @@ const Deposit: React.FC = () => {
                 min="1"
                 step="0.01"
                 value={amount}
-                onChange={(
-                  event
-                ) =>
+                onChange={event =>
                   setAmount(
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
                 placeholder="Enter amount"
@@ -1078,12 +1100,10 @@ const Deposit: React.FC = () => {
                     '10px',
                   fontSize:
                     '16px',
-                  outline:
-                    'none',
                 }}
               />
 
-              {/* PAYMENT METHOD */}
+              {/* METHOD */}
 
               <label
                 htmlFor="method"
@@ -1102,12 +1122,9 @@ const Deposit: React.FC = () => {
               <select
                 id="method"
                 value={method}
-                onChange={(
-                  event
-                ) =>
+                onChange={event =>
                   setMethod(
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
                 disabled={
@@ -1133,22 +1150,107 @@ const Deposit: React.FC = () => {
                 }}
               >
 
-                <option value="bank_transfer">
-                  Bank Transfer
-                </option>
-
                 <option value="paystack">
                   Paystack
                 </option>
 
+                <option value="bank_transfer">
+                  Bank Transfer
+                </option>
+
               </select>
+
+              {/* PAYSTACK INFORMATION */}
+
+              {method ===
+                'paystack' && (
+                <div
+                  style={{
+                    marginBottom:
+                      '20px',
+                    padding:
+                      '14px',
+                    borderRadius:
+                      '10px',
+                    background:
+                      '#eef4ff',
+                    color:
+                      '#344054',
+                    fontSize:
+                      '14px',
+                    lineHeight:
+                      1.6,
+                  }}
+                >
+                  You will be securely
+                  redirected to Paystack
+                  Checkout to complete
+                  your payment.
+                </div>
+              )}
+
+              {/* BANK TRANSFER INFORMATION */}
+
+              {method ===
+                'bank_transfer' && (
+                <div
+                  style={{
+                    marginBottom:
+                      '20px',
+                    padding:
+                      '14px',
+                    borderRadius:
+                      '10px',
+                    background:
+                      depositAccount
+                        ?.account_number
+                        ? '#ecfdf3'
+                        : '#fffaeb',
+                    color:
+                      depositAccount
+                        ?.account_number
+                        ? '#027a48'
+                        : '#7a2e0b',
+                    fontSize:
+                      '14px',
+                    lineHeight:
+                      1.6,
+                  }}
+                >
+                  {depositAccount
+                    ?.account_number ? (
+                    <>
+                      Transfer the
+                      money only to
+                      the official bank
+                      account shown
+                      above.
+                    </>
+                  ) : (
+                    <>
+                      Bank Transfer is
+                      currently
+                      unavailable because
+                      your dedicated bank
+                      deposit account has
+                      not been provisioned.
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* SUBMIT */}
 
               <button
                 type="submit"
                 disabled={
-                  submitting
+                  submitting ||
+                  (
+                    method ===
+                      'bank_transfer' &&
+                    !depositAccount
+                      ?.account_number
+                  )
                 }
                 style={{
                   width:
@@ -1179,13 +1281,14 @@ const Deposit: React.FC = () => {
               >
                 {submitting
                   ? 'Processing...'
-                  : 'Create Deposit Request'}
+                  : method ===
+                      'paystack'
+                    ? 'Continue to Paystack'
+                    : 'Create Bank Transfer Deposit'}
               </button>
 
             </form>
-
           </div>
-
         </div>
 
         {/* ====================================================
@@ -1229,7 +1332,6 @@ const Deposit: React.FC = () => {
           </p>
 
           {deposits.length === 0 ? (
-
             <div
               style={{
                 padding:
@@ -1246,9 +1348,7 @@ const Deposit: React.FC = () => {
             >
               No deposits yet.
             </div>
-
           ) : (
-
             <div
               style={{
                 display:
@@ -1257,10 +1357,8 @@ const Deposit: React.FC = () => {
                   '12px',
               }}
             >
-
               {deposits.map(
-                (deposit) => {
-
+                deposit => {
                   const statusStyle =
                     getStatusStyle(
                       deposit.status
@@ -1367,10 +1465,8 @@ const Deposit: React.FC = () => {
                   );
                 }
               )}
-
             </div>
           )}
-
         </div>
 
         {/* FOOTER */}
