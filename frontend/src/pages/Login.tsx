@@ -10,67 +10,85 @@ type LoginPayload = {
   token?: string;
   accessToken?: string;
   access_token?: string;
-  user?: unknown;
-  accounts?: unknown;
+  user?: any;
+  accounts?: any[];
   requiresOtp?: boolean;
   requires_otp?: boolean;
   otpRequired?: boolean;
   otp_required?: boolean;
   otpToken?: string;
   otp_token?: string;
+  requires_phone_verification?: boolean;
   data?: LoginPayload;
 };
 
-function unwrapLoginPayload(raw: LoginPayload): LoginPayload {
-  if (raw?.data && typeof raw.data === 'object') {
-    return { ...raw, ...raw.data };
+function unwrapLoginPayload(
+  raw: LoginPayload
+): LoginPayload {
+  if (
+    raw?.data &&
+    typeof raw.data === 'object'
+  ) {
+    return {
+      ...raw,
+      ...raw.data,
+    };
   }
-  return raw ?? {};
+
+  return raw || {};
 }
 
-function getLoginErrorMessage(err: unknown): string {
+function getServerError(
+  err: unknown
+): string {
   if (axios.isAxiosError(err)) {
-    const axiosErr = err as AxiosError<LoginPayload>;
-    const status = axiosErr.response?.status;
-    const serverMessage = axiosErr.response?.data?.message;
+    const axiosErr =
+      err as AxiosError<LoginPayload>;
 
-    if (serverMessage) {
-      return serverMessage;
+    const response = axiosErr.response;
+
+    if (response?.data) {
+      const data = response.data;
+
+      if (data.message) {
+        return data.message;
+      }
+
+      return JSON.stringify(data);
     }
 
     if (axiosErr.code === 'ECONNABORTED') {
-      return 'The server took too long to respond. Please try again.';
+      return 'The server took too long to respond.';
     }
 
-    if (!axiosErr.response) {
-      return 'Unable to reach the server. Check your connection and try again.';
+    if (!response) {
+      return 'Unable to reach the Zenimonies server.';
     }
 
-    if (status === 503) {
-      return 'The server is waking up. Wait a few seconds and try again.';
-    }
-
-    if (status === 429) {
-      return 'Too many login attempts. Please wait a moment and try again.';
-    }
-
-    if (status === 401 || status === 403) {
-      return 'Invalid email or password.';
-    }
-
-    return 'Unable to login. Please try again.';
+    return `Server error: HTTP ${response.status}`;
   }
 
-  return 'Unable to login. Please try again.';
+  if (err instanceof Error) {
+    return err.message;
+  }
+
+  return 'Unknown login error.';
 }
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [email, setEmail] =
+    useState('');
+
+  const [password, setPassword] =
+    useState('');
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
 
   const handleSubmit = async (
     event: React.FormEvent<HTMLFormElement>
@@ -79,83 +97,208 @@ const Login: React.FC = () => {
 
     setError('');
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail =
+      email.trim().toLowerCase();
 
     if (!cleanEmail || !password) {
-      setError('Email and password are required.');
+      setError(
+        'Email and password are required.'
+      );
       return;
     }
 
     try {
       setLoading(true);
 
-      const response = await axios.post<LoginPayload>(
-        `${API_URL}/api/auth/login`,
-        {
-          email: cleanEmail,
-          password,
-        },
-        {
-          timeout: 45000,
-          headers: {
-            'Content-Type': 'application/json',
+      console.log(
+        'Zenimonies login request:',
+        cleanEmail
+      );
+
+      const response =
+        await axios.post<LoginPayload>(
+          `${API_URL}/api/auth/login`,
+          {
+            email: cleanEmail,
+            password,
           },
-        }
+          {
+            timeout: 60000,
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+          }
+        );
+
+      console.log(
+        'Zenimonies login response:',
+        response.data
       );
 
-      const data = unwrapLoginPayload(response.data);
+      const data =
+        unwrapLoginPayload(
+          response.data
+        );
 
-      const token =
-        data.token || data.accessToken || data.access_token;
+      // =====================================================
+      // CHECK SERVER SUCCESS
+      // =====================================================
 
-      const requiresOtp = Boolean(
-        data.requiresOtp ||
-          data.requires_otp ||
-          data.otpRequired ||
-          data.otp_required
-      );
-
-      if (data.success === false && !token && !requiresOtp) {
-        setError(data.message || 'Login failed.');
+      if (data.success === false) {
+        setError(
+          data.message ||
+            'Login was rejected by the server.'
+        );
         return;
       }
 
-      if (requiresOtp) {
-        sessionStorage.setItem('zenimonies_otp_email', cleanEmail);
+      // =====================================================
+      // GET TOKEN
+      // =====================================================
 
-        const otpToken = data.otpToken || data.otp_token;
+      const token =
+        data.token ||
+        data.accessToken ||
+        data.access_token;
+
+      // =====================================================
+      // OTP CHECK
+      // =====================================================
+
+      const requiresOtp =
+        Boolean(
+          data.requiresOtp ||
+            data.requires_otp ||
+            data.otpRequired ||
+            data.otp_required
+        );
+
+      if (requiresOtp) {
+        sessionStorage.setItem(
+          'zenimonies_otp_email',
+          cleanEmail
+        );
+
+        const otpToken =
+          data.otpToken ||
+          data.otp_token;
+
         if (otpToken) {
-          sessionStorage.setItem('zenimonies_otp_token', otpToken);
+          sessionStorage.setItem(
+            'zenimonies_otp_token',
+            otpToken
+          );
         }
 
         navigate('/verify-otp');
         return;
       }
 
-      if (!token) {
-        setError(data.message || 'Login failed.');
+      // =====================================================
+      // PHONE VERIFICATION
+      // =====================================================
+
+      if (
+        data.requires_phone_verification ===
+        true
+      ) {
+        if (token) {
+          localStorage.setItem(
+            'zenimonies_token',
+            token
+          );
+
+          localStorage.setItem(
+            'token',
+            token
+          );
+        }
+
+        if (data.user) {
+          localStorage.setItem(
+            'zenimonies_user',
+            JSON.stringify(
+              data.user
+            )
+          );
+        }
+
+        navigate('/verify-phone');
         return;
       }
 
-      localStorage.setItem('zenimonies_token', token);
-      localStorage.setItem('token', token);
+      // =====================================================
+      // TOKEN REQUIRED
+      // =====================================================
+
+      if (!token) {
+        console.error(
+          'Login succeeded but no token was returned:',
+          data
+        );
+
+        setError(
+          data.message ||
+            'The server did not return an authentication token.'
+        );
+
+        return;
+      }
+
+      // =====================================================
+      // SAVE TOKEN
+      // =====================================================
+
+      localStorage.setItem(
+        'zenimonies_token',
+        token
+      );
+
+      localStorage.setItem(
+        'token',
+        token
+      );
+
+      // =====================================================
+      // SAVE USER
+      // =====================================================
 
       if (data.user) {
         localStorage.setItem(
           'zenimonies_user',
-          JSON.stringify(data.user)
+          JSON.stringify(
+            data.user
+          )
         );
       }
 
+      // =====================================================
+      // SAVE ACCOUNTS
+      // =====================================================
+
       localStorage.setItem(
         'zenimonies_accounts',
-        JSON.stringify(data.accounts || [])
+        JSON.stringify(
+          data.accounts || []
+        )
       );
+
+      // =====================================================
+      // SUCCESS
+      // =====================================================
 
       navigate('/');
     } catch (err: unknown) {
-      console.error('Login error:', err);
-      setError(getLoginErrorMessage(err));
+      console.error(
+        'FULL ZENIMONIES LOGIN ERROR:',
+        err
+      );
+
+      const message =
+        getServerError(err);
+
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -179,7 +322,8 @@ const Login: React.FC = () => {
           background: '#ffffff',
           padding: '32px',
           borderRadius: '16px',
-          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08)',
+          boxShadow:
+            '0 8px 30px rgba(0, 0, 0, 0.08)',
         }}
       >
         <h1
@@ -207,19 +351,24 @@ const Login: React.FC = () => {
           <div
             role="alert"
             style={{
-              padding: '12px',
+              padding: '14px',
               marginBottom: '18px',
               borderRadius: '8px',
               background: '#fee4e2',
               color: '#b42318',
               fontSize: '14px',
+              lineHeight: 1.5,
+              wordBreak: 'break-word',
             }}
           >
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} noValidate>
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+        >
           <label
             htmlFor="email"
             style={{
@@ -236,7 +385,11 @@ const Login: React.FC = () => {
             id="email"
             type="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) =>
+              setEmail(
+                event.target.value
+              )
+            }
             placeholder="Enter your email"
             autoComplete="email"
             disabled={loading}
@@ -245,7 +398,8 @@ const Login: React.FC = () => {
               width: '100%',
               padding: '12px',
               marginBottom: '18px',
-              border: '1px solid #d0d5dd',
+              border:
+                '1px solid #d0d5dd',
               borderRadius: '8px',
               outline: 'none',
               fontSize: '15px',
@@ -268,7 +422,11 @@ const Login: React.FC = () => {
             id="password"
             type="password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) =>
+              setPassword(
+                event.target.value
+              )
+            }
             placeholder="Enter your password"
             autoComplete="current-password"
             disabled={loading}
@@ -277,7 +435,8 @@ const Login: React.FC = () => {
               width: '100%',
               padding: '12px',
               marginBottom: '22px',
-              border: '1px solid #d0d5dd',
+              border:
+                '1px solid #d0d5dd',
               borderRadius: '8px',
               outline: 'none',
               fontSize: '15px',
@@ -296,11 +455,17 @@ const Login: React.FC = () => {
               color: '#ffffff',
               fontWeight: 600,
               fontSize: '15px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1,
+              cursor: loading
+                ? 'not-allowed'
+                : 'pointer',
+              opacity: loading
+                ? 0.7
+                : 1,
             }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading
+              ? 'Signing in...'
+              : 'Sign In'}
           </button>
         </form>
 
