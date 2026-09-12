@@ -73,12 +73,15 @@ const getBearerToken = (req) => {
     return null;
   }
 
-  return authHeader.substring(7).trim();
+  return authHeader
+    .substring(7)
+    .trim();
 };
 
 
 const verifyJwt = (req) => {
-  const token = getBearerToken(req);
+  const token =
+    getBearerToken(req);
 
   if (!token) {
     return {
@@ -99,10 +102,11 @@ const verifyJwt = (req) => {
   }
 
   try {
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET
-    );
+    const decoded =
+      jwt.verify(
+        token,
+        process.env.JWT_SECRET
+      );
 
     if (
       !decoded ||
@@ -158,22 +162,28 @@ const createPhoneOtp = async (
 
 
   // ----------------------------------------------------------
-  // Generate secure 6-digit OTP
+  // Generate secure six-digit OTP
   // ----------------------------------------------------------
 
-  const otp = generateOtp();
+  const otp =
+    generateOtp();
 
-  const otpHash = hashToken(otp);
+
+  const otpHash =
+    hashToken(otp);
 
 
   // ----------------------------------------------------------
   // Expiration
   // ----------------------------------------------------------
 
-  const expiresAt = new Date(
-    Date.now() +
-    OTP_EXPIRY_MINUTES * 60 * 1000
-  );
+  const expiresAt =
+    new Date(
+      Date.now() +
+      OTP_EXPIRY_MINUTES *
+      60 *
+      1000
+    );
 
 
   // ----------------------------------------------------------
@@ -322,7 +332,7 @@ const register = async (
 
 
     // ========================================================
-    // START TRANSACTION
+    // START DATABASE TRANSACTION
     // ========================================================
 
     await client.query('BEGIN');
@@ -355,7 +365,9 @@ const register = async (
       existingUser.rows.length > 0
     ) {
 
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
 
       const existing =
         existingUser.rows[0];
@@ -397,11 +409,11 @@ const register = async (
     //
     // IMPORTANT:
     //
-    // kyc_tier = 1 means STARTING TIER.
+    // kyc_tier = 1 means the account starts at Tier 1.
     //
-    // It does NOT mean verified.
+    // It does NOT mean the user has been KYC verified.
     //
-    // is_verified remains FALSE until actual KYC verification.
+    // is_verified remains FALSE.
     // ========================================================
 
     const userResult =
@@ -519,7 +531,9 @@ const register = async (
 
 
     const paystackCustomerCode =
-      paystackCustomer.data.customer_code;
+      paystackCustomer
+        .data
+        .customer_code;
 
 
     if (!paystackCustomerCode) {
@@ -556,15 +570,17 @@ const register = async (
 
 
     // ========================================================
-    // EXTRACT PROVIDER ACCOUNT
+    // PROVIDER ACCOUNT DETAILS
     // ========================================================
 
     const providerAccountNumber =
       providerAccount.account_number;
 
+
     const providerAccountName =
       providerAccount.account_name ||
       normalizedFullName;
+
 
     const providerBankName =
       providerAccount.bank &&
@@ -572,6 +588,7 @@ const register = async (
         ? providerAccount.bank.name
         : providerAccount.bank_name ||
           null;
+
 
     const providerBankCode =
       providerAccount.bank &&
@@ -582,9 +599,12 @@ const register = async (
         : providerAccount.bank_code ||
           null;
 
+
     const providerAccountId =
       providerAccount.id
-        ? String(providerAccount.id)
+        ? String(
+            providerAccount.id
+          )
         : null;
 
 
@@ -675,11 +695,18 @@ const register = async (
       `,
       [
         user.id,
+
         providerAccountNumber,
+
         providerAccountName,
-        providerBankName || 'Paystack',
+
+        providerBankName ||
+          'Paystack',
+
         providerBankCode,
+
         paystackCustomerCode,
+
         providerAccountId,
       ]
     );
@@ -697,7 +724,23 @@ const register = async (
 
 
     // ========================================================
-    // AUDIT
+    // CREATE AUTHENTICATION TOKEN
+    //
+    // IMPORTANT:
+    //
+    // The user needs a JWT to call:
+    //
+    // POST /api/auth/verify-phone-otp
+    //
+    // Phone verification does NOT mean KYC verification.
+    // ========================================================
+
+    const token =
+      createAccessToken(user);
+
+
+    // ========================================================
+    // AUDIT LOG
     // ========================================================
 
     await client.query(
@@ -722,9 +765,12 @@ const register = async (
 
         'Customer account created with real provider-issued dedicated account. Phone verification OTP generated. KYC remains unverified.',
 
-        req.ip || null,
+        req.ip ||
+          null,
 
-        req.get('user-agent') || null,
+        req.get(
+          'user-agent'
+        ) || null,
       ]
     );
 
@@ -733,22 +779,38 @@ const register = async (
     // COMMIT
     // ========================================================
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
 
     // ========================================================
     // RESPONSE
     // ========================================================
 
-    return res.status(201).json({
+    const response = {
 
       success: true,
 
       message:
         'Account created successfully. Please verify your phone number.',
 
+      // ------------------------------------------------------
+      // AUTHENTICATION TOKEN
+      // ------------------------------------------------------
+
+      token,
+
+      // ------------------------------------------------------
+      // PHONE VERIFICATION
+      // ------------------------------------------------------
+
       requires_phone_verification:
         true,
+
+      // ------------------------------------------------------
+      // USER
+      // ------------------------------------------------------
 
       user: {
 
@@ -770,6 +832,9 @@ const register = async (
         status:
           user.status,
 
+        phone_verified:
+          false,
+
         kyc_status:
           user.kyc_status,
 
@@ -786,7 +851,7 @@ const register = async (
           user.tier_3_verified,
 
         is_verified:
-          user.is_verified,
+          false,
 
         account_limit:
           user.account_limit,
@@ -803,6 +868,10 @@ const register = async (
         created_at:
           user.created_at,
       },
+
+      // ------------------------------------------------------
+      // REAL PROVIDER ACCOUNT
+      // ------------------------------------------------------
 
       account: {
 
@@ -836,22 +905,36 @@ const register = async (
         created_at:
           account.created_at,
       },
+    };
 
-      // ------------------------------------------------------
-      // DEVELOPMENT ONLY
-      // ------------------------------------------------------
 
-      development_otp:
-        process.env.NODE_ENV !==
-        'production'
-          ? otp
-          : undefined,
-    });
+    // ========================================================
+    // DEVELOPMENT ONLY
+    // ========================================================
+
+    if (
+      process.env.NODE_ENV !==
+      'production'
+    ) {
+      response.development_otp =
+        otp;
+    }
+
+
+    return res.status(201).json(
+      response
+    );
 
   } catch (error) {
 
+    // ========================================================
+    // ROLLBACK
+    // ========================================================
+
     try {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
     } catch (rollbackError) {
       console.error(
         'Rollback error:',
@@ -902,10 +985,15 @@ const register = async (
 //
 // This verifies ONLY the phone number.
 //
-// It does NOT verify identity/KYC.
+// It does NOT verify:
+//
+// - BVN
+// - Government ID
+// - Selfie
+// - Liveness
+// - KYC
 //
 // is_verified remains FALSE.
-//
 // ============================================================
 
 const verifyPhone = async (
@@ -1024,7 +1112,9 @@ const verifyPhone = async (
     // START TRANSACTION
     // ========================================================
 
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
 
     // ========================================================
@@ -1055,7 +1145,9 @@ const verifyPhone = async (
       otpResult.rows.length === 0
     ) {
 
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
 
       return res.status(400).json({
         success: false,
@@ -1078,7 +1170,9 @@ const verifyPhone = async (
       storedOtp.token_hash
     ) {
 
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
 
       return res.status(400).json({
         success: false,
@@ -1104,8 +1198,6 @@ const verifyPhone = async (
 
     // ========================================================
     // VERIFY PHONE ONLY
-    //
-    // DO NOT SET is_verified = true.
     // ========================================================
 
     await client.query(
@@ -1144,9 +1236,12 @@ const verifyPhone = async (
       [
         userId,
 
-        req.ip || null,
+        req.ip ||
+          null,
 
-        req.get('user-agent') || null,
+        req.get(
+          'user-agent'
+        ) || null,
       ]
     );
 
@@ -1155,7 +1250,9 @@ const verifyPhone = async (
     // COMMIT
     // ========================================================
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
 
     return res.status(200).json({
@@ -1168,9 +1265,12 @@ const verifyPhone = async (
       phone_verified:
         true,
 
-      // IMPORTANT:
-      // This is intentionally FALSE unless
-      // actual KYC verification has been completed.
+      // ------------------------------------------------------
+      // IMPORTANT
+      //
+      // Phone verification does NOT make the user KYC verified.
+      // ------------------------------------------------------
+
       is_verified:
         user.is_verified === true,
     });
@@ -1178,7 +1278,9 @@ const verifyPhone = async (
   } catch (error) {
 
     try {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
     } catch (rollbackError) {
       console.error(
         'Rollback error:',
@@ -1288,7 +1390,7 @@ const resendPhoneOtp = async (
 
 
     // ========================================================
-    // RESEND COOLDOWN
+    // CHECK COOLDOWN
     // ========================================================
 
     const recentOtp =
@@ -1353,7 +1455,9 @@ const resendPhoneOtp = async (
     // TRANSACTION
     // ========================================================
 
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
 
     const otp =
@@ -1387,34 +1491,56 @@ const resendPhoneOtp = async (
       [
         userId,
 
-        req.ip || null,
+        req.ip ||
+          null,
 
-        req.get('user-agent') || null,
+        req.get(
+          'user-agent'
+        ) || null,
       ]
     );
 
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
 
-    return res.status(200).json({
+    const response = {
 
       success: true,
 
       message:
         'A new verification code has been generated.',
 
-      development_otp:
-        process.env.NODE_ENV !==
-        'production'
-          ? otp
-          : undefined,
-    });
+      expires_in:
+        OTP_EXPIRY_MINUTES * 60,
+    };
+
+
+    // ========================================================
+    // DEVELOPMENT ONLY
+    // ========================================================
+
+    if (
+      process.env.NODE_ENV !==
+      'production'
+    ) {
+      response.development_otp =
+        otp;
+    }
+
+
+    return res.status(200).json(
+      response
+    );
 
   } catch (error) {
 
     try {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
     } catch (rollbackError) {
       console.error(
         'Rollback error:',
@@ -1599,7 +1725,9 @@ const sendPhoneOtp = async (
     // TRANSACTION
     // ========================================================
 
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
 
     const otp =
@@ -1633,14 +1761,19 @@ const sendPhoneOtp = async (
       [
         userId,
 
-        req.ip || null,
+        req.ip ||
+          null,
 
-        req.get('user-agent') || null,
+        req.get(
+          'user-agent'
+        ) || null,
       ]
     );
 
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
 
     const response = {
@@ -1663,7 +1796,8 @@ const sendPhoneOtp = async (
       process.env.NODE_ENV !==
       'production'
     ) {
-      response.test_otp = otp;
+      response.test_otp =
+        otp;
     }
 
 
@@ -1674,7 +1808,9 @@ const sendPhoneOtp = async (
   } catch (error) {
 
     try {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
     } catch (rollbackError) {
       console.error(
         'Rollback error:',
@@ -1894,7 +2030,7 @@ const login = async (
         user.status,
 
       // ------------------------------------------------------
-      // PHONE VERIFICATION
+      // PHONE
       // ------------------------------------------------------
 
       phone_verified:
@@ -1924,6 +2060,7 @@ const login = async (
 
       // ------------------------------------------------------
       // IMPORTANT
+      //
       // is_verified is ONLY for actual KYC verification.
       // ------------------------------------------------------
 
