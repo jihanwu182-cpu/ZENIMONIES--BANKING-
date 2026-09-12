@@ -1609,368 +1609,160 @@ const sendPhoneOtpController = async (
 
 // ============================================================
 // LOGIN
-// POST /api/auth/login
 // ============================================================
-
-const login = async (
-  req,
-  res
-) => {
-
+const login = async (req, res) => {
   try {
-
     console.log('LOGIN: request received');
 
-    const {
-      email,
-      password,
-    } = req.body || {};
-
-
-    // ========================================================
-    // VALIDATION
-    // ========================================================
+    const { email, password } = req.body;
 
     if (!email || !password) {
-
-      console.log(
-        'LOGIN: email or password missing'
-      );
-
       return res.status(400).json({
         success: false,
-        message:
-          'Email and password are required',
+        message: 'Email and password are required',
       });
     }
 
+    const normalizedEmail = String(email).trim().toLowerCase();
 
-    const normalizedEmail =
-      String(email)
-        .trim()
-        .toLowerCase();
+    console.log('LOGIN: checking user');
 
-
-    console.log(
-      'LOGIN: looking up user'
+    const userResult = await pool.query(
+      `
+      SELECT
+        id,
+        full_name,
+        email,
+        phone,
+        password_hash,
+        role,
+        status,
+        kyc_status,
+        kyc_tier,
+        tier_3_method,
+        phone_verified,
+        is_verified,
+        account_limit,
+        daily_transfer_limit
+      FROM users
+      WHERE LOWER(email) = $1
+      LIMIT 1
+      `,
+      [normalizedEmail]
     );
 
+    console.log('LOGIN: user query completed');
 
-    // ========================================================
-    // FIND USER
-    // ========================================================
-
-    const userResult =
-      await pool.query(
-        `
-        SELECT
-          id,
-          full_name,
-          email,
-          phone,
-          password_hash,
-          role,
-          status,
-
-          kyc_status,
-          kyc_tier,
-
-          bvn_verified,
-          id_verified,
-          tier_3_verified,
-          tier_3_method,
-
-          is_verified,
-          phone_verified,
-
-          account_limit,
-          daily_transfer_limit,
-          daily_transfer_used,
-          daily_transfer_reset_at,
-
-          created_at,
-          updated_at
-
-        FROM users
-
-        WHERE LOWER(email) = $1
-
-        LIMIT 1
-        `,
-        [normalizedEmail]
-      );
-
-
-    console.log(
-      'LOGIN: user query completed'
-    );
-
-
-    if (
-      userResult.rows.length === 0
-    ) {
-
-      console.log(
-        'LOGIN: user not found'
-      );
-
+    if (userResult.rows.length === 0) {
       return res.status(401).json({
         success: false,
-        message:
-          'Invalid email or password',
+        message: 'Invalid email or password',
       });
     }
 
+    const user = userResult.rows[0];
 
-    const user =
-      userResult.rows[0];
+    console.log('LOGIN: user found');
 
-
-    // ========================================================
-    // ACCOUNT STATUS
-    // ========================================================
-
-    if (
-      user.status !==
-      'active'
-    ) {
-
-      console.log(
-        'LOGIN: account is not active'
-      );
-
+    if (user.status && user.status !== 'active') {
       return res.status(403).json({
         success: false,
-        message:
-          'Your account is not currently active',
+        message: 'Your account is not active',
       });
     }
 
+    console.log('LOGIN: checking password');
 
-    // ========================================================
-    // PASSWORD
-    // ========================================================
-
-    console.log(
-      'LOGIN: checking password'
+    const passwordMatches = await bcrypt.compare(
+      password,
+      user.password_hash
     );
-
-
-    const passwordMatches =
-      await bcrypt.compare(
-        String(password),
-        user.password_hash
-      );
-
 
     if (!passwordMatches) {
-
-      console.log(
-        'LOGIN: password does not match'
-      );
-
       return res.status(401).json({
         success: false,
-        message:
-          'Invalid email or password',
+        message: 'Invalid email or password',
       });
     }
 
+    console.log('LOGIN: password verified');
 
-    console.log(
-      'LOGIN: password verified'
+    console.log('LOGIN: creating token');
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: '24h',
+      }
     );
 
+    console.log('LOGIN: token created');
 
-    // ========================================================
-    // JWT
-    // ========================================================
+    console.log('LOGIN: loading accounts');
 
-    console.log(
-      'LOGIN: creating token'
+    const accountsResult = await pool.query(
+      `
+      SELECT
+        id,
+        user_id,
+        account_number,
+        account_type,
+        currency,
+        balance,
+        status,
+        created_at,
+        updated_at
+      FROM accounts
+      WHERE user_id = $1
+      ORDER BY created_at ASC
+      `,
+      [user.id]
     );
 
-
-    const token =
-      createAccessToken(user);
-
-
-    console.log(
-      'LOGIN: token created'
-    );
-
-
-    // ========================================================
-    // LOAD ACCOUNTS
-    // ========================================================
-
-    console.log(
-      'LOGIN: loading accounts'
-    );
-
-
-    const accountResult =
-      await pool.query(
-        `
-        SELECT
-          id,
-          account_number,
-          account_type,
-          currency,
-          balance,
-          status,
-          created_at,
-          updated_at
-
-        FROM accounts
-
-        WHERE user_id = $1
-
-        ORDER BY created_at ASC
-        `,
-        [user.id]
-      );
-
-
-    console.log(
-      'LOGIN: accounts loaded'
-    );
-
-
-    // ========================================================
-    // SAFE USER OBJECT
-    // ========================================================
+    console.log('LOGIN: accounts loaded');
 
     const safeUser = {
-
-      id:
-        user.id,
-
-      full_name:
-        user.full_name,
-
-      email:
-        user.email,
-
-      phone:
-        user.phone,
-
-      role:
-        user.role,
-
-      status:
-        user.status,
-
-      phone_verified:
-        user.phone_verified,
-
-      kyc_status:
-        user.kyc_status,
-
-      kyc_tier:
-        user.kyc_tier,
-
-      bvn_verified:
-        user.bvn_verified,
-
-      id_verified:
-        user.id_verified,
-
-      tier_3_verified:
-        user.tier_3_verified,
-
-      tier_3_method:
-        user.tier_3_method,
-
-      is_verified:
-        user.is_verified,
-
-      account_limit:
-        user.account_limit,
-
-      daily_transfer_limit:
-        user.daily_transfer_limit,
-
-      daily_transfer_used:
-        user.daily_transfer_used,
-
-      daily_transfer_reset_at:
-        user.daily_transfer_reset_at,
-
-      created_at:
-        user.created_at,
-
-      updated_at:
-        user.updated_at,
-
+      id: user.id,
+      full_name: user.full_name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      status: user.status,
+      kyc_status: user.kyc_status,
+      kyc_tier: user.kyc_tier,
+      tier_3_method: user.tier_3_method,
+      phone_verified: user.phone_verified,
+      is_verified: user.is_verified,
+      account_limit: user.account_limit,
+      daily_transfer_limit: user.daily_transfer_limit,
     };
 
-
-    // ========================================================
-    // SUCCESS
-    // ========================================================
-
-    console.log(
-      'LOGIN: successful'
-    );
-
+    console.log('LOGIN: successful');
 
     return res.status(200).json({
-
       success: true,
-
-      message:
-        'Login successful',
-
+      message: 'Login successful',
       token,
-
-      user:
-        safeUser,
-
-      accounts:
-        accountResult.rows,
-
+      user: safeUser,
+      accounts: accountsResult.rows,
     });
-
 
   } catch (error) {
-
-    // ========================================================
-    // SAFE ERROR LOGGING
-    // ========================================================
-
-    console.error(
-      'LOGIN FAILED'
-    );
-
-    console.error(
-      'Login error name:',
-      error?.name || 'Unknown'
-    );
-
-    console.error(
-      'Login error code:',
-      error?.code || 'No code'
-    );
-
-    console.error(
-      'Login error message:',
-      error?.message || 'Unknown error'
-    );
-
+    console.error('LOGIN FAILED');
+    console.error('Login error name:', error?.name);
+    console.error('Login error code:', error?.code);
+    console.error('Login error message:', error?.message);
 
     return res.status(500).json({
-
       success: false,
-
-      message:
-        'Login service error',
-
-      error_code:
-        error?.code || 'LOGIN_ERROR',
-
+      message: 'LOGIN_DATABASE_OR_SERVER_ERROR',
+      error_code: error?.code || 'UNKNOWN_ERROR',
+      error_detail: error?.message || 'Unknown server error',
     });
-
   }
 };
 
