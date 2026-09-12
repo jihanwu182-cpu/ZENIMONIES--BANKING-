@@ -28,10 +28,6 @@ const generateReference = () => {
 //
 // VERIFIED TIER 3
 //     No account balance limit
-//
-// IMPORTANT:
-// These limits are enforced by the backend.
-// The frontend cannot bypass them.
 // ============================================================
 
 const getAccountLimit = (
@@ -46,21 +42,21 @@ const getAccountLimit = (
     kycTier || 0
   );
 
-  // ----------------------------------------------------------
-  // ONLY APPROVED/VERIFIED KYC CAN RECEIVE A HIGHER LIMIT
-  // ----------------------------------------------------------
-
   const isVerified =
     status === 'verified' ||
     status === 'approved' ||
     status === 'completed';
+
+  // ----------------------------------------------------------
+  // UNVERIFIED USERS
+  // ----------------------------------------------------------
 
   if (!isVerified) {
     return 50000;
   }
 
   // ----------------------------------------------------------
-  // TIER 3
+  // VERIFIED TIER 3
   // ----------------------------------------------------------
 
   if (tier >= 3) {
@@ -68,7 +64,7 @@ const getAccountLimit = (
   }
 
   // ----------------------------------------------------------
-  // TIER 2
+  // VERIFIED TIER 2
   // ----------------------------------------------------------
 
   if (tier === 2) {
@@ -76,7 +72,7 @@ const getAccountLimit = (
   }
 
   // ----------------------------------------------------------
-  // TIER 1
+  // VERIFIED TIER 1
   // ----------------------------------------------------------
 
   if (tier === 1) {
@@ -93,6 +89,7 @@ const getAccountLimit = (
 
 // ============================================================
 // GET DEPOSIT ACCOUNT
+// GET /api/deposits/account
 // ============================================================
 
 const getDepositAccount = async (
@@ -119,18 +116,21 @@ const getDepositAccount = async (
         updated_at
       FROM deposit_accounts
       WHERE user_id = $1
+        AND status = 'active'
       ORDER BY created_at DESC
       LIMIT 1
       `,
       [userId]
     );
 
-    if (result.rows.length === 0) {
+    if (
+      result.rows.length === 0
+    ) {
       return res.status(200).json({
         success: true,
         active: false,
         message:
-          'Deposit account is not activated yet.',
+          'Dedicated bank deposit account is not activated yet.',
         deposit_account: null,
       });
     }
@@ -139,11 +139,13 @@ const getDepositAccount = async (
       success: true,
       active: true,
       message:
-        'Deposit account found.',
+        'Dedicated bank deposit account found.',
       deposit_account:
         result.rows[0],
     });
+
   } catch (error) {
+
     console.error(
       'GET DEPOSIT ACCOUNT ERROR:',
       error
@@ -152,7 +154,7 @@ const getDepositAccount = async (
     return res.status(500).json({
       success: false,
       message:
-        'Unable to retrieve deposit account',
+        'Unable to retrieve deposit account.',
       error_code:
         error?.code || null,
     });
@@ -162,49 +164,62 @@ const getDepositAccount = async (
 
 // ============================================================
 // CREATE DEPOSIT
+// POST /api/deposits
 // ============================================================
 //
 // IMPORTANT:
 //
 // This endpoint creates a PENDING deposit.
 //
-// It does NOT directly increase the account balance.
+// It does NOT increase the account balance.
 //
-// The actual balance must only be increased after the
-// payment provider confirms that the payment was successful.
-//
-// The same account-limit check must also be performed again
-// inside the payment-provider webhook/crediting controller.
+// The balance must only be increased after a trusted payment
+// provider confirms the payment.
 // ============================================================
 
 const createDeposit = async (
   req,
   res
 ) => {
+
   const client =
     await pool.connect();
 
   try {
-    const userId = req.user.id;
+
+    const userId =
+      req.user.id;
+
+    // ========================================================
+    // ACCEPT payment_method
+    //
+    // We also accept "method" as a backwards-compatible
+    // fallback.
+    // ========================================================
 
     const {
       amount,
+      payment_method,
       method,
     } = req.body || {};
 
-    // --------------------------------------------------------
+    const selectedMethod =
+      payment_method ||
+      method;
+
+    // ========================================================
     // VALIDATE REQUEST
-    // --------------------------------------------------------
+    // ========================================================
 
     if (
       amount === undefined ||
       amount === null ||
-      !method
+      !selectedMethod
     ) {
       return res.status(400).json({
         success: false,
         message:
-          'Amount and payment method are required',
+          'Amount and payment method are required.',
       });
     }
 
@@ -220,50 +235,56 @@ const createDeposit = async (
       return res.status(400).json({
         success: false,
         message:
-          'Deposit amount must be greater than zero',
+          'Deposit amount must be greater than zero.',
       });
     }
 
+    // ========================================================
+    // MAXIMUM SINGLE REQUEST
+    // ========================================================
+
     if (
-      depositAmount > 100000000
+      depositAmount > 5000000
     ) {
       return res.status(400).json({
         success: false,
         message:
-          'Deposit amount is too large',
+          'Deposit amount cannot exceed ₦5,000,000 per request.',
       });
     }
 
+    // ========================================================
+    // ALLOWED PAYMENT METHODS
+    // ========================================================
+
     const allowedMethods = [
-      'card',
       'bank_transfer',
+      'paystack',
     ];
 
     if (
       !allowedMethods.includes(
-        method
+        selectedMethod
       )
     ) {
       return res.status(400).json({
         success: false,
         message:
-          'Invalid payment method',
+          'Invalid payment method. Please select Bank Transfer or Paystack.',
       });
     }
 
-    // --------------------------------------------------------
+    // ========================================================
     // START TRANSACTION
-    // --------------------------------------------------------
+    // ========================================================
 
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
-    // --------------------------------------------------------
-    // GET USER KYC STATUS
-    // --------------------------------------------------------
-    //
-    // We lock the user row so the KYC status cannot change
-    // halfway through this operation.
-    // --------------------------------------------------------
+    // ========================================================
+    // LOCK USER
+    // ========================================================
 
     const userResult =
       await client.query(
@@ -283,6 +304,7 @@ const createDeposit = async (
     if (
       userResult.rows.length === 0
     ) {
+
       await client.query(
         'ROLLBACK'
       );
@@ -290,16 +312,16 @@ const createDeposit = async (
       return res.status(404).json({
         success: false,
         message:
-          'User not found',
+          'User not found.',
       });
     }
 
     const user =
       userResult.rows[0];
 
-    // --------------------------------------------------------
-    // GET ACTIVE ACCOUNT
-    // --------------------------------------------------------
+    // ========================================================
+    // GET AND LOCK ACCOUNT
+    // ========================================================
 
     const accountResult =
       await client.query(
@@ -323,6 +345,7 @@ const createDeposit = async (
     if (
       accountResult.rows.length === 0
     ) {
+
       await client.query(
         'ROLLBACK'
       );
@@ -330,25 +353,25 @@ const createDeposit = async (
       return res.status(404).json({
         success: false,
         message:
-          'Active account not found',
+          'Active Zenimonies account not found.',
       });
     }
 
     const account =
       accountResult.rows[0];
 
-    // --------------------------------------------------------
+    // ========================================================
     // CURRENT BALANCE
-    // --------------------------------------------------------
+    // ========================================================
 
     const currentBalance =
       Number(
         account.balance || 0
       );
 
-    // --------------------------------------------------------
-    // DETERMINE ACCOUNT LIMIT
-    // --------------------------------------------------------
+    // ========================================================
+    // ACCOUNT LIMIT
+    // ========================================================
 
     const accountLimit =
       getAccountLimit(
@@ -356,46 +379,54 @@ const createDeposit = async (
         user.kyc_tier
       );
 
-    // --------------------------------------------------------
-    // CHECK CURRENT BALANCE
-    // --------------------------------------------------------
+    // ========================================================
+    // CURRENT BALANCE ALREADY AT LIMIT
+    // ========================================================
 
     if (
       accountLimit !== null &&
       currentBalance >=
         accountLimit
     ) {
+
       await client.query(
         'ROLLBACK'
       );
 
       return res.status(403).json({
         success: false,
+
         code:
           'ACCOUNT_BALANCE_LIMIT_REACHED',
+
         message:
           `Your current account balance has reached the maximum allowed limit of ₦${accountLimit.toLocaleString()}.`,
+
         kyc_status:
           user.kyc_status ||
-          'not_verified',
+          'pending',
+
         kyc_tier:
           Number(
             user.kyc_tier || 0
           ),
+
         current_balance:
           currentBalance,
+
         account_limit:
           accountLimit,
       });
     }
 
-    // --------------------------------------------------------
-    // CHECK WHETHER THIS DEPOSIT WOULD EXCEED THE LIMIT
-    // --------------------------------------------------------
+    // ========================================================
+    // PROJECTED BALANCE
+    // ========================================================
 
     if (
       accountLimit !== null
     ) {
+
       const projectedBalance =
         currentBalance +
         depositAmount;
@@ -404,6 +435,7 @@ const createDeposit = async (
         projectedBalance >
         accountLimit
       ) {
+
         const remaining =
           Math.max(
             accountLimit -
@@ -417,6 +449,7 @@ const createDeposit = async (
 
         return res.status(403).json({
           success: false,
+
           code:
             'ACCOUNT_BALANCE_LIMIT_EXCEEDED',
 
@@ -425,7 +458,7 @@ const createDeposit = async (
 
           kyc_status:
             user.kyc_status ||
-            'not_verified',
+            'pending',
 
           kyc_tier:
             Number(
@@ -444,23 +477,16 @@ const createDeposit = async (
       }
     }
 
-    // --------------------------------------------------------
-    // GENERATE UNIQUE REFERENCE
-    // --------------------------------------------------------
+    // ========================================================
+    // GENERATE REFERENCE
+    // ========================================================
 
     const reference =
       generateReference();
 
-    // --------------------------------------------------------
+    // ========================================================
     // CREATE PENDING DEPOSIT
-    // --------------------------------------------------------
-    //
-    // IMPORTANT:
-    //
-    // Balance is NOT increased here.
-    //
-    // Payment provider confirmation is required first.
-    // --------------------------------------------------------
+    // ========================================================
 
     const depositResult =
       await client.query(
@@ -496,15 +522,16 @@ const createDeposit = async (
           depositAmount,
           account.currency,
           reference,
-          method,
+          selectedMethod,
         ]
       );
 
-    // --------------------------------------------------------
+    // ========================================================
     // AUDIT LOG
-    // --------------------------------------------------------
+    // ========================================================
 
     try {
+
       await client.query(
         `
         INSERT INTO audit_logs (
@@ -520,29 +547,30 @@ const createDeposit = async (
         `,
         [
           userId,
-          `Deposit request ${reference} created for ${depositAmount} ${account.currency}`,
+
+          `Deposit request ${reference} created for ${depositAmount} ${account.currency}. Payment method: ${selectedMethod}. Balance not credited until provider confirmation.`,
         ]
       );
+
     } catch (auditError) {
-      // Do not allow an optional audit-log failure to
-      // prevent the deposit request from being created.
+
       console.error(
         'Deposit audit log error:',
         auditError
       );
     }
 
-    // --------------------------------------------------------
+    // ========================================================
     // COMMIT
-    // --------------------------------------------------------
+    // ========================================================
 
     await client.query(
       'COMMIT'
     );
 
-    // --------------------------------------------------------
-    // RESPONSE
-    // --------------------------------------------------------
+    // ========================================================
+    // REMAINING LIMIT
+    // ========================================================
 
     const remainingLimit =
       accountLimit === null
@@ -554,7 +582,12 @@ const createDeposit = async (
             0
           );
 
+    // ========================================================
+    // RESPONSE
+    // ========================================================
+
     return res.status(201).json({
+
       success: true,
 
       message:
@@ -564,6 +597,7 @@ const createDeposit = async (
         depositResult.rows[0],
 
       account: {
+
         current_balance:
           currentBalance,
 
@@ -575,7 +609,7 @@ const createDeposit = async (
 
         kyc_status:
           user.kyc_status ||
-          'not_verified',
+          'pending',
 
         kyc_tier:
           Number(
@@ -583,18 +617,23 @@ const createDeposit = async (
           ),
       },
     });
+
   } catch (error) {
-    // --------------------------------------------------------
+
+    // ========================================================
     // ROLLBACK
-    // --------------------------------------------------------
+    // ========================================================
 
     try {
+
       await client.query(
         'ROLLBACK'
       );
+
     } catch (
       rollbackError
     ) {
+
       console.error(
         'Deposit rollback error:',
         rollbackError
@@ -609,12 +648,78 @@ const createDeposit = async (
     return res.status(500).json({
       success: false,
       message:
-        'Unable to create deposit request',
+        'Unable to create deposit request.',
       error_code:
         error?.code || null,
     });
+
   } finally {
+
     client.release();
+
+  }
+};
+
+
+// ============================================================
+// GET DEPOSIT HISTORY
+// GET /api/deposits
+// ============================================================
+
+const getDeposits = async (
+  req,
+  res
+) => {
+
+  try {
+
+    const userId =
+      req.user.id;
+
+    const result =
+      await pool.query(
+        `
+        SELECT
+          d.id,
+          d.account_id,
+          d.amount,
+          d.currency,
+          d.reference,
+          d.payment_method,
+          d.status,
+          d.created_at
+        FROM deposits d
+        INNER JOIN accounts a
+          ON a.id = d.account_id
+        WHERE a.user_id = $1
+        ORDER BY d.created_at DESC
+        LIMIT 100
+        `,
+        [userId]
+      );
+
+    return res.status(200).json({
+
+      success: true,
+
+      deposits:
+        result.rows,
+    });
+
+  } catch (error) {
+
+    console.error(
+      'GET DEPOSITS ERROR:',
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Unable to retrieve deposit history.',
+      error_code:
+        error?.code || null,
+    });
   }
 };
 
@@ -626,5 +731,6 @@ const createDeposit = async (
 module.exports = {
   getDepositAccount,
   createDeposit,
+  getDeposits,
   getAccountLimit,
 };
