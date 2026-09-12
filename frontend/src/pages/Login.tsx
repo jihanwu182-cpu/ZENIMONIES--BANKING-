@@ -48,11 +48,15 @@ function getServerError(
     const response = axiosErr.response;
 
     if (response?.data) {
-      const data = response.data;
+  const data = response.data;
 
-      if (data.message) {
-        return data.message;
-      }
+  if (data.message && data.error_detail) {
+    return `${data.message}: ${data.error_detail}`;
+  }
+
+  if (data.message) {
+    return data.message;
+  }
 
       return JSON.stringify(data);
     }
@@ -146,12 +150,14 @@ const Login: React.FC = () => {
       // =====================================================
 
       if (data.success === false) {
-        setError(
-          data.message ||
-            'Login was rejected by the server.'
-        );
-        return;
-      }
+  setError(
+    data.error_detail
+      ? `${data.message || 'Login failed'}: ${data.error_detail}`
+      : data.message ||
+        'Login was rejected by the server.'
+  );
+  return;
+}
 
       // =====================================================
       // GET TOKEN
