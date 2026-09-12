@@ -21,7 +21,7 @@ const bankRoutes = require('./routes/bankRoutes');
 const virtualCardRoutes = require('./routes/virtualCard');
 const adminRoutes = require('./routes/adminRoutes');
 
-// IMPORTANT: KYC ROUTES
+// KYC
 const kycRoutes = require('./routes/kycRoutes');
 
 // ============================================================
@@ -41,7 +41,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ============================================================
-// MIDDLEWARE
+// CORS
 // ============================================================
 
 app.use(
@@ -56,9 +56,9 @@ app.use(
 // ============================================================
 //
 // IMPORTANT:
-// Paystack signature verification requires the raw body.
+// Paystack signature verification requires the raw request body.
 //
-// This MUST come before express.json().
+// Therefore this route MUST appear before express.json().
 // ============================================================
 
 app.post(
@@ -70,7 +70,7 @@ app.post(
 );
 
 // ============================================================
-// NORMAL JSON BODY PARSING
+// NORMAL BODY PARSING
 // ============================================================
 
 app.use(express.json());
@@ -128,7 +128,7 @@ app.use(
 );
 
 // ============================================================
-// KYC VERIFICATION
+// KYC
 // ============================================================
 //
 // GET  /api/kyc/status
@@ -136,10 +136,7 @@ app.use(
 // POST /api/kyc/tier-2
 // POST /api/kyc/tier-3
 //
-// IMPORTANT:
-// KYC is NOT automatically marked verified.
-// Verification must come from the actual verification
-// process/provider or authorized admin approval.
+// KYC submissions remain pending until actual verification.
 // ============================================================
 
 app.use(
@@ -148,7 +145,7 @@ app.use(
 );
 
 // ============================================================
-// ADMIN DASHBOARD
+// ADMIN
 // ============================================================
 
 app.use(
@@ -157,7 +154,7 @@ app.use(
 );
 
 // ============================================================
-// ROOT ROUTE
+// ROOT
 // ============================================================
 
 app.get('/', (req, res) => {
@@ -181,7 +178,7 @@ app.get('/api', (req, res) => {
 });
 
 // ============================================================
-// HEALTH CHECK
+// GENERAL HEALTH CHECK
 // ============================================================
 
 app.get('/health.json', (req, res) => {
@@ -195,7 +192,7 @@ app.get('/health.json', (req, res) => {
 });
 
 // ============================================================
-// GENERAL API HEALTH
+// API HEALTH
 // ============================================================
 
 app.get('/api/health', (req, res) => {
@@ -218,7 +215,7 @@ app.get(
           'SELECT NOW()'
         );
 
-      res.json({
+      return res.status(200).json({
         success: true,
         status: 'healthy',
         database: 'connected',
@@ -231,10 +228,70 @@ app.get(
         error
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         status: 'unhealthy',
         database: 'disconnected',
+      });
+    }
+  }
+);
+
+// ============================================================
+// DOJAH CONFIGURATION HEALTH CHECK
+// ============================================================
+//
+// This endpoint ONLY checks whether the Dojah credentials
+// exist in the server environment.
+//
+// It does NOT perform BVN verification.
+// It does NOT perform ID verification.
+// It does NOT perform facial/liveness verification.
+//
+// It also does NOT return the secret key.
+// ============================================================
+
+app.get(
+  '/api/health/dojah',
+  (req, res) => {
+    try {
+      const {
+        testDojahConnection,
+      } = require(
+        './services/dojahService'
+      );
+
+      const result =
+        testDojahConnection();
+
+      if (!result.success) {
+        return res.status(500).json({
+          success: false,
+          message:
+            'Dojah configuration is incomplete.',
+          dojah: result,
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message:
+          'Dojah configuration is loaded.',
+        dojah: {
+          configured: true,
+          baseUrl: result.baseUrl,
+        },
+      });
+    } catch (error) {
+      console.error(
+        'Dojah configuration test failed:',
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'Unable to test Dojah configuration.',
       });
     }
   }
@@ -246,12 +303,10 @@ app.get(
 
 app.use(
   (req, res) => {
-    res.status(404).json({
+    return res.status(404).json({
       success: false,
-      message:
-        'Route not found',
-      path:
-        req.originalUrl,
+      message: 'Route not found',
+      path: req.originalUrl,
     });
   }
 );
@@ -276,7 +331,7 @@ app.use(
       return next(err);
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message:
         'Internal server error',
@@ -290,7 +345,15 @@ app.use(
 
 const startServer = async () => {
   try {
+    // --------------------------------------------------------
+    // DATABASE
+    // --------------------------------------------------------
+
     await initializeDatabase();
+
+    // --------------------------------------------------------
+    // SERVER
+    // --------------------------------------------------------
 
     app.listen(
       PORT,
@@ -312,6 +375,11 @@ const startServer = async () => {
         console.log(
           'Database Health:',
           '/api/health/database'
+        );
+
+        console.log(
+          'Dojah Health:',
+          '/api/health/dojah'
         );
 
         console.log(
