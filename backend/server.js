@@ -421,6 +421,97 @@ const startServer = async () => {
     console.log(
       'Database migration completed: profile fields are available on users'
     );
+    
+    // --------------------------------------------------------
+    // LEGAL NAME VERIFICATION LOCK
+   // --------------------------------------------------------
+  // LEGAL NAME VERIFICATION LOCK
+  // --------------------------------------------------------
+ //
+ // The first successful verification permanently locks
+ // the user's legal name.
+//
+
+await pool.query(`
+  CREATE OR REPLACE FUNCTION lock_legal_name_after_verification()
+  RETURNS TRIGGER AS $$
+  BEGIN
+    IF
+      OLD.is_verified = false
+      AND NEW.is_verified = true
+    THEN
+      NEW.legal_name_locked = true;
+    END IF;
+
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql;
+
+  DROP TRIGGER IF EXISTS users_legal_name_verification_lock
+  ON users;
+
+  CREATE TRIGGER users_legal_name_verification_lock
+  BEFORE UPDATE OF is_verified
+  ON users
+  FOR EACH ROW
+  EXECUTE FUNCTION lock_legal_name_after_verification();
+`);
+
+await pool.query(`
+  UPDATE users
+  SET
+    legal_name_locked = true,
+    updated_at = CURRENT_TIMESTAMP
+  WHERE is_verified = true
+    AND legal_name_locked = false;
+`);
+
+console.log(
+  'Database migration completed: legal name verification lock is active'
+);
+    // --------------------------------------------------------
+   //
+   // The first successful verification permanently locks
+  // the user's legal name.
+  //
+
+await pool.query(`
+  CREATE OR REPLACE FUNCTION lock_legal_name_after_verification()
+  RETURNS TRIGGER AS $$
+  BEGIN
+    IF
+      OLD.is_verified = false
+      AND NEW.is_verified = true
+    THEN
+      NEW.legal_name_locked = true;
+    END IF;
+
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql;
+
+  DROP TRIGGER IF EXISTS users_legal_name_verification_lock
+  ON users;
+
+  CREATE TRIGGER users_legal_name_verification_lock
+  BEFORE UPDATE OF is_verified
+  ON users
+  FOR EACH ROW
+  EXECUTE FUNCTION lock_legal_name_after_verification();
+`);
+
+await pool.query(`
+  UPDATE users
+  SET
+    legal_name_locked = true,
+    updated_at = CURRENT_TIMESTAMP
+  WHERE is_verified = true
+    AND legal_name_locked = false;
+`);
+
+console.log(
+  'Database migration completed: legal name verification lock is active'
+);
 
     // --------------------------------------------------------
     // SERVER
