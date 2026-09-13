@@ -20,7 +20,7 @@ const depositRoutes = require('./routes/deposit');
 const bankRoutes = require('./routes/bankRoutes');
 const virtualCardRoutes = require('./routes/virtualCard');
 const adminRoutes = require('./routes/adminRoutes');
-const kycRoutes = require('./routes/kyc');
+const kycRoutes = require('./routes/kycRoutes');
 
 // ============================================================
 // PAYSTACK
