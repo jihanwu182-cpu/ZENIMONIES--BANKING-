@@ -509,6 +509,11 @@ const startServer = async () => {
         );
 
         console.log(
+         'Profile:',
+         '/api/profile'
+        );
+
+        console.log(
           'Admin:',
           '/api/admin'
         );
