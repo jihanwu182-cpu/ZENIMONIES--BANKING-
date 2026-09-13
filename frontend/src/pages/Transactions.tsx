@@ -1,5 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import {
+  Box,
+  Card,
+  CardContent,
+  CircularProgress,
+  Container,
+  Divider,
+  IconButton,
+  Stack,
+  Typography,
+  Alert,
+  Chip,
+} from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 const API_URL = 'https://zenimonies-banking.onrender.com';
@@ -8,13 +24,16 @@ interface Transaction {
   id: string | number;
   type: string;
   amount: number;
-  status: string;
-  description?: string;
-  created_at?: string;
+  currency?: string;
   reference?: string;
+  description?: string;
+  status: string;
+  created_at?: string;
 }
 
 const Transactions: React.FC = () => {
+  const navigate = useNavigate();
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,10 +44,18 @@ const Transactions: React.FC = () => {
         setLoading(true);
         setError('');
 
-        const token = localStorage.getItem('zenimonies_token');
+        const token =
+          localStorage.getItem('zenimonies_token') ||
+          localStorage.getItem('token') ||
+          localStorage.getItem('access_token');
+
+        if (!token) {
+          setError('Please log in to view your transaction history.');
+          return;
+        }
 
         const response = await axios.get(
-          `${API_URL}/api/transactions`,
+          `${API_URL}/api/account/transactions`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -41,13 +68,15 @@ const Transactions: React.FC = () => {
         } else {
           setError(
             response.data?.message ||
-              'Unable to load transactions.'
+              'Unable to load transaction history.'
           );
         }
       } catch (err: any) {
+        console.error('Transaction history error:', err);
+
         setError(
           err?.response?.data?.message ||
-            'Transaction history is not connected yet.'
+            'Unable to load transaction history.'
         );
       } finally {
         setLoading(false);
@@ -57,259 +86,283 @@ const Transactions: React.FC = () => {
     loadTransactions();
   }, []);
 
-  const formatAmount = (amount: number) => {
+  const formatAmount = (amount: number, currency?: string) => {
+    const value = Number(amount || 0);
+
     return new Intl.NumberFormat('en-NG', {
       style: 'currency',
-      currency: 'NGN',
+      currency: currency || 'NGN',
       minimumFractionDigits: 2,
-    }).format(Number(amount || 0));
+    }).format(value);
   };
 
   const formatDate = (date?: string) => {
-    if (!date) {
-      return 'Date unavailable';
-    }
+    if (!date) return '';
 
     const parsedDate = new Date(date);
 
     if (Number.isNaN(parsedDate.getTime())) {
-      return 'Date unavailable';
+      return '';
     }
 
-    return parsedDate.toLocaleString('en-NG');
+    return parsedDate.toLocaleString('en-NG', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
   };
 
-  const getStatusStyle = (status: string) => {
-    const normalized = status.toLowerCase();
+  const isCredit = (type: string) => {
+    const value = type.toLowerCase();
+
+    return (
+      value.includes('deposit') ||
+      value.includes('credit') ||
+      value.includes('received')
+    );
+  };
+
+  const getStatusColor = (
+    status: string
+  ): 'success' | 'warning' | 'error' | 'default' => {
+    const value = status.toLowerCase();
 
     if (
-      normalized === 'successful' ||
-      normalized === 'completed' ||
-      normalized === 'success'
+      value === 'completed' ||
+      value === 'success' ||
+      value === 'successful'
     ) {
-      return {
-        background: '#ecfdf3',
-        color: '#027a48',
-      };
+      return 'success';
     }
 
     if (
-      normalized === 'pending' ||
-      normalized === 'processing'
+      value === 'pending' ||
+      value === 'processing'
     ) {
-      return {
-        background: '#fffaeb',
-        color: '#b54708',
-      };
+      return 'warning';
     }
 
-    return {
-      background: '#fee4e2',
-      color: '#b42318',
-    };
+    if (
+      value === 'failed' ||
+      value === 'cancelled' ||
+      value === 'canceled'
+    ) {
+      return 'error';
+    }
+
+    return 'default';
   };
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         minHeight: '100vh',
-        background: '#f5f7fb',
-        padding: '24px',
+        background: '#f5f7f6',
+        pb: 5,
       }}
     >
-      <div
-        style={{
-          maxWidth: '1000px',
-          margin: '0 auto',
+      {/* Header */}
+      <Box
+        sx={{
+          background: '#0b7a4b',
+          color: '#fff',
+          px: 2,
+          py: 2,
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
         }}
       >
-        <Link
-          to="/"
-          style={{
-            display: 'inline-block',
-            marginBottom: '20px',
-            color: '#0b5cff',
-            fontWeight: 600,
-          }}
-        >
-          ← Back to Dashboard
-        </Link>
+        <Container maxWidth="sm">
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+          >
+            <IconButton
+              onClick={() => navigate(-1)}
+              sx={{ color: '#fff' }}
+            >
+              <ArrowBackIcon />
+            </IconButton>
 
-        <div
-          style={{
-            background: '#ffffff',
-            borderRadius: '18px',
-            padding: '30px',
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08)',
-          }}
-        >
-          <h1
-            style={{
-              marginTop: 0,
-              marginBottom: '8px',
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 700 }}
+            >
+              Transaction History
+            </Typography>
+          </Stack>
+        </Container>
+      </Box>
+
+      <Container
+        maxWidth="sm"
+        sx={{ mt: 3 }}
+      >
+        {loading ? (
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              py: 8,
             }}
           >
-            Transactions
-          </h1>
-
-          <p
-            style={{
-              color: '#667085',
-              marginBottom: '28px',
+            <CircularProgress sx={{ color: '#0b7a4b' }} />
+          </Box>
+        ) : error ? (
+          <Alert severity="error">
+            {error}
+          </Alert>
+        ) : transactions.length === 0 ? (
+          <Card
+            sx={{
+              borderRadius: 3,
+              boxShadow: '0 4px 18px rgba(0,0,0,0.06)',
             }}
           >
-            View your account activity and transaction history.
-          </p>
-
-          {error && (
-            <div
-              style={{
-                padding: '14px',
-                marginBottom: '20px',
-                borderRadius: '8px',
-                background: '#fee4e2',
-                color: '#b42318',
-              }}
-            >
-              {error}
-            </div>
-          )}
-
-          {loading ? (
-            <div
-              style={{
-                padding: '30px',
-                textAlign: 'center',
-                color: '#667085',
-              }}
-            >
-              Loading transactions...
-            </div>
-          ) : transactions.length === 0 ? (
-            <div
-              style={{
-                padding: '40px 20px',
-                textAlign: 'center',
-                border: '1px dashed #d0d5dd',
-                borderRadius: '12px',
-                color: '#667085',
-              }}
-            >
-              <h3
-                style={{
-                  marginTop: 0,
-                  color: '#172033',
-                }}
+            <CardContent sx={{ py: 6 }}>
+              <Typography
+                align="center"
+                variant="h6"
+                sx={{ fontWeight: 700 }}
               >
                 No transactions yet
-              </h3>
+              </Typography>
 
-              <p style={{ marginBottom: 0 }}>
-                Your deposits, withdrawals, transfers and
-                payments will appear here.
-              </p>
-            </div>
-          ) : (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-              }}
-            >
-              {transactions.map((transaction) => {
-                const statusStyle = getStatusStyle(
-                  transaction.status
-                );
+              <Typography
+                align="center"
+                color="text.secondary"
+                sx={{ mt: 1 }}
+              >
+                Your deposits, transfers and other
+                account activity will appear here.
+              </Typography>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card
+            sx={{
+              borderRadius: 3,
+              overflow: 'hidden',
+              boxShadow: '0 4px 18px rgba(0,0,0,0.06)',
+            }}
+          >
+            <CardContent sx={{ p: 0 }}>
+              {transactions.map((transaction, index) => {
+                const credit = isCredit(transaction.type);
 
                 return (
-                  <div
-                    key={transaction.id}
-                    style={{
-                      border: '1px solid #eaecf0',
-                      borderRadius: '12px',
-                      padding: '18px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        gap: '16px',
-                        flexWrap: 'wrap',
-                      }}
+                  <Box key={transaction.id}>
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      spacing={2}
+                      sx={{ p: 2 }}
                     >
-                      <div>
-                        <strong
-                          style={{
-                            display: 'block',
-                            marginBottom: '6px',
+                      <Box
+                        sx={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: credit
+                            ? '#e8f7ef'
+                            : '#fff0f0',
+                        }}
+                      >
+                        {credit ? (
+                          <ArrowDownwardIcon
+                            sx={{ color: '#0b7a4b' }}
+                          />
+                        ) : (
+                          <ArrowUpwardIcon
+                            sx={{ color: '#d32f2f' }}
+                          />
+                        )}
+                      </Box>
+
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography
+                          sx={{
+                            fontWeight: 700,
+                            textTransform: 'capitalize',
                           }}
                         >
                           {transaction.description ||
                             transaction.type ||
                             'Transaction'}
-                        </strong>
+                        </Typography>
 
-                        <span
-                          style={{
-                            color: '#667085',
-                            fontSize: '13px',
-                          }}
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 0.3 }}
                         >
-                          {formatDate(transaction.created_at)}
-                        </span>
+                          {formatDate(
+                            transaction.created_at
+                          )}
+                        </Typography>
 
                         {transaction.reference && (
-                          <span
-                            style={{
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{
                               display: 'block',
-                              marginTop: '5px',
-                              color: '#667085',
-                              fontSize: '12px',
+                              mt: 0.5,
+                              wordBreak: 'break-all',
                             }}
                           >
                             Ref: {transaction.reference}
-                          </span>
+                          </Typography>
                         )}
-                      </div>
+                      </Box>
 
-                      <div
-                        style={{
-                          textAlign: 'right',
-                        }}
-                      >
-                        <strong
-                          style={{
-                            display: 'block',
-                            marginBottom: '8px',
+                      <Box sx={{ textAlign: 'right' }}>
+                        <Typography
+                          sx={{
+                            fontWeight: 800,
+                            color: credit
+                              ? '#0b7a4b'
+                              : '#d32f2f',
+                            whiteSpace: 'nowrap',
                           }}
                         >
-                          {formatAmount(transaction.amount)}
-                        </strong>
+                          {credit ? '+' : '-'}
+                          {formatAmount(
+                            transaction.amount,
+                            transaction.currency
+                          )}
+                        </Typography>
 
-                        <span
-                          style={{
-                            ...statusStyle,
-                            display: 'inline-block',
-                            padding: '5px 9px',
-                            borderRadius: '999px',
-                            fontSize: '12px',
-                            fontWeight: 600,
+                        <Chip
+                          label={transaction.status}
+                          color={getStatusColor(
+                            transaction.status
+                          )}
+                          size="small"
+                          sx={{
+                            mt: 0.7,
+                            textTransform: 'capitalize',
                           }}
-                        >
-                          {transaction.status}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                        />
+                      </Box>
+                    </Stack>
+
+                    {index <
+                      transactions.length - 1 && (
+                      <Divider />
+                    )}
+                  </Box>
                 );
               })}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+            </CardContent>
+          </Card>
+        )}
+      </Container>
+    </Box>
   );
 };
 
