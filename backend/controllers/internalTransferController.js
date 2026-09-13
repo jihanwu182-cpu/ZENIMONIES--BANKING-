@@ -39,8 +39,13 @@ const findUserByPhone = async (req, res) => {
     const cleanPhone = phone.replace(/\s+/g, '');
 
     /*
-     * Find the user AND their real active
-     * Zenimonies account number.
+     * Find the user by their REAL registered phone number.
+     *
+     * The internal account number is intentionally NOT
+     * returned to the frontend.
+     *
+     * The accounts table is still checked because the
+     * account record contains the user's balance/currency.
      */
 
     const result = await pool.query(
@@ -50,7 +55,7 @@ const findUserByPhone = async (req, res) => {
         u.phone,
         u.status,
         u.is_verified,
-        a.account_number,
+        a.id AS account_id,
         a.currency AS account_currency
        FROM users u
        LEFT JOIN accounts a
@@ -98,10 +103,13 @@ const findUserByPhone = async (req, res) => {
     }
 
     /*
-     * The recipient must have an active account.
+     * The recipient must have an active internal
+     * balance account.
+     *
+     * The account number itself is NOT exposed.
      */
 
-    if (!user.account_number) {
+    if (!user.account_id) {
       return res.status(400).json({
         success: false,
         message:
@@ -110,7 +118,8 @@ const findUserByPhone = async (req, res) => {
     }
 
     /*
-     * Return the REAL account number.
+     * Return ONLY the information required to identify
+     * the recipient.
      */
 
     return res.status(200).json({
@@ -120,7 +129,6 @@ const findUserByPhone = async (req, res) => {
         id: user.id,
         full_name: user.full_name,
         phone: user.phone,
-        account_number: user.account_number,
         currency:
           user.account_currency || 'NGN',
         is_verified: user.is_verified,
@@ -235,6 +243,11 @@ const transferToZenimoniesUser = async (
      * --------------------------------------------------------
      * FIND SENDER ACCOUNT
      * --------------------------------------------------------
+     *
+     * The internal account record is still used for the
+     * balance ledger.
+     *
+     * The account number is NOT used as an identifier.
      */
 
     const senderAccountResult =
@@ -242,7 +255,6 @@ const transferToZenimoniesUser = async (
         `SELECT
           id,
           user_id,
-          account_number,
           currency,
           balance,
           status
@@ -314,7 +326,7 @@ const transferToZenimoniesUser = async (
 
     /*
      * --------------------------------------------------------
-     * FIND RECIPIENT USER
+     * FIND RECIPIENT BY PHONE
      * --------------------------------------------------------
      */
 
@@ -384,8 +396,13 @@ const transferToZenimoniesUser = async (
 
     /*
      * --------------------------------------------------------
-     * FIND RECIPIENT ACCOUNT
+     * FIND RECIPIENT BALANCE ACCOUNT
      * --------------------------------------------------------
+     *
+     * We still need the internal accounts record because
+     * that is where the balance is stored.
+     *
+     * The account number is NOT used.
      */
 
     const recipientAccountResult =
@@ -393,7 +410,6 @@ const transferToZenimoniesUser = async (
         `SELECT
           id,
           user_id,
-          account_number,
           currency,
           balance,
           status
@@ -593,10 +609,11 @@ const transferToZenimoniesUser = async (
      * recipient_phone contains the ACTUAL phone number
      * used to identify the recipient.
      *
-     * recipient_account_number contains the ACTUAL
-     * Zenimonies account number belonging to that recipient.
+     * recipient_account_number is intentionally retained
+     * in the database for existing/historical compatibility.
      *
-     * These are intentionally stored separately.
+     * It is NOT returned to the frontend.
+     * It is NOT used to identify the recipient.
      */
 
     await client.query(
@@ -633,7 +650,11 @@ const transferToZenimoniesUser = async (
 
         recipientUser.full_name,
 
-        recipientAccount.account_number,
+        /*
+         * Kept only for existing database compatibility.
+         * This value is not exposed to the frontend.
+         */
+        null,
 
         recipientUser.phone,
 
@@ -702,8 +723,10 @@ const transferToZenimoniesUser = async (
      *
      * IMPORTANT:
      *
-     * The response contains both the REAL recipient
-     * phone number and the REAL Zenimonies account number.
+     * The recipient is represented by their REAL phone
+     * number.
+     *
+     * The internal account number is NOT returned.
      */
 
     return res.status(201).json({
@@ -720,9 +743,6 @@ const transferToZenimoniesUser = async (
 
         recipient_phone:
           recipientUser.phone,
-
-        recipient_account:
-          recipientAccount.account_number,
 
         recipient_bank:
           'Zenimonies',
