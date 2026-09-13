@@ -21,6 +21,7 @@ const bankRoutes = require('./routes/bankRoutes');
 const virtualCardRoutes = require('./routes/virtualCard');
 const adminRoutes = require('./routes/adminRoutes');
 const kycRoutes = require('./routes/kycRoutes');
+const profileRoutes = require('./routes/profile');
 
 // ============================================================
 // PAYSTACK
@@ -159,6 +160,15 @@ app.use(
 app.use(
   '/api/kyc',
   kycRoutes
+);
+
+// ============================================================
+// PROFILE
+// ============================================================
+
+app.use(
+  '/api/profile',
+  profileRoutes
 );
 
 // ============================================================
