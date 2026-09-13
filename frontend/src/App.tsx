@@ -27,6 +27,7 @@ import Bills from './pages/Bills.tsx';
 import Betting from './pages/Betting.tsx';
 import VirtualCard from './pages/VirtualCard.tsx';
 import Admin from './pages/AdminDashboard.tsx';
+import TransferConfirmation from './pages/TransferConfirmation.tsx';
 
 interface ServicePageProps {
   title: string;
