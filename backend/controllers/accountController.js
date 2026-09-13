@@ -28,10 +28,7 @@ const getAccountLimit = (kycStatus, kycTier) => {
   // ----------------------------------------------------------
   // NOT VERIFIED / PENDING / REJECTED
   // ----------------------------------------------------------
-  //
-  // Until KYC has actually been approved, the user remains
-  // under the ₦50,000 maximum balance.
-  //
+
   if (
     status !== 'verified' &&
     status !== 'approved' &&
@@ -163,7 +160,6 @@ const getAccount = async (req, res) => {
       account: {
         ...account,
 
-        // Keep balance numeric.
         balance,
 
         // KYC information
@@ -203,6 +199,31 @@ const getAccount = async (req, res) => {
 // ============================================================
 // GET TRANSACTIONS
 // ============================================================
+//
+// IMPORTANT:
+//
+// Transaction details are stored in two places:
+//
+// 1. transactions
+//    - amount
+//    - type
+//    - reference
+//    - status
+//    - balance information
+//
+// 2. bank_transfers
+//    - recipient_name
+//    - recipient_account_number
+//    - recipient_bank_name
+//    - transaction fee
+//
+// We join the two tables using:
+//     account_id + reference
+//
+// This allows the Transaction History page and
+// Transaction Receipt page to display the COMPLETE
+// recipient information.
+// ============================================================
 
 const getTransactions = async (req, res) => {
   try {
@@ -218,20 +239,84 @@ const getTransactions = async (req, res) => {
         t.reference,
         t.description,
         t.status,
-        t.created_at
+        t.created_at,
+
+        -- ----------------------------------------------------
+        -- BALANCE INFORMATION
+        -- ----------------------------------------------------
+
+        t.balance_before,
+        t.balance_after,
+
+        -- ----------------------------------------------------
+        -- RECIPIENT INFORMATION
+        -- ----------------------------------------------------
+
+        bt.recipient_name AS recipient_name,
+
+        bt.recipient_account_number AS recipient_account,
+
+        bt.recipient_bank_name AS recipient_bank,
+
+        -- ----------------------------------------------------
+        -- TRANSACTION FEE
+        -- ----------------------------------------------------
+
+        COALESCE(bt.fee, 0) AS transaction_fee
+
       FROM transactions t
+
       INNER JOIN accounts a
         ON a.id = t.account_id
+
+      LEFT JOIN bank_transfers bt
+        ON bt.account_id = t.account_id
+       AND bt.reference = t.reference
+
       WHERE a.user_id = $1
+
       ORDER BY t.created_at DESC
+
       LIMIT 100
       `,
       [userId]
     );
 
+    // --------------------------------------------------------
+    // NORMALIZE TRANSACTION DATA
+    // --------------------------------------------------------
+
+    const transactions = result.rows.map((transaction) => ({
+      ...transaction,
+
+      // PostgreSQL NUMERIC values can come back as strings.
+      amount: Number(transaction.amount || 0),
+
+      balance_before:
+        transaction.balance_before !== null &&
+        transaction.balance_before !== undefined
+          ? Number(transaction.balance_before)
+          : undefined,
+
+      balance_after:
+        transaction.balance_after !== null &&
+        transaction.balance_after !== undefined
+          ? Number(transaction.balance_after)
+          : undefined,
+
+      transaction_fee:
+        Number(transaction.transaction_fee || 0),
+
+      currency:
+        transaction.currency || 'NGN',
+
+      status:
+        transaction.status || 'completed',
+    }));
+
     return res.status(200).json({
       success: true,
-      transactions: result.rows,
+      transactions,
     });
   } catch (error) {
     console.error(
@@ -260,6 +345,10 @@ const getAccountLimits = async (req, res) => {
   try {
     const userId = req.user.id;
 
+    // --------------------------------------------------------
+    // GET USER KYC
+    // --------------------------------------------------------
+
     const result = await pool.query(
       `
       SELECT
@@ -281,6 +370,10 @@ const getAccountLimits = async (req, res) => {
 
     const user = result.rows[0];
 
+    // --------------------------------------------------------
+    // GET ACCOUNT BALANCE
+    // --------------------------------------------------------
+
     const accountResult = await pool.query(
       `
       SELECT
@@ -301,6 +394,10 @@ const getAccountLimits = async (req, res) => {
           )
         : 0;
 
+    // --------------------------------------------------------
+    // CALCULATE LIMIT
+    // --------------------------------------------------------
+
     const accountLimit = getAccountLimit(
       user.kyc_status,
       user.kyc_tier
@@ -313,6 +410,10 @@ const getAccountLimits = async (req, res) => {
             accountLimit - balance,
             0
           );
+
+    // --------------------------------------------------------
+    // RETURN LIMIT INFORMATION
+    // --------------------------------------------------------
 
     return res.status(200).json({
       success: true,
