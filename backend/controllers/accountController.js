@@ -213,6 +213,7 @@ const getAccount = async (req, res) => {
 //
 // 2. bank_transfers
 //    - recipient_name
+//    - recipient_phone
 //    - recipient_account_number
 //    - recipient_bank_name
 //    - transaction fee
@@ -253,6 +254,8 @@ const getTransactions = async (req, res) => {
         -- ----------------------------------------------------
 
         bt.recipient_name AS recipient_name,
+
+        bt.recipient_phone AS recipient_phone,
 
         bt.recipient_account_number AS recipient_account,
 
