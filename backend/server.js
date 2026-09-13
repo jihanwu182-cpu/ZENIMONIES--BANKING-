@@ -20,7 +20,7 @@ const depositRoutes = require('./routes/deposit');
 const bankRoutes = require('./routes/bankRoutes');
 const virtualCardRoutes = require('./routes/virtualCard');
 const adminRoutes = require('./routes/adminRoutes');
-const kycRoutes = require('./routes/kycRoutes');
+const kycRoutes = require('./routes/kyc');
 
 // ============================================================
 // PAYSTACK
@@ -358,6 +358,26 @@ const startServer = async () => {
     // --------------------------------------------------------
 
     await initializeDatabase();
+
+    // --------------------------------------------------------
+    // DATABASE MIGRATIONS
+    // --------------------------------------------------------
+    //
+    // Add recipient phone number to bank transfers.
+    //
+    // This runs against the existing live PostgreSQL
+    // database. IF NOT EXISTS makes it safe to run
+    // whenever the backend starts.
+    //
+
+    await pool.query(`
+      ALTER TABLE bank_transfers
+      ADD COLUMN IF NOT EXISTS recipient_phone VARCHAR(30);
+    `);
+
+    console.log(
+      'Database migration completed: recipient_phone is available on bank_transfers'
+    );
 
     // --------------------------------------------------------
     // SERVER
