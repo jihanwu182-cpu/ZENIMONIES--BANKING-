@@ -1618,7 +1618,6 @@ const Profile: React.FC = () => {
           </h2>
 
           <div style={styles.accountGrid}>
-            <div>
 
             <div>
               <span style={styles.accountLabel}>
