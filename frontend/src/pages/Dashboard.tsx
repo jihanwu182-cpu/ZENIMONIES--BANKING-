@@ -2013,16 +2013,19 @@ const styles: Record<
   },
 
   kycAlertText: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 3,
-    flex: 1,
-    minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 3,
+  flex: 1,
+  minWidth: 0,
+  color: '#6f7d77',
+  fontSize: 13,
   },
 
   kycAlertTitle: {
-    color: '#bd2424',
-    fontSize: 13,
+  color: '#bd2424',
+  fontSize: 13,
+  fontWeight: 850,
   },
 
   chevron: {
