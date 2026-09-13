@@ -1,17 +1,22 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
-const API_URL = 'https://zenimonies-banking.onrender.com';
+const API_URL =
+  process.env.REACT_APP_API_URL ||
+  'https://zenimonies-banking.onrender.com';
 
-interface Bank {
-  name: string;
-  code: string;
-  slug?: string;
-  active?: boolean;
-  country?: string;
-  currency?: string;
-  type?: string;
+interface Recipient {
+  id: string;
+  full_name: string;
+  phone: string;
+  is_verified?: boolean;
+}
+
+interface LookupResponse {
+  success?: boolean;
+  message?: string;
+  user?: Recipient;
 }
 
 interface TransferResponse {
@@ -19,178 +24,199 @@ interface TransferResponse {
   message?: string;
   transfer?: {
     reference?: string;
+    recipient_name?: string;
+    recipient_phone?: string;
+    amount?: number;
+    currency?: string;
     status?: string;
+    balance_after?: number;
   };
 }
 
 const Transfer: React.FC = () => {
   const navigate = useNavigate();
 
-  const [banks, setBanks] = useState<Bank[]>([]);
-  const [bankCode, setBankCode] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [recipientName, setRecipientName] = useState('');
+  const [phone, setPhone] = useState('');
   const [amount, setAmount] = useState('');
   const [narration, setNarration] = useState('');
 
-  const [loadingBanks, setLoadingBanks] = useState(true);
-  const [verifying, setVerifying] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [recipient, setRecipient] =
+    useState<Recipient | null>(null);
 
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [checking, setChecking] =
+    useState(false);
 
-  const token = localStorage.getItem('zenimonies_token');
+  const [sending, setSending] =
+    useState(false);
 
-  useEffect(() => {
-    const loadBanks = async () => {
-      try {
-        setLoadingBanks(true);
-        setError('');
+  const [error, setError] =
+    useState('');
 
-        const response = await axios.get(
-          `${API_URL}/api/banks`
-        );
+  const [success, setSuccess] =
+    useState('');
 
-        if (
-          response.data?.success &&
-          Array.isArray(response.data.banks)
-        ) {
-          setBanks(response.data.banks);
-        } else {
-          setError(
-            response.data?.message ||
-              'Unable to load banks.'
-          );
-        }
-      } catch (err: any) {
-        setError(
-          err?.response?.data?.message ||
-            'Unable to load Nigerian banks.'
-        );
-      } finally {
-        setLoadingBanks(false);
-      }
-    };
+  const [reference, setReference] =
+    useState('');
 
-    loadBanks();
-  }, []);
+  const [balanceAfter, setBalanceAfter] =
+    useState<number | null>(null);
 
-  const selectedBank = useMemo(
+  const token =
+    localStorage.getItem('zenimonies_token') ||
+    localStorage.getItem('token') ||
+    localStorage.getItem('access_token');
+
+  const cleanPhone = useMemo(
     () =>
-      banks.find(
-        (bank) => bank.code === bankCode
-      ),
-    [banks, bankCode]
+      phone
+        .replace(/\s+/g, '')
+        .trim(),
+    [phone]
   );
 
-  const verifyAccount = async () => {
+  const transferAmount =
+    Number(amount);
+
+  /*
+   * ==========================================================
+   * VERIFY ZENIMONIES RECIPIENT
+   * ==========================================================
+   */
+
+  const verifyRecipient = async () => {
     setError('');
     setSuccess('');
-    setRecipientName('');
-
-    const cleanAccountNumber =
-      accountNumber.replace(/\D/g, '');
-
-    if (!bankCode) {
-      setError(
-        'Please select the recipient bank.'
-      );
-      return;
-    }
-
-    if (cleanAccountNumber.length !== 10) {
-      setError(
-        'Account number must contain exactly 10 digits.'
-      );
-      return;
-    }
-
-    try {
-      setVerifying(true);
-
-      const response = await axios.post(
-        `${API_URL}/api/banks/resolve`,
-        {
-          account_number: cleanAccountNumber,
-          bank_code: bankCode,
-        }
-      );
-
-      if (
-        response.data?.success &&
-        response.data?.verified
-      ) {
-        setRecipientName(
-          response.data.account?.account_name || ''
-        );
-
-        setAccountNumber(cleanAccountNumber);
-
-        setSuccess(
-          'Bank account verified successfully.'
-        );
-      } else {
-        setError(
-          response.data?.message ||
-            'Unable to verify bank account.'
-        );
-      }
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.message ||
-          'Unable to verify this bank account.'
-      );
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  const handleSubmit = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
-    event.preventDefault();
-
-    setError('');
-    setSuccess('');
+    setRecipient(null);
+    setReference('');
+    setBalanceAfter(null);
 
     if (!token) {
       navigate('/login');
       return;
     }
 
-    const cleanAccountNumber =
-      accountNumber.replace(/\D/g, '');
-
-    const transferAmount = Number(amount);
-
-    if (!bankCode || !selectedBank) {
+    if (!cleanPhone) {
       setError(
-        'Please select a recipient bank.'
+        'Please enter the recipient phone number.'
       );
       return;
     }
 
-    if (cleanAccountNumber.length !== 10) {
+    if (cleanPhone.length < 10) {
       setError(
-        'Please enter and verify a valid 10-digit account number.'
+        'Please enter a valid Zenimonies phone number.'
       );
       return;
     }
 
-    if (!recipientName.trim()) {
+    try {
+      setChecking(true);
+
+      const response =
+        await axios.get<LookupResponse>(
+          `${API_URL}/api/internal-transfers/user`,
+          {
+            params: {
+              phone: cleanPhone,
+            },
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      if (
+        response.data?.success &&
+        response.data?.user
+      ) {
+        setRecipient(
+          response.data.user
+        );
+
+        setSuccess(
+          'Zenimonies recipient verified.'
+        );
+      } else {
+        setError(
+          response.data?.message ||
+            'Unable to find this Zenimonies user.'
+        );
+      }
+    } catch (err: any) {
+      if (
+        err?.response?.status === 401
+      ) {
+        localStorage.removeItem(
+          'zenimonies_token'
+        );
+
+        localStorage.removeItem(
+          'token'
+        );
+
+        localStorage.removeItem(
+          'access_token'
+        );
+
+        navigate('/login');
+        return;
+      }
+
       setError(
-        'Please verify the recipient bank account first.'
+        err?.response?.data?.message ||
+          'Unable to verify this Zenimonies user.'
+      );
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  /*
+   * ==========================================================
+   * SEND MONEY
+   * ==========================================================
+   */
+
+  const handleSend = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    setError('');
+    setSuccess('');
+    setReference('');
+    setBalanceAfter(null);
+
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    if (!recipient) {
+      setError(
+        'Please verify the recipient first.'
       );
       return;
     }
 
     if (
-      !Number.isFinite(transferAmount) ||
+      !Number.isFinite(
+        transferAmount
+      ) ||
       transferAmount <= 0
     ) {
       setError(
         'Please enter a valid transfer amount.'
+      );
+      return;
+    }
+
+    if (
+      transferAmount > 100000000
+    ) {
+      setError(
+        'Transfer amount is too large.'
       );
       return;
     }
@@ -200,24 +226,17 @@ const Transfer: React.FC = () => {
 
       const response =
         await axios.post<TransferResponse>(
-          `${API_URL}/api/transfers`,
+          `${API_URL}/api/internal-transfers`,
           {
-            recipient_name:
-              recipientName.trim(),
+            recipient_phone:
+              cleanPhone,
 
-            recipient_account_number:
-              cleanAccountNumber,
-
-            recipient_bank_name:
-              selectedBank.name,
-
-            recipient_bank_code:
-              selectedBank.code,
-
-            amount: transferAmount,
+            amount:
+              transferAmount,
 
             narration:
-              narration.trim() || undefined,
+              narration.trim() ||
+              undefined,
           },
           {
             headers: {
@@ -230,11 +249,35 @@ const Transfer: React.FC = () => {
           }
         );
 
-      if (response.data?.success) {
+      if (
+        response.data?.success
+      ) {
+        const transfer =
+          response.data.transfer;
+
         setSuccess(
           response.data.message ||
-            'Transfer accepted for processing.'
+            'Money sent successfully.'
         );
+
+        setReference(
+          transfer?.reference || ''
+        );
+
+        const newBalance =
+          Number(
+            transfer?.balance_after
+          );
+
+        if (
+          Number.isFinite(
+            newBalance
+          )
+        ) {
+          setBalanceAfter(
+            newBalance
+          );
+        }
 
         setAmount('');
         setNarration('');
@@ -245,9 +288,19 @@ const Transfer: React.FC = () => {
         );
       }
     } catch (err: any) {
-      if (err?.response?.status === 401) {
+      if (
+        err?.response?.status === 401
+      ) {
         localStorage.removeItem(
           'zenimonies_token'
+        );
+
+        localStorage.removeItem(
+          'token'
+        );
+
+        localStorage.removeItem(
+          'access_token'
         );
 
         navigate('/login');
@@ -256,294 +309,364 @@ const Transfer: React.FC = () => {
 
       setError(
         err?.response?.data?.message ||
-          'Unable to process the transfer.'
+          'Unable to complete the transfer.'
       );
     } finally {
       setSending(false);
     }
   };
 
+  /*
+   * ==========================================================
+   * FORMAT MONEY
+   * ==========================================================
+   */
+
+  const formatNaira = (
+    value: number
+  ) =>
+    `₦${Number(value || 0).toLocaleString(
+      'en-NG',
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }
+    )}`;
+
+  /*
+   * ==========================================================
+   * PAGE
+   * ==========================================================
+   */
+
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: '#f5f7fb',
-        padding: '24px',
-        boxSizing: 'border-box',
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '650px',
-          margin: '0 auto',
-        }}
-      >
+    <div style={styles.page}>
+
+      {/* HEADER */}
+
+      <header style={styles.header}>
+
         <Link
           to="/"
-          style={{
-            display: 'inline-block',
-            marginBottom: '20px',
-            color: '#0b5cff',
-            textDecoration: 'none',
-            fontWeight: 600,
-          }}
+          style={styles.brandLink}
+        >
+          <div style={styles.logo}>
+            Z
+          </div>
+
+          <div>
+            <div
+              style={
+                styles.brandName
+              }
+            >
+              Zenimonies
+            </div>
+
+            <div
+              style={
+                styles.brandSubtitle
+              }
+            >
+              DIGITAL BANKING
+            </div>
+          </div>
+        </Link>
+
+        <Link
+          to="/"
+          style={styles.homeLink}
+        >
+          Home
+        </Link>
+
+      </header>
+
+      {/* MAIN */}
+
+      <main style={styles.main}>
+
+        <Link
+          to="/"
+          style={styles.backLink}
         >
           ← Back to Dashboard
         </Link>
 
-        <div
-          style={{
-            background: '#ffffff',
-            borderRadius: '16px',
-            padding: '28px',
-            boxShadow:
-              '0 8px 30px rgba(0, 0, 0, 0.08)',
-          }}
+        <section
+          style={styles.card}
         >
-          <h1
-            style={{
-              marginTop: 0,
-              color: '#172033',
-            }}
+
+          {/* ICON */}
+
+          <div
+            style={
+              styles.iconCircle
+            }
           >
-            Bank Transfer
+            ➤
+          </div>
+
+          {/* TITLE */}
+
+          <h1
+            style={styles.title}
+          >
+            Send to ZENIMONIES
           </h1>
 
           <p
-            style={{
-              color: '#667085',
-              marginBottom: '24px',
-            }}
+            style={
+              styles.subtitle
+            }
           >
-            Send money to a Nigerian bank account.
+            Send money instantly to
+            another active Zenimonies
+            account.
           </p>
+
+          {/* ERROR */}
 
           {error && (
             <div
-              style={{
-                padding: '12px',
-                marginBottom: '16px',
-                borderRadius: '8px',
-                background: '#fee4e2',
-                color: '#b42318',
-              }}
+              style={
+                styles.errorBox
+              }
+              role="alert"
             >
               {error}
             </div>
           )}
 
+          {/* SUCCESS */}
+
           {success && (
             <div
-              style={{
-                padding: '12px',
-                marginBottom: '16px',
-                borderRadius: '8px',
-                background: '#ecfdf3',
-                color: '#027a48',
-              }}
+              style={
+                styles.successBox
+              }
+              role="status"
             >
-              {success}
+              <strong>
+                {success}
+              </strong>
+
+              {reference && (
+                <div
+                  style={
+                    styles.successDetails
+                  }
+                >
+                  Reference:{' '}
+                  {reference}
+                </div>
+              )}
+
+              {balanceAfter !==
+                null &&
+                Number.isFinite(
+                  balanceAfter
+                ) && (
+                  <div
+                    style={
+                      styles.successDetails
+                    }
+                  >
+                    Balance after
+                    transfer:{' '}
+                    {formatNaira(
+                      balanceAfter
+                    )}
+                  </div>
+                )}
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            <label
-              htmlFor="bank"
-              style={{
-                display: 'block',
-                fontWeight: 600,
-                marginBottom: '6px',
-              }}
-            >
-              Recipient Bank
-            </label>
+          {/* FORM */}
 
-            <select
-              id="bank"
-              value={bankCode}
-              onChange={(event) => {
-                setBankCode(
-                  event.target.value
-                );
+          <form
+            onSubmit={
+              handleSend
+            }
+          >
 
-                setRecipientName('');
-                setSuccess('');
-              }}
-              disabled={
-                loadingBanks ||
-                sending ||
-                verifying
-              }
-              style={{
-                width: '100%',
-                padding: '12px',
-                marginBottom: '18px',
-                border:
-                  '1px solid #d0d5dd',
-                borderRadius: '8px',
-                background: '#ffffff',
-                boxSizing: 'border-box',
-              }}
-            >
-              <option value="">
-                {loadingBanks
-                  ? 'Loading banks...'
-                  : 'Select a bank'}
-              </option>
-
-              {banks.map((bank) => (
-                <option
-                  key={`${bank.code}-${bank.name}`}
-                  value={bank.code}
-                >
-                  {bank.name}
-                </option>
-              ))}
-            </select>
+            {/* PHONE */}
 
             <label
-              htmlFor="accountNumber"
-              style={{
-                display: 'block',
-                fontWeight: 600,
-                marginBottom: '6px',
-              }}
+              htmlFor="phone"
+              style={styles.label}
             >
-              Account Number
+              Recipient Phone Number
             </label>
 
             <div
-              style={{
-                display: 'flex',
-                gap: '10px',
-                marginBottom: '18px',
-              }}
+              style={
+                styles.verifyRow
+              }
             >
+
               <input
-                id="accountNumber"
-                type="text"
-                inputMode="numeric"
-                maxLength={10}
-                value={accountNumber}
+                id="phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={phone}
                 onChange={(event) => {
-                  setAccountNumber(
+                  setPhone(
                     event.target.value
-                      .replace(/\D/g, '')
-                      .slice(0, 10)
                   );
 
-                  setRecipientName('');
+                  setRecipient(
+                    null
+                  );
+
                   setSuccess('');
+                  setError('');
+                  setReference('');
+                  setBalanceAfter(
+                    null
+                  );
                 }}
-                placeholder="10-digit account number"
+                placeholder="e.g. 08012345678"
                 disabled={
-                  sending ||
-                  verifying
+                  checking ||
+                  sending
                 }
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  padding: '12px',
-                  border:
-                    '1px solid #d0d5dd',
-                  borderRadius: '8px',
-                  boxSizing: 'border-box',
-                }}
+                style={
+                  styles.input
+                }
               />
 
               <button
                 type="button"
-                onClick={verifyAccount}
+                onClick={
+                  verifyRecipient
+                }
                 disabled={
-                  verifying ||
+                  checking ||
                   sending
                 }
-                style={{
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '0 16px',
-                  background: '#172033',
-                  color: '#ffffff',
-                  fontWeight: 600,
-                }}
+                style={
+                  styles.verifyButton
+                }
               >
-                {verifying
+                {checking
                   ? 'Checking...'
                   : 'Verify'}
               </button>
+
             </div>
 
-            <label
-              htmlFor="recipientName"
-              style={{
-                display: 'block',
-                fontWeight: 600,
-                marginBottom: '6px',
-              }}
-            >
-              Recipient Name
-            </label>
+            {/* RECIPIENT */}
 
-            <input
-              id="recipientName"
-              type="text"
-              value={recipientName}
-              readOnly
-              placeholder="Verify account to display name"
-              style={{
-                width: '100%',
-                padding: '12px',
-                marginBottom: '18px',
-                border:
-                  '1px solid #d0d5dd',
-                borderRadius: '8px',
-                background: '#f9fafb',
-                boxSizing: 'border-box',
-              }}
-            />
+            {recipient && (
+              <div
+                style={
+                  styles.recipientCard
+                }
+              >
+
+                <div
+                  style={
+                    styles.recipientAvatar
+                  }
+                >
+                  {recipient.full_name
+                    ? recipient.full_name
+                        .charAt(0)
+                        .toUpperCase()
+                    : 'Z'}
+                </div>
+
+                <div
+                  style={
+                    styles.recipientInfo
+                  }
+                >
+                  <div
+                    style={
+                      styles.recipientName
+                    }
+                  >
+                    {
+                      recipient.full_name
+                    }
+                  </div>
+
+                  <div
+                    style={
+                      styles.recipientPhone
+                    }
+                  >
+                    {
+                      recipient.phone
+                    }
+                  </div>
+                </div>
+
+                <div
+                  style={
+                    styles.verifiedPill
+                  }
+                >
+                  ✓ Verified
+                </div>
+
+              </div>
+            )}
+
+            {/* AMOUNT */}
 
             <label
               htmlFor="amount"
-              style={{
-                display: 'block',
-                fontWeight: 600,
-                marginBottom: '6px',
-              }}
+              style={styles.label}
             >
               Amount (NGN)
             </label>
 
-            <input
-              id="amount"
-              type="number"
-              min="1"
-              step="0.01"
-              value={amount}
-              onChange={(event) =>
-                setAmount(
-                  event.target.value
-                )
+            <div
+              style={
+                styles.amountWrap
               }
-              placeholder="Enter amount"
-              disabled={sending}
-              style={{
-                width: '100%',
-                padding: '12px',
-                marginBottom: '18px',
-                border:
-                  '1px solid #d0d5dd',
-                borderRadius: '8px',
-                boxSizing: 'border-box',
-              }}
-            />
+            >
+
+              <span
+                style={
+                  styles.currency
+                }
+              >
+                ₦
+              </span>
+
+              <input
+                id="amount"
+                type="number"
+                min="1"
+                step="0.01"
+                inputMode="decimal"
+                value={amount}
+                onChange={(event) => {
+                  setAmount(
+                    event.target.value
+                  );
+
+                  setSuccess('');
+                  setError('');
+                }}
+                placeholder="0.00"
+                disabled={sending}
+                style={
+                  styles.amountInput
+                }
+              />
+
+            </div>
+
+            {/* NARRATION */}
 
             <label
               htmlFor="narration"
-              style={{
-                display: 'block',
-                fontWeight: 600,
-                marginBottom: '6px',
-              }}
+              style={styles.label}
             >
               Narration (optional)
             </label>
@@ -551,6 +674,7 @@ const Transfer: React.FC = () => {
             <input
               id="narration"
               type="text"
+              maxLength={150}
               value={narration}
               onChange={(event) =>
                 setNarration(
@@ -559,48 +683,403 @@ const Transfer: React.FC = () => {
               }
               placeholder="What is this transfer for?"
               disabled={sending}
-              style={{
-                width: '100%',
-                padding: '12px',
-                marginBottom: '22px',
-                border:
-                  '1px solid #d0d5dd',
-                borderRadius: '8px',
-                boxSizing: 'border-box',
-              }}
+              style={
+                styles.inputFull
+              }
             />
+
+            {/* SEND BUTTON */}
 
             <button
               type="submit"
               disabled={
                 sending ||
-                verifying ||
-                !recipientName
+                checking ||
+                !recipient ||
+                !amount
               }
               style={{
-                width: '100%',
-                padding: '13px',
-                border: 'none',
-                borderRadius: '8px',
-                background: '#0b5cff',
-                color: '#ffffff',
-                fontWeight: 600,
+                ...styles.sendButton,
+
                 opacity:
                   sending ||
-                  !recipientName
-                    ? 0.7
+                  checking ||
+                  !recipient ||
+                  !amount
+                    ? 0.55
                     : 1,
               }}
             >
               {sending
                 ? 'Processing Transfer...'
                 : 'Send Money'}
+
+              <span>›</span>
             </button>
+
           </form>
-        </div>
-      </div>
+
+          {/* SECURITY */}
+
+          <div
+            style={
+              styles.securityNote
+            }
+          >
+            <span
+              style={styles.lock}
+            >
+              🔒
+            </span>
+
+            <span>
+              Your transfer is
+              processed securely
+              between Zenimonies
+              accounts.
+            </span>
+          </div>
+
+        </section>
+
+      </main>
+
     </div>
   );
+};
+
+/*
+ * ============================================================
+ * STYLES
+ * ============================================================
+ */
+
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
+
+  page: {
+    minHeight: '100vh',
+    background: '#f6faf8',
+    color: '#10251d',
+    fontFamily:
+      'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+    paddingBottom: 40,
+  },
+
+  header: {
+    height: 68,
+    background: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '0 5%',
+    borderBottom:
+      '1px solid #e8efeb',
+    boxSizing: 'border-box',
+  },
+
+  brandLink: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    textDecoration: 'none',
+  },
+
+  logo: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    background: '#079447',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 23,
+    fontWeight: 800,
+  },
+
+  brandName: {
+    color: '#10251d',
+    fontSize: 18,
+    fontWeight: 800,
+  },
+
+  brandSubtitle: {
+    color: '#9aa7a1',
+    fontSize: 8,
+    letterSpacing: 1.7,
+    marginTop: 2,
+  },
+
+  homeLink: {
+    color: '#087c43',
+    textDecoration: 'none',
+    fontSize: 13,
+    fontWeight: 800,
+  },
+
+  main: {
+    width: 'min(620px, 92%)',
+    margin: '0 auto',
+    paddingTop: 24,
+  },
+
+  backLink: {
+    display: 'inline-block',
+    marginBottom: 16,
+    color: '#66756e',
+    textDecoration: 'none',
+    fontSize: 13,
+    fontWeight: 700,
+  },
+
+  card: {
+    background: '#ffffff',
+    border:
+      '1px solid #e3ebe7',
+    borderRadius: 24,
+    padding: 24,
+    boxShadow:
+      '0 12px 35px rgba(22, 61, 46, 0.07)',
+  },
+
+  iconCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    background: '#e7f8ef',
+    color: '#079447',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 28,
+    fontWeight: 800,
+    marginBottom: 16,
+  },
+
+  title: {
+    margin: 0,
+    color: '#10251d',
+    fontSize: 28,
+    fontWeight: 850,
+  },
+
+  subtitle: {
+    margin:
+      '7px 0 22px',
+    color: '#748079',
+    fontSize: 14,
+    lineHeight: 1.55,
+  },
+
+  errorBox: {
+    background: '#fff1ef',
+    color: '#a53227',
+    border:
+      '1px solid #f4d1cb',
+    borderRadius: 13,
+    padding: 13,
+    marginBottom: 16,
+    fontSize: 13,
+    fontWeight: 700,
+    lineHeight: 1.45,
+  },
+
+  successBox: {
+    background: '#eaf9f1',
+    color: '#087c43',
+    border:
+      '1px solid #ccebd9',
+    borderRadius: 13,
+    padding: 13,
+    marginBottom: 16,
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+
+  successDetails: {
+    marginTop: 4,
+    color: '#4f6d60',
+    fontSize: 12,
+  },
+
+  label: {
+    display: 'block',
+    color: '#263d33',
+    fontSize: 13,
+    fontWeight: 800,
+    marginBottom: 7,
+  },
+
+  verifyRow: {
+    display: 'flex',
+    gap: 9,
+    marginBottom: 16,
+  },
+
+  input: {
+    flex: 1,
+    minWidth: 0,
+    border:
+      '1px solid #d7e0dc',
+    borderRadius: 12,
+    padding:
+      '13px 14px',
+    fontSize: 14,
+    outline: 'none',
+    boxSizing: 'border-box',
+    background: '#ffffff',
+    color: '#10251d',
+  },
+
+  verifyButton: {
+    border: 'none',
+    borderRadius: 12,
+    padding: '0 17px',
+    background: '#10251d',
+    color: '#ffffff',
+    fontWeight: 800,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+
+  recipientCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 11,
+    background: '#f1fbf6',
+    border:
+      '1px solid #d4eee0',
+    borderRadius: 15,
+    padding: 12,
+    marginBottom: 18,
+  },
+
+  recipientAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: '50%',
+    background: '#d8f3e5',
+    color: '#087c43',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800,
+    fontSize: 16,
+    flexShrink: 0,
+  },
+
+  recipientInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  recipientName: {
+    color: '#17362a',
+    fontSize: 14,
+    fontWeight: 800,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+
+  recipientPhone: {
+    color: '#728078',
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  verifiedPill: {
+    background: '#dff5e9',
+    color: '#087c43',
+    borderRadius: 999,
+    padding:
+      '6px 9px',
+    fontSize: 10,
+    fontWeight: 800,
+    whiteSpace: 'nowrap',
+  },
+
+  amountWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    border:
+      '1px solid #d7e0dc',
+    borderRadius: 12,
+    marginBottom: 17,
+    overflow: 'hidden',
+    background: '#ffffff',
+  },
+
+  currency: {
+    paddingLeft: 14,
+    color: '#087c43',
+    fontSize: 20,
+    fontWeight: 800,
+  },
+
+  amountInput: {
+    flex: 1,
+    minWidth: 0,
+    border: 'none',
+    outline: 'none',
+    padding:
+      '13px 12px',
+    fontSize: 19,
+    fontWeight: 800,
+    color: '#10251d',
+    background: 'transparent',
+  },
+
+  inputFull: {
+    width: '100%',
+    border:
+      '1px solid #d7e0dc',
+    borderRadius: 12,
+    padding:
+      '13px 14px',
+    fontSize: 14,
+    outline: 'none',
+    boxSizing: 'border-box',
+    marginBottom: 20,
+    background: '#ffffff',
+    color: '#10251d',
+  },
+
+  sendButton: {
+    width: '100%',
+    border: 'none',
+    borderRadius: 13,
+    padding:
+      '14px 16px',
+    background: '#079447',
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: 800,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  securityNote: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 7,
+    marginTop: 17,
+    color: '#7a8781',
+    fontSize: 11,
+    lineHeight: 1.5,
+    textAlign: 'center',
+    justifyContent: 'center',
+  },
+
+  lock: {
+    flexShrink: 0,
+  },
 };
 
 export default Transfer;
