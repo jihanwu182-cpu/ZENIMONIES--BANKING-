@@ -274,7 +274,7 @@ CREATE TABLE IF NOT EXISTS bank_transfers (
 
     recipient_name VARCHAR(150) NOT NULL,
 
-    recipient_account_number VARCHAR(30) NOT NULL,
+    recipient_account_number VARCHAR(30),
 
     recipient_phone VARCHAR(30),
 
@@ -804,6 +804,17 @@ NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE accounts
 ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
 NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+
+-- ============================================================
+-- BANK TRANSFER COMPATIBILITY
+-- ============================================================
+
+ALTER TABLE bank_transfers
+ADD COLUMN IF NOT EXISTS recipient_phone VARCHAR(30);
+
+ALTER TABLE bank_transfers
+ALTER COLUMN recipient_account_number DROP NOT NULL;
 
 
 -- ============================================================
