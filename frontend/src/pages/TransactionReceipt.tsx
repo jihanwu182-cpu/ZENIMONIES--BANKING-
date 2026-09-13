@@ -1,12 +1,12 @@
 import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Button,
   Card,
   Chip,
-  Container,
   Divider,
-  IconButton,
   Stack,
   Typography,
 } from '@mui/material';
@@ -26,192 +26,102 @@ import {
   ScheduleRounded,
   ShareRounded,
   TagRounded,
+  VerifiedRounded,
 } from '@mui/icons-material';
 
-import {
-  useLocation,
-  useNavigate,
-} from 'react-router-dom';
-
-
 interface Transaction {
-  id: string | number;
-
-  type: string;
-
-  amount: number;
-
-  currency?: string;
-
-  reference?: string;
-
+  id?: string;
+  type?: string;
+  transaction_type?: string;
+  category?: string;
   description?: string;
 
-  status: string;
-
-  created_at?: string;
+  amount?: number | string;
+  currency?: string;
 
   recipient_name?: string;
-
   recipient_account?: string;
-
   recipient_bank?: string;
 
   sender_name?: string;
-
   sender_account?: string;
 
-  balance_before?: number;
+  reference?: string;
+  transaction_reference?: string;
 
-  balance_after?: number;
+  status?: string;
+
+  transaction_fee?: number | string;
+  fee?: number | string;
+
+  balance_before?: number | string;
+  balance_after?: number | string;
+
+  created_at?: string;
+  date?: string;
+  timestamp?: string;
 }
 
-
-/*
- * ============================================================
- * TRANSACTION RECEIPT
- * ============================================================
- */
-
 const TransactionReceipt: React.FC = () => {
+  const location = useLocation();
   const navigate = useNavigate();
 
-  const location = useLocation();
-
-  const transaction =
-    location.state?.transaction as
-      | Transaction
-      | undefined;
-
-
-  /*
-   * ============================================================
-   * RECEIPT UNAVAILABLE
-   * ============================================================
-   */
+  const transaction = location.state?.transaction as Transaction | undefined;
 
   if (!transaction) {
     return (
       <Box
         sx={{
           minHeight: '100vh',
-
-          background:
-            'linear-gradient(180deg, #EFFAF5 0%, #F7F9F8 100%)',
-
+          bgcolor: '#f4faf7',
           display: 'flex',
-
           alignItems: 'center',
-
           justifyContent: 'center',
-
-          px: 2,
+          p: 2,
         }}
       >
         <Card
           sx={{
             width: '100%',
-
-            maxWidth: 460,
-
-            borderRadius: 5,
-
+            maxWidth: 480,
             p: 4,
-
+            borderRadius: 4,
             textAlign: 'center',
-
-            border:
-              '1px solid #DDEBE5',
-
-            boxShadow:
-              '0 18px 45px rgba(20,60,45,0.10)',
           }}
         >
-          <Box
+          <ReceiptLongRounded
             sx={{
-              width: 76,
-
-              height: 76,
-
-              borderRadius: '50%',
-
-              background: '#EAF7F3',
-
-              color: '#008C68',
-
-              display: 'flex',
-
-              alignItems: 'center',
-
-              justifyContent: 'center',
-
-              mx: 'auto',
+              fontSize: 56,
+              color: '#087f5b',
+              mb: 2,
             }}
-          >
-            <ReceiptLongRounded
-              sx={{
-                fontSize: 38,
-              }}
-            />
-          </Box>
+          />
 
           <Typography
-            sx={{
-              mt: 2.5,
-
-              fontSize: 22,
-
-              fontWeight: 900,
-
-              color: '#16251F',
-            }}
+            variant="h5"
+            fontWeight={800}
+            color="#063b2b"
+            gutterBottom
           >
             Receipt unavailable
           </Typography>
 
-          <Typography
-            sx={{
-              mt: 1,
-
-              color: '#78857F',
-
-              fontSize: 14,
-
-              lineHeight: 1.6,
-            }}
-          >
-            We could not find the transaction
-            details for this receipt.
+          <Typography color="text.secondary" sx={{ mb: 3 }}>
+            We could not find the transaction details for this receipt.
           </Typography>
 
           <Button
-            fullWidth
-
             variant="contained"
-
-            onClick={() =>
-              navigate('/transactions')
-            }
-
+            startIcon={<ArrowBackRounded />}
+            onClick={() => navigate('/transactions')}
             sx={{
-              mt: 3,
-
-              height: 50,
-
-              borderRadius: 3,
-
-              background: '#008C68',
-
-              textTransform: 'none',
-
-              fontWeight: 800,
-
-              boxShadow: 'none',
-
+              bgcolor: '#087f5b',
+              borderRadius: 2.5,
+              px: 3,
+              py: 1.2,
+              fontWeight: 700,
               '&:hover': {
-                background: '#007858',
-
-                boxShadow: 'none',
+                bgcolor: '#066b4c',
               },
             }}
           >
@@ -222,1635 +132,1053 @@ const TransactionReceipt: React.FC = () => {
     );
   }
 
+  /* ============================================================
+     HELPERS
+  ============================================================ */
 
-  /*
-   * ============================================================
-   * AMOUNT
-   * ============================================================
-   */
+  const numericAmount = Number(transaction.amount || 0);
 
-  const formatAmount = (
-    amount: number,
-    currency?: string
-  ) => {
-    const selectedCurrency =
-      currency || 'NGN';
+  const numericFee = Number(
+    transaction.transaction_fee ??
+      transaction.fee ??
+      0
+  );
 
-    try {
-      return new Intl.NumberFormat(
-        selectedCurrency === 'ZAR'
-          ? 'en-ZA'
-          : 'en-NG',
-        {
-          style: 'currency',
+  const currency = (
+    transaction.currency ||
+    'NGN'
+  ).toUpperCase();
 
-          currency:
-            selectedCurrency,
-
-          minimumFractionDigits: 2,
-        }
-      ).format(
-        Number(amount || 0)
-      );
-    } catch {
-      return `${selectedCurrency} ${Number(
-        amount || 0
-      ).toFixed(2)}`;
-    }
+  const formatMoney = (value: number) => {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
   };
 
+  const reference =
+    transaction.reference ||
+    transaction.transaction_reference ||
+    transaction.id ||
+    'N/A';
 
-  /*
-   * ============================================================
-   * DATE
-   * ============================================================
-   */
+  const transactionDate =
+    transaction.created_at ||
+    transaction.date ||
+    transaction.timestamp;
 
-  const formatDate = (
-    date?: string
-  ) => {
-    if (!date) {
-      return 'Date unavailable';
+  const formatDate = (value?: string) => {
+    if (!value) return 'N/A';
+
+    const parsed = new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
     }
 
-    const parsedDate =
-      new Date(date);
-
-    if (
-      Number.isNaN(
-        parsedDate.getTime()
-      )
-    ) {
-      return 'Date unavailable';
-    }
-
-    return parsedDate.toLocaleString(
-      'en-NG',
-      {
-        weekday: 'long',
-
-        day: 'numeric',
-
-        month: 'long',
-
-        year: 'numeric',
-
-        hour: 'numeric',
-
-        minute: '2-digit',
-      }
-    );
+    return parsed.toLocaleString('en-NG', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
   };
 
+  const status = (
+    transaction.status ||
+    'successful'
+  ).toLowerCase();
 
-  /*
-   * ============================================================
-   * STATUS
-   * ============================================================
-   */
-
-  const rawStatus =
-    String(
-      transaction.status || ''
-    ).toLowerCase();
-
-
-  const isCompleted =
-    rawStatus === 'completed' ||
-    rawStatus === 'success' ||
-    rawStatus === 'successful';
-
+  const isSuccessful =
+    status === 'successful' ||
+    status === 'completed' ||
+    status === 'success';
 
   const isFailed =
-    rawStatus === 'failed' ||
-    rawStatus === 'cancelled' ||
-    rawStatus === 'canceled';
+    status === 'failed' ||
+    status === 'failure';
 
+  const isPending =
+    status === 'pending' ||
+    status === 'processing';
 
-  const statusLabel =
-    isCompleted
-      ? 'Successful'
-      : isFailed
-      ? 'Failed'
-      : 'Pending';
-
-
-  const statusColor =
-    isCompleted
-      ? '#087A4B'
-      : isFailed
-      ? '#C62828'
-      : '#A66B00';
-
-
-  const statusBackground =
-    isCompleted
-      ? '#E6F7EF'
-      : isFailed
-      ? '#FDECEC'
-      : '#FFF5DF';
-
-
-  /*
-   * ============================================================
-   * TRANSACTION TYPE
-   * ============================================================
-   */
+  const isIncoming =
+    transaction.category === 'credit' ||
+    transaction.category === 'incoming' ||
+    transaction.type?.toLowerCase().includes('received') ||
+    transaction.description?.toLowerCase().includes('received');
 
   const transactionType =
-    String(
-      transaction.type ||
-        'Transaction'
-    )
-      .replace(/_/g, ' ')
-      .replace(
-        /\b\w/g,
-        (letter) =>
-          letter.toUpperCase()
-      );
+    transaction.transaction_type ||
+    transaction.type ||
+    'Internal Transfer';
 
+  const directionText = isIncoming
+    ? 'Money received'
+    : 'Money sent';
 
-  /*
-   * ============================================================
-   * CREDIT / DEBIT
-   * ============================================================
-   */
+  const displayAmount = isIncoming
+    ? `+${formatMoney(numericAmount)}`
+    : `−${formatMoney(numericAmount)}`;
 
-  const type =
-    String(
-      transaction.type || ''
-    ).toLowerCase();
+  const statusText = isSuccessful
+    ? 'Successful'
+    : isFailed
+      ? 'Failed'
+      : isPending
+        ? 'Pending'
+        : transaction.status || 'Successful';
 
+  const statusColor = isSuccessful
+    ? '#087f5b'
+    : isFailed
+      ? '#c62828'
+      : '#b26a00';
 
-  const description =
-    String(
-      transaction.description || ''
-    ).toLowerCase();
+  const statusBackground = isSuccessful
+    ? '#dff7ec'
+    : isFailed
+      ? '#fde8e8'
+      : '#fff3d6';
 
+  const copyReference = async () => {
+    try {
+      await navigator.clipboard.writeText(reference);
+      alert('Transaction reference copied');
+    } catch {
+      alert('Unable to copy reference');
+    }
+  };
 
-  const isCredit =
-    type.includes('deposit') ||
-    type.includes('credit') ||
-    type.includes('funding') ||
-    type.includes('refund') ||
-    type.includes('received') ||
-    description.includes('deposit') ||
-    description.includes('credit') ||
-    description.includes('funding') ||
-    description.includes('refund') ||
-    description.includes('received');
+  const handleShare = async () => {
+    const shareText = [
+      'ZENIMONIES',
+      'Transaction Receipt',
+      '',
+      `Type: ${transactionType}`,
+      `Recipient: ${transaction.recipient_name || 'N/A'}`,
+      `Bank: ${transaction.recipient_bank || 'N/A'}`,
+      `Account Number: ${
+        transaction.recipient_account || 'N/A'
+      }`,
+      `Amount: ${formatMoney(numericAmount)}`,
+      `Transaction Fee: ${formatMoney(numericFee)}`,
+      `Reference: ${reference}`,
+      `Date: ${formatDate(transactionDate)}`,
+      `Status: ${statusText}`,
+    ].join('\n');
 
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Zenimonies Transaction Receipt',
+          text: shareText,
+        });
+        return;
+      } catch {
+        // User cancelled share.
+      }
+    }
 
-  /*
-   * ============================================================
-   * PRINT / DOWNLOAD
-   * ============================================================
-   */
+    try {
+      await navigator.clipboard.writeText(shareText);
+      alert('Receipt details copied');
+    } catch {
+      alert('Unable to share receipt');
+    }
+  };
 
   const handlePrint = () => {
     window.print();
   };
 
+  /* ============================================================
+     DETAIL ROW
+  ============================================================ */
 
-  /*
-   * ============================================================
-   * SHARE
-   * ============================================================
-   */
-
-  const handleShare = async () => {
-    const shareText = [
-      'ZENIMONIES TRANSACTION RECEIPT',
-
-      '',
-
-      `Transaction: ${transactionType}`,
-
-      `Amount: ${formatAmount(
-        transaction.amount,
-        transaction.currency
-      )}`,
-
-      `Status: ${statusLabel}`,
-
-      isCredit
-        ? 'Money received'
-        : 'Money sent',
-
-      transaction.recipient_name
-        ? `Recipient: ${transaction.recipient_name}`
-        : '',
-
-      transaction.recipient_bank
-        ? `Bank: ${transaction.recipient_bank}`
-        : '',
-
-      transaction.recipient_account
-        ? `Account: ${transaction.recipient_account}`
-        : '',
-
-      transaction.reference
-        ? `Reference: ${transaction.reference}`
-        : '',
-
-      transaction.description
-        ? `Description: ${transaction.description}`
-        : '',
-
-      `Date: ${formatDate(
-        transaction.created_at
-      )}`,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-
-    try {
-      if (
-        navigator.share &&
-        typeof navigator.share ===
-          'function'
-      ) {
-        await navigator.share({
-          title:
-            'Zenimonies Transaction Receipt',
-
-          text: shareText,
-        });
-
-        return;
-      }
-
-
-      if (
-        navigator.clipboard &&
-        typeof navigator.clipboard
-          .writeText === 'function'
-      ) {
-        await navigator.clipboard.writeText(
-          shareText
-        );
-
-        window.alert(
-          'Receipt details copied. You can paste them into WhatsApp, Messages, Email or another app.'
-        );
-
-        return;
-      }
-
-
-      window.alert(
-        'Sharing is not supported on this device.'
-      );
-
-    } catch (error) {
-      console.log(
-        'Receipt sharing cancelled or failed:',
-        error
-      );
-    }
-  };
-
-
-  /*
-   * ============================================================
-   * COPY REFERENCE
-   * ============================================================
-   */
-
-  const copyReference = async () => {
-    if (!transaction.reference) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(
-        transaction.reference
-      );
-
-      window.alert(
-        'Transaction reference copied.'
-      );
-
-    } catch {
-      window.alert(
-        'Unable to copy transaction reference.'
-      );
-    }
-  };
-
-
-  const hasRecipient =
-    Boolean(
-      transaction.recipient_name ||
-      transaction.recipient_account ||
-      transaction.recipient_bank
-    );
-
-
-  const hasBalance =
-    transaction.balance_before !==
-      undefined ||
-    transaction.balance_after !==
-      undefined;
-
-
-  /*
-   * ============================================================
-   * PAGE
-   * ============================================================
-   */
-
-  return (
+  const DetailRow = ({
+    icon,
+    label,
+    value,
+    valueNode,
+  }: {
+    icon?: React.ReactNode;
+    label: string;
+    value?: React.ReactNode;
+    valueNode?: React.ReactNode;
+  }) => (
     <Box
-      className="receipt-page"
-
       sx={{
-        minHeight: '100vh',
-
-        background:
-          'linear-gradient(180deg, #EFFAF5 0px, #F7F9F8 500px)',
-
-        pb: 6,
+        display: 'grid',
+        gridTemplateColumns: {
+          xs: 'minmax(125px, 40%) 1fr',
+          sm: '180px 1fr',
+        },
+        alignItems: 'center',
+        minHeight: 44,
+        py: 0.5,
+        borderBottom: '1px solid #e4ebe8',
+        '&:last-child': {
+          borderBottom: 'none',
+        },
       }}
     >
+      <Stack
+        direction="row"
+        spacing={0.8}
+        alignItems="center"
+      >
+        {icon && (
+          <Box
+            sx={{
+              display: 'flex',
+              color: '#6b7d76',
+              '& svg': {
+                fontSize: 18,
+              },
+            }}
+          >
+            {icon}
+          </Box>
+        )}
 
-      <Container
-        maxWidth="sm"
+        <Typography
+          sx={{
+            color: '#687871',
+            fontSize: {
+              xs: 13,
+              sm: 14,
+            },
+            fontWeight: 500,
+          }}
+        >
+          {label}
+        </Typography>
+      </Stack>
 
+      {valueNode || (
+        <Typography
+          sx={{
+            color: '#10221c',
+            fontSize: {
+              xs: 13,
+              sm: 14,
+            },
+            fontWeight: 650,
+            wordBreak: 'break-word',
+            textAlign: 'right',
+          }}
+        >
+          {value || 'N/A'}
+        </Typography>
+      )}
+    </Box>
+  );
+
+  /* ============================================================
+     RECEIPT
+  ============================================================ */
+
+  return (
+    <>
+      <Box
+        className="receipt-page"
         sx={{
-          px: {
+          minHeight: '100vh',
+          bgcolor: '#f3faf7',
+          py: {
             xs: 2,
-            sm: 3,
+            sm: 4,
           },
-
-          pt: 2,
+          px: {
+            xs: 1,
+            sm: 2,
+          },
         }}
       >
-
-        {/* ====================================================
-            TOP NAVIGATION
-        ===================================================== */}
-
-        <Stack
-          className="receipt-navigation"
-
-          direction="row"
-
-          alignItems="center"
-
-          justifyContent="space-between"
-
+        <Box
+          className="receipt-container"
           sx={{
-            mb: 2,
+            width: '100%',
+            maxWidth: 760,
+            mx: 'auto',
           }}
         >
-
-          <IconButton
-            onClick={() =>
-              navigate('/transactions')
-            }
-
-            sx={{
-              width: 46,
-
-              height: 46,
-
-              background: '#FFFFFF',
-
-              color: '#16251F',
-
-              border:
-                '1px solid #E1ECE7',
-
-              boxShadow:
-                '0 6px 18px rgba(20,60,45,0.06)',
-
-              '&:hover': {
-                background: '#FFFFFF',
-              },
-            }}
-          >
-            <ArrowBackRounded />
-          </IconButton>
-
-
-          <Box
-            sx={{
-              textAlign: 'center',
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: 18,
-
-                fontWeight: 900,
-
-                color: '#16251F',
-              }}
-            >
-              Transaction Receipt
-            </Typography>
-
-            <Typography
-              sx={{
-                fontSize: 11,
-
-                color: '#7C8983',
-
-                mt: 0.2,
-              }}
-            >
-              Zenimonies
-            </Typography>
-          </Box>
-
-
-          <IconButton
-            onClick={handleShare}
-
-            sx={{
-              width: 46,
-
-              height: 46,
-
-              background: '#FFFFFF',
-
-              color: '#008C68',
-
-              border:
-                '1px solid #E1ECE7',
-
-              boxShadow:
-                '0 6px 18px rgba(20,60,45,0.06)',
-
-              '&:hover': {
-                background: '#FFFFFF',
-              },
-            }}
-          >
-            <ShareRounded />
-          </IconButton>
-
-        </Stack>
-
-
-        {/* ====================================================
-            MAIN RECEIPT
-        ===================================================== */}
-
-        <Card
-          className="receipt-card"
-
-          sx={{
-            borderRadius: 5,
-
-            overflow: 'hidden',
-
-            background: '#FFFFFF',
-
-            border:
-              '1px solid #DDE9E4',
-
-            boxShadow:
-              '0 20px 50px rgba(20,60,45,0.11)',
-          }}
-        >
-
           {/* ==================================================
-              GREEN BRAND HEADER
-          =================================================== */}
+              RECEIPT CARD
+          ================================================== */}
 
-          <Box
+          <Card
+            className="receipt-card"
+            elevation={0}
             sx={{
-              position: 'relative',
-
               overflow: 'hidden',
-
-              background:
-                'linear-gradient(135deg, #063F31 0%, #087A4B 52%, #00A875 100%)',
-
-              color: '#FFFFFF',
-
-              px: 3,
-
-              py: 3.2,
-
-              textAlign: 'center',
+              borderRadius: {
+                xs: 3,
+                sm: 4,
+              },
+              border: '1px solid #dcebe4',
+              boxShadow:
+                '0 18px 55px rgba(7, 94, 66, 0.10)',
+              bgcolor: '#ffffff',
             }}
           >
-
-            {/* Decorative circles */}
+            {/* ==================================================
+                GREEN BRAND HEADER
+            ================================================== */}
 
             <Box
+              className="receipt-header"
               sx={{
-                position: 'absolute',
-
-                width: 210,
-
-                height: 210,
-
-                borderRadius: '50%',
-
+                position: 'relative',
+                overflow: 'hidden',
+                bgcolor: '#087f5b',
                 background:
-                  'rgba(255,255,255,0.055)',
-
-                right: -100,
-
-                top: -120,
-              }}
-            />
-
-
-            <Box
-              sx={{
-                position: 'absolute',
-
-                width: 130,
-
-                height: 130,
-
-                borderRadius: '50%',
-
-                background:
-                  'rgba(255,255,255,0.045)',
-
-                left: -70,
-
-                bottom: -80,
-              }}
-            />
-
-
-            <Box
-              sx={{
-                position:
-                  'relative',
-
-                zIndex: 1,
+                  'linear-gradient(135deg, #087f5b 0%, #075b42 100%)',
+                color: '#ffffff',
+                px: {
+                  xs: 2.5,
+                  sm: 4,
+                },
+                py: {
+                  xs: 2.5,
+                  sm: 3,
+                },
               }}
             >
-
+              {/* Decorative shape */}
               <Box
+                className="print-decoration"
                 sx={{
-                  width: 62,
+                  position: 'absolute',
+                  width: 260,
+                  height: 120,
+                  right: -70,
+                  bottom: -65,
+                  borderRadius: '50%',
+                  bgcolor:
+                    'rgba(255,255,255,0.08)',
+                }}
+              />
 
-                  height: 62,
-
-                  borderRadius: 3.5,
-
-                  background:
-                    'rgba(255,255,255,0.15)',
-
-                  border:
-                    '1px solid rgba(255,255,255,0.2)',
-
-                  display: 'flex',
-
-                  alignItems: 'center',
-
-                  justifyContent: 'center',
-
-                  mx: 'auto',
-
-                  mb: 1.3,
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                spacing={2}
+                sx={{
+                  position: 'relative',
+                  zIndex: 1,
                 }}
               >
-                <Typography
-                  sx={{
-                    fontSize: 31,
+                {/* BRAND */}
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  spacing={1.5}
+                >
+                  {/* Little green card */}
+                  <Box
+                    className="brand-card"
+                    sx={{
+                      width: 58,
+                      height: 38,
+                      borderRadius: 1.8,
+                      border:
+                        '1px solid rgba(255,255,255,0.35)',
+                      bgcolor:
+                        'rgba(255,255,255,0.12)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transform: 'rotate(-8deg)',
+                      boxShadow:
+                        '0 5px 14px rgba(0,0,0,0.12)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontWeight: 900,
+                        fontSize: 24,
+                        color: '#ffffff',
+                        lineHeight: 1,
+                      }}
+                    >
+                      Z
+                    </Typography>
 
-                    fontWeight: 950,
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        bottom: 6,
+                        left: 7,
+                        width: 13,
+                        height: 8,
+                        borderRadius: 0.5,
+                        bgcolor:
+                          'rgba(255,255,255,0.55)',
+                      }}
+                    />
+
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        right: 7,
+                        bottom: 5,
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        bgcolor:
+                          'rgba(255,255,255,0.85)',
+                      }}
+                    />
+                  </Box>
+
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: {
+                          xs: 22,
+                          sm: 27,
+                        },
+                        fontWeight: 900,
+                        letterSpacing: 1,
+                        lineHeight: 1,
+                      }}
+                    >
+                      ZENIMONIES
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.5,
+                        fontSize: {
+                          xs: 9,
+                          sm: 10,
+                        },
+                        letterSpacing: 3,
+                        fontWeight: 600,
+                        opacity: 0.85,
+                      }}
+                    >
+                      DIGITAL BANKING
+                    </Typography>
+                  </Box>
+                </Stack>
+
+                {/* RECEIPT TITLE */}
+                <Box
+                  sx={{
+                    textAlign: 'right',
+                    flexShrink: 0,
                   }}
                 >
-                  Z
-                </Typography>
-              </Box>
+                  <Typography
+                    sx={{
+                      fontSize: {
+                        xs: 15,
+                        sm: 18,
+                      },
+                      fontWeight: 700,
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    Transaction
+                  </Typography>
 
+                  <Typography
+                    sx={{
+                      fontSize: {
+                        xs: 15,
+                        sm: 18,
+                      },
+                      fontWeight: 700,
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    Receipt
+                  </Typography>
+                </Box>
+              </Stack>
 
               <Typography
                 sx={{
-                  fontSize: 24,
-
-                  fontWeight: 950,
-
-                  letterSpacing:
-                    '-0.5px',
+                  position: 'relative',
+                  zIndex: 1,
+                  textAlign: 'right',
+                  mt: 1.2,
+                  fontSize: 11,
+                  opacity: 0.8,
+                  fontWeight: 500,
                 }}
               >
-                Zenimonies
+                Simple. Safe. For You.
               </Typography>
-
-
-              <Typography
-                sx={{
-                  mt: 0.5,
-
-                  fontSize: 9,
-
-                  letterSpacing: 3,
-
-                  opacity: 0.78,
-
-                  fontWeight: 700,
-                }}
-              >
-                DIGITAL BANKING
-              </Typography>
-
             </Box>
 
-          </Box>
-
-
-          {/* ==================================================
-              SUCCESS SECTION
-          =================================================== */}
-
-          <Box
-            sx={{
-              px: 2.5,
-
-              pt: 3.2,
-
-              pb: 3,
-
-              textAlign: 'center',
-            }}
-          >
+            {/* ==================================================
+                SUCCESS / STATUS AREA
+            ================================================== */}
 
             <Box
               sx={{
-                width: 76,
-
-                height: 76,
-
-                borderRadius: '50%',
-
-                background:
-                  statusBackground,
-
-                color:
-                  statusColor,
-
-                display: 'flex',
-
-                alignItems: 'center',
-
-                justifyContent: 'center',
-
-                mx: 'auto',
-
-                mb: 1.5,
-              }}
-            >
-
-              {isCompleted ? (
-                <CheckCircleRounded
-                  sx={{
-                    fontSize: 46,
-                  }}
-                />
-              ) : isFailed ? (
-                <ErrorRounded
-                  sx={{
-                    fontSize: 46,
-                  }}
-                />
-              ) : (
-                <ScheduleRounded
-                  sx={{
-                    fontSize: 46,
-                  }}
-                />
-              )}
-
-            </Box>
-
-
-            <Typography
-              sx={{
-                fontSize: {
-                  xs: 23,
-                  sm: 26,
+                px: {
+                  xs: 2.5,
+                  sm: 4,
                 },
-
-                fontWeight: 950,
-
-                color: '#14221D',
-
-                letterSpacing:
-                  '-0.5px',
+                pt: {
+                  xs: 2.5,
+                  sm: 3,
+                },
+                pb: 2,
+                textAlign: 'center',
               }}
             >
-              {isCompleted
-                ? 'Transaction Successful'
-                : isFailed
-                ? 'Transaction Failed'
-                : 'Transaction Pending'}
-            </Typography>
-
-
-            <Chip
-              label={statusLabel}
-
-              size="small"
-
-              sx={{
-                mt: 1.2,
-
-                height: 28,
-
-                borderRadius: 2,
-
-                background:
-                  statusBackground,
-
-                color:
-                  statusColor,
-
-                fontSize: 11,
-
-                fontWeight: 850,
-              }}
-            />
-
-
-            {/* MONEY SENT / RECEIVED */}
-
-            <Typography
-              sx={{
-                mt: 2.8,
-
-                fontSize: 12,
-
-                color: '#89958F',
-
-                fontWeight: 600,
-              }}
-            >
-              {isCredit
-                ? 'Money received'
-                : 'Money sent'}
-            </Typography>
-
-
-            <Stack
-              direction="row"
-
-              justifyContent="center"
-
-              alignItems="center"
-
-              spacing={0.3}
-
-              sx={{
-                mt: 0.2,
-              }}
-            >
-
-              {isCredit ? (
-                <ArrowDownwardRounded
-                  sx={{
-                    fontSize: 25,
-
-                    color: '#008C68',
-                  }}
-                />
-              ) : (
-                <ArrowUpwardRounded
-                  sx={{
-                    fontSize: 25,
-
-                    color: '#008C68',
-                  }}
-                />
-              )}
-
+              <Box
+                sx={{
+                  width: 58,
+                  height: 58,
+                  mx: 'auto',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: isSuccessful
+                    ? '#d9f6e9'
+                    : isFailed
+                      ? '#fde4e4'
+                      : '#fff1d3',
+                }}
+              >
+                {isSuccessful ? (
+                  <CheckCircleRounded
+                    sx={{
+                      fontSize: 38,
+                      color: '#087f5b',
+                    }}
+                  />
+                ) : isFailed ? (
+                  <ErrorRounded
+                    sx={{
+                      fontSize: 38,
+                      color: '#c62828',
+                    }}
+                  />
+                ) : (
+                  <ScheduleRounded
+                    sx={{
+                      fontSize: 38,
+                      color: '#b26a00',
+                    }}
+                  />
+                )}
+              </Box>
 
               <Typography
                 sx={{
+                  mt: 1.2,
+                  color: '#063b2b',
+                  fontSize: {
+                    xs: 23,
+                    sm: 27,
+                  },
+                  fontWeight: 850,
+                  letterSpacing: -0.5,
+                }}
+              >
+                Transaction{' '}
+                {isSuccessful
+                  ? 'Successful'
+                  : isFailed
+                    ? 'Failed'
+                    : 'Pending'}
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: '#73817c',
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
+              >
+                {directionText}
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.7,
+                  color: isIncoming
+                    ? '#087f5b'
+                    : '#063b2b',
                   fontSize: {
                     xs: 34,
                     sm: 42,
                   },
-
-                  fontWeight: 950,
-
-                  color: '#063F31',
-
-                  letterSpacing:
-                    '-1.2px',
+                  fontWeight: 900,
+                  letterSpacing: -1.5,
+                  lineHeight: 1.1,
                 }}
               >
-                {isCredit
-                  ? '+'
-                  : '−'}
-
-                {formatAmount(
-                  transaction.amount,
-                  transaction.currency
-                )}
+                {displayAmount}
               </Typography>
 
-            </Stack>
+              <Typography
+                sx={{
+                  mt: 0.8,
+                  color: '#7a8782',
+                  fontSize: 13,
+                }}
+              >
+                Your transaction has been completed
+                successfully.
+              </Typography>
+            </Box>
 
-          </Box>
-
-
-          {/* ==================================================
-              GREEN SEPARATOR
-          =================================================== */}
-
-          <Box
-            sx={{
-              height: 5,
-
-              background:
-                'linear-gradient(90deg, #063F31, #008C68, #00A875)',
-            }}
-          />
-
-
-          {/* ==================================================
-              TRANSACTION INFORMATION
-          =================================================== */}
-
-          <ReceiptSection
-            title="Transaction information"
-          >
-
-            <DetailRow
-              icon={
-                <TagRounded />
-              }
-
-              label="Transaction type"
-
-              value={
-                transactionType
-              }
+            <Divider
+              sx={{
+                mx: {
+                  xs: 2.5,
+                  sm: 4,
+                },
+                borderColor: '#dce6e1',
+              }}
             />
 
-
-            {transaction.description && (
-              <DetailRow
-                icon={
-                  <ReceiptLongRounded />
-                }
-
-                label="Description"
-
-                value={
-                  transaction.description
-                }
-              />
-            )}
-
-
-            {transaction.reference && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-
-                label="Transaction reference"
-
-                value={
-                  transaction.reference
-                }
-
-                action={
-                  <IconButton
-                    size="small"
-
-                    onClick={
-                      copyReference
-                    }
-
-                    sx={{
-                      width: 31,
-
-                      height: 31,
-
-                      flexShrink: 0,
-
-                      color: '#008C68',
-
-                      background:
-                        '#EAF7F3',
-
-                      '&:hover': {
-                        background:
-                          '#DDF2EA',
-                      },
-                    }}
-                  >
-                    <ContentCopyRounded
-                      sx={{
-                        fontSize: 15,
-                      }}
-                    />
-                  </IconButton>
-                }
-              />
-            )}
-
-
-            <DetailRow
-              icon={
-                <CalendarMonthRounded />
-              }
-
-              label="Date & time"
-
-              value={
-                formatDate(
-                  transaction.created_at
-                )
-              }
-            />
-
-          </ReceiptSection>
-
-
-          {/* ==================================================
-              RECIPIENT
-          =================================================== */}
-
-          {hasRecipient && (
-            <ReceiptSection
-              title="Recipient details"
-            >
-
-              {transaction.recipient_name && (
-                <DetailRow
-                  icon={
-                    <PersonRounded />
-                  }
-
-                  label="Recipient"
-
-                  value={
-                    transaction.recipient_name
-                  }
-                />
-              )}
-
-
-              {transaction.recipient_bank && (
-                <DetailRow
-                  icon={
-                    <AccountBalanceRounded />
-                  }
-
-                  label="Bank"
-
-                  value={
-                    transaction.recipient_bank
-                  }
-                />
-              )}
-
-
-              {transaction.recipient_account && (
-                <DetailRow
-                  icon={
-                    <AccountBalanceRounded />
-                  }
-
-                  label="Account number"
-
-                  value={
-                    transaction.recipient_account
-                  }
-                />
-              )}
-
-            </ReceiptSection>
-          )}
-
-
-          {/* ==================================================
-              BALANCE
-          =================================================== */}
-
-          {hasBalance && (
-            <ReceiptSection
-              title="Account balance"
-            >
-
-              {transaction.balance_before !==
-                undefined && (
-                <BalanceRow
-                  label="Balance before"
-
-                  value={
-                    formatAmount(
-                      transaction.balance_before,
-                      transaction.currency
-                    )
-                  }
-                />
-              )}
-
-
-              {transaction.balance_after !==
-                undefined && (
-                <BalanceRow
-                  label="Balance after"
-
-                  value={
-                    formatAmount(
-                      transaction.balance_after,
-                      transaction.currency
-                    )
-                  }
-
-                  highlight
-                />
-              )}
-
-            </ReceiptSection>
-          )}
-
-
-          {/* ==================================================
-              VERIFIED FOOTER
-          =================================================== */}
-
-          <Box
-            sx={{
-              mx: {
-                xs: 2.5,
-                sm: 3,
-              },
-
-              mb: 3,
-
-              p: 2.2,
-
-              borderRadius: 3.5,
-
-              background:
-                '#F0FAF5',
-
-              border:
-                '1px solid #D8ECE3',
-
-              textAlign: 'center',
-            }}
-          >
+            {/* ==================================================
+                PAYMENT DETAILS
+            ================================================== */}
 
             <Box
               sx={{
-                width: 38,
-
-                height: 38,
-
-                borderRadius: '50%',
-
-                background:
-                  '#DDF4E9',
-
-                color:
-                  '#008C68',
-
-                display: 'flex',
-
-                alignItems: 'center',
-
-                justifyContent: 'center',
-
-                mx: 'auto',
-
-                mb: 1,
+                px: {
+                  xs: 2.5,
+                  sm: 4,
+                },
+                py: 2.5,
               }}
             >
-              <CheckCircleRounded
+              {/* Section heading */}
+              <Box
                 sx={{
-                  fontSize: 22,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.2,
+                  bgcolor: '#eaf8f2',
+                  borderRadius: 2.2,
+                  px: 1.8,
+                  py: 1.1,
+                  mb: 1,
                 }}
+              >
+                <Box
+                  sx={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 1.5,
+                    bgcolor: '#087f5b',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <ReceiptLongRounded
+                    sx={{ fontSize: 21 }}
+                  />
+                </Box>
+
+                <Typography
+                  sx={{
+                    color: '#075c43',
+                    fontSize: {
+                      xs: 18,
+                      sm: 20,
+                    },
+                    fontWeight: 800,
+                  }}
+                >
+                  Payment Details
+                </Typography>
+              </Box>
+
+              <DetailRow
+                icon={<TagRounded />}
+                label="Type"
+                value={transactionType}
+              />
+
+              <DetailRow
+                icon={<PersonRounded />}
+                label="Recipient"
+                value={
+                  transaction.recipient_name || 'N/A'
+                }
+              />
+
+              <DetailRow
+                icon={<AccountBalanceRounded />}
+                label="Bank"
+                value={
+                  transaction.recipient_bank ||
+                  'Zenimonies'
+                }
+              />
+
+              <DetailRow
+                icon={<AccountBalanceRounded />}
+                label="Account Number"
+                value={
+                  transaction.recipient_account
+                    ? `••••${String(
+                        transaction.recipient_account
+                      ).slice(-4)}`
+                    : 'N/A'
+                }
+              />
+
+              <DetailRow
+                icon={
+                  isIncoming ? (
+                    <ArrowDownwardRounded />
+                  ) : (
+                    <ArrowUpwardRounded />
+                  )
+                }
+                label="Amount"
+                value={formatMoney(numericAmount)}
+              />
+
+              <DetailRow
+                icon={<ReceiptLongRounded />}
+                label="Transaction Fee"
+                value={formatMoney(numericFee)}
+              />
+
+              <DetailRow
+                icon={<TagRounded />}
+                label="Reference"
+                valueNode={
+                  <Stack
+                    direction="row"
+                    spacing={0.8}
+                    alignItems="center"
+                    justifyContent="flex-end"
+                  >
+                    <Typography
+                      sx={{
+                        color: '#10221c',
+                        fontSize: {
+                          xs: 12,
+                          sm: 13,
+                        },
+                        fontWeight: 650,
+                        wordBreak: 'break-all',
+                        textAlign: 'right',
+                      }}
+                    >
+                      {reference}
+                    </Typography>
+
+                    <Button
+                      className="no-print"
+                      onClick={copyReference}
+                      aria-label="Copy reference"
+                      sx={{
+                        minWidth: 30,
+                        width: 30,
+                        height: 30,
+                        p: 0,
+                        borderRadius: 1.5,
+                        color: '#087f5b',
+                      }}
+                    >
+                      <ContentCopyRounded
+                        sx={{ fontSize: 17 }}
+                      />
+                    </Button>
+                  </Stack>
+                }
+              />
+
+              <DetailRow
+                icon={<CalendarMonthRounded />}
+                label="Date"
+                value={formatDate(transactionDate)}
+              />
+
+              <DetailRow
+                icon={<CheckCircleRounded />}
+                label="Status"
+                valueNode={
+                  <Chip
+                    label={statusText}
+                    size="small"
+                    sx={{
+                      justifySelf: 'end',
+                      bgcolor: statusBackground,
+                      color: statusColor,
+                      fontWeight: 800,
+                      borderRadius: 2,
+                      height: 28,
+                    }}
+                  />
+                }
               />
             </Box>
 
+            {/* ==================================================
+                VERIFIED BOX
+            ================================================== */}
 
-            <Typography
+            <Box
               sx={{
-                fontSize: 13,
-
-                fontWeight: 900,
-
-                color: '#1E352B',
+                mx: {
+                  xs: 2.5,
+                  sm: 4,
+                },
+                mb: 2.5,
+                p: {
+                  xs: 1.7,
+                  sm: 2,
+                },
+                borderRadius: 2.5,
+                bgcolor: '#eaf8f2',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
               }}
             >
-              Zenimonies Transaction Receipt
-            </Typography>
+              <Box
+                sx={{
+                  flexShrink: 0,
+                  width: 43,
+                  height: 43,
+                  borderRadius: '50%',
+                  bgcolor: '#087f5b',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <VerifiedRounded sx={{ fontSize: 27 }} />
+              </Box>
 
+              <Box>
+                <Typography
+                  sx={{
+                    color: '#075c43',
+                    fontSize: 15,
+                    fontWeight: 800,
+                  }}
+                >
+                  Transaction Verified
+                </Typography>
 
-            <Typography
+                <Typography
+                  sx={{
+                    mt: 0.25,
+                    color: '#66766f',
+                    fontSize: 12,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Keep this receipt for your records.
+                  The transaction reference can be used
+                  when contacting Zenimonies support.
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* ==================================================
+                FOOTER
+            ================================================== */}
+
+            <Box
+              className="receipt-footer"
               sx={{
-                mt: 0.6,
-
-                fontSize: 11,
-
-                lineHeight: 1.65,
-
-                color: '#6F8078',
+                bgcolor: '#075b42',
+                color: '#ffffff',
+                textAlign: 'center',
+                px: 2,
+                py: 2.2,
               }}
             >
-              Keep this receipt for your
-              records. Your transaction
-              reference can be used when
-              contacting Zenimonies support.
-            </Typography>
+              <Typography
+                sx={{
+                  fontSize: {
+                    xs: 14,
+                    sm: 16,
+                  },
+                  fontWeight: 800,
+                }}
+              >
+                Thank you for banking with Zenimonies.
+              </Typography>
 
-          </Box>
-
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  fontSize: 9,
+                  letterSpacing: 3,
+                  opacity: 0.8,
+                  fontWeight: 600,
+                }}
+              >
+                BIGGER POSSIBILITIES TOGETHER.
+              </Typography>
+            </Box>
+          </Card>
 
           {/* ==================================================
-              RECEIPT FOOTER
-          =================================================== */}
+              ACTION BUTTONS
+          ================================================== */}
 
-          <Box
+          <Stack
+            className="no-print"
+            direction={{
+              xs: 'column',
+              sm: 'row',
+            }}
+            spacing={1.2}
             sx={{
-              background:
-                '#063F31',
-
-              color: '#FFFFFF',
-
-              textAlign: 'center',
-
-              py: 1.5,
-
-              px: 2,
+              mt: 2,
             }}
           >
-
-            <Typography
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={<DownloadRounded />}
+              onClick={handlePrint}
               sx={{
-                fontSize: 10,
-
-                fontWeight: 700,
-
-                opacity: 0.8,
-
-                letterSpacing:
-                  0.5,
+                bgcolor: '#087f5b',
+                borderRadius: 2.5,
+                py: 1.25,
+                fontWeight: 800,
+                '&:hover': {
+                  bgcolor: '#066b4c',
+                },
               }}
             >
-              Thank you for banking with
-              Zenimonies
-            </Typography>
+              Save / Download
+            </Button>
 
-          </Box>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<ShareRounded />}
+              onClick={handleShare}
+              sx={{
+                borderColor: '#087f5b',
+                color: '#087f5b',
+                borderRadius: 2.5,
+                py: 1.25,
+                fontWeight: 800,
+                '&:hover': {
+                  borderColor: '#066b4c',
+                  bgcolor: '#eaf8f2',
+                },
+              }}
+            >
+              Share
+            </Button>
 
-        </Card>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<ArrowBackRounded />}
+              onClick={() => navigate('/transactions')}
+              sx={{
+                borderColor: '#d2ded9',
+                color: '#42534c',
+                borderRadius: 2.5,
+                py: 1.25,
+                fontWeight: 700,
+              }}
+            >
+              Back
+            </Button>
+          </Stack>
+        </Box>
+      </Box>
 
-
-        {/* ====================================================
-            ACTION BUTTONS
-        ===================================================== */}
-
-        <Stack
-          className="receipt-actions"
-
-          spacing={1.3}
-
-          sx={{
-            mt: 2,
-          }}
-        >
-
-          <Button
-            fullWidth
-
-            variant="contained"
-
-            startIcon={
-              <DownloadRounded />
-            }
-
-            onClick={
-              handlePrint
-            }
-
-            sx={{
-              height: 53,
-
-              borderRadius: 3,
-
-              background:
-                '#008C68',
-
-              textTransform:
-                'none',
-
-              fontWeight: 850,
-
-              fontSize: 14,
-
-              boxShadow:
-                '0 9px 22px rgba(0,140,104,0.18)',
-
-              '&:hover': {
-                background:
-                  '#007858',
-
-                boxShadow:
-                  '0 9px 22px rgba(0,140,104,0.18)',
-              },
-            }}
-          >
-            Download / Save Receipt
-          </Button>
-
-
-          <Button
-            fullWidth
-
-            variant="outlined"
-
-            startIcon={
-              <ShareRounded />
-            }
-
-            onClick={
-              handleShare
-            }
-
-            sx={{
-              height: 53,
-
-              borderRadius: 3,
-
-              borderColor:
-                '#CBE2D8',
-
-              color:
-                '#087A4B',
-
-              background:
-                '#FFFFFF',
-
-              textTransform:
-                'none',
-
-              fontWeight: 850,
-
-              fontSize: 14,
-
-              '&:hover': {
-                borderColor:
-                  '#087A4B',
-
-                background:
-                  '#F0FAF5',
-              },
-            }}
-          >
-            Share Receipt
-          </Button>
-
-
-          <Button
-            fullWidth
-
-            variant="text"
-
-            onClick={() =>
-              navigate('/transactions')
-            }
-
-            sx={{
-              height: 46,
-
-              color:
-                '#718079',
-
-              textTransform:
-                'none',
-
-              fontWeight: 750,
-            }}
-          >
-            Back to Transaction History
-          </Button>
-
-        </Stack>
-
-      </Container>
-
-
-      {/* ======================================================
-          PRINT STYLES
-      ======================================================= */}
+      {/* ========================================================
+          PRINT / PDF STYLES
+      ======================================================== */}
 
       <style>
         {`
           @media print {
-
-            html,
-            body {
-              background: #ffffff !important;
-              margin: 0 !important;
-              padding: 0 !important;
-            }
-
-            .receipt-page {
-              background: #ffffff !important;
-              min-height: auto !important;
-              padding: 0 !important;
-            }
-
-            .receipt-navigation {
-              display: none !important;
-            }
-
-            .receipt-actions {
-              display: none !important;
-            }
-
-            .receipt-card {
-              margin: 0 !important;
-              box-shadow: none !important;
-              border: 1px solid #D8E2DE !important;
-            }
-
             @page {
               size: A4;
               margin: 8mm;
             }
+
+            html,
+            body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+            }
+
+            body {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+
+            .receipt-page {
+              min-height: auto !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+            }
+
+            .receipt-container {
+              max-width: none !important;
+              width: 100% !important;
+            }
+
+            .receipt-card {
+              border: 1px solid #dcebe4 !important;
+              box-shadow: none !important;
+              border-radius: 4mm !important;
+              overflow: hidden !important;
+            }
+
+            .receipt-header,
+            .receipt-footer,
+            .brand-card,
+            .print-decoration {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+
+            .receipt-header {
+              background: #087f5b !important;
+            }
+
+            .receipt-footer {
+              background: #075b42 !important;
+            }
+
+            .no-print {
+              display: none !important;
+            }
+
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
           }
         `}
       </style>
-
-    </Box>
+    </>
   );
 };
-
-
-/*
- * ============================================================
- * RECEIPT SECTION
- * ============================================================
- */
-
-interface ReceiptSectionProps {
-  title: string;
-
-  children: React.ReactNode;
-}
-
-
-const ReceiptSection: React.FC<
-  ReceiptSectionProps
-> = ({
-  title,
-  children,
-}) => {
-  return (
-    <Box>
-
-      <Divider
-        sx={{
-          mx: {
-            xs: 2.5,
-            sm: 3,
-          },
-        }}
-      />
-
-
-      <Box
-        sx={{
-          px: {
-            xs: 2.5,
-            sm: 3,
-          },
-
-          py: 2.5,
-        }}
-      >
-
-        <Typography
-          sx={{
-            fontSize: 15,
-
-            fontWeight: 900,
-
-            color: '#1E2C26',
-
-            mb: 1.2,
-          }}
-        >
-          {title}
-        </Typography>
-
-
-        {children}
-
-      </Box>
-
-    </Box>
-  );
-};
-
-
-/*
- * ============================================================
- * DETAIL ROW
- * ============================================================
- */
-
-interface DetailRowProps {
-  icon: React.ReactNode;
-
-  label: string;
-
-  value: string;
-
-  action?: React.ReactNode;
-}
-
-
-const DetailRow: React.FC<
-  DetailRowProps
-> = ({
-  icon,
-  label,
-  value,
-  action,
-}) => {
-  return (
-    <Box
-      sx={{
-        py: 1.15,
-
-        borderBottom:
-          '1px solid #F0F4F2',
-      }}
-    >
-
-      <Stack
-        direction="row"
-
-        spacing={1.2}
-
-        alignItems="center"
-      >
-
-        <Box
-          sx={{
-            width: 34,
-
-            height: 34,
-
-            minWidth: 34,
-
-            borderRadius: 2,
-
-            background:
-              '#EAF7F3',
-
-            color:
-              '#008C68',
-
-            display: 'flex',
-
-            alignItems: 'center',
-
-            justifyContent: 'center',
-          }}
-        >
-          {React.cloneElement(
-            icon as React.ReactElement,
-            {
-              sx: {
-                fontSize: 17,
-              },
-            }
-          )}
-        </Box>
-
-
-        <Box
-          sx={{
-            flex: 1,
-
-            minWidth: 0,
-          }}
-        >
-
-          <Typography
-            sx={{
-              fontSize: 11,
-
-              color: '#89958F',
-
-              mb: 0.25,
-            }}
-          >
-            {label}
-          </Typography>
-
-
-          <Typography
-            sx={{
-              fontSize: 13,
-
-              fontWeight: 750,
-
-              color: '#26332E',
-
-              wordBreak:
-                'break-word',
-
-              lineHeight: 1.45,
-            }}
-          >
-            {value}
-          </Typography>
-
-        </Box>
-
-
-        {action}
-
-      </Stack>
-
-    </Box>
-  );
-};
-
-
-/*
- * ============================================================
- * BALANCE ROW
- * ============================================================
- */
-
-interface BalanceRowProps {
-  label: string;
-
-  value: string;
-
-  highlight?: boolean;
-}
-
-
-const BalanceRow: React.FC<
-  BalanceRowProps
-> = ({
-  label,
-  value,
-  highlight,
-}) => {
-  return (
-    <Stack
-      direction="row"
-
-      justifyContent="space-between"
-
-      alignItems="center"
-
-      spacing={2}
-
-      sx={{
-        py: 1.05,
-      }}
-    >
-
-      <Typography
-        sx={{
-          fontSize: 13,
-
-          color: '#7B8882',
-        }}
-      >
-        {label}
-      </Typography>
-
-
-      <Typography
-        sx={{
-          fontSize: 14,
-
-          fontWeight: 850,
-
-          color: highlight
-            ? '#008C68'
-            : '#26332E',
-
-          textAlign: 'right',
-        }}
-      >
-        {value}
-      </Typography>
-
-    </Stack>
-  );
-};
-
 
 export default TransactionReceipt;
