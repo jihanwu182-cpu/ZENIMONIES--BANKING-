@@ -24,6 +24,24 @@ type KycResponse = {
   kyc?: KycData;
 };
 
+type AccountData = {
+  id?: string;
+  account_number?: string;
+  account_type?: string;
+  currency?: string;
+  balance?: number | string;
+  status?: string;
+  created_at?: string;
+  kyc_status?: string;
+  kyc_tier?: number;
+};
+
+type AccountResponse = {
+  success?: boolean;
+  account?: AccountData;
+  message?: string;
+};
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
 
@@ -38,6 +56,92 @@ const Dashboard: React.FC = () => {
 
   const [kycLoading, setKycLoading] =
     useState(true);
+
+  // ==========================================================
+  // ACCOUNT BALANCE
+  // ==========================================================
+
+  const [account, setAccount] =
+    useState<AccountData | null>(null);
+
+  const [accountLoading, setAccountLoading] =
+    useState(true);
+
+  // ==========================================================
+  // API BASE
+  // ==========================================================
+
+  const apiBase =
+    process.env.REACT_APP_API_URL ||
+    'https://zenimonies-banking.onrender.com';
+
+  // ==========================================================
+  // LOAD ACCOUNT
+  // ==========================================================
+
+  const loadAccount = async () => {
+    try {
+      setAccountLoading(true);
+
+      const token =
+        localStorage.getItem(
+          'zenimonies_token'
+        ) ||
+        localStorage.getItem(
+          'token'
+        ) ||
+        localStorage.getItem(
+          'access_token'
+        );
+
+      if (!token) {
+        setAccountLoading(false);
+        return;
+      }
+
+      const response =
+        await fetch(
+          `${apiBase}/api/account`,
+          {
+            method: 'GET',
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+              'Content-Type':
+                'application/json',
+            },
+          }
+        );
+
+      if (!response.ok) {
+        throw new Error(
+          `Account request failed: ${response.status}`
+        );
+      }
+
+      const data: AccountResponse =
+        await response.json();
+
+      if (
+        data.success &&
+        data.account
+      ) {
+        setAccount(data.account);
+      } else {
+        console.error(
+          'Account response did not contain account data:',
+          data
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Dashboard account loading error:',
+        error
+      );
+    } finally {
+      setAccountLoading(false);
+    }
+  };
 
   // ==========================================================
   // LOAD KYC STATUS
@@ -63,16 +167,6 @@ const Dashboard: React.FC = () => {
           setKycLoading(false);
           return;
         }
-
-        /*
-         * IMPORTANT:
-         * Change this only if your frontend uses a
-         * different backend URL.
-         */
-
-        const apiBase =
-          process.env.REACT_APP_API_URL ||
-          '';
 
         const response =
           await fetch(
@@ -117,11 +211,6 @@ const Dashboard: React.FC = () => {
           error
         );
 
-        /*
-         * Do NOT assume verification
-         * when the server cannot be reached.
-         */
-
         setKyc({
           status: 'unknown',
           tier: 0,
@@ -135,7 +224,79 @@ const Dashboard: React.FC = () => {
     };
 
     loadKycStatus();
+    loadAccount();
+
+    // Refresh the account balance when
+    // the user returns to the dashboard.
+    const handleFocus = () => {
+      loadAccount();
+    };
+
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState ===
+        'visible'
+      ) {
+        loadAccount();
+      }
+    };
+
+    window.addEventListener(
+      'focus',
+      handleFocus
+    );
+
+    document.addEventListener(
+      'visibilitychange',
+      handleVisibilityChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        'focus',
+        handleFocus
+      );
+
+      document.removeEventListener(
+        'visibilitychange',
+        handleVisibilityChange
+      );
+    };
   }, []);
+
+  // ==========================================================
+  // BALANCE DISPLAY
+  // ==========================================================
+
+  const accountBalance =
+    Number(
+      account?.balance ?? 0
+    );
+
+  const accountCurrency =
+    account?.currency || 'NGN';
+
+  const formattedBalance =
+    accountCurrency === 'NGN'
+      ? `₦${accountBalance.toLocaleString(
+          'en-NG',
+          {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }
+        )}`
+      : `${accountCurrency} ${accountBalance.toLocaleString(
+          'en-NG',
+          {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }
+        )}`;
+
+  const hiddenBalance =
+    accountCurrency === 'NGN'
+      ? '₦••••'
+      : `${accountCurrency} ••••`;
 
   // ==========================================================
   // KYC DISPLAY
@@ -158,14 +319,6 @@ const Dashboard: React.FC = () => {
     const tier = Number(
       kyc?.tier || 0
     );
-
-    /*
-     * VERIFIED ONLY WHEN THE ACTUAL STATUS
-     * SAYS VERIFIED/APPROVED/COMPLETED.
-     *
-     * Merely having tier = 1 does NOT mean
-     * the user is verified.
-     */
 
     const verified =
       status === 'verified' ||
@@ -197,10 +350,6 @@ const Dashboard: React.FC = () => {
         };
       }
     }
-
-    /*
-     * PENDING
-     */
 
     if (
       status === 'pending' ||
@@ -237,10 +386,6 @@ const Dashboard: React.FC = () => {
         type: 'pending',
       };
     }
-
-    /*
-     * UNKNOWN / NOT STARTED
-     */
 
     return {
       text: 'KYC Verification Required',
@@ -388,9 +533,7 @@ const Dashboard: React.FC = () => {
   return (
     <div style={styles.page}>
 
-      {/* ====================================================
-          HEADER
-      ==================================================== */}
+      {/* HEADER */}
 
       <header style={styles.header}>
 
@@ -463,15 +606,11 @@ const Dashboard: React.FC = () => {
 
       </header>
 
-      {/* ====================================================
-          MAIN
-      ==================================================== */}
+      {/* MAIN */}
 
       <main style={styles.main}>
 
-        {/* ==================================================
-            WELCOME
-        ================================================== */}
+        {/* WELCOME */}
 
         <section
           style={
@@ -503,10 +642,6 @@ const Dashboard: React.FC = () => {
             </p>
 
           </div>
-
-          {/* =================================================
-              REAL KYC STATUS
-          ================================================= */}
 
           <button
             type="button"
@@ -554,9 +689,7 @@ const Dashboard: React.FC = () => {
 
         </section>
 
-        {/* ==================================================
-            BALANCE
-        ================================================== */}
+        {/* BALANCE */}
 
         <section
           style={
@@ -628,18 +761,18 @@ const Dashboard: React.FC = () => {
                 styles.balanceAmount
               }
             >
-              {showBalance
-                ? '₦0.00'
-                : '₦••••'}
+              {accountLoading
+                ? 'Loading...'
+                : showBalance
+                ? formattedBalance
+                : hiddenBalance}
             </div>
 
           </div>
 
         </section>
 
-        {/* ==================================================
-            QUICK ACTIONS
-        ================================================== */}
+        {/* QUICK ACTIONS */}
 
         <section
           style={
@@ -734,9 +867,7 @@ const Dashboard: React.FC = () => {
 
         </section>
 
-        {/* ==================================================
-            MORE MENU
-        ================================================== */}
+        {/* MORE MENU */}
 
         {showMenu && (
 
@@ -883,9 +1014,7 @@ const Dashboard: React.FC = () => {
 
         )}
 
-        {/* ==================================================
-            ACCOUNT VERIFICATION
-        ================================================== */}
+        {/* ACCOUNT VERIFICATION */}
 
         <section
           style={
@@ -947,9 +1076,7 @@ const Dashboard: React.FC = () => {
 
         </section>
 
-        {/* ==================================================
-            RECENT TRANSACTIONS
-        ================================================== */}
+        {/* RECENT TRANSACTIONS */}
 
         <section
           style={
@@ -1034,9 +1161,7 @@ const Dashboard: React.FC = () => {
 
       </main>
 
-      {/* ====================================================
-          BOTTOM NAVIGATION
-      ==================================================== */}
+      {/* BOTTOM NAVIGATION */}
 
       <nav
         style={
