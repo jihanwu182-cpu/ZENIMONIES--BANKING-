@@ -408,8 +408,7 @@ const handleSuccessfulCharge = async (
     // CREATE COMPLETED TRANSACTION
     // ========================================================
 
-    const transactionReference =
-      `ZEN-DEP-${reference}`;
+    const transactionReference = reference;
 
     await client.query(
       `
