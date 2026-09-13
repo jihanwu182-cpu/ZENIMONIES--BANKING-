@@ -46,177 +46,6 @@ const generateReference = () => {
 const nairaToKobo = (amount) => {
   return Math.round(Number(amount) * 100);
 };
-    /*
-     * ========================================================
-     * ZENIMONIES TEST TRANSFER SIMULATOR
-     * ========================================================
-     *
-     * This is ONLY for development/testing.
-     *
-     * It works only when:
-     *
-     * ZENIMONIES_TRANSFER_MODE=simulation
-     *
-     * AND the official Paystack test recipient is used:
-     *
-     * Zenith Bank
-     * Bank code: 057
-     * Account: 0000000000
-     *
-     * NO REAL MONEY IS SENT.
-     */
-
-    const transferMode =
-      String(
-        process.env.ZENIMONIES_TRANSFER_MODE || ''
-      )
-        .trim()
-        .toLowerCase();
-
-    const isOfficialTestRecipient =
-      cleanBankCode === '057' &&
-      cleanAccountNumber === '0000000000';
-
-    if (
-      transferMode === 'simulation' &&
-      isOfficialTestRecipient
-    ) {
-      console.log(
-        'ZENIMONIES TEST TRANSFER SIMULATION:',
-        {
-          reference,
-          amount: transferAmount,
-          recipient:
-            'Paystack Test Account',
-          bank: 'Zenith Bank',
-        }
-      );
-
-      const simulatedProviderReference =
-        `sim-${Date.now()}-${crypto
-          .randomBytes(4)
-          .toString('hex')}`;
-
-      const newBalance =
-        currentBalance - transferAmount;
-
-      /*
-       * Mark the bank transfer as completed.
-       */
-
-      await client.query(
-        `UPDATE bank_transfers
-         SET
-           status = 'completed',
-           provider_reference = $1,
-           completed_at = CURRENT_TIMESTAMP,
-           failure_reason = NULL
-         WHERE id = $2`,
-        [
-          simulatedProviderReference,
-          transfer.id,
-        ]
-      );
-
-      /*
-       * Deduct the test amount from the
-       * Zenimonies test wallet.
-       */
-
-      await client.query(
-        `UPDATE accounts
-         SET
-           balance = $1,
-           updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2`,
-        [
-          newBalance,
-          account.id,
-        ]
-      );
-
-      /*
-       * Record the completed test transaction.
-       */
-
-      await client.query(
-        `INSERT INTO transactions (
-          account_id,
-          type,
-          amount,
-          currency,
-          reference,
-          description,
-          status,
-          balance_before,
-          balance_after
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          $8,
-          $9
-        )`,
-        [
-          account.id,
-          'transfer',
-          transferAmount,
-          'NGN',
-          reference,
-          narration ||
-            `Test bank transfer to ${recipient_name}`,
-          'completed',
-          currentBalance,
-          newBalance,
-        ]
-      );
-
-      await client.query('COMMIT');
-      transactionStarted = false;
-
-      return res.status(201).json({
-        success: true,
-
-        test_mode: true,
-
-        message:
-          'Test transfer completed successfully. No real money was sent.',
-
-        transfer: {
-          id: transfer.id,
-          reference,
-          provider_reference:
-            simulatedProviderReference,
-
-          recipient_name:
-            transfer.recipient_name,
-
-          recipient_account_number:
-            transfer.recipient_account_number,
-
-          recipient_bank_name:
-            transfer.recipient_bank_name,
-
-          amount: transferAmount,
-
-          currency: 'NGN',
-
-          status: 'completed',
-
-          test_mode: true,
-
-          created_at:
-            transfer.created_at,
-
-          completed_at:
-            new Date().toISOString(),
-        },
-      });
 
 /*
  * ============================================================
@@ -568,6 +397,165 @@ const transferToBank = async (req, res) => {
 
     const transfer =
       transferResult.rows[0];
+        /*
+     * ========================================================
+     * ZENIMONIES TEST TRANSFER SIMULATION
+     * ========================================================
+     *
+     * Only runs when:
+     *
+     * ZENIMONIES_TRANSFER_MODE=simulation
+     *
+     * and the official Paystack test account is used.
+     *
+     * NO REAL MONEY IS SENT.
+     */
+
+    const transferMode =
+      String(
+        process.env.ZENIMONIES_TRANSFER_MODE || ''
+      )
+        .trim()
+        .toLowerCase();
+
+    const isOfficialTestRecipient =
+      cleanBankCode === '057' &&
+      cleanAccountNumber === '0000000000';
+
+    if (
+      transferMode === 'simulation' &&
+      isOfficialTestRecipient
+    ) {
+      console.log(
+        'ZENIMONIES TEST TRANSFER SIMULATION',
+        {
+          reference,
+          amount: transferAmount,
+        }
+      );
+
+      const simulatedProviderReference =
+        `sim-${Date.now()}-${crypto
+          .randomBytes(4)
+          .toString('hex')}`;
+
+      const newBalance =
+        currentBalance - transferAmount;
+
+      /*
+       * Mark bank transfer completed.
+       */
+
+      await client.query(
+        `UPDATE bank_transfers
+         SET
+           status = 'completed',
+           provider_reference = $1,
+           completed_at = CURRENT_TIMESTAMP,
+           failure_reason = NULL
+         WHERE id = $2`,
+        [
+          simulatedProviderReference,
+          transfer.id,
+        ]
+      );
+
+      /*
+       * Deduct amount from Zenimonies balance.
+       */
+
+      await client.query(
+        `UPDATE accounts
+         SET
+           balance = $1,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [
+          newBalance,
+          account.id,
+        ]
+      );
+
+      /*
+       * Record completed transaction.
+       */
+
+      await client.query(
+        `INSERT INTO transactions (
+          account_id,
+          type,
+          amount,
+          currency,
+          reference,
+          description,
+          status,
+          balance_before,
+          balance_after
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9
+        )`,
+        [
+          account.id,
+          'transfer',
+          transferAmount,
+          'NGN',
+          reference,
+          narration ||
+            `Test bank transfer to ${recipient_name}`,
+          'completed',
+          currentBalance,
+          newBalance,
+        ]
+      );
+
+      await client.query('COMMIT');
+      transactionStarted = false;
+
+      return res.status(201).json({
+        success: true,
+        test_mode: true,
+
+        message:
+          'Test transfer completed successfully. No real money was sent.',
+
+        transfer: {
+          id: transfer.id,
+          reference,
+
+          provider_reference:
+            simulatedProviderReference,
+
+          recipient_name:
+            transfer.recipient_name,
+
+          recipient_account_number:
+            transfer.recipient_account_number,
+
+          recipient_bank_name:
+            transfer.recipient_bank_name,
+
+          amount: transferAmount,
+          currency: 'NGN',
+          status: 'completed',
+          test_mode: true,
+
+          created_at:
+            transfer.created_at,
+
+          completed_at:
+            new Date().toISOString(),
+        },
+      });
+    }
 
     /*
      * --------------------------------------------------------
