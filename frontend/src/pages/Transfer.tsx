@@ -1,44 +1,95 @@
-import React, { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, {
+  useMemo,
+  useState,
+} from 'react';
+
+import {
+  Link,
+  useNavigate,
+} from 'react-router-dom';
+
 import axios from 'axios';
 
 const API_URL =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com';
 
+
+/*
+ * ============================================================
+ * TYPES
+ * ============================================================
+ */
+
 interface Recipient {
   id: string;
   full_name: string;
   phone: string;
+
+  /*
+   * REAL Zenimonies account number.
+   */
+  account_number?: string;
+
+  currency?: string;
+
   is_verified?: boolean;
 }
+
 
 interface LookupResponse {
   success?: boolean;
   message?: string;
+
   user?: Recipient;
 }
+
 
 interface TransferResponse {
   success?: boolean;
   message?: string;
+
   transfer?: {
     reference?: string;
+
     recipient_name?: string;
+
     recipient_phone?: string;
+
+    recipient_account?: string;
+
+    recipient_bank?: string;
+
     amount?: number;
+
+    transaction_fee?: number;
+
     currency?: string;
+
     status?: string;
+
     balance_after?: number;
   };
 }
 
+
+/*
+ * ============================================================
+ * COMPONENT
+ * ============================================================
+ */
+
 const Transfer: React.FC = () => {
   const navigate = useNavigate();
 
-  const [phone, setPhone] = useState('');
-  const [amount, setAmount] = useState('');
-  const [narration, setNarration] = useState('');
+  const [phone, setPhone] =
+    useState('');
+
+  const [amount, setAmount] =
+    useState('');
+
+  const [narration, setNarration] =
+    useState('');
 
   const [recipient, setRecipient] =
     useState<Recipient | null>(null);
@@ -61,10 +112,23 @@ const Transfer: React.FC = () => {
   const [balanceAfter, setBalanceAfter] =
     useState<number | null>(null);
 
+  /*
+   * REAL ACCOUNT NUMBER FROM
+   * THE COMPLETED TRANSFER.
+   */
+  const [
+    recipientAccountNumber,
+    setRecipientAccountNumber,
+  ] = useState('');
+
   const token =
-    localStorage.getItem('zenimonies_token') ||
+    localStorage.getItem(
+      'zenimonies_token'
+    ) ||
     localStorage.getItem('token') ||
-    localStorage.getItem('access_token');
+    localStorage.getItem(
+      'access_token'
+    );
 
   const cleanPhone = useMemo(
     () =>
@@ -77,100 +141,116 @@ const Transfer: React.FC = () => {
   const transferAmount =
     Number(amount);
 
+
   /*
    * ==========================================================
-   * VERIFY ZENIMONIES RECIPIENT
+   * VERIFY RECIPIENT
    * ==========================================================
    */
 
-  const verifyRecipient = async () => {
-    setError('');
-    setSuccess('');
-    setRecipient(null);
-    setReference('');
-    setBalanceAfter(null);
+  const verifyRecipient =
+    async () => {
+      setError('');
+      setSuccess('');
+      setRecipient(null);
+      setReference('');
+      setBalanceAfter(null);
+      setRecipientAccountNumber('');
 
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-
-    if (!cleanPhone) {
-      setError(
-        'Please enter the recipient phone number.'
-      );
-      return;
-    }
-
-    if (cleanPhone.length < 10) {
-      setError(
-        'Please enter a valid Zenimonies phone number.'
-      );
-      return;
-    }
-
-    try {
-      setChecking(true);
-
-      const response =
-        await axios.get<LookupResponse>(
-          `${API_URL}/api/internal-transfers/user`,
-          {
-            params: {
-              phone: cleanPhone,
-            },
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
-
-      if (
-        response.data?.success &&
-        response.data?.user
-      ) {
-        setRecipient(
-          response.data.user
-        );
-
-        setSuccess(
-          'Zenimonies recipient verified.'
-        );
-      } else {
-        setError(
-          response.data?.message ||
-            'Unable to find this Zenimonies user.'
-        );
-      }
-    } catch (err: any) {
-      if (
-        err?.response?.status === 401
-      ) {
-        localStorage.removeItem(
-          'zenimonies_token'
-        );
-
-        localStorage.removeItem(
-          'token'
-        );
-
-        localStorage.removeItem(
-          'access_token'
-        );
-
+      if (!token) {
         navigate('/login');
         return;
       }
 
-      setError(
-        err?.response?.data?.message ||
-          'Unable to verify this Zenimonies user.'
-      );
-    } finally {
-      setChecking(false);
-    }
-  };
+      if (!cleanPhone) {
+        setError(
+          'Please enter the recipient phone number.'
+        );
+        return;
+      }
+
+      if (cleanPhone.length < 10) {
+        setError(
+          'Please enter a valid Zenimonies phone number.'
+        );
+        return;
+      }
+
+      try {
+        setChecking(true);
+
+        const response =
+          await axios.get<LookupResponse>(
+            `${API_URL}/api/internal-transfers/user`,
+            {
+              params: {
+                phone: cleanPhone,
+              },
+
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
+
+        if (
+          response.data?.success &&
+          response.data?.user
+        ) {
+          const verifiedRecipient =
+            response.data.user;
+
+          setRecipient(
+            verifiedRecipient
+          );
+
+          /*
+           * Store the REAL account number.
+           */
+          setRecipientAccountNumber(
+            verifiedRecipient.account_number ||
+              ''
+          );
+
+          setSuccess(
+            'Zenimonies recipient verified.'
+          );
+        } else {
+          setError(
+            response.data?.message ||
+              'Unable to find this Zenimonies user.'
+          );
+        }
+      } catch (err: any) {
+        if (
+          err?.response?.status === 401
+        ) {
+          localStorage.removeItem(
+            'zenimonies_token'
+          );
+
+          localStorage.removeItem(
+            'token'
+          );
+
+          localStorage.removeItem(
+            'access_token'
+          );
+
+          navigate('/login');
+          return;
+        }
+
+        setError(
+          err?.response?.data?.message ||
+            'Unable to verify this Zenimonies user.'
+        );
+      } finally {
+        setChecking(false);
+      }
+    };
+
 
   /*
    * ==========================================================
@@ -264,6 +344,17 @@ const Transfer: React.FC = () => {
           transfer?.reference || ''
         );
 
+        /*
+         * IMPORTANT:
+         * Store the REAL recipient account
+         * returned by the backend.
+         */
+        setRecipientAccountNumber(
+          transfer?.recipient_account ||
+            recipient.account_number ||
+            ''
+        );
+
         const newBalance =
           Number(
             transfer?.balance_after
@@ -316,6 +407,7 @@ const Transfer: React.FC = () => {
     }
   };
 
+
   /*
    * ==========================================================
    * FORMAT MONEY
@@ -325,13 +417,16 @@ const Transfer: React.FC = () => {
   const formatNaira = (
     value: number
   ) =>
-    `₦${Number(value || 0).toLocaleString(
+    `₦${Number(
+      value || 0
+    ).toLocaleString(
       'en-NG',
       {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }
     )}`;
+
 
   /*
    * ==========================================================
@@ -344,13 +439,16 @@ const Transfer: React.FC = () => {
 
       {/* HEADER */}
 
-      <header style={styles.header}>
-
+      <header
+        style={styles.header}
+      >
         <Link
           to="/"
           style={styles.brandLink}
         >
-          <div style={styles.logo}>
+          <div
+            style={styles.logo}
+          >
             Z
           </div>
 
@@ -379,8 +477,8 @@ const Transfer: React.FC = () => {
         >
           Home
         </Link>
-
       </header>
+
 
       {/* MAIN */}
 
@@ -397,8 +495,6 @@ const Transfer: React.FC = () => {
           style={styles.card}
         >
 
-          {/* ICON */}
-
           <div
             style={
               styles.iconCircle
@@ -406,8 +502,6 @@ const Transfer: React.FC = () => {
           >
             ➤
           </div>
-
-          {/* TITLE */}
 
           <h1
             style={styles.title}
@@ -425,6 +519,7 @@ const Transfer: React.FC = () => {
             account.
           </p>
 
+
           {/* ERROR */}
 
           {error && (
@@ -437,6 +532,7 @@ const Transfer: React.FC = () => {
               {error}
             </div>
           )}
+
 
           {/* SUCCESS */}
 
@@ -462,6 +558,21 @@ const Transfer: React.FC = () => {
                 </div>
               )}
 
+              {recipientAccountNumber && (
+                <div
+                  style={
+                    styles.successDetails
+                  }
+                >
+                  Recipient Account:{' '}
+                  <strong>
+                    {
+                      recipientAccountNumber
+                    }
+                  </strong>
+                </div>
+              )}
+
               {balanceAfter !==
                 null &&
                 Number.isFinite(
@@ -481,6 +592,7 @@ const Transfer: React.FC = () => {
                 )}
             </div>
           )}
+
 
           {/* FORM */}
 
@@ -504,7 +616,6 @@ const Transfer: React.FC = () => {
                 styles.verifyRow
               }
             >
-
               <input
                 id="phone"
                 type="tel"
@@ -523,8 +634,13 @@ const Transfer: React.FC = () => {
                   setSuccess('');
                   setError('');
                   setReference('');
+
                   setBalanceAfter(
                     null
+                  );
+
+                  setRecipientAccountNumber(
+                    ''
                   );
                 }}
                 placeholder="e.g. 08012345678"
@@ -554,8 +670,8 @@ const Transfer: React.FC = () => {
                   ? 'Checking...'
                   : 'Verify'}
               </button>
-
             </div>
+
 
             {/* RECIPIENT */}
 
@@ -565,7 +681,6 @@ const Transfer: React.FC = () => {
                   styles.recipientCard
                 }
               >
-
                 <div
                   style={
                     styles.recipientAvatar
@@ -602,6 +717,19 @@ const Transfer: React.FC = () => {
                       recipient.phone
                     }
                   </div>
+
+                  {recipient.account_number && (
+                    <div
+                      style={
+                        styles.recipientAccount
+                      }
+                    >
+                      Account:{' '}
+                      {
+                        recipient.account_number
+                      }
+                    </div>
+                  )}
                 </div>
 
                 <div
@@ -611,9 +739,9 @@ const Transfer: React.FC = () => {
                 >
                   ✓ Verified
                 </div>
-
               </div>
             )}
+
 
             {/* AMOUNT */}
 
@@ -629,7 +757,6 @@ const Transfer: React.FC = () => {
                 styles.amountWrap
               }
             >
-
               <span
                 style={
                   styles.currency
@@ -659,8 +786,8 @@ const Transfer: React.FC = () => {
                   styles.amountInput
                 }
               />
-
             </div>
+
 
             {/* NARRATION */}
 
@@ -688,7 +815,8 @@ const Transfer: React.FC = () => {
               }
             />
 
-            {/* SEND BUTTON */}
+
+            {/* SEND */}
 
             <button
               type="submit"
@@ -719,6 +847,7 @@ const Transfer: React.FC = () => {
 
           </form>
 
+
           {/* SECURITY */}
 
           <div
@@ -741,12 +870,11 @@ const Transfer: React.FC = () => {
           </div>
 
         </section>
-
       </main>
-
     </div>
   );
 };
+
 
 /*
  * ============================================================
@@ -980,15 +1108,19 @@ const styles: Record<
     color: '#17362a',
     fontSize: 14,
     fontWeight: 800,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
   },
 
   recipientPhone: {
     color: '#728078',
     fontSize: 12,
     marginTop: 2,
+  },
+
+  recipientAccount: {
+    color: '#087c43',
+    fontSize: 12,
+    fontWeight: 700,
+    marginTop: 3,
   },
 
   verifiedPill: {
