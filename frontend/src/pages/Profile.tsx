@@ -1619,15 +1619,6 @@ const Profile: React.FC = () => {
 
           <div style={styles.accountGrid}>
             <div>
-              <span style={styles.accountLabel}>
-                Account Number
-              </span>
-
-              <strong style={styles.accountValue}>
-                {account?.account_number ||
-                  'Not available'}
-              </strong>
-            </div>
 
             <div>
               <span style={styles.accountLabel}>
