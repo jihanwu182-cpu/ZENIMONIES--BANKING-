@@ -378,6 +378,39 @@ const startServer = async () => {
     console.log(
       'Database migration completed: recipient_phone is available on bank_transfers'
     );
+    
+    // --------------------------------------------------------
+    // PROFILE DATABASE MIGRATION
+    // --------------------------------------------------------
+    //
+    // Add persistent profile fields to existing users.
+    // IF NOT EXISTS makes this safe on every server restart.
+    //
+
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS address TEXT;
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS lga VARCHAR(100);
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS country VARCHAR(100)
+      NOT NULL DEFAULT 'Nigeria';
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS profile_photo TEXT;
+    `);
+
+    console.log(
+      'Database migration completed: profile fields are available on users'
+    );
 
     // --------------------------------------------------------
     // SERVER
