@@ -34,9 +34,25 @@ CREATE TABLE IF NOT EXISTS users (
 
     legal_name VARCHAR(150),
 
-    legal_name_locked BOOLEAN NOT NULL DEFAULT false,
+        legal_name_locked BOOLEAN NOT NULL DEFAULT false,
 
     legal_dob_locked BOOLEAN NOT NULL DEFAULT false,
+
+    -- ========================================================
+    -- PROFILE INFORMATION
+    -- ========================================================
+
+    address TEXT,
+
+    city VARCHAR(100),
+
+    state VARCHAR(100),
+
+    lga VARCHAR(100),
+
+    country VARCHAR(100) NOT NULL DEFAULT 'Nigeria',
+
+    profile_photo TEXT,
 
     -- ========================================================
     -- KYC / VERIFICATION
