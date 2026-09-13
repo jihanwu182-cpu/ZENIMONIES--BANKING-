@@ -26,11 +26,18 @@ const getPaystackHeaders = () => {
   };
 };
 
+/*
+ * IMPORTANT:
+ *
+ * Paystack transfer references must use lowercase
+ * alphanumeric characters plus "-" or "_".
+ *
+ * Do NOT use uppercase letters here.
+ */
 const generateReference = () => {
-  return `ZEN-TRF-${Date.now()}-${crypto
+  return `zen-trf-${Date.now()}-${crypto
     .randomBytes(4)
-    .toString('hex')
-    .toUpperCase()}`;
+    .toString('hex')}`;
 };
 
 /*
@@ -187,7 +194,8 @@ const transferToBank = async (req, res) => {
     if (!cleanBankCode) {
       return res.status(400).json({
         success: false,
-        message: 'Recipient bank code is required',
+        message:
+          'Recipient bank code is required',
       });
     }
 
@@ -207,7 +215,8 @@ const transferToBank = async (req, res) => {
     if (transferAmount > 100000000) {
       return res.status(400).json({
         success: false,
-        message: 'Transfer amount is too large',
+        message:
+          'Transfer amount is too large',
       });
     }
 
@@ -261,14 +270,17 @@ const transferToBank = async (req, res) => {
 
       return res.status(404).json({
         success: false,
-        message: 'Active account not found',
+        message:
+          'Active account not found',
       });
     }
 
     const account = accountResult.rows[0];
 
     /*
-     * Only NGN is supported by this transfer flow.
+     * --------------------------------------------------------
+     * NGN ONLY
+     * --------------------------------------------------------
      */
 
     if (
@@ -291,7 +303,7 @@ const transferToBank = async (req, res) => {
 
     /*
      * --------------------------------------------------------
-     * CHECK BALANCE
+     * CHECK ZENIMONIES BALANCE
      * --------------------------------------------------------
      */
 
@@ -301,24 +313,34 @@ const transferToBank = async (req, res) => {
 
       return res.status(400).json({
         success: false,
-        message: 'Insufficient account balance',
+        message:
+          'Insufficient account balance',
       });
     }
 
     /*
      * --------------------------------------------------------
-     * CREATE OUR INTERNAL REFERENCE
+     * CREATE PAYSTACK-SAFE REFERENCE
      * --------------------------------------------------------
      */
 
     const reference = generateReference();
 
+    console.log(
+      'Creating bank transfer:',
+      {
+        reference,
+        amount: transferAmount,
+        bankCode: cleanBankCode,
+        accountNumber:
+          cleanAccountNumber,
+      }
+    );
+
     /*
      * --------------------------------------------------------
      * CREATE INITIAL TRANSFER RECORD
      * --------------------------------------------------------
-     *
-     * We record it as pending before contacting Paystack.
      */
 
     const transferResult = await client.query(
@@ -395,11 +417,22 @@ const transferToBank = async (req, res) => {
             cleanAccountNumber,
           bankCode: cleanBankCode,
         });
+
+      console.log(
+        'Paystack recipient created:',
+        paystackRecipient?.recipient_code
+      );
     } catch (error) {
       const providerMessage =
         error?.response?.data?.message ||
         error?.message ||
         'Unable to create transfer recipient';
+
+      console.error(
+        'Paystack recipient error:',
+        error?.response?.data ||
+          error
+      );
 
       await client.query(
         `UPDATE bank_transfers
@@ -419,7 +452,7 @@ const transferToBank = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          'Unable to create the bank transfer recipient',
+          `Unable to create the bank transfer recipient: ${providerMessage}`,
       });
     }
 
@@ -442,11 +475,22 @@ const transferToBank = async (req, res) => {
             narration ||
             `Zenimonies transfer to ${recipient_name}`,
         });
+
+      console.log(
+        'Paystack transfer response:',
+        paystackTransfer
+      );
     } catch (error) {
       const providerMessage =
         error?.response?.data?.message ||
         error?.message ||
         'Unable to initiate transfer';
+
+      console.error(
+        'Paystack transfer initiation error:',
+        error?.response?.data ||
+          error
+      );
 
       await client.query(
         `UPDATE bank_transfers
@@ -466,7 +510,7 @@ const transferToBank = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          'The bank transfer could not be initiated',
+          `The bank transfer could not be initiated: ${providerMessage}`,
       });
     }
 
@@ -475,13 +519,11 @@ const transferToBank = async (req, res) => {
      * PAYSTACK ACCEPTED THE TRANSFER
      * --------------------------------------------------------
      *
-     * IMPORTANT:
+     * In test mode Paystack documents that test transfers
+     * return success because there is no real processing.
      *
-     * "processing" does NOT mean the recipient has received
-     * the money.
-     *
-     * Paystack must later confirm the final status through
-     * its transfer webhook/event.
+     * In live mode, transfers can remain pending/processing
+     * until Paystack sends the final webhook event.
      */
 
     const providerReference =
@@ -503,13 +545,8 @@ const transferToBank = async (req, res) => {
 
     /*
      * --------------------------------------------------------
-     * RESERVE / DEDUCT BALANCE
+     * DEDUCT ZENIMONIES BALANCE
      * --------------------------------------------------------
-     *
-     * The transfer has now been accepted by Paystack.
-     *
-     * We deduct the customer's balance and record the
-     * outgoing transaction.
      */
 
     const newBalance =
@@ -526,6 +563,12 @@ const transferToBank = async (req, res) => {
         account.id,
       ]
     );
+
+    /*
+     * --------------------------------------------------------
+     * RECORD TRANSACTION
+     * --------------------------------------------------------
+     */
 
     await client.query(
       `INSERT INTO transactions (
