@@ -358,6 +358,11 @@ const App: React.FC = () => {
         />
 
         <Route
+          path="/transfer-confirmation"
+          element={<TransferConfirmation />}
+        />
+
+        <Route
           path="/deposit"
           element={<Deposit />}
         />
