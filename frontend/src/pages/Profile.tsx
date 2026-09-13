@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface User {
@@ -16,37 +16,12 @@ interface User {
   city?: string;
   state?: string;
   country?: string;
+  lga?: string;
   role?: string;
-  status?: string;
-
-  /*
-   * KYC fields
-   *
-   * IMPORTANT:
-   * kyc_tier alone does NOT mean the user is verified.
-   * Actual verification comes from kyc_status.
-   */
   kyc_status?: string;
   kyc_tier?: number;
   tier?: number;
-
-  /*
-   * This is separate from KYC.
-   * It may represent phone/email/account verification.
-   */
   is_verified?: boolean;
-
-  bvn_verified?: boolean;
-  id_verified?: boolean;
-  tier_3_verified?: boolean;
-  tier_3_method?: string;
-
-  account_limit?: number;
-  daily_transfer_limit?: number;
-  daily_transfer_used?: number;
-  daily_transfer_reset_at?: string;
-  created_at?: string;
-
   profile_photo?: string;
   avatar?: string;
 }
@@ -58,6 +33,911 @@ interface Account {
   currency?: string;
   status?: string;
 }
+
+/* ============================================================
+   NIGERIA — STATES + FCT
+============================================================ */
+
+const NIGERIAN_STATES: Record<string, string[]> = {
+  Abia: [
+    'Aba North',
+    'Aba South',
+    'Arochukwu',
+    'Bende',
+    'Ikwuano',
+    'Isiala Ngwa North',
+    'Isiala Ngwa South',
+    'Isuikwuato',
+    'Obi Ngwa',
+    'Ohafia',
+    'Osisioma Ngwa',
+    'Ugwunagbo',
+    'Ukwa East',
+    'Ukwa West',
+    'Umuahia North',
+    'Umuahia South',
+    'Umunneochi',
+  ],
+
+  Adamawa: [
+    'Demsa',
+    'Fufore',
+    'Ganye',
+    'Gayuk',
+    'Gombi',
+    'Grie',
+    'Hong',
+    'Jada',
+    'Lamurde',
+    'Madagali',
+    'Maiha',
+    'Mayo Belwa',
+    'Michika',
+    'Mubi North',
+    'Mubi South',
+    'Numan',
+    'Shelleng',
+    'Song',
+    'Toungo',
+    'Yola North',
+    'Yola South',
+  ],
+
+  Akwa Ibom: [
+    'Abak',
+    'Eastern Obolo',
+    'Eket',
+    'Esit Eket',
+    'Essien Udim',
+    'Etim Ekpo',
+    'Etinan',
+    'Ibeno',
+    'Ibesikpo Asutan',
+    'Ibiono-Ibom',
+    'Ika',
+    'Ikono',
+    'Ikot Abasi',
+    'Ikot Ekpene',
+    'Ini',
+    'Itu',
+    'Mbo',
+    'Mkpat-Enin',
+    'Nsit-Atai',
+    'Nsit-Ibom',
+    'Nsit-Ubium',
+    'Obot Akara',
+    'Okobo',
+    'Onna',
+    'Oron',
+    'Oruk Anam',
+    'Udung-Uko',
+    'Ukanafun',
+    'Uruan',
+    'Urue-Offong/Oruko',
+    'Uyo',
+  ],
+
+  Anambra: [
+    'Aguata',
+    'Anambra East',
+    'Anambra West',
+    'Anaocha',
+    'Awka North',
+    'Awka South',
+    'Ayamelum',
+    'Dunukofia',
+    'Ekwusigo',
+    'Idemili North',
+    'Idemili South',
+    'Ihiala',
+    'Njikoka',
+    'Nnewi North',
+    'Nnewi South',
+    'Ogbaru',
+    'Onitsha North',
+    'Onitsha South',
+    'Orumba North',
+    'Orumba South',
+    'Oyi',
+  ],
+
+  Bauchi: [
+    'Bauchi',
+    'Bogoro',
+    'Damban',
+    'Darazo',
+    'Dass',
+    'Gamawa',
+    'Ganjuwa',
+    'Giade',
+    'Itas/Gadau',
+    'Jama’are',
+    'Katagum',
+    'Kirfi',
+    'Misau',
+    'Ningi',
+    'Shira',
+    'Tafawa Balewa',
+    'Toro',
+    'Warji',
+    'Zaki',
+  ],
+
+  Bayelsa: [
+    'Brass',
+    'Ekeremor',
+    'Kolokuma/Opokuma',
+    'Nembe',
+    'Ogbia',
+    'Sagbama',
+    'Southern Ijaw',
+    'Yenagoa',
+  ],
+
+  Benue: [
+    'Ado',
+    'Agatu',
+    'Apa',
+    'Buruku',
+    'Gboko',
+    'Guma',
+    'Gwer East',
+    'Gwer West',
+    'Katsina-Ala',
+    'Konshisha',
+    'Kwande',
+    'Logo',
+    'Makurdi',
+    'Obi',
+    'Ogbadibo',
+    'Ohimini',
+    'Oju',
+    'Okpokwu',
+    'Oturkpo',
+    'Tarka',
+    'Ukum',
+    'Ushongo',
+    'Vandeikya',
+  ],
+
+  Borno: [
+    'Abadam',
+    'Askira/Uba',
+    'Bama',
+    'Bayo',
+    'Biu',
+    'Chibok',
+    'Damboa',
+    'Dikwa',
+    'Gubio',
+    'Guzamala',
+    'Gwoza',
+    'Hawul',
+    'Jere',
+    'Kaga',
+    'Kala/Balge',
+    'Konduga',
+    'Kukawa',
+    'Kwaya Kusar',
+    'Mafa',
+    'Magumeri',
+    'Maiduguri',
+    'Marte',
+    'Mobbar',
+    'Monguno',
+    'Ngala',
+    'Nganzai',
+    'Shani',
+  ],
+
+  Cross River: [
+    'Abi',
+    'Akamkpa',
+    'Akpabuyo',
+    'Bakassi',
+    'Bekwarra',
+    'Biase',
+    'Boki',
+    'Calabar Municipal',
+    'Calabar South',
+    'Etung',
+    'Ikom',
+    'Obanliku',
+    'Obubra',
+    'Obudu',
+    'Odukpani',
+    'Ogoja',
+    'Yakurr',
+    'Yala',
+  ],
+
+  Delta: [
+    'Aniocha North',
+    'Aniocha South',
+    'Bomadi',
+    'Burutu',
+    'Ethiope East',
+    'Ethiope West',
+    'Ika North East',
+    'Ika South',
+    'Isoko North',
+    'Isoko South',
+    'Ndokwa East',
+    'Ndokwa West',
+    'Okpe',
+    'Oshimili North',
+    'Oshimili South',
+    'Patani',
+    'Sapele',
+    'Udu',
+    'Ughelli North',
+    'Ughelli South',
+    'Ukwuani',
+    'Uvwie',
+    'Warri North',
+    'Warri South',
+    'Warri South West',
+  ],
+
+  Ebonyi: [
+    'Abakaliki',
+    'Afikpo North',
+    'Afikpo South',
+    'Ebonyi',
+    'Ezza North',
+    'Ezza South',
+    'Ikwo',
+    'Ishielu',
+    'Ivo',
+    'Izzi',
+    'Ohaukwu',
+    'Onicha',
+  ],
+
+  Edo: [
+    'Akoko-Edo',
+    'Egor',
+    'Esan Central',
+    'Esan North-East',
+    'Esan South-East',
+    'Esan West',
+    'Etsako Central',
+    'Etsako East',
+    'Etsako West',
+    'Igueben',
+    'Ikpoba-Okha',
+    'Oredo',
+    'Orhionmwon',
+    'Ovia North-East',
+    'Ovia South-West',
+    'Owan East',
+    'Owan West',
+    'Uhunmwonde',
+  ],
+
+  Ekiti: [
+    'Ado Ekiti',
+    'Efon',
+    'Ekiti East',
+    'Ekiti South-West',
+    'Ekiti West',
+    'Emure',
+    'Gbonyin',
+    'Ido Osi',
+    'Ijero',
+    'Ikere',
+    'Ikole',
+    'Ilejemeje',
+    'Irepodun/Ifelodun',
+    'Ise/Orun',
+    'Moba',
+    'Oye',
+  ],
+
+  Enugu: [
+    'Aninri',
+    'Awgu',
+    'Enugu East',
+    'Enugu North',
+    'Enugu South',
+    'Ezeagu',
+    'Igbo Etiti',
+    'Igbo Eze North',
+    'Igbo Eze South',
+    'Isi Uzo',
+    'Nkanu East',
+    'Nkanu West',
+    'Nsukka',
+    'Oji River',
+    'Udenu',
+    'Udi',
+    'Uzo-Uwani',
+  ],
+
+  Gombe: [
+    'Akko',
+    'Balanga',
+    'Billiri',
+    'Dukku',
+    'Funakaye',
+    'Gombe',
+    'Kaltungo',
+    'Kwami',
+    'Nafada',
+    'Shongom',
+    'Yamaltu/Deba',
+  ],
+
+  Imo: [
+    'Aboh Mbaise',
+    'Ahiazu Mbaise',
+    'Ehime Mbano',
+    'Ezinihitte',
+    'Ideato North',
+    'Ideato South',
+    'Ihitte/Uboma',
+    'Ikeduru',
+    'Isiala Mbano',
+    'Isu',
+    'Mbaitoli',
+    'Ngor Okpala',
+    'Njaba',
+    'Nkwerre',
+    'Nwangele',
+    'Obowo',
+    'Oguta',
+    'Ohaji/Egbema',
+    'Okigwe',
+    'Orlu',
+    'Orsu',
+    'Oru East',
+    'Oru West',
+    'Owerri Municipal',
+    'Owerri North',
+    'Owerri West',
+    'Unuimo',
+  ],
+
+  Jigawa: [
+    'Auyo',
+    'Babura',
+    'Biriniwa',
+    'Birnin Kudu',
+    'Buji',
+    'Dutse',
+    'Gagarawa',
+    'Garki',
+    'Gumel',
+    'Guri',
+    'Gwaram',
+    'Gwiwa',
+    'Hadejia',
+    'Jahun',
+    'Kafin Hausa',
+    'Kaugama',
+    'Kazaure',
+    'Kiri Kasama',
+    'Kiyawa',
+    'Maigatari',
+    'Malam Madori',
+    'Miga',
+    'Ringim',
+    'Roni',
+    'Sule Tankarkar',
+    'Taura',
+    'Yankwashi',
+  ],
+
+  Kaduna: [
+    'Birnin Gwari',
+    'Chikun',
+    'Giwa',
+    'Igabi',
+    'Ikara',
+    'Jaba',
+    'Jema’a',
+    'Kachia',
+    'Kaduna North',
+    'Kaduna South',
+    'Kagarko',
+    'Kajuru',
+    'Kaura',
+    'Kauru',
+    'Kubau',
+    'Kudan',
+    'Lere',
+    'Makarfi',
+    'Sabon Gari',
+    'Sanga',
+    'Soba',
+    'Zangon Kataf',
+    'Zaria',
+  ],
+
+  Kano: [
+    'Ajingi',
+    'Albasu',
+    'Bagwai',
+    'Bebeji',
+    'Bichi',
+    'Bunkure',
+    'Dala',
+    'Dambatta',
+    'Dawakin Kudu',
+    'Dawakin Tofa',
+    'Doguwa',
+    'Fagge',
+    'Gabasawa',
+    'Garko',
+    'Garun Mallam',
+    'Gaya',
+    'Gezawa',
+    'Gwale',
+    'Gwarzo',
+    'Kabo',
+    'Kano Municipal',
+    'Karaye',
+    'Kibiya',
+    'Kiru',
+    'Kumbotso',
+    'Kunchi',
+    'Kura',
+    'Madobi',
+    'Makoda',
+    'Minjibir',
+    'Nasarawa',
+    'Rano',
+    'Rimin Gado',
+    'Rogo',
+    'Shanono',
+    'Sumaila',
+    'Takai',
+    'Tarauni',
+    'Tofa',
+    'Tsanyawa',
+    'Tudun Wada',
+    'Ungogo',
+    'Warawa',
+    'Wudil',
+  ],
+
+  Katsina: [
+    'Bakori',
+    'Batagarawa',
+    'Batsari',
+    'Baure',
+    'Bindawa',
+    'Charanchi',
+    'Dan Musa',
+    'Dandume',
+    'Danja',
+    'Daura',
+    'Dutsi',
+    'Dutsin-Ma',
+    'Faskari',
+    'Funtua',
+    'Ingawa',
+    'Jibia',
+    'Kafur',
+    'Kaita',
+    'Kankara',
+    'Kankia',
+    'Katsina',
+    'Kurfi',
+    'Kusada',
+    'Mai’Adua',
+    'Malumfashi',
+    'Mani',
+    'Mashi',
+    'Matazu',
+    'Musawa',
+    'Rimi',
+    'Sabuwa',
+    'Safana',
+    'Sandamu',
+    'Zango',
+  ],
+
+  Kebbi: [
+    'Aleiro',
+    'Arewa Dandi',
+    'Argungu',
+    'Augie',
+    'Bagudo',
+    'Birnin Kebbi',
+    'Bunza',
+    'Dandi',
+    'Fakai',
+    'Gwandu',
+    'Jega',
+    'Kalgo',
+    'Koko/Besse',
+    'Maiyama',
+    'Ngaski',
+    'Sakaba',
+    'Shanga',
+    'Suru',
+    'Wasagu/Danko',
+    'Yauri',
+    'Zuru',
+  ],
+
+  Kogi: [
+    'Adavi',
+    'Ajaokuta',
+    'Ankpa',
+    'Bassa',
+    'Dekina',
+    'Ibaji',
+    'Idah',
+    'Igalamela Odolu',
+    'Ijumu',
+    'Kabba/Bunu',
+    'Kogi',
+    'Lokoja',
+    'Mopa-Muro',
+    'Ofu',
+    'Ogori/Magongo',
+    'Okehi',
+    'Okene',
+    'Olamaboro',
+    'Omala',
+    'Yagba East',
+    'Yagba West',
+  ],
+
+  Kwara: [
+    'Asa',
+    'Baruten',
+    'Edu',
+    'Ekiti',
+    'Ifelodun',
+    'Ilorin East',
+    'Ilorin South',
+    'Ilorin West',
+    'Irepodun',
+    'Isin',
+    'Kaiama',
+    'Moro',
+    'Offa',
+    'Oke Ero',
+    'Oyun',
+    'Pategi',
+  ],
+
+  Lagos: [
+    'Agege',
+    'Ajeromi-Ifelodun',
+    'Alimosho',
+    'Amuwo-Odofin',
+    'Apapa',
+    'Badagry',
+    'Epe',
+    'Eti-Osa',
+    'Ibeju-Lekki',
+    'Ifako-Ijaiye',
+    'Ikeja',
+    'Ikorodu',
+    'Kosofe',
+    'Lagos Island',
+    'Lagos Mainland',
+    'Mushin',
+    'Ojo',
+    'Oshodi-Isolo',
+    'Shomolu',
+    'Surulere',
+  ],
+
+  Nasarawa: [
+    'Akwanga',
+    'Awe',
+    'Doma',
+    'Karu',
+    'Keana',
+    'Keffi',
+    'Kokona',
+    'Lafia',
+    'Nasarawa',
+    'Nasarawa Eggon',
+    'Obi',
+    'Toto',
+    'Wamba',
+  ],
+
+  Niger: [
+    'Agaie',
+    'Agwara',
+    'Bida',
+    'Borgu',
+    'Bosso',
+    'Chanchaga',
+    'Edati',
+    'Gbako',
+    'Gurara',
+    'Katcha',
+    'Kontagora',
+    'Lapai',
+    'Lavun',
+    'Magama',
+    'Mariga',
+    'Mashegu',
+    'Mokwa',
+    'Munya',
+    'Paikoro',
+    'Rafi',
+    'Rijau',
+    'Shiroro',
+    'Suleja',
+    'Tafa',
+    'Wushishi',
+  ],
+
+  Ogun: [
+    'Abeokuta North',
+    'Abeokuta South',
+    'Ado-Odo/Ota',
+    'Egbado North',
+    'Egbado South',
+    'Ewekoro',
+    'Ifo',
+    'Ijebu East',
+    'Ijebu North',
+    'Ijebu North East',
+    'Ijebu Ode',
+    'Ikenne',
+    'Imeko Afon',
+    'Ipokia',
+    'Obafemi Owode',
+    'Odeda',
+    'Odogbolu',
+    'Ogun Waterside',
+    'Remo North',
+    'Sagamu',
+  ],
+
+  Ondo: [
+    'Akoko North-East',
+    'Akoko North-West',
+    'Akoko South-East',
+    'Akoko South-West',
+    'Akure North',
+    'Akure South',
+    'Ese Odo',
+    'Idanre',
+    'Ifedore',
+    'Ilaje',
+    'Ile Oluji/Okeigbo',
+    'Irele',
+    'Odigbo',
+    'Okitipupa',
+    'Ondo East',
+    'Ondo West',
+    'Ose',
+    'Owo',
+  ],
+
+  Osun: [
+    'Atakunmosa East',
+    'Atakunmosa West',
+    'Ayedaade',
+    'Ayedire',
+    'Boluwaduro',
+    'Boripe',
+    'Ede North',
+    'Ede South',
+    'Egbedore',
+    'Ejigbo',
+    'Ife Central',
+    'Ife East',
+    'Ife North',
+    'Ife South',
+    'Ifedayo',
+    'Ila',
+    'Ilesa East',
+    'Ilesa West',
+    'Irepodun',
+    'Irewole',
+    'Isokan',
+    'Iwo',
+    'Obokun',
+    'Odo Otin',
+    'Ola Oluwa',
+    'Olorunda',
+    'Oriade',
+    'Orolu',
+    'Osogbo',
+  ],
+
+  Oyo: [
+    'Afijio',
+    'Akinyele',
+    'Atiba',
+    'Atisbo',
+    'Egbeda',
+    'Ibadan North',
+    'Ibadan North-East',
+    'Ibadan North-West',
+    'Ibadan South-East',
+    'Ibadan South-West',
+    'Ibarapa Central',
+    'Ibarapa East',
+    'Ibarapa North',
+    'Ido',
+    'Irepo',
+    'Iseyin',
+    'Itesiwaju',
+    'Iwajowa',
+    'Kajola',
+    'Lagelu',
+    'Ogbomoso North',
+    'Ogbomoso South',
+    'Ogo Oluwa',
+    'Olorunsogo',
+    'Oluyole',
+    'Ona Ara',
+    'Orelope',
+    'Ori Ire',
+    'Oyo East',
+    'Oyo West',
+    'Saki East',
+    'Saki West',
+    'Surulere',
+  ],
+
+  Plateau: [
+    'Barkin Ladi',
+    'Bassa',
+    'Bokkos',
+    'Jos East',
+    'Jos North',
+    'Jos South',
+    'Kanam',
+    'Kanke',
+    'Langtang North',
+    'Langtang South',
+    'Mangu',
+    'Mikang',
+    'Pankshin',
+    'Qua’an Pan',
+    'Riyom',
+    'Shendam',
+    'Wase',
+  ],
+
+  Rivers: [
+    'Abua/Odual',
+    'Ahoada East',
+    'Ahoada West',
+    'Akuku-Toru',
+    'Andoni',
+    'Asari-Toru',
+    'Bonny',
+    'Degema',
+    'Eleme',
+    'Emohua',
+    'Etche',
+    'Gokana',
+    'Ikwerre',
+    'Khana',
+    'Obio/Akpor',
+    'Ogba/Egbema/Ndoni',
+    'Ogu/Bolo',
+    'Okrika',
+    'Omuma',
+    'Opobo/Nkoro',
+    'Oyigbo',
+    'Port Harcourt',
+    'Tai',
+  ],
+
+  Sokoto: [
+    'Binji',
+    'Bodinga',
+    'Dange Shuni',
+    'Gada',
+    'Goronyo',
+    'Gudu',
+    'Gwadabawa',
+    'Illela',
+    'Isa',
+    'Kebbe',
+    'Kware',
+    'Rabah',
+    'Sabon Birni',
+    'Shagari',
+    'Silame',
+    'Sokoto North',
+    'Sokoto South',
+    'Tambuwal',
+    'Tangaza',
+    'Tureta',
+    'Wamako',
+    'Wurno',
+    'Yabo',
+  ],
+
+  Taraba: [
+    'Ardo Kola',
+    'Bali',
+    'Donga',
+    'Gashaka',
+    'Gassol',
+    'Ibi',
+    'Jalingo',
+    'Karim Lamido',
+    'Kumi',
+    'Lau',
+    'Sardauna',
+    'Takum',
+    'Ussa',
+    'Wukari',
+    'Yorro',
+    'Zing',
+  ],
+
+  Yobe: [
+    'Bade',
+    'Bursari',
+    'Damaturu',
+    'Fika',
+    'Fune',
+    'Geidam',
+    'Gujba',
+    'Gulani',
+    'Jakusko',
+    'Karasuwa',
+    'Machina',
+    'Nangere',
+    'Nguru',
+    'Potiskum',
+    'Tarmuwa',
+    'Yunusari',
+    'Yusufari',
+  ],
+
+  Zamfara: [
+    'Anka',
+    'Bakura',
+    'Birnin Magaji/Kiyaw',
+    'Bukunyum',
+    'Bungudu',
+    'Gummi',
+    'Gusau',
+    'Isa',
+    'Kaura Namoda',
+    'Maradun',
+    'Maru',
+    'Shinkafi',
+    'Talata Mafara',
+    'Chafe',
+    'Zurmi',
+  ],
+
+  'Federal Capital Territory': [
+    'Abaji',
+    'Bwari',
+    'Gwagwalada',
+    'Kuje',
+    'Kwali',
+    'Municipal Area Council',
+  ],
+};
+
+/* ============================================================
+   SOUTH AFRICA — PROVINCES
+============================================================ */
+
+const SOUTH_AFRICAN_PROVINCES = [
+  'Eastern Cape',
+  'Free State',
+  'Gauteng',
+  'KwaZulu-Natal',
+  'Limpopo',
+  'Mpumalanga',
+  'Northern Cape',
+  'North West',
+  'Western Cape',
+];
 
 const Profile: React.FC = () => {
   const navigate = useNavigate();
@@ -78,6 +958,7 @@ const Profile: React.FC = () => {
     address: '',
     city: '',
     state: '',
+    lga: '',
     country: 'Nigeria',
   });
 
@@ -115,6 +996,7 @@ const Profile: React.FC = () => {
           '',
         city: savedUser.city || '',
         state: savedUser.state || '',
+        lga: savedUser.lga || '',
         country: savedUser.country || 'Nigeria',
       });
 
@@ -130,164 +1012,49 @@ const Profile: React.FC = () => {
     }
   };
 
-  // ============================================================
-  // DISPLAY NAME
-  // ============================================================
+  const displayName =
+    user?.full_name ||
+    user?.name ||
+    `${user?.first_name || ''} ${
+      user?.last_name || ''
+    }`.trim() ||
+    'Zenimonies User';
 
-  const displayName = useMemo(() => {
-    return (
-      user?.full_name ||
-      user?.name ||
-      `${user?.first_name || ''} ${
-        user?.last_name || ''
-      }`.trim() ||
-      'Zenimonies User'
-    );
-  }, [user]);
+  const initials = displayName
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
-  // ============================================================
-  // INITIALS
-  // ============================================================
+  const kycStatus = String(
+    user?.kyc_status || ''
+  )
+    .toLowerCase()
+    .trim();
 
-  const initials = useMemo(() => {
-    const parts = displayName
-      .split(' ')
-      .filter(Boolean);
+  const kycVerified =
+    kycStatus === 'verified' ||
+    kycStatus === 'approved' ||
+    kycStatus === 'completed';
 
-    if (parts.length >= 2) {
-      return (
-        parts[0][0] +
-        parts[parts.length - 1][0]
-      ).toUpperCase();
-    }
+  const currentTier = Number(
+    user?.kyc_tier ||
+      user?.tier ||
+      0
+  );
 
-    return displayName
-      .slice(0, 2)
-      .toUpperCase();
-  }, [displayName]);
+  const stateOptions =
+    form.country === 'Nigeria'
+      ? Object.keys(NIGERIAN_STATES)
+      : SOUTH_AFRICAN_PROVINCES;
 
-  // ============================================================
-  // KYC VERIFICATION
-  //
-  // IMPORTANT:
-  //
-  // kyc_tier DOES NOT automatically mean verified.
-  //
-  // Tier 1 may simply mean the account is currently at
-  // the Tier 1 level or eligible for Tier 1.
-  //
-  // Actual KYC verification requires the backend to return
-  // an approved/verified/completed KYC status.
-  //
-  // is_verified is deliberately NOT used here because
-  // it is separate from KYC verification.
-  // ============================================================
-
-  const kycVerified = useMemo(() => {
-    const status =
-      String(user?.kyc_status || '')
-        .toLowerCase()
-        .trim();
-
-    return (
-      status === 'verified' ||
-      status === 'approved' ||
-      status === 'completed'
-    );
-  }, [user]);
-
-  // ============================================================
-  // CURRENT KYC TIER
-  // ============================================================
-
-  const currentTier = useMemo(() => {
-    const tier = Number(
-      user?.kyc_tier ??
-        user?.tier ??
-        0
-    );
-
-    if (tier >= 3) return 3;
-    if (tier === 2) return 2;
-    if (tier === 1) return 1;
-
-    return 0;
-  }, [user]);
-
-  // ============================================================
-  // KYC STATUS
-  // ============================================================
-
-  const normalizedKycStatus = useMemo(() => {
-    return String(
-      user?.kyc_status || ''
-    )
-      .toLowerCase()
-      .trim();
-  }, [user]);
-
-  // ============================================================
-  // KYC DISPLAY TEXT
-  // ============================================================
-
-  const getKycText = () => {
-    /*
-     * If the backend has explicitly verified KYC,
-     * show the appropriate verified tier.
-     */
-
-    if (kycVerified) {
-      if (currentTier >= 3) {
-        return 'Tier 3 Verified';
-      }
-
-      if (currentTier === 2) {
-        return 'Tier 2 Verified';
-      }
-
-      if (currentTier === 1) {
-        return 'Tier 1 Verified';
-      }
-
-      return 'KYC Verified';
-    }
-
-    /*
-     * If KYC has not been verified yet,
-     * never display "Verified".
-     */
-
-    if (
-      normalizedKycStatus === 'pending' ||
-      normalizedKycStatus === 'submitted' ||
-      normalizedKycStatus === 'processing' ||
-      normalizedKycStatus === 'under_review' ||
-      normalizedKycStatus === 'review'
-    ) {
-      if (currentTier >= 1) {
-        return `Tier ${currentTier} — KYC Pending`;
-      }
-
-      return 'KYC Verification Pending';
-    }
-
-    if (
-      normalizedKycStatus === 'rejected' ||
-      normalizedKycStatus === 'failed'
-    ) {
-      return 'KYC Verification Failed';
-    }
-
-    if (currentTier >= 1) {
-      return `Tier ${currentTier} — KYC Not Verified`;
-    }
-
-    return 'KYC Verification Required';
-  };
-
-  // ============================================================
-  // UPDATE FORM FIELD
-  // ============================================================
+  const lgaOptions =
+    form.country === 'Nigeria' &&
+    form.state
+      ? NIGERIAN_STATES[form.state] || []
+      : [];
 
   const updateField = (
     field: keyof typeof form,
@@ -299,9 +1066,26 @@ const Profile: React.FC = () => {
     }));
   };
 
-  // ============================================================
-  // SAVE PROFILE
-  // ============================================================
+  const handleCountryChange = (
+    value: string
+  ) => {
+    setForm((previous) => ({
+      ...previous,
+      country: value,
+      state: '',
+      lga: '',
+    }));
+  };
+
+  const handleStateChange = (
+    value: string
+  ) => {
+    setForm((previous) => ({
+      ...previous,
+      state: value,
+      lga: '',
+    }));
+  };
 
   const saveProfile = async () => {
     setSaving(true);
@@ -309,15 +1093,6 @@ const Profile: React.FC = () => {
     setError('');
 
     try {
-      /*
-       * For now, profile information is stored locally.
-       *
-       * IMPORTANT:
-       * The legal name is deliberately NOT editable here.
-       * Once KYC is completed, the verified legal name remains
-       * protected from normal profile editing.
-       */
-
       const updatedUser: User = {
         ...(user || {}),
         email: form.email,
@@ -327,6 +1102,7 @@ const Profile: React.FC = () => {
         residential_address: form.address,
         city: form.city,
         state: form.state,
+        lga: form.lga,
         country: form.country,
       };
 
@@ -352,68 +1128,24 @@ const Profile: React.FC = () => {
       );
 
       setError(
-        'Unable to save your profile. Please try again.'
+        'Unable to save your profile.'
       );
     } finally {
       setSaving(false);
     }
   };
 
-  // ============================================================
-  // CANCEL EDITING
-  // ============================================================
-
   const cancelEditing = () => {
-    if (!user) return;
-
-    setForm({
-      email: user.email || '',
-      phone: user.phone || '',
-      dateOfBirth:
-        user.date_of_birth ||
-        user.dob ||
-        '',
-      address:
-        user.address ||
-        user.residential_address ||
-        '',
-      city: user.city || '',
-      state: user.state || '',
-      country: user.country || 'Nigeria',
-    });
-
+    loadProfile();
     setEditing(false);
-    setError('');
     setMessage('');
-  };
-
-  // ============================================================
-  // MASK ACCOUNT NUMBER
-  // ============================================================
-
-  const maskAccountNumber = (
-    accountNumber?: string
-  ) => {
-    if (!accountNumber) {
-      return 'Not available';
-    }
-
-    if (accountNumber.length <= 4) {
-      return accountNumber;
-    }
-
-    return `•••• ${accountNumber.slice(-4)}`;
+    setError('');
   };
 
   return (
     <div style={styles.page}>
-
-      {/* ======================================================
-          HEADER
-      ====================================================== */}
-
+      {/* HEADER */}
       <header style={styles.header}>
-
         <button
           type="button"
           style={styles.backButton}
@@ -428,27 +1160,19 @@ const Profile: React.FC = () => {
 
         <button
           type="button"
-          style={styles.headerHome}
+          style={styles.homeButton}
           onClick={() => navigate('/')}
         >
           Home
         </button>
-
       </header>
 
       <main style={styles.main}>
-
-        {/* ====================================================
-            PROFILE HEADER
-        ==================================================== */}
-
+        {/* PROFILE HEADER */}
         <section style={styles.profileCard}>
-
           <div style={styles.avatar}>
-
             {user?.profile_photo ||
             user?.avatar ? (
-
               <img
                 src={
                   user.profile_photo ||
@@ -457,56 +1181,42 @@ const Profile: React.FC = () => {
                 alt="Profile"
                 style={styles.avatarImage}
               />
-
             ) : (
-
-              initials
-
+              initials || 'Z'
             )}
-
           </div>
 
-          <div style={styles.profileMain}>
-
+          <div style={styles.profileInfo}>
             <h1 style={styles.profileName}>
               {displayName}
             </h1>
 
             <p style={styles.profileEmail}>
-              {user?.email ||
-                'Email not available'}
+              {user?.email || 'Email not available'}
             </p>
 
-            <div style={styles.statusRow}>
-
+            <div style={styles.badges}>
               <span
                 style={{
-                  ...styles.statusBadge,
-
+                  ...styles.badge,
                   ...(kycVerified
                     ? styles.verifiedBadge
-                    : styles.pendingBadge),
+                    : styles.notVerifiedBadge),
                 }}
               >
-
-                <span>
-                  {kycVerified ? '✓' : '!'}
-                </span>
-
-                {getKycText()}
-
+                {kycVerified
+                  ? '✓ KYC Verified'
+                  : currentTier > 0
+                  ? `Tier ${currentTier} — Not Verified`
+                  : 'KYC Not Verified'}
               </span>
 
               {account?.account_number && (
-                <span
-                  style={styles.accountBadge}
-                >
+                <span style={styles.accountBadge}>
                   Personal Account
                 </span>
               )}
-
             </div>
-
           </div>
 
           {!editing && (
@@ -522,13 +1232,9 @@ const Profile: React.FC = () => {
               Edit Profile
             </button>
           )}
-
         </section>
 
-        {/* ====================================================
-            MESSAGES
-        ==================================================== */}
-
+        {/* MESSAGES */}
         {message && (
           <div style={styles.successMessage}>
             ✓ {message}
@@ -541,79 +1247,42 @@ const Profile: React.FC = () => {
           </div>
         )}
 
-        {/* ====================================================
-            PERSONAL INFORMATION
-        ==================================================== */}
+        {/* PERSONAL INFORMATION */}
+        <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>
+            Personal Information
+          </h2>
 
-        <section style={styles.section}>
+          <p style={styles.description}>
+            Keep your personal information accurate
+            and up to date.
+          </p>
 
-          <div style={styles.sectionHeader}>
-
-            <div>
-
-              <h2 style={styles.sectionTitle}>
-                Personal Information
-              </h2>
-
-              <p
-                style={styles.sectionDescription}
-              >
-                Your basic personal information.
-              </p>
-
-            </div>
-
-          </div>
-
-          <div style={styles.fieldsGrid}>
-
+          <div style={styles.grid}>
             {/* FULL NAME */}
-
             <div style={styles.field}>
-
               <label style={styles.label}>
                 Full Legal Name
               </label>
 
-              <div
-                style={{
-                  ...styles.lockedField,
-
-                  ...(kycVerified
-                    ? styles.lockedVerified
-                    : {}),
-                }}
-              >
-
-                <span>
-                  {displayName}
-                </span>
+              <div style={styles.lockedInput}>
+                <span>{displayName}</span>
 
                 {kycVerified && (
-                  <span
-                    style={styles.lockIcon}
-                    title="Name locked after KYC verification"
-                  >
-                    🔒
-                  </span>
+                  <span>🔒</span>
                 )}
-
               </div>
 
               {kycVerified && (
-                <div style={styles.helperText}>
-                  Your legal name is locked because
-                  your KYC verification has been
-                  completed.
-                </div>
+                <small style={styles.helper}>
+                  Your verified legal name cannot be
+                  changed from your normal profile.
+                </small>
               )}
-
             </div>
 
             {/* DATE OF BIRTH */}
-
             <div style={styles.field}>
-
               <label style={styles.label}>
                 Date of Birth
               </label>
@@ -630,19 +1299,15 @@ const Profile: React.FC = () => {
                 }
                 style={{
                   ...styles.input,
-
                   ...(editing
-                    ? styles.inputEditable
-                    : styles.inputDisabled),
+                    ? styles.editable
+                    : styles.disabled),
                 }}
               />
-
             </div>
 
             {/* EMAIL */}
-
             <div style={styles.field}>
-
               <label style={styles.label}>
                 Email Address
               </label>
@@ -659,19 +1324,15 @@ const Profile: React.FC = () => {
                 }
                 style={{
                   ...styles.input,
-
                   ...(editing
-                    ? styles.inputEditable
-                    : styles.inputDisabled),
+                    ? styles.editable
+                    : styles.disabled),
                 }}
               />
-
             </div>
 
             {/* PHONE */}
-
             <div style={styles.field}>
-
               <label style={styles.label}>
                 Phone Number
               </label>
@@ -688,90 +1349,159 @@ const Profile: React.FC = () => {
                 }
                 style={{
                   ...styles.input,
-
                   ...(editing
-                    ? styles.inputEditable
-                    : styles.inputDisabled),
+                    ? styles.editable
+                    : styles.disabled),
                 }}
               />
-
             </div>
-
           </div>
-
         </section>
 
-        {/* ====================================================
-            ADDRESS
-        ==================================================== */}
+        {/* ADDRESS */}
+        <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>
+            Residential Address
+          </h2>
 
-        <section style={styles.section}>
+          <p style={styles.description}>
+            Select your country, state and local
+            government area.
+          </p>
 
-          <div style={styles.sectionHeader}>
-
-            <div>
-
-              <h2 style={styles.sectionTitle}>
-                Residential Address
-              </h2>
-
-              <p
-                style={styles.sectionDescription}
-              >
-                Keep your residential information
-                up to date.
-              </p>
-
-            </div>
-
-          </div>
-
-          <div style={styles.fieldsGrid}>
-
-            <div
-              style={{
-                ...styles.field,
-                gridColumn: '1 / -1',
-              }}
-            >
-
+          <div style={styles.grid}>
+            {/* COUNTRY */}
+            <div style={styles.field}>
               <label style={styles.label}>
-                Address
+                Country
               </label>
 
-              <textarea
-                value={form.address}
+              <select
+                value={form.country}
                 disabled={!editing}
                 onChange={(event) =>
-                  updateField(
-                    'address',
+                  handleCountryChange(
                     event.target.value
                   )
                 }
-                rows={3}
                 style={{
-                  ...styles.textarea,
-
+                  ...styles.input,
                   ...(editing
-                    ? styles.inputEditable
-                    : styles.inputDisabled),
+                    ? styles.editable
+                    : styles.disabled),
                 }}
-              />
+              >
+                <option value="Nigeria">
+                  Nigeria
+                </option>
 
+                <option value="South Africa">
+                  South Africa
+                </option>
+              </select>
             </div>
 
-            {/* CITY */}
-
+            {/* STATE */}
             <div style={styles.field}>
-
               <label style={styles.label}>
-                City
+                {form.country === 'Nigeria'
+                  ? 'State'
+                  : 'Province'}
+              </label>
+
+              <select
+                value={form.state}
+                disabled={!editing}
+                onChange={(event) =>
+                  handleStateChange(
+                    event.target.value
+                  )
+                }
+                style={{
+                  ...styles.input,
+                  ...(editing
+                    ? styles.editable
+                    : styles.disabled),
+                }}
+              >
+                <option value="">
+                  Select{' '}
+                  {form.country === 'Nigeria'
+                    ? 'state'
+                    : 'province'}
+                </option>
+
+                {stateOptions.map(
+                  (state) => (
+                    <option
+                      key={state}
+                      value={state}
+                    >
+                      {state}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+            {/* LGA */}
+            {form.country === 'Nigeria' && (
+              <div style={styles.field}>
+                <label style={styles.label}>
+                  Local Government Area
+                </label>
+
+                <select
+                  value={form.lga}
+                  disabled={
+                    !editing ||
+                    !form.state
+                  }
+                  onChange={(event) =>
+                    updateField(
+                      'lga',
+                      event.target.value
+                    )
+                  }
+                  style={{
+                    ...styles.input,
+                    ...(!editing ||
+                    !form.state
+                      ? styles.disabled
+                      : styles.editable),
+                  }}
+                >
+                  <option value="">
+                    {!form.state
+                      ? 'Select a state first'
+                      : 'Select LGA'}
+                  </option>
+
+                  {lgaOptions.map(
+                    (lga) => (
+                      <option
+                        key={lga}
+                        value={lga}
+                      >
+                        {lga}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+            )}
+
+            {/* CITY */}
+            <div style={styles.field}>
+              <label style={styles.label}>
+                City / Town
               </label>
 
               <input
                 type="text"
                 value={form.city}
                 disabled={!editing}
+                placeholder="Enter your city or town"
                 onChange={(event) =>
                   updateField(
                     'city',
@@ -780,145 +1510,77 @@ const Profile: React.FC = () => {
                 }
                 style={{
                   ...styles.input,
-
                   ...(editing
-                    ? styles.inputEditable
-                    : styles.inputDisabled),
+                    ? styles.editable
+                    : styles.disabled),
                 }}
               />
-
             </div>
 
-            {/* STATE */}
-
-            <div style={styles.field}>
-
+            {/* ADDRESS */}
+            <div
+              style={{
+                ...styles.field,
+                gridColumn: '1 / -1',
+              }}
+            >
               <label style={styles.label}>
-                State
+                Residential Address
               </label>
 
-              <input
-                type="text"
-                value={form.state}
+              <textarea
+                value={form.address}
                 disabled={!editing}
+                placeholder="Enter your full residential address"
                 onChange={(event) =>
                   updateField(
-                    'state',
+                    'address',
                     event.target.value
                   )
                 }
+                rows={4}
                 style={{
                   ...styles.input,
-
+                  ...styles.textarea,
                   ...(editing
-                    ? styles.inputEditable
-                    : styles.inputDisabled),
+                    ? styles.editable
+                    : styles.disabled),
                 }}
               />
-
             </div>
-
-            {/* COUNTRY */}
-
-            <div style={styles.field}>
-
-              <label style={styles.label}>
-                Country
-              </label>
-
-              <input
-                type="text"
-                value={form.country}
-                disabled={!editing}
-                onChange={(event) =>
-                  updateField(
-                    'country',
-                    event.target.value
-                  )
-                }
-                style={{
-                  ...styles.input,
-
-                  ...(editing
-                    ? styles.inputEditable
-                    : styles.inputDisabled),
-                }}
-              />
-
-            </div>
-
           </div>
-
         </section>
 
-        {/* ====================================================
-            BANK ACCOUNT
-        ==================================================== */}
-
-        <section style={styles.section}>
-
-          <div style={styles.sectionHeader}>
-
-            <div>
-
-              <h2 style={styles.sectionTitle}>
-                Account Information
-              </h2>
-
-              <p
-                style={styles.sectionDescription}
-              >
-                Your Zenimonies account details.
-              </p>
-
-            </div>
-
-          </div>
+        {/* ACCOUNT INFORMATION */}
+        <section style={styles.card}>
+          <h2 style={styles.sectionTitle}>
+            Account Information
+          </h2>
 
           <div style={styles.accountGrid}>
-
-            <div style={styles.accountItem}>
-
+            <div>
               <span style={styles.accountLabel}>
                 Account Number
               </span>
 
               <strong style={styles.accountValue}>
-                {maskAccountNumber(
-                  account?.account_number
-                )}
+                {account?.account_number ||
+                  'Not available'}
               </strong>
-
             </div>
 
-            <div style={styles.accountItem}>
-
-              <span style={styles.accountLabel}>
-                Account Name
-              </span>
-
-              <strong style={styles.accountValue}>
-                {account?.account_name ||
-                  displayName}
-              </strong>
-
-            </div>
-
-            <div style={styles.accountItem}>
-
+            <div>
               <span style={styles.accountLabel}>
                 Account Type
               </span>
 
               <strong style={styles.accountValue}>
                 {account?.account_type ||
-                  'Personal Account'}
+                  'Personal'}
               </strong>
-
             </div>
 
-            <div style={styles.accountItem}>
-
+            <div>
               <span style={styles.accountLabel}>
                 Currency
               </span>
@@ -926,305 +1588,133 @@ const Profile: React.FC = () => {
               <strong style={styles.accountValue}>
                 {account?.currency || 'NGN'}
               </strong>
-
             </div>
 
-          </div>
+            <div>
+              <span style={styles.accountLabel}>
+                Status
+              </span>
 
+              <strong style={styles.accountValue}>
+                {account?.status || 'Active'}
+              </strong>
+            </div>
+          </div>
         </section>
 
-        {/* ====================================================
-            KYC
-        ==================================================== */}
-
-        <section
-          style={{
-            ...styles.kycCard,
-
-            ...(kycVerified
-              ? styles.kycVerifiedCard
-              : styles.kycPendingCard),
-          }}
-        >
-
-          <div
-            style={{
-              ...styles.kycIcon,
-
-              ...(kycVerified
-                ? styles.kycVerifiedIcon
-                : styles.kycPendingIcon),
-            }}
-          >
-            {kycVerified ? '✓' : '!'}
-          </div>
-
-          <div style={styles.kycContent}>
-
-            <h2 style={styles.kycTitle}>
-              KYC Verification
-            </h2>
-
-            <p style={styles.kycDescription}>
-
-              {kycVerified
-                ? `Your account is ${getKycText()}. Your verified legal name is protected from normal profile changes.`
-                : currentTier >= 1
-                ? `Your account is currently at Tier ${currentTier}, but KYC verification has not been completed. Complete verification to unlock higher account limits and additional services.`
-                : 'Complete your KYC verification to unlock higher account limits and additional services.'}
-
-            </p>
-
-          </div>
-
-          <button
-            type="button"
-            style={styles.kycButton}
-            onClick={() => navigate('/kyc')}
-          >
-
-            {kycVerified
-              ? 'View KYC'
-              : 'Verify Now'}
-
-            <span>›</span>
-
-          </button>
-
-        </section>
-
-        {/* ====================================================
-            SECURITY NOTICE
-        ==================================================== */}
-
-        <section style={styles.securityNotice}>
-
-          <div style={styles.securityIcon}>
-            🔒
-          </div>
-
-          <div>
-
-            <strong
-              style={styles.securityTitle}
-            >
-              Your information is protected
-            </strong>
-
-            <p style={styles.securityText}>
-              Passwords, your 6-digit login code,
-              transfer PIN and SafeBox settings are
-              managed separately under Settings.
-            </p>
-
-            <button
-              type="button"
-              style={styles.settingsLink}
-              onClick={() =>
-                navigate('/settings')
-              }
-            >
-              Open Settings →
-            </button>
-
-          </div>
-
-        </section>
-
-        {/* ====================================================
-            EDIT ACTIONS
-        ==================================================== */}
-
+        {/* SAVE / CANCEL */}
         {editing && (
-
-          <div style={styles.editActions}>
-
+          <div style={styles.actionBar}>
             <button
               type="button"
-              style={styles.cancelButton}
               onClick={cancelEditing}
               disabled={saving}
+              style={styles.cancelButton}
             >
               Cancel
             </button>
 
             <button
               type="button"
-              style={styles.saveButton}
               onClick={saveProfile}
               disabled={saving}
+              style={styles.saveButton}
             >
               {saving
                 ? 'Saving...'
                 : 'Save Changes'}
             </button>
-
           </div>
-
         )}
-
       </main>
-
-      {/* ======================================================
-          BOTTOM NAVIGATION
-      ====================================================== */}
-
-      <nav style={styles.bottomNav}>
-
-        <button
-          type="button"
-          style={styles.navItem}
-          onClick={() => navigate('/')}
-        >
-          <span style={styles.navIcon}>
-            ⌂
-          </span>
-
-          Home
-        </button>
-
-        <button
-          type="button"
-          style={styles.navItem}
-          onClick={() =>
-            navigate('/transactions')
-          }
-        >
-          <span style={styles.navIcon}>
-            ↕
-          </span>
-
-          Transactions
-        </button>
-
-        <button
-          type="button"
-          style={styles.navItem}
-          onClick={() =>
-            navigate('/wallet')
-          }
-        >
-          <span style={styles.navIcon}>
-            ▱
-          </span>
-
-          Wallet
-        </button>
-
-        <button
-          type="button"
-          style={{
-            ...styles.navItem,
-            ...styles.navActive,
-          }}
-          onClick={() =>
-            navigate('/profile')
-          }
-        >
-          <span style={styles.navIcon}>
-            ♙
-          </span>
-
-          Profile
-
-          <span style={styles.navIndicator} />
-
-        </button>
-
-      </nav>
-
     </div>
   );
 };
 
-// ============================================================
-// STYLES
-// ============================================================
+/* ============================================================
+   STYLES
+============================================================ */
 
-const styles: Record<
-  string,
-  React.CSSProperties
-> = {
-
+const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
-    background: '#f6faf8',
-    color: '#10251d',
+    background: '#f5f7f6',
+    color: '#17211b',
     fontFamily:
-      'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-    paddingBottom: 95,
+      'Arial, Helvetica, sans-serif',
+    paddingBottom: '50px',
   },
 
   header: {
-    height: 64,
-    background: '#ffffff',
-    borderBottom:
-      '1px solid #e5ebe8',
+    height: '64px',
+    background: '#087a4b',
+    color: '#fff',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 5%',
+    padding: '0 18px',
+    gap: '14px',
     position: 'sticky',
     top: 0,
     zIndex: 20,
+    boxShadow:
+      '0 2px 10px rgba(0,0,0,0.12)',
   },
 
   backButton: {
     border: 'none',
-    background: '#eef8f3',
-    color: '#087c43',
-    width: 38,
-    height: 38,
-    borderRadius: 11,
-    fontSize: 21,
+    background: 'transparent',
+    color: '#fff',
+    fontSize: '28px',
     cursor: 'pointer',
+    padding: '4px 8px',
   },
 
   headerTitle: {
-    fontSize: 18,
-    fontWeight: 800,
+    fontSize: '20px',
+    fontWeight: 700,
+    flex: 1,
   },
 
-  headerHome: {
-    border: 'none',
+  homeButton: {
+    border: '1px solid rgba(255,255,255,0.5)',
     background: 'transparent',
-    color: '#087c43',
-    fontWeight: 700,
+    color: '#fff',
+    borderRadius: '8px',
+    padding: '8px 12px',
     cursor: 'pointer',
-    fontSize: 13,
+    fontWeight: 600,
   },
 
   main: {
-    width: 'min(920px, 92%)',
+    maxWidth: '900px',
     margin: '0 auto',
-    paddingTop: 25,
+    padding: '24px 16px',
   },
 
   profileCard: {
-    background: '#ffffff',
-    border: '1px solid #e5ebe8',
-    borderRadius: 20,
-    padding: 22,
+    background: '#fff',
+    borderRadius: '18px',
+    padding: '22px',
     display: 'flex',
     alignItems: 'center',
-    gap: 16,
+    gap: '18px',
     boxShadow:
-      '0 6px 20px rgba(26,61,47,0.05)',
-    marginBottom: 18,
+      '0 5px 20px rgba(0,0,0,0.07)',
+    marginBottom: '18px',
   },
 
   avatar: {
-    width: 76,
-    height: 76,
+    width: '76px',
+    height: '76px',
+    minWidth: '76px',
     borderRadius: '50%',
-    background: '#dff5e9',
-    color: '#087c43',
+    background: '#087a4b',
+    color: '#fff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 25,
+    fontSize: '25px',
     fontWeight: 800,
-    flexShrink: 0,
     overflow: 'hidden',
   },
 
@@ -1234,426 +1724,221 @@ const styles: Record<
     objectFit: 'cover',
   },
 
-  profileMain: {
+  profileInfo: {
     flex: 1,
     minWidth: 0,
   },
 
   profileName: {
     margin: 0,
-    fontSize: 23,
+    fontSize: '22px',
     fontWeight: 800,
   },
 
   profileEmail: {
     margin: '5px 0 10px',
-    color: '#75827d',
-    fontSize: 13,
+    color: '#69756e',
+    wordBreak: 'break-word',
   },
 
-  statusRow: {
+  badges: {
     display: 'flex',
-    gap: 8,
     flexWrap: 'wrap',
+    gap: '7px',
   },
 
-  statusBadge: {
+  badge: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 6,
-    padding: '6px 9px',
-    borderRadius: 999,
-    fontSize: 11,
+    borderRadius: '20px',
+    padding: '6px 10px',
+    fontSize: '12px',
     fontWeight: 700,
   },
 
   verifiedBadge: {
-    background: '#e9f9f0',
-    color: '#087c43',
+    background: '#e5f7ed',
+    color: '#087a4b',
   },
 
-  pendingBadge: {
-    background: '#fff7e8',
-    color: '#a15c00',
+  notVerifiedBadge: {
+    background: '#fff4df',
+    color: '#9a6500',
   },
 
   accountBadge: {
-    background: '#f2f5f3',
-    color: '#65736d',
-    padding: '6px 9px',
-    borderRadius: 999,
-    fontSize: 11,
+    background: '#eef1ef',
+    color: '#526059',
+    borderRadius: '20px',
+    padding: '6px 10px',
+    fontSize: '12px',
     fontWeight: 700,
   },
 
   editButton: {
     border: 'none',
-    background: '#079447',
-    color: '#ffffff',
-    borderRadius: 11,
-    padding: '10px 14px',
-    fontWeight: 700,
+    background: '#087a4b',
+    color: '#fff',
+    borderRadius: '9px',
+    padding: '11px 15px',
     cursor: 'pointer',
+    fontWeight: 700,
     whiteSpace: 'nowrap',
   },
 
   successMessage: {
-    background: '#eafaf2',
-    border: '1px solid #bce8d1',
-    color: '#087c43',
-    borderRadius: 12,
-    padding: '11px 14px',
-    marginBottom: 16,
-    fontSize: 13,
+    background: '#e7f7ee',
+    color: '#087a4b',
+    borderRadius: '10px',
+    padding: '13px 15px',
+    marginBottom: '15px',
     fontWeight: 600,
   },
 
   errorMessage: {
-    background: '#fff2f0',
-    border: '1px solid #f5c2bd',
-    color: '#a53227',
-    borderRadius: 12,
-    padding: '11px 14px',
-    marginBottom: 16,
-    fontSize: 13,
+    background: '#fdeaea',
+    color: '#b42318',
+    borderRadius: '10px',
+    padding: '13px 15px',
+    marginBottom: '15px',
+    fontWeight: 600,
   },
 
-  section: {
-    background: '#ffffff',
-    border: '1px solid #e5ebe8',
-    borderRadius: 18,
-    padding: 20,
-    marginBottom: 18,
-  },
-
-  sectionHeader: {
-    marginBottom: 18,
+  card: {
+    background: '#fff',
+    borderRadius: '18px',
+    padding: '22px',
+    boxShadow:
+      '0 5px 20px rgba(0,0,0,0.06)',
+    marginBottom: '18px',
   },
 
   sectionTitle: {
     margin: 0,
-    fontSize: 17,
+    fontSize: '18px',
     fontWeight: 800,
   },
 
-  sectionDescription: {
-    margin: '5px 0 0',
-    color: '#7a8781',
-    fontSize: 12,
+  description: {
+    color: '#69756e',
+    fontSize: '14px',
+    marginTop: '6px',
+    marginBottom: '20px',
   },
 
-  fieldsGrid: {
+  grid: {
     display: 'grid',
     gridTemplateColumns:
-      'repeat(auto-fit, minmax(240px, 1fr))',
-    gap: 16,
+      'repeat(auto-fit, minmax(250px, 1fr))',
+    gap: '18px',
   },
 
   field: {
-    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '7px',
   },
 
   label: {
-    display: 'block',
-    marginBottom: 7,
-    fontSize: 12,
+    fontSize: '13px',
     fontWeight: 700,
-    color: '#4e5c55',
+    color: '#344039',
   },
 
   input: {
     width: '100%',
-    height: 44,
     boxSizing: 'border-box',
-    borderRadius: 10,
-    padding: '0 12px',
-    fontSize: 13,
+    border: '1px solid #d8dfda',
+    borderRadius: '9px',
+    padding: '12px',
+    fontSize: '15px',
     outline: 'none',
-    fontFamily: 'inherit',
+    background: '#fff',
+    color: '#17211b',
   },
 
-  inputEditable: {
-    border:
-      '1px solid #9bd5b9',
-    background: '#ffffff',
-    color: '#10251d',
+  editable: {
+    border: '1px solid #087a4b',
+    background: '#fff',
+    cursor: 'text',
   },
 
-  inputDisabled: {
-    border:
-      '1px solid #e3e9e5',
-    background: '#f7f9f8',
-    color: '#66736d',
+  disabled: {
+    background: '#f1f3f2',
+    color: '#6b756f',
+    cursor: 'not-allowed',
+  },
+
+  lockedInput: {
+    minHeight: '42px',
+    boxSizing: 'border-box',
+    border: '1px solid #d8dfda',
+    borderRadius: '9px',
+    padding: '11px 12px',
+    background: '#f1f3f2',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    color: '#56615a',
+  },
+
+  helper: {
+    color: '#69756e',
+    fontSize: '11px',
+    lineHeight: 1.4,
   },
 
   textarea: {
-    width: '100%',
-    boxSizing: 'border-box',
-    borderRadius: 10,
-    padding: '11px 12px',
-    fontSize: 13,
-    outline: 'none',
     resize: 'vertical',
-    fontFamily: 'inherit',
-  },
-
-  lockedField: {
-    minHeight: 44,
-    boxSizing: 'border-box',
-    border:
-      '1px solid #e3e9e5',
-    background: '#f7f9f8',
-    borderRadius: 10,
-    padding: '0 12px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    color: '#66736d',
-    fontSize: 13,
-  },
-
-  lockedVerified: {
-    background: '#f2f7f4',
-    border:
-      '1px solid #d5e7dc',
-    color: '#253b31',
-    fontWeight: 700,
-  },
-
-  lockIcon: {
-    fontSize: 14,
-  },
-
-  helperText: {
-    marginTop: 6,
-    color: '#7a8781',
-    fontSize: 10,
-    lineHeight: 1.4,
+    fontFamily:
+      'Arial, Helvetica, sans-serif',
   },
 
   accountGrid: {
     display: 'grid',
     gridTemplateColumns:
-      'repeat(auto-fit, minmax(190px, 1fr))',
-    gap: 10,
-  },
-
-  accountItem: {
-    background: '#f7faf8',
-    border: '1px solid #e6eee9',
-    borderRadius: 12,
-    padding: 14,
+      'repeat(auto-fit, minmax(180px, 1fr))',
+    gap: '20px',
   },
 
   accountLabel: {
     display: 'block',
-    color: '#7a8781',
-    fontSize: 11,
-    marginBottom: 5,
+    fontSize: '12px',
+    color: '#69756e',
+    marginBottom: '5px',
   },
 
   accountValue: {
     display: 'block',
-    color: '#17352a',
-    fontSize: 13,
+    fontSize: '15px',
   },
 
-  kycCard: {
-    borderRadius: 18,
-    padding: 18,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 13,
-    marginBottom: 18,
-  },
-
-  kycVerifiedCard: {
-    background: '#effbf5',
-    border:
-      '1px solid #d4eee0',
-  },
-
-  kycPendingCard: {
-    background: '#fffaf0',
-    border:
-      '1px solid #f0dfb9',
-  },
-
-  kycIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 21,
-    fontWeight: 800,
-    flexShrink: 0,
-  },
-
-  kycVerifiedIcon: {
-    background: '#d9f5e7',
-    color: '#087c43',
-  },
-
-  kycPendingIcon: {
-    background: '#ffedc8',
-    color: '#a15c00',
-  },
-
-  kycContent: {
-    flex: 1,
-  },
-
-  kycTitle: {
-    margin: 0,
-    fontSize: 15,
-    fontWeight: 800,
-  },
-
-  kycDescription: {
-    margin: '5px 0 0',
-    color: '#68776f',
-    fontSize: 12,
-    lineHeight: 1.5,
-  },
-
-  kycButton: {
-    border: 'none',
-    background: '#079447',
-    color: '#ffffff',
-    borderRadius: 10,
-    padding: '10px 13px',
-    fontWeight: 700,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 7,
-    whiteSpace: 'nowrap',
-  },
-
-  securityNotice: {
-    background: '#ffffff',
-    border:
-      '1px solid #e5ebe8',
-    borderRadius: 18,
-    padding: 18,
-    display: 'flex',
-    gap: 13,
-    marginBottom: 18,
-  },
-
-  securityIcon: {
-    width: 43,
-    height: 43,
-    borderRadius: 12,
-    background: '#eef8f3',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-
-  securityTitle: {
-    display: 'block',
-    fontSize: 13,
-  },
-
-  securityText: {
-    margin: '5px 0 7px',
-    color: '#748079',
-    fontSize: 11,
-    lineHeight: 1.5,
-  },
-
-  settingsLink: {
-    border: 'none',
-    background: 'transparent',
-    color: '#087c43',
-    padding: 0,
-    fontWeight: 700,
-    fontSize: 11,
-    cursor: 'pointer',
-  },
-
-  editActions: {
+  actionBar: {
     display: 'flex',
     justifyContent: 'flex-end',
-    gap: 10,
-    marginBottom: 25,
+    gap: '10px',
+    marginTop: '5px',
   },
 
   cancelButton: {
-    border:
-      '1px solid #d3ddd8',
-    background: '#ffffff',
-    color: '#4d5b54',
-    borderRadius: 11,
-    padding: '11px 18px',
-    fontWeight: 700,
+    border: '1px solid #cbd3ce',
+    background: '#fff',
+    color: '#344039',
+    borderRadius: '9px',
+    padding: '12px 18px',
     cursor: 'pointer',
+    fontWeight: 700,
   },
 
   saveButton: {
     border: 'none',
-    background: '#079447',
-    color: '#ffffff',
-    borderRadius: 11,
-    padding: '11px 20px',
+    background: '#087a4b',
+    color: '#fff',
+    borderRadius: '9px',
+    padding: '12px 20px',
+    cursor: 'pointer',
     fontWeight: 700,
-    cursor: 'pointer',
   },
-
-  bottomNav: {
-    position: 'fixed',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 70,
-    background: 'rgba(255,255,255,0.98)',
-    borderTop:
-      '1px solid #e2e9e5',
-    display: 'grid',
-    gridTemplateColumns:
-      'repeat(4, 1fr)',
-    zIndex: 30,
-    boxShadow:
-      '0 -5px 18px rgba(25,55,43,0.05)',
-  },
-
-  navItem: {
-    border: 'none',
-    background: 'transparent',
-    color: '#7a8781',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-    fontSize: 10,
-    fontWeight: 600,
-    cursor: 'pointer',
-    position: 'relative',
-  },
-
-  navActive: {
-    color: '#078b4a',
-  },
-
-  navIcon: {
-    fontSize: 21,
-    lineHeight: 1,
-  },
-
-  navIndicator: {
-    position: 'absolute',
-    bottom: 4,
-    width: 34,
-    height: 3,
-    borderRadius: 5,
-    background: '#079447',
-  },
-
 };
 
 export default Profile;
