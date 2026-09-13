@@ -36,21 +36,28 @@ const findUserByPhone = async (req, res) => {
       });
     }
 
-    /*
-     * Normalize phone number.
-     */
-
     const cleanPhone = phone.replace(/\s+/g, '');
+
+    /*
+     * Find the user AND their real active
+     * Zenimonies account number.
+     */
 
     const result = await pool.query(
       `SELECT
-        id,
-        full_name,
-        phone,
-        status,
-        is_verified
-       FROM users
-       WHERE phone = $1
+        u.id,
+        u.full_name,
+        u.phone,
+        u.status,
+        u.is_verified,
+        a.account_number,
+        a.currency AS account_currency
+       FROM users u
+       LEFT JOIN accounts a
+         ON a.user_id = u.id
+        AND a.status = 'active'
+       WHERE u.phone = $1
+       ORDER BY a.created_at ASC
        LIMIT 1`,
       [cleanPhone]
     );
@@ -66,7 +73,7 @@ const findUserByPhone = async (req, res) => {
     const user = result.rows[0];
 
     /*
-     * Do not allow a user to send money to themselves.
+     * Do not allow self-transfer.
      */
 
     if (user.id === currentUserId) {
@@ -78,7 +85,8 @@ const findUserByPhone = async (req, res) => {
     }
 
     /*
-     * Only active users can receive internal transfers.
+     * Only active users can receive
+     * internal transfers.
      */
 
     if (user.status !== 'active') {
@@ -89,12 +97,32 @@ const findUserByPhone = async (req, res) => {
       });
     }
 
+    /*
+     * The recipient must have an active account.
+     */
+
+    if (!user.account_number) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'This user does not have an active Zenimonies account',
+      });
+    }
+
+    /*
+     * Return the REAL account number.
+     */
+
     return res.status(200).json({
       success: true,
+
       user: {
         id: user.id,
         full_name: user.full_name,
         phone: user.phone,
+        account_number: user.account_number,
+        currency:
+          user.account_currency || 'NGN',
         is_verified: user.is_verified,
       },
     });
@@ -156,7 +184,8 @@ const transferToZenimoniesUser = async (
     ) {
       return res.status(400).json({
         success: false,
-        message: 'Transfer amount is required',
+        message:
+          'Transfer amount is required',
       });
     }
 
@@ -185,10 +214,6 @@ const transferToZenimoniesUser = async (
       });
     }
 
-    /*
-     * Limit the amount accepted by this endpoint.
-     */
-
     if (transferAmount > 100000000) {
       return res.status(400).json({
         success: false,
@@ -210,9 +235,6 @@ const transferToZenimoniesUser = async (
      * --------------------------------------------------------
      * FIND SENDER ACCOUNT
      * --------------------------------------------------------
-     *
-     * Lock the sender account so two simultaneous transfers
-     * cannot spend the same balance.
      */
 
     const senderAccountResult =
@@ -273,7 +295,7 @@ const transferToZenimoniesUser = async (
 
     /*
      * --------------------------------------------------------
-     * CHECK SENDER BALANCE
+     * CHECK BALANCE
      * --------------------------------------------------------
      */
 
@@ -292,7 +314,7 @@ const transferToZenimoniesUser = async (
 
     /*
      * --------------------------------------------------------
-     * FIND RECIPIENT
+     * FIND RECIPIENT USER
      * --------------------------------------------------------
      */
 
@@ -327,7 +349,7 @@ const transferToZenimoniesUser = async (
       recipientUserResult.rows[0];
 
     /*
-     * Do not allow self-transfer.
+     * Prevent self-transfer.
      */
 
     if (
@@ -420,7 +442,7 @@ const transferToZenimoniesUser = async (
 
     /*
      * --------------------------------------------------------
-     * CALCULATE NEW BALANCES
+     * CALCULATE BALANCES
      * --------------------------------------------------------
      */
 
@@ -433,12 +455,18 @@ const transferToZenimoniesUser = async (
     const recipientNewBalance =
       recipientOldBalance + transferAmount;
 
+    /*
+     * Transaction fee is currently zero.
+     */
+
+    const transactionFee = 0;
+
     const reference =
       generateReference();
 
     /*
      * --------------------------------------------------------
-     * UPDATE SENDER BALANCE
+     * UPDATE SENDER
      * --------------------------------------------------------
      */
 
@@ -456,7 +484,7 @@ const transferToZenimoniesUser = async (
 
     /*
      * --------------------------------------------------------
-     * UPDATE RECIPIENT BALANCE
+     * UPDATE RECIPIENT
      * --------------------------------------------------------
      */
 
@@ -517,9 +545,6 @@ const transferToZenimoniesUser = async (
      * --------------------------------------------------------
      * RECIPIENT TRANSACTION
      * --------------------------------------------------------
-     *
-     * Give the recipient a separate transaction reference
-     * while linking it to the same transfer reference.
      */
 
     const recipientReference =
@@ -560,11 +585,8 @@ const transferToZenimoniesUser = async (
 
     /*
      * --------------------------------------------------------
-     * CREATE BANK TRANSFER RECORD
+     * BANK TRANSFER RECORD
      * --------------------------------------------------------
-     *
-     * We use bank_transfers as the transfer-history record,
-     * but this transfer does NOT go through Paystack.
      */
 
     await client.query(
@@ -610,7 +632,7 @@ const transferToZenimoniesUser = async (
 
     /*
      * --------------------------------------------------------
-     * NOTIFICATION FOR RECIPIENT
+     * RECIPIENT NOTIFICATION
      * --------------------------------------------------------
      */
 
@@ -636,6 +658,7 @@ const transferToZenimoniesUser = async (
           'en-NG',
           {
             minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
           }
         )} from a Zenimonies user.`,
         'transfer',
@@ -644,7 +667,7 @@ const transferToZenimoniesUser = async (
 
     /*
      * --------------------------------------------------------
-     * COMMIT EVERYTHING
+     * COMMIT
      * --------------------------------------------------------
      */
 
@@ -655,21 +678,44 @@ const transferToZenimoniesUser = async (
      * --------------------------------------------------------
      * RESPONSE
      * --------------------------------------------------------
+     *
+     * IMPORTANT:
+     * The actual recipient account number is returned here.
      */
 
     return res.status(201).json({
       success: true,
+
       message:
         'Money sent successfully to the Zenimonies user',
+
       transfer: {
         reference,
+
         recipient_name:
           recipientUser.full_name,
+
         recipient_phone:
           recipientUser.phone,
-        amount: transferAmount,
-        currency: 'NGN',
-        status: 'completed',
+
+        recipient_account:
+          recipientAccount.account_number,
+
+        recipient_bank:
+          'Zenimonies',
+
+        amount:
+          transferAmount,
+
+        transaction_fee:
+          transactionFee,
+
+        currency:
+          'NGN',
+
+        status:
+          'completed',
+
         balance_after:
           senderNewBalance,
       },
@@ -682,7 +728,9 @@ const transferToZenimoniesUser = async (
 
     if (transactionStarted) {
       try {
-        await client.query('ROLLBACK');
+        await client.query(
+          'ROLLBACK'
+        );
       } catch (rollbackError) {
         console.error(
           'Internal transfer rollback error:',
