@@ -19,8 +19,6 @@ pool.on('error', (err) => {
 });
 
 const initializeDatabase = async () => {
-  // schema.sql is inside backend/database/
-  // database.js is inside backend/config/
   const schemaPath = path.join(
     __dirname,
     '../database/schema.sql'
@@ -41,11 +39,31 @@ const initializeDatabase = async () => {
       'utf8'
     );
 
+    // Run the main database schema
     await pool.query(schema);
 
     console.log(
       'Database schema initialized successfully'
     );
+
+    // ============================================================
+    // EXISTING DATABASE MIGRATION
+    // ============================================================
+
+    console.log(
+      'Checking users.phone_verified column...'
+    );
+
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS phone_verified
+      BOOLEAN NOT NULL DEFAULT false;
+    `);
+
+    console.log(
+      'users.phone_verified migration completed'
+    );
+
   } catch (error) {
     console.error(
       'Database initialization failed:',
@@ -57,4 +75,5 @@ const initializeDatabase = async () => {
 };
 
 module.exports = pool;
-module.exports.initializeDatabase = initializeDatabase;
+module.exports.initializeDatabase =
+  initializeDatabase;
