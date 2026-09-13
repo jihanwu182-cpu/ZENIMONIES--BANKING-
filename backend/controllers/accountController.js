@@ -262,7 +262,7 @@ const getTransactions = async (req, res) => {
         -- TRANSACTION FEE
         -- ----------------------------------------------------
 
-        COALESCE(bt.fee, 0) AS transaction_fee
+        0 AS transaction_fee
 
       FROM transactions t
 
