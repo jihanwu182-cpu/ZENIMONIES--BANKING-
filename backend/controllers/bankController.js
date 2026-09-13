@@ -16,11 +16,11 @@ const getPaystackHeaders = () => {
 };
 
 /*
+ * ============================================================
  * GET SUPPORTED NIGERIAN BANKS
- *
- * This endpoint will retrieve the current bank list
- * from Paystack instead of maintaining a short hard-coded list.
+ * ============================================================
  */
+
 const getBanks = async (req, res) => {
   try {
     if (!process.env.PAYSTACK_SECRET_KEY) {
@@ -84,18 +84,39 @@ const getBanks = async (req, res) => {
   }
 };
 
+
 /*
+ * ============================================================
  * RESOLVE BANK ACCOUNT
+ * ============================================================
  *
- * This will be connected to Paystack's account-resolution
- * service when the Paystack credentials are available.
+ * PAYSTACK TEST MODE
+ *
+ * Official Paystack test transfer account:
+ *
+ * Bank: Zenith Bank
+ * Bank code: 057
+ * Account number: 0000000000
+ *
+ * We handle this specific test account locally so that
+ * testing does not consume Paystack's live-bank resolve limit.
+ *
+ * All other accounts continue to use Paystack's real
+ * /bank/resolve endpoint.
  */
+
 const resolveBankAccount = async (req, res) => {
   try {
     const {
       account_number,
       bank_code,
     } = req.body;
+
+    /*
+     * --------------------------------------------------------
+     * BASIC VALIDATION
+     * --------------------------------------------------------
+     */
 
     if (!account_number || !bank_code) {
       return res.status(400).json({
@@ -109,6 +130,10 @@ const resolveBankAccount = async (req, res) => {
       account_number
     ).replace(/\D/g, '');
 
+    const cleanBankCode = String(
+      bank_code
+    ).trim();
+
     if (cleanAccountNumber.length !== 10) {
       return res.status(400).json({
         success: false,
@@ -116,6 +141,41 @@ const resolveBankAccount = async (req, res) => {
           'Account number must contain exactly 10 digits',
       });
     }
+
+    /*
+     * --------------------------------------------------------
+     * PAYSTACK OFFICIAL TEST ACCOUNT
+     * --------------------------------------------------------
+     */
+
+    if (
+      cleanBankCode === '057' &&
+      cleanAccountNumber === '0000000000'
+    ) {
+      console.log(
+        'Paystack test bank account detected'
+      );
+
+      return res.status(200).json({
+        success: true,
+        verified: true,
+        test_mode: true,
+
+        account: {
+          account_number:
+            cleanAccountNumber,
+
+          account_name:
+            'Paystack Test Account',
+        },
+      });
+    }
+
+    /*
+     * --------------------------------------------------------
+     * PAYSTACK KEY CHECK
+     * --------------------------------------------------------
+     */
 
     if (!process.env.PAYSTACK_SECRET_KEY) {
       return res.status(503).json({
@@ -126,21 +186,37 @@ const resolveBankAccount = async (req, res) => {
       });
     }
 
+    /*
+     * --------------------------------------------------------
+     * NORMAL PAYSTACK ACCOUNT RESOLUTION
+     * --------------------------------------------------------
+     */
+
     const response = await axios.get(
       `${PAYSTACK_BASE_URL}/bank/resolve`,
       {
         params: {
-          account_number: cleanAccountNumber,
-          bank_code: String(bank_code),
+          account_number:
+            cleanAccountNumber,
+
+          bank_code:
+            cleanBankCode,
         },
-        headers: getPaystackHeaders(),
+
+        headers:
+          getPaystackHeaders(),
+
         timeout: 15000,
       }
     );
 
-    const account = response.data?.data;
+    const account =
+      response.data?.data;
 
-    if (!response.data?.status || !account) {
+    if (
+      !response.data?.status ||
+      !account
+    ) {
       return res.status(400).json({
         success: false,
         verified: false,
@@ -152,29 +228,41 @@ const resolveBankAccount = async (req, res) => {
     return res.status(200).json({
       success: true,
       verified: true,
+
       account: {
         account_number:
           account.account_number ||
           cleanAccountNumber,
+
         account_name:
-          account.account_name || '',
+          account.account_name ||
+          '',
       },
     });
   } catch (error) {
     console.error(
       'RESOLVE BANK ACCOUNT ERROR:',
-      error?.response?.data || error.message
+      error?.response?.data ||
+        error.message
     );
 
     return res.status(400).json({
       success: false,
       verified: false,
+
       message:
         error?.response?.data?.message ||
         'Unable to verify bank account',
     });
   }
 };
+
+
+/*
+ * ============================================================
+ * EXPORTS
+ * ============================================================
+ */
 
 module.exports = {
   getBanks,
