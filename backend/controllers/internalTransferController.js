@@ -587,6 +587,16 @@ const transferToZenimoniesUser = async (
      * --------------------------------------------------------
      * BANK TRANSFER RECORD
      * --------------------------------------------------------
+     *
+     * IMPORTANT:
+     *
+     * recipient_phone contains the ACTUAL phone number
+     * used to identify the recipient.
+     *
+     * recipient_account_number contains the ACTUAL
+     * Zenimonies account number belonging to that recipient.
+     *
+     * These are intentionally stored separately.
      */
 
     await client.query(
@@ -594,6 +604,7 @@ const transferToZenimoniesUser = async (
         account_id,
         recipient_name,
         recipient_account_number,
+        recipient_phone,
         recipient_bank_name,
         recipient_bank_code,
         amount,
@@ -610,22 +621,32 @@ const transferToZenimoniesUser = async (
         $4,
         $5,
         $6,
-        'NGN',
         $7,
+        'NGN',
         $8,
+        $9,
         'completed',
         CURRENT_TIMESTAMP
       )`,
       [
         senderAccount.id,
+
         recipientUser.full_name,
+
         recipientAccount.account_number,
+
+        recipientUser.phone,
+
         'Zenimonies',
+
         'ZENIMONIES',
+
         transferAmount,
+
         narration
           ? String(narration).trim()
           : `Zenimonies transfer to ${recipientUser.full_name}`,
+
         reference,
       ]
     );
@@ -680,7 +701,9 @@ const transferToZenimoniesUser = async (
      * --------------------------------------------------------
      *
      * IMPORTANT:
-     * The actual recipient account number is returned here.
+     *
+     * The response contains both the REAL recipient
+     * phone number and the REAL Zenimonies account number.
      */
 
     return res.status(201).json({
