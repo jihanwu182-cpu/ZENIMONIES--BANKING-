@@ -3,43 +3,16 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-
 import { useNavigate } from 'react-router-dom';
 
-import {
-  AccountBalanceRounded,
-  AddRounded,
-  ArrowForwardRounded,
-  ArrowUpwardRounded,
-  BarChartRounded,
-  CheckCircleRounded,
-  ChevronRightRounded,
-  CreditCardRounded,
-  DataUsageRounded,
-  DownloadRounded,
-  HomeRounded,
-  LockRounded,
-  MoreHorizRounded,
-  NotificationsNoneRounded,
-  PhoneAndroidRounded,
-  PersonRounded,
-  ReceiptLongRounded,
-  SettingsRounded,
-  SportsSoccerRounded,
-  SwapHorizRounded,
-  TvRounded,
-  WalletRounded,
-} from '@mui/icons-material';
-
-
-// ============================================================
-// TYPES
-// ============================================================
+/* ============================================================
+   TYPES
+============================================================ */
 
 type Service = {
   name: string;
   description: string;
-  icon: React.ReactNode;
+  icon: string;
 };
 
 type KycData = {
@@ -74,36 +47,18 @@ type AccountResponse = {
 };
 
 type UserData = {
-  id?: string;
   full_name?: string;
   name?: string;
-  email?: string;
+  first_name?: string;
   phone?: string;
 };
 
-type RecentTransaction = {
-  id?: string;
-  type?: string;
-  transaction_type?: string;
-  description?: string;
-  amount?: number | string;
-  currency?: string;
-  status?: string;
-  reference?: string;
-  created_at?: string;
-};
-
-
-// ============================================================
-// DASHBOARD
-// ============================================================
+/* ============================================================
+   DASHBOARD
+============================================================ */
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-
-  // ==========================================================
-  // STATE
-  // ==========================================================
 
   const [showBalance, setShowBalance] =
     useState(true);
@@ -126,76 +81,80 @@ const Dashboard: React.FC = () => {
   const [user, setUser] =
     useState<UserData | null>(null);
 
-  const [recentTransactions, setRecentTransactions] =
-    useState<RecentTransaction[]>([]);
-
-  const [notificationsCount, setNotificationsCount] =
-    useState(0);
-
-
-  // ==========================================================
-  // API BASE
-  // ==========================================================
+  /* ==========================================================
+     API
+  ========================================================== */
 
   const apiBase =
     process.env.REACT_APP_API_URL ||
     'https://zenimonies-banking.onrender.com';
 
-
-  // ==========================================================
-  // TOKEN
-  // ==========================================================
-
-  const getToken = () => {
-    return (
-      localStorage.getItem(
-        'zenimonies_token'
-      ) ||
-      localStorage.getItem(
-        'token'
-      ) ||
-      localStorage.getItem(
-        'access_token'
-      )
-    );
-  };
-
-
-  // ==========================================================
-  // LOAD SAVED USER
-  // ==========================================================
+  /* ==========================================================
+     LOAD USER FROM LOCAL STORAGE
+  ========================================================== */
 
   useEffect(() => {
     try {
-      const savedUser =
+      const storedUser =
         localStorage.getItem(
           'zenimonies_user'
         );
 
-      if (savedUser) {
-        const parsedUser =
-          JSON.parse(savedUser);
+      if (storedUser) {
+        const parsed =
+          JSON.parse(storedUser);
 
-        setUser(parsedUser);
+        setUser(parsed);
       }
     } catch (error) {
       console.error(
-        'Unable to load saved user:',
+        'Unable to load user:',
         error
       );
     }
   }, []);
 
+  /* ==========================================================
+     GET USER NAME
+  ========================================================== */
 
-  // ==========================================================
-  // LOAD ACCOUNT
-  // ==========================================================
+  const displayName = useMemo(() => {
+    const fullName =
+      user?.full_name ||
+      user?.name ||
+      '';
+
+    if (fullName.trim()) {
+      return fullName.trim();
+    }
+
+    if (user?.first_name) {
+      return user.first_name;
+    }
+
+    return 'User';
+  }, [user]);
+
+  const firstLetter =
+    displayName.charAt(0).toUpperCase() ||
+    'U';
+
+  /* ==========================================================
+     LOAD ACCOUNT
+  ========================================================== */
 
   const loadAccount = async () => {
     try {
       setAccountLoading(true);
 
-      const token = getToken();
+      const token =
+        localStorage.getItem(
+          'zenimonies_token'
+        ) ||
+        localStorage.getItem('token') ||
+        localStorage.getItem(
+          'access_token'
+        );
 
       if (!token) {
         setAccountLoading(false);
@@ -210,7 +169,6 @@ const Dashboard: React.FC = () => {
             headers: {
               Authorization:
                 `Bearer ${token}`,
-
               'Content-Type':
                 'application/json',
             },
@@ -230,14 +188,7 @@ const Dashboard: React.FC = () => {
         data.success &&
         data.account
       ) {
-        setAccount(
-          data.account
-        );
-      } else {
-        console.error(
-          'Account response did not contain account data:',
-          data
-        );
+        setAccount(data.account);
       }
     } catch (error) {
       console.error(
@@ -249,242 +200,109 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  /* ==========================================================
+     LOAD KYC
+  ========================================================== */
 
-  // ==========================================================
-  // LOAD KYC STATUS
-  // ==========================================================
+  useEffect(() => {
+    const loadKycStatus =
+      async () => {
+        try {
+          setKycLoading(true);
 
-  const loadKycStatus =
-    async () => {
-      try {
-        setKycLoading(true);
+          const token =
+            localStorage.getItem(
+              'zenimonies_token'
+            ) ||
+            localStorage.getItem(
+              'token'
+            ) ||
+            localStorage.getItem(
+              'access_token'
+            );
 
-        const token = getToken();
+          if (!token) {
+            setKycLoading(false);
+            return;
+          }
 
-        if (!token) {
-          setKycLoading(false);
-          return;
-        }
+          const response =
+            await fetch(
+              `${apiBase}/api/kyc/status`,
+              {
+                method: 'GET',
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                  'Content-Type':
+                    'application/json',
+                },
+              }
+            );
 
-        const response =
-          await fetch(
-            `${apiBase}/api/kyc/status`,
-            {
-              method: 'GET',
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
+          if (!response.ok) {
+            throw new Error(
+              `KYC request failed: ${response.status}`
+            );
+          }
 
-                'Content-Type':
-                  'application/json',
-              },
-            }
-          );
+          const data: KycResponse =
+            await response.json();
 
-        if (!response.ok) {
-          throw new Error(
-            `KYC request failed: ${response.status}`
-          );
-        }
-
-        const data: KycResponse =
-          await response.json();
-
-        if (
-          data.success &&
-          data.kyc
-        ) {
-          setKyc(
+          if (
+            data.success &&
             data.kyc
+          ) {
+            setKyc(data.kyc);
+          } else {
+            setKyc({
+              status:
+                'not_verified',
+              tier: 0,
+              bvn_verified:
+                false,
+              id_verified:
+                false,
+              tier_3_verified:
+                false,
+            });
+          }
+        } catch (error) {
+          console.error(
+            'Dashboard KYC loading error:',
+            error
           );
-        } else {
+
           setKyc({
             status:
               'not_verified',
-
             tier: 0,
-
             bvn_verified:
               false,
-
             id_verified:
               false,
-
             tier_3_verified:
               false,
           });
+        } finally {
+          setKycLoading(false);
         }
-      } catch (error) {
-        console.error(
-          'Dashboard KYC loading error:',
-          error
-        );
+      };
 
-        setKyc({
-          status:
-            'not_verified',
-
-          tier: 0,
-
-          bvn_verified:
-            false,
-
-          id_verified:
-            false,
-
-          tier_3_verified:
-            false,
-        });
-      } finally {
-        setKycLoading(false);
-      }
-    };
-
-
-  // ==========================================================
-  // LOAD RECENT TRANSACTIONS
-  // ==========================================================
-
-  const loadRecentTransactions =
-    async () => {
-      try {
-        const token = getToken();
-
-        if (!token) {
-          return;
-        }
-
-        const response =
-          await fetch(
-            `${apiBase}/api/account/transactions?limit=2`,
-            {
-              method: 'GET',
-
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
-
-                'Content-Type':
-                  'application/json',
-              },
-            }
-          );
-
-        if (!response.ok) {
-          return;
-        }
-
-        const data =
-          await response.json();
-
-        if (
-          Array.isArray(
-            data.transactions
-          )
-        ) {
-          setRecentTransactions(
-            data.transactions.slice(
-              0,
-              2
-            )
-          );
-        }
-      } catch (error) {
-        console.error(
-          'Recent transactions loading error:',
-          error
-        );
-      }
-    };
-
-
-  // ==========================================================
-  // LOAD NOTIFICATION COUNT
-  // ==========================================================
-
-  const loadNotifications =
-    async () => {
-      try {
-        const token = getToken();
-
-        if (!token) {
-          return;
-        }
-
-        const response =
-          await fetch(
-            `${apiBase}/api/notifications`,
-            {
-              method: 'GET',
-
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
-
-                'Content-Type':
-                  'application/json',
-              },
-            }
-          );
-
-        if (!response.ok) {
-          return;
-        }
-
-        const data =
-          await response.json();
-
-        if (
-          Array.isArray(
-            data.notifications
-          )
-        ) {
-          const unread =
-            data.notifications.filter(
-              (item: {
-                is_read?: boolean;
-              }) =>
-                item.is_read === false
-            ).length;
-
-          setNotificationsCount(
-            unread
-          );
-        }
-      } catch (error) {
-        console.error(
-          'Notification loading error:',
-          error
-        );
-      }
-    };
-
-
-  // ==========================================================
-  // INITIAL LOAD
-  // ==========================================================
-
-  useEffect(() => {
     loadKycStatus();
     loadAccount();
-    loadRecentTransactions();
-    loadNotifications();
 
     const handleFocus = () => {
       loadAccount();
-      loadRecentTransactions();
-      loadNotifications();
     };
 
-    const handleVisibilityChange =
+    const handleVisibility =
       () => {
         if (
           document.visibilityState ===
           'visible'
         ) {
           loadAccount();
-          loadRecentTransactions();
-          loadNotifications();
         }
       };
 
@@ -495,7 +313,7 @@ const Dashboard: React.FC = () => {
 
     document.addEventListener(
       'visibilitychange',
-      handleVisibilityChange
+      handleVisibility
     );
 
     return () => {
@@ -506,36 +324,14 @@ const Dashboard: React.FC = () => {
 
       document.removeEventListener(
         'visibilitychange',
-        handleVisibilityChange
+        handleVisibility
       );
     };
-  }, []);
+  }, [apiBase]);
 
-
-  // ==========================================================
-  // USER DISPLAY
-  // ==========================================================
-
-  const displayName =
-    user?.full_name ||
-    user?.name ||
-    'Harrison';
-
-  const firstName =
-    displayName
-      .trim()
-      .split(/\s+/)[0] ||
-    'Harrison';
-
-  const avatarLetter =
-    firstName
-      .charAt(0)
-      .toUpperCase();
-
-
-  // ==========================================================
-  // ACCOUNT BALANCE
-  // ==========================================================
+  /* ==========================================================
+     BALANCE
+  ========================================================== */
 
   const accountBalance =
     Number(
@@ -570,21 +366,18 @@ const Dashboard: React.FC = () => {
       ? '₦••••••'
       : `${accountCurrency} ••••••`;
 
-
-  // ==========================================================
-  // KYC DISPLAY
-  // ==========================================================
+  /* ==========================================================
+     KYC DISPLAY
+  ========================================================== */
 
   const kycDisplay =
     useMemo(() => {
       if (kycLoading) {
         return {
-          text:
-            'Checking KYC...',
+          title: 'Checking KYC...',
           description:
-            'Checking your verification status.',
-          type:
-            'loading',
+            'Please wait while we check your verification status.',
+          type: 'loading',
         };
       }
 
@@ -594,272 +387,162 @@ const Dashboard: React.FC = () => {
         ).toLowerCase();
 
       const tier =
-        Number(
-          kyc?.tier || 0
-        );
+        Number(kyc?.tier || 0);
 
       const verified =
-        status ===
-          'verified' ||
-        status ===
-          'approved' ||
-        status ===
-          'completed';
+        status === 'verified' ||
+        status === 'approved' ||
+        status === 'completed';
 
       if (verified) {
-        if (tier >= 3) {
-          return {
-            text:
-              'Tier 3 Verified',
-            description:
-              'Your account is Tier 3 Verified.',
-            type:
-              'verified',
-          };
-        }
-
-        if (tier === 2) {
-          return {
-            text:
-              'Tier 2 Verified',
-            description:
-              'Your account is Tier 2 Verified.',
-            type:
-              'verified',
-          };
-        }
-
-        if (tier === 1) {
-          return {
-            text:
-              'Tier 1 Verified',
-            description:
-              'Your account is Tier 1 Verified.',
-            type:
-              'verified',
-          };
-        }
+        return {
+          title:
+            tier > 0
+              ? `Tier ${tier} Verified`
+              : 'KYC Verified',
+          description:
+            'Your account verification is complete.',
+          type: 'verified',
+        };
       }
 
       if (
-        status ===
-          'pending' ||
-        status ===
-          'submitted' ||
-        status ===
-          'processing' ||
-        status ===
-          'under_review'
+        status === 'pending' ||
+        status === 'submitted' ||
+        status === 'processing' ||
+        status === 'under_review'
       ) {
         return {
-          text:
+          title:
             'KYC Verification Pending',
           description:
-            'Your verification is being reviewed.',
-          type:
-            'pending',
+            'Your verification is currently being reviewed.',
+          type: 'pending',
         };
       }
 
       return {
-        text:
+        title:
           'KYC Verification Required',
         description:
           'Complete your KYC to increase your limits.',
-        type:
-          'required',
+        type: 'required',
       };
-    }, [
-      kyc,
-      kycLoading,
-    ]);
+    }, [kyc, kycLoading]);
 
+  /* ==========================================================
+     SERVICES
+  ========================================================== */
 
-  // ==========================================================
-  // SERVICES
-  // ==========================================================
+  const services: Service[] = [
+    {
+      name: 'Add Money',
+      icon: 'plus',
+      description:
+        'Fund your account',
+    },
+    {
+      name: 'To Bank',
+      icon: 'bank',
+      description:
+        'Send to any bank',
+    },
+    {
+      name: 'Send to ZENIMONIES',
+      icon: 'send',
+      description:
+        'Send to another Zenimonies user',
+    },
+    {
+      name: 'Airtime',
+      icon: 'phone',
+      description:
+        'Buy airtime',
+    },
+    {
+      name: 'Data',
+      icon: 'data',
+      description:
+        'Buy mobile data',
+    },
+    {
+      name: 'Betting',
+      icon: 'ball',
+      description:
+        'Fund your betting account',
+    },
+    {
+      name: 'TV',
+      icon: 'tv',
+      description:
+        'Pay TV bills',
+    },
+    {
+      name: 'Bills',
+      icon: 'receipt',
+      description:
+        'Pay your bills',
+    },
+    {
+      name: 'SafeBox',
+      icon: 'lock',
+      description:
+        'Save securely',
+    },
+    {
+      name: 'More',
+      icon: 'grid',
+      description:
+        'More services',
+    },
+  ];
 
-  const services: Service[] =
-    [
-      {
-        name:
-          'Add Money',
-
-        description:
-          'Fund your account',
-
-        icon:
-          <AddRounded />,
-      },
-
-      {
-        name:
-          'To Bank',
-
-        description:
-          'Send to any bank',
-
-        icon:
-          <AccountBalanceRounded />,
-      },
-
-      {
-        name:
-          'Send to ZENIMONIES',
-
-        description:
-          'Send to another Zenimonies user',
-
-        icon:
-          <ArrowForwardRounded />,
-      },
-
-      {
-        name:
-          'Airtime',
-
-        description:
-          'Buy airtime',
-
-        icon:
-          <PhoneAndroidRounded />,
-      },
-
-      {
-        name:
-          'Data',
-
-        description:
-          'Buy mobile data',
-
-        icon:
-          <BarChartRounded />,
-      },
-
-      {
-        name:
-          'Betting',
-
-        description:
-          'Fund your bets',
-
-        icon:
-          <SportsSoccerRounded />,
-      },
-
-      {
-        name:
-          'TV',
-
-        description:
-          'Pay TV bills',
-
-        icon:
-          <TvRounded />,
-      },
-
-      {
-        name:
-          'Bills',
-
-        description:
-          'Pay your bills',
-
-        icon:
-          <ReceiptLongRounded />,
-      },
-
-      {
-        name:
-          'SafeBox',
-
-        description:
-          'Save securely',
-
-        icon:
-          <LockRounded />,
-      },
-
-      {
-        name:
-          'More',
-
-        description:
-          'More services',
-
-        icon:
-          <MoreHorizRounded />,
-      },
-    ];
-
-
-  // ==========================================================
-  // SERVICE NAVIGATION
-  // ==========================================================
+  /* ==========================================================
+     NAVIGATION
+  ========================================================== */
 
   const handleServiceClick =
-    (
-      service: string
-    ) => {
+    (service: string) => {
       switch (service) {
         case 'Add Money':
-          navigate(
-            '/deposit'
-          );
+          navigate('/deposit');
           break;
 
         case 'To Bank':
-          navigate(
-            '/to-bank'
-          );
+          navigate('/to-bank');
           break;
 
         case 'Send to ZENIMONIES':
-          navigate(
-            '/transfer'
-          );
+          navigate('/transfer');
           break;
 
         case 'Airtime':
-          navigate(
-            '/airtime'
-          );
+          navigate('/airtime');
           break;
 
         case 'Data':
-          navigate(
-            '/data'
-          );
+          navigate('/data');
           break;
 
         case 'Betting':
-          navigate(
-            '/betting'
-          );
+          navigate('/betting');
           break;
 
         case 'TV':
-          navigate(
-            '/tv'
-          );
+          navigate('/tv');
           break;
 
         case 'Bills':
-          navigate(
-            '/bills'
-          );
+          navigate('/bills');
           break;
 
         case 'SafeBox':
-          navigate(
-            '/safebox'
-          );
+          navigate('/safebox');
           break;
 
         case 'More':
           setShowMenu(
-            previous =>
-              !previous
+            previous => !previous
           );
           break;
 
@@ -868,294 +551,292 @@ const Dashboard: React.FC = () => {
       }
     };
 
+  /* ==========================================================
+     ICON
+  ========================================================== */
 
-  // ==========================================================
-  // FORMAT TRANSACTION DATE
-  // ==========================================================
-
-  const formatTransactionDate =
-    (
-      value?: string
-    ) => {
-      if (!value) {
-        return '';
-      }
-
-      const date =
-        new Date(value);
-
-      if (
-        Number.isNaN(
-          date.getTime()
-        )
-      ) {
-        return value;
-      }
-
-      return date.toLocaleString(
-        'en-NG',
-        {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-        }
-      );
+  const Icon = ({
+    name,
+    size = 30,
+  }: {
+    name: string;
+    size?: number;
+  }) => {
+    const common = {
+      width: size,
+      height: size,
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      strokeWidth: 2,
+      strokeLinecap:
+        'round' as const,
+      strokeLinejoin:
+        'round' as const,
     };
 
-
-  // ==========================================================
-  // TRANSACTION HELPERS
-  // ==========================================================
-
-  const isIncomingTransaction =
-    (
-      transaction: RecentTransaction
-    ) => {
-      const type =
-        String(
-          transaction.type ||
-          transaction.transaction_type ||
-          ''
-        ).toLowerCase();
-
-      const description =
-        String(
-          transaction.description ||
-          ''
-        ).toLowerCase();
-
-      return (
-        type.includes(
-          'received'
-        ) ||
-        type.includes(
-          'deposit'
-        ) ||
-        type.includes(
-          'funding'
-        ) ||
-        type.includes(
-          'credit'
-        ) ||
-        description.includes(
-          'received'
-        ) ||
-        description.includes(
-          'funding'
-        )
-      );
-    };
-
-
-  const formatTransactionAmount =
-    (
-      transaction: RecentTransaction
-    ) => {
-      const amount =
-        Number(
-          transaction.amount || 0
-        );
-
-      const currency =
-        (
-          transaction.currency ||
-          'NGN'
-        ).toUpperCase();
-
-      const money =
-        currency === 'NGN'
-          ? `₦${amount.toLocaleString(
-              'en-NG',
-              {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              }
-            )}`
-          : `${currency} ${amount.toLocaleString(
-              'en-NG',
-              {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              }
-            )}`;
-
-      return isIncomingTransaction(
-        transaction
-      )
-        ? `+${money}`
-        : `−${money}`;
-    };
-
-
-  const getTransactionTitle =
-    (
-      transaction: RecentTransaction
-    ) => {
-      const type =
-        String(
-          transaction.type ||
-          transaction.transaction_type ||
-          ''
-        ).toLowerCase();
-
-      if (
-        type.includes(
-          'received'
-        )
-      ) {
-        return 'Money Received';
-      }
-
-      if (
-        type.includes(
-          'internal_transfer'
-        )
-      ) {
-        return 'Transfer';
-      }
-
-      if (
-        type.includes(
-          'deposit'
-        ) ||
-        type.includes(
-          'funding'
-        )
-      ) {
-        return 'Account Funding';
-      }
-
-      return (
-        transaction.description ||
-        'Transaction'
-      );
-    };
-
-
-  const getTransactionStatus =
-    (
-      transaction: RecentTransaction
-    ) => {
-      const status =
-        String(
-          transaction.status ||
-          ''
-        ).toLowerCase();
-
-      if (
-        status ===
-          'completed' ||
-        status ===
-          'successful' ||
-        status ===
-          'success'
-      ) {
-        return {
-          label:
-            'Completed',
-          type:
-            'completed',
-        };
-      }
-
-      if (
-        status ===
-          'failed' ||
-        status ===
-          'failure'
-      ) {
-        return {
-          label:
-            'Failed',
-          type:
-            'failed',
-        };
-      }
-
-      return {
-        label:
-          'Pending',
-        type:
-          'pending',
-      };
-    };
-
-
-  // ==========================================================
-  // TRANSACTION ICON
-  // ==========================================================
-
-  const getTransactionIcon =
-    (
-      transaction: RecentTransaction
-    ) => {
-      if (
-        isIncomingTransaction(
-          transaction
-        )
-      ) {
+    switch (name) {
+      case 'plus':
         return (
-          <ArrowDownwardIcon />
+          <svg {...common}>
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
         );
-      }
 
-      return (
-        <ArrowUpwardRounded />
-      );
-    };
+      case 'bank':
+        return (
+          <svg {...common}>
+            <path d="M3 10h18" />
+            <path d="M5 10v8" />
+            <path d="M9 10v8" />
+            <path d="M15 10v8" />
+            <path d="M19 10v8" />
+            <path d="M3 18h18" />
+            <path d="M2 10l10-6 10 6" />
+          </svg>
+        );
 
+      case 'send':
+        return (
+          <svg {...common}>
+            <path d="M4 12h15" />
+            <path d="M13 6l6 6-6 6" />
+          </svg>
+        );
 
-  // ==========================================================
-  // RENDER
-  // ==========================================================
+      case 'phone':
+        return (
+          <svg {...common}>
+            <rect
+              x="7"
+              y="2.5"
+              width="10"
+              height="19"
+              rx="2"
+            />
+            <path d="M10 18.5h4" />
+          </svg>
+        );
+
+      case 'data':
+        return (
+          <svg {...common}>
+            <path d="M5 19v-3" />
+            <path d="M9.5 19v-6" />
+            <path d="M14.5 19v-10" />
+            <path d="M19 19V5" />
+          </svg>
+        );
+
+      case 'ball':
+        return (
+          <svg {...common}>
+            <circle
+              cx="12"
+              cy="12"
+              r="9"
+            />
+            <path d="M12 7l3 2-1 4h-4l-1-4 3-2z" />
+            <path d="M9 13l-3 2" />
+            <path d="M15 13l3 2" />
+            <path d="M10 17l-1 3" />
+            <path d="M14 17l1 3" />
+          </svg>
+        );
+
+      case 'tv':
+        return (
+          <svg {...common}>
+            <rect
+              x="3"
+              y="5"
+              width="18"
+              height="13"
+              rx="2"
+            />
+            <path d="M8 21h8" />
+            <path d="M12 18v3" />
+          </svg>
+        );
+
+      case 'receipt':
+        return (
+          <svg {...common}>
+            <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z" />
+            <path d="M9 8h6" />
+            <path d="M9 12h6" />
+            <path d="M9 16h4" />
+          </svg>
+        );
+
+      case 'lock':
+        return (
+          <svg {...common}>
+            <rect
+              x="5"
+              y="10"
+              width="14"
+              height="10"
+              rx="2"
+            />
+            <path d="M8 10V7a4 4 0 018 0v3" />
+          </svg>
+        );
+
+      case 'grid':
+        return (
+          <svg {...common}>
+            <circle cx="5" cy="5" r="1" />
+            <circle cx="12" cy="5" r="1" />
+            <circle cx="19" cy="5" r="1" />
+            <circle cx="5" cy="12" r="1" />
+            <circle cx="12" cy="12" r="1" />
+            <circle cx="19" cy="12" r="1" />
+            <circle cx="5" cy="19" r="1" />
+            <circle cx="12" cy="19" r="1" />
+            <circle cx="19" cy="19" r="1" />
+          </svg>
+        );
+
+      case 'bell':
+        return (
+          <svg {...common}>
+            <path d="M18 9a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+            <path d="M10 21h4" />
+          </svg>
+        );
+
+      case 'eye':
+        return (
+          <svg {...common}>
+            <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" />
+            <circle
+              cx="12"
+              cy="12"
+              r="2.5"
+            />
+          </svg>
+        );
+
+      case 'shield':
+        return (
+          <svg {...common}>
+            <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z" />
+            <path d="M12 8v5" />
+            <circle
+              cx="12"
+              cy="16"
+              r=".7"
+              fill="currentColor"
+            />
+          </svg>
+        );
+
+      case 'home':
+        return (
+          <svg {...common}>
+            <path d="M3 11l9-8 9 8" />
+            <path d="M5 10v10h14V10" />
+            <path d="M10 20v-6h4v6" />
+          </svg>
+        );
+
+      case 'transactions':
+        return (
+          <svg {...common}>
+            <path d="M7 7h13l-3-3" />
+            <path d="M17 17H4l3 3" />
+            <path d="M20 7l-3 3" />
+            <path d="M4 17l3-3" />
+          </svg>
+        );
+
+      case 'card':
+        return (
+          <svg {...common}>
+            <rect
+              x="3"
+              y="5"
+              width="18"
+              height="14"
+              rx="2"
+            />
+            <path d="M3 10h18" />
+          </svg>
+        );
+
+      case 'wallet':
+        return (
+          <svg {...common}>
+            <path d="M4 6h15a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+            <path d="M16 13h5" />
+            <circle
+              cx="16"
+              cy="13"
+              r="1"
+            />
+            <path d="M4 6l2-3h12" />
+          </svg>
+        );
+
+      case 'user':
+        return (
+          <svg {...common}>
+            <circle
+              cx="12"
+              cy="8"
+              r="3.5"
+            />
+            <path d="M5 21c.8-4 3.2-6 7-6s6.2 2 7 6" />
+          </svg>
+        );
+
+      case 'settings':
+        return (
+          <svg {...common}>
+            <circle
+              cx="12"
+              cy="12"
+              r="3"
+            />
+            <path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1-2 2-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.6v.2h-2.8v-.2a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1-2-2 .1-.1A1.7 1.7 0 007 15a1.7 1.7 0 00-1.6-1H5v-2.8h.2a1.7 1.7 0 001.6-1A1.7 1.7 0 006.5 8.3l-.1-.1 2-2 .1.1a1.7 1.7 0 001.9.3 1.7 1.7 0 001-1.6v-.2h2.8V5a1.7 1.7 0 001 1.6 1.7 1.7 0 001.9-.3l.1-.1 2 2-.1.1a1.7 1.7 0 00-.3 1.9 1.7 1.7 0 001.6 1h.2V14h-.2a1.7 1.7 0 00-1.6 1z" />
+          </svg>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  /* ==========================================================
+     RENDER
+  ========================================================== */
 
   return (
-    <div
-      style={
-        styles.page
-      }
-    >
+    <div style={styles.page}>
 
       {/* ======================================================
           HEADER
       ====================================================== */}
 
-      <header
-        style={
-          styles.header
-        }
-      >
+      <header style={styles.header}>
 
-        <div
-          style={
-            styles.brandArea
-          }
-        >
+        <div style={styles.brandArea}>
 
-          <div
-            style={
-              styles.logo
-            }
-          >
+          <div style={styles.logo}>
             Z
           </div>
 
           <div>
             <div
-              style={
-                styles.brandName
-              }
+              style={styles.brandName}
             >
               Zenimonies
             </div>
 
             <div
-              style={
-                styles.brandSubtitle
-              }
+              style={styles.brandSubtitle}
             >
               DIGITAL BANKING
             </div>
@@ -1163,45 +844,35 @@ const Dashboard: React.FC = () => {
 
         </div>
 
-
         <div
-          style={
-            styles.headerRight
-          }
+          style={styles.headerRight}
         >
 
           {/* NOTIFICATION */}
 
           <button
             type="button"
+            aria-label="Notifications"
             style={
               styles.notificationButton
             }
             onClick={() =>
-              navigate(
-                '/notifications'
+              alert(
+                'No new notifications'
               )
             }
-            aria-label="Notifications"
           >
-
-            <NotificationsNoneRounded
-              sx={{
-                fontSize: 27,
-              }}
+            <Icon
+              name="bell"
+              size={29}
             />
 
-            {notificationsCount >
-              0 && (
-              <span
-                style={
-                  styles.notificationDot
-                }
-              />
-            )}
-
+            <span
+              style={
+                styles.notificationDot
+              }
+            />
           </button>
-
 
           {/* PROFILE */}
 
@@ -1211,18 +882,14 @@ const Dashboard: React.FC = () => {
               styles.profileButton
             }
             onClick={() =>
-              navigate(
-                '/profile'
-              )
+              navigate('/profile')
             }
           >
 
             <div
-              style={
-                styles.avatar
-              }
+              style={styles.avatar}
             >
-              {avatarLetter}
+              {firstLetter}
             </div>
 
             <span
@@ -1230,7 +897,7 @@ const Dashboard: React.FC = () => {
                 styles.headerName
               }
             >
-              {firstName}
+              {displayName}
             </span>
 
           </button>
@@ -1239,20 +906,13 @@ const Dashboard: React.FC = () => {
 
       </header>
 
-
       {/* ======================================================
           MAIN
       ====================================================== */}
 
-      <main
-        style={
-          styles.main
-        }
-      >
+      <main style={styles.main}>
 
-        {/* ====================================================
-            WELCOME
-        ==================================================== */}
+        {/* WELCOME */}
 
         <section
           style={
@@ -1271,17 +931,13 @@ const Dashboard: React.FC = () => {
             </div>
 
             <h1
-              style={
-                styles.name
-              }
+              style={styles.name}
             >
-              {firstName}
+              {displayName}
             </h1>
 
             <p
-              style={
-                styles.subtitle
-              }
+              style={styles.subtitle}
             >
               Here's your financial
               overview.
@@ -1291,87 +947,67 @@ const Dashboard: React.FC = () => {
 
         </section>
 
-
         {/* ====================================================
-            KYC BANNER
+            KYC ALERT
         ==================================================== */}
 
-        <button
-          type="button"
-          style={{
-            ...styles.kycBanner,
+        {kycDisplay.type !==
+          'verified' && (
 
-            ...(kycDisplay.type ===
-            'verified'
-              ? styles.kycBannerVerified
-              : {}),
-
-            ...(kycDisplay.type ===
-            'pending'
-              ? styles.kycBannerPending
-              : {}),
-          }}
-          onClick={() =>
-            navigate('/kyc')
-          }
-        >
-
-          <div
+          <button
+            type="button"
             style={
-              styles.kycBannerIcon
+              styles.kycAlert
+            }
+            onClick={() =>
+              navigate('/kyc')
             }
           >
-            {kycDisplay.type ===
-            'verified' ? (
-              <CheckCircleRounded
-                sx={{
-                  fontSize: 25,
-                }}
+
+            <div
+              style={
+                styles.kycAlertIcon
+              }
+            >
+              <Icon
+                name="shield"
+                size={25}
               />
-            ) : (
-              '!'
-            )}
-          </div>
-
-          <div
-            style={
-              styles.kycBannerContent
-            }
-          >
-
-            <div
-              style={
-                styles.kycBannerTitle
-              }
-            >
-              {kycDisplay.text}
             </div>
 
             <div
               style={
-                styles.kycBannerDescription
+                styles.kycAlertText
               }
             >
-              {kycDisplay.type ===
-              'verified'
-                ? 'Your account verification is complete.'
-                : 'Complete your KYC to increase your limits.'}
+
+              <strong>
+                {
+                  kycDisplay.title
+                }
+              </strong>
+
+              <span>
+                {
+                  kycDisplay.description
+                }
+              </span>
+
             </div>
 
-          </div>
+            <span
+              style={
+                styles.chevron
+              }
+            >
+              ›
+            </span>
 
-          <ChevronRightRounded
-            sx={{
-              fontSize: 28,
-              color: '#687a72',
-            }}
-          />
-
-        </button>
-
+          </button>
+        )}
 
         {/* ====================================================
-            BALANCE CARD
+            BALANCE CARD — DARK LATEST DESIGN
         ==================================================== */}
 
         <section
@@ -1389,12 +1025,6 @@ const Dashboard: React.FC = () => {
           <div
             style={
               styles.balanceWaveTwo
-            }
-          />
-
-          <div
-            style={
-              styles.balanceWaveThree
             }
           />
 
@@ -1439,19 +1069,16 @@ const Dashboard: React.FC = () => {
                 }
               >
 
-                <span
-                  style={
-                    styles.eyeIcon
-                  }
-                >
-                  {showBalance
-                    ? '◉'
-                    : '○'}
-                </span>
+                <Icon
+                  name="eye"
+                  size={23}
+                />
 
-                {showBalance
-                  ? 'Hide'
-                  : 'Show'}
+                <span>
+                  {showBalance
+                    ? 'Hide'
+                    : 'Show'}
+                </span>
 
               </button>
 
@@ -1471,24 +1098,24 @@ const Dashboard: React.FC = () => {
 
             <div
               style={
-                styles.balanceSecure
+                styles.safeText
               }
             >
-              <LockRounded
-                sx={{
-                  fontSize: 18,
-                }}
-              />
-
-              <span>
-                Your funds are safe and secure
+              <span
+                style={
+                  styles.lockSymbol
+                }
+              >
+                🔒
               </span>
+
+              Your funds are safe
+              and secure
             </div>
 
           </div>
 
         </section>
-
 
         {/* ====================================================
             QUICK ACTIONS
@@ -1500,22 +1127,13 @@ const Dashboard: React.FC = () => {
           }
         >
 
-          <div
+          <h2
             style={
-              styles.sectionHeading
+              styles.quickTitle
             }
           >
-
-            <h2
-              style={
-                styles.quickTitle
-              }
-            >
-              Quick Actions
-            </h2>
-
-          </div>
-
+            Quick Actions
+          </h2>
 
           <div
             style={
@@ -1548,7 +1166,12 @@ const Dashboard: React.FC = () => {
                       styles.serviceIcon
                     }
                   >
-                    {service.icon}
+                    <Icon
+                      name={
+                        service.icon
+                      }
+                      size={34}
+                    />
                   </div>
 
                   <div
@@ -1567,26 +1190,25 @@ const Dashboard: React.FC = () => {
 
         </section>
 
-
         {/* ====================================================
             MORE SERVICES
         ==================================================== */}
 
         <section
           style={
-            styles.moreServicesCard
+            styles.moreServices
           }
         >
 
           <div
             style={
-              styles.moreServicesHeader
+              styles.sectionHeading
             }
           >
 
             <h2
               style={
-                styles.moreServicesTitle
+                styles.sectionTitle
               }
             >
               More Services
@@ -1604,20 +1226,14 @@ const Dashboard: React.FC = () => {
                 )
               }
             >
-              See all
-              <ChevronRightRounded
-                sx={{
-                  fontSize: 18,
-                }}
-              />
+              See all ›
             </button>
 
           </div>
 
-
           <div
             style={
-              styles.moreServicesGrid
+              styles.moreGrid
             }
           >
 
@@ -1632,18 +1248,14 @@ const Dashboard: React.FC = () => {
                 )
               }
             >
-              <SwapHorizRounded
-                sx={{
-                  fontSize: 29,
-                  color: '#079447',
-                }}
+              <Icon
+                name="transactions"
+                size={31}
               />
-
               <span>
                 Transactions
               </span>
             </button>
-
 
             <button
               type="button"
@@ -1651,23 +1263,17 @@ const Dashboard: React.FC = () => {
                 styles.moreServiceItem
               }
               onClick={() =>
-                navigate(
-                  '/wallet'
-                )
+                navigate('/wallet')
               }
             >
-              <WalletRounded
-                sx={{
-                  fontSize: 29,
-                  color: '#079447',
-                }}
+              <Icon
+                name="wallet"
+                size={31}
               />
-
               <span>
                 Wallet
               </span>
             </button>
-
 
             <button
               type="button"
@@ -1680,18 +1286,14 @@ const Dashboard: React.FC = () => {
                 )
               }
             >
-              <CreditCardRounded
-                sx={{
-                  fontSize: 29,
-                  color: '#079447',
-                }}
+              <Icon
+                name="card"
+                size={31}
               />
-
               <span>
                 Cards
               </span>
             </button>
-
 
             <button
               type="button"
@@ -1704,13 +1306,10 @@ const Dashboard: React.FC = () => {
                 )
               }
             >
-              <SettingsRounded
-                sx={{
-                  fontSize: 29,
-                  color: '#079447',
-                }}
+              <Icon
+                name="settings"
+                size={31}
               />
-
               <span>
                 Settings
               </span>
@@ -1719,7 +1318,6 @@ const Dashboard: React.FC = () => {
           </div>
 
         </section>
-
 
         {/* ====================================================
             MORE MENU
@@ -1737,24 +1335,9 @@ const Dashboard: React.FC = () => {
                 styles.morePanelHeader
               }
             >
-
-              <div>
-                <h3
-                  style={
-                    styles.morePanelTitle
-                  }
-                >
-                  More Services
-                </h3>
-
-                <p
-                  style={
-                    styles.morePanelSubtitle
-                  }
-                >
-                  Choose a service to continue.
-                </p>
-              </div>
+              <strong>
+                More Services
+              </strong>
 
               <button
                 type="button"
@@ -1762,16 +1345,12 @@ const Dashboard: React.FC = () => {
                   styles.closeButton
                 }
                 onClick={() =>
-                  setShowMenu(
-                    false
-                  )
+                  setShowMenu(false)
                 }
               >
                 ×
               </button>
-
             </div>
-
 
             <div
               style={
@@ -1782,87 +1361,7 @@ const Dashboard: React.FC = () => {
               <button
                 type="button"
                 style={
-                  styles.morePanelItem
-                }
-                onClick={() =>
-                  navigate(
-                    '/transactions'
-                  )
-                }
-              >
-                <SwapHorizRounded />
-                Transactions
-              </button>
-
-
-              <button
-                type="button"
-                style={
-                  styles.morePanelItem
-                }
-                onClick={() =>
-                  navigate(
-                    '/wallet'
-                  )
-                }
-              >
-                <WalletRounded />
-                Wallet
-              </button>
-
-
-              <button
-                type="button"
-                style={
-                  styles.morePanelItem
-                }
-                onClick={() =>
-                  navigate(
-                    '/virtual-card'
-                  )
-                }
-              >
-                <CreditCardRounded />
-                Cards
-              </button>
-
-
-              <button
-                type="button"
-                style={
-                  styles.morePanelItem
-                }
-                onClick={() =>
-                  navigate(
-                    '/profile'
-                  )
-                }
-              >
-                <PersonRounded />
-                Profile
-              </button>
-
-
-              <button
-                type="button"
-                style={
-                  styles.morePanelItem
-                }
-                onClick={() =>
-                  navigate(
-                    '/settings'
-                  )
-                }
-              >
-                <SettingsRounded />
-                Settings
-              </button>
-
-
-              <button
-                type="button"
-                style={
-                  styles.morePanelItem
+                  styles.panelItem
                 }
                 onClick={() =>
                   navigate(
@@ -1870,15 +1369,41 @@ const Dashboard: React.FC = () => {
                   )
                 }
               >
-                <CheckCircleRounded />
                 Verify Phone
+              </button>
+
+              <button
+                type="button"
+                style={
+                  styles.panelItem
+                }
+                onClick={() =>
+                  navigate(
+                    '/virtual-card'
+                  )
+                }
+              >
+                Cards
+              </button>
+
+              <button
+                type="button"
+                style={
+                  styles.panelItem
+                }
+                onClick={() =>
+                  navigate(
+                    '/safebox'
+                  )
+                }
+              >
+                SafeBox
               </button>
 
             </div>
 
           </section>
         )}
-
 
         {/* ====================================================
             RECENT TRANSACTIONS
@@ -1892,13 +1417,13 @@ const Dashboard: React.FC = () => {
 
           <div
             style={
-              styles.transactionsHeader
+              styles.sectionHeading
             }
           >
 
             <h2
               style={
-                styles.transactionsTitle
+                styles.sectionTitle
               }
             >
               Recent Transactions
@@ -1915,236 +1440,56 @@ const Dashboard: React.FC = () => {
                 )
               }
             >
-              See all
-              <ChevronRightRounded
-                sx={{
-                  fontSize: 18,
-                }}
-              />
+              See all ›
             </button>
 
           </div>
 
+          <button
+            type="button"
+            style={
+              styles.emptyTransactions
+            }
+            onClick={() =>
+              navigate(
+                '/transactions'
+              )
+            }
+          >
 
-          {recentTransactions.length ===
-          0 ? (
-
-            <button
-              type="button"
+            <div
               style={
-                styles.emptyTransactions
+                styles.emptyIcon
               }
-              onClick={() =>
-                navigate(
-                  '/transactions'
-                )
+            >
+              <Icon
+                name="transactions"
+                size={25}
+              />
+            </div>
+
+            <div
+              style={
+                styles.emptyText
               }
             >
 
-              <div
-                style={
-                  styles.emptyIcon
-                }
-              >
-                <ReceiptLongRounded
-                  sx={{
-                    fontSize: 25,
-                  }}
-                />
-              </div>
+              <strong>
+                No transactions yet
+              </strong>
 
-              <div
-                style={
-                  styles.emptyTransactionText
-                }
-              >
+              <span>
+                Your transactions
+                will appear here.
+              </span>
 
-                <strong>
-                  No transactions yet
-                </strong>
-
-                <p
-                  style={
-                    styles.emptyDescription
-                  }
-                >
-                  Your transactions will appear here.
-                </p>
-
-              </div>
-
-              <ChevronRightRounded
-                sx={{
-                  color: '#87938e',
-                }}
-              />
-
-            </button>
-
-          ) : (
-
-            <div>
-              {recentTransactions.map(
-                (
-                  transaction,
-                  index
-                ) => {
-
-                  const transactionStatus =
-                    getTransactionStatus(
-                      transaction
-                    );
-
-                  const incoming =
-                    isIncomingTransaction(
-                      transaction
-                    );
-
-                  return (
-                    <button
-                      type="button"
-                      key={
-                        transaction.id ||
-                        transaction.reference ||
-                        index
-                      }
-                      style={{
-                        ...styles.transactionRow,
-
-                        borderBottom:
-                          index <
-                          recentTransactions.length -
-                            1
-                            ? '1px solid #e7eeeb'
-                            : 'none',
-                      }}
-                      onClick={() =>
-                        navigate(
-                          '/transactions'
-                        )
-                      }
-                    >
-
-                      <div
-                        style={{
-                          ...styles.transactionIcon,
-
-                          background:
-                            incoming
-                              ? '#e2f8ed'
-                              : transactionStatus.type ===
-                                  'pending'
-                                ? '#f0f2f4'
-                                : '#eaf8f2',
-
-                          color:
-                            incoming
-                              ? '#079447'
-                              : transactionStatus.type ===
-                                  'pending'
-                                ? '#68756f'
-                                : '#079447',
-                        }}
-                      >
-                        {getTransactionIcon(
-                          transaction
-                        )}
-                      </div>
-
-
-                      <div
-                        style={
-                          styles.transactionMiddle
-                        }
-                      >
-
-                        <div
-                          style={
-                            styles.transactionName
-                          }
-                        >
-                          {getTransactionTitle(
-                            transaction
-                          )}
-                        </div>
-
-                        <div
-                          style={
-                            styles.transactionMeta
-                          }
-                        >
-                          {transaction.description ||
-                            'Zenimonies'}
-
-                          {transaction.created_at &&
-                            ` • ${formatTransactionDate(
-                              transaction.created_at
-                            )}`}
-                        </div>
-
-                      </div>
-
-
-                      <div
-                        style={
-                          styles.transactionRight
-                        }
-                      >
-
-                        <div
-                          style={{
-                            ...styles.transactionAmount,
-
-                            color:
-                              incoming
-                                ? '#079447'
-                                : '#172b23',
-                          }}
-                        >
-                          {formatTransactionAmount(
-                            transaction
-                          )}
-                        </div>
-
-                        <span
-                          style={{
-                            ...styles.transactionStatus,
-
-                            ...(transactionStatus.type ===
-                            'completed'
-                              ? styles.statusCompleted
-                              : {}),
-
-                            ...(transactionStatus.type ===
-                            'pending'
-                              ? styles.statusPending
-                              : {}),
-
-                            ...(transactionStatus.type ===
-                            'failed'
-                              ? styles.statusFailed
-                              : {}),
-                          }}
-                        >
-                          {
-                            transactionStatus.label
-                          }
-                        </span>
-
-                      </div>
-
-                    </button>
-                  );
-                }
-              )}
             </div>
 
-          )}
+          </button>
 
         </section>
 
       </main>
-
 
       {/* ======================================================
           BOTTOM NAVIGATION
@@ -2160,31 +1505,27 @@ const Dashboard: React.FC = () => {
           type="button"
           style={{
             ...styles.navItem,
-            ...styles.navItemActive,
+            ...styles.navActive,
           }}
           onClick={() =>
             navigate('/')
           }
         >
-
-          <HomeRounded
-            sx={{
-              fontSize: 25,
-            }}
+          <Icon
+            name="home"
+            size={27}
           />
 
           <span>
             Home
           </span>
 
-          <span
+          <div
             style={
               styles.activeIndicator
             }
           />
-
         </button>
-
 
         <button
           type="button"
@@ -2197,19 +1538,15 @@ const Dashboard: React.FC = () => {
             )
           }
         >
-
-          <SwapHorizRounded
-            sx={{
-              fontSize: 25,
-            }}
+          <Icon
+            name="transactions"
+            size={27}
           />
 
           <span>
             Transactions
           </span>
-
         </button>
-
 
         <button
           type="button"
@@ -2222,19 +1559,15 @@ const Dashboard: React.FC = () => {
             )
           }
         >
-
-          <CreditCardRounded
-            sx={{
-              fontSize: 25,
-            }}
+          <Icon
+            name="card"
+            size={27}
           />
 
           <span>
             Cards
           </span>
-
         </button>
-
 
         <button
           type="button"
@@ -2242,24 +1575,18 @@ const Dashboard: React.FC = () => {
             styles.navItem
           }
           onClick={() =>
-            navigate(
-              '/wallet'
-            )
+            navigate('/wallet')
           }
         >
-
-          <WalletRounded
-            sx={{
-              fontSize: 25,
-            }}
+          <Icon
+            name="wallet"
+            size={27}
           />
 
           <span>
             Wallet
           </span>
-
         </button>
-
 
         <button
           type="button"
@@ -2267,22 +1594,17 @@ const Dashboard: React.FC = () => {
             styles.navItem
           }
           onClick={() =>
-            navigate(
-              '/profile'
-            )
+            navigate('/profile')
           }
         >
-
-          <PersonRounded
-            sx={{
-              fontSize: 25,
-            }}
+          <Icon
+            name="user"
+            size={27}
           />
 
           <span>
             Profile
           </span>
-
         </button>
 
       </nav>
@@ -2291,1686 +1613,678 @@ const Dashboard: React.FC = () => {
   );
 };
 
-
-// ============================================================
-// HELPER ICON
-// ============================================================
-
-const ArrowDownwardIcon =
-  () => (
-    <svg
-      width="25"
-      height="25"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M12 4V18"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-
-      <path
-        d="M6 12L12 18L18 12"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-
-// ============================================================
-// STYLES
-// ============================================================
+/* ============================================================
+   STYLES
+============================================================ */
 
 const styles: Record<
   string,
   React.CSSProperties
 > = {
 
-  // ==========================================================
-  // PAGE
-  // ==========================================================
-
   page: {
-    minHeight:
-      '100vh',
-
+    minHeight: '100vh',
     background:
-      'linear-gradient(180deg, #fbfefd 0%, #f1f9f5 100%)',
-
-    color:
-      '#10251d',
-
+      'linear-gradient(180deg, #f8fcfa 0%, #eff8f4 100%)',
+    color: '#102a21',
     fontFamily:
       'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-
-    paddingBottom:
-      96,
+    paddingBottom: 100,
   },
 
-
-  // ==========================================================
-  // HEADER
-  // ==========================================================
+  /* ==========================================================
+     HEADER
+  ========================================================== */
 
   header: {
-    minHeight:
-      72,
-
+    minHeight: 76,
     background:
-      'rgba(255,255,255,0.97)',
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
+      'rgba(255,255,255,0.96)',
+    display: 'flex',
+    alignItems: 'center',
     justifyContent:
       'space-between',
-
     padding:
-      '0 4.5%',
-
+      '12px max(4%, 18px)',
     borderBottom:
-      '1px solid #edf2ef',
-
-    position:
-      'sticky',
-
-    top:
-      0,
-
-    zIndex:
-      20,
-
+      '1px solid #e7efeb',
+    position: 'sticky',
+    top: 0,
+    zIndex: 20,
     backdropFilter:
       'blur(14px)',
   },
 
-
   brandArea: {
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    gap:
-      10,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 11,
   },
-
 
   logo: {
-    width:
-      45,
-
-    height:
-      45,
-
-    borderRadius:
-      13,
-
+    width: 49,
+    height: 49,
+    borderRadius: 15,
     background:
-      'linear-gradient(145deg, #08a44f, #079447)',
-
-    color:
-      '#ffffff',
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    justifyContent:
-      'center',
-
-    fontSize:
-      27,
-
-    fontWeight:
-      900,
-
+      'linear-gradient(135deg, #05a653, #087d42)',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 29,
+    fontWeight: 900,
     boxShadow:
-      '0 6px 15px rgba(7,148,71,0.18)',
+      '0 8px 20px rgba(5,166,83,0.20)',
   },
-
 
   brandName: {
-    fontSize:
-      20,
-
-    fontWeight:
-      850,
-
-    lineHeight:
-      1.05,
-
-    color:
-      '#0d2119',
+    fontSize: 22,
+    fontWeight: 900,
+    lineHeight: 1,
+    letterSpacing: -0.5,
   },
-
 
   brandSubtitle: {
-    fontSize:
-      8,
-
-    letterSpacing:
-      2.2,
-
-    color:
-      '#9aa7a1',
-
-    marginTop:
-      4,
-
-    fontWeight:
-      600,
+    marginTop: 5,
+    fontSize: 8,
+    letterSpacing: 3,
+    color: '#9aa9a2',
+    fontWeight: 700,
   },
-
 
   headerRight: {
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    gap:
-      11,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 15,
   },
-
-
-  // ==========================================================
-  // NOTIFICATION
-  // ==========================================================
 
   notificationButton: {
-    width:
-      43,
-
-    height:
-      43,
-
-    border:
-      'none',
-
+    width: 40,
+    height: 40,
+    border: 'none',
     background:
       'transparent',
-
-    color:
-      '#18382c',
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    justifyContent:
-      'center',
-
-    cursor:
-      'pointer',
-
-    position:
-      'relative',
-
-    borderRadius:
-      '50%',
+    color: '#143a2d',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    position: 'relative',
+    padding: 0,
   },
 
-
   notificationDot: {
-    position:
-      'absolute',
-
-    top:
-      6,
-
-    right:
-      7,
-
-    width:
-      9,
-
-    height:
-      9,
-
-    borderRadius:
-      '50%',
-
-    background:
-      '#ef3340',
-
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: '#ef3340',
     border:
       '2px solid #ffffff',
   },
 
-
-  // ==========================================================
-  // PROFILE
-  // ==========================================================
-
   profileButton: {
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    gap:
-      8,
-
-    border:
-      'none',
-
+    border: 'none',
     background:
       'transparent',
-
-    cursor:
-      'pointer',
-
-    padding:
-      0,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 9,
+    cursor: 'pointer',
+    padding: 0,
   },
-
 
   avatar: {
-    width:
-      40,
-
-    height:
-      40,
-
-    borderRadius:
-      '50%',
-
-    background:
-      '#e4f6ed',
-
-    color:
-      '#087c43',
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    justifyContent:
-      'center',
-
-    fontWeight:
-      800,
-
-    fontSize:
-      16,
+    width: 43,
+    height: 43,
+    borderRadius: '50%',
+    background: '#e5f7ef',
+    color: '#078a4a',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 17,
+    fontWeight: 800,
   },
-
 
   headerName: {
-    fontWeight:
-      800,
-
-    fontSize:
-      14,
-
-    color:
-      '#087c43',
+    color: '#078a4a',
+    fontWeight: 800,
+    fontSize: 15,
   },
 
-
-  // ==========================================================
-  // MAIN
-  // ==========================================================
+  /* ==========================================================
+     MAIN
+  ========================================================== */
 
   main: {
     width:
       'min(1080px, 92%)',
-
-    margin:
-      '0 auto',
-
-    paddingTop:
-      22,
+    margin: '0 auto',
+    paddingTop: 22,
   },
-
-
-  // ==========================================================
-  // WELCOME
-  // ==========================================================
 
   welcomeSection: {
-    display:
-      'flex',
-
-    alignItems:
-      'flex-start',
-
-    justifyContent:
-      'space-between',
-
-    marginBottom:
-      14,
+    marginBottom: 17,
   },
-
 
   welcomeSmall: {
-    color:
-      '#77857f',
-
-    fontSize:
-      16,
-
-    marginBottom:
-      1,
-
-    fontWeight:
-      500,
+    color: '#71817a',
+    fontSize: 16,
+    fontWeight: 500,
   },
-
 
   name: {
-    margin:
-      0,
-
-    fontSize:
-      32,
-
-    fontWeight:
-      850,
-
-    lineHeight:
-      1.05,
-
-    color:
-      '#071d15',
-
-    letterSpacing:
-      -0.8,
+    margin: '1px 0 0',
+    fontSize: 34,
+    lineHeight: 1.05,
+    fontWeight: 900,
+    letterSpacing: -1.2,
   },
-
 
   subtitle: {
-    margin:
-      '7px 0 0',
-
-    color:
-      '#74817b',
-
-    fontSize:
-      14,
-
-    fontWeight:
-      500,
+    margin: '6px 0 0',
+    color: '#78867f',
+    fontSize: 15,
   },
 
+  /* ==========================================================
+     KYC
+  ========================================================== */
 
-  // ==========================================================
-  // KYC BANNER
-  // ==========================================================
-
-  kycBanner: {
-    width:
-      '100%',
-
-    border:
-      'none',
-
-    borderRadius:
-      18,
-
+  kycAlert: {
+    width: '100%',
+    border: 'none',
+    borderRadius: 18,
     background:
-      '#fff1ef',
-
-    color:
-      '#9d3128',
-
-    padding:
-      '12px 14px',
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    gap:
-      12,
-
-    cursor:
-      'pointer',
-
-    textAlign:
-      'left',
-
-    marginBottom:
-      16,
-
-    boxSizing:
-      'border-box',
+      'linear-gradient(135deg, #fff1ef, #fff7f5)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '12px 15px',
+    marginBottom: 17,
+    cursor: 'pointer',
+    textAlign: 'left',
   },
 
-
-  kycBannerVerified: {
-    background:
-      '#e9f9f0',
-
-    color:
-      '#087c43',
+  kycAlertIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: '50%',
+    background: '#ffe4e0',
+    color: '#d02020',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
 
-
-  kycBannerPending: {
-    background:
-      '#fff7e7',
-
-    color:
-      '#9a6200',
+  kycAlertText: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 3,
+    flex: 1,
   },
 
-
-  kycBannerIcon: {
-    width:
-      40,
-
-    height:
-      40,
-
-    flexShrink:
-      0,
-
-    borderRadius:
-      '50%',
-
-    background:
-      'rgba(255,255,255,0.72)',
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    justifyContent:
-      'center',
-
-    fontSize:
-      22,
-
-    fontWeight:
-      900,
+  kycAlertTitle: {
+    color: '#bd2424',
   },
 
-
-  kycBannerContent: {
-    flex:
-      1,
-
-    minWidth:
-      0,
+  chevron: {
+    color: '#6f7d77',
+    fontSize: 29,
+    lineHeight: 1,
   },
 
-
-  kycBannerTitle: {
-    fontSize:
-      16,
-
-    fontWeight:
-      850,
-
-    lineHeight:
-      1.2,
-  },
-
-
-  kycBannerDescription: {
-    marginTop:
-      3,
-
-    color:
-      '#687872',
-
-    fontSize:
-      13,
-
-    lineHeight:
-      1.3,
-  },
-
-
-  // ==========================================================
-  // BALANCE
-  // ==========================================================
+  /* ==========================================================
+     DARK BALANCE CARD
+  ========================================================== */
 
   balanceCard: {
-    minHeight:
-      180,
-
-    borderRadius:
-      26,
-
+    minHeight: 205,
+    borderRadius: 27,
+    position: 'relative',
+    overflow: 'hidden',
+    marginBottom: 28,
     background:
-      'linear-gradient(135deg, #08a34f 0%, #10bd62 58%, #079447 100%)',
-
-    position:
-      'relative',
-
-    overflow:
-      'hidden',
-
-    marginBottom:
-      23,
-
+      'linear-gradient(135deg, #07583f 0%, #063b2d 55%, #042d23 100%)',
     boxShadow:
-      '0 15px 35px rgba(0,137,71,0.15)',
+      '0 16px 35px rgba(2,72,51,0.22)',
   },
-
 
   balanceWaveOne: {
-    position:
-      'absolute',
-
-    width:
-      530,
-
-    height:
-      220,
-
-    borderRadius:
-      '50%',
-
+    position: 'absolute',
+    width: 520,
+    height: 230,
+    borderRadius: '50%',
     border:
-      '1px solid rgba(255,255,255,0.12)',
-
-    right:
-      -190,
-
-    bottom:
-      -135,
-
+      '1px solid rgba(82,218,159,0.18)',
+    right: -175,
+    top: 38,
     transform:
-      'rotate(-8deg)',
+      'rotate(-11deg)',
   },
-
 
   balanceWaveTwo: {
-    position:
-      'absolute',
-
-    width:
-      480,
-
-    height:
-      170,
-
-    borderRadius:
-      '50%',
-
+    position: 'absolute',
+    width: 610,
+    height: 220,
+    borderRadius: '50%',
     border:
-      '1px solid rgba(255,255,255,0.10)',
-
-    left:
-      -230,
-
-    bottom:
-      -120,
-
+      '1px solid rgba(82,218,159,0.13)',
+    left: -230,
+    bottom: -130,
     transform:
-      'rotate(12deg)',
+      'rotate(11deg)',
   },
-
-
-  balanceWaveThree: {
-    position:
-      'absolute',
-
-    width:
-      390,
-
-    height:
-      140,
-
-    borderRadius:
-      '50%',
-
-    border:
-      '1px solid rgba(255,255,255,0.08)',
-
-    right:
-      -100,
-
-    top:
-      45,
-
-    transform:
-      'rotate(10deg)',
-  },
-
 
   balanceWatermark: {
-    position:
-      'absolute',
-
-    right:
-      32,
-
-    bottom:
-      -17,
-
-    fontSize:
-      120,
-
-    fontWeight:
-      900,
-
+    position: 'absolute',
+    right: 25,
+    bottom: -35,
+    fontSize: 170,
+    lineHeight: 1,
+    fontWeight: 900,
     color:
-      'rgba(255,255,255,0.055)',
-
-    lineHeight:
-      1,
+      'rgba(68,207,148,0.08)',
+    pointerEvents: 'none',
   },
-
 
   balanceContent: {
-    position:
-      'relative',
-
-    zIndex:
-      2,
-
-    padding:
-      '26px 27px',
+    position: 'relative',
+    zIndex: 2,
+    padding: 27,
   },
-
 
   balanceTop: {
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
+    display: 'flex',
+    alignItems: 'center',
     justifyContent:
       'space-between',
-
-    gap:
-      12,
+    gap: 15,
   },
-
 
   balanceLabel: {
     color:
-      'rgba(255,255,255,0.92)',
-
-    fontSize:
-      17,
-
-    fontWeight:
-      600,
+      'rgba(255,255,255,0.91)',
+    fontSize: 18,
+    fontWeight: 600,
   },
-
 
   hideButton: {
     border:
-      '1px solid rgba(255,255,255,0.28)',
-
+      '1px solid rgba(255,255,255,0.25)',
     background:
-      'rgba(255,255,255,0.10)',
-
-    color:
-      '#ffffff',
-
-    borderRadius:
-      999,
-
+      'rgba(255,255,255,0.08)',
+    color: '#ffffff',
+    borderRadius: 999,
     padding:
-      '9px 15px',
-
-    cursor:
-      'pointer',
-
-    fontWeight:
-      750,
-
-    fontSize:
-      14,
+      '10px 17px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    cursor: 'pointer',
+    fontSize: 15,
+    fontWeight: 700,
   },
-
-
-  eyeIcon: {
-    marginRight:
-      6,
-  },
-
 
   balanceAmount: {
-    color:
-      '#ffffff',
-
-    fontSize:
-      43,
-
-    fontWeight:
-      900,
-
-    marginTop:
-      25,
-
-    letterSpacing:
-      -1.5,
-
-    lineHeight:
-      1,
+    color: '#ffffff',
+    fontSize: 45,
+    fontWeight: 900,
+    letterSpacing: -1.7,
+    marginTop: 29,
+    lineHeight: 1,
   },
 
-
-  balanceSecure: {
-    marginTop:
-      18,
-
+  safeText: {
+    marginTop: 28,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 9,
     color:
-      'rgba(255,255,255,0.93)',
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    gap:
-      7,
-
-    fontSize:
-      13,
-
-    fontWeight:
-      600,
+      'rgba(255,255,255,0.92)',
+    fontSize: 15,
+    fontWeight: 600,
   },
 
+  lockSymbol: {
+    fontSize: 19,
+  },
 
-  // ==========================================================
-  // QUICK ACTIONS
-  // ==========================================================
+  /* ==========================================================
+     QUICK ACTIONS
+  ========================================================== */
 
   quickSection: {
-    marginBottom:
-      24,
+    marginBottom: 28,
   },
-
-
-  sectionHeading: {
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    justifyContent:
-      'space-between',
-
-    marginBottom:
-      13,
-  },
-
 
   quickTitle: {
-    margin:
-      0,
-
-    fontSize:
-      23,
-
-    fontWeight:
-      850,
-
-    color:
-      '#0b2119',
-
-    letterSpacing:
-      -0.4,
+    margin: '0 0 15px',
+    fontSize: 24,
+    fontWeight: 900,
+    letterSpacing: -0.6,
   },
-
 
   servicesGrid: {
-    display:
-      'grid',
-
+    display: 'grid',
     gridTemplateColumns:
       'repeat(4, minmax(0, 1fr))',
-
-    gap:
-      13,
+    columnGap: 13,
+    rowGap: 23,
   },
-
 
   serviceButton: {
-    border:
-      'none',
-
+    border: 'none',
     background:
       'transparent',
-
-    cursor:
-      'pointer',
-
-    minWidth:
-      0,
-
-    padding:
-      0,
-
-    display:
-      'flex',
-
-    flexDirection:
-      'column',
-
-    alignItems:
-      'center',
+    cursor: 'pointer',
+    padding: 0,
+    minWidth: 0,
   },
-
 
   serviceIcon: {
-    width:
-      78,
-
-    height:
-      70,
-
-    borderRadius:
-      19,
-
+    width: '100%',
+    aspectRatio: '1 / 0.82',
+    maxHeight: 82,
+    borderRadius: 20,
     background:
-      'rgba(255,255,255,0.72)',
-
-    color:
-      '#079447',
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    justifyContent:
-      'center',
-
-    margin:
-      '0 auto 8px',
-
-    fontSize:
-      31,
-
-    boxShadow:
-      '0 8px 24px rgba(39,87,66,0.05)',
-
+      'rgba(255,255,255,0.82)',
     border:
-      '1px solid rgba(222,238,231,0.65)',
+      '1px solid #e0eee8',
+    color: '#07974d',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow:
+      '0 8px 22px rgba(30,87,65,0.035)',
+    transition:
+      'transform 0.15s ease',
   },
-
 
   serviceName: {
-    color:
-      '#172e25',
-
-    fontSize:
-      12,
-
-    fontWeight:
-      750,
-
-    textAlign:
-      'center',
-
-    lineHeight:
-      1.25,
-
-    minHeight:
-      30,
-
-    display:
-      'flex',
-
-    alignItems:
-      'flex-start',
-
-    justifyContent:
-      'center',
+    marginTop: 8,
+    color: '#1c362c',
+    fontSize: 13,
+    fontWeight: 750,
+    lineHeight: 1.25,
+    textAlign: 'center',
+    minHeight: 32,
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
 
+  /* ==========================================================
+     MORE SERVICES
+  ========================================================== */
 
-  // ==========================================================
-  // MORE SERVICES
-  // ==========================================================
-
-  moreServicesCard: {
+  moreServices: {
     background:
-      'rgba(255,255,255,0.96)',
-
+      'rgba(255,255,255,0.92)',
     border:
-      '1px solid #e4ece8',
-
-    borderRadius:
-      20,
-
-    padding:
-      14,
-
-    marginBottom:
-      18,
-
-    boxShadow:
-      '0 8px 25px rgba(31,67,52,0.035)',
+      '1px solid #e1ebe7',
+    borderRadius: 20,
+    padding: 15,
+    marginBottom: 18,
   },
 
-
-  moreServicesHeader: {
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
+  sectionHeading: {
+    display: 'flex',
+    alignItems: 'center',
     justifyContent:
       'space-between',
-
-    marginBottom:
-      10,
-
-    padding:
-      '0 4px',
+    marginBottom: 11,
   },
 
-
-  moreServicesTitle: {
-    margin:
-      0,
-
-    fontSize:
-      19,
-
-    fontWeight:
-      850,
-
-    color:
-      '#0c2119',
+  sectionTitle: {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 900,
+    letterSpacing: -0.4,
   },
-
 
   seeAllButton: {
-    border:
-      'none',
-
+    border: 'none',
     background:
       'transparent',
-
-    color:
-      '#079447',
-
-    fontWeight:
-      800,
-
-    cursor:
-      'pointer',
-
-    fontSize:
-      13,
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    gap:
-      1,
-
-    padding:
-      0,
+    color: '#07934b',
+    fontSize: 13,
+    fontWeight: 800,
+    cursor: 'pointer',
+    padding: 3,
   },
 
-
-  moreServicesGrid: {
-    display:
-      'grid',
-
+  moreGrid: {
+    display: 'grid',
     gridTemplateColumns:
-      'repeat(4, minmax(0, 1fr))',
-
-    gap:
-      8,
+      'repeat(4, 1fr)',
+    gap: 8,
   },
-
 
   moreServiceItem: {
-    border:
-      'none',
-
+    border: 'none',
     background:
-      '#f7fbf9',
-
-    borderRadius:
-      13,
-
-    padding:
-      '10px 5px',
-
-    display:
-      'flex',
-
-    flexDirection:
-      'column',
-
-    alignItems:
-      'center',
-
-    justifyContent:
-      'center',
-
-    gap:
-      4,
-
-    color:
-      '#65756e',
-
-    fontSize:
-      11,
-
-    cursor:
-      'pointer',
+      '#f5faf8',
+    borderRadius: 13,
+    minHeight: 78,
+    color: '#078c4a',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    cursor: 'pointer',
   },
 
-
-  // ==========================================================
-  // MORE PANEL
-  // ==========================================================
+  /* ==========================================================
+     MORE PANEL
+  ========================================================== */
 
   morePanel: {
-    background:
-      '#ffffff',
-
+    background: '#ffffff',
     border:
-      '1px solid #e2ebe7',
-
-    borderRadius:
-      19,
-
-    padding:
-      17,
-
-    marginBottom:
-      18,
-
-    boxShadow:
-      '0 10px 30px rgba(30,65,50,0.07)',
+      '1px solid #dfeae5',
+    borderRadius: 18,
+    padding: 15,
+    marginBottom: 18,
   },
-
 
   morePanelHeader: {
-    display:
-      'flex',
-
+    display: 'flex',
+    alignItems: 'center',
     justifyContent:
       'space-between',
-
-    alignItems:
-      'flex-start',
-
-    marginBottom:
-      14,
+    marginBottom: 12,
+    fontSize: 17,
   },
-
-
-  morePanelTitle: {
-    margin:
-      0,
-
-    fontSize:
-      18,
-
-    fontWeight:
-      850,
-  },
-
-
-  morePanelSubtitle: {
-    margin:
-      '4px 0 0',
-
-    color:
-      '#7a8781',
-
-    fontSize:
-      12,
-  },
-
 
   closeButton: {
-    border:
-      'none',
-
-    background:
-      '#eef8f3',
-
-    color:
-      '#087c43',
-
-    width:
-      34,
-
-    height:
-      34,
-
-    borderRadius:
-      10,
-
-    fontSize:
-      22,
-
-    cursor:
-      'pointer',
+    border: 'none',
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    background: '#eff8f4',
+    color: '#087e45',
+    fontSize: 22,
+    cursor: 'pointer',
   },
-
 
   morePanelGrid: {
-    display:
-      'grid',
-
+    display: 'grid',
     gridTemplateColumns:
-      'repeat(2, minmax(0, 1fr))',
-
-    gap:
-      9,
+      'repeat(2, 1fr)',
+    gap: 8,
   },
 
-
-  morePanelItem: {
+  panelItem: {
     border:
-      '1px solid #e3ebe7',
-
-    background:
-      '#f9fbfa',
-
-    borderRadius:
-      12,
-
-    padding:
-      13,
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    gap:
-      9,
-
-    color:
-      '#263d33',
-
-    fontWeight:
-      700,
-
-    cursor:
-      'pointer',
+      '1px solid #e2ebe7',
+    background: '#f9fcfa',
+    borderRadius: 11,
+    padding: 12,
+    color: '#274238',
+    fontWeight: 700,
+    cursor: 'pointer',
   },
 
-
-  // ==========================================================
-  // RECENT TRANSACTIONS
-  // ==========================================================
+  /* ==========================================================
+     RECENT TRANSACTIONS
+  ========================================================== */
 
   transactionsSection: {
     background:
-      '#ffffff',
-
+      'rgba(255,255,255,0.95)',
     border:
-      '1px solid #e4ebe8',
-
-    borderRadius:
-      20,
-
-    padding:
-      14,
-
-    marginBottom:
-      25,
-
-    boxShadow:
-      '0 8px 25px rgba(31,67,52,0.035)',
+      '1px solid #e1ebe7',
+    borderRadius: 20,
+    padding: 15,
+    marginBottom: 24,
   },
-
-
-  transactionsHeader: {
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    justifyContent:
-      'space-between',
-
-    marginBottom:
-      8,
-
-    padding:
-      '0 4px',
-  },
-
-
-  transactionsTitle: {
-    margin:
-      0,
-
-    fontSize:
-      19,
-
-    fontWeight:
-      850,
-
-    color:
-      '#0c2119',
-  },
-
 
   emptyTransactions: {
-    width:
-      '100%',
-
+    width: '100%',
     border:
-      '1px solid #edf1ef',
-
-    background:
-      '#fafcfb',
-
-    borderRadius:
-      14,
-
-    padding:
-      14,
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    gap:
-      12,
-
-    cursor:
-      'pointer',
-
-    textAlign:
-      'left',
-
-    boxSizing:
-      'border-box',
+      '1px solid #edf2ef',
+    background: '#fbfdfc',
+    borderRadius: 15,
+    padding: 14,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    cursor: 'pointer',
+    textAlign: 'left',
   },
-
 
   emptyIcon: {
-    width:
-      44,
-
-    height:
-      44,
-
-    borderRadius:
-      13,
-
-    background:
-      '#eaf8f2',
-
-    color:
-      '#087c43',
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    justifyContent:
-      'center',
-
-    flexShrink:
-      0,
+    width: 45,
+    height: 45,
+    borderRadius: '50%',
+    background: '#e6f8ef',
+    color: '#07934b',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
 
-
-  emptyTransactionText: {
-    color:
-      '#263d33',
-
-    fontSize:
-      13,
-
-    flex:
-      1,
+  emptyText: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    color: '#263d33',
+    fontSize: 13,
   },
-
 
   emptyDescription: {
-    margin:
-      '4px 0 0',
-
-    color:
-      '#7a8781',
-
-    fontSize:
-      11,
+    color: '#7b8982',
+    fontSize: 11,
   },
 
-
-  // ==========================================================
-  // TRANSACTION ROW
-  // ==========================================================
-
-  transactionRow: {
-    width:
-      '100%',
-
-    borderTop:
-      'none',
-
-    borderLeft:
-      'none',
-
-    borderRight:
-      'none',
-
-    background:
-      '#ffffff',
-
-    padding:
-      '12px 2px',
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    gap:
-      11,
-
-    cursor:
-      'pointer',
-
-    textAlign:
-      'left',
-  },
-
-
-  transactionIcon: {
-    width:
-      48,
-
-    height:
-      48,
-
-    borderRadius:
-      '50%',
-
-    display:
-      'flex',
-
-    alignItems:
-      'center',
-
-    justifyContent:
-      'center',
-
-    flexShrink:
-      0,
-  },
-
-
-  transactionMiddle: {
-    flex:
-      1,
-
-    minWidth:
-      0,
-  },
-
-
-  transactionName: {
-    color:
-      '#172b23',
-
-    fontSize:
-      13,
-
-    fontWeight:
-      750,
-
-    whiteSpace:
-      'nowrap',
-
-    overflow:
-      'hidden',
-
-    textOverflow:
-      'ellipsis',
-  },
-
-
-  transactionMeta: {
-    marginTop:
-      4,
-
-    color:
-      '#7b8782',
-
-    fontSize:
-      11,
-
-    whiteSpace:
-      'nowrap',
-
-    overflow:
-      'hidden',
-
-    textOverflow:
-      'ellipsis',
-  },
-
-
-  transactionRight: {
-    display:
-      'flex',
-
-    flexDirection:
-      'column',
-
-    alignItems:
-      'flex-end',
-
-    flexShrink:
-      0,
-
-    gap:
-      4,
-  },
-
-
-  transactionAmount: {
-    fontSize:
-      13,
-
-    fontWeight:
-      850,
-
-    whiteSpace:
-      'nowrap',
-  },
-
-
-  transactionStatus: {
-    padding:
-      '4px 9px',
-
-    borderRadius:
-      999,
-
-    fontSize:
-      10,
-
-    fontWeight:
-      750,
-  },
-
-
-  statusCompleted: {
-    background:
-      '#ddf7e9',
-
-    color:
-      '#07874a',
-  },
-
-
-  statusPending: {
-    background:
-      '#fff0d7',
-
-    color:
-      '#b26a00',
-  },
-
-
-  statusFailed: {
-    background:
-      '#fde8e8',
-
-    color:
-      '#c62828',
-  },
-
-
-  // ==========================================================
-  // BOTTOM NAVIGATION
-  // ==========================================================
+  /* ==========================================================
+     BOTTOM NAVIGATION
+  ========================================================== */
 
   bottomNav: {
-    position:
-      'fixed',
-
-    left:
-      0,
-
-    right:
-      0,
-
-    bottom:
-      0,
-
-    height:
-      73,
-
+    position: 'fixed',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 76,
     background:
       'rgba(255,255,255,0.98)',
-
     borderTop:
-      '1px solid #e2e9e5',
-
-    display:
-      'grid',
-
+      '1px solid #e1e9e5',
+    display: 'grid',
     gridTemplateColumns:
       'repeat(5, 1fr)',
-
-    zIndex:
-      30,
-
+    zIndex: 50,
     boxShadow:
-      '0 -6px 20px rgba(25,55,43,0.06)',
-
+      '0 -8px 25px rgba(22,60,45,0.07)',
     backdropFilter:
       'blur(15px)',
   },
 
-
   navItem: {
-    border:
-      'none',
-
+    position: 'relative',
+    border: 'none',
     background:
       'transparent',
-
-    color:
-      '#7b8882',
-
-    display:
-      'flex',
-
-    flexDirection:
-      'column',
-
-    alignItems:
-      'center',
-
-    justifyContent:
-      'center',
-
-    gap:
-      3,
-
-    fontSize:
-      10,
-
-    fontWeight:
-      650,
-
-    cursor:
-      'pointer',
-
-    position:
-      'relative',
+    color: '#7b8983',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    cursor: 'pointer',
+    fontSize: 10,
+    fontWeight: 650,
   },
 
-
-  navItemActive: {
-    color:
-      '#078b4a',
-
-    fontWeight:
-      800,
+  navActive: {
+    color: '#078f4b',
   },
-
 
   activeIndicator: {
-    position:
-      'absolute',
-
-    bottom:
-      3,
-
-    width:
-      36,
-
-    height:
-      3,
-
-    borderRadius:
-      5,
-
-    background:
-      '#079447',
+    position: 'absolute',
+    bottom: 4,
+    width: 38,
+    height: 4,
+    borderRadius: 10,
+    background: '#079b50',
   },
 };
 
+/* ============================================================
+   MOBILE RESPONSIVE ADJUSTMENTS
+============================================================ */
+
+if (
+  typeof document !== 'undefined'
+) {
+  const style =
+    document.createElement(
+      'style'
+    );
+
+  style.innerHTML = `
+    @media (max-width: 600px) {
+
+      .dashboard-placeholder {
+        width: 100%;
+      }
+
+      button {
+        -webkit-tap-highlight-color: transparent;
+      }
+    }
+
+    @media (min-width: 700px) {
+
+      .dashboard-placeholder {
+        max-width: 1080px;
+        margin: auto;
+      }
+    }
+  `;
+
+  if (
+    !document.head.querySelector(
+      '[data-zenimonies-dashboard]'
+    )
+  ) {
+    style.setAttribute(
+      'data-zenimonies-dashboard',
+      'true'
+    );
+
+    document.head.appendChild(
+      style
+    );
+  }
+}
 
 export default Dashboard;
