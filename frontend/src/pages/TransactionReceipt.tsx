@@ -1,7 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Alert,
   Box,
   Button,
   Card,
@@ -42,7 +41,6 @@ interface Transaction {
 
   recipient_name?: string;
   recipient_phone?: string;
-  recipient_account?: string;
   recipient_bank?: string;
 
   sender_name?: string;
@@ -267,22 +265,15 @@ const TransactionReceipt: React.FC = () => {
    * REAL RECIPIENT DATA
    * ==========================================================
    *
-   * These values come directly from the transaction object.
-   *
    * recipient_phone:
    *     Actual phone number used to identify the recipient.
    *
-   * recipient_account:
-   *     Actual Zenimonies account number.
-   *
-   * We NEVER substitute one for the other.
+   * The Zenimonies internal account number is intentionally
+   * not displayed or shared on the receipt.
    */
 
   const recipientPhone =
     transaction.recipient_phone || '';
-
-  const recipientAccount =
-    transaction.recipient_account || '';
 
   const recipientName =
     transaction.recipient_name || '';
@@ -316,11 +307,8 @@ const TransactionReceipt: React.FC = () => {
       `Recipient: ${
         recipientName || 'N/A'
       }`,
-      `Phone Number: ${
+      `User Phone: ${
         recipientPhone || 'N/A'
-      }`,
-      `Zenimonies Account Number: ${
-        recipientAccount || 'N/A'
       }`,
       `Bank: ${recipientBank}`,
       `Amount: ${formatMoney(
@@ -889,12 +877,12 @@ const TransactionReceipt: React.FC = () => {
               />
 
               {/* ==================================================
-                  ACTUAL PHONE NUMBER
+                  USER PHONE
               ================================================== */}
 
               <DetailRow
                 icon={<PhoneRounded />}
-                label="Phone Number"
+                label="User Phone"
                 value={
                   recipientPhone || 'N/A'
                 }
@@ -904,18 +892,6 @@ const TransactionReceipt: React.FC = () => {
                 icon={<AccountBalanceRounded />}
                 label="Bank"
                 value={recipientBank}
-              />
-
-              {/* ==================================================
-                  ACTUAL ZENIMONIES ACCOUNT NUMBER
-              ================================================== */}
-
-              <DetailRow
-                icon={<AccountBalanceRounded />}
-                label="Zenimonies Account Number"
-                value={
-                  recipientAccount || 'N/A'
-                }
               />
 
               <DetailRow
