@@ -90,7 +90,7 @@ const Dashboard: React.FC = () => {
     'https://zenimonies-banking.onrender.com';
 
   /* ==========================================================
-     LOAD USER FROM LOCAL STORAGE
+     LOAD USER
   ========================================================== */
 
   useEffect(() => {
@@ -101,10 +101,7 @@ const Dashboard: React.FC = () => {
         );
 
       if (storedUser) {
-        const parsed =
-          JSON.parse(storedUser);
-
-        setUser(parsed);
+        setUser(JSON.parse(storedUser));
       }
     } catch (error) {
       console.error(
@@ -115,7 +112,7 @@ const Dashboard: React.FC = () => {
   }, []);
 
   /* ==========================================================
-     GET USER NAME
+     USER NAME
   ========================================================== */
 
   const displayName = useMemo(() => {
@@ -431,7 +428,7 @@ const Dashboard: React.FC = () => {
     }, [kyc, kycLoading]);
 
   /* ==========================================================
-     SERVICES
+     QUICK ACTIONS
   ========================================================== */
 
   const services: Service[] = [
@@ -552,7 +549,7 @@ const Dashboard: React.FC = () => {
     };
 
   /* ==========================================================
-     ICON
+     ICONS
   ========================================================== */
 
   const Icon = ({
@@ -769,7 +766,7 @@ const Dashboard: React.FC = () => {
       case 'wallet':
         return (
           <svg {...common}>
-            <path d="M4 6h15a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+            <path d="M4 6h15a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-1z" />
             <path d="M16 13h5" />
             <circle
               cx="16"
@@ -829,26 +826,20 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div>
-            <div
-              style={styles.brandName}
-            >
+            <div style={styles.brandName}>
               Zenimonies
             </div>
 
-            <div
-              style={styles.brandSubtitle}
-            >
+            <div style={styles.brandSubtitle}>
               DIGITAL BANKING
             </div>
           </div>
 
         </div>
 
-        <div
-          style={styles.headerRight}
-        >
+        <div style={styles.headerRight}>
 
-          {/* NOTIFICATION */}
+          {/* NOTIFICATION — VISUAL ONLY FOR NOW */}
 
           <button
             type="button"
@@ -858,13 +849,13 @@ const Dashboard: React.FC = () => {
             }
             onClick={() =>
               alert(
-                'No new notifications'
+                'Notifications will be available soon.'
               )
             }
           >
             <Icon
               name="bell"
-              size={29}
+              size={24}
             />
 
             <span
@@ -886,17 +877,11 @@ const Dashboard: React.FC = () => {
             }
           >
 
-            <div
-              style={styles.avatar}
-            >
+            <div style={styles.avatar}>
               {firstLetter}
             </div>
 
-            <span
-              style={
-                styles.headerName
-              }
-            >
+            <span style={styles.headerName}>
               {displayName}
             </span>
 
@@ -919,7 +904,6 @@ const Dashboard: React.FC = () => {
             styles.welcomeSection
           }
         >
-
           <div>
 
             <div
@@ -930,25 +914,148 @@ const Dashboard: React.FC = () => {
               Welcome back,
             </div>
 
-            <h1
-              style={styles.name}
-            >
+            <h1 style={styles.name}>
               {displayName}
             </h1>
 
-            <p
-              style={styles.subtitle}
-            >
-              Here's your financial
-              overview.
+            <p style={styles.subtitle}>
+              Here's your financial overview.
             </p>
+
+          </div>
+        </section>
+
+        {/* ====================================================
+            BALANCE CARD
+        ==================================================== */}
+
+        <section
+          style={
+            styles.balanceCard
+          }
+        >
+
+          <div
+            style={
+              styles.balanceGlow
+            }
+          />
+
+          <div
+            style={
+              styles.balanceWatermark
+            }
+          >
+            Z
+          </div>
+
+          <div
+            style={
+              styles.balanceContent
+            }
+          >
+
+            <div
+              style={
+                styles.balanceTop
+              }>
+
+              <div>
+                <div
+                  style={
+                    styles.balanceLabel
+                  }
+                >
+                  Available Balance
+                </div>
+
+                <div
+                  style={
+                    styles.accountType
+                  }
+                >
+                  {account?.account_type ||
+                    'Personal Account'}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                style={
+                  styles.hideButton
+                }
+                onClick={() =>
+                  setShowBalance(
+                    previous =>
+                      !previous
+                  )
+                }
+                aria-label={
+                  showBalance
+                    ? 'Hide balance'
+                    : 'Show balance'
+                }
+              >
+                <Icon
+                  name="eye"
+                  size={19}
+                />
+
+                <span>
+                  {showBalance
+                    ? 'Hide'
+                    : 'Show'}
+                </span>
+              </button>
+
+            </div>
+
+            <div
+              style={
+                styles.balanceAmount
+              }
+            >
+              {accountLoading
+                ? 'Loading...'
+                : showBalance
+                  ? formattedBalance
+                  : hiddenBalance}
+            </div>
+
+            <div
+              style={
+                styles.balanceBottom
+              }>
+
+              <span
+                style={
+                  styles.secureBadge
+                }
+              >
+                <span
+                  style={
+                    styles.secureDot
+                  }
+                />
+                Secure
+              </span>
+
+              <span
+                style={
+                  styles.currencyLabel
+                }
+              >
+                {accountCurrency}
+              </span>
+
+            </div>
 
           </div>
 
         </section>
 
         {/* ====================================================
-            KYC ALERT
+            KYC
         ==================================================== */}
 
         {kycDisplay.type !==
@@ -971,17 +1078,20 @@ const Dashboard: React.FC = () => {
             >
               <Icon
                 name="shield"
-                size={25}
+                size={22}
               />
             </div>
 
             <div
               style={
                 styles.kycAlertText
-              }
-            >
+              }>
 
-              <strong>
+              <strong
+                style={
+                  styles.kycAlertTitle
+                }
+              >
                 {
                   kycDisplay.title
                 }
@@ -1007,117 +1117,6 @@ const Dashboard: React.FC = () => {
         )}
 
         {/* ====================================================
-            BALANCE CARD — DARK LATEST DESIGN
-        ==================================================== */}
-
-        <section
-          style={
-            styles.balanceCard
-          }
-        >
-
-          <div
-            style={
-              styles.balanceWaveOne
-            }
-          />
-
-          <div
-            style={
-              styles.balanceWaveTwo
-            }
-          />
-
-          <div
-            style={
-              styles.balanceWatermark
-            }
-          >
-            Z
-          </div>
-
-          <div
-            style={
-              styles.balanceContent
-            }
-          >
-
-            <div
-              style={
-                styles.balanceTop
-              }
-            >
-
-              <span
-                style={
-                  styles.balanceLabel
-                }
-              >
-                Available Balance
-              </span>
-
-              <button
-                type="button"
-                style={
-                  styles.hideButton
-                }
-                onClick={() =>
-                  setShowBalance(
-                    previous =>
-                      !previous
-                  )
-                }
-              >
-
-                <Icon
-                  name="eye"
-                  size={23}
-                />
-
-                <span>
-                  {showBalance
-                    ? 'Hide'
-                    : 'Show'}
-                </span>
-
-              </button>
-
-            </div>
-
-            <div
-              style={
-                styles.balanceAmount
-              }
-            >
-              {accountLoading
-                ? 'Loading...'
-                : showBalance
-                  ? formattedBalance
-                  : hiddenBalance}
-            </div>
-
-            <div
-              style={
-                styles.safeText
-              }
-            >
-              <span
-                style={
-                  styles.lockSymbol
-                }
-              >
-                🔒
-              </span>
-
-              Your funds are safe
-              and secure
-            </div>
-
-          </div>
-
-        </section>
-
-        {/* ====================================================
             QUICK ACTIONS
         ==================================================== */}
 
@@ -1127,13 +1126,31 @@ const Dashboard: React.FC = () => {
           }
         >
 
-          <h2
+          <div
             style={
-              styles.quickTitle
+              styles.sectionHeading
             }
           >
-            Quick Actions
-          </h2>
+
+            <div>
+              <h2
+                style={
+                  styles.sectionTitle
+                }
+              >
+                Quick Actions
+              </h2>
+
+              <p
+                style={
+                  styles.sectionSubtitle
+                }
+              >
+                Everything you need, in one place.
+              </p>
+            </div>
+
+          </div>
 
           <div
             style={
@@ -1170,7 +1187,7 @@ const Dashboard: React.FC = () => {
                       name={
                         service.icon
                       }
-                      size={34}
+                      size={28}
                     />
                   </div>
 
@@ -1206,13 +1223,23 @@ const Dashboard: React.FC = () => {
             }
           >
 
-            <h2
-              style={
-                styles.sectionTitle
-              }
-            >
-              More Services
-            </h2>
+            <div>
+              <h2
+                style={
+                  styles.sectionTitle
+                }
+              >
+                More Services
+              </h2>
+
+              <p
+                style={
+                  styles.sectionSubtitle
+                }
+              >
+                Manage your Zenimonies account.
+              </p>
+            </div>
 
             <button
               type="button"
@@ -1250,8 +1277,9 @@ const Dashboard: React.FC = () => {
             >
               <Icon
                 name="transactions"
-                size={31}
+                size={25}
               />
+
               <span>
                 Transactions
               </span>
@@ -1268,8 +1296,9 @@ const Dashboard: React.FC = () => {
             >
               <Icon
                 name="wallet"
-                size={31}
+                size={25}
               />
+
               <span>
                 Wallet
               </span>
@@ -1288,8 +1317,9 @@ const Dashboard: React.FC = () => {
             >
               <Icon
                 name="card"
-                size={31}
+                size={25}
               />
+
               <span>
                 Cards
               </span>
@@ -1308,8 +1338,9 @@ const Dashboard: React.FC = () => {
             >
               <Icon
                 name="settings"
-                size={31}
+                size={25}
               />
+
               <span>
                 Settings
               </span>
@@ -1320,7 +1351,7 @@ const Dashboard: React.FC = () => {
         </section>
 
         {/* ====================================================
-            MORE MENU
+            MORE PANEL
         ==================================================== */}
 
         {showMenu && (
@@ -1333,8 +1364,8 @@ const Dashboard: React.FC = () => {
             <div
               style={
                 styles.morePanelHeader
-              }
-            >
+              }>
+
               <strong>
                 More Services
               </strong>
@@ -1347,16 +1378,17 @@ const Dashboard: React.FC = () => {
                 onClick={() =>
                   setShowMenu(false)
                 }
+                aria-label="Close"
               >
                 ×
               </button>
+
             </div>
 
             <div
               style={
                 styles.morePanelGrid
-              }
-            >
+              }>
 
               <button
                 type="button"
@@ -1418,16 +1450,25 @@ const Dashboard: React.FC = () => {
           <div
             style={
               styles.sectionHeading
-            }
-          >
+            }>
 
-            <h2
-              style={
-                styles.sectionTitle
-              }
-            >
-              Recent Transactions
-            </h2>
+            <div>
+              <h2
+                style={
+                  styles.sectionTitle
+                }
+              >
+                Recent Transactions
+              </h2>
+
+              <p
+                style={
+                  styles.sectionSubtitle
+                }
+              >
+                Your latest account activity.
+              </p>
+            </div>
 
             <button
               type="button"
@@ -1464,26 +1505,32 @@ const Dashboard: React.FC = () => {
             >
               <Icon
                 name="transactions"
-                size={25}
+                size={22}
               />
             </div>
 
             <div
               style={
                 styles.emptyText
-              }
-            >
+              }>
 
               <strong>
                 No transactions yet
               </strong>
 
               <span>
-                Your transactions
-                will appear here.
+                Your transactions will appear here.
               </span>
 
             </div>
+
+            <span
+              style={
+                styles.emptyChevron
+              }
+            >
+              ›
+            </span>
 
           </button>
 
@@ -1513,7 +1560,7 @@ const Dashboard: React.FC = () => {
         >
           <Icon
             name="home"
-            size={27}
+            size={24}
           />
 
           <span>
@@ -1540,7 +1587,7 @@ const Dashboard: React.FC = () => {
         >
           <Icon
             name="transactions"
-            size={27}
+            size={24}
           />
 
           <span>
@@ -1561,7 +1608,7 @@ const Dashboard: React.FC = () => {
         >
           <Icon
             name="card"
-            size={27}
+            size={24}
           />
 
           <span>
@@ -1580,7 +1627,7 @@ const Dashboard: React.FC = () => {
         >
           <Icon
             name="wallet"
-            size={27}
+            size={24}
           />
 
           <span>
@@ -1599,7 +1646,7 @@ const Dashboard: React.FC = () => {
         >
           <Icon
             name="user"
-            size={27}
+            size={24}
           />
 
           <span>
@@ -1625,11 +1672,11 @@ const styles: Record<
   page: {
     minHeight: '100vh',
     background:
-      'linear-gradient(180deg, #f8fcfa 0%, #eff8f4 100%)',
+      'linear-gradient(180deg, #f9fcfa 0%, #f1f8f5 100%)',
     color: '#102a21',
     fontFamily:
       'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-    paddingBottom: 100,
+    paddingBottom: 96,
   },
 
   /* ==========================================================
@@ -1637,17 +1684,17 @@ const styles: Record<
   ========================================================== */
 
   header: {
-    minHeight: 76,
+    minHeight: 72,
     background:
-      'rgba(255,255,255,0.96)',
+      'rgba(255,255,255,0.97)',
     display: 'flex',
     alignItems: 'center',
     justifyContent:
       'space-between',
     padding:
-      '12px max(4%, 18px)',
+      '10px max(4%, 18px)',
     borderBottom:
-      '1px solid #e7efeb',
+      '1px solid #e5eee9',
     position: 'sticky',
     top: 0,
     zIndex: 20,
@@ -1658,44 +1705,44 @@ const styles: Record<
   brandArea: {
     display: 'flex',
     alignItems: 'center',
-    gap: 11,
+    gap: 10,
   },
 
   logo: {
-    width: 49,
-    height: 49,
-    borderRadius: 15,
+    width: 43,
+    height: 43,
+    borderRadius: 13,
     background:
-      'linear-gradient(135deg, #05a653, #087d42)',
+      'linear-gradient(135deg, #087b48, #034d31)',
     color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 29,
+    fontSize: 25,
     fontWeight: 900,
     boxShadow:
-      '0 8px 20px rgba(5,166,83,0.20)',
+      '0 7px 18px rgba(4,87,53,0.18)',
   },
 
   brandName: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 900,
     lineHeight: 1,
     letterSpacing: -0.5,
   },
 
   brandSubtitle: {
-    marginTop: 5,
-    fontSize: 8,
-    letterSpacing: 3,
-    color: '#9aa9a2',
-    fontWeight: 700,
+    marginTop: 4,
+    fontSize: 7,
+    letterSpacing: 2.7,
+    color: '#94a49c',
+    fontWeight: 800,
   },
 
   headerRight: {
     display: 'flex',
     alignItems: 'center',
-    gap: 15,
+    gap: 10,
   },
 
   notificationButton: {
@@ -1704,7 +1751,7 @@ const styles: Record<
     border: 'none',
     background:
       'transparent',
-    color: '#143a2d',
+    color: '#12392c',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1731,28 +1778,32 @@ const styles: Record<
       'transparent',
     display: 'flex',
     alignItems: 'center',
-    gap: 9,
+    gap: 7,
     cursor: 'pointer',
     padding: 0,
   },
 
   avatar: {
-    width: 43,
-    height: 43,
+    width: 39,
+    height: 39,
     borderRadius: '50%',
-    background: '#e5f7ef',
-    color: '#078a4a',
+    background: '#e4f5ed',
+    color: '#087f47',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 17,
-    fontWeight: 800,
+    fontSize: 16,
+    fontWeight: 900,
   },
 
   headerName: {
-    color: '#078a4a',
+    color: '#087c46',
     fontWeight: 800,
-    fontSize: 15,
+    fontSize: 14,
+    maxWidth: 105,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
 
   /* ==========================================================
@@ -1761,9 +1812,9 @@ const styles: Record<
 
   main: {
     width:
-      'min(1080px, 92%)',
+      'min(1040px, 92%)',
     margin: '0 auto',
-    paddingTop: 22,
+    paddingTop: 20,
   },
 
   welcomeSection: {
@@ -1771,23 +1822,161 @@ const styles: Record<
   },
 
   welcomeSmall: {
-    color: '#71817a',
-    fontSize: 16,
+    color: '#74847d',
+    fontSize: 15,
     fontWeight: 500,
   },
 
   name: {
-    margin: '1px 0 0',
-    fontSize: 34,
+    margin: '2px 0 0',
+    fontSize: 31,
     lineHeight: 1.05,
     fontWeight: 900,
-    letterSpacing: -1.2,
+    letterSpacing: -1,
   },
 
   subtitle: {
     margin: '6px 0 0',
-    color: '#78867f',
+    color: '#788780',
+    fontSize: 14,
+  },
+
+  /* ==========================================================
+     BALANCE CARD
+     
+     IMPORTANT:
+     This card is intentionally compact.
+     Do NOT make it full-width/oversized.
+  ========================================================== */
+
+  balanceCard: {
+    width: 'min(100%, 680px)',
+    minHeight: 178,
+    borderRadius: 24,
+    position: 'relative',
+    overflow: 'hidden',
+    marginBottom: 17,
+    background:
+      'linear-gradient(135deg, #07583f 0%, #064331 55%, #032c22 100%)',
+    boxShadow:
+      '0 15px 30px rgba(2,72,51,0.20)',
+  },
+
+  balanceGlow: {
+    position: 'absolute',
+    width: 250,
+    height: 250,
+    borderRadius: '50%',
+    right: -115,
+    top: -120,
+    background:
+      'rgba(66,208,148,0.10)',
+    filter: 'blur(2px)',
+  },
+
+  balanceWatermark: {
+    position: 'absolute',
+    right: 16,
+    bottom: -37,
+    fontSize: 145,
+    lineHeight: 1,
+    fontWeight: 900,
+    color:
+      'rgba(78,218,157,0.07)',
+    pointerEvents: 'none',
+  },
+
+  balanceContent: {
+    position: 'relative',
+    zIndex: 2,
+    padding:
+      '21px 22px 18px',
+  },
+
+  balanceTop: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent:
+      'space-between',
+    gap: 15,
+  },
+
+  balanceLabel: {
+    color:
+      'rgba(255,255,255,0.90)',
     fontSize: 15,
+    fontWeight: 650,
+  },
+
+  accountType: {
+    marginTop: 3,
+    color:
+      'rgba(255,255,255,0.48)',
+    fontSize: 10,
+    fontWeight: 600,
+    textTransform: 'capitalize',
+  },
+
+  hideButton: {
+    border:
+      '1px solid rgba(255,255,255,0.20)',
+    background:
+      'rgba(255,255,255,0.07)',
+    color: '#ffffff',
+    borderRadius: 999,
+    padding:
+      '7px 11px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    cursor: 'pointer',
+    fontSize: 11,
+    fontWeight: 700,
+    flexShrink: 0,
+  },
+
+  balanceAmount: {
+    color: '#ffffff',
+    fontSize: 34,
+    fontWeight: 900,
+    letterSpacing: -1.2,
+    marginTop: 21,
+    lineHeight: 1,
+  },
+
+  balanceBottom: {
+    marginTop: 16,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent:
+      'space-between',
+  },
+
+  secureBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    color:
+      'rgba(255,255,255,0.74)',
+    fontSize: 10,
+    fontWeight: 700,
+  },
+
+  secureDot: {
+    width: 6,
+    height: 6,
+    borderRadius: '50%',
+    background: '#57d99d',
+    boxShadow:
+      '0 0 0 4px rgba(87,217,157,0.10)',
+  },
+
+  currencyLabel: {
+    color:
+      'rgba(255,255,255,0.50)',
+    fontSize: 10,
+    fontWeight: 800,
+    letterSpacing: 1,
   },
 
   /* ==========================================================
@@ -1796,25 +1985,27 @@ const styles: Record<
 
   kycAlert: {
     width: '100%',
-    border: 'none',
-    borderRadius: 18,
+    border:
+      '1px solid #f3d8d3',
+    borderRadius: 16,
     background:
-      'linear-gradient(135deg, #fff1ef, #fff7f5)',
+      'linear-gradient(135deg, #fff7f5, #fff1ef)',
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
-    padding: '12px 15px',
-    marginBottom: 17,
+    gap: 11,
+    padding:
+      '11px 13px',
+    marginBottom: 22,
     cursor: 'pointer',
     textAlign: 'left',
   },
 
   kycAlertIcon: {
-    width: 43,
-    height: 43,
-    borderRadius: '50%',
-    background: '#ffe4e0',
-    color: '#d02020',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    background: '#ffe5e1',
+    color: '#ca2929',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1826,155 +2017,60 @@ const styles: Record<
     flexDirection: 'column',
     gap: 3,
     flex: 1,
+    minWidth: 0,
   },
 
   kycAlertTitle: {
     color: '#bd2424',
+    fontSize: 13,
   },
 
   chevron: {
-    color: '#6f7d77',
-    fontSize: 29,
+    color: '#79857f',
+    fontSize: 27,
     lineHeight: 1,
   },
 
   /* ==========================================================
-     DARK BALANCE CARD
+     SECTIONS
   ========================================================== */
 
-  balanceCard: {
-    minHeight: 205,
-    borderRadius: 27,
-    position: 'relative',
-    overflow: 'hidden',
-    marginBottom: 28,
-    background:
-      'linear-gradient(135deg, #07583f 0%, #063b2d 55%, #042d23 100%)',
-    boxShadow:
-      '0 16px 35px rgba(2,72,51,0.22)',
+  quickSection: {
+    marginBottom: 24,
   },
 
-  balanceWaveOne: {
-    position: 'absolute',
-    width: 520,
-    height: 230,
-    borderRadius: '50%',
-    border:
-      '1px solid rgba(82,218,159,0.18)',
-    right: -175,
-    top: 38,
-    transform:
-      'rotate(-11deg)',
-  },
-
-  balanceWaveTwo: {
-    position: 'absolute',
-    width: 610,
-    height: 220,
-    borderRadius: '50%',
-    border:
-      '1px solid rgba(82,218,159,0.13)',
-    left: -230,
-    bottom: -130,
-    transform:
-      'rotate(11deg)',
-  },
-
-  balanceWatermark: {
-    position: 'absolute',
-    right: 25,
-    bottom: -35,
-    fontSize: 170,
-    lineHeight: 1,
-    fontWeight: 900,
-    color:
-      'rgba(68,207,148,0.08)',
-    pointerEvents: 'none',
-  },
-
-  balanceContent: {
-    position: 'relative',
-    zIndex: 2,
-    padding: 27,
-  },
-
-  balanceTop: {
+  sectionHeading: {
     display: 'flex',
     alignItems: 'center',
     justifyContent:
       'space-between',
-    gap: 15,
+    marginBottom: 12,
   },
 
-  balanceLabel: {
-    color:
-      'rgba(255,255,255,0.91)',
-    fontSize: 18,
-    fontWeight: 600,
-  },
-
-  hideButton: {
-    border:
-      '1px solid rgba(255,255,255,0.25)',
-    background:
-      'rgba(255,255,255,0.08)',
-    color: '#ffffff',
-    borderRadius: 999,
-    padding:
-      '10px 17px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    cursor: 'pointer',
-    fontSize: 15,
-    fontWeight: 700,
-  },
-
-  balanceAmount: {
-    color: '#ffffff',
-    fontSize: 45,
+  sectionTitle: {
+    margin: 0,
+    fontSize: 20,
     fontWeight: 900,
-    letterSpacing: -1.7,
-    marginTop: 29,
-    lineHeight: 1,
+    letterSpacing: -0.45,
   },
 
-  safeText: {
-    marginTop: 28,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 9,
-    color:
-      'rgba(255,255,255,0.92)',
-    fontSize: 15,
-    fontWeight: 600,
-  },
-
-  lockSymbol: {
-    fontSize: 19,
+  sectionSubtitle: {
+    margin: '3px 0 0',
+    color: '#89958f',
+    fontSize: 11,
+    lineHeight: 1.35,
   },
 
   /* ==========================================================
      QUICK ACTIONS
   ========================================================== */
 
-  quickSection: {
-    marginBottom: 28,
-  },
-
-  quickTitle: {
-    margin: '0 0 15px',
-    fontSize: 24,
-    fontWeight: 900,
-    letterSpacing: -0.6,
-  },
-
   servicesGrid: {
     display: 'grid',
     gridTemplateColumns:
-      'repeat(4, minmax(0, 1fr))',
-    columnGap: 13,
-    rowGap: 23,
+      'repeat(5, minmax(0, 1fr))',
+    columnGap: 10,
+    rowGap: 18,
   },
 
   serviceButton: {
@@ -1987,32 +2083,31 @@ const styles: Record<
   },
 
   serviceIcon: {
-    width: '100%',
-    aspectRatio: '1 / 0.82',
-    maxHeight: 82,
-    borderRadius: 20,
+    width: 58,
+    height: 58,
+    margin:
+      '0 auto',
+    borderRadius: 17,
     background:
-      'rgba(255,255,255,0.82)',
+      '#ffffff',
     border:
-      '1px solid #e0eee8',
-    color: '#07974d',
+      '1px solid #e0ebe6',
+    color: '#078b4a',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow:
-      '0 8px 22px rgba(30,87,65,0.035)',
-    transition:
-      'transform 0.15s ease',
+      '0 7px 17px rgba(24,77,56,0.045)',
   },
 
   serviceName: {
-    marginTop: 8,
-    color: '#1c362c',
-    fontSize: 13,
+    marginTop: 7,
+    color: '#20372e',
+    fontSize: 11,
     fontWeight: 750,
     lineHeight: 1.25,
     textAlign: 'center',
-    minHeight: 32,
+    minHeight: 28,
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'center',
@@ -2024,38 +2119,24 @@ const styles: Record<
 
   moreServices: {
     background:
-      'rgba(255,255,255,0.92)',
+      'rgba(255,255,255,0.94)',
     border:
       '1px solid #e1ebe7',
-    borderRadius: 20,
-    padding: 15,
+    borderRadius: 18,
+    padding: 14,
     marginBottom: 18,
-  },
-
-  sectionHeading: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent:
-      'space-between',
-    marginBottom: 11,
-  },
-
-  sectionTitle: {
-    margin: 0,
-    fontSize: 20,
-    fontWeight: 900,
-    letterSpacing: -0.4,
   },
 
   seeAllButton: {
     border: 'none',
     background:
       'transparent',
-    color: '#07934b',
-    fontSize: 13,
-    fontWeight: 800,
+    color: '#078e4b',
+    fontSize: 12,
+    fontWeight: 850,
     cursor: 'pointer',
     padding: 3,
+    flexShrink: 0,
   },
 
   moreGrid: {
@@ -2068,16 +2149,18 @@ const styles: Record<
   moreServiceItem: {
     border: 'none',
     background:
-      '#f5faf8',
-    borderRadius: 13,
-    minHeight: 78,
-    color: '#078c4a',
+      '#f4faf7',
+    borderRadius: 12,
+    minHeight: 72,
+    color: '#078b4a',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 5,
     cursor: 'pointer',
+    fontSize: 10,
+    fontWeight: 750,
   },
 
   /* ==========================================================
@@ -2088,8 +2171,8 @@ const styles: Record<
     background: '#ffffff',
     border:
       '1px solid #dfeae5',
-    borderRadius: 18,
-    padding: 15,
+    borderRadius: 17,
+    padding: 14,
     marginBottom: 18,
   },
 
@@ -2098,18 +2181,18 @@ const styles: Record<
     alignItems: 'center',
     justifyContent:
       'space-between',
-    marginBottom: 12,
-    fontSize: 17,
+    marginBottom: 11,
+    fontSize: 15,
   },
 
   closeButton: {
     border: 'none',
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 31,
+    height: 31,
+    borderRadius: 9,
     background: '#eff8f4',
     color: '#087e45',
-    fontSize: 22,
+    fontSize: 21,
     cursor: 'pointer',
   },
 
@@ -2124,9 +2207,10 @@ const styles: Record<
     border:
       '1px solid #e2ebe7',
     background: '#f9fcfa',
-    borderRadius: 11,
-    padding: 12,
+    borderRadius: 10,
+    padding: 11,
     color: '#274238',
+    fontSize: 12,
     fontWeight: 700,
     cursor: 'pointer',
   },
@@ -2140,9 +2224,9 @@ const styles: Record<
       'rgba(255,255,255,0.95)',
     border:
       '1px solid #e1ebe7',
-    borderRadius: 20,
-    padding: 15,
-    marginBottom: 24,
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 20,
   },
 
   emptyTransactions: {
@@ -2150,19 +2234,19 @@ const styles: Record<
     border:
       '1px solid #edf2ef',
     background: '#fbfdfc',
-    borderRadius: 15,
-    padding: 14,
+    borderRadius: 14,
+    padding: 12,
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
+    gap: 11,
     cursor: 'pointer',
     textAlign: 'left',
   },
 
   emptyIcon: {
-    width: 45,
-    height: 45,
-    borderRadius: '50%',
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     background: '#e6f8ef',
     color: '#07934b',
     display: 'flex',
@@ -2174,18 +2258,20 @@ const styles: Record<
   emptyText: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 3,
     color: '#263d33',
-    fontSize: 13,
+    fontSize: 12,
+    flex: 1,
   },
 
-  emptyDescription: {
-    color: '#7b8982',
-    fontSize: 11,
+  emptyChevron: {
+    color: '#82908a',
+    fontSize: 23,
+    lineHeight: 1,
   },
 
   /* ==========================================================
-     BOTTOM NAVIGATION
+     BOTTOM NAV
   ========================================================== */
 
   bottomNav: {
@@ -2193,7 +2279,7 @@ const styles: Record<
     left: 0,
     right: 0,
     bottom: 0,
-    height: 76,
+    height: 72,
     background:
       'rgba(255,255,255,0.98)',
     borderTop:
@@ -2218,10 +2304,10 @@ const styles: Record<
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 4,
     cursor: 'pointer',
-    fontSize: 10,
-    fontWeight: 650,
+    fontSize: 9,
+    fontWeight: 700,
   },
 
   navActive: {
@@ -2230,42 +2316,51 @@ const styles: Record<
 
   activeIndicator: {
     position: 'absolute',
-    bottom: 4,
-    width: 38,
-    height: 4,
+    bottom: 3,
+    width: 30,
+    height: 3,
     borderRadius: 10,
     background: '#079b50',
   },
 };
 
 /* ============================================================
-   MOBILE RESPONSIVE ADJUSTMENTS
+   RESPONSIVE
 ============================================================ */
 
 if (
   typeof document !== 'undefined'
 ) {
   const style =
-    document.createElement(
-      'style'
-    );
+    document.createElement('style');
 
   style.innerHTML = `
-    @media (max-width: 600px) {
+    * {
+      box-sizing: border-box;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    @media (max-width: 700px) {
 
       .dashboard-placeholder {
         width: 100%;
       }
+    }
 
-      button {
-        -webkit-tap-highlight-color: transparent;
+    @media (max-width: 520px) {
+
+      .zenimonies-desktop-only {
+        display: none;
       }
     }
 
-    @media (min-width: 700px) {
+    @media (min-width: 900px) {
 
       .dashboard-placeholder {
-        max-width: 1080px;
+        max-width: 1040px;
         margin: auto;
       }
     }
@@ -2281,9 +2376,7 @@ if (
       'true'
     );
 
-    document.head.appendChild(
-      style
-    );
+    document.head.appendChild(style);
   }
 }
 
