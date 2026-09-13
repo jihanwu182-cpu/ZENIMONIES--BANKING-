@@ -5,6 +5,11 @@ const {
   updateProfile,
 } = require('../controllers/profileController');
 
+const {
+  uploadProfilePhoto,
+  handlePhotoUpload,
+} = require('../controllers/profilePhotoController');
+
 const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -20,7 +25,6 @@ router.get(
   getProfile
 );
 
-
 // ============================================================
 // UPDATE PROFILE
 // PUT /api/profile
@@ -32,5 +36,16 @@ router.put(
   updateProfile
 );
 
+// ============================================================
+// UPDATE PROFILE PHOTO
+// POST /api/profile/photo
+// ============================================================
+
+router.post(
+  '/photo',
+  authMiddleware,
+  handlePhotoUpload,
+  uploadProfilePhoto
+);
 
 module.exports = router;
