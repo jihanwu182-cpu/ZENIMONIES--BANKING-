@@ -276,6 +276,8 @@ CREATE TABLE IF NOT EXISTS bank_transfers (
 
     recipient_account_number VARCHAR(30) NOT NULL,
 
+    recipient_phone VARCHAR(30),
+
     recipient_bank_name VARCHAR(150) NOT NULL,
 
     recipient_bank_code VARCHAR(30),
