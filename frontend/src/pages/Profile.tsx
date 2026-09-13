@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface User {
-  id?: number | string;
+  id?: string | number;
   full_name?: string;
   name?: string;
   first_name?: string;
@@ -15,8 +15,8 @@ interface User {
   residential_address?: string;
   city?: string;
   state?: string;
-  country?: string;
   lga?: string;
+  country?: string;
   role?: string;
   kyc_status?: string;
   kyc_tier?: number;
@@ -31,14 +31,66 @@ interface Account {
   account_name?: string;
   account_type?: string;
   currency?: string;
+  balance?: number;
   status?: string;
 }
 
-/* ============================================================
-   NIGERIA — STATES + FCT
-============================================================ */
+/*
+============================================================
+NIGERIA
+36 STATES + FCT
+============================================================
+*/
 
-const NIGERIAN_STATES: Record<string, string[]> = {
+const NIGERIAN_STATES = [
+  'Abia',
+  'Adamawa',
+  'Akwa Ibom',
+  'Anambra',
+  'Bauchi',
+  'Bayelsa',
+  'Benue',
+  'Borno',
+  'Cross River',
+  'Delta',
+  'Ebonyi',
+  'Edo',
+  'Ekiti',
+  'Enugu',
+  'Gombe',
+  'Imo',
+  'Jigawa',
+  'Kaduna',
+  'Kano',
+  'Katsina',
+  'Kebbi',
+  'Kogi',
+  'Kwara',
+  'Lagos',
+  'Nasarawa',
+  'Niger',
+  'Ogun',
+  'Ondo',
+  'Osun',
+  'Oyo',
+  'Plateau',
+  'Rivers',
+  'Sokoto',
+  'Taraba',
+  'Yobe',
+  'Zamfara',
+  'Federal Capital Territory',
+];
+
+/*
+============================================================
+NIGERIAN LGAs
+
+The selected state determines the available LGA options.
+============================================================
+*/
+
+const NIGERIAN_LGAS: Record<string, string[]> = {
   Abia: [
     'Aba North',
     'Aba South',
@@ -63,9 +115,9 @@ const NIGERIAN_STATES: Record<string, string[]> = {
     'Demsa',
     'Fufore',
     'Ganye',
-    'Gayuk',
+    'Girei',
     'Gombi',
-    'Grie',
+    'Guyuk',
     'Hong',
     'Jada',
     'Lamurde',
@@ -83,7 +135,7 @@ const NIGERIAN_STATES: Record<string, string[]> = {
     'Yola South',
   ],
 
-  Akwa Ibom: [
+  'Akwa Ibom': [
     'Abak',
     'Eastern Obolo',
     'Eket',
@@ -230,7 +282,7 @@ const NIGERIAN_STATES: Record<string, string[]> = {
     'Shani',
   ],
 
-  Cross River: [
+  'Cross River': [
     'Abi',
     'Akamkpa',
     'Akpabuyo',
@@ -395,7 +447,6 @@ const NIGERIAN_STATES: Record<string, string[]> = {
     'Owerri Municipal',
     'Owerri North',
     'Owerri West',
-    'Unuimo',
   ],
 
   Jigawa: [
@@ -676,8 +727,6 @@ const NIGERIAN_STATES: Record<string, string[]> = {
     'Abeokuta North',
     'Abeokuta South',
     'Ado-Odo/Ota',
-    'Egbado North',
-    'Egbado South',
     'Ewekoro',
     'Ifo',
     'Ijebu East',
@@ -693,6 +742,8 @@ const NIGERIAN_STATES: Record<string, string[]> = {
     'Ogun Waterside',
     'Remo North',
     'Sagamu',
+    'Yewa North',
+    'Yewa South',
   ],
 
   Ondo: [
@@ -899,7 +950,7 @@ const NIGERIAN_STATES: Record<string, string[]> = {
     'Anka',
     'Bakura',
     'Birnin Magaji/Kiyaw',
-    'Bukunyum',
+    'Bukkuyum',
     'Bungudu',
     'Gummi',
     'Gusau',
@@ -909,7 +960,7 @@ const NIGERIAN_STATES: Record<string, string[]> = {
     'Maru',
     'Shinkafi',
     'Talata Mafara',
-    'Chafe',
+    'Tsafe',
     'Zurmi',
   ],
 
@@ -923,9 +974,11 @@ const NIGERIAN_STATES: Record<string, string[]> = {
   ],
 };
 
-/* ============================================================
-   SOUTH AFRICA — PROVINCES
-============================================================ */
+/*
+============================================================
+SOUTH AFRICA
+============================================================
+*/
 
 const SOUTH_AFRICAN_PROVINCES = [
   'Eastern Cape',
@@ -943,13 +996,20 @@ const Profile: React.FC = () => {
   const navigate = useNavigate();
 
   const [user, setUser] = useState<User | null>(null);
-  const [account, setAccount] = useState<Account | null>(null);
+  const [account, setAccount] =
+    useState<Account | null>(null);
 
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] =
+    useState(false);
 
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [saving, setSaving] =
+    useState(false);
+
+  const [message, setMessage] =
+    useState('');
+
+  const [error, setError] =
+    useState('');
 
   const [form, setForm] = useState({
     email: '',
@@ -969,11 +1029,15 @@ const Profile: React.FC = () => {
   const loadProfile = () => {
     try {
       const savedUser = JSON.parse(
-        localStorage.getItem('zenimonies_user') || 'null'
+        localStorage.getItem(
+          'zenimonies_user'
+        ) || 'null'
       );
 
       const savedAccounts = JSON.parse(
-        localStorage.getItem('zenimonies_accounts') || '[]'
+        localStorage.getItem(
+          'zenimonies_accounts'
+        ) || '[]'
       );
 
       if (!savedUser) {
@@ -991,13 +1055,15 @@ const Profile: React.FC = () => {
           savedUser.dob ||
           '',
         address:
-          savedUser.address ||
           savedUser.residential_address ||
+          savedUser.address ||
           '',
         city: savedUser.city || '',
         state: savedUser.state || '',
         lga: savedUser.lga || '',
-        country: savedUser.country || 'Nigeria',
+        country:
+          savedUser.country ||
+          'Nigeria',
       });
 
       if (
@@ -1007,8 +1073,14 @@ const Profile: React.FC = () => {
         setAccount(savedAccounts[0]);
       }
     } catch (err) {
-      console.error('Profile loading error:', err);
-      setError('Unable to load your profile.');
+      console.error(
+        'Profile loading error:',
+        err
+      );
+
+      setError(
+        'Unable to load your profile.'
+      );
     }
   };
 
@@ -1023,37 +1095,34 @@ const Profile: React.FC = () => {
   const initials = displayName
     .split(' ')
     .filter(Boolean)
-    .map((part) => part[0])
+    .map(
+      (part) => part.charAt(0)
+    )
     .slice(0, 2)
     .join('')
     .toUpperCase();
 
   const kycStatus = String(
     user?.kyc_status || ''
-  )
-    .toLowerCase()
-    .trim();
+  ).toLowerCase();
 
-  const kycVerified =
+  const isKycVerified =
     kycStatus === 'verified' ||
     kycStatus === 'approved' ||
-    kycStatus === 'completed';
-
-  const currentTier = Number(
-    user?.kyc_tier ||
-      user?.tier ||
-      0
-  );
+    kycStatus === 'completed' ||
+    user?.is_verified === true;
 
   const stateOptions =
     form.country === 'Nigeria'
-      ? Object.keys(NIGERIAN_STATES)
+      ? NIGERIAN_STATES
       : SOUTH_AFRICAN_PROVINCES;
 
   const lgaOptions =
     form.country === 'Nigeria' &&
     form.state
-      ? NIGERIAN_STATES[form.state] || []
+      ? NIGERIAN_LGAS[
+          form.state
+        ] || []
       : [];
 
   const updateField = (
@@ -1087,7 +1156,7 @@ const Profile: React.FC = () => {
     }));
   };
 
-  const saveProfile = async () => {
+  const handleSave = () => {
     setSaving(true);
     setMessage('');
     setError('');
@@ -1097,9 +1166,12 @@ const Profile: React.FC = () => {
         ...(user || {}),
         email: form.email,
         phone: form.phone,
-        date_of_birth: form.dateOfBirth,
+        date_of_birth:
+          form.dateOfBirth,
+        dob: form.dateOfBirth,
         address: form.address,
-        residential_address: form.address,
+        residential_address:
+          form.address,
         city: form.city,
         state: form.state,
         lga: form.lga,
@@ -1113,14 +1185,9 @@ const Profile: React.FC = () => {
 
       setUser(updatedUser);
       setEditing(false);
-
       setMessage(
         'Profile updated successfully.'
       );
-
-      setTimeout(() => {
-        setMessage('');
-      }, 3500);
     } catch (err) {
       console.error(
         'Profile save error:',
@@ -1135,7 +1202,7 @@ const Profile: React.FC = () => {
     }
   };
 
-  const cancelEditing = () => {
+  const handleCancel = () => {
     loadProfile();
     setEditing(false);
     setMessage('');
@@ -1148,8 +1215,8 @@ const Profile: React.FC = () => {
       <header style={styles.header}>
         <button
           type="button"
-          style={styles.backButton}
           onClick={() => navigate('/')}
+          style={styles.backButton}
         >
           ←
         </button>
@@ -1160,15 +1227,15 @@ const Profile: React.FC = () => {
 
         <button
           type="button"
-          style={styles.homeButton}
           onClick={() => navigate('/')}
+          style={styles.homeButton}
         >
           Home
         </button>
       </header>
 
       <main style={styles.main}>
-        {/* PROFILE HEADER */}
+        {/* PROFILE SUMMARY */}
         <section style={styles.profileCard}>
           <div style={styles.avatar}>
             {user?.profile_photo ||
@@ -1191,43 +1258,34 @@ const Profile: React.FC = () => {
               {displayName}
             </h1>
 
-            <p style={styles.profileEmail}>
-              {user?.email || 'Email not available'}
+            <p style={styles.emailText}>
+              {user?.email ||
+                'Email not available'}
             </p>
 
-            <div style={styles.badges}>
-              <span
-                style={{
-                  ...styles.badge,
-                  ...(kycVerified
-                    ? styles.verifiedBadge
-                    : styles.notVerifiedBadge),
-                }}
-              >
-                {kycVerified
-                  ? '✓ KYC Verified'
-                  : currentTier > 0
-                  ? `Tier ${currentTier} — Not Verified`
-                  : 'KYC Not Verified'}
-              </span>
-
-              {account?.account_number && (
-                <span style={styles.accountBadge}>
-                  Personal Account
-                </span>
-              )}
-            </div>
+            <span
+              style={{
+                ...styles.statusBadge,
+                ...(isKycVerified
+                  ? styles.verifiedBadge
+                  : styles.notVerifiedBadge),
+              }}
+            >
+              {isKycVerified
+                ? '✓ KYC Verified'
+                : 'KYC Not Verified'}
+            </span>
           </div>
 
           {!editing && (
             <button
               type="button"
-              style={styles.editButton}
               onClick={() => {
                 setEditing(true);
                 setMessage('');
                 setError('');
               }}
+              style={styles.editButton}
             >
               Edit Profile
             </button>
@@ -1236,13 +1294,13 @@ const Profile: React.FC = () => {
 
         {/* MESSAGES */}
         {message && (
-          <div style={styles.successMessage}>
+          <div style={styles.success}>
             ✓ {message}
           </div>
         )}
 
         {error && (
-          <div style={styles.errorMessage}>
+          <div style={styles.error}>
             {error}
           </div>
         )}
@@ -1254,8 +1312,8 @@ const Profile: React.FC = () => {
           </h2>
 
           <p style={styles.description}>
-            Keep your personal information accurate
-            and up to date.
+            Keep your personal information
+            up to date.
           </p>
 
           <div style={styles.grid}>
@@ -1265,18 +1323,20 @@ const Profile: React.FC = () => {
                 Full Legal Name
               </label>
 
-              <div style={styles.lockedInput}>
-                <span>{displayName}</span>
+              <input
+                type="text"
+                value={displayName}
+                disabled
+                style={{
+                  ...styles.input,
+                  ...styles.disabledInput,
+                }}
+              />
 
-                {kycVerified && (
-                  <span>🔒</span>
-                )}
-              </div>
-
-              {kycVerified && (
+              {isKycVerified && (
                 <small style={styles.helper}>
-                  Your verified legal name cannot be
-                  changed from your normal profile.
+                  🔒 Your verified legal name
+                  cannot be changed here.
                 </small>
               )}
             </div>
@@ -1300,8 +1360,8 @@ const Profile: React.FC = () => {
                 style={{
                   ...styles.input,
                   ...(editing
-                    ? styles.editable
-                    : styles.disabled),
+                    ? styles.editableInput
+                    : styles.disabledInput),
                 }}
               />
             </div>
@@ -1325,8 +1385,8 @@ const Profile: React.FC = () => {
                 style={{
                   ...styles.input,
                   ...(editing
-                    ? styles.editable
-                    : styles.disabled),
+                    ? styles.editableInput
+                    : styles.disabledInput),
                 }}
               />
             </div>
@@ -1350,23 +1410,23 @@ const Profile: React.FC = () => {
                 style={{
                   ...styles.input,
                   ...(editing
-                    ? styles.editable
-                    : styles.disabled),
+                    ? styles.editableInput
+                    : styles.disabledInput),
                 }}
               />
             </div>
           </div>
         </section>
 
-        {/* ADDRESS */}
+        {/* RESIDENTIAL ADDRESS */}
         <section style={styles.card}>
           <h2 style={styles.sectionTitle}>
             Residential Address
           </h2>
 
           <p style={styles.description}>
-            Select your country, state and local
-            government area.
+            Select your country, state and
+            Local Government Area.
           </p>
 
           <div style={styles.grid}>
@@ -1387,8 +1447,8 @@ const Profile: React.FC = () => {
                 style={{
                   ...styles.input,
                   ...(editing
-                    ? styles.editable
-                    : styles.disabled),
+                    ? styles.editableInput
+                    : styles.disabledInput),
                 }}
               >
                 <option value="Nigeria">
@@ -1401,7 +1461,7 @@ const Profile: React.FC = () => {
               </select>
             </div>
 
-            {/* STATE */}
+            {/* STATE / PROVINCE */}
             <div style={styles.field}>
               <label style={styles.label}>
                 {form.country === 'Nigeria'
@@ -1420,15 +1480,15 @@ const Profile: React.FC = () => {
                 style={{
                   ...styles.input,
                   ...(editing
-                    ? styles.editable
-                    : styles.disabled),
+                    ? styles.editableInput
+                    : styles.disabledInput),
                 }}
               >
                 <option value="">
                   Select{' '}
                   {form.country === 'Nigeria'
-                    ? 'state'
-                    : 'province'}
+                    ? 'State'
+                    : 'Province'}
                 </option>
 
                 {stateOptions.map(
@@ -1467,13 +1527,13 @@ const Profile: React.FC = () => {
                     ...styles.input,
                     ...(!editing ||
                     !form.state
-                      ? styles.disabled
-                      : styles.editable),
+                      ? styles.disabledInput
+                      : styles.editableInput),
                   }}
                 >
                   <option value="">
                     {!form.state
-                      ? 'Select a state first'
+                      ? 'Select a State first'
                       : 'Select LGA'}
                   </option>
 
@@ -1511,8 +1571,8 @@ const Profile: React.FC = () => {
                 style={{
                   ...styles.input,
                   ...(editing
-                    ? styles.editable
-                    : styles.disabled),
+                    ? styles.editableInput
+                    : styles.disabledInput),
                 }}
               />
             </div>
@@ -1532,19 +1592,19 @@ const Profile: React.FC = () => {
                 value={form.address}
                 disabled={!editing}
                 placeholder="Enter your full residential address"
+                rows={4}
                 onChange={(event) =>
                   updateField(
                     'address',
                     event.target.value
                   )
                 }
-                rows={4}
                 style={{
                   ...styles.input,
                   ...styles.textarea,
                   ...(editing
-                    ? styles.editable
-                    : styles.disabled),
+                    ? styles.editableInput
+                    : styles.disabledInput),
                 }}
               />
             </div>
@@ -1602,12 +1662,12 @@ const Profile: React.FC = () => {
           </div>
         </section>
 
-        {/* SAVE / CANCEL */}
+        {/* ACTION BUTTONS */}
         {editing && (
-          <div style={styles.actionBar}>
+          <div style={styles.actions}>
             <button
               type="button"
-              onClick={cancelEditing}
+              onClick={handleCancel}
               disabled={saving}
               style={styles.cancelButton}
             >
@@ -1616,7 +1676,7 @@ const Profile: React.FC = () => {
 
             <button
               type="button"
-              onClick={saveProfile}
+              onClick={handleSave}
               disabled={saving}
               style={styles.saveButton}
             >
@@ -1631,14 +1691,19 @@ const Profile: React.FC = () => {
   );
 };
 
-/* ============================================================
-   STYLES
-============================================================ */
+/*
+============================================================
+STYLES
+============================================================
+*/
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
   page: {
     minHeight: '100vh',
-    background: '#f5f7f6',
+    backgroundColor: '#f5f7f6',
     color: '#17211b',
     fontFamily:
       'Arial, Helvetica, sans-serif',
@@ -1646,39 +1711,35 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   header: {
-    height: '64px',
-    background: '#087a4b',
-    color: '#fff',
+    minHeight: '64px',
+    backgroundColor: '#087a4b',
+    color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
-    padding: '0 18px',
-    gap: '14px',
-    position: 'sticky',
-    top: 0,
-    zIndex: 20,
-    boxShadow:
-      '0 2px 10px rgba(0,0,0,0.12)',
+    padding: '0 16px',
+    gap: '12px',
+    boxSizing: 'border-box',
   },
 
   backButton: {
     border: 'none',
     background: 'transparent',
-    color: '#fff',
+    color: '#ffffff',
     fontSize: '28px',
     cursor: 'pointer',
-    padding: '4px 8px',
+    padding: '5px 8px',
   },
 
   headerTitle: {
+    flex: 1,
     fontSize: '20px',
     fontWeight: 700,
-    flex: 1,
   },
 
   homeButton: {
     border: '1px solid rgba(255,255,255,0.5)',
-    background: 'transparent',
-    color: '#fff',
+    backgroundColor: 'transparent',
+    color: '#ffffff',
     borderRadius: '8px',
     padding: '8px 12px',
     cursor: 'pointer',
@@ -1686,34 +1747,37 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   main: {
+    width: '100%',
     maxWidth: '900px',
     margin: '0 auto',
-    padding: '24px 16px',
+    padding: '22px 16px',
+    boxSizing: 'border-box',
   },
 
   profileCard: {
-    background: '#fff',
+    backgroundColor: '#ffffff',
     borderRadius: '18px',
-    padding: '22px',
+    padding: '20px',
     display: 'flex',
     alignItems: 'center',
-    gap: '18px',
+    gap: '16px',
     boxShadow:
-      '0 5px 20px rgba(0,0,0,0.07)',
+      '0 4px 18px rgba(0,0,0,0.06)',
     marginBottom: '18px',
+    flexWrap: 'wrap',
   },
 
   avatar: {
-    width: '76px',
-    height: '76px',
-    minWidth: '76px',
+    width: '72px',
+    height: '72px',
+    minWidth: '72px',
     borderRadius: '50%',
-    background: '#087a4b',
-    color: '#fff',
+    backgroundColor: '#087a4b',
+    color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '25px',
+    fontSize: '24px',
     fontWeight: 800,
     overflow: 'hidden',
   },
@@ -1726,30 +1790,23 @@ const styles: Record<string, React.CSSProperties> = {
 
   profileInfo: {
     flex: 1,
-    minWidth: 0,
+    minWidth: '180px',
   },
 
   profileName: {
     margin: 0,
-    fontSize: '22px',
+    fontSize: '21px',
     fontWeight: 800,
   },
 
-  profileEmail: {
-    margin: '5px 0 10px',
+  emailText: {
+    margin: '5px 0 9px',
     color: '#69756e',
-    wordBreak: 'break-word',
+    fontSize: '14px',
   },
 
-  badges: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '7px',
-  },
-
-  badge: {
-    display: 'inline-flex',
-    alignItems: 'center',
+  statusBadge: {
+    display: 'inline-block',
     borderRadius: '20px',
     padding: '6px 10px',
     fontSize: '12px',
@@ -1757,59 +1814,49 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   verifiedBadge: {
-    background: '#e5f7ed',
+    backgroundColor: '#e5f7ed',
     color: '#087a4b',
   },
 
   notVerifiedBadge: {
-    background: '#fff4df',
-    color: '#9a6500',
-  },
-
-  accountBadge: {
-    background: '#eef1ef',
-    color: '#526059',
-    borderRadius: '20px',
-    padding: '6px 10px',
-    fontSize: '12px',
-    fontWeight: 700,
+    backgroundColor: '#fff4df',
+    color: '#916100',
   },
 
   editButton: {
     border: 'none',
-    background: '#087a4b',
-    color: '#fff',
+    backgroundColor: '#087a4b',
+    color: '#ffffff',
     borderRadius: '9px',
     padding: '11px 15px',
     cursor: 'pointer',
     fontWeight: 700,
-    whiteSpace: 'nowrap',
   },
 
-  successMessage: {
-    background: '#e7f7ee',
+  success: {
+    backgroundColor: '#e7f7ee',
     color: '#087a4b',
-    borderRadius: '10px',
     padding: '13px 15px',
+    borderRadius: '10px',
     marginBottom: '15px',
     fontWeight: 600,
   },
 
-  errorMessage: {
-    background: '#fdeaea',
+  error: {
+    backgroundColor: '#fdeaea',
     color: '#b42318',
-    borderRadius: '10px',
     padding: '13px 15px',
+    borderRadius: '10px',
     marginBottom: '15px',
     fontWeight: 600,
   },
 
   card: {
-    background: '#fff',
+    backgroundColor: '#ffffff',
     borderRadius: '18px',
-    padding: '22px',
+    padding: '21px',
     boxShadow:
-      '0 5px 20px rgba(0,0,0,0.06)',
+      '0 4px 18px rgba(0,0,0,0.06)',
     marginBottom: '18px',
   },
 
@@ -1820,17 +1867,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   description: {
+    margin: '6px 0 20px',
     color: '#69756e',
     fontSize: '14px',
-    marginTop: '6px',
-    marginBottom: '20px',
   },
 
   grid: {
     display: 'grid',
     gridTemplateColumns:
       'repeat(auto-fit, minmax(250px, 1fr))',
-    gap: '18px',
+    gap: '17px',
   },
 
   field: {
@@ -1848,63 +1894,49 @@ const styles: Record<string, React.CSSProperties> = {
   input: {
     width: '100%',
     boxSizing: 'border-box',
-    border: '1px solid #d8dfda',
+    border: '1px solid #d6ddd8',
     borderRadius: '9px',
     padding: '12px',
     fontSize: '15px',
-    outline: 'none',
-    background: '#fff',
     color: '#17211b',
+    backgroundColor: '#ffffff',
+    outline: 'none',
   },
 
-  editable: {
+  editableInput: {
     border: '1px solid #087a4b',
-    background: '#fff',
-    cursor: 'text',
+    backgroundColor: '#ffffff',
   },
 
-  disabled: {
-    background: '#f1f3f2',
-    color: '#6b756f',
+  disabledInput: {
+    backgroundColor: '#f1f3f2',
+    color: '#68736d',
     cursor: 'not-allowed',
   },
 
-  lockedInput: {
-    minHeight: '42px',
-    boxSizing: 'border-box',
-    border: '1px solid #d8dfda',
-    borderRadius: '9px',
-    padding: '11px 12px',
-    background: '#f1f3f2',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    color: '#56615a',
+  textarea: {
+    resize: 'vertical',
+    minHeight: '100px',
+    fontFamily:
+      'Arial, Helvetica, sans-serif',
   },
 
   helper: {
     color: '#69756e',
     fontSize: '11px',
-    lineHeight: 1.4,
-  },
-
-  textarea: {
-    resize: 'vertical',
-    fontFamily:
-      'Arial, Helvetica, sans-serif',
   },
 
   accountGrid: {
     display: 'grid',
     gridTemplateColumns:
-      'repeat(auto-fit, minmax(180px, 1fr))',
+      'repeat(auto-fit, minmax(170px, 1fr))',
     gap: '20px',
   },
 
   accountLabel: {
     display: 'block',
-    fontSize: '12px',
     color: '#69756e',
+    fontSize: '12px',
     marginBottom: '5px',
   },
 
@@ -1913,7 +1945,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '15px',
   },
 
-  actionBar: {
+  actions: {
     display: 'flex',
     justifyContent: 'flex-end',
     gap: '10px',
@@ -1922,7 +1954,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   cancelButton: {
     border: '1px solid #cbd3ce',
-    background: '#fff',
+    backgroundColor: '#ffffff',
     color: '#344039',
     borderRadius: '9px',
     padding: '12px 18px',
@@ -1932,8 +1964,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   saveButton: {
     border: 'none',
-    background: '#087a4b',
-    color: '#fff',
+    backgroundColor: '#087a4b',
+    color: '#ffffff',
     borderRadius: '9px',
     padding: '12px 20px',
     cursor: 'pointer',
