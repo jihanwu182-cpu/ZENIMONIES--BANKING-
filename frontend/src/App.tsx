@@ -28,6 +28,7 @@ import Betting from './pages/Betting.tsx';
 import VirtualCard from './pages/VirtualCard.tsx';
 import Admin from './pages/AdminDashboard.tsx';
 import TransferConfirmation from './pages/TransferConfirmation.tsx';
+import TransactionReceipt from './pages/TransactionReceipt.tsx';
 
 interface ServicePageProps {
   title: string;
@@ -376,6 +377,11 @@ const App: React.FC = () => {
           path="/transactions"
           element={<Transactions />}
         />
+
+        <Route
+          path="/transaction-receipt"
+          element={<TransactionReceipt />}
+         />
 
         <Route
           path="/wallet"
