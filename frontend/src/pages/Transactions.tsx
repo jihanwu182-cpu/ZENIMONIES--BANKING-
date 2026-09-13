@@ -1,21 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   Box,
+  Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
   Container,
   Divider,
   Stack,
   Typography,
-  Alert,
-  Chip,
-  Button,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-
-const API_URL = 'https://zenimonies-banking.onrender.com';
 
 interface Transaction {
   id: string | number;
@@ -26,27 +24,50 @@ interface Transaction {
   description?: string;
   status: string;
   created_at?: string;
+
+  recipient_name?: string;
+  recipient_account?: string;
+  recipient_bank?: string;
+
+  sender_name?: string;
+  sender_account?: string;
+
+  balance_before?: number;
+  balance_after?: number;
 }
+
+const API_URL =
+  'https://zenimonies-banking.onrender.com';
 
 const Transactions: React.FC = () => {
   const navigate = useNavigate();
 
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [transactions, setTransactions] =
+    useState<Transaction[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState('');
+
+  const getToken = () => {
+    return (
+      localStorage.getItem('zenimonies_token') ||
+      localStorage.getItem('token') ||
+      localStorage.getItem('access_token')
+    );
+  };
 
   const loadTransactions = async () => {
     try {
       setLoading(true);
       setError('');
 
-      const token =
-        localStorage.getItem('zenimonies_token') ||
-        localStorage.getItem('token') ||
-        localStorage.getItem('access_token');
+      const token = getToken();
 
       if (!token) {
-        setError('Please log in to view your transaction history.');
+        navigate('/login');
         return;
       }
 
@@ -59,16 +80,22 @@ const Transactions: React.FC = () => {
         }
       );
 
-      if (response.data?.success) {
-        setTransactions(response.data.transactions || []);
+      const data = response.data;
+
+      if (Array.isArray(data)) {
+        setTransactions(data);
+      } else if (
+        Array.isArray(data?.transactions)
+      ) {
+        setTransactions(data.transactions);
       } else {
-        setError(
-          response.data?.message ||
-            'Unable to load transaction history.'
-        );
+        setTransactions([]);
       }
     } catch (err: any) {
-      console.error('Transaction history error:', err);
+      console.error(
+        'Failed to load transactions:',
+        err
+      );
 
       setError(
         err?.response?.data?.message ||
@@ -87,13 +114,11 @@ const Transactions: React.FC = () => {
     amount: number,
     currency?: string
   ) => {
-    const value = Number(amount || 0);
-
     return new Intl.NumberFormat('en-NG', {
       style: 'currency',
       currency: currency || 'NGN',
       minimumFractionDigits: 2,
-    }).format(value);
+    }).format(Number(amount || 0));
   };
 
   const formatDate = (date?: string) => {
@@ -113,7 +138,23 @@ const Transactions: React.FC = () => {
     });
   };
 
-  const getTransactionType = (
+  const getTransactionTitle = (
+    transaction: Transaction
+  ) => {
+    if (transaction.description) {
+      return transaction.description;
+    }
+
+    return String(
+      transaction.type || 'Transaction'
+    )
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (letter) =>
+        letter.toUpperCase()
+      );
+  };
+
+  const isCredit = (
     transaction: Transaction
   ) => {
     const type = String(
@@ -124,71 +165,50 @@ const Transactions: React.FC = () => {
       transaction.description || ''
     ).toLowerCase();
 
-    const combined =
-      `${type} ${description}`;
-
-    if (
-      combined.includes('deposit') ||
-      combined.includes('credit') ||
-      combined.includes('received') ||
-      combined.includes('funding') ||
-      combined.includes('paystack')
-    ) {
-      return 'credit';
-    }
-
-    return 'debit';
+    return (
+      type.includes('deposit') ||
+      type.includes('credit') ||
+      type.includes('funding') ||
+      type.includes('airtime_refund') ||
+      description.includes('deposit') ||
+      description.includes('credit')
+    );
   };
 
   const getStatusColor = (
     status: string
-  ): 'success' | 'warning' | 'error' | 'default' => {
-    const value = String(
+  ) => {
+    const normalized = String(
       status || ''
     ).toLowerCase();
 
     if (
-      value === 'completed' ||
-      value === 'success' ||
-      value === 'successful'
+      normalized === 'completed' ||
+      normalized === 'success' ||
+      normalized === 'successful'
     ) {
       return 'success';
     }
 
     if (
-      value === 'pending' ||
-      value === 'processing'
-    ) {
-      return 'warning';
-    }
-
-    if (
-      value === 'failed' ||
-      value === 'cancelled' ||
-      value === 'canceled'
+      normalized === 'failed' ||
+      normalized === 'cancelled' ||
+      normalized === 'canceled'
     ) {
       return 'error';
     }
 
-    return 'default';
+    return 'warning';
   };
 
-  const getTransactionTitle = (
+  const handleViewReceipt = (
     transaction: Transaction
   ) => {
-    if (transaction.description) {
-      return transaction.description;
-    }
-
-    if (transaction.type) {
-      return transaction.type
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, (letter) =>
-          letter.toUpperCase()
-        );
-    }
-
-    return 'Transaction';
+    navigate('/transaction-receipt', {
+      state: {
+        transaction,
+      },
+    });
   };
 
   return (
@@ -196,63 +216,83 @@ const Transactions: React.FC = () => {
       sx={{
         minHeight: '100vh',
         backgroundColor: '#f5f7f6',
+        py: 3,
         pb: 6,
       }}
     >
-      {/* HEADER */}
-      <Box
-        sx={{
-          backgroundColor: '#087a4b',
-          color: '#ffffff',
-          py: 2,
-          px: 2,
-          boxShadow:
-            '0 2px 10px rgba(0,0,0,0.12)',
-        }}
-      >
-        <Container maxWidth="sm">
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={1}
-          >
-            <Button
-              onClick={() => navigate(-1)}
-              sx={{
-                color: '#ffffff',
-                minWidth: 40,
-                fontSize: 28,
-                fontWeight: 400,
-                lineHeight: 1,
-                p: 0,
-              }}
-            >
-              ←
-            </Button>
+      <Container maxWidth="md">
+        {/* HEADER */}
 
+        <Stack
+          direction={{
+            xs: 'column',
+            sm: 'row',
+          }}
+          justifyContent="space-between"
+          alignItems={{
+            xs: 'stretch',
+            sm: 'center',
+          }}
+          spacing={2}
+          sx={{ mb: 3 }}
+        >
+          <Box>
             <Typography
-              variant="h6"
+              variant="h5"
               sx={{
-                fontWeight: 700,
+                fontWeight: 900,
+                color: '#063b2d',
               }}
             >
               Transaction History
             </Typography>
-          </Stack>
-        </Container>
-      </Box>
 
-      <Container
-        maxWidth="sm"
-        sx={{ mt: 3 }}
-      >
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mt: 0.5 }}
+            >
+              View your recent Zenimonies
+              transactions and receipts.
+            </Typography>
+          </Box>
+
+          <Button
+            variant="outlined"
+            onClick={loadTransactions}
+            disabled={loading}
+            sx={{
+              borderColor: '#087a4b',
+              color: '#087a4b',
+              fontWeight: 700,
+              borderRadius: 2,
+            }}
+          >
+            Refresh Transactions
+          </Button>
+        </Stack>
+
+        {/* ERROR */}
+
+        {error && (
+          <Alert
+            severity="error"
+            sx={{
+              mb: 2,
+              borderRadius: 2,
+            }}
+          >
+            {error}
+          </Alert>
+        )}
+
         {/* LOADING */}
-        {loading && (
+
+        {loading ? (
           <Box
             sx={{
               display: 'flex',
               justifyContent: 'center',
-              alignItems: 'center',
               py: 8,
             }}
           >
@@ -260,176 +300,90 @@ const Transactions: React.FC = () => {
               sx={{ color: '#087a4b' }}
             />
           </Box>
-        )}
+        ) : transactions.length === 0 ? (
+          /* EMPTY */
 
-        {/* ERROR */}
-        {!loading && error && (
-          <Box>
-            <Alert
-              severity="error"
+          <Card
+            sx={{
+              borderRadius: 3,
+              boxShadow:
+                '0 8px 25px rgba(0,0,0,0.06)',
+            }}
+          >
+            <CardContent
               sx={{
-                borderRadius: 2,
-                mb: 2,
+                textAlign: 'center',
+                py: 6,
               }}
             >
-              {error}
-            </Alert>
-
-            <Button
-              variant="contained"
-              onClick={loadTransactions}
-              sx={{
-                backgroundColor: '#087a4b',
-                '&:hover': {
-                  backgroundColor: '#06663e',
-                },
-              }}
-            >
-              Try Again
-            </Button>
-          </Box>
-        )}
-
-        {/* EMPTY */}
-        {!loading &&
-          !error &&
-          transactions.length === 0 && (
-            <Card
-              sx={{
-                borderRadius: 3,
-                boxShadow:
-                  '0 4px 18px rgba(0,0,0,0.06)',
-              }}
-            >
-              <CardContent
+              <Typography
+                variant="h6"
                 sx={{
-                  py: 7,
-                  textAlign: 'center',
+                  fontWeight: 800,
+                  color: '#063b2d',
+                  mb: 1,
                 }}
               >
-                <Box
-                  sx={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: '50%',
-                    backgroundColor: '#e8f5ef',
-                    color: '#087a4b',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 18px',
-                    fontSize: 30,
-                  }}
-                >
-                  ₦
-                </Box>
+                No transactions yet
+              </Typography>
 
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 700,
-                  }}
-                >
-                  No transactions yet
-                </Typography>
-
-                <Typography
-                  color="text.secondary"
-                  sx={{
-                    mt: 1,
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Your deposits, transfers and
-                  other account activity will
-                  appear here.
-                </Typography>
-              </CardContent>
-            </Card>
-          )}
-
-        {/* TRANSACTIONS */}
-        {!loading &&
-          !error &&
-          transactions.length > 0 && (
-            <Card
-              sx={{
-                borderRadius: 3,
-                overflow: 'hidden',
-                boxShadow:
-                  '0 4px 18px rgba(0,0,0,0.06)',
-              }}
-            >
-              <CardContent
-                sx={{
-                  p: 0,
-                }}
+              <Typography
+                color="text.secondary"
               >
-                {transactions.map(
-                  (
-                    transaction,
-                    index
-                  ) => {
-                    const credit =
-                      getTransactionType(
-                        transaction
-                      ) === 'credit';
+                Your transactions will appear
+                here once you make or receive a
+                payment.
+              </Typography>
+            </CardContent>
+          </Card>
+        ) : (
+          /* TRANSACTIONS */
 
-                    return (
-                      <Box
-                        key={
-                          transaction.id
-                        }
+          <Stack spacing={2}>
+            {transactions.map(
+              (transaction) => {
+                const credit =
+                  isCredit(transaction);
+
+                return (
+                  <Card
+                    key={String(
+                      transaction.id
+                    )}
+                    sx={{
+                      borderRadius: 3,
+                      boxShadow:
+                        '0 6px 22px rgba(0,0,0,0.06)',
+                    }}
+                  >
+                    <CardContent>
+                      <Stack
+                        direction={{
+                          xs: 'column',
+                          sm: 'row',
+                        }}
+                        justifyContent="space-between"
+                        spacing={2}
                       >
-                        <Stack
-                          direction="row"
-                          alignItems="center"
-                          spacing={1.5}
+                        {/* LEFT */}
+
+                        <Box
                           sx={{
-                            p: 2,
+                            minWidth: 0,
+                            flex: 1,
                           }}
                         >
-                          {/* TRANSACTION ICON */}
-                          <Box
-                            sx={{
-                              width: 46,
-                              height: 46,
-                              minWidth: 46,
-                              borderRadius:
-                                '50%',
-                              display:
-                                'flex',
-                              alignItems:
-                                'center',
-                              justifyContent:
-                                'center',
-                              backgroundColor:
-                                credit
-                                  ? '#e5f7ed'
-                                  : '#fdeaea',
-                              color: credit
-                                ? '#087a4b'
-                                : '#c62828',
-                              fontSize: 22,
-                              fontWeight: 700,
-                            }}
-                          >
-                            {credit
-                              ? '↓'
-                              : '↑'}
-                          </Box>
-
-                          {/* DETAILS */}
-                          <Box
-                            sx={{
-                              flex: 1,
-                              minWidth: 0,
-                            }}
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            flexWrap="wrap"
                           >
                             <Typography
                               sx={{
-                                fontWeight: 700,
-                                fontSize: 15,
+                                fontWeight: 800,
+                                color:
+                                  '#172b22',
                               }}
                             >
                               {getTransactionTitle(
@@ -437,123 +391,158 @@ const Transactions: React.FC = () => {
                               )}
                             </Typography>
 
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{
-                                mt: 0.4,
-                              }}
-                            >
-                              {formatDate(
-                                transaction.created_at
-                              )}
-                            </Typography>
-
-                            {transaction.reference && (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                sx={{
-                                  display:
-                                    'block',
-                                  mt: 0.5,
-                                  wordBreak:
-                                    'break-all',
-                                }}
-                              >
-                                Ref:{' '}
-                                {
-                                  transaction.reference
-                                }
-                              </Typography>
-                            )}
-                          </Box>
-
-                          {/* AMOUNT + STATUS */}
-                          <Box
-                            sx={{
-                              textAlign:
-                                'right',
-                              minWidth:
-                                110,
-                            }}
-                          >
-                            <Typography
-                              sx={{
-                                fontWeight: 800,
-                                fontSize: 14,
-                                color: credit
-                                  ? '#087a4b'
-                                  : '#c62828',
-                                whiteSpace:
-                                  'nowrap',
-                              }}
-                            >
-                              {credit
-                                ? '+'
-                                : '-'}
-                              {formatAmount(
-                                transaction.amount,
-                                transaction.currency
-                              )}
-                            </Typography>
-
                             <Chip
                               label={
                                 transaction.status ||
-                                'unknown'
+                                'Processing'
                               }
-                              color={getStatusColor(
-                                transaction.status
-                              )}
                               size="small"
+                              color={
+                                getStatusColor(
+                                  transaction.status
+                                ) as any
+                              }
                               sx={{
-                                mt: 0.7,
-                                textTransform:
-                                  'capitalize',
-                                fontSize: 11,
+                                fontWeight: 700,
                               }}
                             />
-                          </Box>
-                        </Stack>
+                          </Stack>
 
-                        {index <
-                          transactions.length -
-                            1 && (
-                          <Divider />
-                        )}
-                      </Box>
-                    );
-                  }
-                )}
-              </CardContent>
-            </Card>
-          )}
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{
+                              mt: 0.7,
+                            }}
+                          >
+                            {formatDate(
+                              transaction.created_at
+                            )}
+                          </Typography>
 
-        {/* REFRESH */}
-        {!loading &&
-          !error &&
-          transactions.length > 0 && (
-            <Button
-              fullWidth
-              variant="outlined"
-              onClick={loadTransactions}
-              sx={{
-                mt: 2,
-                borderColor: '#087a4b',
-                color: '#087a4b',
-                borderRadius: 2,
-                fontWeight: 700,
-                '&:hover': {
-                  borderColor: '#06663e',
-                  backgroundColor:
-                    '#eaf7f0',
-                },
-              }}
-            >
-              Refresh Transactions
-            </Button>
-          )}
+                          {transaction.reference && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                display: 'block',
+                                mt: 0.5,
+                                wordBreak:
+                                  'break-all',
+                              }}
+                            >
+                              Ref:{' '}
+                              {
+                                transaction.reference
+                              }
+                            </Typography>
+                          )}
+
+                          {transaction.recipient_name && (
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                mt: 0.7,
+                                fontWeight: 600,
+                              }}
+                            >
+                              Recipient:{' '}
+                              {
+                                transaction.recipient_name
+                              }
+                            </Typography>
+                          )}
+
+                          {transaction.recipient_bank && (
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                            >
+                              Bank:{' '}
+                              {
+                                transaction.recipient_bank
+                              }
+                            </Typography>
+                          )}
+                        </Box>
+
+                        {/* RIGHT */}
+
+                        <Box
+                          sx={{
+                            textAlign: {
+                              xs: 'left',
+                              sm: 'right',
+                            },
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              fontSize: 20,
+                              fontWeight: 900,
+                              color: credit
+                                ? '#087a4b'
+                                : '#172b22',
+                            }}
+                          >
+                            {credit
+                              ? '+'
+                              : '-'}
+                            {formatAmount(
+                              transaction.amount,
+                              transaction.currency
+                            )}
+                          </Typography>
+
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                          >
+                            {
+                              transaction.currency
+                            }
+                          </Typography>
+                        </Box>
+                      </Stack>
+
+                      <Divider
+                        sx={{ my: 2 }}
+                      />
+
+                      {/* RECEIPT BUTTON */}
+
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        onClick={() =>
+                          handleViewReceipt(
+                            transaction
+                          )
+                        }
+                        sx={{
+                          borderColor:
+                            '#087a4b',
+                          color: '#087a4b',
+                          borderRadius: 2,
+                          fontWeight: 800,
+                          py: 1.2,
+                          '&:hover': {
+                            borderColor:
+                              '#06663e',
+                            backgroundColor:
+                              '#eaf7f0',
+                          },
+                        }}
+                      >
+                        View Transaction Receipt
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              }
+            )}
+          </Stack>
+        )}
       </Container>
     </Box>
   );
