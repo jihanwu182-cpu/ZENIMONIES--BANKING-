@@ -33,6 +33,11 @@ const {
   handlePaystackWebhook,
 } = require('./controllers/paystackWebhookController');
 
+const {
+  handleDojahWebhook,
+} = require(
+  './controllers/dojahWebhookController'
+);
 // ============================================================
 // APP
 // ============================================================
@@ -389,6 +394,14 @@ app.get(
       });
     }
   }
+);
+// ============================================================
+// DOJAH WEBHOOK
+// ============================================================
+
+app.post(
+  '/api/webhooks/dojah',
+  handleDojahWebhook
 );
 // ============================================================
 // 404 HANDLER
