@@ -83,115 +83,6 @@ const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 const MAX_PDF_SIZE = 10 * 1024 * 1024;
 
 /* ============================================================
-   KYC PAGE
-   ============================================================ */
-
-const KYC: React.FC = () => {
-  const navigate = useNavigate();
-
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-
-  const [kyc, setKyc] = useState<KycStatus>({
-    status: 'not_verified',
-    tier: 0,
-    bvn_verified: false,
-    id_verified: false,
-    tier_3_verified: false,
-    tier_3_method: null,
-  });
-
-  const [limits, setLimits] = useState<KycLimits>({
-    account_limit: 50000,
-    daily_transfer_limit: 25000,
-    daily_transfer_used: 0,
-    daily_transfer_remaining: 25000,
-  });
-
-  const [record, setRecord] =
-    useState<KycRecord | null>(null);
-
-  /* ==========================================================
-     TIER 1 — BVN
-     ========================================================== */
-
-  const [bvn, setBvn] = useState('');
-
-  /* ==========================================================
-     TIER 2 — ID + SELFIE
-     ========================================================== */
-
-  const [documentType, setDocumentType] =
-    useState('national_id');
-
-  const [documentNumber, setDocumentNumber] =
-    useState('');
-
-  const [documentFront, setDocumentFront] =
-    useState<File | null>(null);
-
-  const [documentBack, setDocumentBack] =
-    useState<File | null>(null);
-
-  const [selfie, setSelfie] =
-    useState<File | null>(null);
-
-  /* ==========================================================
-     TIER 3 — ADDRESS + LIVENESS
-     ========================================================== */
-
-  const [tier3Method, setTier3Method] =
-    useState<Tier3Method>('bank_statement');
-
-  const [tier3Document, setTier3Document] =
-    useState<File | null>(null);
-
-  const [tier3Selfie, setTier3Selfie] =
-    useState<File | null>(null);
-
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-
-  const token =
-    localStorage.getItem('zenimonies_token') ||
-    localStorage.getItem('token');
-
-  /* ==========================================================
-     HELPERS
-     ========================================================== */
-
-  const formatMoney = (
-    amount: number | null
-  ): string => {
-    if (amount === null) {
-      return 'Unlimited';
-    }
-
-    return `₦${amount.toLocaleString('en-NG', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    })}`;
-  };
-
-  type VerificationState =
-  | 'not_verified'
-  | 'pending'
-  | 'verified'
-  | 'rejected';
-
-type Tier3Method =
-  | 'bank_statement'
-  | 'utility_bill'
-  | 'proof_of_address';
-
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL ||
-  'https://zenimonies-banking.onrender.com/api';
-
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
-const MAX_PDF_SIZE = 10 * 1024 * 1024;
-
-/* ============================================================
    GLOBAL KYC STATUS HELPERS
    ============================================================ */
 
@@ -220,9 +111,7 @@ const normalizeStatus = (
     return 'pending';
   }
 
-  if (
-    normalized === 'rejected'
-  ) {
+  if (normalized === 'rejected') {
     return 'rejected';
   }
 
@@ -297,9 +186,110 @@ const getStatusBackground = (
    ============================================================ */
 
 const KYC: React.FC = () => {
+  const navigate = useNavigate();
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [submitting, setSubmitting] =
+    useState(false);
+
+  const [kyc, setKyc] =
+    useState<KycStatus>({
+      status: 'not_verified',
+      tier: 0,
+      bvn_verified: false,
+      id_verified: false,
+      tier_3_verified: false,
+      tier_3_method: null,
+    });
+
+  const [limits, setLimits] =
+    useState<KycLimits>({
+      account_limit: 50000,
+      daily_transfer_limit: 25000,
+      daily_transfer_used: 0,
+      daily_transfer_remaining: 25000,
+    });
+
+  const [record, setRecord] =
+    useState<KycRecord | null>(null);
 
   /* ==========================================================
-     IMPORTANT — INDIVIDUAL BVN STATUS
+     TIER 1 — BVN
+     ========================================================== */
+
+  const [bvn, setBvn] =
+    useState('');
+
+  /* ==========================================================
+     TIER 2 — ID + SELFIE
+     ========================================================== */
+
+  const [documentType, setDocumentType] =
+    useState('national_id');
+
+  const [documentNumber, setDocumentNumber] =
+    useState('');
+
+  const [documentFront, setDocumentFront] =
+    useState<File | null>(null);
+
+  const [documentBack, setDocumentBack] =
+    useState<File | null>(null);
+
+  const [selfie, setSelfie] =
+    useState<File | null>(null);
+
+  /* ==========================================================
+     TIER 3
+     ========================================================== */
+
+  const [tier3Method, setTier3Method] =
+    useState<Tier3Method>(
+      'bank_statement'
+    );
+
+  const [tier3Document, setTier3Document] =
+    useState<File | null>(null);
+
+  const [tier3Selfie, setTier3Selfie] =
+    useState<File | null>(null);
+
+  const [message, setMessage] =
+    useState('');
+
+  const [error, setError] =
+    useState('');
+
+  const token =
+    localStorage.getItem(
+      'zenimonies_token'
+    ) ||
+    localStorage.getItem('token');
+
+  /* ==========================================================
+     MONEY
+     ========================================================== */
+
+  const formatMoney = (
+    amount: number | null
+  ): string => {
+    if (amount === null) {
+      return 'Unlimited';
+    }
+
+    return `₦${amount.toLocaleString(
+      'en-NG',
+      {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }
+    )}`;
+  };
+
+  /* ==========================================================
+     BVN STATUS
      ========================================================== */
 
   const bvnStatus: VerificationState =
@@ -324,6 +314,48 @@ const KYC: React.FC = () => {
     bvnStatus === 'rejected';
 
   /* ==========================================================
+     TIER 2 STATUS
+     ========================================================== */
+
+  const tier2Status: VerificationState =
+    kyc.id_verified
+      ? 'verified'
+      : normalizeStatus(
+          record?.id_verification_status
+        );
+
+  const tier2Pending =
+    tier2Status === 'pending';
+
+  const tier2Verified =
+    tier2Status === 'verified' ||
+    kyc.id_verified === true;
+
+  const tier2Rejected =
+    tier2Status === 'rejected';
+
+  /* ==========================================================
+     TIER 3 STATUS
+     ========================================================== */
+
+  const tier3Status: VerificationState =
+    kyc.tier_3_verified
+      ? 'verified'
+      : normalizeStatus(
+          record?.tier_3_verification_status
+        );
+
+  const tier3Pending =
+    tier3Status === 'pending';
+
+  const tier3Verified =
+    tier3Status === 'verified' ||
+    kyc.tier_3_verified === true;
+
+  const tier3Rejected =
+    tier3Status === 'rejected';
+
+  /* ==========================================================
      FILE VALIDATION
      ========================================================== */
 
@@ -345,14 +377,18 @@ const KYC: React.FC = () => {
       'image/webp',
     ];
 
-    if (!allowedTypes.includes(file.type)) {
+    if (
+      !allowedTypes.includes(file.type)
+    ) {
       setError(
         `${fieldName} must be a JPG, JPEG, PNG, or WEBP image.`
       );
       return false;
     }
 
-    if (file.size > MAX_IMAGE_SIZE) {
+    if (
+      file.size > MAX_IMAGE_SIZE
+    ) {
       setError(
         `${fieldName} must not exceed 10 MB.`
       );
@@ -373,7 +409,8 @@ const KYC: React.FC = () => {
     }
 
     const isPdf =
-      file.type === 'application/pdf' ||
+      file.type ===
+        'application/pdf' ||
       file.name
         .toLowerCase()
         .endsWith('.pdf');
@@ -396,106 +433,116 @@ const KYC: React.FC = () => {
   };
 
   /* ==========================================================
-     LOAD KYC STATUS
+     LOAD STATUS
      ========================================================== */
 
-  const loadKycStatus = async () => {
-    if (!token) {
-      navigate('/login');
-      return;
-    }
+  const loadKycStatus =
+    async () => {
+      if (!token) {
+        navigate('/login');
+        return;
+      }
 
-    setLoading(true);
-    setError('');
+      setLoading(true);
+      setError('');
 
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/kyc/status`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-            'Content-Type':
-              'application/json',
-          },
+      try {
+        const response =
+          await fetch(
+            `${API_BASE_URL}/kyc/status`,
+            {
+              method: 'GET',
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+                'Content-Type':
+                  'application/json',
+              },
+            }
+          );
+
+        const data: KycResponse =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !data.success
+        ) {
+          throw new Error(
+            data.message ||
+              'Unable to load KYC status.'
+          );
         }
-      );
 
-      const data: KycResponse =
-        await response.json();
+        if (data.kyc) {
+          setKyc({
+            status:
+              data.kyc.status ||
+              'not_verified',
 
-      if (
-        !response.ok ||
-        !data.success
-      ) {
-        throw new Error(
-          data.message ||
-            'Unable to load KYC status.'
+            tier:
+              Number(
+                data.kyc.tier
+              ) || 0,
+
+            bvn_verified:
+              Boolean(
+                data.kyc
+                  .bvn_verified
+              ),
+
+            id_verified:
+              Boolean(
+                data.kyc
+                  .id_verified
+              ),
+
+            tier_3_verified:
+              Boolean(
+                data.kyc
+                  .tier_3_verified
+              ),
+
+            tier_3_method:
+              data.kyc
+                .tier_3_method ||
+              null,
+          });
+        }
+
+        if (data.limits) {
+          setLimits(
+            data.limits
+          );
+        }
+
+        setRecord(
+          data.record || null
         );
-      }
 
-      if (data.kyc) {
-        setKyc({
-          status:
-            data.kyc.status ||
-            'not_verified',
-
-          tier:
-            Number(data.kyc.tier) || 0,
-
-          bvn_verified:
-            Boolean(
-              data.kyc.bvn_verified
-            ),
-
-          id_verified:
-            Boolean(
-              data.kyc.id_verified
-            ),
-
-          tier_3_verified:
-            Boolean(
-              data.kyc.tier_3_verified
-            ),
-
-          tier_3_method:
-            data.kyc.tier_3_method ||
-            null,
-        });
-      }
-
-      if (data.limits) {
-        setLimits(data.limits);
-      }
-
-      setRecord(
-        data.record || null
-      );
-
-      if (
-        data.record?.tier_3_method
-      ) {
-        setTier3Method(
-          data.record
-            .tier_3_method as Tier3Method
+        if (
+          data.record?.tier_3_method
+        ) {
+          setTier3Method(
+            data.record
+              .tier_3_method as Tier3Method
+          );
+        }
+      } catch (err) {
+        console.error(
+          'KYC status error:',
+          err
         );
-      }
-    } catch (err) {
-      console.error(
-        'KYC status error:',
-        err
-      );
 
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to load KYC status.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Unable to load KYC status.'
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
     loadKycStatus();
@@ -504,7 +551,27 @@ const KYC: React.FC = () => {
   }, []);
 
   /* ==========================================================
-     TIER 1 — BVN SUBMISSION
+     CLEAR FILE INPUTS
+     ========================================================== */
+
+  const clearFileInputs =
+    () => {
+      const fileInputs =
+        document.querySelectorAll(
+          'input[type="file"]'
+        );
+
+      fileInputs.forEach(
+        (input) => {
+          (
+            input as HTMLInputElement
+          ).value = '';
+        }
+      );
+    };
+
+  /* ==========================================================
+     BVN SUBMISSION
      ========================================================== */
 
   const submitBvn = async (
@@ -514,12 +581,6 @@ const KYC: React.FC = () => {
 
     setError('');
     setMessage('');
-
-    /*
-     * Frontend protection.
-     *
-     * The backend also independently enforces this rule.
-     */
 
     if (!bvnCanSubmit) {
       if (bvnIsPending) {
@@ -559,21 +620,22 @@ const KYC: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/kyc/bvn`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-            'Content-Type':
-              'application/json',
-          },
-          body: JSON.stringify({
-            bvn: cleanBvn,
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          `${API_BASE_URL}/kyc/bvn`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              bvn: cleanBvn,
+            }),
+          }
+        );
 
       const data =
         await response.json();
@@ -608,12 +670,6 @@ const KYC: React.FC = () => {
           : 'Unable to submit BVN.'
       );
 
-      /*
-       * Refresh status even after an error.
-       *
-       * This keeps the frontend synchronized with
-       * the backend verification state.
-       */
       await loadKycStatus();
     } finally {
       setSubmitting(false);
@@ -764,7 +820,7 @@ const KYC: React.FC = () => {
   };
 
   /* ==========================================================
-     TIER 2 — SUBMIT
+     TIER 2 SUBMISSION
      ========================================================== */
 
   const submitTier2 = async (
@@ -775,6 +831,20 @@ const KYC: React.FC = () => {
     setError('');
     setMessage('');
 
+    if (tier2Pending) {
+      setError(
+        'Your Tier 2 verification is pending. You cannot edit or submit another verification while it is being reviewed.'
+      );
+      return;
+    }
+
+    if (tier2Verified) {
+      setError(
+        'Your Tier 2 identity verification has already been verified and cannot be changed.'
+      );
+      return;
+    }
+
     if (!documentType) {
       setError(
         'Please select your ID document type.'
@@ -782,7 +852,9 @@ const KYC: React.FC = () => {
       return;
     }
 
-    if (!documentNumber.trim()) {
+    if (
+      !documentNumber.trim()
+    ) {
       setError(
         'Please enter your ID document number.'
       );
@@ -845,17 +917,18 @@ const KYC: React.FC = () => {
         selfie as File
       );
 
-      const response = await fetch(
-        `${API_BASE_URL}/kyc/tier-2`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
+      const response =
+        await fetch(
+          `${API_BASE_URL}/kyc/tier-2`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body: formData,
+          }
+        );
 
       const data =
         await response.json();
@@ -894,13 +967,15 @@ const KYC: React.FC = () => {
           ? err.message
           : 'Unable to submit Tier 2 verification.'
       );
+
+      await loadKycStatus();
     } finally {
       setSubmitting(false);
     }
   };
 
   /* ==========================================================
-     TIER 3 — SUBMIT
+     TIER 3 SUBMISSION
      ========================================================== */
 
   const submitTier3 = async (
@@ -910,6 +985,20 @@ const KYC: React.FC = () => {
 
     setError('');
     setMessage('');
+
+    if (tier3Pending) {
+      setError(
+        'Your Tier 3 verification is pending. You cannot edit or submit another verification while it is being reviewed.'
+      );
+      return;
+    }
+
+    if (tier3Verified) {
+      setError(
+        'Your Tier 3 verification has already been verified and cannot be changed.'
+      );
+      return;
+    }
 
     if (!tier3Method) {
       setError(
@@ -961,17 +1050,18 @@ const KYC: React.FC = () => {
         tier3Selfie as File
       );
 
-      const response = await fetch(
-        `${API_BASE_URL}/kyc/tier-3`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
+      const response =
+        await fetch(
+          `${API_BASE_URL}/kyc/tier-3`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+            body: formData,
+          }
+        );
 
       const data =
         await response.json();
@@ -1008,28 +1098,11 @@ const KYC: React.FC = () => {
           ? err.message
           : 'Unable to submit Tier 3 verification.'
       );
+
+      await loadKycStatus();
     } finally {
       setSubmitting(false);
     }
-  };
-
-  /* ==========================================================
-     CLEAR FILE INPUTS
-     ========================================================== */
-
-  const clearFileInputs = () => {
-    const fileInputs =
-      document.querySelectorAll(
-        'input[type="file"]'
-      );
-
-    fileInputs.forEach(
-      (input) => {
-        (
-          input as HTMLInputElement
-        ).value = '';
-      }
-    );
   };
 
   /* ==========================================================
@@ -1089,10 +1162,6 @@ const KYC: React.FC = () => {
         background: '#f5f7fb',
       }}
     >
-      {/* ======================================================
-          HEADER
-          ====================================================== */}
-
       <header
         style={{
           background: '#ffffff',
@@ -1179,10 +1248,6 @@ const KYC: React.FC = () => {
         </div>
       </header>
 
-      {/* ======================================================
-          MAIN
-          ====================================================== */}
-
       <main
         style={{
           maxWidth: '1000px',
@@ -1230,10 +1295,6 @@ const KYC: React.FC = () => {
           </p>
         </section>
 
-        {/* ====================================================
-            ALERTS
-            ==================================================== */}
-
         {message && (
           <div
             style={{
@@ -1273,16 +1334,7 @@ const KYC: React.FC = () => {
             ==================================================== */}
 
         <section
-          style={{
-            background: '#ffffff',
-            border:
-              '1px solid #eaecf0',
-            borderRadius: '18px',
-            padding: '25px',
-            marginBottom: '20px',
-            boxShadow:
-              '0 8px 25px rgba(16, 24, 40, 0.05)',
-          }}
+          style={sectionStyle}
         >
           <div
             style={{
@@ -1433,15 +1485,12 @@ const KYC: React.FC = () => {
               accountLimit="₦500,000"
               transferLimit="₦200,000 daily"
               verified={
-                kyc.id_verified
+                tier2Verified
               }
               currentTier={
                 kyc.tier === 2
               }
-              status={
-                record?.id_verification_status ||
-                'not_verified'
-              }
+              status={tier2Status}
             />
 
             <TierCard
@@ -1451,21 +1500,18 @@ const KYC: React.FC = () => {
               accountLimit="Unlimited"
               transferLimit="₦5,000,000 daily"
               verified={
-                kyc.tier_3_verified
+                tier3Verified
               }
               currentTier={
                 kyc.tier === 3
               }
-              status={
-                record?.tier_3_verification_status ||
-                'not_verified'
-              }
+              status={tier3Status}
             />
           </div>
         </section>
 
         {/* ====================================================
-            TIER 1 — BVN
+            TIER 1
             ==================================================== */}
 
         <section
@@ -1477,137 +1523,28 @@ const KYC: React.FC = () => {
             description="Submit your 11-digit BVN. Once submitted, your BVN remains locked until the verification process returns a result."
           />
 
-          {/* VERIFIED */}
-
           {bvnIsVerified && (
-            <div
-              style={{
-                background:
-                  '#ecfdf3',
-                border:
-                  '1px solid #abefc6',
-                borderRadius: '12px',
-                padding: '18px',
-                color: '#027a48',
-              }}
-            >
-              <strong
-                style={{
-                  display: 'block',
-                  marginBottom: '5px',
-                }}
-              >
-                ✓ BVN Verified
-              </strong>
-
-              <span
-                style={{
-                  fontSize: '13px',
-                  lineHeight: 1.5,
-                }}
-              >
-                Your BVN has been successfully
-                verified and is permanently
-                locked. It cannot be changed.
-              </span>
-            </div>
+            <VerifiedMessage
+              text="Your BVN has been successfully verified and is permanently locked. It cannot be changed."
+            />
           )}
-
-          {/* PENDING */}
 
           {bvnIsPending && (
-            <div
-              style={{
-                background:
-                  '#fffaeb',
-                border:
-                  '1px solid #fedf89',
-                borderRadius: '12px',
-                padding: '18px',
-                color: '#b54708',
-              }}
-            >
-              <strong
-                style={{
-                  display: 'block',
-                  marginBottom: '5px',
-                }}
-              >
-                🔒 BVN Pending Verification
-              </strong>
-
-              <span
-                style={{
-                  fontSize: '13px',
-                  lineHeight: 1.5,
-                }}
-              >
-                Your BVN has been submitted and
-                is currently being verified.
-                You cannot edit or submit another
-                BVN while verification is pending.
-              </span>
-            </div>
+            <PendingMessage
+              title="BVN Pending Verification"
+              text="Your BVN has been submitted and is currently being verified. You cannot edit or submit another BVN while verification is pending."
+            />
           )}
-
-          {/* REJECTED */}
 
           {bvnIsRejected && (
-            <div
-              style={{
-                background:
-                  '#fef3f2',
-                border:
-                  '1px solid #fecdca',
-                borderRadius: '12px',
-                padding: '18px',
-                color: '#b42318',
-                marginBottom: '18px',
-              }}
-            >
-              <strong
-                style={{
-                  display: 'block',
-                  marginBottom: '5px',
-                }}
-              >
-                BVN Verification Rejected
-              </strong>
-
-              <span
-                style={{
-                  display: 'block',
-                  fontSize: '13px',
-                  lineHeight: 1.5,
-                }}
-              >
-                Your previous BVN submission was
-                rejected. You may correct your
-                information and submit again.
-              </span>
-
-              {record?.bvn_rejection_reason && (
-                <div
-                  style={{
-                    marginTop: '10px',
-                    paddingTop: '10px',
-                    borderTop:
-                      '1px solid #fecdca',
-                    fontSize: '13px',
-                  }}
-                >
-                  <strong>
-                    Reason:
-                  </strong>{' '}
-                  {
-                    record.bvn_rejection_reason
-                  }
-                </div>
-              )}
-            </div>
+            <RejectedMessage
+              title="BVN Verification Rejected"
+              reason={
+                record?.bvn_rejection_reason
+              }
+              text="Your previous BVN submission was rejected. You may correct your information and submit again."
+            />
           )}
-
-          {/* NOT VERIFIED / REJECTED FORM */}
 
           {bvnCanSubmit && (
             <form
@@ -1693,199 +1630,214 @@ const KYC: React.FC = () => {
             description="Upload your actual government-issued ID and complete facial/liveness verification."
           />
 
-          {kyc.id_verified ? (
+          {tier2Verified && (
             <VerifiedMessage
-              text="Your identity verification has been approved."
+              text="Your identity verification has been approved and is permanently locked."
             />
-          ) : (
-            <form
-              onSubmit={submitTier2}
-            >
-              <label
-                style={labelStyle}
+          )}
+
+          {tier2Pending && (
+            <PendingMessage
+              title="Tier 2 Verification Pending"
+              text="Your ID and facial verification have been submitted and are currently being reviewed. All Tier 2 fields are locked until a verification result is returned."
+            />
+          )}
+
+          {tier2Rejected && (
+            <RejectedMessage
+              title="Tier 2 Verification Rejected"
+              reason={
+                record?.id_rejection_reason
+              }
+              text="Your previous identity verification was rejected. You may correct your information and submit again."
+            />
+          )}
+
+          {!tier2Verified &&
+            !tier2Pending && (
+              <form
+                onSubmit={submitTier2}
               >
-                ID Document Type
-              </label>
-
-              <select
-                value={documentType}
-                onChange={(event) =>
-                  setDocumentType(
-                    event.target.value
-                  )
-                }
-                style={inputStyle}
-                disabled={
-                  normalizeStatus(
-                    record?.id_verification_status
-                  ) === 'pending'
-                }
-              >
-                <option value="national_id">
-                  National ID
-                </option>
-
-                <option value="nin">
-                  NIN
-                </option>
-
-                <option value="international_passport">
-                  International Passport
-                </option>
-
-                <option value="drivers_license">
-                  Driver's License
-                </option>
-
-                <option value="voters_card">
-                  Voter's Card
-                </option>
-              </select>
-
-              <label
-                style={labelStyle}
-              >
-                ID Document Number
-              </label>
-
-              <input
-                type="text"
-                value={documentNumber}
-                onChange={(event) =>
-                  setDocumentNumber(
-                    event.target.value
-                  )
-                }
-                placeholder="Enter document number"
-                style={inputStyle}
-                autoComplete="off"
-                disabled={
-                  normalizeStatus(
-                    record?.id_verification_status
-                  ) === 'pending'
-                }
-              />
-
-              <FileUploadBox
-                label="Front of ID"
-                description="Upload a clear photo of the front of your government-issued ID."
-                accept="image/jpeg,image/png,image/webp"
-                file={documentFront}
-                onChange={
-                  handleFrontDocument
-                }
-                required
-                disabled={
-                  normalizeStatus(
-                    record?.id_verification_status
-                  ) === 'pending'
-                }
-              />
-
-              <FileUploadBox
-                label="Back of ID"
-                description="Upload the back of your ID if your document has a reverse side."
-                accept="image/jpeg,image/png,image/webp"
-                file={documentBack}
-                onChange={
-                  handleBackDocument
-                }
-                required={false}
-                disabled={
-                  normalizeStatus(
-                    record?.id_verification_status
-                  ) === 'pending'
-                }
-              />
-
-              <div
-                style={{
-                  marginTop: '20px',
-                  marginBottom: '18px',
-                  padding: '18px',
-                  border:
-                    '1px solid #dbe7ff',
-                  background: '#f8faff',
-                  borderRadius: '14px',
-                }}
-              >
-                <h3
-                  style={{
-                    margin:
-                      '0 0 7px',
-                    color: '#172033',
-                    fontSize: '17px',
-                  }}
+                <label
+                  style={labelStyle}
                 >
-                  Facial Verification
-                </h3>
+                  ID Document Type
+                </label>
 
-                <p
-                  style={{
-                    margin:
-                      '0 0 14px',
-                    color: '#667085',
-                    fontSize: '13px',
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Take a clear selfie using your
-                  device. Your selfie will be sent
-                  for facial/liveness verification.
-                </p>
-
-                <FileUploadBox
-                  label="Live Selfie"
-                  description="Use a clear image of your face."
-                  accept="image/jpeg,image/png,image/webp"
-                  capture="user"
-                  file={selfie}
-                  onChange={handleSelfie}
-                  required
+                <select
+                  value={documentType}
+                  onChange={(event) =>
+                    setDocumentType(
+                      event.target.value
+                    )
+                  }
+                  style={inputStyle}
                   disabled={
-                    normalizeStatus(
-                      record?.id_verification_status
-                    ) === 'pending'
+                    submitting
+                  }
+                >
+                  <option value="national_id">
+                    National ID
+                  </option>
+
+                  <option value="nin">
+                    NIN
+                  </option>
+
+                  <option value="international_passport">
+                    International Passport
+                  </option>
+
+                  <option value="drivers_license">
+                    Driver's License
+                  </option>
+
+                  <option value="voters_card">
+                    Voter's Card
+                  </option>
+                </select>
+
+                <label
+                  style={labelStyle}
+                >
+                  ID Document Number
+                </label>
+
+                <input
+                  type="text"
+                  value={
+                    documentNumber
+                  }
+                  onChange={(event) =>
+                    setDocumentNumber(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Enter document number"
+                  style={inputStyle}
+                  autoComplete="off"
+                  disabled={
+                    submitting
                   }
                 />
-              </div>
 
-              <button
-                type="submit"
-                disabled={
-                  submitting ||
-                  normalizeStatus(
-                    record?.id_verification_status
-                  ) === 'pending'
-                }
-                style={{
-                  ...primaryButtonStyle,
-                  opacity:
-                    submitting ||
-                    normalizeStatus(
-                      record?.id_verification_status
-                    ) === 'pending'
-                      ? 0.6
-                      : 1,
-                  cursor:
-                    submitting ||
-                    normalizeStatus(
-                      record?.id_verification_status
-                    ) === 'pending'
-                      ? 'not-allowed'
-                      : 'pointer',
-                }}
-              >
-                {submitting
-                  ? 'Uploading and submitting...'
-                  : normalizeStatus(
-                      record?.id_verification_status
-                    ) === 'pending'
-                  ? 'Verification Pending'
-                  : 'Submit Tier 2 Verification'}
-              </button>
-            </form>
-          )}
+                <FileUploadBox
+                  label="Front of ID"
+                  description="Upload a clear photo of the front of your government-issued ID."
+                  accept="image/jpeg,image/png,image/webp"
+                  file={
+                    documentFront
+                  }
+                  onChange={
+                    handleFrontDocument
+                  }
+                  required
+                  disabled={
+                    submitting
+                  }
+                />
+
+                <FileUploadBox
+                  label="Back of ID"
+                  description="Upload the back of your ID if your document has a reverse side."
+                  accept="image/jpeg,image/png,image/webp"
+                  file={
+                    documentBack
+                  }
+                  onChange={
+                    handleBackDocument
+                  }
+                  required={false}
+                  disabled={
+                    submitting
+                  }
+                />
+
+                <div
+                  style={{
+                    marginTop: '20px',
+                    marginBottom: '18px',
+                    padding: '18px',
+                    border:
+                      '1px solid #dbe7ff',
+                    background:
+                      '#f8faff',
+                    borderRadius:
+                      '14px',
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin:
+                        '0 0 7px',
+                      color:
+                        '#172033',
+                      fontSize:
+                        '17px',
+                    }}
+                  >
+                    Facial Verification
+                  </h3>
+
+                  <p
+                    style={{
+                      margin:
+                        '0 0 14px',
+                      color:
+                        '#667085',
+                      fontSize:
+                        '13px',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Take a clear selfie using
+                    your device. Your selfie
+                    will be sent for
+                    facial/liveness
+                    verification.
+                  </p>
+
+                  <FileUploadBox
+                    label="Live Selfie"
+                    description="Use a clear image of your face."
+                    accept="image/jpeg,image/png,image/webp"
+                    capture="user"
+                    file={selfie}
+                    onChange={
+                      handleSelfie
+                    }
+                    required
+                    disabled={
+                      submitting
+                    }
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={
+                    submitting
+                  }
+                  style={{
+                    ...primaryButtonStyle,
+                    opacity:
+                      submitting
+                        ? 0.6
+                        : 1,
+                    cursor:
+                      submitting
+                        ? 'not-allowed'
+                        : 'pointer',
+                  }}
+                >
+                  {submitting
+                    ? 'Uploading and submitting...'
+                    : tier2Rejected
+                    ? 'Resubmit Tier 2 Verification'
+                    : 'Submit Tier 2 Verification'}
+                </button>
+              </form>
+            )}
         </section>
 
         {/* ====================================================
@@ -1901,192 +1853,203 @@ const KYC: React.FC = () => {
             description="Submit an accepted proof-of-address document and complete liveness verification."
           />
 
-          {kyc.tier_3_verified ? (
+          {tier3Verified && (
             <VerifiedMessage
-              text="Your Tier 3 verification has been approved."
+              text="Your Tier 3 verification has been approved and is permanently locked."
             />
-          ) : (
-            <form
-              onSubmit={submitTier3}
-            >
-              <label
-                style={labelStyle}
-              >
-                Choose Verification Method
-              </label>
+          )}
 
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns:
-                    'repeat(auto-fit, minmax(220px, 1fr))',
-                  gap: '12px',
-                  marginBottom: '20px',
-                }}
+          {tier3Pending && (
+            <PendingMessage
+              title="Tier 3 Verification Pending"
+              text="Your proof-of-address document and liveness verification have been submitted and are currently being reviewed. All Tier 3 fields are locked until a result is returned."
+            />
+          )}
+
+          {tier3Rejected && (
+            <RejectedMessage
+              title="Tier 3 Verification Rejected"
+              reason={
+                record?.tier_3_rejection_reason
+              }
+              text="Your previous Tier 3 verification was rejected. You may correct your information and submit again."
+            />
+          )}
+
+          {!tier3Verified &&
+            !tier3Pending && (
+              <form
+                onSubmit={submitTier3}
               >
-                <MethodCard
-                  selected={
-                    tier3Method ===
-                    'bank_statement'
-                  }
-                  title="Bank Statement"
-                  description="Stamped PDF from your bank app. Must be dated within the last 90 days."
-                  onClick={() =>
-                    setTier3Method(
+                <label
+                  style={labelStyle}
+                >
+                  Choose Verification Method
+                </label>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns:
+                      'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '12px',
+                    marginBottom:
+                      '20px',
+                  }}
+                >
+                  <MethodCard
+                    selected={
+                      tier3Method ===
                       'bank_statement'
-                    )
-                  }
-                  disabled={
-                    normalizeStatus(
-                      record?.tier_3_verification_status
-                    ) === 'pending'
-                  }
-                />
+                    }
+                    title="Bank Statement"
+                    description="Stamped PDF from your bank app. Must be dated within the last 90 days."
+                    onClick={() =>
+                      setTier3Method(
+                        'bank_statement'
+                      )
+                    }
+                    disabled={
+                      submitting
+                    }
+                  />
 
-                <MethodCard
-                  selected={
-                    tier3Method ===
-                    'utility_bill'
-                  }
-                  title="Utility Bill"
-                  description="PHED, Water, DSTV, or Gas bill."
-                  onClick={() =>
-                    setTier3Method(
+                  <MethodCard
+                    selected={
+                      tier3Method ===
                       'utility_bill'
-                    )
-                  }
-                  disabled={
-                    normalizeStatus(
-                      record?.tier_3_verification_status
-                    ) === 'pending'
-                  }
-                />
+                    }
+                    title="Utility Bill"
+                    description="PHED, Water, DSTV, or Gas bill."
+                    onClick={() =>
+                      setTier3Method(
+                        'utility_bill'
+                      )
+                    }
+                    disabled={
+                      submitting
+                    }
+                  />
 
-                <MethodCard
-                  selected={
-                    tier3Method ===
-                    'proof_of_address'
-                  }
-                  title="Proof of Address"
-                  description="Stamped tenancy agreement or government-issued address letter."
-                  onClick={() =>
-                    setTier3Method(
+                  <MethodCard
+                    selected={
+                      tier3Method ===
                       'proof_of_address'
-                    )
-                  }
-                  disabled={
-                    normalizeStatus(
-                      record?.tier_3_verification_status
-                    ) === 'pending'
-                  }
-                />
-              </div>
-
-              <FileUploadBox
-                label="Proof-of-Address Document"
-                description="Upload the actual PDF document. Do not enter a document URL. Maximum file size is 10 MB."
-                accept="application/pdf,.pdf"
-                file={tier3Document}
-                onChange={
-                  handleTier3Document
-                }
-                required
-                disabled={
-                  normalizeStatus(
-                    record?.tier_3_verification_status
-                  ) === 'pending'
-                }
-              />
-
-              <div
-                style={{
-                  marginTop: '22px',
-                  marginBottom: '18px',
-                  padding: '18px',
-                  border:
-                    '1px solid #dbe7ff',
-                  background: '#f8faff',
-                  borderRadius: '14px',
-                }}
-              >
-                <h3
-                  style={{
-                    margin:
-                      '0 0 7px',
-                    color: '#172033',
-                    fontSize: '17px',
-                  }}
-                >
-                  Liveness Verification
-                </h3>
-
-                <p
-                  style={{
-                    margin:
-                      '0 0 14px',
-                    color: '#667085',
-                    fontSize: '13px',
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Take a current selfie using your
-                  device camera.
-                </p>
+                    }
+                    title="Proof of Address"
+                    description="Stamped tenancy agreement or government-issued address letter."
+                    onClick={() =>
+                      setTier3Method(
+                        'proof_of_address'
+                      )
+                    }
+                    disabled={
+                      submitting
+                    }
+                  />
+                </div>
 
                 <FileUploadBox
-                  label="Liveness Selfie"
-                  description="Use your device camera to take a current selfie."
-                  accept="image/jpeg,image/png,image/webp"
-                  capture="user"
-                  file={tier3Selfie}
+                  label="Proof-of-Address Document"
+                  description="Upload the actual PDF document. Do not enter a document URL. Maximum file size is 10 MB."
+                  accept="application/pdf,.pdf"
+                  file={
+                    tier3Document
+                  }
                   onChange={
-                    handleTier3Selfie
+                    handleTier3Document
                   }
                   required
                   disabled={
-                    normalizeStatus(
-                      record?.tier_3_verification_status
-                    ) === 'pending'
+                    submitting
                   }
                 />
-              </div>
 
-              <button
-                type="submit"
-                disabled={
-                  submitting ||
-                  normalizeStatus(
-                    record?.tier_3_verification_status
-                  ) === 'pending'
-                }
-                style={{
-                  ...primaryButtonStyle,
-                  opacity:
-                    submitting ||
-                    normalizeStatus(
-                      record?.tier_3_verification_status
-                    ) === 'pending'
-                      ? 0.6
-                      : 1,
-                  cursor:
-                    submitting ||
-                    normalizeStatus(
-                      record?.tier_3_verification_status
-                    ) === 'pending'
-                      ? 'not-allowed'
-                      : 'pointer',
-                }}
-              >
-                {submitting
-                  ? 'Uploading and submitting...'
-                  : normalizeStatus(
-                      record?.tier_3_verification_status
-                    ) === 'pending'
-                  ? 'Verification Pending'
-                  : 'Submit Tier 3 Verification'}
-              </button>
-            </form>
-          )}
+                <div
+                  style={{
+                    marginTop: '22px',
+                    marginBottom: '18px',
+                    padding: '18px',
+                    border:
+                      '1px solid #dbe7ff',
+                    background:
+                      '#f8faff',
+                    borderRadius:
+                      '14px',
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin:
+                        '0 0 7px',
+                      color:
+                        '#172033',
+                      fontSize:
+                        '17px',
+                    }}
+                  >
+                    Liveness Verification
+                  </h3>
+
+                  <p
+                    style={{
+                      margin:
+                        '0 0 14px',
+                      color:
+                        '#667085',
+                      fontSize:
+                        '13px',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Take a current selfie
+                    using your device
+                    camera.
+                  </p>
+
+                  <FileUploadBox
+                    label="Liveness Selfie"
+                    description="Use your device camera to take a current selfie."
+                    accept="image/jpeg,image/png,image/webp"
+                    capture="user"
+                    file={
+                      tier3Selfie
+                    }
+                    onChange={
+                      handleTier3Selfie
+                    }
+                    required
+                    disabled={
+                      submitting
+                    }
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={
+                    submitting
+                  }
+                  style={{
+                    ...primaryButtonStyle,
+                    opacity:
+                      submitting
+                        ? 0.6
+                        : 1,
+                    cursor:
+                      submitting
+                        ? 'not-allowed'
+                        : 'pointer',
+                  }}
+                >
+                  {submitting
+                    ? 'Uploading and submitting...'
+                    : tier3Rejected
+                    ? 'Resubmit Tier 3 Verification'
+                    : 'Submit Tier 3 Verification'}
+                </button>
+              </form>
+            )}
         </section>
 
         {/* ====================================================
@@ -2096,12 +2059,14 @@ const KYC: React.FC = () => {
         {record && (
           <section
             style={{
-              background: '#f8faff',
+              background:
+                '#f8faff',
               border:
                 '1px solid #dbe7ff',
               borderRadius: '14px',
               padding: '20px',
-              marginBottom: '20px',
+              marginBottom:
+                '20px',
             }}
           >
             <h3
@@ -2116,78 +2081,30 @@ const KYC: React.FC = () => {
             </h3>
 
             {record.bvn_verification_status && (
-              <p
-                style={{
-                  margin:
-                    '0 0 7px',
-                  color: '#667085',
-                  fontSize: '14px',
-                }}
-              >
-                BVN:{' '}
-                <strong
-                  style={{
-                    color:
-                      getStatusColor(
-                        record.bvn_verification_status
-                      ),
-                  }}
-                >
-                  {displayStatus(
-                    record.bvn_verification_status
-                  )}
-                </strong>
-              </p>
+              <StatusRow
+                label="BVN"
+                status={
+                  record.bvn_verification_status
+                }
+              />
             )}
 
             {record.id_verification_status && (
-              <p
-                style={{
-                  margin:
-                    '0 0 7px',
-                  color: '#667085',
-                  fontSize: '14px',
-                }}
-              >
-                ID:{' '}
-                <strong
-                  style={{
-                    color:
-                      getStatusColor(
-                        record.id_verification_status
-                      ),
-                  }}
-                >
-                  {displayStatus(
-                    record.id_verification_status
-                  )}
-                </strong>
-              </p>
+              <StatusRow
+                label="ID"
+                status={
+                  record.id_verification_status
+                }
+              />
             )}
 
             {record.tier_3_verification_status && (
-              <p
-                style={{
-                  margin:
-                    '0 0 7px',
-                  color: '#667085',
-                  fontSize: '14px',
-                }}
-              >
-                Tier 3:{' '}
-                <strong
-                  style={{
-                    color:
-                      getStatusColor(
-                        record.tier_3_verification_status
-                      ),
-                  }}
-                >
-                  {displayStatus(
-                    record.tier_3_verification_status
-                  )}
-                </strong>
-              </p>
+              <StatusRow
+                label="Tier 3"
+                status={
+                  record.tier_3_verification_status
+                }
+              />
             )}
 
             {record.rejection_reason && (
@@ -2199,7 +2116,9 @@ const KYC: React.FC = () => {
                 }}
               >
                 Reason:{' '}
-                {record.rejection_reason}
+                {
+                  record.rejection_reason
+                }
               </p>
             )}
 
@@ -2258,7 +2177,8 @@ const KYC: React.FC = () => {
           style={{
             display:
               'inline-block',
-            textDecoration: 'none',
+            textDecoration:
+              'none',
             color: '#0b5cff',
             fontWeight: 700,
           }}
@@ -2271,7 +2191,7 @@ const KYC: React.FC = () => {
 };
 
 /* ============================================================
-   FILE UPLOAD COMPONENT
+   FILE UPLOAD
    ============================================================ */
 
 interface FileUploadBoxProps {
@@ -2341,7 +2261,8 @@ const FileUploadBox: React.FC<
           disabled={disabled}
           style={{
             width: '100%',
-            boxSizing: 'border-box',
+            boxSizing:
+              'border-box',
             fontSize: '14px',
           }}
         />
@@ -2377,8 +2298,10 @@ const FileUploadBox: React.FC<
           <div
             style={{
               marginTop: '12px',
-              padding: '10px 12px',
-              background: '#ecfdf3',
+              padding:
+                '10px 12px',
+              background:
+                '#ecfdf3',
               border:
                 '1px solid #abefc6',
               borderRadius: '8px',
@@ -2391,9 +2314,11 @@ const FileUploadBox: React.FC<
 
             <span
               style={{
-                display: 'block',
+                display:
+                  'block',
                 marginTop: '3px',
-                fontSize: '12px',
+                fontSize:
+                  '12px',
                 fontWeight: 400,
               }}
             >
@@ -2405,6 +2330,47 @@ const FileUploadBox: React.FC<
         )}
       </div>
     </div>
+  );
+};
+
+/* ============================================================
+   STATUS ROW
+   ============================================================ */
+
+interface StatusRowProps {
+  label: string;
+  status: string;
+}
+
+const StatusRow: React.FC<
+  StatusRowProps
+> = ({
+  label,
+  status,
+}) => {
+  return (
+    <p
+      style={{
+        margin:
+          '0 0 7px',
+        color: '#667085',
+        fontSize: '14px',
+      }}
+    >
+      {label}:{' '}
+      <strong
+        style={{
+          color:
+            getStatusColor(
+              status
+            ),
+        }}
+      >
+        {displayStatus(
+          status
+        )}
+      </strong>
+    </p>
   );
 };
 
@@ -2426,7 +2392,8 @@ const InfoBox: React.FC<
   return (
     <div
       style={{
-        background: '#f9fafb',
+        background:
+          '#f9fafb',
         border:
           '1px solid #eaecf0',
         borderRadius: '10px',
@@ -2487,16 +2454,23 @@ const TierCard: React.FC<
   status,
 }) => {
   const normalizedStatus =
-    normalizeStatus(status);
+    verified
+      ? 'verified'
+      : normalizeStatus(
+          status
+        );
 
   return (
     <div
       style={{
-        background: '#ffffff',
-        border: currentTier
-          ? '2px solid #0b5cff'
-          : '1px solid #eaecf0',
-        borderRadius: '14px',
+        background:
+          '#ffffff',
+        border:
+          currentTier
+            ? '2px solid #0b5cff'
+            : '1px solid #eaecf0',
+        borderRadius:
+          '14px',
         padding: '20px',
       }}
     >
@@ -2505,8 +2479,10 @@ const TierCard: React.FC<
           display: 'flex',
           justifyContent:
             'space-between',
-          alignItems: 'center',
-          marginBottom: '12px',
+          alignItems:
+            'center',
+          marginBottom:
+            '12px',
           gap: '8px',
         }}
       >
@@ -2523,13 +2499,14 @@ const TierCard: React.FC<
           style={{
             background:
               getStatusBackground(
-                status
+                normalizedStatus
               ),
             color:
               getStatusColor(
-                status
+                normalizedStatus
               ),
-            borderRadius: '20px',
+            borderRadius:
+              '20px',
             padding:
               '5px 9px',
             fontSize: '11px',
@@ -2537,7 +2514,7 @@ const TierCard: React.FC<
           }}
         >
           {displayStatus(
-            status
+            normalizedStatus
           )}
         </span>
       </div>
@@ -2569,7 +2546,8 @@ const TierCard: React.FC<
         style={{
           color: '#172033',
           fontSize: '13px',
-          marginBottom: '5px',
+          marginBottom:
+            '5px',
         }}
       >
         <strong>
@@ -2594,13 +2572,29 @@ const TierCard: React.FC<
         'pending' && (
         <div
           style={{
-            marginTop: '12px',
+            marginTop:
+              '12px',
             color: '#b54708',
             fontSize: '12px',
             fontWeight: 600,
           }}
         >
           🔒 Submission locked
+        </div>
+      )}
+
+      {normalizedStatus ===
+        'rejected' && (
+        <div
+          style={{
+            marginTop:
+              '12px',
+            color: '#b42318',
+            fontSize: '12px',
+            fontWeight: 600,
+          }}
+        >
+          Correction required — resubmission available
         </div>
       )}
     </div>
@@ -2629,7 +2623,8 @@ const SectionHeading: React.FC<
       style={{
         display: 'flex',
         gap: '14px',
-        marginBottom: '22px',
+        marginBottom:
+          '22px',
       }}
     >
       <div
@@ -2637,11 +2632,15 @@ const SectionHeading: React.FC<
           flexShrink: 0,
           width: '36px',
           height: '36px',
-          borderRadius: '50%',
-          background: '#eaf2ff',
-          color: '#0b5cff',
+          borderRadius:
+            '50%',
+          background:
+            '#eaf2ff',
+          color:
+            '#0b5cff',
           display: 'flex',
-          alignItems: 'center',
+          alignItems:
+            'center',
           justifyContent:
             'center',
           fontWeight: 800,
@@ -2704,27 +2703,35 @@ const MethodCard: React.FC<
       onClick={onClick}
       disabled={disabled}
       style={{
-        textAlign: 'left',
-        cursor: disabled
-          ? 'not-allowed'
-          : 'pointer',
-        background: selected
-          ? '#f0f6ff'
-          : '#ffffff',
-        border: selected
-          ? '2px solid #0b5cff'
-          : '1px solid #d0d5dd',
-        borderRadius: '12px',
-        padding: '15px',
+        textAlign:
+          'left',
+        cursor:
+          disabled
+            ? 'not-allowed'
+            : 'pointer',
+        background:
+          selected
+            ? '#f0f6ff'
+            : '#ffffff',
+        border:
+          selected
+            ? '2px solid #0b5cff'
+            : '1px solid #d0d5dd',
+        borderRadius:
+          '12px',
+        padding:
+          '15px',
         opacity:
           disabled ? 0.6 : 1,
       }}
     >
       <strong
         style={{
-          display: 'block',
+          display:
+            'block',
           color: '#172033',
-          marginBottom: '5px',
+          marginBottom:
+            '5px',
         }}
       >
         {title}
@@ -2757,16 +2764,156 @@ const VerifiedMessage: React.FC<
   return (
     <div
       style={{
-        background: '#ecfdf3',
+        background:
+          '#ecfdf3',
         border:
           '1px solid #abefc6',
-        borderRadius: '10px',
-        padding: '15px',
-        color: '#027a48',
+        borderRadius:
+          '10px',
+        padding:
+          '15px',
+        color:
+          '#027a48',
         fontWeight: 600,
       }}
     >
       ✓ {text}
+    </div>
+  );
+};
+
+/* ============================================================
+   PENDING MESSAGE
+   ============================================================ */
+
+interface PendingMessageProps {
+  title: string;
+  text: string;
+}
+
+const PendingMessage: React.FC<
+  PendingMessageProps
+> = ({
+  title,
+  text,
+}) => {
+  return (
+    <div
+      style={{
+        background:
+          '#fffaeb',
+        border:
+          '1px solid #fedf89',
+        borderRadius:
+          '12px',
+        padding:
+          '18px',
+        color:
+          '#b54708',
+      }}
+    >
+      <strong
+        style={{
+          display:
+            'block',
+          marginBottom:
+            '5px',
+        }}
+      >
+        🔒 {title}
+      </strong>
+
+      <span
+        style={{
+          fontSize:
+            '13px',
+          lineHeight:
+            1.5,
+        }}
+      >
+        {text}
+      </span>
+    </div>
+  );
+};
+
+/* ============================================================
+   REJECTED MESSAGE
+   ============================================================ */
+
+interface RejectedMessageProps {
+  title: string;
+  text: string;
+  reason?: string | null;
+}
+
+const RejectedMessage: React.FC<
+  RejectedMessageProps
+> = ({
+  title,
+  text,
+  reason,
+}) => {
+  return (
+    <div
+      style={{
+        background:
+          '#fef3f2',
+        border:
+          '1px solid #fecdca',
+        borderRadius:
+          '12px',
+        padding:
+          '18px',
+        color:
+          '#b42318',
+        marginBottom:
+          '18px',
+      }}
+    >
+      <strong
+        style={{
+          display:
+            'block',
+          marginBottom:
+            '5px',
+        }}
+      >
+        {title}
+      </strong>
+
+      <span
+        style={{
+          display:
+            'block',
+          fontSize:
+            '13px',
+          lineHeight:
+            1.5,
+        }}
+      >
+        {text}
+      </span>
+
+      {reason && (
+        <div
+          style={{
+            marginTop:
+              '10px',
+            paddingTop:
+              '10px',
+            borderTop:
+              '1px solid #fecdca',
+            fontSize:
+              '13px',
+          }}
+        >
+          <strong>
+            Reason:
+          </strong>{' '}
+          {reason}
+        </div>
+      )}
     </div>
   );
 };
@@ -2782,7 +2929,10 @@ const formatFileSizeStatic = (
     return `${size} B`;
   }
 
-  if (size < 1024 * 1024) {
+  if (
+    size <
+    1024 * 1024
+  ) {
     return `${(
       size / 1024
     ).toFixed(1)} KB`;
@@ -2799,45 +2949,69 @@ const formatFileSizeStatic = (
    ============================================================ */
 
 const sectionStyle: React.CSSProperties = {
-  background: '#ffffff',
+  background:
+    '#ffffff',
   border:
     '1px solid #eaecf0',
-  borderRadius: '18px',
-  padding: '25px',
-  marginBottom: '20px',
+  borderRadius:
+    '18px',
+  padding:
+    '25px',
+  marginBottom:
+    '20px',
   boxShadow:
     '0 8px 25px rgba(16, 24, 40, 0.05)',
 };
 
 const labelStyle: React.CSSProperties = {
-  display: 'block',
-  color: '#344054',
-  fontSize: '14px',
+  display:
+    'block',
+  color:
+    '#344054',
+  fontSize:
+    '14px',
   fontWeight: 600,
-  marginBottom: '7px',
+  marginBottom:
+    '7px',
 };
 
 const inputStyle: React.CSSProperties = {
-  width: '100%',
-  boxSizing: 'border-box',
-  border: '1px solid #d0d5dd',
-  borderRadius: '8px',
-  padding: '12px 13px',
-  fontSize: '15px',
-  marginBottom: '17px',
-  outline: 'none',
-  background: '#ffffff',
+  width:
+    '100%',
+  boxSizing:
+    'border-box',
+  border:
+    '1px solid #d0d5dd',
+  borderRadius:
+    '8px',
+  padding:
+    '12px 13px',
+  fontSize:
+    '15px',
+  marginBottom:
+    '17px',
+  outline:
+    'none',
+  background:
+    '#ffffff',
 };
 
 const primaryButtonStyle: React.CSSProperties = {
-  border: 'none',
-  background: '#0b5cff',
-  color: '#ffffff',
-  padding: '12px 18px',
-  borderRadius: '8px',
+  border:
+    'none',
+  background:
+    '#0b5cff',
+  color:
+    '#ffffff',
+  padding:
+    '12px 18px',
+  borderRadius:
+    '8px',
   fontWeight: 700,
-  fontSize: '14px',
-  cursor: 'pointer',
+  fontSize:
+    '14px',
+  cursor:
+    'pointer',
 };
 
 export default KYC;
