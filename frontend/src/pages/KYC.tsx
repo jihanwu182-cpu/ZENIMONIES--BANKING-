@@ -173,100 +173,130 @@ const KYC: React.FC = () => {
     })}`;
   };
 
-  const normalizeStatus = (
-    status: string | null | undefined
-  ): VerificationState => {
-    const normalized =
-      String(status || '')
-        .toLowerCase()
-        .trim();
+  type VerificationState =
+  | 'not_verified'
+  | 'pending'
+  | 'verified'
+  | 'rejected';
 
-    if (
-      normalized === 'verified' ||
-      normalized === 'approved' ||
-      normalized === 'completed'
-    ) {
-      return 'verified';
-    }
+type Tier3Method =
+  | 'bank_statement'
+  | 'utility_bill'
+  | 'proof_of_address';
 
-    if (
-      normalized === 'pending' ||
-      normalized === 'under_review' ||
-      normalized === 'submitted' ||
-      normalized === 'processing'
-    ) {
-      return 'pending';
-    }
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  'https://zenimonies-banking.onrender.com/api';
 
-    if (normalized === 'rejected') {
-      return 'rejected';
-    }
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+const MAX_PDF_SIZE = 10 * 1024 * 1024;
 
-    return 'not_verified';
-  };
+/* ============================================================
+   GLOBAL KYC STATUS HELPERS
+   ============================================================ */
 
-  const displayStatus = (
-    status: string | null | undefined
-  ): string => {
-    const normalized =
-      normalizeStatus(status);
+const normalizeStatus = (
+  status: string | null | undefined
+): VerificationState => {
+  const normalized =
+    String(status || '')
+      .toLowerCase()
+      .trim();
 
-    if (normalized === 'verified') {
-      return 'Verified';
-    }
+  if (
+    normalized === 'verified' ||
+    normalized === 'approved' ||
+    normalized === 'completed'
+  ) {
+    return 'verified';
+  }
 
-    if (normalized === 'pending') {
-      return 'Pending Verification';
-    }
+  if (
+    normalized === 'pending' ||
+    normalized === 'under_review' ||
+    normalized === 'submitted' ||
+    normalized === 'processing'
+  ) {
+    return 'pending';
+  }
 
-    if (normalized === 'rejected') {
-      return 'Rejected';
-    }
+  if (
+    normalized === 'rejected'
+  ) {
+    return 'rejected';
+  }
 
-    return 'Not Verified';
-  };
+  return 'not_verified';
+};
 
-  const getStatusColor = (
-    status: string | null | undefined
-  ): string => {
-    const normalized =
-      normalizeStatus(status);
+const displayStatus = (
+  status: string | null | undefined
+): string => {
+  const normalized =
+    normalizeStatus(status);
 
-    if (normalized === 'verified') {
-      return '#027a48';
-    }
+  if (normalized === 'verified') {
+    return 'Verified';
+  }
 
-    if (normalized === 'pending') {
-      return '#b54708';
-    }
+  if (normalized === 'pending') {
+    return 'Pending Verification';
+  }
 
-    if (normalized === 'rejected') {
-      return '#b42318';
-    }
+  if (normalized === 'rejected') {
+    return 'Rejected';
+  }
 
-    return '#475467';
-  };
+  return 'Not Verified';
+};
 
-  const getStatusBackground = (
-    status: string | null | undefined
-  ): string => {
-    const normalized =
-      normalizeStatus(status);
+const getStatusColor = (
+  status: string | null | undefined
+): string => {
+  const normalized =
+    normalizeStatus(status);
 
-    if (normalized === 'verified') {
-      return '#ecfdf3';
-    }
+  if (normalized === 'verified') {
+    return '#027a48';
+  }
 
-    if (normalized === 'pending') {
-      return '#fffaeb';
-    }
+  if (normalized === 'pending') {
+    return '#b54708';
+  }
 
-    if (normalized === 'rejected') {
-      return '#fef3f2';
-    }
+  if (normalized === 'rejected') {
+    return '#b42318';
+  }
 
-    return '#f2f4f7';
-  };
+  return '#475467';
+};
+
+const getStatusBackground = (
+  status: string | null | undefined
+): string => {
+  const normalized =
+    normalizeStatus(status);
+
+  if (normalized === 'verified') {
+    return '#ecfdf3';
+  }
+
+  if (normalized === 'pending') {
+    return '#fffaeb';
+  }
+
+  if (normalized === 'rejected') {
+    return '#fef3f2';
+  }
+
+  return '#f2f4f7';
+};
+
+/* ============================================================
+   KYC PAGE
+   ============================================================ */
+
+const KYC: React.FC = () => {
 
   /* ==========================================================
      IMPORTANT — INDIVIDUAL BVN STATUS
