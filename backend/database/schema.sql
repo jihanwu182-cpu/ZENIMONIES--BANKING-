@@ -1007,7 +1007,67 @@ SET
     daily_transfer_limit = 5000000.00
 WHERE tier_3_verified = true;
 
+-- ============================================================
+-- ZENIMONIES KYC STATUS FIX
+-- ============================================================
 
+-- ------------------------------------------------------------
+-- 1. Fix existing records where ONLY BVN was submitted.
+--
+-- We only reset Tier 2/Tier 3 when there is no evidence that
+-- those submissions were actually made.
+-- ------------------------------------------------------------
+
+UPDATE kyc_records
+SET
+    id_verification_status = 'not_verified',
+    liveness_status = 'not_verified',
+    tier_3_verification_status = 'not_verified',
+    updated_at = CURRENT_TIMESTAMP
+WHERE bvn_verification_status = 'pending'
+  AND document_type IS NULL
+  AND document_number IS NULL
+  AND document_front_url IS NULL
+  AND document_back_url IS NULL
+  AND selfie_url IS NULL
+  AND tier_3_method IS NULL
+  AND tier_3_document_url IS NULL;
+
+
+-- ------------------------------------------------------------
+-- 2. Change the database defaults.
+--
+-- A brand-new KYC record must NOT automatically make every
+-- verification method pending.
+-- ------------------------------------------------------------
+
+ALTER TABLE kyc_records
+ALTER COLUMN bvn_verification_status
+SET DEFAULT 'not_verified';
+
+ALTER TABLE kyc_records
+ALTER COLUMN id_verification_status
+SET DEFAULT 'not_verified';
+
+ALTER TABLE kyc_records
+ALTER COLUMN liveness_status
+SET DEFAULT 'not_verified';
+
+ALTER TABLE kyc_records
+ALTER COLUMN tier_3_verification_status
+SET DEFAULT 'not_verified';
+
+
+-- ------------------------------------------------------------
+-- 3. Keep the general record status separate.
+--
+-- A record can have an overall pending workflow while individual
+-- verification methods remain Not Verified.
+-- ------------------------------------------------------------
+
+ALTER TABLE kyc_records
+ALTER COLUMN verification_status
+SET DEFAULT 'not_verified';
 -- ============================================================
 -- END OF ZENIMONIES DATABASE SCHEMA
 -- ============================================================
