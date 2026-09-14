@@ -207,6 +207,10 @@ const getKycStatus = async (req, res) => {
       });
     }
 
+    // ========================================================
+    // GET USER
+    // ========================================================
+
     const result = await pool.query(
       `
       SELECT
@@ -239,9 +243,112 @@ const getKycStatus = async (req, res) => {
 
     const user = result.rows[0];
 
-    const kycStatus = normalizeKycStatus(
-      user.kyc_status
+    // ========================================================
+    // GET LATEST KYC RECORD
+    // ========================================================
+
+    const kycResult = await pool.query(
+      `
+      SELECT
+        id,
+
+        bvn_verification_status,
+        bvn_verified_at,
+        bvn_rejection_reason,
+
+        document_type,
+        document_number,
+
+        id_verification_status,
+        id_verified_at,
+        id_rejection_reason,
+
+        liveness_status,
+        liveness_provider_reference,
+
+        tier_3_method,
+        tier_3_verification_status,
+        tier_3_verified_at,
+        tier_3_rejection_reason,
+
+        verification_status,
+        rejection_reason,
+
+        created_at,
+        updated_at
+
+      FROM kyc_records
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [userId]
     );
+
+    const record =
+      kycResult.rows.length > 0
+        ? kycResult.rows[0]
+        : null;
+
+    // ========================================================
+    // INDIVIDUAL VERIFICATION STATES
+    //
+    // NOT VERIFIED
+    // PENDING
+    // VERIFIED
+    // REJECTED
+    // ========================================================
+
+    const bvnStatus =
+      user.bvn_verified === true
+        ? 'verified'
+        : normalizeKycStatus(
+            record?.bvn_verification_status
+          );
+
+    const idStatus =
+      user.id_verified === true
+        ? 'verified'
+        : normalizeKycStatus(
+            record?.id_verification_status
+          );
+
+    const tier3Status =
+      user.tier_3_verified === true
+        ? 'verified'
+        : normalizeKycStatus(
+            record?.tier_3_verification_status
+          );
+
+    // ========================================================
+    // LOCK RULES
+    //
+    // PENDING  = LOCKED
+    // VERIFIED = PERMANENTLY LOCKED
+    // REJECTED  = CAN RESUBMIT
+    // NOT VERIFIED = CAN SUBMIT
+    // ========================================================
+
+    const bvnLocked =
+      bvnStatus === 'pending' ||
+      bvnStatus === 'verified';
+
+    const idLocked =
+      idStatus === 'pending' ||
+      idStatus === 'verified';
+
+    const tier3Locked =
+      tier3Status === 'pending' ||
+      tier3Status === 'verified';
+
+    // ========================================================
+    // OVERALL KYC STATUS
+    // ========================================================
+
+    const kycStatus =
+      normalizeKycStatus(
+        user.kyc_status
+      );
 
     const verified =
       kycStatus === 'verified';
@@ -254,35 +361,9 @@ const getKycStatus = async (req, res) => {
       verified ? tier : 0
     );
 
-    const kycResult = await pool.query(
-      `
-      SELECT
-        id,
-        bvn_verification_status,
-        bvn_verified_at,
-        bvn_rejection_reason,
-        document_type,
-        document_number,
-        id_verification_status,
-        id_verified_at,
-        id_rejection_reason,
-        liveness_status,
-        liveness_provider_reference,
-        tier_3_method,
-        tier_3_verification_status,
-        tier_3_verified_at,
-        tier_3_rejection_reason,
-        verification_status,
-        rejection_reason,
-        created_at,
-        updated_at
-      FROM kyc_records
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT 1
-      `,
-      [userId]
-    );
+    // ========================================================
+    // RESPONSE
+    // ========================================================
 
     return res.status(200).json({
       success: true,
@@ -294,6 +375,10 @@ const getKycStatus = async (req, res) => {
         phone: user.phone,
       },
 
+      // ======================================================
+      // KYC
+      // ======================================================
+
       kyc: {
         status: kycStatus,
 
@@ -303,18 +388,66 @@ const getKycStatus = async (req, res) => {
 
         submitted_tier: tier,
 
+        // -----------------------------------------------
+        // BVN
+        // -----------------------------------------------
+
         bvn_verified:
           user.bvn_verified === true,
+
+        bvn_status:
+          bvnStatus,
+
+        bvn_locked:
+          bvnLocked,
+
+        bvn_rejection_reason:
+          record?.bvn_rejection_reason ||
+          null,
+
+        // -----------------------------------------------
+        // ID
+        // -----------------------------------------------
 
         id_verified:
           user.id_verified === true,
 
+        id_status:
+          idStatus,
+
+        id_locked:
+          idLocked,
+
+        id_rejection_reason:
+          record?.id_rejection_reason ||
+          null,
+
+        // -----------------------------------------------
+        // TIER 3
+        // -----------------------------------------------
+
         tier_3_verified:
           user.tier_3_verified === true,
 
+        tier_3_status:
+          tier3Status,
+
+        tier_3_locked:
+          tier3Locked,
+
         tier_3_method:
-          user.tier_3_method || null,
+          user.tier_3_method ||
+          record?.tier_3_method ||
+          null,
+
+        tier_3_rejection_reason:
+          record?.tier_3_rejection_reason ||
+          null,
       },
+
+      // ======================================================
+      // LIMITS
+      // ======================================================
 
       limits: {
         account_limit:
@@ -340,10 +473,11 @@ const getKycStatus = async (req, res) => {
               ),
       },
 
-      record:
-        kycResult.rows.length > 0
-          ? kycResult.rows[0]
-          : null,
+      // ======================================================
+      // LATEST RECORD
+      // ======================================================
+
+      record,
     });
   } catch (error) {
     console.error(
@@ -358,6 +492,7 @@ const getKycStatus = async (req, res) => {
     });
   }
 };
+      
 
 // ============================================================
 // SUBMIT BVN
