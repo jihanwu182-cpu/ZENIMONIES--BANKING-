@@ -452,16 +452,27 @@ const getKycRecords = async (req, res) => {
         u.phone,
         u.kyc_tier,
 
+        k.bvn,
         k.bvn_verification_status,
         k.bvn_verified_at,
+        k.bvn_rejection_reason,
 
         k.document_type,
+        k.document_number,
+        k.document_front_url,
+        k.document_back_url,
+        k.selfie_url,
         k.id_verification_status,
         k.id_verified_at,
+        k.id_rejection_reason,
 
         k.tier_3_method,
+        k.tier_3_document_url,
         k.tier_3_verification_status,
         k.tier_3_verified_at,
+        k.tier_3_rejection_reason,
+
+        k.liveness_status,
 
         k.verification_status,
         k.rejection_reason,
@@ -498,6 +509,560 @@ const getKycRecords = async (req, res) => {
       message: 'Unable to load KYC records',
     });
   }
+};
+
+
+// ============================================================
+// KYC DECISION HELPERS
+// ============================================================
+
+const KYC_TYPES = {
+  BVN: {
+    statusColumn: 'bvn_verification_status',
+    verifiedColumn: 'bvn_verified',
+    verifiedAtColumn: 'bvn_verified_at',
+    rejectionColumn: 'bvn_rejection_reason',
+    userTier: 1,
+  },
+
+  TIER2: {
+    statusColumn: 'id_verification_status',
+    verifiedColumn: 'id_verified',
+    verifiedAtColumn: 'id_verified_at',
+    rejectionColumn: 'id_rejection_reason',
+    userTier: 2,
+  },
+
+  TIER3: {
+    statusColumn: 'tier_3_verification_status',
+    verifiedColumn: 'tier_3_verified',
+    verifiedAtColumn: 'tier_3_verified_at',
+    rejectionColumn: 'tier_3_rejection_reason',
+    userTier: 3,
+  },
+};
+
+
+// ============================================================
+// UPDATE OVERALL KYC STATE
+// ============================================================
+
+const refreshOverallKycState = async (
+  client,
+  userId
+) => {
+  const result = await client.query(
+    `
+    SELECT
+      bvn_verified,
+      id_verified,
+      tier_3_verified
+    FROM users
+    WHERE id = $1
+    FOR UPDATE
+    `,
+    [userId]
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error('User not found');
+  }
+
+  const user = result.rows[0];
+
+  const bvnVerified =
+    user.bvn_verified === true;
+
+  const idVerified =
+    user.id_verified === true;
+
+  const tier3Verified =
+    user.tier_3_verified === true;
+
+  const allVerified =
+    bvnVerified &&
+    idVerified &&
+    tier3Verified;
+
+  let highestVerifiedTier = 0;
+
+  if (bvnVerified) {
+    highestVerifiedTier = 1;
+  }
+
+  if (idVerified) {
+    highestVerifiedTier = 2;
+  }
+
+  if (tier3Verified) {
+    highestVerifiedTier = 3;
+  }
+
+  let overallStatus = 'pending';
+
+  if (allVerified) {
+    overallStatus = 'approved';
+  }
+
+  const rejectedResult = await client.query(
+    `
+    SELECT
+      bvn_verification_status,
+      id_verification_status,
+      tier_3_verification_status
+    FROM kyc_records
+    WHERE user_id = $1
+    ORDER BY updated_at DESC
+    LIMIT 1
+    `,
+    [userId]
+  );
+
+  if (rejectedResult.rows.length > 0) {
+    const record = rejectedResult.rows[0];
+
+    const hasRejected =
+      record.bvn_verification_status === 'rejected' ||
+      record.id_verification_status === 'rejected' ||
+      record.tier_3_verification_status === 'rejected';
+
+    if (hasRejected && !allVerified) {
+      overallStatus = 'rejected';
+    }
+  }
+
+  await client.query(
+    `
+    UPDATE users
+    SET
+      kyc_status = $1,
+      kyc_tier = $2,
+      is_verified = $3,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = $4
+    `,
+    [
+      overallStatus,
+      highestVerifiedTier,
+      allVerified,
+      userId,
+    ]
+  );
+
+  await client.query(
+    `
+    UPDATE kyc_records
+    SET
+      verification_status = $1,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE user_id = $2
+      AND id = (
+        SELECT id
+        FROM kyc_records
+        WHERE user_id = $2
+        ORDER BY updated_at DESC
+        LIMIT 1
+      )
+    `,
+    [
+      overallStatus,
+      userId,
+    ]
+  );
+
+  return {
+    overallStatus,
+    highestVerifiedTier,
+    allVerified,
+  };
+};
+
+
+// ============================================================
+// ADMIN KYC DECISION
+// ============================================================
+
+const processKycDecision = async (
+  req,
+  res,
+  type,
+  decision
+) => {
+  const client = await pool.connect();
+
+  try {
+    const { id } = req.params;
+
+    const config =
+      KYC_TYPES[type];
+
+    if (!config) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid KYC verification type',
+      });
+    }
+
+    let reason =
+      String(
+        req.body?.reason ||
+        req.body?.rejection_reason ||
+        ''
+      ).trim();
+
+    if (
+      decision === 'reject' &&
+      !reason
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'A rejection reason is required.',
+      });
+    }
+
+    await client.query('BEGIN');
+
+    const recordResult =
+      await client.query(
+        `
+        SELECT
+          k.*,
+          u.full_name,
+          u.email
+        FROM kyc_records k
+
+        INNER JOIN users u
+          ON u.id = k.user_id
+
+        WHERE k.id = $1
+
+        FOR UPDATE
+        `,
+        [id]
+      );
+
+    if (recordResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+
+      return res.status(404).json({
+        success: false,
+        message: 'KYC record not found',
+      });
+    }
+
+    const record =
+      recordResult.rows[0];
+
+    const currentStatus =
+      String(
+        record[config.statusColumn] || ''
+      ).toLowerCase();
+
+    // ----------------------------------------------------------
+    // VERIFIED = PERMANENT LOCK
+    // ----------------------------------------------------------
+
+    if (
+      currentStatus === 'verified'
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        message:
+          `${type} verification is already verified and permanently locked.`,
+        status: 'verified',
+        locked: true,
+      });
+    }
+
+    // ----------------------------------------------------------
+    // ONLY PENDING SUBMISSIONS CAN RECEIVE A DECISION
+    // ----------------------------------------------------------
+
+    if (
+      currentStatus !== 'pending'
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        message:
+          `This ${type} verification is not currently pending.`,
+        status: currentStatus,
+        locked:
+          currentStatus === 'verified',
+      });
+    }
+
+    const now =
+      new Date();
+
+    // ----------------------------------------------------------
+    // VERIFY
+    // ----------------------------------------------------------
+
+    if (decision === 'verify') {
+      await client.query(
+        `
+        UPDATE kyc_records
+        SET
+          ${config.statusColumn} = 'verified',
+          ${config.verifiedAtColumn} = CURRENT_TIMESTAMP,
+          ${config.rejectionColumn} = NULL,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        `,
+        [id]
+      );
+
+      await client.query(
+        `
+        UPDATE users
+        SET
+          ${config.verifiedColumn} = true,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        `,
+        [record.user_id]
+      );
+    }
+
+    // ----------------------------------------------------------
+    // REJECT
+    // ----------------------------------------------------------
+
+    if (decision === 'reject') {
+      await client.query(
+        `
+        UPDATE kyc_records
+        SET
+          ${config.statusColumn} = 'rejected',
+          ${config.rejectionColumn} = $1,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        `,
+        [
+          reason,
+          id,
+        ]
+      );
+
+      await client.query(
+        `
+        UPDATE users
+        SET
+          ${config.verifiedColumn} = false,
+          kyc_status = 'rejected',
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        `,
+        [record.user_id]
+      );
+    }
+
+    const overall =
+      await refreshOverallKycState(
+        client,
+        record.user_id
+      );
+
+    // ----------------------------------------------------------
+    // AUDIT LOG
+    // ----------------------------------------------------------
+
+    const action =
+      decision === 'verify'
+        ? `admin_${type.toLowerCase()}_verified`
+        : `admin_${type.toLowerCase()}_rejected`;
+
+    const description =
+      decision === 'verify'
+        ? `${type} verification approved by administrator.`
+        : `${type} verification rejected by administrator. Reason: ${reason}`;
+
+    await client.query(
+      `
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description,
+        ip_address,
+        user_agent
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5
+      )
+      `,
+      [
+        record.user_id,
+        action,
+        description,
+        req.ip || null,
+        req.get('user-agent') || null,
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      success: true,
+
+      message:
+        decision === 'verify'
+          ? `${type} verification approved successfully.`
+          : `${type} verification rejected successfully.`,
+
+      kyc: {
+        id: record.id,
+        user_id: record.user_id,
+        type,
+        status:
+          decision === 'verify'
+            ? 'verified'
+            : 'rejected',
+
+        rejection_reason:
+          decision === 'reject'
+            ? reason
+            : null,
+
+        locked:
+          decision === 'verify',
+
+        verified_at:
+          decision === 'verify'
+            ? now
+            : null,
+
+        overall_status:
+          overall.overallStatus,
+
+        kyc_tier:
+          overall.highestVerifiedTier,
+
+        account_verified:
+          overall.allVerified,
+      },
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error(
+        'KYC rollback error:',
+        rollbackError
+      );
+    }
+
+    console.error(
+      `Admin ${type} ${decision} error:`,
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        `Unable to ${decision} ${type} verification`,
+    });
+  } finally {
+    client.release();
+  }
+};
+
+
+// ============================================================
+// BVN VERIFICATION
+// POST /api/admin/kyc/:id/bvn/verify
+// ============================================================
+
+const verifyBvn = async (req, res) => {
+  return processKycDecision(
+    req,
+    res,
+    'BVN',
+    'verify'
+  );
+};
+
+
+// ============================================================
+// BVN REJECTION
+// POST /api/admin/kyc/:id/bvn/reject
+// ============================================================
+
+const rejectBvn = async (req, res) => {
+  return processKycDecision(
+    req,
+    res,
+    'BVN',
+    'reject'
+  );
+};
+
+
+// ============================================================
+// TIER 2 VERIFICATION
+// POST /api/admin/kyc/:id/tier2/verify
+// ============================================================
+
+const verifyTier2 = async (req, res) => {
+  return processKycDecision(
+    req,
+    res,
+    'TIER2',
+    'verify'
+  );
+};
+
+
+// ============================================================
+// TIER 2 REJECTION
+// POST /api/admin/kyc/:id/tier2/reject
+// ============================================================
+
+const rejectTier2 = async (req, res) => {
+  return processKycDecision(
+    req,
+    res,
+    'TIER2',
+    'reject'
+  );
+};
+
+
+// ============================================================
+// TIER 3 VERIFICATION
+// POST /api/admin/kyc/:id/tier3/verify
+// ============================================================
+
+const verifyTier3 = async (req, res) => {
+  return processKycDecision(
+    req,
+    res,
+    'TIER3',
+    'verify'
+  );
+};
+
+
+// ============================================================
+// TIER 3 REJECTION
+// POST /api/admin/kyc/:id/tier3/reject
+// ============================================================
+
+const rejectTier3 = async (req, res) => {
+  return processKycDecision(
+    req,
+    res,
+    'TIER3',
+    'reject'
+  );
 };
 
 
@@ -674,6 +1239,15 @@ module.exports = {
   getUser,
   updateUserStatus,
   getKycRecords,
+
+  // KYC decisions
+  verifyBvn,
+  rejectBvn,
+  verifyTier2,
+  rejectTier2,
+  verifyTier3,
+  rejectTier3,
+
   getTransactions,
   getAuditLogs,
 };
