@@ -45,6 +45,7 @@ interface User {
 
   is_verified?: boolean;
   legal_name_locked?: boolean;
+
   profile_photo?: string;
   avatar?: string;
 
@@ -1114,11 +1115,11 @@ const Profile: React.FC = () => {
       setUser(serverUser);
 
       setForm({
-  fullName:
-    serverUser.full_name || '',
+        fullName:
+          serverUser.full_name || '',
 
-  email:
-    serverUser.email || '',
+        email:
+          serverUser.email || '',
 
         phone:
           serverUser.phone || '',
@@ -1247,13 +1248,13 @@ const Profile: React.FC = () => {
     ).toLowerCase();
 
   const accountVerified =
-  user?.is_verified === true;
+    user?.is_verified === true;
 
-const legalNameLocked =
-  user?.legal_name_locked === true;
+  const legalNameLocked =
+    user?.legal_name_locked === true;
 
-const profileLocked =
-  accountVerified;
+  const profileLocked =
+    accountVerified;
 
 
   // ==========================================================
@@ -1356,17 +1357,16 @@ const profileLocked =
 
       const response =
         await axios.put(
-         `${API_URL}/api/profile`,
-         {
-           full_name:
-            form.fullName.trim(),
+          `${API_URL}/api/profile`,
+          {
+            full_name:
+              form.fullName.trim(),
 
-         email:
-           form.email.trim(),
+            email:
+              form.email.trim(),
 
-        phone:
-           form.phone.trim(),
-    
+            phone:
+              form.phone.trim(),
 
             date_of_birth:
               form.dateOfBirth ||
@@ -1425,13 +1425,18 @@ const profileLocked =
       if (
         axios.isAxiosError(err) &&
         err.response?.status === 403 &&
-        err.response?.data?.code ===
-          'PROFILE_LOCKED'
+        (
+          err.response?.data?.code ===
+            'PROFILE_LOCKED' ||
+          err.response?.data?.code ===
+            'LEGAL_NAME_LOCKED'
+        )
       ) {
         setEditing(false);
 
         setError(
-          'Your account is verified. Protected profile information can no longer be changed.'
+          err.response?.data?.message ||
+            'Your verified profile information can no longer be changed.'
         );
 
         await loadProfile();
@@ -1463,7 +1468,6 @@ const profileLocked =
     const file =
       event.target.files?.[0];
 
-    // Allow selecting the same image again.
     event.target.value = '';
 
     if (!file) {
@@ -1756,12 +1760,12 @@ const profileLocked =
               style={{
                 ...styles.statusBadge,
 
-                ...(isKycVerified
+                ...(accountVerified
                   ? styles.verifiedBadge
                   : styles.notVerifiedBadge),
               }}
             >
-              {isKycVerified
+              {accountVerified
                 ? '✓ KYC Verified'
                 : 'KYC Not Verified'}
             </span>
@@ -1864,7 +1868,7 @@ const profileLocked =
 
           <div style={styles.grid}>
 
-            {/* FULL NAME */}
+            {/* FULL LEGAL NAME */}
 
             <div
               style={styles.field}
@@ -1878,31 +1882,40 @@ const profileLocked =
 
               <input
                 type="text"
-                value={displayName}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                   fullName: e.target.value,
-                 }))
+                value={form.fullName}
+                onChange={(event) =>
+                  updateField(
+                    'fullName',
+                    event.target.value
+                  )
                 }
                 disabled={
                   !editing ||
                   legalNameLocked
-               }
+                }
                 style={{
                   ...styles.input,
-                  ...styles.disabledInput,
+
+                  ...(editing &&
+                  !legalNameLocked
+                    ? styles.editableInput
+                    : styles.disabledInput),
                 }}
               />
 
-              <small
-                style={
-                  styles.helper
-                }
-              >
-                🔒 Legal name is protected
-                and cannot be changed here.
-              </small>
+              {legalNameLocked && (
+
+                <small
+                  style={
+                    styles.helper
+                  }
+                >
+                  🔒 Legal name is permanently
+                  locked because your account
+                  has been verified.
+                </small>
+
+              )}
 
             </div>
 
