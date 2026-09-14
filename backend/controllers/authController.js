@@ -8,12 +8,19 @@ const {
   sendPhoneOtp,
 } = require('../services/termiiService');
 
+const {
+  sendPasswordResetEmail,
+} = require('../services/emailService');
+
 // ============================================================
 // CONFIGURATION
 // ============================================================
 
 const OTP_EXPIRY_MINUTES = 10;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
+
+const PASSWORD_RESET_EXPIRY_MINUTES = 30;
+const PASSWORD_RESET_COOLDOWN_SECONDS = 60;
 
 
 // ============================================================
@@ -515,11 +522,6 @@ const register = async (
     // ========================================================
     // CREATE INTERNAL ZENIMONIES ACCOUNT
     // ========================================================
-    //
-    // This is NOT a bank NUBAN.
-    //
-    // It is the user's Zenimonies account identifier.
-    // ========================================================
 
     let account = null;
 
@@ -579,9 +581,6 @@ const register = async (
         break;
 
       } catch (error) {
-
-        // Retry if account number happens
-        // to collide with an existing number.
 
         if (
           error &&
@@ -754,12 +753,6 @@ const register = async (
         id:
           account.id,
 
-        // ----------------------------------------------------
-        // IMPORTANT:
-        // This is a Zenimonies account number.
-        // It is NOT a bank NUBAN.
-        // ----------------------------------------------------
-
         account_number:
           account.account_number,
 
@@ -788,10 +781,6 @@ const register = async (
           account.created_at,
       },
 
-      // ------------------------------------------------------
-      // Deposit account status
-      // ------------------------------------------------------
-
       deposit_account_status:
         'not_provisioned',
 
@@ -816,10 +805,6 @@ const register = async (
     );
 
   } catch (error) {
-
-    // ========================================================
-    // ROLLBACK
-    // ========================================================
 
     try {
       await client.query(
@@ -1610,6 +1595,7 @@ const sendPhoneOtpController = async (
 // ============================================================
 // LOGIN
 // ============================================================
+
 const login = async (req, res) => {
   try {
     console.log('LOGIN: request received');
@@ -1623,146 +1609,977 @@ const login = async (req, res) => {
       });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedEmail =
+      String(email)
+        .trim()
+        .toLowerCase();
 
     console.log('LOGIN: checking user');
 
-    const userResult = await pool.query(
-      `
-      SELECT
-        id,
-        full_name,
-        email,
-        phone,
-        password_hash,
-        role,
-        status,
-        kyc_status,
-        kyc_tier,
-        tier_3_method,
-        phone_verified,
-        is_verified,
-        account_limit,
-        daily_transfer_limit
-      FROM users
-      WHERE LOWER(email) = $1
-      LIMIT 1
-      `,
-      [normalizedEmail]
+    const userResult =
+      await pool.query(
+        `
+        SELECT
+          id,
+          full_name,
+          email,
+          phone,
+          password_hash,
+          role,
+          status,
+          kyc_status,
+          kyc_tier,
+          tier_3_method,
+          phone_verified,
+          is_verified,
+          account_limit,
+          daily_transfer_limit
+        FROM users
+        WHERE LOWER(email) = $1
+        LIMIT 1
+        `,
+        [normalizedEmail]
+      );
+
+    console.log(
+      'LOGIN: user query completed'
     );
 
-    console.log('LOGIN: user query completed');
-
-    if (userResult.rows.length === 0) {
+    if (
+      userResult.rows.length === 0
+    ) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password',
+        message:
+          'Invalid email or password',
       });
     }
 
-    const user = userResult.rows[0];
+    const user =
+      userResult.rows[0];
 
-    console.log('LOGIN: user found');
+    console.log(
+      'LOGIN: user found'
+    );
 
-    if (user.status && user.status !== 'active') {
+    if (
+      user.status &&
+      user.status !== 'active'
+    ) {
       return res.status(403).json({
         success: false,
-        message: 'Your account is not active',
+        message:
+          'Your account is not active',
       });
     }
 
-    console.log('LOGIN: checking password');
-
-    const passwordMatches = await bcrypt.compare(
-      password,
-      user.password_hash
+    console.log(
+      'LOGIN: checking password'
     );
+
+    const passwordMatches =
+      await bcrypt.compare(
+        password,
+        user.password_hash
+      );
 
     if (!passwordMatches) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password',
+        message:
+          'Invalid email or password',
       });
     }
 
-    console.log('LOGIN: password verified');
-
-    console.log('LOGIN: creating token');
-
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: '24h',
-      }
+    console.log(
+      'LOGIN: password verified'
     );
 
-    console.log('LOGIN: token created');
+    console.log(
+      'LOGIN: creating token'
+    );
 
-    console.log('LOGIN: loading accounts');
+    const token =
+      createAccessToken(user);
 
-    const accountsResult = await pool.query(
+    console.log(
+      'LOGIN: token created'
+    );
+
+    console.log(
+      'LOGIN: loading accounts'
+    );
+
+    const accountsResult =
+      await pool.query(
+        `
+        SELECT
+          id,
+          user_id,
+          account_number,
+          account_type,
+          currency,
+          balance,
+          status,
+          created_at,
+          updated_at
+        FROM accounts
+        WHERE user_id = $1
+        ORDER BY created_at ASC
+        `,
+        [user.id]
+      );
+
+    console.log(
+      'LOGIN: accounts loaded'
+    );
+
+    const safeUser = {
+      id:
+        user.id,
+
+      full_name:
+        user.full_name,
+
+      email:
+        user.email,
+
+      phone:
+        user.phone,
+
+      role:
+        user.role,
+
+      status:
+        user.status,
+
+      kyc_status:
+        user.kyc_status,
+
+      kyc_tier:
+        user.kyc_tier,
+
+      tier_3_method:
+        user.tier_3_method,
+
+      phone_verified:
+        user.phone_verified,
+
+      is_verified:
+        user.is_verified,
+
+      account_limit:
+        user.account_limit,
+
+      daily_transfer_limit:
+        user.daily_transfer_limit,
+    };
+
+    console.log(
+      'LOGIN: successful'
+    );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        'Login successful',
+      token,
+      user: safeUser,
+      accounts:
+        accountsResult.rows,
+    });
+
+  } catch (error) {
+
+    console.error(
+      'LOGIN FAILED'
+    );
+
+    console.error(
+      'Login error name:',
+      error?.name
+    );
+
+    console.error(
+      'Login error code:',
+      error?.code
+    );
+
+    console.error(
+      'Login error message:',
+      error?.message
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'LOGIN_DATABASE_OR_SERVER_ERROR',
+      error_code:
+        error?.code ||
+        'UNKNOWN_ERROR',
+      error_detail:
+        error?.message ||
+        'Unknown server error',
+    });
+  }
+};
+
+
+// ============================================================
+// FORGOT PASSWORD
+// POST /api/auth/forgot-password
+// ============================================================
+//
+// IMPORTANT SECURITY RULE:
+//
+// This endpoint intentionally returns the same successful
+// response whether or not the email belongs to a user.
+//
+// This prevents attackers from discovering registered
+// Zenimonies email addresses.
+// ============================================================
+
+const forgotPassword = async (
+  req,
+  res
+) => {
+
+  const client =
+    await pool.connect();
+
+  let resetTokenId = null;
+
+  try {
+
+    const normalizedEmail =
+      String(
+        req.body?.email || ''
+      )
+        .trim()
+        .toLowerCase();
+
+
+    if (
+      !normalizedEmail ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        normalizedEmail
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Please enter a valid email address.',
+      });
+    }
+
+
+    // ========================================================
+    // FIND USER
+    // ========================================================
+
+    const userResult =
+      await client.query(
+        `
+        SELECT
+          id,
+          email,
+          full_name,
+          status
+        FROM users
+        WHERE LOWER(email) = $1
+        LIMIT 1
+        `,
+        [normalizedEmail]
+      );
+
+
+    /*
+     * If there is no matching account, return the same
+     * generic response as a successful request.
+     */
+
+    if (
+      userResult.rows.length === 0
+    ) {
+      return res.status(200).json({
+        success: true,
+        message:
+          'If an account exists for this email address, you will receive a password reset link shortly.',
+      });
+    }
+
+
+    const user =
+      userResult.rows[0];
+
+
+    // ========================================================
+    // ACCOUNT STATUS
+    // ========================================================
+
+    if (
+      user.status &&
+      user.status !== 'active'
+    ) {
+      return res.status(200).json({
+        success: true,
+        message:
+          'If an account exists for this email address, you will receive a password reset link shortly.',
+      });
+    }
+
+
+    // ========================================================
+    // RESET REQUEST COOLDOWN
+    // ========================================================
+
+    const recentReset =
+      await client.query(
+        `
+        SELECT
+          created_at
+        FROM security_tokens
+        WHERE user_id = $1
+          AND token_type = 'password_reset'
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [user.id]
+      );
+
+
+    if (
+      recentReset.rows.length > 0
+    ) {
+
+      const createdAt =
+        new Date(
+          recentReset.rows[0].created_at
+        );
+
+
+      const secondsSinceCreation =
+        Math.floor(
+          (
+            Date.now() -
+            createdAt.getTime()
+          ) / 1000
+        );
+
+
+      if (
+        secondsSinceCreation <
+        PASSWORD_RESET_COOLDOWN_SECONDS
+      ) {
+
+        /*
+         * Still return the same generic message.
+         * Do not reveal that a reset was recently requested.
+         */
+
+        return res.status(200).json({
+          success: true,
+          message:
+            'If an account exists for this email address, you will receive a password reset link shortly.',
+        });
+      }
+    }
+
+
+    // ========================================================
+    // GENERATE SECURE RESET TOKEN
+    // ========================================================
+
+    const resetToken =
+      crypto.randomBytes(32).toString('hex');
+
+
+    const resetTokenHash =
+      hashToken(resetToken);
+
+
+    const expiresAt =
+      new Date(
+        Date.now() +
+        PASSWORD_RESET_EXPIRY_MINUTES *
+        60 *
+        1000
+      );
+
+
+    // ========================================================
+    // START TRANSACTION
+    // ========================================================
+
+    await client.query(
+      'BEGIN'
+    );
+
+
+    // ========================================================
+    // INVALIDATE PREVIOUS RESET TOKENS
+    // ========================================================
+
+    await client.query(
       `
-      SELECT
-        id,
-        user_id,
-        account_number,
-        account_type,
-        currency,
-        balance,
-        status,
-        created_at,
-        updated_at
-      FROM accounts
+      UPDATE security_tokens
+      SET
+        used_at = CURRENT_TIMESTAMP
       WHERE user_id = $1
-      ORDER BY created_at ASC
+        AND token_type = 'password_reset'
+        AND used_at IS NULL
       `,
       [user.id]
     );
 
-    console.log('LOGIN: accounts loaded');
 
-    const safeUser = {
-      id: user.id,
-      full_name: user.full_name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      status: user.status,
-      kyc_status: user.kyc_status,
-      kyc_tier: user.kyc_tier,
-      tier_3_method: user.tier_3_method,
-      phone_verified: user.phone_verified,
-      is_verified: user.is_verified,
-      account_limit: user.account_limit,
-      daily_transfer_limit: user.daily_transfer_limit,
-    };
+    // ========================================================
+    // STORE ONLY HASHED TOKEN
+    // ========================================================
 
-    console.log('LOGIN: successful');
+    const tokenResult =
+      await client.query(
+        `
+        INSERT INTO security_tokens (
+          user_id,
+          token_hash,
+          token_type,
+          expires_at
+        )
+        VALUES (
+          $1,
+          $2,
+          'password_reset',
+          $3
+        )
+        RETURNING id
+        `,
+        [
+          user.id,
+          resetTokenHash,
+          expiresAt,
+        ]
+      );
+
+
+    resetTokenId =
+      tokenResult.rows[0].id;
+
+
+    // ========================================================
+    // AUDIT LOG
+    // ========================================================
+
+    await client.query(
+      `
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description,
+        ip_address,
+        user_agent
+      )
+      VALUES (
+        $1,
+        'password_reset_requested',
+        'Password reset requested through email.',
+        $2,
+        $3
+      )
+      `,
+      [
+        user.id,
+        req.ip || null,
+        req.get('user-agent') || null,
+      ]
+    );
+
+
+    await client.query(
+      'COMMIT'
+    );
+
+
+    // ========================================================
+    // CREATE RESET URL
+    // ========================================================
+
+    const frontendUrl =
+      String(
+        process.env.FRONTEND_URL || ''
+      ).trim().replace(/\/+$/, '');
+
+
+    if (!frontendUrl) {
+
+      /*
+       * The token has already been created, so invalidate it
+       * before reporting the configuration error.
+       */
+
+      await pool.query(
+        `
+        UPDATE security_tokens
+        SET used_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        `,
+        [resetTokenId]
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'Password reset service is not configured.',
+      });
+    }
+
+
+    const resetUrl =
+      `${frontendUrl}/reset-password?token=${encodeURIComponent(
+        resetToken
+      )}`;
+
+
+    // ========================================================
+    // SEND EMAIL
+    // ========================================================
+
+    try {
+
+      await sendPasswordResetEmail({
+        to: user.email,
+        resetUrl,
+      });
+
+    } catch (emailError) {
+
+      console.error(
+        'Password reset email sending failed:',
+        emailError
+      );
+
+
+      /*
+       * Never leave an active reset token behind when the
+       * email could not be sent.
+       */
+
+      await pool.query(
+        `
+        UPDATE security_tokens
+        SET used_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        `,
+        [resetTokenId]
+      );
+
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'Unable to send password reset email. Please try again later.',
+      });
+    }
+
+
+    // ========================================================
+    // SUCCESS
+    // ========================================================
 
     return res.status(200).json({
       success: true,
-      message: 'Login successful',
-      token,
-      user: safeUser,
-      accounts: accountsResult.rows,
+      message:
+        'If an account exists for this email address, you will receive a password reset link shortly.',
     });
 
   } catch (error) {
-    console.error('LOGIN FAILED');
-    console.error('Login error name:', error?.name);
-    console.error('Login error code:', error?.code);
-    console.error('Login error message:', error?.message);
+
+    try {
+      await client.query(
+        'ROLLBACK'
+      );
+    } catch (rollbackError) {
+      console.error(
+        'Forgot password rollback error:',
+        rollbackError
+      );
+    }
+
+
+    console.error(
+      'Forgot password error:',
+      error
+    );
+
 
     return res.status(500).json({
       success: false,
-      message: 'LOGIN_DATABASE_OR_SERVER_ERROR',
-      error_code: error?.code || 'UNKNOWN_ERROR',
-      error_detail: error?.message || 'Unknown server error',
+      message:
+        'Unable to process password reset request.',
     });
+
+  } finally {
+
+    client.release();
+
+  }
+};
+
+
+// ============================================================
+// RESET PASSWORD
+// POST /api/auth/reset-password
+// ============================================================
+
+const resetPassword = async (
+  req,
+  res
+) => {
+
+  const client =
+    await pool.connect();
+
+  try {
+
+    const resetToken =
+      String(
+        req.body?.token || ''
+      ).trim();
+
+
+    const newPassword =
+      String(
+        req.body?.new_password || ''
+      );
+
+
+    const confirmPassword =
+      String(
+        req.body?.confirm_password || ''
+      );
+
+
+    // ========================================================
+    // VALIDATION
+    // ========================================================
+
+    if (!resetToken) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password reset token is required.',
+      });
+    }
+
+
+    if (
+      newPassword.length < 8
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must be at least 8 characters.',
+      });
+    }
+
+
+    if (
+      newPassword !==
+      confirmPassword
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Passwords do not match.',
+      });
+    }
+
+
+    // ========================================================
+    // HASH SUPPLIED TOKEN
+    // ========================================================
+
+    const resetTokenHash =
+      hashToken(resetToken);
+
+
+    // ========================================================
+    // START TRANSACTION
+    // ========================================================
+
+    await client.query(
+      'BEGIN'
+    );
+
+
+    // ========================================================
+    // FIND VALID RESET TOKEN
+    // ========================================================
+
+    const tokenResult =
+      await client.query(
+        `
+        SELECT
+          id,
+          user_id,
+          token_hash,
+          expires_at,
+          used_at
+        FROM security_tokens
+        WHERE token_hash = $1
+          AND token_type = 'password_reset'
+          AND used_at IS NULL
+          AND expires_at > CURRENT_TIMESTAMP
+        ORDER BY created_at DESC
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [resetTokenHash]
+      );
+
+
+    if (
+      tokenResult.rows.length === 0
+    ) {
+
+      await client.query(
+        'ROLLBACK'
+      );
+
+      return res.status(400).json({
+        success: false,
+        message:
+          'This password reset link is invalid, expired, or has already been used. Please request a new one.',
+      });
+    }
+
+
+    const resetRecord =
+      tokenResult.rows[0];
+
+
+    // ========================================================
+    // EXTRA HASH CHECK
+    // ========================================================
+
+    if (
+      resetRecord.token_hash !==
+      resetTokenHash
+    ) {
+
+      await client.query(
+        'ROLLBACK'
+      );
+
+      return res.status(400).json({
+        success: false,
+        message:
+          'This password reset link is invalid.',
+      });
+    }
+
+
+    // ========================================================
+    // LOAD USER
+    // ========================================================
+
+    const userResult =
+      await client.query(
+        `
+        SELECT
+          id,
+          email,
+          status
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [resetRecord.user_id]
+      );
+
+
+    if (
+      userResult.rows.length === 0
+    ) {
+
+      await client.query(
+        'ROLLBACK'
+      );
+
+      return res.status(400).json({
+        success: false,
+        message:
+          'This password reset link is invalid.',
+      });
+    }
+
+
+    const user =
+      userResult.rows[0];
+
+
+    if (
+      user.status &&
+      user.status !== 'active'
+    ) {
+
+      await client.query(
+        'ROLLBACK'
+      );
+
+      return res.status(403).json({
+        success: false,
+        message:
+          'This account is not active.',
+      });
+    }
+
+
+    // ========================================================
+    // HASH NEW PASSWORD
+    // ========================================================
+
+    const passwordHash =
+      await bcrypt.hash(
+        newPassword,
+        12
+      );
+
+
+    // ========================================================
+    // UPDATE PASSWORD
+    // ========================================================
+
+    await client.query(
+      `
+      UPDATE users
+      SET
+        password_hash = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      `,
+      [
+        passwordHash,
+        user.id,
+      ]
+    );
+
+
+    // ========================================================
+    // MARK CURRENT TOKEN USED
+    // ========================================================
+
+    await client.query(
+      `
+      UPDATE security_tokens
+      SET
+        used_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      `,
+      [resetRecord.id]
+    );
+
+
+    // ========================================================
+    // INVALIDATE OTHER RESET TOKENS
+    // ========================================================
+
+    await client.query(
+      `
+      UPDATE security_tokens
+      SET
+        used_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1
+        AND token_type = 'password_reset'
+        AND used_at IS NULL
+        AND id <> $2
+      `,
+      [
+        user.id,
+        resetRecord.id,
+      ]
+    );
+
+
+    // ========================================================
+    // AUDIT LOG
+    // ========================================================
+
+    await client.query(
+      `
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description,
+        ip_address,
+        user_agent
+      )
+      VALUES (
+        $1,
+        'password_reset_completed',
+        'Account password was successfully reset through the password reset flow.',
+        $2,
+        $3
+      )
+      `,
+      [
+        user.id,
+        req.ip || null,
+        req.get('user-agent') || null,
+      ]
+    );
+
+
+    // ========================================================
+    // COMMIT
+    // ========================================================
+
+    await client.query(
+      'COMMIT'
+    );
+
+
+    // ========================================================
+    // SUCCESS
+    // ========================================================
+
+    return res.status(200).json({
+      success: true,
+      message:
+        'Your password has been reset successfully. You can now log in with your new password.',
+    });
+
+  } catch (error) {
+
+    try {
+      await client.query(
+        'ROLLBACK'
+      );
+    } catch (rollbackError) {
+      console.error(
+        'Reset password rollback error:',
+        rollbackError
+      );
+    }
+
+
+    console.error(
+      'Reset password error:',
+      error
+    );
+
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Unable to reset password. Please try again later.',
+    });
+
+  } finally {
+
+    client.release();
+
   }
 };
 
@@ -2010,6 +2827,10 @@ module.exports = {
   login,
 
   getMe,
+
+  forgotPassword,
+
+  resetPassword,
 
   sendPhoneOtp:
     sendPhoneOtpController,
