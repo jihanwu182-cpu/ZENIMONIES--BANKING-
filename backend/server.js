@@ -265,56 +265,131 @@ app.get(
 );
 
 // ============================================================
-// DOJAH CONFIGURATION HEALTH CHECK
+// DOJAH BVN CONNECTION HEALTH CHECK
 // ============================================================
 
 app.get(
   '/api/health/dojah',
-  (req, res) => {
+  async (req, res) => {
     try {
       const {
         testDojahConnection,
+        verifyBvn,
       } = require(
         './services/dojahService'
       );
 
-      const result =
+      // --------------------------------------------------------
+      // STEP 1: CHECK CONFIGURATION
+      // --------------------------------------------------------
+
+      const config =
         testDojahConnection();
 
-      if (!result.success) {
+      if (!config.success) {
         return res.status(500).json({
           success: false,
           message:
             'Dojah configuration is incomplete.',
-          dojah: result,
+          dojah: config,
         });
       }
+
+      // --------------------------------------------------------
+      // STEP 2: ACTUALLY CALL DOJAH SANDBOX
+      // --------------------------------------------------------
+      //
+      // This is Dojah's official sandbox test BVN.
+      //
+      // We NEVER use this to verify a real customer.
+      // It is only a connectivity test.
+      //
+
+      console.log(
+        '================================================'
+      );
+
+      console.log(
+        'DOJAH SANDBOX CONNECTION TEST'
+      );
+
+      console.log(
+        '================================================'
+      );
+
+      const result =
+        await verifyBvn(
+          '22222222222'
+        );
+
+      console.log(
+        'Dojah test status:',
+        result.status
+      );
+
+      console.log(
+        'Dojah test success:',
+        result.success
+      );
+
+      console.log(
+        '================================================'
+      );
+
+      // --------------------------------------------------------
+      // DOJAH REQUEST FAILED
+      // --------------------------------------------------------
+
+      if (!result.success) {
+        return res.status(502).json({
+          success: false,
+          message:
+            'Dojah Sandbox request failed.',
+          dojah: {
+            configured: true,
+            baseUrl:
+              config.baseUrl,
+            status:
+              result.status,
+            error:
+              result.message,
+          },
+        });
+      }
+
+      // --------------------------------------------------------
+      // DOJAH REQUEST SUCCEEDED
+      // --------------------------------------------------------
 
       return res.status(200).json({
         success: true,
         message:
-          'Dojah configuration is loaded.',
+          'Dojah Sandbox connection is working.',
         dojah: {
           configured: true,
+          connected: true,
           baseUrl:
-            result.baseUrl,
+            config.baseUrl,
+          status:
+            result.status,
         },
       });
     } catch (error) {
       console.error(
-        'Dojah configuration test failed:',
+        'Dojah Sandbox health check failed:',
         error
       );
 
       return res.status(500).json({
         success: false,
         message:
-          'Unable to test Dojah configuration.',
+          'Unable to connect to Dojah Sandbox.',
+        error:
+          error.message,
       });
     }
   }
 );
-
 // ============================================================
 // 404 HANDLER
 // ============================================================
