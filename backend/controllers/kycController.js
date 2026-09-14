@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+
 const {
   verifyBvn,
 } = require('../services/dojahService');
@@ -72,11 +73,6 @@ const normalizeKycStatus = (status) => {
 
 // ============================================================
 // PROFILE COMPLETENESS
-//
-// BVN submission requires the user's personal profile to be
-// completed first.
-//
-// This check is performed on the BACKEND.
 // ============================================================
 
 const getMissingProfileFields = (user) => {
@@ -361,11 +357,6 @@ const getKycStatus = async (req, res) => {
 
     // ========================================================
     // INDIVIDUAL VERIFICATION STATES
-    //
-    // NOT VERIFIED
-    // PENDING
-    // VERIFIED
-    // REJECTED
     // ========================================================
 
     const bvnStatus =
@@ -391,11 +382,6 @@ const getKycStatus = async (req, res) => {
 
     // ========================================================
     // INDIVIDUAL LOCK RULES
-    //
-    // PENDING  = LOCKED
-    // VERIFIED = PERMANENTLY LOCKED
-    // REJECTED = CAN RESUBMIT
-    // NOT VERIFIED = CAN SUBMIT
     // ========================================================
 
     const bvnLocked =
@@ -569,9 +555,13 @@ const getKycStatus = async (req, res) => {
 //                    ↓
 //                 PENDING 🔒
 //
-// BVN submission does NOT verify the BVN.
-// The provider/admin verification result determines the
-// final state.
+// IMPORTANT:
+// Dojah is the verification authority.
+//
+// This endpoint sends the BVN to Dojah and places the
+// Zenimonies verification into PENDING state.
+//
+// It does NOT automatically mark the BVN as VERIFIED.
 // ============================================================
 
 const submitBvn = async (req, res) => {
@@ -719,8 +709,6 @@ const submitBvn = async (req, res) => {
 
     // ========================================================
     // PROFILE COMPLETENESS CHECK
-    //
-    // This happens BEFORE accepting a new BVN submission.
     // ========================================================
 
     const missingProfileFields =
@@ -742,10 +730,52 @@ const submitBvn = async (req, res) => {
     }
 
     // ========================================================
-    // ONLY THESE STATES CAN SUBMIT:
+    // DOJAH BVN LOOKUP
     //
-    // NOT VERIFIED
-    // REJECTED
+    // Dojah is contacted before the submission is committed.
+    //
+    // IMPORTANT:
+    // A successful API response does NOT automatically mean
+    // the customer is verified.
+    //
+    // The Zenimonies BVN state remains PENDING until the
+    // authoritative Dojah result is processed.
+    // ========================================================
+
+    const dojahResult =
+      await verifyBvn(bvn);
+
+    if (!dojahResult?.success) {
+      await client.query('ROLLBACK');
+
+      console.error(
+        'Dojah BVN submission failed:',
+        {
+          status:
+            dojahResult?.status ||
+            null,
+
+          message:
+            dojahResult?.message ||
+            null,
+        }
+      );
+
+      return res.status(502).json({
+        success: false,
+        code:
+          'DOJAH_BVN_SUBMISSION_FAILED',
+        message:
+          'We could not submit your BVN for verification at this time. Please try again later.',
+      });
+    }
+
+    // ========================================================
+    // DOJAH RESPONDED SUCCESSFULLY
+    //
+    // Save the Zenimonies verification as PENDING.
+    //
+    // We deliberately do NOT set bvn_verified = true here.
     // ========================================================
 
     let kycId;
@@ -753,10 +783,9 @@ const submitBvn = async (req, res) => {
     // ========================================================
     // UPDATE EXISTING RECORD
     //
-    // IMPORTANT:
-    // ONLY BVN fields are changed here.
+    // ONLY BVN fields are changed.
     //
-    // Tier 2 and Tier 3 statuses remain untouched.
+    // Tier 2 and Tier 3 remain untouched.
     // ========================================================
 
     if (existingRecord) {
@@ -792,12 +821,6 @@ const submitBvn = async (req, res) => {
 
     // ========================================================
     // CREATE NEW KYC RECORD
-    //
-    // IMPORTANT:
-    // EVERY OTHER VERIFICATION STARTS AS NOT VERIFIED.
-    //
-    // This prevents a BVN submission from accidentally locking
-    // Tier 2 or Tier 3.
     // ========================================================
 
     else {
@@ -847,11 +870,12 @@ const submitBvn = async (req, res) => {
     // ========================================================
     // UPDATE USER
     //
-    // BVN submission means PENDING.
-    // It does NOT mean VERIFIED.
+    // BVN submission = PENDING.
     //
-    // IMPORTANT:
-    // We do not change id_verified or tier_3_verified.
+    // DO NOT CHANGE:
+    //
+    // id_verified
+    // tier_3_verified
     // ========================================================
 
     await client.query(
@@ -895,11 +919,15 @@ const submitBvn = async (req, res) => {
       `,
       [
         userId,
-        'BVN submitted for Tier 1 verification. Awaiting provider verification.',
+        'BVN submitted to Dojah for Tier 1 verification. Awaiting Dojah verification result.',
       ]
     );
 
     await client.query('COMMIT');
+
+    // ========================================================
+    // RESPONSE
+    // ========================================================
 
     return res.status(200).json({
       success: true,
@@ -917,6 +945,8 @@ const submitBvn = async (req, res) => {
       verified: false,
 
       locked: true,
+
+      provider: 'dojah',
     });
   } catch (error) {
     try {
@@ -1193,8 +1223,6 @@ const submitTier2 = async (req, res) => {
 
     // ========================================================
     // UPDATE EXISTING RECORD
-    //
-    // ONLY Tier 2 fields are changed.
     // ========================================================
 
     let kycId;
@@ -1239,8 +1267,6 @@ const submitTier2 = async (req, res) => {
 
     // ========================================================
     // CREATE NEW RECORD
-    //
-    // Tier 1 and Tier 3 explicitly start as NOT VERIFIED.
     // ========================================================
 
     else {
@@ -1294,9 +1320,6 @@ const submitTier2 = async (req, res) => {
 
     // ========================================================
     // SUBMISSION = PENDING
-    //
-    // IMPORTANT:
-    // Do not change BVN or Tier 3 verification flags.
     // ========================================================
 
     await client.query(
@@ -1630,8 +1653,6 @@ const submitTier3 = async (req, res) => {
 
     // ========================================================
     // CREATE OR UPDATE RECORD
-    //
-    // ONLY Tier 3 fields are changed.
     // ========================================================
 
     let kycId;
@@ -1718,7 +1739,6 @@ const submitTier3 = async (req, res) => {
     // ========================================================
     // UPDATE USER
     //
-    // IMPORTANT:
     // Do not change BVN or Tier 2 verification flags.
     // ========================================================
 
