@@ -41,9 +41,7 @@ const getDojahHeaders = () => {
 
   return {
     Accept: 'application/json',
-
     AppId: DOJAH_APP_ID,
-
     Authorization: DOJAH_SECRET_KEY,
   };
 };
@@ -60,46 +58,103 @@ const dojahRequest = async ({
   headers = {},
 }) => {
   try {
+    console.log('============================================');
+    console.log('DOJAH REQUEST');
+    console.log('============================================');
+    console.log('Method:', method);
+    console.log('Base URL:', DOJAH_BASE_URL);
+    console.log('Endpoint:', url);
+    console.log('Params:', params || null);
+
     const response = await axios({
       method,
       baseURL: DOJAH_BASE_URL,
       url,
       data,
       params,
-
       headers: {
         ...getDojahHeaders(),
         ...headers,
       },
-
       timeout: 30000,
     });
 
-    return {
-      success: true,
-
-      status: response.status,
-
-      data: response.data,
-    };
-  } catch (error) {
-    console.error(
-      'Dojah API error:',
-      error.response?.data ||
-        error.message
+    console.log('============================================');
+    console.log('DOJAH RESPONSE SUCCESS');
+    console.log('============================================');
+    console.log('HTTP Status:', response.status);
+    console.log(
+      'Response:',
+      JSON.stringify(
+        response.data,
+        null,
+        2
+      )
     );
 
     return {
-      success: false,
+      success: true,
+      status: response.status,
+      data: response.data,
+    };
+  } catch (error) {
+    console.error('============================================');
+    console.error('DOJAH API ERROR');
+    console.error('============================================');
 
+    console.error(
+      'HTTP Status:',
+      error.response?.status || 'NO HTTP STATUS'
+    );
+
+    console.error(
+      'HTTP Status Text:',
+      error.response?.statusText || 'N/A'
+    );
+
+    console.error(
+      'Endpoint:',
+      url
+    );
+
+    console.error(
+      'Response Data:',
+      JSON.stringify(
+        error.response?.data || null,
+        null,
+        2
+      )
+    );
+
+    console.error(
+      'Response Headers:',
+      JSON.stringify(
+        error.response?.headers || null,
+        null,
+        2
+      )
+    );
+
+    console.error(
+      'Error Message:',
+      error.message
+    );
+
+    console.error(
+      'Error Code:',
+      error.code || 'N/A'
+    );
+
+    console.error('============================================');
+
+    return {
+      success: false,
       status:
         error.response?.status ||
         500,
-
       data:
         error.response?.data ||
         null,
-
       message:
         error.response?.data?.message ||
         error.message ||
@@ -111,24 +166,11 @@ const dojahRequest = async ({
 // ============================================================
 // BVN LOOKUP
 //
-// Dojah endpoint:
-//
 // GET /api/v1/kyc/bvn?bvn=XXXXXXXXXXX
 //
 // IMPORTANT:
-// This function retrieves the Dojah BVN result.
-//
-// It does NOT directly change the user's Zenimonies
-// verification status.
-//
-// The KYC controller/webhook will be responsible for
-// deciding and storing the final:
-//
-// NOT VERIFIED
-// PENDING
-// VERIFIED
-// REJECTED
-//
+// This only sends the BVN to Dojah and returns Dojah's response.
+// It does NOT mark the Zenimonies user as verified.
 // ============================================================
 
 const verifyBvn = async (bvn) => {
@@ -138,25 +180,59 @@ const verifyBvn = async (bvn) => {
   if (!/^\d{11}$/.test(normalizedBvn)) {
     return {
       success: false,
-
       status: 400,
-
       message:
         'BVN must contain exactly 11 digits.',
-
       data: null,
     };
   }
 
-  return dojahRequest({
+  console.log('============================================');
+  console.log('DOJAH BVN VERIFICATION START');
+  console.log('============================================');
+
+  // Never log the actual BVN.
+
+  const result = await dojahRequest({
     method: 'GET',
-
     url: '/api/v1/kyc/bvn',
-
     params: {
       bvn: normalizedBvn,
     },
   });
+
+  if (!result.success) {
+    console.error(
+      'DOJAH BVN VERIFICATION FAILED'
+    );
+
+    console.error(
+      'Status:',
+      result.status
+    );
+
+    console.error(
+      'Message:',
+      result.message
+    );
+
+    console.error(
+      'Data:',
+      JSON.stringify(
+        result.data || null,
+        null,
+        2
+      )
+    );
+  } else {
+    console.log(
+      'DOJAH BVN REQUEST COMPLETED'
+    );
+  }
+
+  console.log('============================================');
+
+  return result;
 };
 
 // ============================================================
@@ -169,17 +245,13 @@ const testDojahConnection = () => {
 
     return {
       success: true,
-
       configured: true,
-
       baseUrl: DOJAH_BASE_URL,
     };
   } catch (error) {
     return {
       success: false,
-
       configured: false,
-
       message: error.message,
     };
   }
@@ -191,8 +263,6 @@ const testDojahConnection = () => {
 
 module.exports = {
   dojahRequest,
-
   verifyBvn,
-
   testDojahConnection,
 };
