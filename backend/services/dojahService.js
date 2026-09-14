@@ -5,7 +5,8 @@ const axios = require('axios');
 // ============================================================
 
 const DOJAH_BASE_URL =
-  process.env.DOJAH_BASE_URL || 'https://sandbox.dojah.io';
+  process.env.DOJAH_BASE_URL ||
+  'https://sandbox.dojah.io';
 
 const DOJAH_APP_ID =
   process.env.DOJAH_APP_ID;
@@ -76,7 +77,9 @@ const dojahRequest = async ({
 
     return {
       success: true,
+
       status: response.status,
+
       data: response.data,
     };
   } catch (error) {
@@ -90,10 +93,12 @@ const dojahRequest = async ({
       success: false,
 
       status:
-        error.response?.status || 500,
+        error.response?.status ||
+        500,
 
       data:
-        error.response?.data || null,
+        error.response?.data ||
+        null,
 
       message:
         error.response?.data?.message ||
@@ -104,7 +109,58 @@ const dojahRequest = async ({
 };
 
 // ============================================================
-// TEST DOJAH CONFIGURATION
+// BVN LOOKUP
+//
+// Dojah endpoint:
+//
+// GET /api/v1/kyc/bvn?bvn=XXXXXXXXXXX
+//
+// IMPORTANT:
+// This function retrieves the Dojah BVN result.
+//
+// It does NOT directly change the user's Zenimonies
+// verification status.
+//
+// The KYC controller/webhook will be responsible for
+// deciding and storing the final:
+//
+// NOT VERIFIED
+// PENDING
+// VERIFIED
+// REJECTED
+//
+// ============================================================
+
+const verifyBvn = async (bvn) => {
+  const normalizedBvn =
+    String(bvn || '').trim();
+
+  if (!/^\d{11}$/.test(normalizedBvn)) {
+    return {
+      success: false,
+
+      status: 400,
+
+      message:
+        'BVN must contain exactly 11 digits.',
+
+      data: null,
+    };
+  }
+
+  return dojahRequest({
+    method: 'GET',
+
+    url: '/api/v1/kyc/bvn',
+
+    params: {
+      bvn: normalizedBvn,
+    },
+  });
+};
+
+// ============================================================
+// TEST DOJAH CONNECTION
 // ============================================================
 
 const testDojahConnection = () => {
@@ -113,13 +169,17 @@ const testDojahConnection = () => {
 
     return {
       success: true,
+
       configured: true,
+
       baseUrl: DOJAH_BASE_URL,
     };
   } catch (error) {
     return {
       success: false,
+
       configured: false,
+
       message: error.message,
     };
   }
@@ -131,5 +191,8 @@ const testDojahConnection = () => {
 
 module.exports = {
   dojahRequest,
+
+  verifyBvn,
+
   testDojahConnection,
 };
