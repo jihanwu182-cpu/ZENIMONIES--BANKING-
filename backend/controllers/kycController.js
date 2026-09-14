@@ -195,7 +195,17 @@ const validateProofOfAddressFile = (file) => {
 
 const getKycStatus = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId =
+      req.user?.id ||
+      req.userId ||
+      req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required.',
+      });
+    }
 
     const result = await pool.query(
       `
@@ -233,9 +243,12 @@ const getKycStatus = async (req, res) => {
       user.kyc_status
     );
 
-    const verified = kycStatus === 'verified';
+    const verified =
+      kycStatus === 'verified';
 
-    const tier = Number(user.kyc_tier || 0);
+    const tier = Number(
+      user.kyc_tier || 0
+    );
 
     const limits = getTierLimits(
       verified ? tier : 0
@@ -284,7 +297,9 @@ const getKycStatus = async (req, res) => {
       kyc: {
         status: kycStatus,
 
-        tier: verified ? tier : 0,
+        tier: verified
+          ? tier
+          : 0,
 
         submitted_tier: tier,
 
@@ -346,10 +361,42 @@ const getKycStatus = async (req, res) => {
 
 // ============================================================
 // SUBMIT BVN
+//
+// FINAL BVN LIFECYCLE:
+//
+// NOT VERIFIED
+//      ↓
+//   SUBMIT
+//      ↓
+// PENDING 🔒
+//      ↓
+// ┌───────────────┐
+// ↓               ↓
+// VERIFIED      REJECTED
+//   🔒              ↓
+// permanent      correct/resubmit
+//                    ↓
+//                 PENDING 🔒
+//
+// IMPORTANT:
+//
+// Pending BVN cannot be submitted again.
+// Verified BVN cannot be changed.
+// Rejected BVN can be corrected and resubmitted.
 // ============================================================
 
 const submitBvn = async (req, res) => {
-  const userId = req.user.id;
+  const userId =
+    req.user?.id ||
+    req.userId ||
+    req.user?.userId;
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
 
   const bvn = String(
     req.body?.bvn || ''
@@ -368,6 +415,10 @@ const submitBvn = async (req, res) => {
 
   try {
     await client.query('BEGIN');
+
+    // ========================================================
+    // LOCK USER
+    // ========================================================
 
     const userResult =
       await client.query(
@@ -395,57 +446,134 @@ const submitBvn = async (req, res) => {
       });
     }
 
-    const user = userResult.rows[0];
+    const user =
+      userResult.rows[0];
+
+    // ========================================================
+    // GET CURRENT BVN VERIFICATION RECORD
+    // ========================================================
+
+    const existingKyc =
+      await client.query(
+        `
+        SELECT
+          id,
+          bvn_verification_status,
+          bvn_verified_at,
+          bvn_rejection_reason
+        FROM kyc_records
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [userId]
+      );
+
+    const existingRecord =
+      existingKyc.rows.length > 0
+        ? existingKyc.rows[0]
+        : null;
+
+    const currentBvnStatus =
+      normalizeKycStatus(
+        existingRecord?.bvn_verification_status
+      );
+
+    // ========================================================
+    // VERIFIED = PERMANENT LOCK
+    // ========================================================
 
     if (
-      normalizeKycStatus(
-        user.kyc_status
-      ) === 'verified' &&
-      user.bvn_verified === true
+      user.bvn_verified === true ||
+      currentBvnStatus === 'verified'
     ) {
       await client.query('ROLLBACK');
 
       return res.status(400).json({
         success: false,
+        code: 'BVN_ALREADY_VERIFIED',
         message:
-          'Your BVN verification has already been completed',
+          'Your BVN has already been verified and cannot be changed.',
+        status: 'verified',
+        verified: true,
+        locked: true,
       });
     }
 
-    const existingKyc =
-      await client.query(
-        `
-        SELECT id
-        FROM kyc_records
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-        LIMIT 1
-        `,
-        [userId]
-      );
+    // ========================================================
+    // PENDING = LOCK
+    //
+    // THIS IS THE IMPORTANT NEW PROTECTION.
+    // ========================================================
+
+    if (
+      currentBvnStatus === 'pending'
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        code: 'BVN_VERIFICATION_PENDING',
+        message:
+          'Your BVN verification is currently pending. You cannot submit another BVN while verification is in progress.',
+        status: 'pending',
+        verified: false,
+        locked: true,
+      });
+    }
+
+    // ========================================================
+    // ONLY THESE STATES CAN SUBMIT:
+    //
+    // NOT VERIFIED
+    // REJECTED
+    //
+    // Rejected submissions are allowed again.
+    // ========================================================
 
     let kycId;
 
-    if (existingKyc.rows.length > 0) {
+    // ========================================================
+    // UPDATE EXISTING REJECTED RECORD
+    // ========================================================
+
+    if (existingRecord) {
       kycId =
-        existingKyc.rows[0].id;
+        existingRecord.id;
 
       await client.query(
         `
         UPDATE kyc_records
         SET
           bvn = $1,
+
           bvn_verification_status = 'pending',
+
           bvn_verified_at = NULL,
+
           bvn_rejection_reason = NULL,
+
           verification_status = 'pending',
+
           rejection_reason = NULL,
+
           updated_at = CURRENT_TIMESTAMP
+
         WHERE id = $2
         `,
-        [bvn, kycId]
+        [
+          bvn,
+          kycId,
+        ]
       );
-    } else {
+    }
+
+    // ========================================================
+    // CREATE NEW KYC RECORD
+    // ========================================================
+
+    else {
       const insertResult =
         await client.query(
           `
@@ -463,26 +591,48 @@ const submitBvn = async (req, res) => {
           )
           RETURNING id
           `,
-          [userId, bvn]
+          [
+            userId,
+            bvn,
+          ]
         );
 
       kycId =
         insertResult.rows[0].id;
     }
 
+    // ========================================================
+    // UPDATE USER
+    //
+    // Submission means PENDING.
+    // It does NOT mean VERIFIED.
+    // ========================================================
+
     await client.query(
       `
       UPDATE users
       SET
         bvn = $1,
+
         bvn_verified = false,
+
         kyc_status = 'pending',
+
         kyc_tier = 1,
+
         updated_at = CURRENT_TIMESTAMP
+
       WHERE id = $2
       `,
-      [bvn, userId]
+      [
+        bvn,
+        userId,
+      ]
     );
+
+    // ========================================================
+    // AUDIT LOG
+    // ========================================================
 
     await client.query(
       `
@@ -509,15 +659,18 @@ const submitBvn = async (req, res) => {
       success: true,
 
       message:
-        'BVN submitted successfully. Your account remains pending until the BVN is verified.',
+        'BVN submitted successfully. Your BVN verification is now pending.',
 
-      kyc_record_id: kycId,
+      kyc_record_id:
+        kycId,
 
       tier: 1,
 
       status: 'pending',
 
       verified: false,
+
+      locked: true,
     });
   } catch (error) {
     try {
@@ -551,7 +704,17 @@ const submitBvn = async (req, res) => {
 // ============================================================
 
 const submitTier2 = async (req, res) => {
-  const userId = req.user.id;
+  const userId =
+    req.user?.id ||
+    req.userId ||
+    req.user?.userId;
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
 
   const documentType = String(
     req.body?.document_type || ''
@@ -603,9 +766,9 @@ const submitTier2 = async (req, res) => {
     req.files?.selfie?.[0] ||
     null;
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // FRONT
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const frontValidation =
     validateIdFile(idFrontFile);
@@ -619,9 +782,9 @@ const submitTier2 = async (req, res) => {
     });
   }
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // SELFIE
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const selfieValidation =
     validateSelfieFile(selfieFile);
@@ -635,9 +798,9 @@ const submitTier2 = async (req, res) => {
     });
   }
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // BACK
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const documentsWithoutBack = [
     'international_passport',
@@ -703,50 +866,115 @@ const submitTier2 = async (req, res) => {
       });
     }
 
-    const user = userResult.rows[0];
+    const user =
+      userResult.rows[0];
 
-    if (user.id_verified === true) {
-      await client.query('ROLLBACK');
-
-      return res.status(400).json({
-        success: false,
-        message:
-          'Your identity verification has already been completed.',
-      });
-    }
+    // ========================================================
+    // GET CURRENT ID STATUS
+    // ========================================================
 
     const existingKyc =
       await client.query(
         `
-        SELECT id
+        SELECT
+          id,
+          id_verification_status,
+          id_verified_at,
+          id_rejection_reason
         FROM kyc_records
         WHERE user_id = $1
         ORDER BY created_at DESC
         LIMIT 1
+        FOR UPDATE
         `,
         [userId]
       );
 
+    const existingRecord =
+      existingKyc.rows.length > 0
+        ? existingKyc.rows[0]
+        : null;
+
+    const currentIdStatus =
+      normalizeKycStatus(
+        existingRecord?.id_verification_status
+      );
+
+    // ========================================================
+    // VERIFIED = PERMANENT LOCK
+    // ========================================================
+
+    if (
+      user.id_verified === true ||
+      currentIdStatus === 'verified'
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(400).json({
+        success: false,
+        code: 'ID_ALREADY_VERIFIED',
+        message:
+          'Your identity verification has already been completed and cannot be changed.',
+        status: 'verified',
+        verified: true,
+        locked: true,
+      });
+    }
+
+    // ========================================================
+    // PENDING = LOCK
+    // ========================================================
+
+    if (
+      currentIdStatus === 'pending'
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        code: 'ID_VERIFICATION_PENDING',
+        message:
+          'Your identity verification is currently pending. You cannot submit another identity verification while verification is in progress.',
+        status: 'pending',
+        verified: false,
+        locked: true,
+      });
+    }
+
+    // ========================================================
+    // UPDATE EXISTING REJECTED RECORD
+    // ========================================================
+
     let kycId;
 
-    if (existingKyc.rows.length > 0) {
+    if (existingRecord) {
       kycId =
-        existingKyc.rows[0].id;
+        existingRecord.id;
 
       await client.query(
         `
         UPDATE kyc_records
         SET
           document_type = $1,
+
           document_number = $2,
+
           id_verification_status = 'pending',
+
           id_verified_at = NULL,
+
           id_rejection_reason = NULL,
+
           liveness_status = 'pending',
+
           liveness_provider_reference = NULL,
+
           verification_status = 'pending',
+
           rejection_reason = NULL,
+
           updated_at = CURRENT_TIMESTAMP
+
         WHERE id = $3
         `,
         [
@@ -755,7 +983,13 @@ const submitTier2 = async (req, res) => {
           kycId,
         ]
       );
-    } else {
+    }
+
+    // ========================================================
+    // CREATE NEW RECORD
+    // ========================================================
+
+    else {
       const insertResult =
         await client.query(
           `
@@ -788,32 +1022,30 @@ const submitTier2 = async (req, res) => {
         insertResult.rows[0].id;
     }
 
-    // --------------------------------------------------------
-    // IMPORTANT
-    // --------------------------------------------------------
-    //
-    // Files are received successfully by Multer.
-    //
-    // We DO NOT mark the user as verified merely because files
-    // were uploaded.
-    //
-    // Real identity/liveness verification must happen through
-    // an approved verification process.
-    //
-    // --------------------------------------------------------
+    // ========================================================
+    // SUBMISSION = PENDING
+    // ========================================================
 
     await client.query(
       `
       UPDATE users
       SET
         id_verified = false,
+
         kyc_status = 'pending',
+
         kyc_tier = 2,
+
         updated_at = CURRENT_TIMESTAMP
+
       WHERE id = $1
       `,
       [userId]
     );
+
+    // ========================================================
+    // AUDIT LOG
+    // ========================================================
 
     await client.query(
       `
@@ -842,7 +1074,8 @@ const submitTier2 = async (req, res) => {
       message:
         'Your ID documents and selfie have been received. Identity and liveness verification are pending.',
 
-      kyc_record_id: kycId,
+      kyc_record_id:
+        kycId,
 
       tier: 2,
 
@@ -850,7 +1083,10 @@ const submitTier2 = async (req, res) => {
 
       verified: false,
 
-      liveness_status: 'pending',
+      locked: true,
+
+      liveness_status:
+        'pending',
 
       id_verification_status:
         'pending',
@@ -892,30 +1128,19 @@ const submitTier2 = async (req, res) => {
 // tier_3_selfie
 //
 // ============================================================
-//
-// ACCEPTED METHODS
-//
-// 1. bank_statement
-// 2. utility_bill
-// 3. proof_of_address
-//
-// ============================================================
-//
-// IMPORTANT:
-//
-// Tier 3 requires BOTH:
-//
-// - Proof-of-address document
-// - Liveness submission
-//
-// Uploading the files DOES NOT mean verification succeeded.
-//
-// Both remain pending until the actual verification process
-// confirms them.
-// ============================================================
 
 const submitTier3 = async (req, res) => {
-  const userId = req.user.id;
+  const userId =
+    req.user?.id ||
+    req.userId ||
+    req.user?.userId;
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
 
   const method = String(
     req.body?.tier_3_method || ''
@@ -973,14 +1198,6 @@ const submitTier3 = async (req, res) => {
   // ==========================================================
   // LIVENESS / SELFIE VALIDATION
   // ==========================================================
-  //
-  // This confirms that a selfie file was submitted.
-  //
-  // It does NOT claim that liveness succeeded.
-  //
-  // Actual liveness verification must be performed by the
-  // approved verification provider.
-  // ==========================================================
 
   const selfieValidation =
     validateSelfieFile(
@@ -997,16 +1214,7 @@ const submitTier3 = async (req, res) => {
   }
 
   // ==========================================================
-  // TIER 3 DOCUMENT REQUIREMENTS
-  // ==========================================================
-  //
-  // These requirements describe what our review process accepts.
-  //
-  // Automated code should NOT falsely claim that a document
-  // contains a genuine stamp, belongs to the user, or is
-  // authentic.
-  //
-  // Those checks require document analysis/provider/manual review.
+  // TIER 3 REQUIREMENTS
   // ==========================================================
 
   const tier3Requirements = {
@@ -1072,47 +1280,90 @@ const submitTier3 = async (req, res) => {
       });
     }
 
-    const user = userResult.rows[0];
+    const user =
+      userResult.rows[0];
 
     // ========================================================
-    // ALREADY VERIFIED
-    // ========================================================
-
-    if (user.tier_3_verified === true) {
-      await client.query('ROLLBACK');
-
-      return res.status(400).json({
-        success: false,
-        message:
-          'Your Tier 3 verification has already been completed.',
-      });
-    }
-
-    // ========================================================
-    // FIND EXISTING KYC RECORD
+    // GET CURRENT TIER 3 STATUS
     // ========================================================
 
     const existingKyc =
       await client.query(
         `
-        SELECT id
+        SELECT
+          id,
+          tier_3_verification_status,
+          tier_3_verified_at,
+          tier_3_rejection_reason
         FROM kyc_records
         WHERE user_id = $1
         ORDER BY created_at DESC
         LIMIT 1
+        FOR UPDATE
         `,
         [userId]
       );
 
+    const existingRecord =
+      existingKyc.rows.length > 0
+        ? existingKyc.rows[0]
+        : null;
+
+    const currentTier3Status =
+      normalizeKycStatus(
+        existingRecord?.tier_3_verification_status
+      );
+
+    // ========================================================
+    // VERIFIED = PERMANENT LOCK
+    // ========================================================
+
+    if (
+      user.tier_3_verified === true ||
+      currentTier3Status === 'verified'
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(400).json({
+        success: false,
+        code: 'TIER_3_ALREADY_VERIFIED',
+        message:
+          'Your Tier 3 verification has already been completed and cannot be changed.',
+        status: 'verified',
+        verified: true,
+        locked: true,
+      });
+    }
+
+    // ========================================================
+    // PENDING = LOCK
+    // ========================================================
+
+    if (
+      currentTier3Status === 'pending'
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        code: 'TIER_3_VERIFICATION_PENDING',
+        message:
+          'Your Tier 3 verification is currently pending. You cannot submit another Tier 3 verification while verification is in progress.',
+        status: 'pending',
+        verified: false,
+        locked: true,
+      });
+    }
+
+    // ========================================================
+    // CREATE OR UPDATE RECORD
+    // ========================================================
+
     let kycId;
 
-    // ========================================================
-    // UPDATE EXISTING RECORD
-    // ========================================================
-
-    if (existingKyc.rows.length > 0) {
+    if (existingRecord) {
       kycId =
-        existingKyc.rows[0].id;
+        existingRecord.id;
 
       await client.query(
         `
@@ -1143,13 +1394,7 @@ const submitTier3 = async (req, res) => {
           kycId,
         ]
       );
-    }
-
-    // ========================================================
-    // CREATE NEW RECORD
-    // ========================================================
-
-    else {
+    } else {
       const insertResult =
         await client.query(
           `
@@ -1181,12 +1426,6 @@ const submitTier3 = async (req, res) => {
 
     // ========================================================
     // UPDATE USER
-    // ========================================================
-    //
-    // IMPORTANT:
-    //
-    // Submission is NOT verification.
-    //
     // ========================================================
 
     await client.query(
@@ -1255,6 +1494,8 @@ const submitTier3 = async (req, res) => {
 
       verified: false,
 
+      locked: true,
+
       method,
 
       tier_3_verification_status:
@@ -1266,7 +1507,6 @@ const submitTier3 = async (req, res) => {
       requirements:
         tier3Requirements[method],
     });
-
   } catch (error) {
     try {
       await client.query('ROLLBACK');
