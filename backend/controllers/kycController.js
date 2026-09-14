@@ -68,6 +68,71 @@ const normalizeKycStatus = (status) => {
 };
 
 // ============================================================
+// PROFILE COMPLETENESS
+//
+// BVN submission requires the user's personal profile to be
+// completed first.
+//
+// This check is performed on the BACKEND.
+// ============================================================
+
+const getMissingProfileFields = (user) => {
+  const requiredFields = [
+    {
+      key: 'full_name',
+      label: 'Full Legal Name',
+    },
+    {
+      key: 'date_of_birth',
+      label: 'Date of Birth',
+    },
+    {
+      key: 'phone',
+      label: 'Phone Number',
+    },
+    {
+      key: 'email',
+      label: 'Email Address',
+    },
+    {
+      key: 'address',
+      label: 'Address',
+    },
+    {
+      key: 'city',
+      label: 'City',
+    },
+    {
+      key: 'state',
+      label: 'State',
+    },
+    {
+      key: 'lga',
+      label: 'LGA',
+    },
+    {
+      key: 'country',
+      label: 'Country',
+    },
+  ];
+
+  return requiredFields
+    .filter(({ key }) => {
+      const value = user?.[key];
+
+      if (
+        value === null ||
+        value === undefined
+      ) {
+        return true;
+      }
+
+      return String(value).trim() === '';
+    })
+    .map(({ label }) => label);
+};
+
+// ============================================================
 // FILE TYPES
 // ============================================================
 
@@ -142,7 +207,8 @@ const validateSelfieFile = (file) => {
   if (!file.buffer || file.buffer.length === 0) {
     return {
       valid: false,
-      message: 'The uploaded selfie is empty.',
+      message:
+        'The uploaded selfie is empty.',
     };
   }
 
@@ -321,11 +387,11 @@ const getKycStatus = async (req, res) => {
           );
 
     // ========================================================
-    // LOCK RULES
+    // INDIVIDUAL LOCK RULES
     //
     // PENDING  = LOCKED
     // VERIFIED = PERMANENTLY LOCKED
-    // REJECTED  = CAN RESUBMIT
+    // REJECTED = CAN RESUBMIT
     // NOT VERIFIED = CAN SUBMIT
     // ========================================================
 
@@ -375,10 +441,6 @@ const getKycStatus = async (req, res) => {
         phone: user.phone,
       },
 
-      // ======================================================
-      // KYC
-      // ======================================================
-
       kyc: {
         status: kycStatus,
 
@@ -388,9 +450,9 @@ const getKycStatus = async (req, res) => {
 
         submitted_tier: tier,
 
-        // -----------------------------------------------
+        // ----------------------------------------------------
         // BVN
-        // -----------------------------------------------
+        // ----------------------------------------------------
 
         bvn_verified:
           user.bvn_verified === true,
@@ -405,9 +467,9 @@ const getKycStatus = async (req, res) => {
           record?.bvn_rejection_reason ||
           null,
 
-        // -----------------------------------------------
+        // ----------------------------------------------------
         // ID
-        // -----------------------------------------------
+        // ----------------------------------------------------
 
         id_verified:
           user.id_verified === true,
@@ -422,9 +484,9 @@ const getKycStatus = async (req, res) => {
           record?.id_rejection_reason ||
           null,
 
-        // -----------------------------------------------
+        // ----------------------------------------------------
         // TIER 3
-        // -----------------------------------------------
+        // ----------------------------------------------------
 
         tier_3_verified:
           user.tier_3_verified === true,
@@ -444,10 +506,6 @@ const getKycStatus = async (req, res) => {
           record?.tier_3_rejection_reason ||
           null,
       },
-
-      // ======================================================
-      // LIMITS
-      // ======================================================
 
       limits: {
         account_limit:
@@ -473,10 +531,6 @@ const getKycStatus = async (req, res) => {
               ),
       },
 
-      // ======================================================
-      // LATEST RECORD
-      // ======================================================
-
       record,
     });
   } catch (error) {
@@ -492,12 +546,11 @@ const getKycStatus = async (req, res) => {
     });
   }
 };
-      
 
 // ============================================================
 // SUBMIT BVN
 //
-// FINAL BVN LIFECYCLE:
+// BVN LIFECYCLE:
 //
 // NOT VERIFIED
 //      ↓
@@ -513,11 +566,9 @@ const getKycStatus = async (req, res) => {
 //                    ↓
 //                 PENDING 🔒
 //
-// IMPORTANT:
-//
-// Pending BVN cannot be submitted again.
-// Verified BVN cannot be changed.
-// Rejected BVN can be corrected and resubmitted.
+// BVN submission does NOT verify the BVN.
+// The provider/admin verification result determines the
+// final state.
 // ============================================================
 
 const submitBvn = async (req, res) => {
@@ -561,7 +612,14 @@ const submitBvn = async (req, res) => {
         SELECT
           id,
           full_name,
+          email,
+          phone,
           date_of_birth,
+          address,
+          city,
+          state,
+          lga,
+          country,
           kyc_status,
           kyc_tier,
           bvn_verified
@@ -638,8 +696,6 @@ const submitBvn = async (req, res) => {
 
     // ========================================================
     // PENDING = LOCK
-    //
-    // THIS IS THE IMPORTANT NEW PROTECTION.
     // ========================================================
 
     if (
@@ -659,18 +715,45 @@ const submitBvn = async (req, res) => {
     }
 
     // ========================================================
+    // PROFILE COMPLETENESS CHECK
+    //
+    // This happens BEFORE accepting a new BVN submission.
+    // ========================================================
+
+    const missingProfileFields =
+      getMissingProfileFields(user);
+
+    if (
+      missingProfileFields.length > 0
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(400).json({
+        success: false,
+        code: 'PROFILE_INCOMPLETE',
+        message:
+          'Please complete your personal profile before submitting your BVN.',
+        missing_fields:
+          missingProfileFields,
+      });
+    }
+
+    // ========================================================
     // ONLY THESE STATES CAN SUBMIT:
     //
     // NOT VERIFIED
     // REJECTED
-    //
-    // Rejected submissions are allowed again.
     // ========================================================
 
     let kycId;
 
     // ========================================================
-    // UPDATE EXISTING REJECTED RECORD
+    // UPDATE EXISTING RECORD
+    //
+    // IMPORTANT:
+    // ONLY BVN fields are changed here.
+    //
+    // Tier 2 and Tier 3 statuses remain untouched.
     // ========================================================
 
     if (existingRecord) {
@@ -706,6 +789,12 @@ const submitBvn = async (req, res) => {
 
     // ========================================================
     // CREATE NEW KYC RECORD
+    //
+    // IMPORTANT:
+    // EVERY OTHER VERIFICATION STARTS AS NOT VERIFIED.
+    //
+    // This prevents a BVN submission from accidentally locking
+    // Tier 2 or Tier 3.
     // ========================================================
 
     else {
@@ -715,13 +804,29 @@ const submitBvn = async (req, res) => {
           INSERT INTO kyc_records (
             user_id,
             bvn,
+
             bvn_verification_status,
+
+            id_verification_status,
+
+            liveness_status,
+
+            tier_3_verification_status,
+
             verification_status
           )
           VALUES (
             $1,
             $2,
+
             'pending',
+
+            'not_verified',
+
+            'not_verified',
+
+            'not_verified',
+
             'pending'
           )
           RETURNING id
@@ -739,8 +844,11 @@ const submitBvn = async (req, res) => {
     // ========================================================
     // UPDATE USER
     //
-    // Submission means PENDING.
+    // BVN submission means PENDING.
     // It does NOT mean VERIFIED.
+    //
+    // IMPORTANT:
+    // We do not change id_verified or tier_3_verified.
     // ========================================================
 
     await client.query(
@@ -975,6 +1083,10 @@ const submitTier2 = async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    // ========================================================
+    // LOCK USER
+    // ========================================================
+
     const userResult =
       await client.query(
         `
@@ -1077,7 +1189,9 @@ const submitTier2 = async (req, res) => {
     }
 
     // ========================================================
-    // UPDATE EXISTING REJECTED RECORD
+    // UPDATE EXISTING RECORD
+    //
+    // ONLY Tier 2 fields are changed.
     // ========================================================
 
     let kycId;
@@ -1122,6 +1236,8 @@ const submitTier2 = async (req, res) => {
 
     // ========================================================
     // CREATE NEW RECORD
+    //
+    // Tier 1 and Tier 3 explicitly start as NOT VERIFIED.
     // ========================================================
 
     else {
@@ -1130,18 +1246,34 @@ const submitTier2 = async (req, res) => {
           `
           INSERT INTO kyc_records (
             user_id,
+
             document_type,
             document_number,
+
+            bvn_verification_status,
+
             id_verification_status,
+
             liveness_status,
+
+            tier_3_verification_status,
+
             verification_status
           )
           VALUES (
             $1,
+
             $2,
             $3,
+
+            'not_verified',
+
             'pending',
+
             'pending',
+
+            'not_verified',
+
             'pending'
           )
           RETURNING id
@@ -1159,6 +1291,9 @@ const submitTier2 = async (req, res) => {
 
     // ========================================================
     // SUBMISSION = PENDING
+    //
+    // IMPORTANT:
+    // Do not change BVN or Tier 3 verification flags.
     // ========================================================
 
     await client.query(
@@ -1492,6 +1627,8 @@ const submitTier3 = async (req, res) => {
 
     // ========================================================
     // CREATE OR UPDATE RECORD
+    //
+    // ONLY Tier 3 fields are changed.
     // ========================================================
 
     let kycId;
@@ -1535,16 +1672,32 @@ const submitTier3 = async (req, res) => {
           `
           INSERT INTO kyc_records (
             user_id,
+
             tier_3_method,
-            tier_3_verification_status,
+
+            bvn_verification_status,
+
+            id_verification_status,
+
             liveness_status,
+
+            tier_3_verification_status,
+
             verification_status
           )
           VALUES (
             $1,
+
             $2,
+
+            'not_verified',
+
+            'not_verified',
+
             'pending',
+
             'pending',
+
             'pending'
           )
           RETURNING id
@@ -1561,6 +1714,9 @@ const submitTier3 = async (req, res) => {
 
     // ========================================================
     // UPDATE USER
+    //
+    // IMPORTANT:
+    // Do not change BVN or Tier 2 verification flags.
     // ========================================================
 
     await client.query(
