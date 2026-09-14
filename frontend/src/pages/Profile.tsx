@@ -44,7 +44,7 @@ interface User {
   tier_3_verified?: boolean;
 
   is_verified?: boolean;
-
+  legal_name_locked?: boolean;
   profile_photo?: string;
   avatar?: string;
 
@@ -1047,6 +1047,7 @@ const Profile: React.FC = () => {
     useRef<HTMLInputElement | null>(null);
 
   const [form, setForm] = useState({
+    fullName: '',
     email: '',
     phone: '',
     dateOfBirth: '',
@@ -1113,8 +1114,11 @@ const Profile: React.FC = () => {
       setUser(serverUser);
 
       setForm({
-        email:
-          serverUser.email || '',
+  fullName:
+    serverUser.full_name || '',
+
+  email:
+    serverUser.email || '',
 
         phone:
           serverUser.phone || '',
@@ -1242,14 +1246,14 @@ const Profile: React.FC = () => {
       user?.kyc_status || ''
     ).toLowerCase();
 
-  const isKycVerified =
-    kycStatus === 'verified' ||
-    kycStatus === 'approved' ||
-    kycStatus === 'completed' ||
-    user?.is_verified === true;
+  const accountVerified =
+  user?.is_verified === true;
 
-  const profileLocked =
-    isKycVerified;
+const legalNameLocked =
+  user?.legal_name_locked === true;
+
+const profileLocked =
+  accountVerified;
 
 
   // ==========================================================
@@ -1352,13 +1356,17 @@ const Profile: React.FC = () => {
 
       const response =
         await axios.put(
-          `${API_URL}/api/profile`,
-          {
-            email:
-              form.email.trim(),
+         `${API_URL}/api/profile`,
+         {
+           full_name:
+            form.fullName.trim(),
 
-            phone:
-              form.phone.trim(),
+         email:
+           form.email.trim(),
+
+        phone:
+           form.phone.trim(),
+    
 
             date_of_birth:
               form.dateOfBirth ||
@@ -1871,7 +1879,16 @@ const Profile: React.FC = () => {
               <input
                 type="text"
                 value={displayName}
-                disabled
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                   fullName: e.target.value,
+                 }))
+                }
+                disabled={
+                  !editing ||
+                  legalNameLocked
+               }
                 style={{
                   ...styles.input,
                   ...styles.disabledInput,
