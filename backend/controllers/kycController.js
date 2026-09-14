@@ -1,4 +1,7 @@
 const pool = require('../config/database');
+const {
+  verifyBvn,
+} = require('../services/dojahService');
 
 // ============================================================
 // KYC / ACCOUNT LIMITS
