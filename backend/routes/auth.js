@@ -4,6 +4,8 @@ const {
   register,
   login,
   getMe,
+  forgotPassword,
+  resetPassword,
   sendPhoneOtp,
   verifyPhone,
   resendPhoneOtp,
@@ -13,130 +15,74 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// ============================================================
-// AUTHENTICATION ROUTES
-// Base URL:
-// /api/auth
-// ============================================================
-
 
 // ============================================================
-// REGISTER
-// POST /api/auth/register
-//
-// Public route
+// PUBLIC AUTH ROUTES
 // ============================================================
 
+// Register
 router.post(
   '/register',
   register
 );
 
-
-// ============================================================
-// LOGIN
-// POST /api/auth/login
-//
-// Public route
-// ============================================================
-
+// Login
 router.post(
   '/login',
   login
 );
 
+// Forgot Password
+router.post(
+  '/forgot-password',
+  forgotPassword
+);
+
+// Reset Password
+router.post(
+  '/reset-password',
+  resetPassword
+);
+
 
 // ============================================================
-// CURRENT USER
-// GET /api/auth/me
-//
-// Protected route
-//
-// Header:
-// Authorization: Bearer YOUR_JWT_TOKEN
+// PROTECTED AUTH ROUTES
 // ============================================================
 
+// Get current user
 router.get(
   '/me',
   authMiddleware,
   getMe
 );
 
-
-// ============================================================
-// SEND PHONE OTP
-// POST /api/auth/send-phone-otp
-//
-// Protected route
-//
-// Header:
-// Authorization: Bearer YOUR_JWT_TOKEN
-// ============================================================
-
+// Send phone verification OTP
 router.post(
   '/send-phone-otp',
   authMiddleware,
   sendPhoneOtp
 );
 
-
-// ============================================================
-// VERIFY PHONE
-// POST /api/auth/verify-phone
-//
-// Protected route
-//
-// Header:
-// Authorization: Bearer YOUR_JWT_TOKEN
-//
-// Body:
-// {
-//   "otp": "123456"
-// }
-// ============================================================
-
+// Verify phone
 router.post(
   '/verify-phone',
   authMiddleware,
   verifyPhone
 );
 
-
-// ============================================================
-// VERIFY PHONE OTP
-// POST /api/auth/verify-phone-otp
-//
-// Protected route
-//
-// This is the endpoint currently used by VerifyPhone.tsx.
-// ============================================================
-
+// Verify phone OTP
 router.post(
   '/verify-phone-otp',
   authMiddleware,
   verifyPhone
 );
 
-
-// ============================================================
-// RESEND PHONE OTP
-// POST /api/auth/resend-phone-otp
-//
-// Protected route
-//
-// Header:
-// Authorization: Bearer YOUR_JWT_TOKEN
-// ============================================================
-
+// Resend phone verification OTP
 router.post(
   '/resend-phone-otp',
   authMiddleware,
   resendPhoneOtp
 );
 
-
-// ============================================================
-// EXPORT
-// ============================================================
 
 module.exports = router;
