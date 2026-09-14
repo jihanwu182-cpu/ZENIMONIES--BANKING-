@@ -88,8 +88,9 @@ const getProfile = async (req, res) => {
         country: row.country,
 
         profile_photo: row.profile_photo,
+
         legal_name_locked:
-        row.legal_name_locked === true,
+          row.legal_name_locked === true,
 
         role: row.role,
         status: row.status,
@@ -141,9 +142,13 @@ const getProfile = async (req, res) => {
 //
 // IMPORTANT:
 //
-// If the account has been VERIFIED:
+// Before verification:
+// - Full legal name can be changed.
+// - Other permitted profile information can be changed.
 //
-// Protected identity/profile information cannot be changed.
+// After verification:
+// - Full legal name is permanently locked.
+// - Protected identity/profile information is locked.
 //
 // Profile photo is handled separately and remains editable.
 //
@@ -168,9 +173,13 @@ const updateProfile = async (req, res) => {
 
     await client.query('BEGIN');
 
-    const currentResult = await client.query( 
-  
-     SELECT
+    // ========================================================
+    // GET CURRENT USER
+    // ========================================================
+
+    const currentResult = await client.query(
+      `
+      SELECT
         id,
         full_name,
         legal_name,
@@ -206,42 +215,44 @@ const updateProfile = async (req, res) => {
     const currentUser =
       currentResult.rows[0];
 
-
     // ========================================================
-    // VERIFIED ACCOUNT
+    // FULL LEGAL NAME
     // ========================================================
 
     const requestedFullName =
-  req.body?.full_name !== undefined
-    ? String(req.body.full_name).trim()
-    : currentUser.full_name;
+      req.body?.full_name !== undefined
+        ? String(req.body.full_name).trim()
+        : currentUser.full_name;
 
-if (!requestedFullName) {
-  await client.query('ROLLBACK');
+    if (!requestedFullName) {
+      await client.query('ROLLBACK');
 
-  return res.status(400).json({
-    success: false,
-    message: 'Full legal name is required',
-  });
-}
-
-if (
-  currentUser.legal_name_locked === true &&
-  requestedFullName !== currentUser.full_name
-) {
-  await client.query('ROLLBACK');
-
-  return res.status(403).json({
-    success: false,
-    code: 'LEGAL_NAME_LOCKED',
-    message:
-      'Your legal name is permanently locked because your account has already been verified.',
-  });
-}
-
+      return res.status(400).json({
+        success: false,
+        message: 'Full legal name is required',
+      });
+    }
 
     // ========================================================
-    // UPDATE PROFILE
+    // PERMANENT LEGAL NAME LOCK
+    // ========================================================
+
+    if (
+      currentUser.legal_name_locked === true &&
+      requestedFullName !== currentUser.full_name
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(403).json({
+        success: false,
+        code: 'LEGAL_NAME_LOCKED',
+        message:
+          'Your legal name is permanently locked because your account has already been verified.',
+      });
+    }
+
+    // ========================================================
+    // NORMALIZE PROFILE DATA
     // ========================================================
 
     const normalizedEmail =
@@ -279,6 +290,9 @@ if (
         ? String(country).trim()
         : currentUser.country;
 
+    // ========================================================
+    // VALIDATE EMAIL
+    // ========================================================
 
     if (
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
@@ -293,6 +307,9 @@ if (
       });
     }
 
+    // ========================================================
+    // VALIDATE PHONE
+    // ========================================================
 
     if (!normalizedPhone) {
       await client.query('ROLLBACK');
@@ -303,50 +320,54 @@ if (
       });
     }
 
+    // ========================================================
+    // UPDATE PROFILE
+    // ========================================================
 
     await client.query(
       `
       UPDATE users
 
-  SET
-    full_name = $1,
-    legal_name = $2,
-    email = $3,
-    phone = $4,
-    date_of_birth = $5,
-    address = $6,
-    city = $7,
-    state = $8,
-    lga = $9,
-    country = $10,
-    updated_at = CURRENT_TIMESTAMP
+      SET
+        full_name = $1,
+        legal_name = $2,
+        email = $3,
+        phone = $4,
+        date_of_birth = $5,
+        address = $6,
+        city = $7,
+        state = $8,
+        lga = $9,
+        country = $10,
+        updated_at = CURRENT_TIMESTAMP
 
- WHERE id = $11
+      WHERE id = $11
       `,
       [
-        [
-  requestedFullName,
+        requestedFullName,
 
-  currentUser.legal_name_locked === true
-    ? currentUser.legal_name
-    : requestedFullName,
+        currentUser.legal_name_locked === true
+          ? currentUser.legal_name
+          : requestedFullName,
 
-  normalizedEmail,
-  normalizedPhone,
-  date_of_birth || null,
-  normalizedAddress || null,
-  normalizedCity || null,
-  normalizedState || null,
-  normalizedLga || null,
-  normalizedCountry || 'Nigeria',
+        normalizedEmail,
+        normalizedPhone,
+        date_of_birth || null,
+        normalizedAddress || null,
+        normalizedCity || null,
+        normalizedState || null,
+        normalizedLga || null,
+        normalizedCountry || 'Nigeria',
 
-  userId,
-]
-  );
+        userId,
+      ]
+    );
 
+    // ========================================================
+    // COMMIT
+    // ========================================================
 
     await client.query('COMMIT');
-
 
     return res.status(200).json({
       success: true,
@@ -369,6 +390,10 @@ if (
       error
     );
 
+    // ========================================================
+    // DUPLICATE EMAIL / PHONE
+    // ========================================================
+
     if (error?.code === '23505') {
       return res.status(409).json({
         success: false,
@@ -387,6 +412,10 @@ if (
   }
 };
 
+
+// ============================================================
+// EXPORTS
+// ============================================================
 
 module.exports = {
   getProfile,
