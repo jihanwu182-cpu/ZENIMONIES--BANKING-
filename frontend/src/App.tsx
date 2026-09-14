@@ -29,6 +29,7 @@ import VirtualCard from './pages/VirtualCard.tsx';
 import Admin from './pages/AdminDashboard.tsx';
 import TransferConfirmation from './pages/TransferConfirmation.tsx';
 import TransactionReceipt from './pages/TransactionReceipt.tsx';
+import ForgotPassword from './pages/ForgotPassword';
 
 interface ServicePageProps {
   title: string;
@@ -297,6 +298,11 @@ const App: React.FC = () => {
           path="/register"
           element={<Register />}
         />
+
+        <Route
+          path="/forgot-password"
+          element={<ForgotPassword />}
+       />
 
         {/* DASHBOARD */}
 
