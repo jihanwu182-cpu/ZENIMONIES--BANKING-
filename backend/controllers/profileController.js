@@ -7,7 +7,25 @@ const pool = require('../config/database');
 
 const getProfile = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    // ========================================================
+    // GET AUTHENTICATED USER ID
+    // ========================================================
+
+    const userId =
+      req.user?.id ||
+      req.userId ||
+      req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unable to identify authenticated user',
+      });
+    }
+
+    // ========================================================
+    // LOAD PROFILE
+    // ========================================================
 
     const result = await pool.query(
       `
@@ -17,12 +35,15 @@ const getProfile = async (req, res) => {
         u.email,
         u.phone,
         u.date_of_birth,
+
         u.address,
         u.city,
         u.state,
         u.lga,
         u.country,
+
         u.profile_photo,
+
         u.legal_name_locked,
 
         u.role,
@@ -60,6 +81,10 @@ const getProfile = async (req, res) => {
       [userId]
     );
 
+    // ========================================================
+    // USER NOT FOUND
+    // ========================================================
+
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
@@ -68,6 +93,10 @@ const getProfile = async (req, res) => {
     }
 
     const row = result.rows[0];
+
+    // ========================================================
+    // RESPONSE
+    // ========================================================
 
     return res.status(200).json({
       success: true,
@@ -98,11 +127,17 @@ const getProfile = async (req, res) => {
         kyc_status: row.kyc_status,
         kyc_tier: row.kyc_tier,
 
-        bvn_verified: row.bvn_verified,
-        id_verified: row.id_verified,
-        tier_3_verified: row.tier_3_verified,
+        bvn_verified:
+          row.bvn_verified === true,
 
-        is_verified: row.is_verified,
+        id_verified:
+          row.id_verified === true,
+
+        tier_3_verified:
+          row.tier_3_verified === true,
+
+        is_verified:
+          row.is_verified === true,
 
         created_at: row.created_at,
         updated_at: row.updated_at,
@@ -111,12 +146,24 @@ const getProfile = async (req, res) => {
       account: row.account_id
         ? {
             id: row.account_id,
-            account_number: row.account_number,
-            account_name: row.full_name,
-            account_type: row.account_type,
-            currency: row.currency,
-            balance: row.balance,
-            status: row.account_status,
+
+            account_number:
+              row.account_number,
+
+            account_name:
+              row.full_name,
+
+            account_type:
+              row.account_type,
+
+            currency:
+              row.currency,
+
+            balance:
+              row.balance,
+
+            status:
+              row.account_status,
           }
         : null,
     });
@@ -140,17 +187,20 @@ const getProfile = async (req, res) => {
 // PUT /api/profile
 // ============================================================
 //
-// IMPORTANT:
+// BEFORE VERIFICATION:
 //
-// Before verification:
 // - Full legal name can be changed.
-// - Other permitted profile information can be changed.
+// - Permitted profile information can be changed.
 //
-// After verification:
+// AFTER VERIFICATION:
+//
 // - Full legal name is permanently locked.
 // - Protected identity/profile information is locked.
 //
-// Profile photo is handled separately and remains editable.
+// PROFILE PHOTO:
+//
+// - Profile photo is handled separately.
+// - Profile photo remains editable after verification.
 //
 // ============================================================
 
@@ -158,7 +208,25 @@ const updateProfile = async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const userId = req.user.userId;
+    // ========================================================
+    // GET AUTHENTICATED USER ID
+    // ========================================================
+
+    const userId =
+      req.user?.id ||
+      req.userId ||
+      req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unable to identify authenticated user',
+      });
+    }
+
+    // ========================================================
+    // REQUEST DATA
+    // ========================================================
 
     const {
       email,
@@ -171,40 +239,57 @@ const updateProfile = async (req, res) => {
       country,
     } = req.body || {};
 
+    // ========================================================
+    // START TRANSACTION
+    // ========================================================
+
     await client.query('BEGIN');
 
     // ========================================================
     // GET CURRENT USER
     // ========================================================
 
-    const currentResult = await client.query(
-      `
-      SELECT
-        id,
-        full_name,
-        legal_name,
-        legal_name_locked,
-        email,
-        phone,
-        date_of_birth,
-        address,
-        city,
-        state,
-        lga,
-        country,
-        is_verified
+    const currentResult =
+      await client.query(
+        `
+        SELECT
+          id,
+          full_name,
+          legal_name,
+          legal_name_locked,
 
-      FROM users
+          email,
+          phone,
 
-      WHERE id = $1
+          date_of_birth,
 
-      FOR UPDATE
-      `,
-      [userId]
-    );
+          address,
+          city,
+          state,
+          lga,
+          country,
 
-    if (currentResult.rows.length === 0) {
-      await client.query('ROLLBACK');
+          is_verified
+
+        FROM users
+
+        WHERE id = $1
+
+        FOR UPDATE
+        `,
+        [userId]
+      );
+
+    // ========================================================
+    // USER NOT FOUND
+    // ========================================================
+
+    if (
+      currentResult.rows.length === 0
+    ) {
+      await client.query(
+        'ROLLBACK'
+      );
 
       return res.status(404).json({
         success: false,
@@ -221,69 +306,116 @@ const updateProfile = async (req, res) => {
 
     const requestedFullName =
       req.body?.full_name !== undefined
-        ? String(req.body.full_name).trim()
+        ? String(
+            req.body.full_name
+          ).trim()
         : currentUser.full_name;
 
+    // ========================================================
+    // NAME REQUIRED
+    // ========================================================
+
     if (!requestedFullName) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
 
       return res.status(400).json({
         success: false,
-        message: 'Full legal name is required',
+        message:
+          'Full legal name is required',
       });
     }
 
     // ========================================================
     // PERMANENT LEGAL NAME LOCK
     // ========================================================
+    //
+    // Once legal_name_locked is true,
+    // the name can NEVER be changed
+    // through this endpoint.
+    //
+    // ========================================================
 
     if (
       currentUser.legal_name_locked === true &&
-      requestedFullName !== currentUser.full_name
+      requestedFullName !==
+        currentUser.full_name
     ) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
 
       return res.status(403).json({
         success: false,
-        code: 'LEGAL_NAME_LOCKED',
+
+        code:
+          'LEGAL_NAME_LOCKED',
+
         message:
           'Your legal name is permanently locked because your account has already been verified.',
       });
     }
 
     // ========================================================
-    // NORMALIZE PROFILE DATA
+    // NORMALIZE EMAIL
     // ========================================================
 
     const normalizedEmail =
       email !== undefined
-        ? String(email).trim().toLowerCase()
+        ? String(email)
+            .trim()
+            .toLowerCase()
         : currentUser.email;
+
+    // ========================================================
+    // NORMALIZE PHONE
+    // ========================================================
 
     const normalizedPhone =
       phone !== undefined
         ? String(phone).trim()
         : currentUser.phone;
 
+    // ========================================================
+    // NORMALIZE ADDRESS
+    // ========================================================
+
     const normalizedAddress =
       address !== undefined
         ? String(address).trim()
         : currentUser.address;
+
+    // ========================================================
+    // NORMALIZE CITY
+    // ========================================================
 
     const normalizedCity =
       city !== undefined
         ? String(city).trim()
         : currentUser.city;
 
+    // ========================================================
+    // NORMALIZE STATE
+    // ========================================================
+
     const normalizedState =
       state !== undefined
         ? String(state).trim()
         : currentUser.state;
 
+    // ========================================================
+    // NORMALIZE LGA
+    // ========================================================
+
     const normalizedLga =
       lga !== undefined
         ? String(lga).trim()
         : currentUser.lga;
+
+    // ========================================================
+    // NORMALIZE COUNTRY
+    // ========================================================
 
     const normalizedCountry =
       country !== undefined
@@ -299,11 +431,14 @@ const updateProfile = async (req, res) => {
         normalizedEmail
       )
     ) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
 
       return res.status(400).json({
         success: false,
-        message: 'Please enter a valid email address',
+        message:
+          'Please enter a valid email address',
       });
     }
 
@@ -312,16 +447,19 @@ const updateProfile = async (req, res) => {
     // ========================================================
 
     if (!normalizedPhone) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
 
       return res.status(400).json({
         success: false,
-        message: 'Phone number is required',
+        message:
+          'Phone number is required',
       });
     }
 
     // ========================================================
-    // UPDATE PROFILE
+    // UPDATE USERS
     // ========================================================
 
     await client.query(
@@ -330,34 +468,99 @@ const updateProfile = async (req, res) => {
 
       SET
         full_name = $1,
+
         legal_name = $2,
+
         email = $3,
         phone = $4,
+
         date_of_birth = $5,
+
         address = $6,
         city = $7,
         state = $8,
         lga = $9,
         country = $10,
-        updated_at = CURRENT_TIMESTAMP
+
+        updated_at =
+          CURRENT_TIMESTAMP
 
       WHERE id = $11
       `,
       [
+        // ----------------------------------------------------
+        // Full legal name
+        // ----------------------------------------------------
+
         requestedFullName,
 
-        currentUser.legal_name_locked === true
+        // ----------------------------------------------------
+        // Legal name
+        //
+        // Before lock:
+        //     keep synchronized with full_name
+        //
+        // After lock:
+        //     preserve existing legal_name
+        // ----------------------------------------------------
+
+        currentUser.legal_name_locked ===
+        true
           ? currentUser.legal_name
           : requestedFullName,
 
+        // ----------------------------------------------------
+        // Email
+        // ----------------------------------------------------
+
         normalizedEmail,
+
+        // ----------------------------------------------------
+        // Phone
+        // ----------------------------------------------------
+
         normalizedPhone,
+
+        // ----------------------------------------------------
+        // Date of birth
+        // ----------------------------------------------------
+
         date_of_birth || null,
+
+        // ----------------------------------------------------
+        // Address
+        // ----------------------------------------------------
+
         normalizedAddress || null,
+
+        // ----------------------------------------------------
+        // City
+        // ----------------------------------------------------
+
         normalizedCity || null,
+
+        // ----------------------------------------------------
+        // State
+        // ----------------------------------------------------
+
         normalizedState || null,
+
+        // ----------------------------------------------------
+        // LGA
+        // ----------------------------------------------------
+
         normalizedLga || null,
-        normalizedCountry || 'Nigeria',
+
+        // ----------------------------------------------------
+        // Country
+        // ----------------------------------------------------
+
+        normalizedCountry ||
+          'Nigeria',
+
+        // ----------------------------------------------------
+        // User ID
+        // ----------------------------------------------------
 
         userId,
       ]
@@ -367,23 +570,42 @@ const updateProfile = async (req, res) => {
     // COMMIT
     // ========================================================
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
+
+    // ========================================================
+    // SUCCESS
+    // ========================================================
 
     return res.status(200).json({
       success: true,
-      message: 'Profile updated successfully.',
+      message:
+        'Profile updated successfully.',
     });
 
   } catch (error) {
 
+    // ========================================================
+    // ROLLBACK
+    // ========================================================
+
     try {
-      await client.query('ROLLBACK');
-    } catch (rollbackError) {
+      await client.query(
+        'ROLLBACK'
+      );
+    } catch (
+      rollbackError
+    ) {
       console.error(
         'Profile rollback error:',
         rollbackError
       );
     }
+
+    // ========================================================
+    // LOG ERROR
+    // ========================================================
 
     console.error(
       'Update profile error:',
@@ -394,7 +616,10 @@ const updateProfile = async (req, res) => {
     // DUPLICATE EMAIL / PHONE
     // ========================================================
 
-    if (error?.code === '23505') {
+    if (
+      error?.code ===
+      '23505'
+    ) {
       return res.status(409).json({
         success: false,
         message:
@@ -402,12 +627,22 @@ const updateProfile = async (req, res) => {
       });
     }
 
+    // ========================================================
+    // GENERAL ERROR
+    // ========================================================
+
     return res.status(500).json({
       success: false,
-      message: 'Unable to update profile',
+      message:
+        'Unable to update profile',
     });
 
   } finally {
+
+    // ========================================================
+    // RELEASE DATABASE CONNECTION
+    // ========================================================
+
     client.release();
   }
 };
