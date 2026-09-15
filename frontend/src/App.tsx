@@ -31,6 +31,7 @@ import TransferConfirmation from './pages/TransferConfirmation.tsx';
 import TransactionReceipt from './pages/TransactionReceipt.tsx';
 import ForgotPassword from './pages/ForgotPassword.tsx';
 import ResetPassword from './pages/ResetPassword.tsx';
+import Notifications from './pages/Notifications.tsx';
 
 interface ServicePageProps {
   title: string;
@@ -316,6 +317,11 @@ const App: React.FC = () => {
           path="/"
           element={<Dashboard />}
         />
+
+        <Route
+          path="/notifications"
+          element={<Notifications />}
+       />
 
         <Route
           path="/dashboard"
