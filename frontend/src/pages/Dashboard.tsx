@@ -80,6 +80,8 @@ const Dashboard: React.FC = () => {
 
   const [user, setUser] =
     useState<UserData | null>(null);
+  const [unreadNotificationCount, setUnreadNotificationCount] =
+  useState(0);
 
   /* ==========================================================
      API
@@ -325,6 +327,43 @@ const Dashboard: React.FC = () => {
       );
     };
   }, [apiBase]);
+
+  const loadUnreadNotificationCount = async () => {
+  try {
+    const token =
+      localStorage.getItem('zenimonies_token') ||
+      localStorage.getItem('token') ||
+      localStorage.getItem('access_token');
+
+    if (!token) {
+      return;
+    }
+
+    const response = await axios.get(
+      `${apiBase}/api/notifications/unread-count`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (response.data?.success) {
+      setUnreadNotificationCount(
+        Number(response.data.unread_count || 0)
+      );
+    }
+  } catch (error) {
+    console.error(
+      'Failed to load notification count:',
+      error
+    );
+  }
+};
+
+useEffect(() => {
+  loadUnreadNotificationCount();
+}, []);
 
   /* ==========================================================
      BALANCE
@@ -839,57 +878,43 @@ const Dashboard: React.FC = () => {
 
         <div style={styles.headerRight}>
 
-          {/* NOTIFICATION — VISUAL ONLY FOR NOW */}
+          {/* NOTIFICATIONS */}
 
-          <button
-            type="button"
-            aria-label="Notifications"
-            style={
-              styles.notificationButton
-            }
-            onClick={() =>
-              alert(
-                'Notifications will be available soon.'
-              )
-            }
-          >
-            <Icon
-              name="bell"
-              size={24}
-            />
+<button
+  type="button"
+  aria-label="Notifications"
+  style={styles.notificationButton}
+  onClick={() => navigate('/notifications')}
+>
+  <Icon name="bell" size={24} />
 
-            <span
-              style={
-                styles.notificationDot
-              }
-            />
-          </button>
-
-          {/* PROFILE */}
-
-          <button
-            type="button"
-            style={
-              styles.profileButton
-            }
-            onClick={() =>
-              navigate('/profile')
-            }
-          >
-
-            <div style={styles.avatar}>
-              {firstLetter}
-            </div>
-
-            <span style={styles.headerName}>
-              {displayName}
-            </span>
-
-          </button>
-
-        </div>
-
-      </header>
+  {unreadNotificationCount > 0 && (
+    <span
+      style={{
+        position: 'absolute',
+        top: '3px',
+        right: '3px',
+        minWidth: '17px',
+        height: '17px',
+        padding: '0 4px',
+        borderRadius: '999px',
+        background: '#e11d48',
+        color: '#ffffff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '9px',
+        fontWeight: 800,
+        border: '2px solid #ffffff',
+        boxSizing: 'border-box',
+      }}
+    >
+      {unreadNotificationCount > 99
+        ? '99+'
+        : unreadNotificationCount}
+    </span>
+  )}
+</button>
 
       {/* ======================================================
           MAIN
