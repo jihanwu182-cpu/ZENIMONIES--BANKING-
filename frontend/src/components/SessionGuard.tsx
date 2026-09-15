@@ -5,13 +5,10 @@ import React, {
   useState,
 } from 'react';
 import { useLocation } from 'react-router-dom';
-import axios from 'axios';
 
-const API_BASE_URL =
-  'https://zenimonies-banking.onrender.com';
+import AccountLocked from '../pages/AccountLocked';
 
-const INACTIVITY_TIMEOUT =
-  5 * 60 * 1000;
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
 
 interface SessionGuardProps {
   children: React.ReactNode;
@@ -37,18 +34,16 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
   const activityThrottleRef =
     useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const lastActivityRef =
-    useRef<number>(Date.now());
-
-  const isPublicPath =
-    PUBLIC_PATHS.includes(location.pathname);
-
-  const getToken = () => {
+  const getToken = useCallback(() => {
     return (
       localStorage.getItem('zenimonies_token') ||
       localStorage.getItem('token')
     );
-  };
+  }, []);
+
+  const isPublicPath = PUBLIC_PATHS.includes(
+    location.pathname
+  );
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -79,14 +74,13 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
       return;
     }
 
-    lastActivityRef.current = Date.now();
-
     clearTimer();
 
     timerRef.current = setTimeout(() => {
       lockAccount();
     }, INACTIVITY_TIMEOUT);
   }, [
+    getToken,
     isPublicPath,
     locked,
     clearTimer,
@@ -94,36 +88,29 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
   ]);
 
   /*
-   * Check whether this browser already has
-   * a locked Zenimonies session.
+   * Initialize or restore the lock state.
    */
   useEffect(() => {
     const token = getToken();
 
-    if (
-      isPublicPath ||
-      !token
-    ) {
+    if (!token || isPublicPath) {
       clearTimer();
       setLocked(false);
       return;
     }
 
-    const alreadyLocked =
+    const storedLock =
       sessionStorage.getItem(
         'zenimonies_account_locked'
-      ) === 'true';
+      );
 
-    if (alreadyLocked) {
+    if (storedLock === 'true') {
       setLocked(true);
       clearTimer();
       return;
     }
 
     setLocked(false);
-
-    lastActivityRef.current =
-      Date.now();
 
     resetTimer();
 
@@ -133,19 +120,20 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
   }, [
     location.pathname,
     isPublicPath,
+    getToken,
     resetTimer,
     clearTimer,
   ]);
 
   /*
-   * Detect genuine user activity.
+   * Detect real user activity.
    */
   useEffect(() => {
     const token = getToken();
 
     if (
-      isPublicPath ||
       !token ||
+      isPublicPath ||
       locked
     ) {
       return;
@@ -156,6 +144,7 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
       'mousemove',
       'keydown',
       'touchstart',
+      'touchmove',
       'scroll',
       'click',
     ];
@@ -168,7 +157,6 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
       activityThrottleRef.current =
         setTimeout(() => {
           activityThrottleRef.current = null;
-
           resetTimer();
         }, 1000);
     };
@@ -188,9 +176,7 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
         );
       });
 
-      if (
-        activityThrottleRef.current
-      ) {
+      if (activityThrottleRef.current) {
         clearTimeout(
           activityThrottleRef.current
         );
@@ -199,120 +185,57 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
       }
     };
   }, [
+    getToken,
     isPublicPath,
     locked,
     resetTimer,
   ]);
 
   /*
-   * Ask the backend periodically whether
-   * the authentication session is still valid.
-   *
-   * The backend remains the security authority.
+   * Listen for a successful unlock.
    */
   useEffect(() => {
-    const token = getToken();
-
-    if (
-      isPublicPath ||
-      !token ||
-      locked
-    ) {
-      return;
-    }
-
-    const checkSession = async () => {
-      const currentToken = getToken();
-
-      if (!currentToken) {
-        return;
-      }
-
-      try {
-        await axios.get(
-          `${API_BASE_URL}/api/auth/me`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${currentToken}`,
-            },
-          }
-        );
-      } catch (error: any) {
-        const status =
-          error?.response?.status;
-
-        const code =
-          error?.response?.data?.code;
-
-        if (
-          status === 401 &&
-          code === 'SESSION_EXPIRED'
-        ) {
-          lockAccount();
-        }
-      }
-    };
-
-    const interval = setInterval(
-      checkSession,
-      30 * 1000
-    );
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [
-    isPublicPath,
-    locked,
-    lockAccount,
-  ]);
-
-  /*
-   * The lock screen will use this event
-   * to unlock the account after successful
-   * authentication.
-   */
-  useEffect(() => {
-    const handleUnlockEvent = () => {
+    const handleUnlock = () => {
       sessionStorage.removeItem(
         'zenimonies_account_locked'
       );
 
       setLocked(false);
 
-      lastActivityRef.current =
-        Date.now();
+      clearTimer();
 
-      resetTimer();
+      timerRef.current = setTimeout(() => {
+        lockAccount();
+      }, INACTIVITY_TIMEOUT);
     };
 
     window.addEventListener(
       'zenimonies:unlock',
-      handleUnlockEvent
+      handleUnlock
     );
 
     return () => {
       window.removeEventListener(
         'zenimonies:unlock',
-        handleUnlockEvent
+        handleUnlock
       );
     };
-  }, [resetTimer]);
+  }, [
+    clearTimer,
+    lockAccount,
+  ]);
 
   /*
-   * While locked, display the AccountLocked
-   * route/component through the application.
+   * While locked, show the lock screen.
+   *
+   * AccountLocked will handle the actual
+   * Passkey/password unlock flow.
    */
   if (
     locked &&
     !isPublicPath
   ) {
-    return (
-      <>
-        {children}
-      </>
-    );
+    return <AccountLocked />;
   }
 
   return <>{children}</>;
