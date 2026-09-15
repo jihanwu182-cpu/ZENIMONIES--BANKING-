@@ -5,6 +5,8 @@ const {
   verifyRegistration,
   getAuthenticationOptions,
   verifyAuthentication,
+  getLoginAuthenticationOptions,
+  verifyLoginAuthentication,
   getPasskeys,
 } = require('../controllers/passkeyController');
 
@@ -12,51 +14,69 @@ const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
+
 // ============================================================
-// PASSKEY REGISTRATION
+// PASSWORDLESS LOGIN
+// These routes MUST NOT use authMiddleware
 // ============================================================
 
-// Create WebAuthn registration challenge/options
+// Create login challenge
+router.post(
+  '/login/options',
+  getLoginAuthenticationOptions
+);
+
+// Verify passkey and create session
+router.post(
+  '/login/verify',
+  verifyLoginAuthentication
+);
+
+
+// ============================================================
+// PASSKEY REGISTRATION
+// These routes require the user to already be logged in
+// ============================================================
+
 router.post(
   '/register/options',
   authMiddleware,
   getRegistrationOptions
 );
 
-// Verify and save the new passkey
 router.post(
   '/register/verify',
   authMiddleware,
   verifyRegistration
 );
 
+
 // ============================================================
-// PASSKEY AUTHENTICATION
+// AUTHENTICATED PASSKEY TEST
 // ============================================================
 
-// Create WebAuthn authentication challenge/options
 router.post(
   '/authenticate/options',
   authMiddleware,
   getAuthenticationOptions
 );
 
-// Verify the passkey authentication response
 router.post(
   '/authenticate/verify',
   authMiddleware,
   verifyAuthentication
 );
 
+
 // ============================================================
-// PASSKEY MANAGEMENT
+// LIST REGISTERED PASSKEYS
 // ============================================================
 
-// Get the user's registered passkeys
 router.get(
   '/',
   authMiddleware,
   getPasskeys
 );
+
 
 module.exports = router;
