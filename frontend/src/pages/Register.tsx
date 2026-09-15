@@ -95,6 +95,16 @@ const Register: React.FC = () => {
   const [confirmPassword, setConfirmPassword] =
     useState('');
 
+  // ========================================================
+  // PASSWORD VISIBILITY
+  // ========================================================
+
+  const [showPassword, setShowPassword] =
+    useState(false);
+
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -299,13 +309,6 @@ const Register: React.FC = () => {
         // ----------------------------------------------------
         // DEVELOPMENT TEST OTP
         // ----------------------------------------------------
-        //
-        // This is useful only when the backend is running
-        // with NODE_ENV other than production.
-        //
-        // It must NOT be used as the actual production
-        // phone-delivery mechanism.
-        //
 
         if (data.development_otp) {
           sessionStorage.setItem(
@@ -587,30 +590,75 @@ const Register: React.FC = () => {
             Password
           </label>
 
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(event) =>
-              setPassword(
-                event.target.value
-              )
-            }
-            placeholder="Minimum 8 characters"
-            autoComplete="new-password"
-            disabled={loading}
+          <div
             style={{
-              boxSizing: 'border-box',
+              position: 'relative',
               width: '100%',
-              padding: '12px',
               marginBottom: '18px',
-              border:
-                '1px solid #d0d5dd',
-              borderRadius: '8px',
-              outline: 'none',
-              fontSize: '15px',
             }}
-          />
+          >
+            <input
+              id="password"
+              type={
+                showPassword
+                  ? 'text'
+                  : 'password'
+              }
+              value={password}
+              onChange={(event) =>
+                setPassword(
+                  event.target.value
+                )
+              }
+              placeholder="Minimum 8 characters"
+              autoComplete="new-password"
+              disabled={loading}
+              style={{
+                boxSizing: 'border-box',
+                width: '100%',
+                padding: '12px 48px 12px 12px',
+                border:
+                  '1px solid #d0d5dd',
+                borderRadius: '8px',
+                outline: 'none',
+                fontSize: '15px',
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowPassword(
+                  (current) => !current
+                )
+              }
+              aria-label={
+                showPassword
+                  ? 'Hide password'
+                  : 'Show password'
+              }
+              disabled={loading}
+              style={{
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform:
+                  'translateY(-50%)',
+                border: 'none',
+                background: 'transparent',
+                cursor: loading
+                  ? 'not-allowed'
+                  : 'pointer',
+                fontSize: '20px',
+                padding: '4px',
+                lineHeight: 1,
+              }}
+            >
+              {showPassword
+                ? '🙈'
+                : '👁️'}
+            </button>
+          </div>
 
           {/* CONFIRM PASSWORD */}
 
@@ -626,30 +674,75 @@ const Register: React.FC = () => {
             Confirm Password
           </label>
 
-          <input
-            id="confirmPassword"
-            type="password"
-            value={confirmPassword}
-            onChange={(event) =>
-              setConfirmPassword(
-                event.target.value
-              )
-            }
-            placeholder="Enter your password again"
-            autoComplete="new-password"
-            disabled={loading}
+          <div
             style={{
-              boxSizing: 'border-box',
+              position: 'relative',
               width: '100%',
-              padding: '12px',
               marginBottom: '22px',
-              border:
-                '1px solid #d0d5dd',
-              borderRadius: '8px',
-              outline: 'none',
-              fontSize: '15px',
             }}
-          />
+          >
+            <input
+              id="confirmPassword"
+              type={
+                showConfirmPassword
+                  ? 'text'
+                  : 'password'
+              }
+              value={confirmPassword}
+              onChange={(event) =>
+                setConfirmPassword(
+                  event.target.value
+                )
+              }
+              placeholder="Enter your password again"
+              autoComplete="new-password"
+              disabled={loading}
+              style={{
+                boxSizing: 'border-box',
+                width: '100%',
+                padding: '12px 48px 12px 12px',
+                border:
+                  '1px solid #d0d5dd',
+                borderRadius: '8px',
+                outline: 'none',
+                fontSize: '15px',
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowConfirmPassword(
+                  (current) => !current
+                )
+              }
+              aria-label={
+                showConfirmPassword
+                  ? 'Hide confirm password'
+                  : 'Show confirm password'
+              }
+              disabled={loading}
+              style={{
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform:
+                  'translateY(-50%)',
+                border: 'none',
+                background: 'transparent',
+                cursor: loading
+                  ? 'not-allowed'
+                  : 'pointer',
+                fontSize: '20px',
+                padding: '4px',
+                lineHeight: 1,
+              }}
+            >
+              {showConfirmPassword
+                ? '🙈'
+                : '👁️'}
+            </button>
+          </div>
 
           {/* SUBMIT */}
 
