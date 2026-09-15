@@ -32,6 +32,7 @@ import TransactionReceipt from './pages/TransactionReceipt.tsx';
 import ForgotPassword from './pages/ForgotPassword.tsx';
 import ResetPassword from './pages/ResetPassword.tsx';
 import Notifications from './pages/Notifications.tsx';
+import PasskeySecurity from './pages/PasskeySecurity.tsx';
 
 interface ServicePageProps {
   title: string;
@@ -310,6 +311,11 @@ const App: React.FC = () => {
           path="/reset-password" 
           element={<ResetPassword />} 
           />
+
+        <Route
+          path="/passkey-security"
+          element={<PasskeySecurity />}
+        />
 
         {/* DASHBOARD */}
 
