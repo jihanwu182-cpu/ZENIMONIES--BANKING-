@@ -5,6 +5,10 @@ const crypto = require('crypto');
 const pool = require('../config/database');
 
 const {
+  createAuthSession,
+} = require('../services/sessionService');
+
+const {
   sendPhoneOtp,
 } = require('../services/termiiService');
 
@@ -12,9 +16,6 @@ const {
   sendPasswordResetEmail,
 } = require('../services/emailService');
 
-const {
-  createAuthSession,
-} = require('../services/sessionService');
 
 // ============================================================
 // CONFIGURATION
@@ -77,36 +78,14 @@ const generateZenimoniesAccountNumber = () => {
 
 
 // ============================================================
-// CREATE JWT
-// ============================================================
-
-const createAccessToken = (user) => {
-  if (!process.env.JWT_SECRET) {
-    throw new Error(
-      'JWT_SECRET is not configured'
-    );
-  }
-
-  return jwt.sign(
-    {
-      userId: user.id,
-      role: user.role,
-    },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: '24h',
-    }
-  );
-};
-
-
-// ============================================================
 // GET BEARER TOKEN
 // ============================================================
 
 const getBearerToken = (req) => {
+
   const authHeader =
     req.headers.authorization;
+
 
   if (
     !authHeader ||
@@ -114,6 +93,7 @@ const getBearerToken = (req) => {
   ) {
     return null;
   }
+
 
   return authHeader
     .substring(7)
@@ -124,10 +104,21 @@ const getBearerToken = (req) => {
 // ============================================================
 // VERIFY JWT
 // ============================================================
+//
+// NOTE:
+//
+// The JWT contains the session ID when created through
+// sessionService.js.
+//
+// The full 5-minute inactivity enforcement is performed by
+// authMiddleware.js through the auth_sessions database table.
+// ============================================================
 
 const verifyJwt = (req) => {
+
   const token =
     getBearerToken(req);
+
 
   if (!token) {
     return {
@@ -138,6 +129,7 @@ const verifyJwt = (req) => {
     };
   }
 
+
   if (!process.env.JWT_SECRET) {
     return {
       valid: false,
@@ -147,12 +139,15 @@ const verifyJwt = (req) => {
     };
   }
 
+
   try {
+
     const decoded =
       jwt.verify(
         token,
         process.env.JWT_SECRET
       );
+
 
     if (
       !decoded ||
@@ -166,12 +161,15 @@ const verifyJwt = (req) => {
       };
     }
 
+
     return {
       valid: true,
       decoded,
     };
 
+
   } catch (error) {
+
     return {
       valid: false,
       status: 401,
@@ -276,6 +274,7 @@ const register = async (
   const client =
     await pool.connect();
 
+
   try {
 
     const {
@@ -296,6 +295,7 @@ const register = async (
       !phone ||
       !password
     ) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -307,19 +307,23 @@ const register = async (
     const normalizedFullName =
       String(full_name).trim();
 
+
     const normalizedEmail =
       String(email)
         .trim()
         .toLowerCase();
 
+
     const normalizedPhone =
       normalizePhone(phone);
+
 
     const normalizedPassword =
       String(password);
 
 
     if (!normalizedFullName) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -333,6 +337,7 @@ const register = async (
         normalizedEmail
       )
     ) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -342,6 +347,7 @@ const register = async (
 
 
     if (!normalizedPhone) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -353,6 +359,7 @@ const register = async (
     if (
       normalizedPassword.length < 8
     ) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -365,7 +372,9 @@ const register = async (
     // START TRANSACTION
     // ========================================================
 
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
 
     // ========================================================
@@ -399,6 +408,7 @@ const register = async (
         'ROLLBACK'
       );
 
+
       const existing =
         existingUser.rows[0];
 
@@ -407,6 +417,7 @@ const register = async (
         existing.email ===
         normalizedEmail
       ) {
+
         return res.status(409).json({
           success: false,
           message:
@@ -531,6 +542,7 @@ const register = async (
 
     let accountCreated = false;
 
+
     for (
       let attempt = 0;
       attempt < 5;
@@ -539,6 +551,7 @@ const register = async (
 
       const accountNumber =
         generateZenimoniesAccountNumber();
+
 
       try {
 
@@ -580,9 +593,11 @@ const register = async (
         account =
           accountResult.rows[0];
 
+
         accountCreated = true;
 
         break;
+
 
       } catch (error) {
 
@@ -599,6 +614,7 @@ const register = async (
 
 
     if (!accountCreated) {
+
       throw new Error(
         'Unable to create Zenimonies account number'
       );
@@ -621,17 +637,10 @@ const register = async (
     // ========================================================
 
     await sendPhoneOtp({
-      phone: normalizedPhone,
+      phone:
+        normalizedPhone,
       otp,
     });
-
-
-    // ========================================================
-    // CREATE JWT
-    // ========================================================
-
-    const token =
-      createAccessToken(user);
 
 
     // ========================================================
@@ -671,12 +680,34 @@ const register = async (
 
 
     // ========================================================
-    // COMMIT
+    // COMMIT USER / ACCOUNT / OTP
     // ========================================================
 
     await client.query(
       'COMMIT'
     );
+
+
+    // ========================================================
+    // CREATE AUTHENTICATION SESSION
+    // ========================================================
+    //
+    // IMPORTANT:
+    //
+    // This happens AFTER COMMIT because sessionService uses
+    // the main pool and the newly-created user must already
+    // be committed before the auth_sessions foreign key can
+    // reference it.
+    // ========================================================
+
+    const session =
+      await createAuthSession(
+        user
+      );
+
+
+    const token =
+      session.token;
 
 
     // ========================================================
@@ -692,8 +723,15 @@ const register = async (
 
       token,
 
+      session_expires_at:
+        session.expiresAt,
+
+      inactivity_timeout_minutes:
+        5,
+
       requires_phone_verification:
         true,
+
 
       user: {
 
@@ -752,6 +790,7 @@ const register = async (
           user.created_at,
       },
 
+
       account: {
 
         id:
@@ -785,9 +824,9 @@ const register = async (
           account.created_at,
       },
 
+
       deposit_account_status:
         'not_provisioned',
-
     };
 
 
@@ -799,6 +838,7 @@ const register = async (
       process.env.NODE_ENV !==
       'production'
     ) {
+
       response.development_otp =
         otp;
     }
@@ -808,13 +848,17 @@ const register = async (
       response
     );
 
+
   } catch (error) {
 
     try {
+
       await client.query(
         'ROLLBACK'
       );
+
     } catch (rollbackError) {
+
       console.error(
         'Rollback error:',
         rollbackError
@@ -832,6 +876,7 @@ const register = async (
       error &&
       error.code === '23505'
     ) {
+
       return res.status(409).json({
         success: false,
         message:
@@ -847,10 +892,10 @@ const register = async (
         'Unable to create account',
     });
 
+
   } finally {
 
     client.release();
-
   }
 };
 
@@ -867,6 +912,7 @@ const verifyPhone = async (
   const client =
     await pool.connect();
 
+
   try {
 
     const auth =
@@ -874,6 +920,7 @@ const verifyPhone = async (
 
 
     if (!auth.valid) {
+
       return res.status(
         auth.status
       ).json({
@@ -897,6 +944,7 @@ const verifyPhone = async (
     if (
       !/^\d{6}$/.test(otp)
     ) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -926,6 +974,7 @@ const verifyPhone = async (
     if (
       userResult.rows.length === 0
     ) {
+
       return res.status(404).json({
         success: false,
         message:
@@ -939,6 +988,7 @@ const verifyPhone = async (
 
 
     if (user.phone_verified) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -984,6 +1034,7 @@ const verifyPhone = async (
         'ROLLBACK'
       );
 
+
       return res.status(400).json({
         success: false,
         message:
@@ -1004,6 +1055,7 @@ const verifyPhone = async (
       await client.query(
         'ROLLBACK'
       );
+
 
       return res.status(400).json({
         success: false,
@@ -1079,13 +1131,17 @@ const verifyPhone = async (
         user.is_verified === true,
     });
 
+
   } catch (error) {
 
     try {
+
       await client.query(
         'ROLLBACK'
       );
+
     } catch (rollbackError) {
+
       console.error(
         'Rollback error:',
         rollbackError
@@ -1105,10 +1161,10 @@ const verifyPhone = async (
         'Unable to verify phone number.',
     });
 
+
   } finally {
 
     client.release();
-
   }
 };
 
@@ -1125,6 +1181,7 @@ const resendPhoneOtp = async (
   const client =
     await pool.connect();
 
+
   try {
 
     const auth =
@@ -1132,6 +1189,7 @@ const resendPhoneOtp = async (
 
 
     if (!auth.valid) {
+
       return res.status(
         auth.status
       ).json({
@@ -1164,6 +1222,7 @@ const resendPhoneOtp = async (
     if (
       userResult.rows.length === 0
     ) {
+
       return res.status(404).json({
         success: false,
         message:
@@ -1177,6 +1236,7 @@ const resendPhoneOtp = async (
 
 
     if (user.phone_verified) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -1256,7 +1316,8 @@ const resendPhoneOtp = async (
 
 
     await sendPhoneOtp({
-      phone: user.phone,
+      phone:
+        user.phone,
       otp,
     });
 
@@ -1307,6 +1368,7 @@ const resendPhoneOtp = async (
       process.env.NODE_ENV !==
       'production'
     ) {
+
       response.development_otp =
         otp;
     }
@@ -1316,13 +1378,17 @@ const resendPhoneOtp = async (
       response
     );
 
+
   } catch (error) {
 
     try {
+
       await client.query(
         'ROLLBACK'
       );
+
     } catch (rollbackError) {
+
       console.error(
         'Rollback error:',
         rollbackError
@@ -1342,10 +1408,10 @@ const resendPhoneOtp = async (
         'Unable to resend verification code.',
     });
 
+
   } finally {
 
     client.release();
-
   }
 };
 
@@ -1362,6 +1428,7 @@ const sendPhoneOtpController = async (
   const client =
     await pool.connect();
 
+
   try {
 
     const auth =
@@ -1369,6 +1436,7 @@ const sendPhoneOtpController = async (
 
 
     if (!auth.valid) {
+
       return res.status(
         auth.status
       ).json({
@@ -1401,6 +1469,7 @@ const sendPhoneOtpController = async (
     if (
       userResult.rows.length === 0
     ) {
+
       return res.status(404).json({
         success: false,
         message:
@@ -1414,6 +1483,7 @@ const sendPhoneOtpController = async (
 
 
     if (!user.phone) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -1423,6 +1493,7 @@ const sendPhoneOtpController = async (
 
 
     if (user.phone_verified) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -1502,7 +1573,8 @@ const sendPhoneOtpController = async (
 
 
     await sendPhoneOtp({
-      phone: user.phone,
+      phone:
+        user.phone,
       otp,
     });
 
@@ -1553,6 +1625,7 @@ const sendPhoneOtpController = async (
       process.env.NODE_ENV !==
       'production'
     ) {
+
       response.development_otp =
         otp;
     }
@@ -1562,13 +1635,17 @@ const sendPhoneOtpController = async (
       response
     );
 
+
   } catch (error) {
 
     try {
+
       await client.query(
         'ROLLBACK'
       );
+
     } catch (rollbackError) {
+
       console.error(
         'Rollback error:',
         rollbackError
@@ -1588,37 +1665,96 @@ const sendPhoneOtpController = async (
         'Unable to send verification code',
     });
 
+
   } finally {
 
     client.release();
-
   }
 };
 
 
 // ============================================================
 // LOGIN
+// POST /api/auth/login
+// ============================================================
+//
+// Login identifier:
+//
+// Email
+// OR
+// Registered Zenimonies phone number
+//
+// Successful login creates:
+//
+// JWT
+// +
+// Server-side auth session
+//
+// The auth session enforces the 5-minute inactivity timeout.
 // ============================================================
 
-const login = async (req, res) => {
+const login = async (
+  req,
+  res
+) => {
+
   try {
-    console.log('LOGIN: request received');
 
-    const { email, password } = req.body;
+    console.log(
+      'LOGIN: request received'
+    );
 
-    if (!email || !password) {
+
+    const {
+      email,
+      phone,
+      identifier,
+      password,
+    } = req.body || {};
+
+
+    // ========================================================
+    // LOGIN IDENTIFIER
+    // ========================================================
+
+    const loginIdentifier =
+      String(
+        identifier ||
+        email ||
+        phone ||
+        ''
+      ).trim();
+
+
+    const normalizedIdentifier =
+      loginIdentifier.toLowerCase();
+
+
+    // ========================================================
+    // VALIDATION
+    // ========================================================
+
+    if (
+      !loginIdentifier ||
+      !password
+    ) {
+
       return res.status(400).json({
         success: false,
-        message: 'Email and password are required',
+        message:
+          'Email or phone number and password are required',
       });
     }
 
-    const normalizedEmail =
-      String(email)
-        .trim()
-        .toLowerCase();
 
-    console.log('LOGIN: checking user');
+    console.log(
+      'LOGIN: checking user'
+    );
+
+
+    // ========================================================
+    // FIND USER BY EMAIL OR REGISTERED PHONE
+    // ========================================================
 
     const userResult =
       await pool.query(
@@ -1631,45 +1767,70 @@ const login = async (req, res) => {
           password_hash,
           role,
           status,
+
           kyc_status,
           kyc_tier,
           tier_3_method,
+
           phone_verified,
           is_verified,
+
           account_limit,
-          daily_transfer_limit
+          daily_transfer_limit,
+          daily_transfer_used,
+          daily_transfer_reset_at
         FROM users
-        WHERE LOWER(email) = $1
+        WHERE
+          LOWER(email) = $1
+          OR phone = $2
         LIMIT 1
         `,
-        [normalizedEmail]
+        [
+          normalizedIdentifier,
+          loginIdentifier,
+        ]
       );
+
 
     console.log(
       'LOGIN: user query completed'
     );
 
+
+    // ========================================================
+    // USER NOT FOUND
+    // ========================================================
+
     if (
       userResult.rows.length === 0
     ) {
+
       return res.status(401).json({
         success: false,
         message:
-          'Invalid email or password',
+          'Invalid email/phone or password',
       });
     }
 
+
     const user =
       userResult.rows[0];
+
 
     console.log(
       'LOGIN: user found'
     );
 
+
+    // ========================================================
+    // ACCOUNT STATUS
+    // ========================================================
+
     if (
       user.status &&
       user.status !== 'active'
     ) {
+
       return res.status(403).json({
         success: false,
         message:
@@ -1677,42 +1838,66 @@ const login = async (req, res) => {
       });
     }
 
+
+    // ========================================================
+    // CHECK PASSWORD
+    // ========================================================
+
     console.log(
       'LOGIN: checking password'
     );
 
+
     const passwordMatches =
       await bcrypt.compare(
-        password,
+        String(password),
         user.password_hash
       );
 
+
     if (!passwordMatches) {
+
       return res.status(401).json({
         success: false,
         message:
-          'Invalid email or password',
+          'Invalid email/phone or password',
       });
     }
+
 
     console.log(
       'LOGIN: password verified'
     );
 
-    console.log(
-      'LOGIN: creating token'
-    );
 
-    const token =
-      createAccessToken(user);
+    // ========================================================
+    // CREATE SERVER-SIDE AUTH SESSION
+    // ========================================================
 
     console.log(
-      'LOGIN: token created'
+      'LOGIN: creating authentication session'
     );
+
+
+    const session =
+      await createAuthSession(
+        user
+      );
+
+
+    console.log(
+      'LOGIN: authentication session created'
+    );
+
+
+    // ========================================================
+    // LOAD ACCOUNTS
+    // ========================================================
 
     console.log(
       'LOGIN: loading accounts'
     );
+
 
     const accountsResult =
       await pool.query(
@@ -1734,11 +1919,18 @@ const login = async (req, res) => {
         [user.id]
       );
 
+
     console.log(
       'LOGIN: accounts loaded'
     );
 
+
+    // ========================================================
+    // SAFE USER DATA
+    // ========================================================
+
     const safeUser = {
+
       id:
         user.id,
 
@@ -1777,21 +1969,76 @@ const login = async (req, res) => {
 
       daily_transfer_limit:
         user.daily_transfer_limit,
+
+      daily_transfer_used:
+        user.daily_transfer_used,
+
+      daily_transfer_reset_at:
+        user.daily_transfer_reset_at,
     };
+
+
+    // ========================================================
+    // AUDIT LOG
+    // ========================================================
+
+    await pool.query(
+      `
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description,
+        ip_address,
+        user_agent
+      )
+      VALUES (
+        $1,
+        'login_success',
+        'User successfully authenticated with email or registered phone number.',
+        $2,
+        $3
+      )
+      `,
+      [
+        user.id,
+        req.ip || null,
+        req.get('user-agent') || null,
+      ]
+    );
+
+
+    // ========================================================
+    // SUCCESS
+    // ========================================================
 
     console.log(
       'LOGIN: successful'
     );
 
+
     return res.status(200).json({
+
       success: true,
+
       message:
         'Login successful',
-      token,
-      user: safeUser,
+
+      token:
+        session.token,
+
+      session_expires_at:
+        session.expiresAt,
+
+      inactivity_timeout_minutes:
+        5,
+
+      user:
+        safeUser,
+
       accounts:
         accountsResult.rows,
     });
+
 
   } catch (error) {
 
@@ -1799,28 +2046,36 @@ const login = async (req, res) => {
       'LOGIN FAILED'
     );
 
+
     console.error(
       'Login error name:',
       error?.name
     );
+
 
     console.error(
       'Login error code:',
       error?.code
     );
 
+
     console.error(
       'Login error message:',
       error?.message
     );
 
+
     return res.status(500).json({
+
       success: false,
+
       message:
         'LOGIN_DATABASE_OR_SERVER_ERROR',
+
       error_code:
         error?.code ||
         'UNKNOWN_ERROR',
+
       error_detail:
         error?.message ||
         'Unknown server error',
@@ -1851,7 +2106,10 @@ const forgotPassword = async (
   const client =
     await pool.connect();
 
-  let resetTokenId = null;
+
+  let resetTokenId =
+    null;
+
 
   try {
 
@@ -1869,6 +2127,7 @@ const forgotPassword = async (
         normalizedEmail
       )
     ) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -1897,14 +2156,10 @@ const forgotPassword = async (
       );
 
 
-    /*
-     * If there is no matching account, return the same
-     * generic response as a successful request.
-     */
-
     if (
       userResult.rows.length === 0
     ) {
+
       return res.status(200).json({
         success: true,
         message:
@@ -1925,6 +2180,7 @@ const forgotPassword = async (
       user.status &&
       user.status !== 'active'
     ) {
+
       return res.status(200).json({
         success: true,
         message:
@@ -1976,11 +2232,6 @@ const forgotPassword = async (
         PASSWORD_RESET_COOLDOWN_SECONDS
       ) {
 
-        /*
-         * Still return the same generic message.
-         * Do not reveal that a reset was recently requested.
-         */
-
         return res.status(200).json({
           success: true,
           message:
@@ -1995,7 +2246,9 @@ const forgotPassword = async (
     // ========================================================
 
     const resetToken =
-      crypto.randomBytes(32).toString('hex');
+      crypto
+        .randomBytes(32)
+        .toString('hex');
 
 
     const resetTokenHash =
@@ -2111,15 +2364,15 @@ const forgotPassword = async (
     const frontendUrl =
       String(
         process.env.FRONTEND_URL || ''
-      ).trim().replace(/\/+$/, '');
+      )
+        .trim()
+        .replace(
+          /\/+$/,
+          ''
+        );
 
 
     if (!frontendUrl) {
-
-      /*
-       * The token has already been created, so invalidate it
-       * before reporting the configuration error.
-       */
 
       await pool.query(
         `
@@ -2129,6 +2382,7 @@ const forgotPassword = async (
         `,
         [resetTokenId]
       );
+
 
       return res.status(500).json({
         success: false,
@@ -2151,9 +2405,12 @@ const forgotPassword = async (
     try {
 
       await sendPasswordResetEmail({
-        to: user.email,
+        to:
+          user.email,
+
         resetUrl,
       });
+
 
     } catch (emailError) {
 
@@ -2162,11 +2419,6 @@ const forgotPassword = async (
         emailError
       );
 
-
-      /*
-       * Never leave an active reset token behind when the
-       * email could not be sent.
-       */
 
       await pool.query(
         `
@@ -2196,13 +2448,17 @@ const forgotPassword = async (
         'If an account exists for this email address, you will receive a password reset link shortly.',
     });
 
+
   } catch (error) {
 
     try {
+
       await client.query(
         'ROLLBACK'
       );
+
     } catch (rollbackError) {
+
       console.error(
         'Forgot password rollback error:',
         rollbackError
@@ -2222,10 +2478,10 @@ const forgotPassword = async (
         'Unable to process password reset request.',
     });
 
+
   } finally {
 
     client.release();
-
   }
 };
 
@@ -2242,6 +2498,7 @@ const resetPassword = async (
 
   const client =
     await pool.connect();
+
 
   try {
 
@@ -2268,6 +2525,7 @@ const resetPassword = async (
     // ========================================================
 
     if (!resetToken) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -2279,6 +2537,7 @@ const resetPassword = async (
     if (
       newPassword.length < 8
     ) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -2291,6 +2550,7 @@ const resetPassword = async (
       newPassword !==
       confirmPassword
     ) {
+
       return res.status(400).json({
         success: false,
         message:
@@ -2350,6 +2610,7 @@ const resetPassword = async (
         'ROLLBACK'
       );
 
+
       return res.status(400).json({
         success: false,
         message:
@@ -2374,6 +2635,7 @@ const resetPassword = async (
       await client.query(
         'ROLLBACK'
       );
+
 
       return res.status(400).json({
         success: false,
@@ -2411,6 +2673,7 @@ const resetPassword = async (
         'ROLLBACK'
       );
 
+
       return res.status(400).json({
         success: false,
         message:
@@ -2431,6 +2694,7 @@ const resetPassword = async (
       await client.query(
         'ROLLBACK'
       );
+
 
       return res.status(403).json({
         success: false,
@@ -2554,13 +2818,17 @@ const resetPassword = async (
         'Your password has been reset successfully. You can now log in with your new password.',
     });
 
+
   } catch (error) {
 
     try {
+
       await client.query(
         'ROLLBACK'
       );
+
     } catch (rollbackError) {
+
       console.error(
         'Reset password rollback error:',
         rollbackError
@@ -2580,16 +2848,17 @@ const resetPassword = async (
         'Unable to reset password. Please try again later.',
     });
 
+
   } finally {
 
     client.release();
-
   }
 };
 
 
 // ============================================================
 // GET CURRENT USER
+// GET /api/auth/me
 // ============================================================
 
 const getMe = async (
@@ -2604,6 +2873,7 @@ const getMe = async (
 
 
     if (!auth.valid) {
+
       return res.status(
         auth.status
       ).json({
@@ -2660,6 +2930,7 @@ const getMe = async (
     if (
       userResult.rows.length === 0
     ) {
+
       return res.status(404).json({
         success: false,
         message:
@@ -2804,12 +3075,14 @@ const getMe = async (
         accountResult.rows,
     });
 
+
   } catch (error) {
 
     console.error(
       'Get profile error:',
       error
     );
+
 
     return res.status(500).json({
       success: false,
@@ -2842,5 +3115,4 @@ module.exports = {
   verifyPhone,
 
   resendPhoneOtp,
-
 };
