@@ -23,6 +23,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const kycRoutes = require('./routes/kycRoutes');
 const profileRoutes = require('./routes/profile');
 const notificationRoutes = require('./routes/notifications');
+const passkeyRoutes = require('./routes/passkey');
 
 // ============================================================
 // PAYSTACK
@@ -184,6 +185,15 @@ app.use(
 app.use(
   '/api/notifications',
   notificationRoutes
+);
+
+// ============================================================
+// PASSKEYS
+// ============================================================
+
+app.use(
+  '/api/passkeys',
+  passkeyRoutes
 );
 // ============================================================
 // ADMIN
