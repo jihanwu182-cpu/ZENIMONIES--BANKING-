@@ -924,8 +924,10 @@ const Dashboard: React.FC = () => {
         : unreadNotificationCount}
     </span>
   )}
-</button>
-  </div>
+    </button>
+     </div>
+    </header> 
+      
       {/* ======================================================
           MAIN
       ====================================================== */}
