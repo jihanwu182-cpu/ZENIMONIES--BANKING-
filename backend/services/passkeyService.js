@@ -215,6 +215,11 @@ const createRegistrationOptions = async (userId) => {
       user.email ||
       `user-${user.id}`,
 
+    userDisplayName:
+    user.full_name ||
+    user.email ||
+    `Zenimonies User`,
+
     userID: getWebAuthnUserId(user.id),
 
     attestationType: 'none',
