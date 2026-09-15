@@ -1,8 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import axios, { AxiosError } from 'axios';
 import {
-  startRegistration,
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Container,
+  Divider,
+  IconButton,
+  Stack,
+  Typography,
+} from '@mui/material';
+
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
+import SecurityIcon from '@mui/icons-material/Security';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+
+import {
+  browserSupportsPasskeys,
+  platformAuthenticatorIsAvailable,
   startAuthentication,
+  startRegistration,
 } from '@simplewebauthn/browser';
 
 const API_ROOT =
@@ -12,6 +32,9 @@ const API_ROOT =
 const API_BASE_URL = API_ROOT.endsWith('/api')
   ? API_ROOT
   : `${API_ROOT}/api`;
+
+const FRONTEND_URL =
+  'https://zenimonies-banking-1.onrender.com';
 
 interface Passkey {
   id: string;
@@ -23,94 +46,81 @@ interface Passkey {
   last_used_at?: string | null;
 }
 
-interface ApiErrorResponse {
+interface ApiResponse {
+  success?: boolean;
   message?: string;
+  options?: any;
+  passkey?: Passkey;
+  passkeys?: Passkey[];
 }
 
-const getToken = (): string | null => {
+const getToken = () => {
   return (
     localStorage.getItem('zenimonies_token') ||
-    localStorage.getItem('token')
+    localStorage.getItem('token') ||
+    ''
   );
 };
 
-const getErrorMessage = (
-  error: unknown,
-  fallback: string
-): string => {
-  const axiosError = error as AxiosError<ApiErrorResponse>;
-
-  return (
-    axiosError.response?.data?.message ||
-    (error instanceof Error
-      ? error.message
-      : fallback)
-  );
-};
-
-const formatDate = (
-  value?: string | null
-): string => {
-  if (!value) {
-    return 'Not used yet';
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return 'Unknown';
-  }
-
-  return date.toLocaleString();
-};
+const authHeaders = () => ({
+  Authorization: `Bearer ${getToken()}`,
+});
 
 const PasskeySecurity: React.FC = () => {
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
   const [loading, setLoading] = useState(true);
-  const [registering, setRegistering] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [message, setMessage] = useState('');
+
+  const [supported, setSupported] = useState(false);
+  const [platformAvailable, setPlatformAvailable] =
+    useState(false);
+
   const [error, setError] = useState('');
-
-  const token = getToken();
-
-  // ============================================================
-  // LOAD REGISTERED PASSKEYS
-  // ============================================================
+  const [success, setSuccess] = useState('');
 
   const loadPasskeys = async () => {
-    if (!token) {
-      setError(
-        'Your session has expired. Please log in again.'
-      );
-      setLoading(false);
-      return;
-    }
-
     try {
-      setLoading(true);
-      setError('');
+      const token = getToken();
 
-      const response = await axios.get(
+      if (!token) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const response = await fetch(
         `${API_BASE_URL}/passkeys`,
         {
+          method: 'GET',
           headers: {
-            Authorization: `Bearer ${token}`,
+            ...authHeaders(),
           },
         }
       );
 
+      const data: ApiResponse = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            'Unable to load your passkeys.'
+        );
+      }
+
       setPasskeys(
-        Array.isArray(response.data?.passkeys)
-          ? response.data.passkeys
+        Array.isArray(data.passkeys)
+          ? data.passkeys
           : []
       );
-    } catch (err) {
+    } catch (err: any) {
+      console.error(
+        'Load passkeys error:',
+        err
+      );
+
       setError(
-        getErrorMessage(
-          err,
-          'Unable to load your registered passkeys.'
-        )
+        err.message ||
+          'Unable to load your passkeys.'
       );
     } finally {
       setLoading(false);
@@ -118,130 +128,178 @@ const PasskeySecurity: React.FC = () => {
   };
 
   useEffect(() => {
-    loadPasskeys();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const checkSupport = async () => {
+      try {
+        const passkeySupported =
+          await browserSupportsPasskeys();
 
-  // ============================================================
-  // REGISTER PASSKEY
-  // ============================================================
-
-  const handleRegisterPasskey = async () => {
-    if (!token) {
-      setError(
-        'Your session has expired. Please log in again.'
-      );
-      return;
-    }
-
-    if (
-      !window.isSecureContext &&
-      window.location.hostname !== 'localhost'
-    ) {
-      setError(
-        'Passkeys require a secure connection (HTTPS).'
-      );
-      return;
-    }
-
-    try {
-      setRegistering(true);
-      setError('');
-      setMessage('');
-
-      // --------------------------------------------------------
-      // STEP 1: GET REGISTRATION OPTIONS
-      // --------------------------------------------------------
-
-      const optionsResponse =
-        await axios.post(
-          `${API_BASE_URL}/passkeys/register/options`,
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
+        setSupported(
+          Boolean(passkeySupported)
         );
 
-      const options =
-        optionsResponse.data?.options;
+        if (passkeySupported) {
+          const platform =
+            await platformAuthenticatorIsAvailable();
 
-      if (!options) {
+          setPlatformAvailable(
+            Boolean(platform)
+          );
+        }
+      } catch (err) {
+        console.error(
+          'Passkey support check error:',
+          err
+        );
+      }
+    };
+
+    checkSupport();
+    loadPasskeys();
+  }, []);
+
+  /*
+   * ============================================================
+   * CREATE PASSKEY
+   * ============================================================
+   */
+
+  const createPasskey = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!supported) {
+      setError(
+        'Passkeys are not supported by this browser or device.'
+      );
+      return;
+    }
+
+    if (!getToken()) {
+      window.location.href = '/login';
+      return;
+    }
+
+    setCreating(true);
+
+    try {
+      /*
+       * IMPORTANT:
+       *
+       * We use native fetch here rather than Axios.
+       * This helps preserve Safari/iPhone's user gesture
+       * requirement for WebAuthn.
+       */
+
+      const optionsResponse = await fetch(
+        `${API_BASE_URL}/passkeys/register/options`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders(),
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({}),
+        }
+      );
+
+      const optionsData: ApiResponse =
+        await optionsResponse.json();
+
+      if (!optionsResponse.ok) {
+        throw new Error(
+          optionsData.message ||
+            'Unable to start passkey registration.'
+        );
+      }
+
+      if (!optionsData.options) {
         throw new Error(
           'The server did not return passkey registration options.'
         );
       }
 
-      // --------------------------------------------------------
-      // STEP 2: CREATE PASSKEY ON DEVICE
-      // --------------------------------------------------------
+      /*
+       * The device should now display its native
+       * Face ID / Touch ID / passkey prompt.
+       */
 
       const registrationResponse =
         await startRegistration({
-          optionsJSON: options,
+          optionsJSON:
+            optionsData.options,
         });
 
-      // --------------------------------------------------------
-      // STEP 3: SEND CRYPTOGRAPHIC RESPONSE TO SERVER
-      // --------------------------------------------------------
+      const verifyResponse = await fetch(
+        `${API_BASE_URL}/passkeys/register/verify`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders(),
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify(
+            registrationResponse
+          ),
+        }
+      );
 
-      const verificationResponse =
-        await axios.post(
-          `${API_BASE_URL}/passkeys/register/verify`,
-          registrationResponse,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+      const verifyData: ApiResponse =
+        await verifyResponse.json();
 
-      if (
-        !verificationResponse.data?.success ||
-        !verificationResponse.data?.verified
-      ) {
+      if (!verifyResponse.ok) {
         throw new Error(
-          verificationResponse.data?.message ||
-            'Passkey registration could not be verified.'
+          verifyData.message ||
+            'Passkey registration failed.'
         );
       }
 
-      setMessage(
-        'Passkey registered successfully. You can now use your device authentication for Zenimonies security.'
+      setSuccess(
+        'Passkey created successfully. Your device can now use Face ID, Touch ID, or its passkey security to authenticate with Zenimonies.'
       );
 
       await loadPasskeys();
-    } catch (err) {
+    } catch (err: any) {
       console.error(
-        'Passkey registration error:',
+        'Create passkey error:',
         err
       );
 
-      setError(
-        getErrorMessage(
-          err,
-          'Passkey registration failed. Please try again.'
-        )
-      );
+      if (
+        err?.name ===
+        'NotAllowedError'
+      ) {
+        setError(
+          'Passkey creation was cancelled or the device could not complete authentication.'
+        );
+      } else if (
+        err?.name ===
+        'InvalidStateError'
+      ) {
+        setError(
+          'This passkey may already be registered on this device.'
+        );
+      } else {
+        setError(
+          err.message ||
+            'Unable to create passkey.'
+        );
+      }
     } finally {
-      setRegistering(false);
+      setCreating(false);
     }
   };
 
-  // ============================================================
-  // TEST PASSKEY AUTHENTICATION
-  // ============================================================
+  /*
+   * ============================================================
+   * TEST PASSKEY
+   * ============================================================
+   */
 
-  const handleTestPasskey = async () => {
-    if (!token) {
-      setError(
-        'Your session has expired. Please log in again.'
-      );
-      return;
-    }
+  const testPasskey = async () => {
+    setError('');
+    setSuccess('');
 
     if (passkeys.length === 0) {
       setError(
@@ -250,767 +308,583 @@ const PasskeySecurity: React.FC = () => {
       return;
     }
 
+    setTesting(true);
+
     try {
-      setTesting(true);
-      setError('');
-      setMessage('');
+      const optionsResponse = await fetch(
+        `${API_BASE_URL}/passkeys/authenticate/options`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders(),
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({}),
+        }
+      );
 
-      // --------------------------------------------------------
-      // STEP 1: GET AUTHENTICATION OPTIONS
-      // --------------------------------------------------------
+      const optionsData: ApiResponse =
+        await optionsResponse.json();
 
-      const optionsResponse =
-        await axios.post(
-          `${API_BASE_URL}/passkeys/authenticate/options`,
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
+      if (!optionsResponse.ok) {
+        throw new Error(
+          optionsData.message ||
+            'Unable to start passkey authentication.'
         );
+      }
 
-      const options =
-        optionsResponse.data?.options;
-
-      if (!options) {
+      if (!optionsData.options) {
         throw new Error(
           'The server did not return passkey authentication options.'
         );
       }
 
-      // --------------------------------------------------------
-      // STEP 2: AUTHENTICATE USING DEVICE
-      // --------------------------------------------------------
-
       const authenticationResponse =
         await startAuthentication({
-          optionsJSON: options,
+          optionsJSON:
+            optionsData.options,
         });
 
-      // --------------------------------------------------------
-      // STEP 3: VERIFY AUTHENTICATION ON SERVER
-      // --------------------------------------------------------
+      const verifyResponse = await fetch(
+        `${API_BASE_URL}/passkeys/authenticate/verify`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders(),
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify(
+            authenticationResponse
+          ),
+        }
+      );
 
-      const verificationResponse =
-        await axios.post(
-          `${API_BASE_URL}/passkeys/authenticate/verify`,
-          authenticationResponse,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+      const verifyData: ApiResponse =
+        await verifyResponse.json();
 
-      if (
-        !verificationResponse.data?.success ||
-        !verificationResponse.data?.verified
-      ) {
+      if (!verifyResponse.ok) {
         throw new Error(
-          verificationResponse.data?.message ||
+          verifyData.message ||
             'Passkey authentication failed.'
         );
       }
 
-      setMessage(
-        'Passkey authentication successful. Your device authentication is working correctly.'
+      setSuccess(
+        'Passkey authentication successful.'
       );
 
       await loadPasskeys();
-    } catch (err) {
+    } catch (err: any) {
       console.error(
-        'Passkey authentication error:',
+        'Test passkey error:',
         err
       );
 
-      setError(
-        getErrorMessage(
-          err,
-          'Passkey authentication failed.'
-        )
-      );
+      if (
+        err?.name ===
+        'NotAllowedError'
+      ) {
+        setError(
+          'Passkey authentication was cancelled or could not be completed.'
+        );
+      } else {
+        setError(
+          err.message ||
+            'Passkey authentication failed.'
+        );
+      }
     } finally {
       setTesting(false);
     }
   };
 
-  // ============================================================
-  // LOGGED-OUT STATE
-  // ============================================================
+  /*
+   * ============================================================
+   * FORMAT HELPERS
+   * ============================================================
+   */
 
-  if (!token) {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          background: '#f6faf8',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '24px',
-          fontFamily:
-            'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-        }}
-      >
-        <div
-          style={{
-            width: '100%',
-            maxWidth: '460px',
-            background: '#ffffff',
-            border: '1px solid #e3ebe7',
-            borderRadius: '22px',
-            padding: '30px',
-            textAlign: 'center',
-            boxShadow:
-              '0 12px 35px rgba(20, 65, 45, 0.07)',
-          }}
-        >
-          <div
-            style={{
-              fontSize: '42px',
-              marginBottom: '12px',
-            }}
-          >
-            🔐
-          </div>
+  const formatDate = (
+    value?: string | null
+  ) => {
+    if (!value) {
+      return 'Not used yet';
+    }
 
-          <h1
-            style={{
-              margin: '0 0 10px',
-              color: '#063b2d',
-              fontSize: '24px',
-              fontWeight: 800,
-            }}
-          >
-            Security
-          </h1>
+    const date = new Date(value);
 
-          <p
-            style={{
-              margin: 0,
-              color: '#66756e',
-              fontSize: '14px',
-              lineHeight: 1.6,
-            }}
-          >
-            Please log in to manage your Zenimonies
-            passkeys.
-          </p>
+    if (
+      Number.isNaN(date.getTime())
+    ) {
+      return 'Not available';
+    }
 
-          <a
-            href="/login"
-            style={{
-              display: 'inline-block',
-              marginTop: '22px',
-              padding: '12px 20px',
-              borderRadius: '11px',
-              background: '#087c43',
-              color: '#ffffff',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: 700,
-            }}
-          >
-            Go to Login
-          </a>
-        </div>
-      </div>
-    );
-  }
+    return date.toLocaleString();
+  };
 
-  // ============================================================
-  // MAIN PAGE
-  // ============================================================
+  const getDeviceName = (
+    passkey: Passkey
+  ) => {
+    if (
+      passkey.device_type ===
+      'multiDevice'
+    ) {
+      return 'Synced passkey';
+    }
+
+    if (
+      passkey.device_type ===
+      'singleDevice'
+    ) {
+      return 'Device passkey';
+    }
+
+    return 'Passkey';
+  };
+
+  /*
+   * ============================================================
+   * UI
+   * ============================================================
+   */
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         minHeight: '100vh',
-        background: '#f6faf8',
-        color: '#172b22',
-        fontFamily:
-          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-        paddingBottom: '50px',
+        backgroundColor: '#f7f9f8',
+        py: 4,
       }}
     >
-      {/* HEADER */}
-
-      <header
-        style={{
-          background: '#ffffff',
-          borderBottom: '1px solid #e5ebe8',
-          position: 'sticky',
-          top: 0,
-          zIndex: 20,
-        }}
+      <Container
+        maxWidth="sm"
       >
-        <div
-          style={{
-            width: 'min(920px, 92%)',
-            margin: '0 auto',
-            minHeight: '64px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '16px',
-          }}
+        <Stack
+          spacing={3}
         >
-          <a
-            href="/"
-            style={{
-              textDecoration: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-            }}
+          {/* HEADER */}
+
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
           >
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '11px',
-                background:
-                  'linear-gradient(135deg, #079447, #007a3f)',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '20px',
-                fontWeight: 800,
-              }}
+            <IconButton
+              onClick={() =>
+                window.history.back()
+              }
             >
-              Z
-            </div>
+              <ArrowBackIcon />
+            </IconButton>
 
-            <div>
-              <div
-                style={{
-                  fontSize: '17px',
-                  fontWeight: 800,
-                  color: '#063b2d',
-                }}
+            <Box>
+              <Typography
+                variant="h5"
+                fontWeight={800}
               >
-                Zenimonies
-              </div>
+                Passkey & Security
+              </Typography>
 
-              <div
-                style={{
-                  fontSize: '9px',
-                  letterSpacing: '1.5px',
-                  color: '#98a2a0',
-                }}
+              <Typography
+                variant="body2"
+                color="text.secondary"
               >
-                DIGITAL BANKING
-              </div>
-            </div>
-          </a>
+                Secure your Zenimonies
+                account with your
+                device
+              </Typography>
+            </Box>
+          </Stack>
 
-          <a
-            href="/profile"
-            style={{
-              textDecoration: 'none',
-              color: '#087c43',
-              fontWeight: 700,
-              fontSize: '13px',
-            }}
-          >
-            ← Profile
-          </a>
-        </div>
-      </header>
+          {/* SUPPORT STATUS */}
 
-      <main
-        style={{
-          width: 'min(700px, 92%)',
-          margin: '0 auto',
-          paddingTop: '28px',
-        }}
-      >
-        {/* TITLE */}
-
-        <div
-          style={{
-            marginBottom: '20px',
-          }}
-        >
-          <div
-            style={{
-              width: '58px',
-              height: '58px',
-              borderRadius: '17px',
-              background: '#e8f8f0',
-              color: '#087c43',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '27px',
-              marginBottom: '16px',
-            }}
-          >
-            🔐
-          </div>
-
-          <h1
-            style={{
-              margin: '0 0 8px',
-              fontSize: '28px',
-              fontWeight: 800,
-              color: '#063b2d',
-            }}
-          >
-            Passkey & Device Security
-          </h1>
-
-          <p
-            style={{
-              margin: 0,
-              color: '#66756e',
-              fontSize: '14px',
-              lineHeight: 1.6,
-            }}
-          >
-            Secure your Zenimonies account with a
-            passkey. Your device may use Face ID,
-            Touch ID, fingerprint, device PIN, or
-            another secure screen-lock method.
-          </p>
-        </div>
-
-        {/* SECURITY NOTICE */}
-
-        <div
-          style={{
-            background: '#effbf5',
-            border: '1px solid #cfe9db',
-            borderRadius: '16px',
-            padding: '17px',
-            marginBottom: '16px',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '11px',
-            }}
-          >
-            <div
-              style={{
-                fontSize: '22px',
-              }}
-            >
-              🛡️
-            </div>
-
-            <div>
-              <div
-                style={{
-                  fontWeight: 800,
-                  color: '#05603a',
-                  fontSize: '14px',
-                  marginBottom: '5px',
-                }}
-              >
-                Your biometric stays on your device
-              </div>
-
-              <div
-                style={{
-                  color: '#4c675c',
-                  fontSize: '12px',
-                  lineHeight: 1.6,
-                }}
-              >
-                Zenimonies does not receive or store
-                your Face ID, Touch ID, fingerprint,
-                or other biometric information.
-                Passkeys use cryptographic credentials
-                instead.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* SUCCESS */}
-
-        {message && (
-          <div
-            style={{
-              background: '#effbf5',
-              border: '1px solid #bfe4cf',
-              color: '#05603a',
-              borderRadius: '13px',
-              padding: '14px 15px',
-              marginBottom: '15px',
-              fontSize: '13px',
-              lineHeight: 1.5,
-            }}
-          >
-            ✓ {message}
-          </div>
-        )}
-
-        {/* ERROR */}
-
-        {error && (
-          <div
-            style={{
-              background: '#fff5f5',
-              border: '1px solid #f0caca',
-              color: '#a42626',
-              borderRadius: '13px',
-              padding: '14px 15px',
-              marginBottom: '15px',
-              fontSize: '13px',
-              lineHeight: 1.5,
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {/* SETUP CARD */}
-
-        <section
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e3ebe7',
-            borderRadius: '20px',
-            padding: '22px',
-            boxShadow:
-              '0 8px 25px rgba(26, 61, 47, 0.05)',
-            marginBottom: '16px',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '14px',
-              marginBottom: '10px',
-            }}
-          >
-            <div>
-              <h2
-                style={{
-                  margin: 0,
-                  color: '#063b2d',
-                  fontSize: '19px',
-                  fontWeight: 800,
-                }}
-              >
-                Passkey
-              </h2>
-
-              <p
-                style={{
-                  margin: '6px 0 0',
-                  color: '#66756e',
-                  fontSize: '12px',
-                }}
-              >
-                {passkeys.length > 0
-                  ? 'Passkey protection is enabled.'
-                  : 'No passkey has been registered yet.'}
-              </p>
-            </div>
-
-            <div
-              style={{
-                padding: '7px 10px',
-                borderRadius: '999px',
-                background:
-                  passkeys.length > 0
-                    ? '#e8f8f0'
-                    : '#f2f4f3',
-                color:
-                  passkeys.length > 0
-                    ? '#087c43'
-                    : '#66756e',
-                fontSize: '11px',
-                fontWeight: 800,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {passkeys.length > 0
-                ? 'ENABLED'
-                : 'NOT SET UP'}
-            </div>
-          </div>
-
-          <p
-            style={{
-              margin: '15px 0 18px',
-              color: '#66756e',
-              fontSize: '13px',
-              lineHeight: 1.6,
-            }}
-          >
-            Register this device with a passkey.
-            When your device asks you to authenticate,
-            use the available secure method such as
-            Face ID, Touch ID, fingerprint, or your
-            device security method.
-          </p>
-
-          <button
-            type="button"
-            onClick={handleRegisterPasskey}
-            disabled={registering}
-            style={{
-              width: '100%',
-              border: 'none',
-              borderRadius: '12px',
-              padding: '13px 16px',
-              background: registering
-                ? '#9bb8aa'
-                : '#087c43',
-              color: '#ffffff',
-              fontSize: '14px',
-              fontWeight: 800,
-              cursor: registering
-                ? 'not-allowed'
-                : 'pointer',
-            }}
-          >
-            {registering
-              ? 'Setting up passkey...'
-              : passkeys.length > 0
-                ? 'Add Another Passkey'
-                : 'Set Up Passkey'}
-          </button>
-
-          {passkeys.length > 0 && (
-            <button
-              type="button"
-              onClick={handleTestPasskey}
-              disabled={testing}
-              style={{
-                width: '100%',
-                marginTop: '10px',
-                border: '1px solid #cfdad5',
-                borderRadius: '12px',
-                padding: '12px 16px',
-                background: '#ffffff',
-                color: '#087c43',
-                fontSize: '13px',
-                fontWeight: 800,
-                cursor: testing
-                  ? 'not-allowed'
-                  : 'pointer',
-              }}
-            >
-              {testing
-                ? 'Testing passkey...'
-                : 'Test Passkey'}
-            </button>
+          {!loading && !supported && (
+            <Alert severity="warning">
+              This browser or device does
+              not currently support
+              passkeys.
+            </Alert>
           )}
-        </section>
 
-        {/* REGISTERED PASSKEYS */}
+          {!loading &&
+            supported &&
+            platformAvailable && (
+              <Alert severity="success">
+                Your device supports
+                platform authentication
+                such as Face ID or
+                Touch ID.
+              </Alert>
+            )}
 
-        <section
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e3ebe7',
-            borderRadius: '20px',
-            padding: '22px',
-            boxShadow:
-              '0 8px 25px rgba(26, 61, 47, 0.05)',
-          }}
-        >
-          <h2
-            style={{
-              margin: '0 0 14px',
-              color: '#063b2d',
-              fontSize: '19px',
-              fontWeight: 800,
+          {!loading &&
+            supported &&
+            !platformAvailable && (
+              <Alert severity="info">
+                Passkeys are supported,
+                but this device does not
+                report an available
+                built-in authenticator.
+                You may still be able to
+                use another passkey
+                method.
+              </Alert>
+            )}
+
+          {error && (
+            <Alert
+              severity="error"
+              onClose={() =>
+                setError('')
+              }
+            >
+              {error}
+            </Alert>
+          )}
+
+          {success && (
+            <Alert
+              severity="success"
+              onClose={() =>
+                setSuccess('')
+              }
+            >
+              {success}
+            </Alert>
+          )}
+
+          {/* MAIN CARD */}
+
+          <Card
+            elevation={0}
+            sx={{
+              borderRadius: 4,
+              border:
+                '1px solid #e3e9e5',
+              backgroundColor:
+                '#ffffff',
             }}
           >
-            Registered Devices
-          </h2>
+            <CardContent
+              sx={{ p: 3 }}
+            >
+              <Stack
+                spacing={3}
+              >
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems:
+                      'center',
+                    justifyContent:
+                      'center',
+                    width: 70,
+                    height: 70,
+                    borderRadius:
+                      '50%',
+                    backgroundColor:
+                      '#e8f3ed',
+                    mx: 'auto',
+                  }}
+                >
+                  <FingerprintIcon
+                    sx={{
+                      fontSize: 42,
+                      color:
+                        '#155d45',
+                    }}
+                  />
+                </Box>
 
-          {loading ? (
-            <div
-              style={{
-                color: '#66756e',
-                fontSize: '13px',
-                padding: '10px 0',
-              }}
-            >
-              Loading your registered passkeys...
-            </div>
-          ) : passkeys.length === 0 ? (
-            <div
-              style={{
-                background: '#f8faf9',
-                borderRadius: '13px',
-                padding: '16px',
-                color: '#66756e',
-                fontSize: '13px',
-                lineHeight: 1.5,
-              }}
-            >
-              No passkeys registered yet.
-              <br />
-              Set up a passkey above to protect this
-              account.
-            </div>
-          ) : (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
-              }}
-            >
-              {passkeys.map(
-                (passkey, index) => (
-                  <div
-                    key={passkey.id}
-                    style={{
-                      border: '1px solid #e3ebe7',
-                      borderRadius: '14px',
-                      padding: '15px',
+                <Box
+                  textAlign="center"
+                >
+                  <Typography
+                    variant="h6"
+                    fontWeight={800}
+                  >
+                    Use your device
+                    security
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      mt: 1,
+                      lineHeight: 1.7,
                     }}
                   >
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent:
-                          'space-between',
-                        alignItems: 'flex-start',
-                        gap: '12px',
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            color: '#063b2d',
-                            fontWeight: 800,
-                            fontSize: '14px',
-                          }}
-                        >
-                          Device Passkey {index + 1}
-                        </div>
+                    Passkeys use your
+                    device's secure
+                    authentication,
+                    such as Face ID,
+                    Touch ID, or a
+                    device PIN.
+                  </Typography>
+                </Box>
 
-                        <div
-                          style={{
-                            color: '#66756e',
-                            fontSize: '11px',
-                            marginTop: '5px',
-                          }}
-                        >
-                          {passkey.device_type ||
-                            'Platform authenticator'}
-                        </div>
-                      </div>
+                <Divider />
 
-                      <span
-                        style={{
-                          background: '#e8f8f0',
-                          color: '#087c43',
-                          borderRadius: '999px',
-                          padding: '5px 8px',
-                          fontSize: '10px',
-                          fontWeight: 800,
+                <Button
+                  variant="contained"
+                  size="large"
+                  fullWidth
+                  startIcon={
+                    creating ? (
+                      <CircularProgress
+                        size={20}
+                        color="inherit"
+                      />
+                    ) : (
+                      <FingerprintIcon />
+                    )
+                  }
+                  disabled={
+                    creating ||
+                    !supported
+                  }
+                  onClick={
+                    createPasskey
+                  }
+                  sx={{
+                    py: 1.5,
+                    borderRadius: 3,
+                    fontWeight: 800,
+                    backgroundColor:
+                      '#155d45',
+                    '&:hover': {
+                      backgroundColor:
+                        '#104936',
+                    },
+                  }}
+                >
+                  {creating
+                    ? 'Creating Passkey...'
+                    : 'Create Passkey'}
+                </Button>
+
+                {passkeys.length >
+                  0 && (
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    fullWidth
+                    startIcon={
+                      testing ? (
+                        <CircularProgress
+                          size={20}
+                        />
+                      ) : (
+                        <SecurityIcon />
+                      )
+                    }
+                    disabled={testing}
+                    onClick={
+                      testPasskey
+                    }
+                    sx={{
+                      py: 1.5,
+                      borderRadius: 3,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {testing
+                      ? 'Testing...'
+                      : 'Test Passkey'}
+                  </Button>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+
+          {/* REGISTERED PASSKEYS */}
+
+          <Card
+            elevation={0}
+            sx={{
+              borderRadius: 4,
+              border:
+                '1px solid #e3e9e5',
+              backgroundColor:
+                '#ffffff',
+            }}
+          >
+            <CardContent
+              sx={{ p: 3 }}
+            >
+              <Typography
+                variant="h6"
+                fontWeight={800}
+                sx={{ mb: 2 }}
+              >
+                Your Passkeys
+              </Typography>
+
+              {loading ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent:
+                      'center',
+                    py: 3,
+                  }}
+                >
+                  <CircularProgress />
+                </Box>
+              ) : passkeys.length ===
+                0 ? (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  No passkeys have been
+                  registered for this
+                  account yet.
+                </Typography>
+              ) : (
+                <Stack
+                  spacing={2}
+                >
+                  {passkeys.map(
+                    (passkey) => (
+                      <Box
+                        key={
+                          passkey.id
+                        }
+                        sx={{
+                          p: 2,
+                          borderRadius: 3,
+                          backgroundColor:
+                            '#f7f9f8',
                         }}
                       >
-                        ACTIVE
-                      </span>
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: '12px',
-                        display: 'grid',
-                        gap: '6px',
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: '11px',
-                          color: '#66756e',
-                        }}
-                      >
-                        Registered:{' '}
-                        <strong
-                          style={{
-                            color: '#344054',
-                          }}
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          spacing={2}
                         >
-                          {formatDate(
-                            passkey.created_at
-                          )}
-                        </strong>
-                      </div>
+                          <FingerprintIcon
+                            sx={{
+                              color:
+                                '#155d45',
+                            }}
+                          />
 
-                      <div
-                        style={{
-                          fontSize: '11px',
-                          color: '#66756e',
-                        }}
-                      >
-                        Last used:{' '}
-                        <strong
-                          style={{
-                            color: '#344054',
-                          }}
-                        >
-                          {formatDate(
-                            passkey.last_used_at
-                          )}
-                        </strong>
-                      </div>
+                          <Box
+                            sx={{
+                              flex: 1,
+                            }}
+                          >
+                            <Typography
+                              fontWeight={700}
+                            >
+                              {getDeviceName(
+                                passkey
+                              )}
+                            </Typography>
 
-                      <div
-                        style={{
-                          fontSize: '11px',
-                          color: '#66756e',
-                        }}
-                      >
-                        Backup eligible:{' '}
-                        <strong
-                          style={{
-                            color: '#344054',
-                          }}
-                        >
-                          {passkey.backed_up
-                            ? 'Yes'
-                            : 'No'}
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
-                )
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Created:{' '}
+                              {formatDate(
+                                passkey.created_at
+                              )}
+                            </Typography>
+
+                            <br />
+
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Last used:{' '}
+                              {formatDate(
+                                passkey.last_used_at
+                              )}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                      </Box>
+                    )
+                  )}
+                </Stack>
               )}
-            </div>
-          )}
-        </section>
+            </CardContent>
+          </Card>
 
-        {/* SECURITY INFORMATION */}
+          {/* SECURITY NOTICE */}
 
-        <div
-          style={{
-            marginTop: '14px',
-            padding: '15px',
-            color: '#66756e',
-            fontSize: '11px',
-            lineHeight: 1.6,
-            textAlign: 'center',
-          }}
-        >
-          Passkeys use WebAuthn cryptographic
-          authentication. Zenimonies never stores
-          your biometric information or your device's
-          private passkey.
-        </div>
-      </main>
-    </div>
+          <Card
+            elevation={0}
+            sx={{
+              borderRadius: 4,
+              backgroundColor:
+                '#eef6f1',
+              border:
+                '1px solid #d7e9dd',
+            }}
+          >
+            <CardContent
+              sx={{ p: 3 }}
+            >
+              <Stack
+                direction="row"
+                spacing={2}
+              >
+                <SecurityIcon
+                  sx={{
+                    color:
+                      '#155d45',
+                    mt: 0.3,
+                  }}
+                />
+
+                <Box>
+                  <Typography
+                    fontWeight={800}
+                  >
+                    Your biometric data
+                    stays on your device
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      mt: 1,
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    Zenimonies does not
+                    receive or store your
+                    Face ID, fingerprint,
+                    or other biometric
+                    information. Your
+                    device uses its secure
+                    authentication system
+                    to approve the passkey.
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            textAlign="center"
+          >
+            Zenimonies security •
+            Passkeys
+          </Typography>
+        </Stack>
+      </Container>
+    </Box>
   );
 };
 
