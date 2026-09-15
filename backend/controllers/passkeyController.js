@@ -368,5 +368,7 @@ module.exports = {
   verifyRegistration,
   getAuthenticationOptions,
   verifyAuthentication,
+  getLoginAuthenticationOptions,
+  verifyLoginAuthentication,
   getPasskeys,
 };
