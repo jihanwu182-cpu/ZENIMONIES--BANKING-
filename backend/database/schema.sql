@@ -834,6 +834,19 @@ ALTER COLUMN recipient_account_number DROP NOT NULL;
 
 
 -- ============================================================
+-- NOTIFICATIONS COMPATIBILITY
+-- ============================================================
+
+ALTER TABLE notifications
+ADD COLUMN IF NOT EXISTS read_at TIMESTAMP;
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+ON notifications(user_id, is_read);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at
+ON notifications(created_at DESC);
+
+-- ============================================================
 -- INDEXES
 -- ============================================================
 
