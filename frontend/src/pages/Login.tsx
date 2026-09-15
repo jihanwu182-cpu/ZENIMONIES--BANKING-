@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
 import axios, { AxiosError } from 'axios';
-import { Link, useNavigate } from 'react-router-dom';
+import {
+  startAuthentication,
+} from '@simplewebauthn/browser';
+import {
+  Link,
+  useNavigate,
+} from 'react-router-dom';
 
-const API_URL = 'https://zenimonies-banking.onrender.com';
+const API_URL =
+  'https://zenimonies-banking.onrender.com';
+
+const MAX_PASSKEY_FAILURES = 3;
 
 type LoginPayload = {
   success?: boolean;
@@ -20,6 +29,25 @@ type LoginPayload = {
   otp_token?: string;
   requires_phone_verification?: boolean;
   data?: LoginPayload;
+};
+
+type PasskeyLoginOptionsResponse = {
+  success?: boolean;
+  message?: string;
+  options?: any;
+};
+
+type PasskeyLoginResponse = {
+  success?: boolean;
+  message?: string;
+  token?: string;
+  user?: any;
+  accounts?: any[];
+  data?: {
+    token?: string;
+    user?: any;
+    accounts?: any[];
+  };
 };
 
 function unwrapLoginPayload(
@@ -45,10 +73,12 @@ function getServerError(
     const axiosErr =
       err as AxiosError<LoginPayload>;
 
-    const response = axiosErr.response;
+    const response =
+      axiosErr.response;
 
     if (response?.data) {
-      const data = response.data;
+      const data =
+        response.data;
 
       if (
         data.message &&
@@ -68,7 +98,10 @@ function getServerError(
       return JSON.stringify(data);
     }
 
-    if (axiosErr.code === 'ECONNABORTED') {
+    if (
+      axiosErr.code ===
+      'ECONNABORTED'
+    ) {
       return 'The server took too long to respond.';
     }
 
@@ -86,8 +119,52 @@ function getServerError(
   return 'Unknown login error.';
 }
 
+function saveAuthenticatedSession(
+  data: {
+    token?: string;
+    user?: any;
+    accounts?: any[];
+  }
+) {
+  const token =
+    data.token;
+
+  if (!token) {
+    throw new Error(
+      'The server did not return an authentication token.'
+    );
+  }
+
+  localStorage.setItem(
+    'zenimonies_token',
+    token
+  );
+
+  localStorage.setItem(
+    'token',
+    token
+  );
+
+  if (data.user) {
+    localStorage.setItem(
+      'zenimonies_user',
+      JSON.stringify(
+        data.user
+      )
+    );
+  }
+
+  localStorage.setItem(
+    'zenimonies_accounts',
+    JSON.stringify(
+      data.accounts || []
+    )
+  );
+}
+
 const Login: React.FC = () => {
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
   const [email, setEmail] =
     useState('');
@@ -95,14 +172,35 @@ const Login: React.FC = () => {
   const [password, setPassword] =
     useState('');
 
-  const [showPassword, setShowPassword] =
-    useState(false);
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
 
   const [loading, setLoading] =
     useState(false);
 
+  const [
+    passkeyLoading,
+    setPasskeyLoading,
+  ] = useState(false);
+
   const [error, setError] =
     useState('');
+
+  const [
+    passkeyFailures,
+    setPasskeyFailures,
+  ] = useState(0);
+
+  const [
+    passkeyFallback,
+    setPasskeyFallback,
+  ] = useState(false);
+
+  // ==========================================================
+  // NORMAL PASSWORD LOGIN
+  // ==========================================================
 
   const handleSubmit = async (
     event: React.FormEvent<HTMLFormElement>
@@ -112,7 +210,9 @@ const Login: React.FC = () => {
     setError('');
 
     const cleanEmail =
-      email.trim().toLowerCase();
+      email
+        .trim()
+        .toLowerCase();
 
     if (!cleanEmail || !password) {
       setError(
@@ -133,7 +233,8 @@ const Login: React.FC = () => {
         await axios.post<LoginPayload>(
           `${API_URL}/api/auth/login`,
           {
-            email: cleanEmail,
+            email:
+              cleanEmail,
             password,
           },
           {
@@ -155,37 +256,40 @@ const Login: React.FC = () => {
           response.data
         );
 
-      // =====================================================
-      // CHECK SERVER SUCCESS
-      // =====================================================
+      // ========================================================
+      // SERVER SUCCESS CHECK
+      // ========================================================
 
       if (data.success === false) {
         setError(
-          (data as any).error_detail
+          (data as any)
+            .error_detail
             ? `${
                 data.message ||
                 'Login failed'
               }: ${
-                (data as any).error_detail
+                (data as any)
+                  .error_detail
               }`
             : data.message ||
               'Login was rejected by the server.'
         );
+
         return;
       }
 
-      // =====================================================
+      // ========================================================
       // GET TOKEN
-      // =====================================================
+      // ========================================================
 
       const token =
         data.token ||
         data.accessToken ||
         data.access_token;
 
-      // =====================================================
+      // ========================================================
       // OTP CHECK
-      // =====================================================
+      // ========================================================
 
       const requiresOtp =
         Boolean(
@@ -212,13 +316,16 @@ const Login: React.FC = () => {
           );
         }
 
-        navigate('/verify-otp');
+        navigate(
+          '/verify-otp'
+        );
+
         return;
       }
 
-      // =====================================================
+      // ========================================================
       // PHONE VERIFICATION
-      // =====================================================
+      // ========================================================
 
       if (
         data.requires_phone_verification ===
@@ -245,13 +352,16 @@ const Login: React.FC = () => {
           );
         }
 
-        navigate('/verify-phone');
+        navigate(
+          '/verify-phone'
+        );
+
         return;
       }
 
-      // =====================================================
+      // ========================================================
       // TOKEN REQUIRED
-      // =====================================================
+      // ========================================================
 
       if (!token) {
         console.error(
@@ -267,47 +377,19 @@ const Login: React.FC = () => {
         return;
       }
 
-      // =====================================================
-      // SAVE TOKEN
-      // =====================================================
+      // ========================================================
+      // SAVE SESSION
+      // ========================================================
 
-      localStorage.setItem(
-        'zenimonies_token',
-        token
+      saveAuthenticatedSession(
+        {
+          token,
+          user:
+            data.user,
+          accounts:
+            data.accounts,
+        }
       );
-
-      localStorage.setItem(
-        'token',
-        token
-      );
-
-      // =====================================================
-      // SAVE USER
-      // =====================================================
-
-      if (data.user) {
-        localStorage.setItem(
-          'zenimonies_user',
-          JSON.stringify(
-            data.user
-          )
-        );
-      }
-
-      // =====================================================
-      // SAVE ACCOUNTS
-      // =====================================================
-
-      localStorage.setItem(
-        'zenimonies_accounts',
-        JSON.stringify(
-          data.accounts || []
-        )
-      );
-
-      // =====================================================
-      // SUCCESS
-      // =====================================================
 
       navigate('/');
     } catch (err: unknown) {
@@ -316,43 +398,328 @@ const Login: React.FC = () => {
         err
       );
 
-      const message =
-        getServerError(err);
-
-      setError(message);
+      setError(
+        getServerError(err)
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  // ==========================================================
+  // PASSWORDLESS PASSKEY LOGIN
+  // ==========================================================
+
+  const handlePasskeyLogin =
+    async () => {
+      if (
+        loading ||
+        passkeyLoading
+      ) {
+        return;
+      }
+
+      setError('');
+
+      const cleanEmail =
+        email
+          .trim()
+          .toLowerCase();
+
+      if (!cleanEmail) {
+        setError(
+          'Enter your email address first, then use Sign in with Passkey.'
+        );
+        return;
+      }
+
+      if (
+        passkeyFailures >=
+        MAX_PASSKEY_FAILURES
+      ) {
+        setPasskeyFallback(
+          true
+        );
+
+        setError(
+          'Passkey authentication failed 3 times. Please sign in with your password.'
+        );
+
+        return;
+      }
+
+      try {
+        setPasskeyLoading(
+          true
+        );
+
+        // ======================================================
+        // 1. REQUEST AUTHENTICATION CHALLENGE
+        // ======================================================
+
+        const optionsResponse =
+          await fetch(
+            `${API_URL}/api/passkeys/login/options`,
+            {
+              method:
+                'POST',
+
+              headers: {
+                'Content-Type':
+                  'application/json',
+              },
+
+              body:
+                JSON.stringify({
+                  email:
+                    cleanEmail,
+                }),
+            }
+          );
+
+        let optionsData:
+          PasskeyLoginOptionsResponse;
+
+        try {
+          optionsData =
+            await optionsResponse.json();
+        } catch {
+          throw new Error(
+            'The Zenimonies server returned an invalid passkey response.'
+          );
+        }
+
+        if (
+          !optionsResponse.ok ||
+          !optionsData.success ||
+          !optionsData.options
+        ) {
+          throw new Error(
+            optionsData.message ||
+              'Unable to start passkey login.'
+          );
+        }
+
+        // ======================================================
+        // 2. OPEN DEVICE PASSKEY / BIOMETRIC PROMPT
+        // ======================================================
+
+        const authenticationResponse =
+          await startAuthentication({
+            optionsJSON:
+              optionsData.options,
+          });
+
+        // ======================================================
+        // 3. SEND SIGNED ASSERTION TO SERVER
+        // ======================================================
+
+        const verifyResponse =
+          await fetch(
+            `${API_URL}/api/passkeys/login/verify`,
+            {
+              method:
+                'POST',
+
+              headers: {
+                'Content-Type':
+                  'application/json',
+              },
+
+              body:
+                JSON.stringify(
+                  authenticationResponse
+                ),
+            }
+          );
+
+        let verifyData:
+          PasskeyLoginResponse;
+
+        try {
+          verifyData =
+            await verifyResponse.json();
+        } catch {
+          throw new Error(
+            'The Zenimonies server returned an invalid authentication response.'
+          );
+        }
+
+        if (
+          !verifyResponse.ok ||
+          !verifyData.success
+        ) {
+          throw new Error(
+            verifyData.message ||
+              'Passkey login failed.'
+          );
+        }
+
+        const responseData =
+          verifyData.data ||
+          verifyData;
+
+        const token =
+          responseData.token;
+
+        // ======================================================
+        // 4. SAVE AUTHENTICATED SESSION
+        // ======================================================
+
+        if (!token) {
+          throw new Error(
+            'Passkey login succeeded but no authentication token was returned.'
+          );
+        }
+
+        saveAuthenticatedSession(
+          {
+            token,
+            user:
+              responseData.user,
+            accounts:
+              responseData.accounts,
+          }
+        );
+
+        // Reset the failure counter
+        // after successful authentication.
+        setPasskeyFailures(
+          0
+        );
+
+        // ======================================================
+        // 5. GO TO DASHBOARD
+        // ======================================================
+
+        navigate('/');
+      } catch (err: unknown) {
+        console.error(
+          'Zenimonies passkey login error:',
+          err
+        );
+
+        const nextFailures =
+          passkeyFailures + 1;
+
+        setPasskeyFailures(
+          nextFailures
+        );
+
+        if (
+          nextFailures >=
+          MAX_PASSKEY_FAILURES
+        ) {
+          setPasskeyFallback(
+            true
+          );
+
+          setError(
+            'Passkey authentication failed 3 times. Please sign in with your password.'
+          );
+
+          return;
+        }
+
+        // ------------------------------------------------------
+        // User cancelled the biometric/passkey prompt.
+        // Do not present it as a server failure.
+        // ------------------------------------------------------
+
+        const errorName =
+          err instanceof Error
+            ? err.name
+            : '';
+
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : '';
+
+        const userCancelled =
+          errorName ===
+            'NotAllowedError' ||
+          /cancel|abort|not allowed/i.test(
+            errorMessage
+          );
+
+        if (userCancelled) {
+          setError(
+            'Passkey authentication was cancelled. You can try again or use your password.'
+          );
+
+          return;
+        }
+
+        setError(
+          `${
+            errorMessage ||
+            'Passkey authentication failed.'
+          } ${
+            MAX_PASSKEY_FAILURES -
+            nextFailures
+          } attempt${
+            MAX_PASSKEY_FAILURES -
+              nextFailures ===
+            1
+              ? ''
+              : 's'
+          } remaining.`
+        );
+      } finally {
+        setPasskeyLoading(
+          false
+        );
+      }
+    };
+
+  const busy =
+    loading ||
+    passkeyLoading;
+
   return (
     <div
       style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-        background: '#f5f7fb',
+        minHeight:
+          '100vh',
+        display:
+          'flex',
+        alignItems:
+          'center',
+        justifyContent:
+          'center',
+        padding:
+          '24px',
+        background:
+          '#f5f7fb',
       }}
     >
       <div
         style={{
-          width: '100%',
-          maxWidth: '420px',
-          background: '#ffffff',
-          padding: '32px',
-          borderRadius: '16px',
+          width:
+            '100%',
+          maxWidth:
+            '420px',
+          background:
+            '#ffffff',
+          padding:
+            '32px',
+          borderRadius:
+            '16px',
           boxShadow:
             '0 8px 30px rgba(0, 0, 0, 0.08)',
         }}
       >
         <h1
           style={{
-            marginTop: 0,
-            marginBottom: '8px',
-            textAlign: 'center',
-            color: '#172033',
+            marginTop:
+              0,
+            marginBottom:
+              '8px',
+            textAlign:
+              'center',
+            color:
+              '#172033',
           }}
         >
           Zenimonies
@@ -360,9 +727,12 @@ const Login: React.FC = () => {
 
         <p
           style={{
-            textAlign: 'center',
-            color: '#667085',
-            marginBottom: '28px',
+            textAlign:
+              'center',
+            color:
+              '#667085',
+            marginBottom:
+              '28px',
           }}
         >
           Sign in to your account
@@ -372,14 +742,22 @@ const Login: React.FC = () => {
           <div
             role="alert"
             style={{
-              padding: '14px',
-              marginBottom: '18px',
-              borderRadius: '8px',
-              background: '#fee4e2',
-              color: '#b42318',
-              fontSize: '14px',
-              lineHeight: 1.5,
-              wordBreak: 'break-word',
+              padding:
+                '14px',
+              marginBottom:
+                '18px',
+              borderRadius:
+                '8px',
+              background:
+                '#fee4e2',
+              color:
+                '#b42318',
+              fontSize:
+                '14px',
+              lineHeight:
+                1.5,
+              wordBreak:
+                'break-word',
             }}
           >
             {error}
@@ -387,16 +765,22 @@ const Login: React.FC = () => {
         )}
 
         <form
-          onSubmit={handleSubmit}
+          onSubmit={
+            handleSubmit
+          }
           noValidate
         >
           <label
             htmlFor="email"
             style={{
-              display: 'block',
-              marginBottom: '6px',
-              fontWeight: 600,
-              color: '#172033',
+              display:
+                'block',
+              marginBottom:
+                '6px',
+              fontWeight:
+                600,
+              color:
+                '#172033',
             }}
           >
             Email
@@ -406,40 +790,56 @@ const Login: React.FC = () => {
             id="email"
             type="email"
             value={email}
-            onChange={(event) =>
+            onChange={(
+              event
+            ) =>
               setEmail(
-                event.target.value
+                event.target
+                  .value
               )
             }
             placeholder="Enter your email"
             autoComplete="email"
-            disabled={loading}
+            disabled={busy}
             style={{
-              boxSizing: 'border-box',
-              width: '100%',
-              padding: '12px',
-              marginBottom: '18px',
+              boxSizing:
+                'border-box',
+              width:
+                '100%',
+              padding:
+                '12px',
+              marginBottom:
+                '18px',
               border:
                 '1px solid #d0d5dd',
-              borderRadius: '8px',
-              outline: 'none',
-              fontSize: '15px',
+              borderRadius:
+                '8px',
+              outline:
+                'none',
+              fontSize:
+                '15px',
             }}
           />
 
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '6px',
+              display:
+                'flex',
+              alignItems:
+                'center',
+              justifyContent:
+                'space-between',
+              marginBottom:
+                '6px',
             }}
           >
             <label
               htmlFor="password"
               style={{
-                fontWeight: 600,
-                color: '#172033',
+                fontWeight:
+                  600,
+                color:
+                  '#172033',
               }}
             >
               Password
@@ -448,10 +848,14 @@ const Login: React.FC = () => {
             <Link
               to="/forgot-password"
               style={{
-                color: '#0b5cff',
-                fontWeight: 600,
-                fontSize: '13px',
-                textDecoration: 'none',
+                color:
+                  '#0b5cff',
+                fontWeight:
+                  600,
+                fontSize:
+                  '13px',
+                textDecoration:
+                  'none',
               }}
             >
               Forgot Password?
@@ -460,9 +864,12 @@ const Login: React.FC = () => {
 
           <div
             style={{
-              position: 'relative',
-              width: '100%',
-              marginBottom: '22px',
+              position:
+                'relative',
+              width:
+                '100%',
+              marginBottom:
+                '22px',
             }}
           >
             <input
@@ -473,24 +880,32 @@ const Login: React.FC = () => {
                   : 'password'
               }
               value={password}
-              onChange={(event) =>
+              onChange={(
+                event
+              ) =>
                 setPassword(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               placeholder="Enter your password"
               autoComplete="current-password"
-              disabled={loading}
+              disabled={busy}
               style={{
-                boxSizing: 'border-box',
-                width: '100%',
+                boxSizing:
+                  'border-box',
+                width:
+                  '100%',
                 padding:
                   '12px 48px 12px 12px',
                 border:
                   '1px solid #d0d5dd',
-                borderRadius: '8px',
-                outline: 'none',
-                fontSize: '15px',
+                borderRadius:
+                  '8px',
+                outline:
+                  'none',
+                fontSize:
+                  '15px',
               }}
             />
 
@@ -498,11 +913,13 @@ const Login: React.FC = () => {
               type="button"
               onClick={() =>
                 setShowPassword(
-                  (previous) =>
+                  (
+                    previous
+                  ) =>
                     !previous
                 )
               }
-              disabled={loading}
+              disabled={busy}
               aria-label={
                 showPassword
                   ? 'Hide password'
@@ -514,20 +931,28 @@ const Login: React.FC = () => {
                   : 'Show password'
               }
               style={{
-                position: 'absolute',
-                right: '10px',
-                top: '50%',
+                position:
+                  'absolute',
+                right:
+                  '10px',
+                top:
+                  '50%',
                 transform:
                   'translateY(-50%)',
-                border: 'none',
+                border:
+                  'none',
                 background:
                   'transparent',
-                cursor: loading
-                  ? 'not-allowed'
-                  : 'pointer',
-                fontSize: '20px',
-                lineHeight: 1,
-                padding: '4px',
+                cursor:
+                  busy
+                    ? 'not-allowed'
+                    : 'pointer',
+                fontSize:
+                  '20px',
+                lineHeight:
+                  1,
+                padding:
+                  '4px',
               }}
             >
               {showPassword
@@ -538,22 +963,32 @@ const Login: React.FC = () => {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={busy}
             style={{
-              width: '100%',
-              padding: '13px',
-              border: 'none',
-              borderRadius: '8px',
-              background: '#0b5cff',
-              color: '#ffffff',
-              fontWeight: 600,
-              fontSize: '15px',
-              cursor: loading
-                ? 'not-allowed'
-                : 'pointer',
-              opacity: loading
-                ? 0.7
-                : 1,
+              width:
+                '100%',
+              padding:
+                '13px',
+              border:
+                'none',
+              borderRadius:
+                '8px',
+              background:
+                '#0b5cff',
+              color:
+                '#ffffff',
+              fontWeight:
+                600,
+              fontSize:
+                '15px',
+              cursor:
+                busy
+                  ? 'not-allowed'
+                  : 'pointer',
+              opacity:
+                busy
+                  ? 0.7
+                  : 1,
             }}
           >
             {loading
@@ -562,20 +997,183 @@ const Login: React.FC = () => {
           </button>
         </form>
 
+        {/* ======================================================
+            PASSKEY LOGIN
+            ====================================================== */}
+
+        {!passkeyFallback && (
+          <>
+            <div
+              style={{
+                display:
+                  'flex',
+                alignItems:
+                  'center',
+                gap:
+                  '12px',
+                margin:
+                  '22px 0',
+                color:
+                  '#98a2b3',
+                fontSize:
+                  '13px',
+              }}
+            >
+              <div
+                style={{
+                  flex:
+                    1,
+                  height:
+                    '1px',
+                  background:
+                    '#eaecf0',
+                }}
+              />
+
+              <span>
+                OR
+              </span>
+
+              <div
+                style={{
+                  flex:
+                    1,
+                  height:
+                    '1px',
+                  background:
+                    '#eaecf0',
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={
+                handlePasskeyLogin
+              }
+              disabled={busy}
+              style={{
+                width:
+                  '100%',
+                padding:
+                  '13px',
+                border:
+                  '1px solid #0b5cff',
+                borderRadius:
+                  '8px',
+                background:
+                  '#ffffff',
+                color:
+                  '#0b5cff',
+                fontWeight:
+                  700,
+                fontSize:
+                  '15px',
+                cursor:
+                  busy
+                    ? 'not-allowed'
+                    : 'pointer',
+                opacity:
+                  busy
+                    ? 0.7
+                    : 1,
+                display:
+                  'flex',
+                alignItems:
+                  'center',
+                justifyContent:
+                  'center',
+                gap:
+                  '9px',
+              }}
+            >
+              <span
+                style={{
+                  fontSize:
+                    '20px',
+                  lineHeight:
+                    1,
+                }}
+              >
+                🔐
+              </span>
+
+              {passkeyLoading
+                ? 'Verifying Passkey...'
+                : 'Sign in with Passkey'}
+            </button>
+
+            <p
+              style={{
+                textAlign:
+                  'center',
+                color:
+                  '#667085',
+                fontSize:
+                  '12px',
+                lineHeight:
+                  1.5,
+                marginTop:
+                  '10px',
+                marginBottom:
+                  0,
+              }}
+            >
+              Use your device passkey,
+              Face ID, Touch ID, or
+              security key.
+            </p>
+          </>
+        )}
+
+        {passkeyFallback && (
+          <div
+            style={{
+              marginTop:
+                '18px',
+              padding:
+                '12px',
+              borderRadius:
+                '8px',
+              background:
+                '#f2f4f7',
+              color:
+                '#475467',
+              fontSize:
+                '13px',
+              lineHeight:
+                1.5,
+              textAlign:
+                'center',
+            }}
+          >
+            Passkey login is temporarily
+            unavailable after 3 failed
+            attempts. Please use your
+            password to sign in.
+          </div>
+        )}
+
         <p
           style={{
-            textAlign: 'center',
-            marginTop: '24px',
-            color: '#667085',
+            textAlign:
+              'center',
+            marginTop:
+              '24px',
+            color:
+              '#667085',
           }}
         >
           Don&apos;t have an account?{' '}
           <Link
             to="/register"
             style={{
-              color: '#0b5cff',
-              fontWeight: 600,
-              textDecoration: 'none',
+              color:
+                '#0b5cff',
+              fontWeight:
+                600,
+              textDecoration:
+                'none',
             }}
           >
             Create one
