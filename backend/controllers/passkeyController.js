@@ -1,6 +1,114 @@
 const passkeyService = require('../services/passkeyService');
 
 // ============================================================
+// PASSWORDLESS LOGIN OPTIONS
+// POST /api/passkeys/login/options
+// ============================================================
+
+const getLoginAuthenticationOptions =
+  async (req, res) => {
+    try {
+      const {
+        email,
+      } = req.body || {};
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Email address is required.',
+        });
+      }
+
+      const result =
+        await passkeyService
+          .createLoginAuthenticationOptions(
+            email
+          );
+
+      return res.status(200).json({
+        success: true,
+        options:
+          result.options,
+      });
+    } catch (error) {
+      console.error(
+        'Passkey login options error:',
+        error
+      );
+
+      return res.status(400).json({
+        success: false,
+        message:
+          error.message ||
+          'Unable to start passkey login.',
+      });
+    }
+  };
+
+
+// ============================================================
+// PASSWORDLESS LOGIN VERIFY
+// POST /api/passkeys/login/verify
+// ============================================================
+
+const verifyLoginAuthentication =
+  async (req, res) => {
+    try {
+      const response =
+        req.body;
+
+      if (
+        !response ||
+        typeof response !==
+          'object'
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'WebAuthn authentication response is required.',
+        });
+      }
+
+      const result =
+        await passkeyService
+          .verifyLoginAuthentication({
+            response,
+          });
+
+      return res.status(200).json({
+        success: true,
+
+        message:
+          'Passkey login successful.',
+
+        token:
+          result.token,
+
+        user:
+          result.user,
+
+        passkey_id:
+          result.passkeyId,
+
+        credential_id:
+          result.credentialId,
+      });
+    } catch (error) {
+      console.error(
+        'Passkey login verification error:',
+        error
+      );
+
+      return res.status(401).json({
+        success: false,
+        message:
+          error.message ||
+          'Passkey login failed.',
+      });
+    }
+  };
+// ============================================================
 // GET USER ID
 // ============================================================
 
