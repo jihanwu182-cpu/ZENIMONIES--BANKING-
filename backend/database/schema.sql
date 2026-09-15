@@ -645,6 +645,45 @@ CREATE TABLE IF NOT EXISTS security_tokens (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ============================================================
+-- AUTHENTICATION SESSIONS
+-- ============================================================
+--
+-- Server-side sessions allow Zenimonies to enforce an
+-- inactivity timeout independently of JWT expiration.
+--
+-- A session becomes inactive/locked after 5 minutes without
+-- authenticated activity.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    session_token_hash TEXT NOT NULL UNIQUE,
+
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    last_activity_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    expires_at TIMESTAMP NOT NULL,
+
+    revoked_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id
+ON auth_sessions(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_token_hash
+ON auth_sessions(session_token_hash);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at
+ON auth_sessions(expires_at);
 
 -- ============================================================
 -- AUDIT LOG
