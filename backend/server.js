@@ -1,4 +1,4 @@
-require('dotenv').config();
+oh require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
@@ -510,6 +510,54 @@ const startServer = async () => {
       'Database migration completed: profile fields are available on users'
     );
     
+    // --------------------------------------------------------
+// NOTIFICATIONS DATABASE
+// --------------------------------------------------------
+//
+// Stores real customer notifications.
+// No mock notifications are created.
+//
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL
+      REFERENCES users(id)
+      ON DELETE CASCADE,
+
+    type VARCHAR(50) NOT NULL DEFAULT 'general',
+
+    title VARCHAR(200) NOT NULL,
+
+    message TEXT NOT NULL,
+
+    is_read BOOLEAN NOT NULL DEFAULT false,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    read_at TIMESTAMP
+  );
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_notifications_user_id
+  ON notifications(user_id);
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+  ON notifications(user_id, is_read);
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_notifications_created_at
+  ON notifications(created_at DESC);
+`);
+
+console.log(
+  'Database migration completed: notifications table is available'
+);
     // --------------------------------------------------------
     // LEGAL NAME VERIFICATION LOCK
    // --------------------------------------------------------
