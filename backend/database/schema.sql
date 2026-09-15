@@ -846,6 +846,44 @@ ON notifications(user_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at
 ON notifications(created_at DESC);
 
+
+-- ============================================================
+-- PASSKEY / WEBAUTHN CREDENTIALS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS passkey_credentials (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    credential_id TEXT NOT NULL UNIQUE,
+
+    public_key TEXT NOT NULL,
+
+    counter BIGINT NOT NULL DEFAULT 0,
+
+    device_type VARCHAR(50),
+
+    backed_up BOOLEAN NOT NULL DEFAULT false,
+
+    transports TEXT,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    last_used_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_passkey_credentials_user_id
+ON passkey_credentials(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_passkey_credentials_credential_id
+ON passkey_credentials(credential_id);
+
+CREATE INDEX IF NOT EXISTS idx_passkey_credentials_last_used_at
+ON passkey_credentials(last_used_at);
+
 -- ============================================================
 -- INDEXES
 -- ============================================================
