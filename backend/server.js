@@ -22,6 +22,7 @@ const virtualCardRoutes = require('./routes/virtualCard');
 const adminRoutes = require('./routes/adminRoutes');
 const kycRoutes = require('./routes/kycRoutes');
 const profileRoutes = require('./routes/profile');
+const notificationRoutes = require('./routes/notifications');
 
 // ============================================================
 // PAYSTACK
@@ -176,6 +177,14 @@ app.use(
   profileRoutes
 );
 
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+app.use(
+  '/api/notifications',
+  notificationRoutes
+);
 // ============================================================
 // ADMIN
 // ============================================================
