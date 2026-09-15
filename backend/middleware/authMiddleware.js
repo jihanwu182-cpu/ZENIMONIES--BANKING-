@@ -1,35 +1,83 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
 
-const authMiddleware = async (req, res, next) => {
+const {
+  validateAndRefreshSession,
+} = require('../services/sessionService');
+
+
+// ============================================================
+// AUTHENTICATION MIDDLEWARE
+// ============================================================
+//
+// Responsibilities:
+//
+// 1. Validate the Bearer JWT.
+// 2. Read the user ID and session ID.
+// 3. Confirm the user still exists.
+// 4. Confirm the account is active.
+// 5. Confirm the server-side session is still active.
+// 6. Refresh the 5-minute inactivity timer.
+//
+// IMPORTANT:
+//
+// The JWT alone is NOT enough to authenticate a request.
+//
+// The auth_sessions database record is also required.
+// This allows Zenimonies to lock an inactive account after
+// 5 minutes without activity.
+// ============================================================
+
+const authMiddleware = async (
+  req,
+  res,
+  next
+) => {
+
   try {
-    // ============================================================
-    // 1. CHECK AUTHORIZATION HEADER
-    // ============================================================
 
-    const authHeader = req.headers.authorization;
+    // ========================================================
+    // AUTHORIZATION HEADER
+    // ========================================================
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const authHeader =
+      req.headers.authorization;
+
+
+    if (
+      !authHeader ||
+      !authHeader.startsWith('Bearer ')
+    ) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required',
+        message:
+          'Authentication token is required',
       });
     }
 
-    const token = authHeader
-      .substring(7)
-      .trim();
+
+    // ========================================================
+    // EXTRACT TOKEN
+    // ========================================================
+
+    const token =
+      authHeader
+        .substring(7)
+        .trim();
+
 
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication token is missing',
+        message:
+          'Authentication token is required',
       });
     }
 
-    // ============================================================
-    // 2. CHECK JWT SECRET
-    // ============================================================
+
+    // ========================================================
+    // JWT SECRET
+    // ========================================================
 
     if (!process.env.JWT_SECRET) {
       console.error(
@@ -43,22 +91,22 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // ============================================================
-    // 3. VERIFY JWT
-    // ============================================================
+
+    // ========================================================
+    // VERIFY JWT
+    // ========================================================
 
     let decoded;
 
     try {
-      decoded = jwt.verify(
-        token,
-        process.env.JWT_SECRET
-      );
-    } catch (jwtError) {
-      console.error(
-        'JWT verification failed:',
-        jwtError.message
-      );
+
+      decoded =
+        jwt.verify(
+          token,
+          process.env.JWT_SECRET
+        );
+
+    } catch (error) {
 
       return res.status(401).json({
         success: false,
@@ -67,22 +115,19 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // ============================================================
-    // 4. GET USER ID FROM TOKEN
-    // ============================================================
+
+    // ========================================================
+    // EXTRACT USER ID
+    // ========================================================
 
     const userId =
-      decoded.userId ||
-      decoded.id ||
-      decoded.user_id ||
-      decoded.sub;
+      decoded?.userId ||
+      decoded?.id ||
+      decoded?.user_id ||
+      decoded?.sub;
+
 
     if (!userId) {
-      console.error(
-        'JWT does not contain a user ID:',
-        decoded
-      );
-
       return res.status(401).json({
         success: false,
         message:
@@ -90,47 +135,80 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // ============================================================
-    // 5. LOAD USER
-    //
-    // IMPORTANT:
-    // Only use columns that are required for authentication.
-    // KYC-specific fields are loaded separately by KYC routes.
-    // ============================================================
 
-    const result = await pool.query(
-      `
-      SELECT
-        id,
-        full_name,
-        email,
-        phone,
-        role,
-        status
-      FROM users
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [userId]
-    );
+    // ========================================================
+    // EXTRACT SESSION ID
+    // ========================================================
 
-    if (result.rows.length === 0) {
+    const sessionId =
+      decoded?.sessionId ||
+      decoded?.session_id ||
+      decoded?.sid;
+
+
+    // --------------------------------------------------------
+    // Sessions are now required for authenticated requests.
+    // --------------------------------------------------------
+
+    if (!sessionId) {
+
       return res.status(401).json({
         success: false,
-        message: 'User not found',
+        code:
+          'SESSION_REQUIRED',
+        message:
+          'Your session is no longer valid. Please sign in again.',
       });
     }
 
-    const user = result.rows[0];
 
-    // ============================================================
-    // 6. CHECK ACCOUNT STATUS
-    // ============================================================
+    // ========================================================
+    // LOAD USER
+    // ========================================================
+
+    const userResult =
+      await pool.query(
+        `
+        SELECT
+          id,
+          full_name,
+          email,
+          phone,
+          role,
+          status
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [userId]
+      );
+
+
+    if (
+      userResult.rows.length === 0
+    ) {
+
+      return res.status(401).json({
+        success: false,
+        message:
+          'User account could not be found',
+      });
+    }
+
+
+    const user =
+      userResult.rows[0];
+
+
+    // ========================================================
+    // ACCOUNT STATUS
+    // ========================================================
 
     if (
       user.status &&
-      String(user.status).toLowerCase() !== 'active'
+      user.status !== 'active'
     ) {
+
       return res.status(403).json({
         success: false,
         message:
@@ -138,30 +216,107 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // ============================================================
-    // 7. ATTACH USER TO REQUEST
-    // ============================================================
+
+    // ========================================================
+    // VALIDATE SERVER SESSION
+    // ========================================================
+    //
+    // This checks whether the user has been inactive for
+    // more than 5 minutes.
+    //
+    // If valid:
+    //     inactivity timer is refreshed.
+    //
+    // If expired:
+    //     request is rejected.
+    // ========================================================
+
+    const session =
+      await validateAndRefreshSession({
+        userId,
+        sessionId,
+      });
+
+
+    if (!session.valid) {
+
+      if (
+        session.reason ===
+        'SESSION_EXPIRED'
+      ) {
+
+        return res.status(401).json({
+          success: false,
+          code:
+            'SESSION_EXPIRED',
+          message:
+            'Your account has been locked because there was no activity for 5 minutes. Please unlock your account to continue.',
+        });
+      }
+
+
+      if (
+        session.reason ===
+        'SESSION_REVOKED'
+      ) {
+
+        return res.status(401).json({
+          success: false,
+          code:
+            'SESSION_REVOKED',
+          message:
+            'Your session has been ended. Please sign in again.',
+        });
+      }
+
+
+      return res.status(401).json({
+        success: false,
+        code:
+          'SESSION_INVALID',
+        message:
+          'Your session is no longer valid. Please sign in again.',
+      });
+    }
+
+
+    // ========================================================
+    // ATTACH AUTHENTICATED USER
+    // ========================================================
 
     req.user = user;
-    req.userId = user.id;
 
-    // ============================================================
-    // 8. CONTINUE
-    // ============================================================
+    req.userId =
+      user.id;
+
+    req.sessionId =
+      sessionId;
+
+    req.session =
+      session;
+
+
+    // ========================================================
+    // CONTINUE
+    // ========================================================
 
     next();
+
   } catch (error) {
+
     console.error(
-      'User authentication error:',
+      'Authentication middleware error:',
       error
     );
 
     return res.status(500).json({
       success: false,
       message:
-        'Unable to authenticate user',
+        'Authentication service temporarily unavailable',
     });
   }
 };
 
-module.exports = authMiddleware;
+
+module.exports =
+  authMiddleware;
