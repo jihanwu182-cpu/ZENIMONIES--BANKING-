@@ -14,7 +14,7 @@ interface NotificationItem {
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
-  'https://zenimonies-banking.onrender.com';
+  'https://zenimonies-banking.onrender.com/api';
 
 const Notifications: React.FC = () => {
   const navigate = useNavigate();
