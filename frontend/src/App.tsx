@@ -33,6 +33,7 @@ import ForgotPassword from './pages/ForgotPassword.tsx';
 import ResetPassword from './pages/ResetPassword.tsx';
 import Notifications from './pages/Notifications.tsx';
 import PasskeySecurity from './pages/PasskeySecurity.tsx';
+import AccountLocked from './pages/AccountLocked.tsx';
 
 interface ServicePageProps {
   title: string;
@@ -290,7 +291,7 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Routes>
 
-        {/* AUTHENTICATION */}
+        {/* ================= AUTHENTICATION ================= */}
 
         <Route
           path="/login"
@@ -305,19 +306,26 @@ const App: React.FC = () => {
         <Route
           path="/forgot-password"
           element={<ForgotPassword />}
-       />
+        />
 
-        <Route 
-          path="/reset-password" 
-          element={<ResetPassword />} 
-          />
+        <Route
+          path="/reset-password"
+          element={<ResetPassword />}
+        />
+
+        {/* ================= SECURITY ================= */}
 
         <Route
           path="/passkey-security"
           element={<PasskeySecurity />}
         />
 
-        {/* DASHBOARD */}
+        <Route
+          path="/account-locked"
+          element={<AccountLocked />}
+        />
+
+        {/* ================= DASHBOARD ================= */}
 
         <Route
           path="/"
@@ -327,7 +335,7 @@ const App: React.FC = () => {
         <Route
           path="/notifications"
           element={<Notifications />}
-       />
+        />
 
         <Route
           path="/dashboard"
@@ -338,12 +346,13 @@ const App: React.FC = () => {
             />
           }
         />
+
         <Route
           path="/admin"
           element={<Admin />}
         />
 
-        {/* ACCOUNT */}
+        {/* ================= ACCOUNT ================= */}
 
         <Route
           path="/profile"
@@ -370,7 +379,7 @@ const App: React.FC = () => {
           element={<VerifyOTP />}
         />
 
-        {/* MONEY */}
+        {/* ================= MONEY ================= */}
 
         <Route
           path="/transfer"
@@ -405,7 +414,7 @@ const App: React.FC = () => {
         <Route
           path="/transaction-receipt"
           element={<TransactionReceipt />}
-         />
+        />
 
         <Route
           path="/wallet"
@@ -425,21 +434,21 @@ const App: React.FC = () => {
           element={<VirtualCard />}
         />
 
-        {/* AIRTIME */}
+        {/* ================= AIRTIME ================= */}
 
         <Route
           path="/airtime"
           element={<Airtime />}
         />
 
-        {/* DATA */}
+        {/* ================= DATA ================= */}
 
         <Route
           path="/data"
           element={<Data />}
         />
 
-        {/* TV */}
+        {/* ================= TV ================= */}
 
         <Route
           path="/tv"
@@ -452,21 +461,21 @@ const App: React.FC = () => {
           }
         />
 
-        {/* BILLS */}
+        {/* ================= BILLS ================= */}
 
         <Route
           path="/bills"
           element={<Bills />}
         />
 
-        {/* BETTING */}
+        {/* ================= BETTING ================= */}
 
         <Route
           path="/betting"
           element={<Betting />}
         />
 
-        {/* SAFEBOX */}
+        {/* ================= SAFEBOX ================= */}
 
         <Route
           path="/safebox"
@@ -479,7 +488,7 @@ const App: React.FC = () => {
           }
         />
 
-        {/* MORE */}
+        {/* ================= MORE ================= */}
 
         <Route
           path="/more"
@@ -492,7 +501,7 @@ const App: React.FC = () => {
           }
         />
 
-        {/* FALLBACK */}
+        {/* ================= FALLBACK ================= */}
 
         <Route
           path="*"
