@@ -1387,6 +1387,31 @@ const Dashboard: React.FC = () => {
 
         </section>
 
+        <button
+  type="button"
+  style={
+    styles.moreServiceItem
+  }
+  onClick={() =>
+    navigate(
+      '/passkey-security'
+    )
+  }
+>
+  <span
+    style={{
+      fontSize: 25,
+      lineHeight: 1,
+    }}
+  >
+    🔐
+  </span>
+
+  <span>
+    Passkey Security
+  </span>
+</button>
+
         {/* ====================================================
             MORE PANEL
         ==================================================== */}
@@ -2180,11 +2205,11 @@ const styles: Record<
   },
 
   moreGrid: {
-    display: 'grid',
-    gridTemplateColumns:
-      'repeat(4, 1fr)',
-    gap: 8,
-  },
+  display: 'grid',
+  gridTemplateColumns:
+    'repeat(5, 1fr)',
+  gap: 8,
+},
 
   moreServiceItem: {
     border: 'none',
