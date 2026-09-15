@@ -651,5 +651,8 @@ module.exports = {
   createAuthenticationOptions,
   verifyAuthentication,
 
+  createLoginAuthenticationOptions,
+  verifyLoginAuthentication,
+
   getUserPasskeys,
 };
