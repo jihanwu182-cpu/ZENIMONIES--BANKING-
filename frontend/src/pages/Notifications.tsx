@@ -1,4 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -12,20 +16,42 @@ interface NotificationItem {
   read_at?: string | null;
 }
 
-const API_BASE_URL =
+/*
+============================================================
+API
+============================================================
+*/
+
+const API_ROOT =
   process.env.REACT_APP_API_URL ||
-  'https://zenimonies-banking.onrender.com/api';
+  'https://zenimonies-banking.onrender.com';
+
+const API_BASE_URL = API_ROOT.endsWith('/api')
+  ? API_ROOT
+  : `${API_ROOT}/api`;
+
+/*
+============================================================
+COMPONENT
+============================================================
+*/
 
 const Notifications: React.FC = () => {
   const navigate = useNavigate();
 
-  const [notifications, setNotifications] = useState<
-    NotificationItem[]
-  >([]);
+  const [notifications, setNotifications] =
+    useState<NotificationItem[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [markingAll, setMarkingAll] = useState(false);
+  const [markingAll, setMarkingAll] =
+    useState(false);
+
+  /*
+  ==========================================================
+  AUTH
+  ==========================================================
+  */
 
   const getToken = () =>
     localStorage.getItem('zenimonies_token') ||
@@ -40,77 +66,116 @@ const Notifications: React.FC = () => {
     };
   };
 
-  const loadNotifications = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError('');
+  /*
+  ==========================================================
+  LOAD NOTIFICATIONS
+  ==========================================================
+  */
 
-      const token = getToken();
+  const loadNotifications = useCallback(
+    async () => {
+      try {
+        setLoading(true);
+        setError('');
 
-      if (!token) {
-        navigate('/login', { replace: true });
-        return;
-      }
+        const token = getToken();
 
-      const response = await axios.get(
-        `${API_BASE_URL}/api/notifications`,
-        {
-          headers: getHeaders(),
+        if (!token) {
+          navigate('/login', {
+            replace: true,
+          });
+          return;
         }
-      );
 
-      if (response.data?.success) {
-        setNotifications(
-          Array.isArray(response.data.notifications)
-            ? response.data.notifications
-            : []
+        const response = await axios.get(
+          `${API_BASE_URL}/notifications`,
+          {
+            headers: getHeaders(),
+          }
         );
-      } else {
-        setNotifications([]);
-      }
-    } catch (err) {
-      console.error('Failed to load notifications:', err);
 
-      if (
-        axios.isAxiosError(err) &&
-        err.response?.status === 401
-      ) {
-        navigate('/login', { replace: true });
-        return;
-      }
+        if (response.data?.success) {
+          setNotifications(
+            Array.isArray(
+              response.data.notifications
+            )
+              ? response.data.notifications
+              : []
+          );
+        } else {
+          setNotifications([]);
+          setError(
+            response.data?.message ||
+              'Unable to load your notifications.'
+          );
+        }
+      } catch (err) {
+        console.error(
+          'Failed to load notifications:',
+          err
+        );
 
-      setError(
-        'Unable to load your notifications. Please try again.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [navigate]);
+        if (
+          axios.isAxiosError(err) &&
+          err.response?.status === 401
+        ) {
+          navigate('/login', {
+            replace: true,
+          });
+          return;
+        }
+
+        setError(
+          'Unable to load your notifications. Please try again.'
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [navigate]
+  );
+
+  /*
+  ==========================================================
+  INITIAL LOAD
+  ==========================================================
+  */
 
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
 
-  const markAsRead = async (id: string) => {
+  /*
+  ==========================================================
+  MARK ONE AS READ
+  ==========================================================
+  */
+
+  const markAsRead = async (
+    id: string
+  ) => {
     try {
       await axios.patch(
-        `${API_BASE_URL}/api/notifications/${id}/read`,
+        `${API_BASE_URL}/notifications/${id}/read`,
         {},
         {
           headers: getHeaders(),
         }
       );
 
-      setNotifications((current) =>
-        current.map((notification) =>
-          notification.id === id
-            ? {
-                ...notification,
-                is_read: true,
-                read_at: new Date().toISOString(),
-              }
-            : notification
-        )
+      setNotifications(
+        (current) =>
+          current.map(
+            (notification) =>
+              notification.id === id
+                ? {
+                    ...notification,
+                    is_read: true,
+                    read_at:
+                      new Date().toISOString(),
+                  }
+                : notification
+          )
       );
     } catch (err) {
       console.error(
@@ -120,26 +185,35 @@ const Notifications: React.FC = () => {
     }
   };
 
+  /*
+  ==========================================================
+  MARK ALL AS READ
+  ==========================================================
+  */
+
   const markAllAsRead = async () => {
     try {
       setMarkingAll(true);
 
       await axios.patch(
-        `${API_BASE_URL}/api/notifications/read-all`,
+        `${API_BASE_URL}/notifications/read-all`,
         {},
         {
           headers: getHeaders(),
         }
       );
 
-      setNotifications((current) =>
-        current.map((notification) => ({
-          ...notification,
-          is_read: true,
-          read_at:
-            notification.read_at ||
-            new Date().toISOString(),
-        }))
+      setNotifications(
+        (current) =>
+          current.map(
+            (notification) => ({
+              ...notification,
+              is_read: true,
+              read_at:
+                notification.read_at ||
+                new Date().toISOString(),
+            })
+          )
       );
     } catch (err) {
       console.error(
@@ -151,19 +225,29 @@ const Notifications: React.FC = () => {
     }
   };
 
-  const deleteNotification = async (id: string) => {
+  /*
+  ==========================================================
+  DELETE NOTIFICATION
+  ==========================================================
+  */
+
+  const deleteNotification = async (
+    id: string
+  ) => {
     try {
       await axios.delete(
-        `${API_BASE_URL}/api/notifications/${id}`,
+        `${API_BASE_URL}/notifications/${id}`,
         {
           headers: getHeaders(),
         }
       );
 
-      setNotifications((current) =>
-        current.filter(
-          (notification) => notification.id !== id
-        )
+      setNotifications(
+        (current) =>
+          current.filter(
+            (notification) =>
+              notification.id !== id
+          )
       );
     } catch (err) {
       console.error(
@@ -173,14 +257,32 @@ const Notifications: React.FC = () => {
     }
   };
 
-  const unreadCount = notifications.filter(
-    (notification) => !notification.is_read
-  ).length;
+  /*
+  ==========================================================
+  UNREAD COUNT
+  ==========================================================
+  */
 
-  const formatDate = (dateString: string) => {
+  const unreadCount =
+    notifications.filter(
+      (notification) =>
+        !notification.is_read
+    ).length;
+
+  /*
+  ==========================================================
+  DATE FORMAT
+  ==========================================================
+  */
+
+  const formatDate = (
+    dateString: string
+  ) => {
     const date = new Date(dateString);
 
-    if (Number.isNaN(date.getTime())) {
+    if (
+      Number.isNaN(date.getTime())
+    ) {
       return '';
     }
 
@@ -192,6 +294,12 @@ const Notifications: React.FC = () => {
       minute: '2-digit',
     });
   };
+
+  /*
+  ==========================================================
+  NOTIFICATION ICON
+  ==========================================================
+  */
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -216,6 +324,12 @@ const Notifications: React.FC = () => {
     }
   };
 
+  /*
+  ==========================================================
+  RENDER
+  ==========================================================
+  */
+
   return (
     <div
       style={{
@@ -227,12 +341,15 @@ const Notifications: React.FC = () => {
         paddingBottom: '40px',
       }}
     >
-      {/* HEADER */}
+      {/* ==================================================
+          HEADER
+      ================================================== */}
 
       <header
         style={{
           background: '#ffffff',
-          borderBottom: '1px solid #e5ebe8',
+          borderBottom:
+            '1px solid #e5ebe8',
           position: 'sticky',
           top: 0,
           zIndex: 20,
@@ -240,21 +357,26 @@ const Notifications: React.FC = () => {
       >
         <div
           style={{
-            width: 'min(920px, 92%)',
+            width:
+              'min(920px, 92%)',
             margin: '0 auto',
             minHeight: '64px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent:
+              'space-between',
             gap: '15px',
           }}
         >
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() =>
+              navigate('/')
+            }
             style={{
               border: 'none',
-              background: 'transparent',
+              background:
+                'transparent',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -272,7 +394,8 @@ const Notifications: React.FC = () => {
                 color: '#ffffff',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
+                justifyContent:
+                  'center',
                 fontSize: '20px',
                 fontWeight: 800,
               }}
@@ -280,7 +403,11 @@ const Notifications: React.FC = () => {
               Z
             </div>
 
-            <div style={{ textAlign: 'left' }}>
+            <div
+              style={{
+                textAlign: 'left',
+              }}
+            >
               <div
                 style={{
                   fontSize: '17px',
@@ -294,7 +421,8 @@ const Notifications: React.FC = () => {
               <div
                 style={{
                   fontSize: '9px',
-                  letterSpacing: '1.5px',
+                  letterSpacing:
+                    '1.5px',
                   color: '#98a2a0',
                 }}
               >
@@ -305,10 +433,13 @@ const Notifications: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() =>
+              navigate('/')
+            }
             style={{
               border: 'none',
-              background: 'transparent',
+              background:
+                'transparent',
               color: '#087c43',
               fontWeight: 700,
               fontSize: '13px',
@@ -320,21 +451,29 @@ const Notifications: React.FC = () => {
         </div>
       </header>
 
-      {/* CONTENT */}
+      {/* ==================================================
+          CONTENT
+      ================================================== */}
 
       <main
         style={{
-          width: 'min(700px, 92%)',
+          width:
+            'min(700px, 92%)',
           margin: '0 auto',
           paddingTop: '28px',
         }}
       >
+        {/* BACK */}
+
         <button
           type="button"
-          onClick={() => navigate('/')}
+          onClick={() =>
+            navigate('/')
+          }
           style={{
             border: 'none',
-            background: 'transparent',
+            background:
+              'transparent',
             padding: 0,
             display: 'inline-flex',
             alignItems: 'center',
@@ -349,12 +488,15 @@ const Notifications: React.FC = () => {
           ← Back to Dashboard
         </button>
 
-        {/* TITLE CARD */}
+        {/* ==================================================
+            TITLE CARD
+        ================================================== */}
 
         <div
           style={{
             background: '#ffffff',
-            border: '1px solid #e5ebe8',
+            border:
+              '1px solid #e5ebe8',
             borderRadius: '20px',
             padding: '24px',
             boxShadow:
@@ -366,7 +508,8 @@ const Notifications: React.FC = () => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              justifyContent:
+                'space-between',
               gap: '15px',
             }}
           >
@@ -384,14 +527,18 @@ const Notifications: React.FC = () => {
 
               <p
                 style={{
-                  margin: '7px 0 0',
+                  margin:
+                    '7px 0 0',
                   color: '#66756e',
                   fontSize: '14px',
                 }}
               >
                 {unreadCount > 0
                   ? `${unreadCount} unread notification${
-                      unreadCount === 1 ? '' : 's'
+                      unreadCount ===
+                      1
+                        ? ''
+                        : 's'
                     }`
                   : 'You are all caught up.'}
               </p>
@@ -400,20 +547,33 @@ const Notifications: React.FC = () => {
             {unreadCount > 0 && (
               <button
                 type="button"
-                onClick={markAllAsRead}
-                disabled={markingAll}
+                onClick={
+                  markAllAsRead
+                }
+                disabled={
+                  markingAll
+                }
                 style={{
-                  border: '1px solid #cfe5d9',
-                  background: '#effbf5',
-                  color: '#087c43',
-                  borderRadius: '10px',
-                  padding: '10px 13px',
+                  border:
+                    '1px solid #cfe5d9',
+                  background:
+                    '#effbf5',
+                  color:
+                    '#087c43',
+                  borderRadius:
+                    '10px',
+                  padding:
+                    '10px 13px',
                   fontWeight: 700,
                   fontSize: '12px',
-                  cursor: markingAll
-                    ? 'not-allowed'
-                    : 'pointer',
-                  opacity: markingAll ? 0.6 : 1,
+                  cursor:
+                    markingAll
+                      ? 'not-allowed'
+                      : 'pointer',
+                  opacity:
+                    markingAll
+                      ? 0.6
+                      : 1,
                 }}
               >
                 {markingAll
@@ -424,13 +584,16 @@ const Notifications: React.FC = () => {
           </div>
         </div>
 
-        {/* ERROR */}
+        {/* ==================================================
+            ERROR
+        ================================================== */}
 
         {error && (
           <div
             style={{
               background: '#fff5f5',
-              border: '1px solid #f2caca',
+              border:
+                '1px solid #f2caca',
               color: '#b42318',
               borderRadius: '14px',
               padding: '14px',
@@ -442,13 +605,17 @@ const Notifications: React.FC = () => {
 
             <button
               type="button"
-              onClick={loadNotifications}
+              onClick={
+                loadNotifications
+              }
               style={{
                 marginLeft: '10px',
                 border: 'none',
-                background: 'transparent',
+                background:
+                  'transparent',
                 color: '#b42318',
-                textDecoration: 'underline',
+                textDecoration:
+                  'underline',
                 fontWeight: 700,
                 cursor: 'pointer',
               }}
@@ -458,32 +625,41 @@ const Notifications: React.FC = () => {
           </div>
         )}
 
-        {/* LOADING */}
+        {/* ==================================================
+            LOADING / EMPTY / LIST
+        ================================================== */}
 
         {loading ? (
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e5ebe8',
+              background:
+                '#ffffff',
+              border:
+                '1px solid #e5ebe8',
               borderRadius: '20px',
-              padding: '45px 20px',
-              textAlign: 'center',
+              padding:
+                '45px 20px',
+              textAlign:
+                'center',
               color: '#66756e',
               fontSize: '14px',
             }}
           >
             Loading notifications...
           </div>
-        ) : notifications.length === 0 ? (
-          /* EMPTY */
-
+        ) : notifications.length ===
+          0 ? (
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e5ebe8',
+              background:
+                '#ffffff',
+              border:
+                '1px solid #e5ebe8',
               borderRadius: '20px',
-              padding: '55px 20px',
-              textAlign: 'center',
+              padding:
+                '55px 20px',
+              textAlign:
+                'center',
               boxShadow:
                 '0 8px 25px rgba(26, 61, 47, 0.04)',
             }}
@@ -492,13 +668,19 @@ const Notifications: React.FC = () => {
               style={{
                 width: '64px',
                 height: '64px',
-                borderRadius: '20px',
-                background: '#e8f8f0',
-                color: '#087c43',
+                borderRadius:
+                  '20px',
+                background:
+                  '#e8f8f0',
+                color:
+                  '#087c43',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 16px',
+                alignItems:
+                  'center',
+                justifyContent:
+                  'center',
+                margin:
+                  '0 auto 16px',
                 fontSize: '28px',
               }}
             >
@@ -507,9 +689,12 @@ const Notifications: React.FC = () => {
 
             <h2
               style={{
-                margin: '0 0 8px',
-                color: '#063b2d',
-                fontSize: '19px',
+                margin:
+                  '0 0 8px',
+                color:
+                  '#063b2d',
+                fontSize:
+                  '19px',
               }}
             >
               No notifications yet
@@ -518,177 +703,245 @@ const Notifications: React.FC = () => {
             <p
               style={{
                 margin: 0,
-                color: '#66756e',
-                fontSize: '13px',
+                color:
+                  '#66756e',
+                fontSize:
+                  '13px',
                 lineHeight: 1.6,
               }}
             >
-              Important updates about your Zenimonies
-              account and transactions will appear here.
+              Important updates
+              about your
+              Zenimonies account
+              and transactions
+              will appear here.
             </p>
           </div>
         ) : (
-          /* NOTIFICATION LIST */
-
           <div
             style={{
               display: 'flex',
-              flexDirection: 'column',
+              flexDirection:
+                'column',
               gap: '10px',
             }}
           >
-            {notifications.map((notification) => (
-              <div
-                key={notification.id}
-                style={{
-                  background: notification.is_read
-                    ? '#ffffff'
-                    : '#f1fbf6',
-                  border: notification.is_read
-                    ? '1px solid #e5ebe8'
-                    : '1px solid #cfe8da',
-                  borderRadius: '18px',
-                  padding: '17px',
-                  boxShadow:
-                    '0 5px 18px rgba(26, 61, 47, 0.04)',
-                }}
-              >
+            {notifications.map(
+              (
+                notification
+              ) => (
                 <div
+                  key={
+                    notification.id
+                  }
                   style={{
-                    display: 'flex',
-                    gap: '13px',
+                    background:
+                      notification.is_read
+                        ? '#ffffff'
+                        : '#f1fbf6',
+                    border:
+                      notification.is_read
+                        ? '1px solid #e5ebe8'
+                        : '1px solid #cfe8da',
+                    borderRadius:
+                      '18px',
+                    padding: '17px',
+                    boxShadow:
+                      '0 5px 18px rgba(26, 61, 47, 0.04)',
                   }}
                 >
                   <div
                     style={{
-                      width: '45px',
-                      height: '45px',
-                      flexShrink: 0,
-                      borderRadius: '14px',
-                      background: '#e8f8f0',
-                      color: '#087c43',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '20px',
-                    }}
-                  >
-                    {getIcon(notification.type)}
-                  </div>
-
-                  <div
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
+                      display:
+                        'flex',
+                      gap: '13px',
                     }}
                   >
                     <div
                       style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        gap: '10px',
+                        width: '45px',
+                        height: '45px',
+                        flexShrink: 0,
+                        borderRadius:
+                          '14px',
+                        background:
+                          '#e8f8f0',
+                        color:
+                          '#087c43',
+                        display:
+                          'flex',
+                        alignItems:
+                          'center',
+                        justifyContent:
+                          'center',
+                        fontSize:
+                          '20px',
                       }}
                     >
-                      <h3
-                        style={{
-                          margin: 0,
-                          color: '#063b2d',
-                          fontSize: '15px',
-                          fontWeight: 800,
-                        }}
-                      >
-                        {notification.title}
-                      </h3>
-
-                      {!notification.is_read && (
-                        <span
-                          style={{
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            background: '#e11d48',
-                            flexShrink: 0,
-                            marginTop: '5px',
-                          }}
-                        />
+                      {getIcon(
+                        notification.type
                       )}
                     </div>
 
-                    <p
-                      style={{
-                        margin: '6px 0 8px',
-                        color: '#66756e',
-                        fontSize: '13px',
-                        lineHeight: 1.55,
-                      }}
-                    >
-                      {notification.message}
-                    </p>
-
                     <div
                       style={{
-                        color: '#98a2a0',
-                        fontSize: '11px',
+                        flex: 1,
+                        minWidth: 0,
                       }}
                     >
-                      {formatDate(notification.created_at)}
-                    </div>
+                      <div
+                        style={{
+                          display:
+                            'flex',
+                          justifyContent:
+                            'space-between',
+                          alignItems:
+                            'flex-start',
+                          gap: '10px',
+                        }}
+                      >
+                        <h3
+                          style={{
+                            margin: 0,
+                            color:
+                              '#063b2d',
+                            fontSize:
+                              '15px',
+                            fontWeight:
+                              800,
+                          }}
+                        >
+                          {
+                            notification.title
+                          }
+                        </h3>
 
-                    <div
-                      style={{
-                        marginTop: '11px',
-                        display: 'flex',
-                        gap: '8px',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      {!notification.is_read && (
+                        {!notification.is_read && (
+                          <span
+                            style={{
+                              width:
+                                '8px',
+                              height:
+                                '8px',
+                              borderRadius:
+                                '50%',
+                              background:
+                                '#e11d48',
+                              flexShrink:
+                                0,
+                              marginTop:
+                                '5px',
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      <p
+                        style={{
+                          margin:
+                            '6px 0 8px',
+                          color:
+                            '#66756e',
+                          fontSize:
+                            '13px',
+                          lineHeight:
+                            1.55,
+                        }}
+                      >
+                        {
+                          notification.message
+                        }
+                      </p>
+
+                      <div
+                        style={{
+                          color:
+                            '#98a2a0',
+                          fontSize:
+                            '11px',
+                        }}
+                      >
+                        {formatDate(
+                          notification.created_at
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop:
+                            '11px',
+                          display:
+                            'flex',
+                          gap: '8px',
+                          flexWrap:
+                            'wrap',
+                        }}
+                      >
+                        {!notification.is_read && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              markAsRead(
+                                notification.id
+                              )
+                            }
+                            style={{
+                              border:
+                                '1px solid #cfe5d9',
+                              background:
+                                '#ffffff',
+                              color:
+                                '#087c43',
+                              borderRadius:
+                                '9px',
+                              padding:
+                                '7px 10px',
+                              fontSize:
+                                '11px',
+                              fontWeight:
+                                700,
+                              cursor:
+                                'pointer',
+                            }}
+                          >
+                            Mark as read
+                          </button>
+                        )}
+
                         <button
                           type="button"
                           onClick={() =>
-                            markAsRead(notification.id)
+                            deleteNotification(
+                              notification.id
+                            )
                           }
                           style={{
-                            border: '1px solid #cfe5d9',
-                            background: '#ffffff',
-                            color: '#087c43',
-                            borderRadius: '9px',
-                            padding: '7px 10px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
+                            border:
+                              '1px solid #eadede',
+                            background:
+                              '#ffffff',
+                            color:
+                              '#8b3a3a',
+                            borderRadius:
+                              '9px',
+                            padding:
+                              '7px 10px',
+                            fontSize:
+                              '11px',
+                            fontWeight:
+                              700,
+                            cursor:
+                              'pointer',
                           }}
                         >
-                          Mark as read
+                          Delete
                         </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          deleteNotification(
-                            notification.id
-                          )
-                        }
-                        style={{
-                          border: '1px solid #eadede',
-                          background: '#ffffff',
-                          color: '#8b3a3a',
-                          borderRadius: '9px',
-                          padding: '7px 10px',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Delete
-                      </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            )}
           </div>
         )}
       </main>
