@@ -48,15 +48,22 @@ function getServerError(
     const response = axiosErr.response;
 
     if (response?.data) {
-  const data = response.data;
+      const data = response.data;
 
-  if (data.message && data.error_detail) {
-    return `${data.message}: ${data.error_detail}`;
-  }
+      if (
+        data.message &&
+        (data as any).error_detail
+      ) {
+        return `${
+          data.message
+        }: ${
+          (data as any).error_detail
+        }`;
+      }
 
-  if (data.message) {
-    return data.message;
-  }
+      if (data.message) {
+        return data.message;
+      }
 
       return JSON.stringify(data);
     }
@@ -87,6 +94,9 @@ const Login: React.FC = () => {
 
   const [password, setPassword] =
     useState('');
+
+  const [showPassword, setShowPassword] =
+    useState(false);
 
   const [loading, setLoading] =
     useState(false);
@@ -150,14 +160,19 @@ const Login: React.FC = () => {
       // =====================================================
 
       if (data.success === false) {
-  setError(
-    data.error_detail
-      ? `${data.message || 'Login failed'}: ${data.error_detail}`
-      : data.message ||
-        'Login was rejected by the server.'
-  );
-  return;
-}
+        setError(
+          (data as any).error_detail
+            ? `${
+                data.message ||
+                'Login failed'
+              }: ${
+                (data as any).error_detail
+              }`
+            : data.message ||
+              'Login was rejected by the server.'
+        );
+        return;
+      }
 
       // =====================================================
       // GET TOKEN
@@ -412,42 +427,114 @@ const Login: React.FC = () => {
             }}
           />
 
-          <label
-            htmlFor="password"
+          <div
             style={{
-              display: 'block',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               marginBottom: '6px',
-              fontWeight: 600,
-              color: '#172033',
             }}
           >
-            Password
-          </label>
+            <label
+              htmlFor="password"
+              style={{
+                fontWeight: 600,
+                color: '#172033',
+              }}
+            >
+              Password
+            </label>
 
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(event) =>
-              setPassword(
-                event.target.value
-              )
-            }
-            placeholder="Enter your password"
-            autoComplete="current-password"
-            disabled={loading}
+            <Link
+              to="/forgot-password"
+              style={{
+                color: '#0b5cff',
+                fontWeight: 600,
+                fontSize: '13px',
+                textDecoration: 'none',
+              }}
+            >
+              Forgot Password?
+            </Link>
+          </div>
+
+          <div
             style={{
-              boxSizing: 'border-box',
+              position: 'relative',
               width: '100%',
-              padding: '12px',
               marginBottom: '22px',
-              border:
-                '1px solid #d0d5dd',
-              borderRadius: '8px',
-              outline: 'none',
-              fontSize: '15px',
             }}
-          />
+          >
+            <input
+              id="password"
+              type={
+                showPassword
+                  ? 'text'
+                  : 'password'
+              }
+              value={password}
+              onChange={(event) =>
+                setPassword(
+                  event.target.value
+                )
+              }
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              disabled={loading}
+              style={{
+                boxSizing: 'border-box',
+                width: '100%',
+                padding:
+                  '12px 48px 12px 12px',
+                border:
+                  '1px solid #d0d5dd',
+                borderRadius: '8px',
+                outline: 'none',
+                fontSize: '15px',
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowPassword(
+                  (previous) =>
+                    !previous
+                )
+              }
+              disabled={loading}
+              aria-label={
+                showPassword
+                  ? 'Hide password'
+                  : 'Show password'
+              }
+              title={
+                showPassword
+                  ? 'Hide password'
+                  : 'Show password'
+              }
+              style={{
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform:
+                  'translateY(-50%)',
+                border: 'none',
+                background:
+                  'transparent',
+                cursor: loading
+                  ? 'not-allowed'
+                  : 'pointer',
+                fontSize: '20px',
+                lineHeight: 1,
+                padding: '4px',
+              }}
+            >
+              {showPassword
+                ? '🙈'
+                : '👁️'}
+            </button>
+          </div>
 
           <button
             type="submit"
