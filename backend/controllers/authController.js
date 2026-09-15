@@ -12,6 +12,10 @@ const {
   sendPasswordResetEmail,
 } = require('../services/emailService');
 
+const {
+  createAuthSession,
+} = require('../services/sessionService');
+
 // ============================================================
 // CONFIGURATION
 // ============================================================
