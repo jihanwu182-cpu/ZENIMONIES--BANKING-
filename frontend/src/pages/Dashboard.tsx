@@ -328,42 +328,52 @@ const Dashboard: React.FC = () => {
     };
   }, [apiBase]);
 
+  useEffect(() => {
   const loadUnreadNotificationCount = async () => {
-  try {
-    const token =
-      localStorage.getItem('zenimonies_token') ||
-      localStorage.getItem('token') ||
-      localStorage.getItem('access_token');
+    try {
+      const token =
+        localStorage.getItem('zenimonies_token') ||
+        localStorage.getItem('token') ||
+        localStorage.getItem('access_token');
 
-    if (!token) {
-      return;
-    }
-
-    const response = await axios.get(
-      `${apiBase}/api/notifications/unread-count`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      if (!token) {
+        return;
       }
-    );
 
-    if (response.data?.success) {
-      setUnreadNotificationCount(
-        Number(response.data.unread_count || 0)
+      const response = await fetch(
+        `${apiBase}/api/notifications/unread-count`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Notification request failed: ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      if (data?.success) {
+        setUnreadNotificationCount(
+          Number(data.unread_count || 0)
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Failed to load notification count:',
+        error
       );
     }
-  } catch (error) {
-    console.error(
-      'Failed to load notification count:',
-      error
-    );
-  }
-};
+  };
 
-useEffect(() => {
   loadUnreadNotificationCount();
-}, []);
+}, [apiBase]);
 
   /* ==========================================================
      BALANCE
