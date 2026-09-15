@@ -35,6 +35,8 @@ import Notifications from './pages/Notifications.tsx';
 import PasskeySecurity from './pages/PasskeySecurity.tsx';
 import AccountLocked from './pages/AccountLocked.tsx';
 
+import SessionGuard from './components/SessionGuard.tsx';
+
 interface ServicePageProps {
   title: string;
   description: string;
@@ -289,231 +291,233 @@ const ServicePage: React.FC<ServicePageProps> = ({
 const App: React.FC = () => {
   return (
     <BrowserRouter>
-      <Routes>
+      <SessionGuard>
+        <Routes>
 
-        {/* ================= AUTHENTICATION ================= */}
+          {/* ================= AUTHENTICATION ================= */}
 
-        <Route
-          path="/login"
-          element={<Login />}
-        />
+          <Route
+            path="/login"
+            element={<Login />}
+          />
 
-        <Route
-          path="/register"
-          element={<Register />}
-        />
+          <Route
+            path="/register"
+            element={<Register />}
+          />
 
-        <Route
-          path="/forgot-password"
-          element={<ForgotPassword />}
-        />
+          <Route
+            path="/forgot-password"
+            element={<ForgotPassword />}
+          />
 
-        <Route
-          path="/reset-password"
-          element={<ResetPassword />}
-        />
+          <Route
+            path="/reset-password"
+            element={<ResetPassword />}
+          />
 
-        {/* ================= SECURITY ================= */}
+          {/* ================= SECURITY ================= */}
 
-        <Route
-          path="/passkey-security"
-          element={<PasskeySecurity />}
-        />
+          <Route
+            path="/passkey-security"
+            element={<PasskeySecurity />}
+          />
 
-        <Route
-          path="/account-locked"
-          element={<AccountLocked />}
-        />
+          <Route
+            path="/account-locked"
+            element={<AccountLocked />}
+          />
 
-        {/* ================= DASHBOARD ================= */}
+          {/* ================= DASHBOARD ================= */}
 
-        <Route
-          path="/"
-          element={<Dashboard />}
-        />
+          <Route
+            path="/"
+            element={<Dashboard />}
+          />
 
-        <Route
-          path="/notifications"
-          element={<Notifications />}
-        />
+          <Route
+            path="/notifications"
+            element={<Notifications />}
+          />
 
-        <Route
-          path="/dashboard"
-          element={
-            <Navigate
-              to="/"
-              replace
-            />
-          }
-        />
+          <Route
+            path="/dashboard"
+            element={
+              <Navigate
+                to="/"
+                replace
+              />
+            }
+          />
 
-        <Route
-          path="/admin"
-          element={<Admin />}
-        />
+          <Route
+            path="/admin"
+            element={<Admin />}
+          />
 
-        {/* ================= ACCOUNT ================= */}
+          {/* ================= ACCOUNT ================= */}
 
-        <Route
-          path="/profile"
-          element={<Profile />}
-        />
+          <Route
+            path="/profile"
+            element={<Profile />}
+          />
 
-        <Route
-          path="/settings"
-          element={<Settings />}
-        />
+          <Route
+            path="/settings"
+            element={<Settings />}
+          />
 
-        <Route
-          path="/kyc"
-          element={<KYC />}
-        />
+          <Route
+            path="/kyc"
+            element={<KYC />}
+          />
 
-        <Route
-          path="/verify-phone"
-          element={<VerifyPhone />}
-        />
+          <Route
+            path="/verify-phone"
+            element={<VerifyPhone />}
+          />
 
-        <Route
-          path="/verify-otp"
-          element={<VerifyOTP />}
-        />
+          <Route
+            path="/verify-otp"
+            element={<VerifyOTP />}
+          />
 
-        {/* ================= MONEY ================= */}
+          {/* ================= MONEY ================= */}
 
-        <Route
-          path="/transfer"
-          element={<Transfer />}
-        />
+          <Route
+            path="/transfer"
+            element={<Transfer />}
+          />
 
-        <Route
-          path="/to-bank"
-          element={<ToBank />}
-        />
+          <Route
+            path="/to-bank"
+            element={<ToBank />}
+          />
 
-        <Route
-          path="/transfer-confirmation"
-          element={<TransferConfirmation />}
-        />
+          <Route
+            path="/transfer-confirmation"
+            element={<TransferConfirmation />}
+          />
 
-        <Route
-          path="/deposit"
-          element={<Deposit />}
-        />
+          <Route
+            path="/deposit"
+            element={<Deposit />}
+          />
 
-        <Route
-          path="/withdraw"
-          element={<Withdraw />}
-        />
+          <Route
+            path="/withdraw"
+            element={<Withdraw />}
+          />
 
-        <Route
-          path="/transactions"
-          element={<Transactions />}
-        />
+          <Route
+            path="/transactions"
+            element={<Transactions />}
+          />
 
-        <Route
-          path="/transaction-receipt"
-          element={<TransactionReceipt />}
-        />
+          <Route
+            path="/transaction-receipt"
+            element={<TransactionReceipt />}
+          />
 
-        <Route
-          path="/wallet"
-          element={
-            <ServicePage
-              title="Wallet"
-              icon="◈"
-              description="Manage your Zenimonies wallet and available funds."
-            />
-          }
-        />
+          <Route
+            path="/wallet"
+            element={
+              <ServicePage
+                title="Wallet"
+                icon="◈"
+                description="Manage your Zenimonies wallet and available funds."
+              />
+            }
+          />
 
-        {/* ================= VIRTUAL CARD ================= */}
+          {/* ================= VIRTUAL CARD ================= */}
 
-        <Route
-          path="/virtual-card"
-          element={<VirtualCard />}
-        />
+          <Route
+            path="/virtual-card"
+            element={<VirtualCard />}
+          />
 
-        {/* ================= AIRTIME ================= */}
+          {/* ================= AIRTIME ================= */}
 
-        <Route
-          path="/airtime"
-          element={<Airtime />}
-        />
+          <Route
+            path="/airtime"
+            element={<Airtime />}
+          />
 
-        {/* ================= DATA ================= */}
+          {/* ================= DATA ================= */}
 
-        <Route
-          path="/data"
-          element={<Data />}
-        />
+          <Route
+            path="/data"
+            element={<Data />}
+          />
 
-        {/* ================= TV ================= */}
+          {/* ================= TV ================= */}
 
-        <Route
-          path="/tv"
-          element={
-            <ServicePage
-              title="TV"
-              icon="▶"
-              description="Manage and pay your supported television subscription."
-            />
-          }
-        />
+          <Route
+            path="/tv"
+            element={
+              <ServicePage
+                title="TV"
+                icon="▶"
+                description="Manage and pay your supported television subscription."
+              />
+            }
+          />
 
-        {/* ================= BILLS ================= */}
+          {/* ================= BILLS ================= */}
 
-        <Route
-          path="/bills"
-          element={<Bills />}
-        />
+          <Route
+            path="/bills"
+            element={<Bills />}
+          />
 
-        {/* ================= BETTING ================= */}
+          {/* ================= BETTING ================= */}
 
-        <Route
-          path="/betting"
-          element={<Betting />}
-        />
+          <Route
+            path="/betting"
+            element={<Betting />}
+          />
 
-        {/* ================= SAFEBOX ================= */}
+          {/* ================= SAFEBOX ================= */}
 
-        <Route
-          path="/safebox"
-          element={
-            <ServicePage
-              title="SafeBox"
-              icon="◉"
-              description="Manage funds you want to keep separately from your available balance."
-            />
-          }
-        />
+          <Route
+            path="/safebox"
+            element={
+              <ServicePage
+                title="SafeBox"
+                icon="◉"
+                description="Manage funds you want to keep separately from your available balance."
+              />
+            }
+          />
 
-        {/* ================= MORE ================= */}
+          {/* ================= MORE ================= */}
 
-        <Route
-          path="/more"
-          element={
-            <ServicePage
-              title="More Services"
-              icon="••"
-              description="Explore additional Zenimonies services and account features."
-            />
-          }
-        />
+          <Route
+            path="/more"
+            element={
+              <ServicePage
+                title="More Services"
+                icon="••"
+                description="Explore additional Zenimonies services and account features."
+              />
+            }
+          />
 
-        {/* ================= FALLBACK ================= */}
+          {/* ================= FALLBACK ================= */}
 
-        <Route
-          path="*"
-          element={
-            <Navigate
-              to="/"
-              replace
-            />
-          }
-        />
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to="/"
+                replace
+              />
+            }
+          />
 
-      </Routes>
+        </Routes>
+      </SessionGuard>
     </BrowserRouter>
   );
 };
