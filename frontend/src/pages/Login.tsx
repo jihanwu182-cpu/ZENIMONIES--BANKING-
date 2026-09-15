@@ -224,11 +224,6 @@ const Login: React.FC = () => {
     try {
       setLoading(true);
 
-      console.log(
-        'Zenimonies login request:',
-        cleanEmail
-      );
-
       const response =
         await axios.post<LoginPayload>(
           `${API_URL}/api/auth/login`,
@@ -245,11 +240,6 @@ const Login: React.FC = () => {
             },
           }
         );
-
-      console.log(
-        'Zenimonies login response:',
-        response.data
-      );
 
       const data =
         unwrapLoginPayload(
@@ -364,11 +354,6 @@ const Login: React.FC = () => {
       // ========================================================
 
       if (!token) {
-        console.error(
-          'Login succeeded but no token was returned:',
-          data
-        );
-
         setError(
           data.message ||
             'The server did not return an authentication token.'
@@ -381,20 +366,18 @@ const Login: React.FC = () => {
       // SAVE SESSION
       // ========================================================
 
-      saveAuthenticatedSession(
-        {
-          token,
-          user:
-            data.user,
-          accounts:
-            data.accounts,
-        }
-      );
+      saveAuthenticatedSession({
+        token,
+        user:
+          data.user,
+        accounts:
+          data.accounts,
+      });
 
       navigate('/');
     } catch (err: unknown) {
       console.error(
-        'FULL ZENIMONIES LOGIN ERROR:',
+        'Zenimonies password login error:',
         err
       );
 
@@ -407,7 +390,7 @@ const Login: React.FC = () => {
   };
 
   // ==========================================================
-  // PASSWORDLESS PASSKEY LOGIN
+  // PASSKEY LOGIN
   // ==========================================================
 
   const handlePasskeyLogin =
@@ -428,7 +411,7 @@ const Login: React.FC = () => {
 
       if (!cleanEmail) {
         setError(
-          'Enter your email address first, then use Sign in with Passkey.'
+          'Enter your email address first, then tap Sign in with Passkey.'
         );
         return;
       }
@@ -454,7 +437,7 @@ const Login: React.FC = () => {
         );
 
         // ======================================================
-        // 1. REQUEST AUTHENTICATION CHALLENGE
+        // 1. REQUEST PASSKEY CHALLENGE
         // ======================================================
 
         const optionsResponse =
@@ -501,7 +484,7 @@ const Login: React.FC = () => {
         }
 
         // ======================================================
-        // 2. OPEN DEVICE PASSKEY / BIOMETRIC PROMPT
+        // 2. OPEN REAL DEVICE PASSKEY AUTHENTICATION
         // ======================================================
 
         const authenticationResponse =
@@ -511,7 +494,7 @@ const Login: React.FC = () => {
           });
 
         // ======================================================
-        // 3. SEND SIGNED ASSERTION TO SERVER
+        // 3. VERIFY PASSKEY WITH ZENIMONIES
         // ======================================================
 
         const verifyResponse =
@@ -562,34 +545,30 @@ const Login: React.FC = () => {
         const token =
           responseData.token;
 
-        // ======================================================
-        // 4. SAVE AUTHENTICATED SESSION
-        // ======================================================
-
         if (!token) {
           throw new Error(
             'Passkey login succeeded but no authentication token was returned.'
           );
         }
 
-        saveAuthenticatedSession(
-          {
-            token,
-            user:
-              responseData.user,
-            accounts:
-              responseData.accounts,
-          }
-        );
+        // ======================================================
+        // 4. SAVE SESSION
+        // ======================================================
 
-        // Reset the failure counter
-        // after successful authentication.
+        saveAuthenticatedSession({
+          token,
+          user:
+            responseData.user,
+          accounts:
+            responseData.accounts,
+        });
+
         setPasskeyFailures(
           0
         );
 
         // ======================================================
-        // 5. GO TO DASHBOARD
+        // 5. DASHBOARD
         // ======================================================
 
         navigate('/');
@@ -605,26 +584,6 @@ const Login: React.FC = () => {
         setPasskeyFailures(
           nextFailures
         );
-
-        if (
-          nextFailures >=
-          MAX_PASSKEY_FAILURES
-        ) {
-          setPasskeyFallback(
-            true
-          );
-
-          setError(
-            'Passkey authentication failed 3 times. Please sign in with your password.'
-          );
-
-          return;
-        }
-
-        // ------------------------------------------------------
-        // User cancelled the biometric/passkey prompt.
-        // Do not present it as a server failure.
-        // ------------------------------------------------------
 
         const errorName =
           err instanceof Error
@@ -651,17 +610,31 @@ const Login: React.FC = () => {
           return;
         }
 
+        if (
+          nextFailures >=
+          MAX_PASSKEY_FAILURES
+        ) {
+          setPasskeyFallback(
+            true
+          );
+
+          setError(
+            'Passkey authentication failed 3 times. Please sign in with your password.'
+          );
+
+          return;
+        }
+
+        const remaining =
+          MAX_PASSKEY_FAILURES -
+          nextFailures;
+
         setError(
           `${
             errorMessage ||
             'Passkey authentication failed.'
-          } ${
-            MAX_PASSKEY_FAILURES -
-            nextFailures
-          } attempt${
-            MAX_PASSKEY_FAILURES -
-              nextFailures ===
-            1
+          } ${remaining} attempt${
+            remaining === 1
               ? ''
               : 's'
           } remaining.`
@@ -710,6 +683,10 @@ const Login: React.FC = () => {
             '0 8px 30px rgba(0, 0, 0, 0.08)',
         }}
       >
+        {/* =====================================================
+            BRAND
+            ===================================================== */}
+
         <h1
           style={{
             marginTop:
@@ -738,6 +715,10 @@ const Login: React.FC = () => {
           Sign in to your account
         </p>
 
+        {/* =====================================================
+            ERROR
+            ===================================================== */}
+
         {error && (
           <div
             role="alert"
@@ -764,63 +745,200 @@ const Login: React.FC = () => {
           </div>
         )}
 
+        {/* =====================================================
+            EMAIL
+            ===================================================== */}
+
+        <label
+          htmlFor="email"
+          style={{
+            display:
+              'block',
+            marginBottom:
+              '6px',
+            fontWeight:
+              600,
+            color:
+              '#172033',
+          }}
+        >
+          Email
+        </label>
+
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(
+            event
+          ) =>
+            setEmail(
+              event.target
+                .value
+            )
+          }
+          placeholder="Enter your email"
+          autoComplete="username"
+          disabled={busy}
+          style={{
+            boxSizing:
+              'border-box',
+            width:
+              '100%',
+            padding:
+              '12px',
+            marginBottom:
+              '14px',
+            border:
+              '1px solid #d0d5dd',
+            borderRadius:
+              '8px',
+            outline:
+              'none',
+            fontSize:
+              '15px',
+          }}
+        />
+
+        {/* =====================================================
+            PASSKEY — PRIMARY PASSWORDLESS LOGIN
+            ===================================================== */}
+
+        {!passkeyFallback && (
+          <>
+            <button
+              type="button"
+              onClick={
+                handlePasskeyLogin
+              }
+              disabled={busy}
+              style={{
+                width:
+                  '100%',
+                padding:
+                  '14px',
+                border:
+                  'none',
+                borderRadius:
+                  '8px',
+                background:
+                  '#0b5cff',
+                color:
+                  '#ffffff',
+                fontWeight:
+                  700,
+                fontSize:
+                  '15px',
+                cursor:
+                  busy
+                    ? 'not-allowed'
+                    : 'pointer',
+                opacity:
+                  busy
+                    ? 0.7
+                    : 1,
+                display:
+                  'flex',
+                alignItems:
+                  'center',
+                justifyContent:
+                  'center',
+                gap:
+                  '10px',
+              }}
+            >
+              <span
+                style={{
+                  fontSize:
+                    '21px',
+                  lineHeight:
+                    1,
+                }}
+              >
+                🔐
+              </span>
+
+              {passkeyLoading
+                ? 'Verifying Passkey...'
+                : 'Sign in with Passkey'}
+            </button>
+
+            <p
+              style={{
+                textAlign:
+                  'center',
+                color:
+                  '#667085',
+                fontSize:
+                  '12px',
+                lineHeight:
+                  1.5,
+                marginTop:
+                  '9px',
+                marginBottom:
+                  '20px',
+              }}
+            >
+              Use Face ID, Touch ID,
+              your device passkey,
+              or security key.
+            </p>
+
+            <div
+              style={{
+                display:
+                  'flex',
+                alignItems:
+                  'center',
+                gap:
+                  '12px',
+                margin:
+                  '4px 0 20px',
+                color:
+                  '#98a2b3',
+                fontSize:
+                  '13px',
+              }}
+            >
+              <div
+                style={{
+                  flex:
+                    1,
+                  height:
+                    '1px',
+                  background:
+                    '#eaecf0',
+                }}
+              />
+
+              <span>
+                OR
+              </span>
+
+              <div
+                style={{
+                  flex:
+                    1,
+                  height:
+                    '1px',
+                  background:
+                    '#eaecf0',
+                }}
+              />
+            </div>
+          </>
+        )}
+
+        {/* =====================================================
+            PASSWORD FALLBACK
+            ===================================================== */}
+
         <form
           onSubmit={
             handleSubmit
           }
           noValidate
         >
-          <label
-            htmlFor="email"
-            style={{
-              display:
-                'block',
-              marginBottom:
-                '6px',
-              fontWeight:
-                600,
-              color:
-                '#172033',
-            }}
-          >
-            Email
-          </label>
-
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(
-              event
-            ) =>
-              setEmail(
-                event.target
-                  .value
-              )
-            }
-            placeholder="Enter your email"
-            autoComplete="email"
-            disabled={busy}
-            style={{
-              boxSizing:
-                'border-box',
-              width:
-                '100%',
-              padding:
-                '12px',
-              marginBottom:
-                '18px',
-              border:
-                '1px solid #d0d5dd',
-              borderRadius:
-                '8px',
-              outline:
-                'none',
-              fontSize:
-                '15px',
-            }}
-          />
-
           <div
             style={{
               display:
@@ -997,134 +1115,9 @@ const Login: React.FC = () => {
           </button>
         </form>
 
-        {/* ======================================================
-            PASSKEY LOGIN
-            ====================================================== */}
-
-        {!passkeyFallback && (
-          <>
-            <div
-              style={{
-                display:
-                  'flex',
-                alignItems:
-                  'center',
-                gap:
-                  '12px',
-                margin:
-                  '22px 0',
-                color:
-                  '#98a2b3',
-                fontSize:
-                  '13px',
-              }}
-            >
-              <div
-                style={{
-                  flex:
-                    1,
-                  height:
-                    '1px',
-                  background:
-                    '#eaecf0',
-                }}
-              />
-
-              <span>
-                OR
-              </span>
-
-              <div
-                style={{
-                  flex:
-                    1,
-                  height:
-                    '1px',
-                  background:
-                    '#eaecf0',
-                }}
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={
-                handlePasskeyLogin
-              }
-              disabled={busy}
-              style={{
-                width:
-                  '100%',
-                padding:
-                  '13px',
-                border:
-                  '1px solid #0b5cff',
-                borderRadius:
-                  '8px',
-                background:
-                  '#ffffff',
-                color:
-                  '#0b5cff',
-                fontWeight:
-                  700,
-                fontSize:
-                  '15px',
-                cursor:
-                  busy
-                    ? 'not-allowed'
-                    : 'pointer',
-                opacity:
-                  busy
-                    ? 0.7
-                    : 1,
-                display:
-                  'flex',
-                alignItems:
-                  'center',
-                justifyContent:
-                  'center',
-                gap:
-                  '9px',
-              }}
-            >
-              <span
-                style={{
-                  fontSize:
-                    '20px',
-                  lineHeight:
-                    1,
-                }}
-              >
-                🔐
-              </span>
-
-              {passkeyLoading
-                ? 'Verifying Passkey...'
-                : 'Sign in with Passkey'}
-            </button>
-
-            <p
-              style={{
-                textAlign:
-                  'center',
-                color:
-                  '#667085',
-                fontSize:
-                  '12px',
-                lineHeight:
-                  1.5,
-                marginTop:
-                  '10px',
-                marginBottom:
-                  0,
-              }}
-            >
-              Use your device passkey,
-              Face ID, Touch ID, or
-              security key.
-            </p>
-          </>
-        )}
+        {/* =====================================================
+            FALLBACK MESSAGE AFTER 3 PASSKEY FAILURES
+            ===================================================== */}
 
         {passkeyFallback && (
           <div
@@ -1153,6 +1146,10 @@ const Login: React.FC = () => {
             password to sign in.
           </div>
         )}
+
+        {/* =====================================================
+            REGISTER
+            ===================================================== */}
 
         <p
           style={{
