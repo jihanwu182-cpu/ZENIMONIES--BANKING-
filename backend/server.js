@@ -25,6 +25,7 @@ const profileRoutes = require('./routes/profile');
 const notificationRoutes = require('./routes/notifications');
 const passkeyRoutes = require('./routes/passkey');
 const passcodeRoutes = require('./routes/passcode');
+const transactionPinRoutes = require('./routes/transactionPin');
 
 // ============================================================
 // PAYSTACK
@@ -236,6 +237,10 @@ app.use(
   passcodeRoutes
 );
 
+app.use(
+  '/api/transaction-pin',
+  transactionPinRoutes
+);
 // ============================================================
 // ADMIN
 // ============================================================
