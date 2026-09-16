@@ -1,79 +1,65 @@
+const axios = require('axios');
+const crypto = require('crypto');
+
 const {
   generateRegistrationOptions,
   verifyRegistrationResponse,
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
+  isoUint8Array,
 } = require('@simplewebauthn/server');
 
-const {
-  isoUint8Array,
-} = require('@simplewebauthn/server/helpers');
-
 const pool = require('../config/database');
-
-const {
-  createAuthSession,
-} = require('./sessionService');
-
+const { createAuthSession } = require('./sessionService');
 
 // ============================================================
-// CONFIGURATION
+// WEBAUTHN CONFIGURATION
 // ============================================================
 
 const RP_NAME =
-  process.env.WEBAUTHN_RP_NAME ||
-  'Zenimonies';
+  process.env.WEBAUTHN_RP_NAME || 'Zenimonies';
 
 const RP_ID =
   process.env.WEBAUTHN_RP_ID ||
-  'zenimonies.com';
+  'zenimonies-banking-1.onrender.com';
 
 const ORIGIN =
   process.env.WEBAUTHN_ORIGIN ||
-  'https://zenimonies.com';
+  'https://zenimonies-banking-1.onrender.com';
 
 const CHALLENGE_EXPIRY_MINUTES = 5;
 
+// ============================================================
+// PASSKEY SECURITY
+// ============================================================
+
+const MAX_FAILED_PASSKEY_ATTEMPTS = 3;
+
+const PASSKEY_LOCK_MINUTES = 10;
 
 // ============================================================
 // HELPERS
 // ============================================================
 
 const getWebAuthnUserId = (userId) => {
-
-  if (!userId) {
-    throw new Error(
-      'User ID is required'
-    );
-  }
-
-  return isoUint8Array.fromUTF8String(
-    String(userId)
-  );
+  return isoUint8Array.fromUTF8String(String(userId));
 };
-
 
 const cleanupExpiredChallenges = async () => {
-
-  await pool.query(`
-    DELETE FROM webauthn_challenges
-    WHERE expires_at < CURRENT_TIMESTAMP
-  `);
+  await pool.query(
+    `
+      DELETE FROM webauthn_challenges
+      WHERE expires_at <= CURRENT_TIMESTAMP
+    `
+  );
 };
-
 
 const saveChallenge = async ({
   userId,
   challenge,
   challengeType,
 }) => {
-
   await cleanupExpiredChallenges();
-
-
-  // ----------------------------------------------------------
-  // Only one active challenge of each type per user.
-  // ----------------------------------------------------------
 
   await pool.query(
     `
@@ -81,12 +67,13 @@ const saveChallenge = async ({
       WHERE user_id = $1
         AND challenge_type = $2
     `,
-    [
-      userId,
-      challengeType,
-    ]
+    [userId, challengeType]
   );
 
+  const expiresAt = new Date(
+    Date.now() +
+      CHALLENGE_EXPIRY_MINUTES * 60 * 1000
+  );
 
   await pool.query(
     `
@@ -96,81 +83,55 @@ const saveChallenge = async ({
         challenge_type,
         expires_at
       )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        CURRENT_TIMESTAMP +
-          ($4 * INTERVAL '1 minute')
-      )
+      VALUES ($1, $2, $3, $4)
     `,
     [
       userId,
       challenge,
       challengeType,
-      CHALLENGE_EXPIRY_MINUTES,
+      expiresAt,
     ]
   );
-};
 
+  return expiresAt;
+};
 
 const consumeChallenge = async ({
   userId,
   challengeType,
 }) => {
-
-  const client =
-    await pool.connect();
-
+  const client = await pool.connect();
 
   try {
+    await client.query('BEGIN');
 
-    await client.query(
-      'BEGIN'
+    const result = await client.query(
+      `
+        SELECT
+          id,
+          challenge,
+          expires_at
+        FROM webauthn_challenges
+        WHERE user_id = $1
+          AND challenge_type = $2
+          AND expires_at > CURRENT_TIMESTAMP
+        ORDER BY created_at DESC
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [
+        userId,
+        challengeType,
+      ]
     );
 
-
-    const result =
-      await client.query(
-        `
-          SELECT
-            id,
-            challenge,
-            expires_at
-          FROM webauthn_challenges
-          WHERE user_id = $1
-            AND challenge_type = $2
-            AND expires_at > CURRENT_TIMESTAMP
-          ORDER BY created_at DESC
-          LIMIT 1
-          FOR UPDATE
-        `,
-        [
-          userId,
-          challengeType,
-        ]
-      );
-
-
-    if (
-      result.rows.length === 0
-    ) {
-
-      await client.query(
-        'ROLLBACK'
-      );
-
+    if (result.rowCount === 0) {
+      await client.query('ROLLBACK');
       return null;
     }
 
-
     const challengeRecord =
       result.rows[0];
-
-
-    // --------------------------------------------------------
-    // Delete immediately so the challenge cannot be reused.
-    // --------------------------------------------------------
 
     await client.query(
       `
@@ -180,37 +141,227 @@ const consumeChallenge = async ({
       [challengeRecord.id]
     );
 
-
-    await client.query(
-      'COMMIT'
-    );
-
+    await client.query('COMMIT');
 
     return challengeRecord.challenge;
-
-
   } catch (error) {
-
-    try {
-      await client.query(
-        'ROLLBACK'
-      );
-    } catch (rollbackError) {
-      console.error(
-        'Challenge rollback error:',
-        rollbackError
-      );
-    }
-
+    await client.query('ROLLBACK');
     throw error;
-
-
   } finally {
-
     client.release();
   }
 };
 
+// ============================================================
+// PASSKEY ATTEMPT TRACKING
+// ============================================================
+
+const getAttemptRecord = async ({
+  userId,
+  email,
+}) => {
+  const result = await pool.query(
+    `
+      SELECT
+        id,
+        user_id,
+        email,
+        attempt_type,
+        failed_attempts,
+        locked_until,
+        last_failed_at
+      FROM passkey_auth_attempts
+      WHERE attempt_type = 'login'
+        AND (
+          ($1::uuid IS NOT NULL AND user_id = $1)
+          OR
+          ($2::varchar IS NOT NULL AND LOWER(email) = LOWER($2))
+        )
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `,
+    [
+      userId || null,
+      email || null,
+    ]
+  );
+
+  return result.rows[0] || null;
+};
+
+const isPasskeyTemporarilyLocked = async ({
+  userId,
+  email,
+}) => {
+  const record = await getAttemptRecord({
+    userId,
+    email,
+  });
+
+  if (!record) {
+    return {
+      locked: false,
+      failedAttempts: 0,
+      lockedUntil: null,
+    };
+  }
+
+  if (
+    record.locked_until &&
+    new Date(record.locked_until) > new Date()
+  ) {
+    return {
+      locked: true,
+      failedAttempts:
+        Number(record.failed_attempts) || 0,
+      lockedUntil: record.locked_until,
+    };
+  }
+
+  if (
+    record.locked_until &&
+    new Date(record.locked_until) <= new Date()
+  ) {
+    await pool.query(
+      `
+        UPDATE passkey_auth_attempts
+        SET
+          failed_attempts = 0,
+          locked_until = NULL,
+          last_failed_at = NULL,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `,
+      [record.id]
+    );
+
+    return {
+      locked: false,
+      failedAttempts: 0,
+      lockedUntil: null,
+    };
+  }
+
+  return {
+    locked: false,
+    failedAttempts:
+      Number(record.failed_attempts) || 0,
+    lockedUntil: null,
+  };
+};
+
+const recordFailedPasskeyAttempt = async ({
+  userId,
+  email,
+}) => {
+  const normalizedEmail = email
+    ? String(email).trim().toLowerCase()
+    : null;
+
+  const existing = await getAttemptRecord({
+    userId,
+    email: normalizedEmail,
+  });
+
+  const now = new Date();
+
+  if (!existing) {
+    const failedAttempts = 1;
+
+    await pool.query(
+      `
+        INSERT INTO passkey_auth_attempts (
+          user_id,
+          email,
+          attempt_type,
+          failed_attempts,
+          last_failed_at,
+          updated_at
+        )
+        VALUES ($1, $2, 'login', $3, $4, CURRENT_TIMESTAMP)
+      `,
+      [
+        userId || null,
+        normalizedEmail,
+        failedAttempts,
+        now,
+      ]
+    );
+
+    return {
+      failedAttempts,
+      fallbackRequired: false,
+      lockedUntil: null,
+    };
+  }
+
+  const nextFailedAttempts =
+    Number(existing.failed_attempts || 0) + 1;
+
+  let lockedUntil = null;
+
+  if (
+    nextFailedAttempts >=
+    MAX_FAILED_PASSKEY_ATTEMPTS
+  ) {
+    lockedUntil = new Date(
+      Date.now() +
+        PASSKEY_LOCK_MINUTES * 60 * 1000
+    );
+  }
+
+  await pool.query(
+    `
+      UPDATE passkey_auth_attempts
+      SET
+        failed_attempts = $1,
+        locked_until = $2,
+        last_failed_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+    `,
+    [
+      nextFailedAttempts,
+      lockedUntil,
+      existing.id,
+    ]
+  );
+
+  return {
+    failedAttempts: nextFailedAttempts,
+    fallbackRequired:
+      nextFailedAttempts >=
+      MAX_FAILED_PASSKEY_ATTEMPTS,
+    lockedUntil,
+  };
+};
+
+const clearFailedPasskeyAttempts = async ({
+  userId,
+  email,
+}) => {
+  const existing = await getAttemptRecord({
+    userId,
+    email,
+  });
+
+  if (!existing) {
+    return;
+  }
+
+  await pool.query(
+    `
+      UPDATE passkey_auth_attempts
+      SET
+        failed_attempts = 0,
+        locked_until = NULL,
+        last_failed_at = NULL,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+    `,
+    [existing.id]
+  );
+};
 
 // ============================================================
 // GET USER PASSKEYS
@@ -219,148 +370,88 @@ const consumeChallenge = async ({
 const getUserPasskeys = async (
   userId
 ) => {
-
-  const result =
-    await pool.query(
-      `
-        SELECT
-          id,
-          credential_id,
-          public_key,
-          counter,
-          device_type,
-          backed_up,
-          transports,
-          created_at,
-          last_used_at
-        FROM passkey_credentials
-        WHERE user_id = $1
-        ORDER BY created_at ASC
-      `,
-      [userId]
-    );
-
+  const result = await pool.query(
+    `
+      SELECT
+        id,
+        credential_id,
+        device_type,
+        backed_up,
+        transports,
+        created_at,
+        last_used_at
+      FROM passkey_credentials
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `,
+    [userId]
+  );
 
   return result.rows;
 };
-
 
 // ============================================================
 // REGISTRATION OPTIONS
 // ============================================================
 
-const createRegistrationOptions = async (
-  userId
-) => {
-
-  const userResult =
+const createRegistrationOptions = async ({
+  userId,
+  userName,
+  userDisplayName,
+}) => {
+  const existingCredentials =
     await pool.query(
       `
-        SELECT
-          id,
-          full_name,
-          email
-        FROM users
-        WHERE id = $1
-        LIMIT 1
+        SELECT credential_id
+        FROM passkey_credentials
+        WHERE user_id = $1
       `,
       [userId]
     );
 
-
-  if (
-    userResult.rows.length === 0
-  ) {
-
-    throw new Error(
-      'User not found'
-    );
-  }
-
-
-  const user =
-    userResult.rows[0];
-
-
-  const existingPasskeys =
-    await getUserPasskeys(
-      userId
-    );
-
-
   const options =
     await generateRegistrationOptions({
-      rpName:
-        RP_NAME,
-
-      rpID:
-        RP_ID,
+      rpName: RP_NAME,
+      rpID: RP_ID,
 
       userName:
-        user.email ||
-        `user-${user.id}`,
+        userName ||
+        `user-${userId}`,
 
       userDisplayName:
-        user.full_name ||
-        user.email ||
+        userDisplayName ||
+        userName ||
         'Zenimonies User',
 
       userID:
-        getWebAuthnUserId(
-          user.id
-        ),
+        getWebAuthnUserId(userId),
 
-      attestationType:
-        'none',
+      attestationType: 'none',
 
       excludeCredentials:
-        existingPasskeys.map(
-          (passkey) => ({
-            id:
-              passkey.credential_id,
-
-            transports:
-              passkey.transports
-                ? passkey.transports
-                    .split(',')
-                    .map(
-                      (value) =>
-                        value.trim()
-                    )
-                    .filter(Boolean)
-                : undefined,
+        existingCredentials.rows.map(
+          (credential) => ({
+            id: credential.credential_id,
           })
         ),
 
       authenticatorSelection: {
-        residentKey:
-          'required',
-
-        userVerification:
-          'required',
+        residentKey: 'required',
+        requireResidentKey: true,
+        userVerification: 'required',
       },
 
-      supportedAlgorithmIDs: [
-        -7,
-        -257,
-      ],
+      timeout: 60000,
     });
-
 
   await saveChallenge({
     userId,
-
-    challenge:
-      options.challenge,
-
-    challengeType:
-      'registration',
+    challenge: options.challenge,
+    challengeType: 'registration',
   });
-
 
   return options;
 };
-
 
 // ============================================================
 // VERIFY REGISTRATION
@@ -370,95 +461,47 @@ const verifyRegistration = async ({
   userId,
   response,
 }) => {
-
   if (!response) {
-
     throw new Error(
-      'WebAuthn registration response is required'
+      'Passkey registration response is required.'
     );
   }
-
 
   const expectedChallenge =
     await consumeChallenge({
       userId,
-
-      challengeType:
-        'registration',
+      challengeType: 'registration',
     });
 
-
   if (!expectedChallenge) {
-
     throw new Error(
-      'Registration challenge is missing or expired'
+      'Passkey registration challenge expired or was not found.'
     );
   }
 
+  const verification =
+    await verifyRegistrationResponse({
+      response,
+      expectedChallenge,
+      expectedOrigin: ORIGIN,
+      expectedRPID: RP_ID,
+      requireUserVerification: true,
+    });
 
-  let verification;
-
-
-  try {
-
-    verification =
-      await verifyRegistrationResponse({
-        response,
-
-        expectedChallenge,
-
-        expectedOrigin:
-          ORIGIN,
-
-        expectedRPID:
-          RP_ID,
-
-        requireUserVerification:
-          true,
-
-        supportedAlgorithmIDs: [
-          -7,
-          -257,
-        ],
-      });
-
-
-  } catch (error) {
-
-    console.error(
-      'WebAuthn registration verification error:',
-      error
-    );
-
-
+  if (!verification.verified) {
     throw new Error(
-      error.message ||
-      'Passkey registration verification failed'
+      'Passkey registration could not be verified.'
     );
   }
-
-
-  if (
-    !verification.verified
-  ) {
-
-    throw new Error(
-      'Passkey registration could not be verified'
-    );
-  }
-
 
   const registrationInfo =
     verification.registrationInfo;
 
-
   if (!registrationInfo) {
-
     throw new Error(
-      'WebAuthn registration information is missing'
+      'Passkey registration information was not returned.'
     );
   }
-
 
   const {
     credential,
@@ -466,492 +509,319 @@ const verifyRegistration = async ({
     credentialBackedUp,
   } = registrationInfo;
 
-
-  if (!credential?.id) {
-
-    throw new Error(
-      'Passkey credential ID is missing'
-    );
-  }
-
-
-  if (!credential?.publicKey) {
-
-    throw new Error(
-      'Passkey public key is missing'
-    );
-  }
-
-
   const credentialId =
     credential.id;
 
-
-  const publicKeyBase64 =
+  const publicKey =
     Buffer.from(
       credential.publicKey
-    ).toString(
-      'base64'
-    );
-
+    ).toString('base64');
 
   const counter =
-    Number.isFinite(
-      credential.counter
-    )
-      ? credential.counter
-      : 0;
-
+    Number(credential.counter || 0);
 
   const transports =
-    response.response?.transports &&
-    Array.isArray(
-      response.response.transports
-    )
-      ? response.response.transports.join(',')
+    response.response?.transports
+      ? JSON.stringify(
+          response.response.transports
+        )
       : null;
 
-
-  // ----------------------------------------------------------
-  // Prevent duplicate credentials.
-  // ----------------------------------------------------------
-
-  const existing =
+  const existingCredential =
     await pool.query(
       `
-        SELECT
-          id
+        SELECT id
         FROM passkey_credentials
         WHERE credential_id = $1
-        LIMIT 1
       `,
       [credentialId]
     );
 
-
-  if (
-    existing.rows.length > 0
-  ) {
-
+  if (existingCredential.rowCount > 0) {
     throw new Error(
-      'This passkey is already registered'
+      'This Passkey is already registered.'
     );
   }
 
-
-  const result =
-    await pool.query(
-      `
-        INSERT INTO passkey_credentials (
-          user_id,
-          credential_id,
-          public_key,
-          counter,
-          device_type,
-          backed_up,
-          transports,
-          created_at
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          CURRENT_TIMESTAMP
-        )
-        RETURNING
-          id,
-          credential_id,
-          device_type,
-          backed_up,
-          created_at
-      `,
-      [
-        userId,
-
-        credentialId,
-
-        publicKeyBase64,
-
+  const result = await pool.query(
+    `
+      INSERT INTO passkey_credentials (
+        user_id,
+        credential_id,
+        public_key,
         counter,
+        device_type,
+        backed_up,
+        transports
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING
+        id,
+        credential_id,
+        device_type,
+        backed_up,
+        created_at
+    `,
+    [
+      userId,
+      credentialId,
+      publicKey,
+      counter,
+      credentialDeviceType ||
+        null,
+      Boolean(
+        credentialBackedUp
+      ),
+      transports,
+    ]
+  );
 
-        credentialDeviceType ||
-          null,
-
-        Boolean(
-          credentialBackedUp
-        ),
-
-        transports,
-      ]
-    );
-
+  await pool.query(
+    `
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description
+      )
+      VALUES ($1, $2, $3)
+    `,
+    [
+      userId,
+      'passkey_registration_success',
+      'A new Passkey was successfully registered.',
+    ]
+  );
 
   return {
-
-    verified:
-      true,
-
-    passkey:
-      result.rows[0],
+    verified: true,
+    passkey: result.rows[0],
   };
 };
-
 
 // ============================================================
 // AUTHENTICATION OPTIONS
 // ============================================================
 
-const createAuthenticationOptions =
-  async (
-    userId
-  ) => {
+const createAuthenticationOptions = async ({
+  userId,
+}) => {
+  const credentials =
+    await pool.query(
+      `
+        SELECT credential_id
+        FROM passkey_credentials
+        WHERE user_id = $1
+      `,
+      [userId]
+    );
 
-    const passkeys =
-      await getUserPasskeys(
-        userId
-      );
+  if (credentials.rowCount === 0) {
+    throw new Error(
+      'No Passkey is registered for this account.'
+    );
+  }
 
+  const options =
+    await generateAuthenticationOptions({
+      rpID: RP_ID,
 
-    if (
-      passkeys.length === 0
-    ) {
+      allowCredentials:
+        credentials.rows.map(
+          (credential) => ({
+            id: credential.credential_id,
+          })
+        ),
 
-      throw new Error(
-        'No passkey is registered for this account'
-      );
-    }
+      userVerification: 'required',
 
-
-    const options =
-      await generateAuthenticationOptions({
-        rpID:
-          RP_ID,
-
-        allowCredentials:
-          passkeys.map(
-            (passkey) => ({
-              id:
-                passkey.credential_id,
-
-              transports:
-                passkey.transports
-                  ? passkey.transports
-                      .split(',')
-                      .map(
-                        (value) =>
-                          value.trim()
-                      )
-                      .filter(
-                        Boolean
-                      )
-                  : undefined,
-            })
-          ),
-
-        userVerification:
-          'required',
-      });
-
-
-    await saveChallenge({
-      userId,
-
-      challenge:
-        options.challenge,
-
-      challengeType:
-        'authentication',
+      timeout: 60000,
     });
 
+  await saveChallenge({
+    userId,
+    challenge: options.challenge,
+    challengeType: 'authentication',
+  });
 
-    return options;
-  };
-
+  return options;
+};
 
 // ============================================================
 // VERIFY AUTHENTICATION
 // ============================================================
 
-const verifyAuthentication =
-  async ({
-    userId,
-    response,
-  }) => {
+const verifyAuthentication = async ({
+  userId,
+  response,
+}) => {
+  if (!response) {
+    throw new Error(
+      'Passkey authentication response is required.'
+    );
+  }
 
-    if (!response) {
+  const credentialId =
+    response.id;
 
-      throw new Error(
-        'WebAuthn authentication response is required'
-      );
-    }
+  if (!credentialId) {
+    throw new Error(
+      'Passkey credential ID is missing.'
+    );
+  }
 
-
-    const expectedChallenge =
-      await consumeChallenge({
+  const credentialResult =
+    await pool.query(
+      `
+        SELECT
+          id,
+          user_id,
+          credential_id,
+          public_key,
+          counter
+        FROM passkey_credentials
+        WHERE user_id = $1
+          AND credential_id = $2
+        LIMIT 1
+      `,
+      [
         userId,
+        credentialId,
+      ]
+    );
 
-        challengeType:
-          'authentication',
-      });
+  if (credentialResult.rowCount === 0) {
+    throw new Error(
+      'Passkey credential was not found.'
+    );
+  }
 
+  const credential =
+    credentialResult.rows[0];
 
-    if (!expectedChallenge) {
+  const expectedChallenge =
+    await consumeChallenge({
+      userId,
+      challengeType: 'authentication',
+    });
 
-      throw new Error(
-        'Authentication challenge is missing or expired'
-      );
-    }
+  if (!expectedChallenge) {
+    throw new Error(
+      'Passkey authentication challenge expired or was not found.'
+    );
+  }
 
+  const verification =
+    await verifyAuthenticationResponse({
+      response,
+      expectedChallenge,
+      expectedOrigin: ORIGIN,
+      expectedRPID: RP_ID,
 
-    const credentialId =
-      response.id;
+      credential: {
+        id: credential.credential_id,
 
+        publicKey:
+          Buffer.from(
+            credential.public_key,
+            'base64'
+          ),
 
-    if (!credentialId) {
+        counter:
+          Number(
+            credential.counter || 0
+          ),
 
-      throw new Error(
-        'Passkey credential ID is missing'
-      );
-    }
+        transports:
+          credential.transports
+            ? JSON.parse(
+                credential.transports
+              )
+            : undefined,
+      },
 
+      requireUserVerification: true,
+    });
 
-    const result =
-      await pool.query(
-        `
-          SELECT
-            id,
-            user_id,
-            credential_id,
-            public_key,
-            counter,
-            device_type,
-            backed_up,
-            transports
-          FROM passkey_credentials
-          WHERE user_id = $1
-            AND credential_id = $2
-          LIMIT 1
-        `,
-        [
-          userId,
-          credentialId,
-        ]
-      );
+  if (!verification.verified) {
+    throw new Error(
+      'Passkey authentication failed.'
+    );
+  }
 
+  const newCounter =
+    Number(
+      verification.authenticationInfo
+        ?.newCounter ??
+        credential.counter
+    );
 
-    if (
-      result.rows.length === 0
-    ) {
+  await pool.query(
+    `
+      UPDATE passkey_credentials
+      SET
+        counter = $1,
+        last_used_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `,
+    [
+      newCounter,
+      credential.id,
+    ]
+  );
 
-      throw new Error(
-        'Registered passkey could not be found'
-      );
-    }
+  await clearFailedPasskeyAttempts({
+    userId,
+  });
 
-
-    const passkey =
-      result.rows[0];
-
-
-    const publicKey =
-      new Uint8Array(
-        Buffer.from(
-          passkey.public_key,
-          'base64'
-        )
-      );
-
-
-    let verification;
-
-
-    try {
-
-      verification =
-        await verifyAuthenticationResponse({
-          response,
-
-          expectedChallenge,
-
-          expectedOrigin:
-            ORIGIN,
-
-          expectedRPID:
-            RP_ID,
-
-          requireUserVerification:
-            true,
-
-          credential: {
-            id:
-              passkey.credential_id,
-
-            publicKey,
-
-            counter:
-              Number(
-                passkey.counter || 0
-              ),
-
-            transports:
-              passkey.transports
-                ? passkey.transports
-                    .split(',')
-                    .map(
-                      (value) =>
-                        value.trim()
-                    )
-                    .filter(
-                      Boolean
-                    )
-                : undefined,
-          },
-        });
-
-
-    } catch (error) {
-
-      console.error(
-        'WebAuthn authentication verification error:',
-        error
-      );
-
-
-      throw new Error(
-        error.message ||
-        'Passkey authentication verification failed'
-      );
-    }
-
-
-    if (
-      !verification.verified
-    ) {
-
-      throw new Error(
-        'Passkey authentication failed'
-      );
-    }
-
-
-    const newCounter =
-      verification
-        .authenticationInfo
-        ?.newCounter;
-
-
-    if (
-      Number.isFinite(
-        newCounter
+  await pool.query(
+    `
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description
       )
-    ) {
+      VALUES ($1, $2, $3)
+    `,
+    [
+      userId,
+      'passkey_authentication_success',
+      'Passkey authentication succeeded.',
+    ]
+  );
 
-      await pool.query(
-        `
-          UPDATE passkey_credentials
-          SET
-            counter = $1,
-            last_used_at =
-              CURRENT_TIMESTAMP
-          WHERE id = $2
-        `,
-        [
-          newCounter,
-          passkey.id,
-        ]
-      );
-
-    } else {
-
-      await pool.query(
-        `
-          UPDATE passkey_credentials
-          SET
-            last_used_at =
-              CURRENT_TIMESTAMP
-          WHERE id = $1
-        `,
-        [passkey.id]
-      );
-    }
-
-
-    return {
-
-      verified:
-        true,
-
-      passkeyId:
-        passkey.id,
-
-      credentialId:
-        passkey.credential_id,
-
-      deviceType:
-        passkey.device_type,
-
-      backedUp:
-        passkey.backed_up,
-    };
+  return {
+    verified: true,
+    passkeyId: credential.id,
+    credentialId:
+      credential.credential_id,
   };
-
+};
 
 // ============================================================
 // PASSWORDLESS LOGIN OPTIONS
 // ============================================================
-//
-// This is used by:
-//
-// "Sign in with Passkey"
-//
-// The email identifies which Zenimonies account's registered
-// passkeys should be offered.
-//
-// The actual authentication is still performed cryptographically
-// by WebAuthn.
-// ============================================================
 
 const createLoginAuthenticationOptions =
-  async (
-    email
-  ) => {
-
-    const normalizedEmail =
-      String(
-        email || ''
-      )
-        .trim()
-        .toLowerCase();
-
+  async (email) => {
+    const normalizedEmail = String(
+      email || ''
+    )
+      .trim()
+      .toLowerCase();
 
     if (!normalizedEmail) {
-
       throw new Error(
-        'Email address is required'
+        'Email address is required.'
       );
     }
-
 
     const userResult =
       await pool.query(
         `
           SELECT
             id,
-            full_name,
             email,
-            phone,
-            role,
-            status,
-            kyc_status,
-            kyc_tier,
-            bvn_verified,
-            id_verified,
-            tier_3_verified,
-            is_verified
+            status
           FROM users
           WHERE LOWER(email) = $1
           LIMIT 1
@@ -959,154 +829,116 @@ const createLoginAuthenticationOptions =
         [normalizedEmail]
       );
 
-
-    if (
-      userResult.rows.length === 0
-    ) {
-
+    if (userResult.rowCount === 0) {
       throw new Error(
-        'No Zenimonies account was found for this email address'
+        'Invalid login credentials.'
       );
     }
-
 
     const user =
       userResult.rows[0];
 
-
     if (
       user.status &&
-      String(
-        user.status
-      ).toLowerCase() !==
-        'active'
+      user.status !== 'active'
     ) {
-
       throw new Error(
-        'This Zenimonies account is not active'
+        'This account is not active.'
       );
     }
 
+    const attemptStatus =
+      await isPasskeyTemporarilyLocked({
+        userId: user.id,
+        email: normalizedEmail,
+      });
 
-    const passkeys =
-      await getUserPasskeys(
-        user.id
-      );
+    if (attemptStatus.locked) {
+      const error =
+        new Error(
+          'Passkey authentication is temporarily unavailable. Please use your password.'
+        );
 
+      error.code =
+        'PASSKEY_FALLBACK_REQUIRED';
 
-    if (
-      passkeys.length === 0
-    ) {
+      error.failedAttempts =
+        attemptStatus.failedAttempts;
 
-      throw new Error(
-        'No passkey is registered for this account'
-      );
+      error.lockedUntil =
+        attemptStatus.lockedUntil;
+
+      throw error;
     }
 
+    const credentials =
+      await pool.query(
+        `
+          SELECT credential_id
+          FROM passkey_credentials
+          WHERE user_id = $1
+        `,
+        [user.id]
+      );
+
+    if (credentials.rowCount === 0) {
+      throw new Error(
+        'No Passkey is registered for this account.'
+      );
+    }
 
     const options =
       await generateAuthenticationOptions({
-        rpID:
-          RP_ID,
+        rpID: RP_ID,
 
         allowCredentials:
-          passkeys.map(
-            (passkey) => ({
+          credentials.rows.map(
+            (credential) => ({
               id:
-                passkey.credential_id,
-
-              transports:
-                passkey.transports
-                  ? passkey.transports
-                      .split(',')
-                      .map(
-                        (value) =>
-                          value.trim()
-                      )
-                      .filter(
-                        Boolean
-                      )
-                  : undefined,
+                credential.credential_id,
             })
           ),
 
         userVerification:
           'required',
+
+        timeout: 60000,
       });
 
-
     await saveChallenge({
-      userId:
-        user.id,
-
-      challenge:
-        options.challenge,
-
-      challengeType:
-        'login',
+      userId: user.id,
+      challenge: options.challenge,
+      challengeType: 'login',
     });
 
-
     return {
-
       options,
-
-      userId:
-        user.id,
+      userId: user.id,
     };
   };
 
-
 // ============================================================
-// VERIFY PASSWORDLESS LOGIN
-// ============================================================
-//
-// IMPORTANT:
-//
-// A successful Passkey login now creates the SAME server-side
-// authentication session used by password login.
-//
-// Therefore:
-//
-// Passkey
-//    ↓
-// WebAuthn verification
-//    ↓
-// auth_sessions
-//    ↓
-// JWT containing sessionId
-//    ↓
-// 5-minute inactivity protection
+// PASSWORDLESS LOGIN VERIFY
 // ============================================================
 
 const verifyLoginAuthentication =
   async ({
     response,
   }) => {
-
     if (!response) {
-
       throw new Error(
-        'WebAuthn authentication response is required'
+        'Passkey authentication response is required.'
       );
     }
-
 
     const credentialId =
       response.id;
 
-
     if (!credentialId) {
-
       throw new Error(
-        'Passkey credential ID is missing'
+        'Passkey credential ID is missing.'
       );
     }
-
-
-    // ========================================================
-    // FIND PASSKEY + USER
-    // ========================================================
 
     const credentialResult =
       await pool.query(
@@ -1117,112 +949,83 @@ const verifyLoginAuthentication =
             pc.credential_id,
             pc.public_key,
             pc.counter,
-            pc.device_type,
-            pc.backed_up,
             pc.transports,
-
-            u.id AS user_id_from_users,
-            u.full_name,
             u.email,
             u.phone,
+            u.full_name,
             u.role,
-            u.status,
-            u.kyc_status,
-            u.kyc_tier,
-            u.bvn_verified,
-            u.id_verified,
-            u.tier_3_verified,
-            u.is_verified
-
+            u.status
           FROM passkey_credentials pc
-
           INNER JOIN users u
             ON u.id = pc.user_id
-
           WHERE pc.credential_id = $1
-
           LIMIT 1
         `,
         [credentialId]
       );
 
-
     if (
-      credentialResult.rows.length === 0
+      credentialResult.rowCount === 0
     ) {
-
       throw new Error(
-        'This passkey is not registered with Zenimonies'
+        'Passkey credential was not found.'
       );
     }
-
 
     const passkey =
       credentialResult.rows[0];
 
-
-    // ========================================================
-    // ACCOUNT STATUS
-    // ========================================================
-
     if (
       passkey.status &&
-      String(
-        passkey.status
-      ).toLowerCase() !==
-        'active'
+      passkey.status !== 'active'
     ) {
-
       throw new Error(
-        'This Zenimonies account is not active'
+        'This account is not active.'
       );
     }
 
+    const attemptStatus =
+      await isPasskeyTemporarilyLocked({
+        userId:
+          passkey.user_id,
+        email:
+          passkey.email,
+      });
 
-    // ========================================================
-    // CONSUME LOGIN CHALLENGE
-    // ========================================================
+    if (attemptStatus.locked) {
+      const error =
+        new Error(
+          'Passkey authentication is temporarily unavailable. Please use your password.'
+        );
+
+      error.code =
+        'PASSKEY_FALLBACK_REQUIRED';
+
+      error.failedAttempts =
+        attemptStatus.failedAttempts;
+
+      error.lockedUntil =
+        attemptStatus.lockedUntil;
+
+      throw error;
+    }
 
     const expectedChallenge =
       await consumeChallenge({
         userId:
           passkey.user_id,
-
-        challengeType:
-          'login',
+        challengeType: 'login',
       });
 
-
     if (!expectedChallenge) {
-
       throw new Error(
-        'Passkey login challenge is missing or expired'
+        'Passkey login challenge expired or was not found. Please try again.'
       );
     }
 
-
-    // ========================================================
-    // PUBLIC KEY
-    // ========================================================
-
-    const publicKey =
-      new Uint8Array(
-        Buffer.from(
-          passkey.public_key,
-          'base64'
-        )
-      );
-
-
-    // ========================================================
-    // VERIFY WEBAUTHN ASSERTION
-    // ========================================================
-
     let verification;
 
-
     try {
-
       verification =
         await verifyAuthenticationResponse({
           response,
@@ -1235,14 +1038,15 @@ const verifyLoginAuthentication =
           expectedRPID:
             RP_ID,
 
-          requireUserVerification:
-            true,
-
           credential: {
             id:
               passkey.credential_id,
 
-            publicKey,
+            publicKey:
+              Buffer.from(
+                passkey.public_key,
+                'base64'
+              ),
 
             counter:
               Number(
@@ -1251,121 +1055,23 @@ const verifyLoginAuthentication =
 
             transports:
               passkey.transports
-                ? passkey.transports
-                    .split(',')
-                    .map(
-                      (value) =>
-                        value.trim()
-                    )
-                    .filter(
-                      Boolean
-                    )
+                ? JSON.parse(
+                    passkey.transports
+                  )
                 : undefined,
           },
+
+          requireUserVerification:
+            true,
         });
-
-
-    } catch (error) {
-
-      console.error(
-        'WebAuthn passwordless login verification error:',
-        error
-      );
-
-
-      throw new Error(
-        error.message ||
-        'Passkey login verification failed'
-      );
-    }
-
-
-    if (
-      !verification.verified
-    ) {
-
-      throw new Error(
-        'Passkey login could not be verified'
-      );
-    }
-
-
-    // ========================================================
-    // UPDATE PASSKEY COUNTER
-    // ========================================================
-
-    const newCounter =
-      verification
-        .authenticationInfo
-        ?.newCounter;
-
-
-    if (
-      Number.isFinite(
-        newCounter
-      )
-    ) {
-
-      await pool.query(
-        `
-          UPDATE passkey_credentials
-          SET
-            counter = $1,
-            last_used_at =
-              CURRENT_TIMESTAMP
-          WHERE id = $2
-        `,
-        [
-          newCounter,
-          passkey.id,
-        ]
-      );
-
-    } else {
-
-      await pool.query(
-        `
-          UPDATE passkey_credentials
-          SET
-            last_used_at =
-              CURRENT_TIMESTAMP
-          WHERE id = $1
-        `,
-        [passkey.id]
-      );
-    }
-
-
-    // ========================================================
-    // CREATE SERVER-SIDE AUTH SESSION
-    // ========================================================
-    //
-    // DO NOT CREATE A STANDALONE JWT HERE.
-    //
-    // createAuthSession() creates:
-    //
-    // 1. auth_sessions database record
-    // 2. JWT containing sessionId
-    //
-    // This makes Passkey login use exactly the same
-    // inactivity protection as password login.
-    // ========================================================
-
-    const session =
-      await createAuthSession({
-        id:
-          passkey.user_id,
-
-        role:
-          passkey.role,
-      });
-
-
-    // ========================================================
-    // AUDIT LOG
-    // ========================================================
-
-    try {
+    } catch (verificationError) {
+      const attempt =
+        await recordFailedPasskeyAttempt({
+          userId:
+            passkey.user_id,
+          email:
+            passkey.email,
+        });
 
       await pool.query(
         `
@@ -1374,56 +1080,175 @@ const verifyLoginAuthentication =
             action,
             description
           )
-          VALUES (
-            $1,
-            $2,
-            $3
-          )
+          VALUES ($1, $2, $3)
         `,
         [
           passkey.user_id,
-
-          'passkey_login_success',
-
-          'User successfully authenticated with a registered Zenimonies passkey.',
+          'passkey_login_failed',
+          `Passkey login failed. Failed attempt ${attempt.failedAttempts} of ${MAX_FAILED_PASSKEY_ATTEMPTS}.`,
         ]
       );
 
+      if (
+        attempt.fallbackRequired
+      ) {
+        const error =
+          new Error(
+            'Passkey authentication failed three times. Please use your password to continue.'
+          );
 
-    } catch (auditError) {
+        error.code =
+          'PASSKEY_FALLBACK_REQUIRED';
 
-      console.error(
-        'Passkey login audit log error:',
-        auditError
-      );
+        error.failedAttempts =
+          attempt.failedAttempts;
+
+        error.lockedUntil =
+          attempt.lockedUntil;
+
+        throw error;
+      }
+
+      const error =
+        new Error(
+          `Passkey authentication failed. Attempt ${attempt.failedAttempts} of ${MAX_FAILED_PASSKEY_ATTEMPTS}.`
+        );
+
+      error.code =
+        'PASSKEY_AUTH_FAILED';
+
+      error.failedAttempts =
+        attempt.failedAttempts;
+
+      throw error;
     }
 
+    if (!verification.verified) {
+      const attempt =
+        await recordFailedPasskeyAttempt({
+          userId:
+            passkey.user_id,
+          email:
+            passkey.email,
+        });
 
-    // ========================================================
-    // RETURN AUTHENTICATED USER
-    // ========================================================
+      await pool.query(
+        `
+          INSERT INTO audit_logs (
+            user_id,
+            action,
+            description
+          )
+          VALUES ($1, $2, $3)
+        `,
+        [
+          passkey.user_id,
+          'passkey_login_failed',
+          `Passkey login failed. Failed attempt ${attempt.failedAttempts} of ${MAX_FAILED_PASSKEY_ATTEMPTS}.`,
+        ]
+      );
+
+      if (
+        attempt.fallbackRequired
+      ) {
+        const error =
+          new Error(
+            'Passkey authentication failed three times. Please use your password to continue.'
+          );
+
+        error.code =
+          'PASSKEY_FALLBACK_REQUIRED';
+
+        error.failedAttempts =
+          attempt.failedAttempts;
+
+        error.lockedUntil =
+          attempt.lockedUntil;
+
+        throw error;
+      }
+
+      const error =
+        new Error(
+          `Passkey authentication failed. Attempt ${attempt.failedAttempts} of ${MAX_FAILED_PASSKEY_ATTEMPTS}.`
+        );
+
+      error.code =
+        'PASSKEY_AUTH_FAILED';
+
+      error.failedAttempts =
+        attempt.failedAttempts;
+
+      throw error;
+    }
+
+    const newCounter =
+      Number(
+        verification.authenticationInfo
+          ?.newCounter ??
+          passkey.counter
+      );
+
+    await pool.query(
+      `
+        UPDATE passkey_credentials
+        SET
+          counter = $1,
+          last_used_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `,
+      [
+        newCounter,
+        passkey.id,
+      ]
+    );
+
+    await clearFailedPasskeyAttempts({
+      userId:
+        passkey.user_id,
+      email:
+        passkey.email,
+    });
+
+    const session =
+      await createAuthSession({
+        id:
+          passkey.user_id,
+        role:
+          passkey.role,
+      });
+
+    await pool.query(
+      `
+        INSERT INTO audit_logs (
+          user_id,
+          action,
+          description
+        )
+        VALUES ($1, $2, $3)
+      `,
+      [
+        passkey.user_id,
+        'passkey_login_success',
+        'Passwordless login succeeded using a Passkey.',
+      ]
+    );
 
     return {
-
-      verified:
-        true,
+      verified: true,
 
       token:
         session.token,
 
-      session_expires_at:
+      sessionExpiresAt:
         session.expiresAt,
 
-      inactivity_timeout_minutes:
+      inactivityTimeoutMinutes:
         5,
 
       user: {
-
         id:
           passkey.user_id,
-
-        full_name:
-          passkey.full_name,
 
         email:
           passkey.email,
@@ -1431,29 +1256,11 @@ const verifyLoginAuthentication =
         phone:
           passkey.phone,
 
+        full_name:
+          passkey.full_name,
+
         role:
           passkey.role,
-
-        status:
-          passkey.status,
-
-        kyc_status:
-          passkey.kyc_status,
-
-        kyc_tier:
-          passkey.kyc_tier,
-
-        bvn_verified:
-          passkey.bvn_verified,
-
-        id_verified:
-          passkey.id_verified,
-
-        tier_3_verified:
-          passkey.tier_3_verified,
-
-        is_verified:
-          passkey.is_verified,
       },
 
       passkeyId:
@@ -1464,25 +1271,37 @@ const verifyLoginAuthentication =
     };
   };
 
+// ============================================================
+// TEST DOJAH CONNECTION PLACEHOLDER
+// ============================================================
+
+const testDojahConnection = async () => {
+  return {
+    success: true,
+    message:
+      'Dojah service is configured separately from Passkey authentication.',
+  };
+};
 
 // ============================================================
 // EXPORTS
 // ============================================================
 
 module.exports = {
+  getUserPasskeys,
 
   createRegistrationOptions,
-
   verifyRegistration,
 
   createAuthenticationOptions,
-
   verifyAuthentication,
 
   createLoginAuthenticationOptions,
-
   verifyLoginAuthentication,
 
-  getUserPasskeys,
+  isPasskeyTemporarilyLocked,
+  recordFailedPasskeyAttempt,
+  clearFailedPasskeyAttempts,
 
+  testDojahConnection,
 };
