@@ -52,14 +52,14 @@ const getWebAuthnUserId = (userId) => {
  *
  * Supports:
  *
- *   ["internal","hybrid"]
+ * ["internal","hybrid"]
  *
  * and:
  *
- *   internal,hybrid
+ * internal,hybrid
  *
- * This prevents JSON.parse() errors from older
- * or differently formatted database values.
+ * This prevents JSON.parse() errors from
+ * older or differently formatted records.
  */
 const parseTransports = (value) => {
   if (
@@ -69,21 +69,23 @@ const parseTransports = (value) => {
     return undefined;
   }
 
-  const normalized = String(value).trim();
+  const normalized =
+    String(value).trim();
 
   if (!normalized) {
     return undefined;
   }
 
   // ----------------------------------------------------------
-  // JSON array format
+  // JSON ARRAY FORMAT
   // ----------------------------------------------------------
 
-  if (normalized.startsWith('[')) {
+  if (
+    normalized.startsWith('[')
+  ) {
     try {
-      const parsed = JSON.parse(
-        normalized
-      );
+      const parsed =
+        JSON.parse(normalized);
 
       if (
         Array.isArray(parsed)
@@ -105,7 +107,7 @@ const parseTransports = (value) => {
   }
 
   // ----------------------------------------------------------
-  // Comma-separated format
+  // COMMA-SEPARATED FORMAT
   // ----------------------------------------------------------
 
   return normalized
@@ -152,12 +154,13 @@ const saveChallenge = async ({
     ]
   );
 
-  const expiresAt = new Date(
-    Date.now() +
-      CHALLENGE_EXPIRY_MINUTES *
-        60 *
-        1000
-  );
+  const expiresAt =
+    new Date(
+      Date.now() +
+        CHALLENGE_EXPIRY_MINUTES *
+          60 *
+          1000
+    );
 
   await pool.query(
     `
@@ -1046,6 +1049,7 @@ const verifyAuthentication =
       `,
       [
         newCounter,
+
         credential.id,
       ]
     );
