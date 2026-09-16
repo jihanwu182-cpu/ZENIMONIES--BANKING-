@@ -953,6 +953,50 @@ CREATE INDEX IF NOT EXISTS idx_webauthn_challenges_expires_at
 ON webauthn_challenges(expires_at);
 
 -- ============================================================
+-- PASSKEY AUTHENTICATION ATTEMPTS
+-- ============================================================
+--
+-- Tracks failed Passkey/WebAuthn authentication attempts.
+-- This is used to enforce the Passkey failure fallback policy.
+--
+-- Login policy:
+-- Passkey/Biometric → maximum 3 failed attempts → Password
+--
+-- No biometric data is stored by Zenimonies.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS passkey_auth_attempts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    email VARCHAR(255),
+
+    attempt_type VARCHAR(30) NOT NULL DEFAULT 'login',
+
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+
+    locked_until TIMESTAMP,
+
+    last_failed_at TIMESTAMP,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_passkey_auth_attempts_user_id
+ON passkey_auth_attempts(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_passkey_auth_attempts_email
+ON passkey_auth_attempts(email);
+
+CREATE INDEX IF NOT EXISTS idx_passkey_auth_attempts_type
+ON passkey_auth_attempts(attempt_type);
+
+-- ============================================================
 -- INDEXES
 -- ============================================================
 
