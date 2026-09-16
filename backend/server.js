@@ -763,6 +763,11 @@ const startServer = async () => {
         );
 
         console.log(
+          'Passcode:',
+         '/api/passcode'
+       );
+
+        console.log(
           'Admin:',
           '/api/admin'
         );
