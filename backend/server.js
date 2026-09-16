@@ -24,6 +24,7 @@ const kycRoutes = require('./routes/kycRoutes');
 const profileRoutes = require('./routes/profile');
 const notificationRoutes = require('./routes/notifications');
 const passkeyRoutes = require('./routes/passkey');
+const passcodeRoutes = require('./routes/passcode');
 
 // ============================================================
 // PAYSTACK
@@ -224,6 +225,10 @@ app.use(
 app.use(
   '/api/passkey',
   passkeyRoutes
+);
+app.use(
+  '/api/passcode',
+  passcodeRoutes
 );
 
 // ============================================================
