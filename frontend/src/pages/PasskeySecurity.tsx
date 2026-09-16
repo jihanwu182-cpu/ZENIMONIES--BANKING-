@@ -24,13 +24,23 @@ import {
   startRegistration,
 } from '@simplewebauthn/browser';
 
-const API_ROOT =
-  process.env.REACT_APP_API_URL ||
-  'https://zenimonies-banking.onrender.com';
+// ============================================================
+// ZENIMONIES BACKEND API
+// ============================================================
+//
+// IMPORTANT:
+// The frontend is hosted on zenimonies.com.
+// The banking API is hosted on Render.
+//
+// Passkey requests MUST go to the banking backend.
+// ============================================================
 
-const API_BASE_URL = API_ROOT.endsWith('/api')
-  ? API_ROOT
-  : `${API_ROOT}/api`;
+const API_BASE_URL =
+  'https://zenimonies-banking.onrender.com/api';
+
+// ============================================================
+// TYPES
+// ============================================================
 
 interface Passkey {
   id: string;
@@ -50,6 +60,10 @@ interface ApiResponse {
   passkeys?: Passkey[];
 }
 
+// ============================================================
+// AUTHENTICATION HELPERS
+// ============================================================
+
 const getToken = (): string => {
   return (
     localStorage.getItem('zenimonies_token') ||
@@ -58,22 +72,42 @@ const getToken = (): string => {
   );
 };
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${getToken()}`,
-});
+const authHeaders = () => {
+  const token = getToken();
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+};
+
+// ============================================================
+// PASSKEY SECURITY PAGE
+// ============================================================
 
 const PasskeySecurity: React.FC = () => {
-  const [passkeys, setPasskeys] = useState<Passkey[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [testing, setTesting] = useState(false);
+  const [passkeys, setPasskeys] =
+    useState<Passkey[]>([]);
 
-  const [supported, setSupported] = useState(false);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [creating, setCreating] =
+    useState(false);
+
+  const [testing, setTesting] =
+    useState(false);
+
+  const [supported, setSupported] =
+    useState(false);
+
   const [platformAvailable, setPlatformAvailable] =
     useState(false);
 
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] =
+    useState('');
+
+  const [success, setSuccess] =
+    useState('');
 
   // ============================================================
   // LOAD REGISTERED PASSKEYS
@@ -192,22 +226,23 @@ const PasskeySecurity: React.FC = () => {
     setCreating(true);
 
     try {
-      // ----------------------------------------------------------
-      // 1. REQUEST REGISTRATION OPTIONS
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
+      // 1. GET REGISTRATION OPTIONS
+      // --------------------------------------------------------
 
-      const optionsResponse = await fetch(
-        `${API_BASE_URL}/passkey/register/options`,
-        {
-          method: 'POST',
-          headers: {
-            ...authHeaders(),
-            'Content-Type':
-              'application/json',
-          },
-          body: JSON.stringify({}),
-        }
-      );
+      const optionsResponse =
+        await fetch(
+          `${API_BASE_URL}/passkey/register/options`,
+          {
+            method: 'POST',
+            headers: {
+              ...authHeaders(),
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({}),
+          }
+        );
 
       let optionsData: ApiResponse = {};
 
@@ -233,9 +268,9 @@ const PasskeySecurity: React.FC = () => {
         );
       }
 
-      // ----------------------------------------------------------
-      // 2. NATIVE DEVICE PASSKEY
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
+      // 2. DEVICE AUTHENTICATION
+      // --------------------------------------------------------
 
       const registrationResponse =
         await startRegistration({
@@ -243,24 +278,25 @@ const PasskeySecurity: React.FC = () => {
             optionsData.options,
         });
 
-      // ----------------------------------------------------------
-      // 3. VERIFY REGISTRATION WITH BACKEND
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
+      // 3. VERIFY REGISTRATION
+      // --------------------------------------------------------
 
-      const verifyResponse = await fetch(
-        `${API_BASE_URL}/passkey/register/verify`,
-        {
-          method: 'POST',
-          headers: {
-            ...authHeaders(),
-            'Content-Type':
-              'application/json',
-          },
-          body: JSON.stringify(
-            registrationResponse
-          ),
-        }
-      );
+      const verifyResponse =
+        await fetch(
+          `${API_BASE_URL}/passkey/register/verify`,
+          {
+            method: 'POST',
+            headers: {
+              ...authHeaders(),
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify(
+              registrationResponse
+            ),
+          }
+        );
 
       let verifyData: ApiResponse = {};
 
@@ -339,22 +375,23 @@ const PasskeySecurity: React.FC = () => {
     setTesting(true);
 
     try {
-      // ----------------------------------------------------------
-      // 1. REQUEST AUTHENTICATION OPTIONS
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
+      // 1. GET AUTHENTICATION OPTIONS
+      // --------------------------------------------------------
 
-      const optionsResponse = await fetch(
-        `${API_BASE_URL}/passkey/authenticate/options`,
-        {
-          method: 'POST',
-          headers: {
-            ...authHeaders(),
-            'Content-Type':
-              'application/json',
-          },
-          body: JSON.stringify({}),
-        }
-      );
+      const optionsResponse =
+        await fetch(
+          `${API_BASE_URL}/passkey/authenticate/options`,
+          {
+            method: 'POST',
+            headers: {
+              ...authHeaders(),
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({}),
+          }
+        );
 
       let optionsData: ApiResponse = {};
 
@@ -380,9 +417,9 @@ const PasskeySecurity: React.FC = () => {
         );
       }
 
-      // ----------------------------------------------------------
-      // 2. NATIVE DEVICE AUTHENTICATION
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
+      // 2. DEVICE AUTHENTICATION
+      // --------------------------------------------------------
 
       const authenticationResponse =
         await startAuthentication({
@@ -390,24 +427,25 @@ const PasskeySecurity: React.FC = () => {
             optionsData.options,
         });
 
-      // ----------------------------------------------------------
-      // 3. VERIFY AUTHENTICATION WITH BACKEND
-      // ----------------------------------------------------------
+      // --------------------------------------------------------
+      // 3. VERIFY AUTHENTICATION
+      // --------------------------------------------------------
 
-      const verifyResponse = await fetch(
-        `${API_BASE_URL}/passkey/authenticate/verify`,
-        {
-          method: 'POST',
-          headers: {
-            ...authHeaders(),
-            'Content-Type':
-              'application/json',
-          },
-          body: JSON.stringify(
-            authenticationResponse
-          ),
-        }
-      );
+      const verifyResponse =
+        await fetch(
+          `${API_BASE_URL}/passkey/authenticate/verify`,
+          {
+            method: 'POST',
+            headers: {
+              ...authHeaders(),
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify(
+              authenticationResponse
+            ),
+          }
+        );
 
       let verifyData: ApiResponse = {};
 
@@ -477,7 +515,9 @@ const PasskeySecurity: React.FC = () => {
     const date = new Date(value);
 
     if (
-      Number.isNaN(date.getTime())
+      Number.isNaN(
+        date.getTime()
+      )
     ) {
       return 'Not available';
     }
@@ -556,16 +596,17 @@ const PasskeySecurity: React.FC = () => {
           </Stack>
 
           {/* ==================================================
-              DEVICE SUPPORT STATUS
+              DEVICE SUPPORT
               ================================================== */}
 
-          {!loading && !supported && (
-            <Alert severity="warning">
-              This browser or device does
-              not currently support
-              passkeys.
-            </Alert>
-          )}
+          {!loading &&
+            !supported && (
+              <Alert severity="warning">
+                This browser or device
+                does not currently
+                support passkeys.
+              </Alert>
+            )}
 
           {!loading &&
             supported &&
@@ -573,8 +614,7 @@ const PasskeySecurity: React.FC = () => {
               <Alert severity="success">
                 Your device supports
                 platform authentication
-                such as Face ID or
-                Touch ID.
+                such as Face ID or Touch ID.
               </Alert>
             )}
 
@@ -587,8 +627,7 @@ const PasskeySecurity: React.FC = () => {
                 report an available
                 built-in authenticator.
                 You may still be able to
-                use another passkey
-                method.
+                use another passkey method.
               </Alert>
             )}
 
@@ -623,7 +662,7 @@ const PasskeySecurity: React.FC = () => {
           )}
 
           {/* ==================================================
-              MAIN PASSKEY CARD
+              PASSKEY CARD
               ================================================== */}
 
           <Card
@@ -694,7 +733,9 @@ const PasskeySecurity: React.FC = () => {
 
                 <Divider />
 
-                {/* CREATE PASSKEY */}
+                {/* ==================================================
+                    CREATE PASSKEY
+                    ================================================== */}
 
                 <Button
                   variant="contained"
@@ -735,7 +776,9 @@ const PasskeySecurity: React.FC = () => {
                     : 'Create Passkey'}
                 </Button>
 
-                {/* TEST PASSKEY */}
+                {/* ==================================================
+                    TEST PASSKEY
+                    ================================================== */}
 
                 {passkeys.length >
                   0 && (
