@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS users (
 
     phone VARCHAR(30) UNIQUE NOT NULL,
 
+    gender VARCHAR(30),
+    
     password_hash TEXT NOT NULL,
 
     role VARCHAR(30) NOT NULL DEFAULT 'user',
