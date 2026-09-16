@@ -16,7 +16,8 @@ const { createAuthSession } = require('./sessionService');
 // ============================================================
 
 const RP_NAME =
-  process.env.WEBAUTHN_RP_NAME || 'Zenimonies';
+  process.env.WEBAUTHN_RP_NAME ||
+  'Zenimonies';
 
 const RP_ID =
   process.env.WEBAUTHN_RP_ID ||
@@ -26,11 +27,11 @@ const ORIGIN =
   process.env.WEBAUTHN_ORIGIN ||
   'https://zenimonies-banking-1.onrender.com';
 
-const CHALLENGE_EXPIRY_MINUTES = 5;
+// ============================================================
+// SECURITY SETTINGS
+// ============================================================
 
-// ============================================================
-// PASSKEY SECURITY
-// ============================================================
+const CHALLENGE_EXPIRY_MINUTES = 5;
 
 const MAX_FAILED_PASSKEY_ATTEMPTS = 3;
 
@@ -44,6 +45,75 @@ const getWebAuthnUserId = (userId) => {
   return isoUint8Array.fromUTF8String(
     String(userId)
   );
+};
+
+/**
+ * Safely normalize authenticator transports.
+ *
+ * Supports:
+ *
+ *   ["internal","hybrid"]
+ *
+ * and:
+ *
+ *   internal,hybrid
+ *
+ * This prevents JSON.parse() errors from older
+ * or differently formatted database values.
+ */
+const parseTransports = (value) => {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return undefined;
+  }
+
+  const normalized = String(value).trim();
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  // ----------------------------------------------------------
+  // JSON array format
+  // ----------------------------------------------------------
+
+  if (normalized.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(
+        normalized
+      );
+
+      if (
+        Array.isArray(parsed)
+      ) {
+        return parsed
+          .map((item) =>
+            String(item).trim()
+          )
+          .filter(Boolean);
+      }
+    } catch (error) {
+      console.warn(
+        'Unable to parse Passkey transports JSON:',
+        error.message
+      );
+
+      return undefined;
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Comma-separated format
+  // ----------------------------------------------------------
+
+  return normalized
+    .split(',')
+    .map((item) =>
+      item.trim()
+    )
+    .filter(Boolean);
 };
 
 // ============================================================
@@ -255,6 +325,10 @@ const isPasskeyTemporarilyLocked =
         lockedUntil: null,
       };
     }
+
+    // --------------------------------------------------------
+    // CURRENTLY LOCKED
+    // --------------------------------------------------------
 
     if (
       record.locked_until &&
@@ -578,8 +652,10 @@ const createRegistrationOptions =
 
     await saveChallenge({
       userId,
+
       challenge:
         options.challenge,
+
       challengeType:
         'registration',
     });
@@ -605,6 +681,7 @@ const verifyRegistration =
     const expectedChallenge =
       await consumeChallenge({
         userId,
+
         challengeType:
           'registration',
       });
@@ -729,8 +806,11 @@ const verifyRegistration =
         `,
         [
           userId,
+
           credentialId,
+
           publicKey,
+
           counter,
 
           credentialDeviceType ||
@@ -768,6 +848,7 @@ const verifyRegistration =
 
     return {
       verified: true,
+
       passkey:
         result.rows[0],
     };
@@ -815,11 +896,9 @@ const createAuthenticationOptions =
                 credential.credential_id,
 
               transports:
-                credential.transports
-                  ? JSON.parse(
-                      credential.transports
-                    )
-                  : undefined,
+                parseTransports(
+                  credential.transports
+                ),
             })
           ),
 
@@ -832,8 +911,10 @@ const createAuthenticationOptions =
 
     await saveChallenge({
       userId,
+
       challenge:
         options.challenge,
+
       challengeType:
         'authentication',
     });
@@ -842,7 +923,7 @@ const createAuthenticationOptions =
   };
 
 // ============================================================
-// VERIFY AUTHENTICATION
+// VERIFY AUTHENTICATED PASSKEY
 // ============================================================
 
 const verifyAuthentication =
@@ -856,21 +937,11 @@ const verifyAuthentication =
       );
     }
 
-    const credentialId =
-      response.id;
-
-    if (!credentialId) {
-      throw new Error(
-        'Passkey credential ID is missing.'
-      );
-    }
-
     const credentialResult =
       await pool.query(
         `
           SELECT
             id,
-            user_id,
             credential_id,
             public_key,
             counter,
@@ -882,7 +953,8 @@ const verifyAuthentication =
         `,
         [
           userId,
-          credentialId,
+
+          response.id,
         ]
       );
 
@@ -890,7 +962,7 @@ const verifyAuthentication =
       credentialResult.rowCount === 0
     ) {
       throw new Error(
-        'Passkey credential was not found.'
+        'This Passkey is not registered for this account.'
       );
     }
 
@@ -900,6 +972,7 @@ const verifyAuthentication =
     const expectedChallenge =
       await consumeChallenge({
         userId,
+
         challengeType:
           'authentication',
       });
@@ -938,11 +1011,9 @@ const verifyAuthentication =
             ),
 
           transports:
-            credential.transports
-              ? JSON.parse(
-                  credential.transports
-                )
-              : undefined,
+            parseTransports(
+              credential.transports
+            ),
         },
 
         requireUserVerification:
@@ -953,16 +1024,16 @@ const verifyAuthentication =
       !verification.verified
     ) {
       throw new Error(
-        'Passkey authentication failed.'
+        'Passkey authentication could not be verified.'
       );
     }
 
     const newCounter =
       Number(
-        verification
-          .authenticationInfo
+        verification.authenticationInfo
           ?.newCounter ??
-        credential.counter
+          credential.counter ??
+          0
       );
 
     await pool.query(
@@ -978,10 +1049,6 @@ const verifyAuthentication =
         credential.id,
       ]
     );
-
-    await clearFailedPasskeyAttempts({
-      userId,
-    });
 
     await pool.query(
       `
@@ -1001,7 +1068,7 @@ const verifyAuthentication =
 
         'passkey_authentication_success',
 
-        'Passkey authentication succeeded.',
+        'A registered Passkey successfully authenticated the user.',
       ]
     );
 
@@ -1013,6 +1080,9 @@ const verifyAuthentication =
 
       credentialId:
         credential.credential_id,
+
+      counter:
+        newCounter,
     };
   };
 
@@ -1021,7 +1091,9 @@ const verifyAuthentication =
 // ============================================================
 
 const createLoginAuthenticationOptions =
-  async (email) => {
+  async ({
+    email,
+  }) => {
     const normalizedEmail =
       String(
         email || ''
@@ -1041,9 +1113,10 @@ const createLoginAuthenticationOptions =
           SELECT
             id,
             email,
-            status
+            role,
+            is_active
           FROM users
-          WHERE LOWER(email) = $1
+          WHERE LOWER(email) = LOWER($1)
           LIMIT 1
         `,
         [
@@ -1055,7 +1128,7 @@ const createLoginAuthenticationOptions =
       userResult.rowCount === 0
     ) {
       throw new Error(
-        'Invalid login credentials.'
+        'Unable to start Passkey authentication.'
       );
     }
 
@@ -1063,15 +1136,14 @@ const createLoginAuthenticationOptions =
       userResult.rows[0];
 
     if (
-      user.status &&
-      user.status !== 'active'
+      user.is_active === false
     ) {
       throw new Error(
-        'This account is not active.'
+        'This account is currently unavailable.'
       );
     }
 
-    const attemptStatus =
+    const lock =
       await isPasskeyTemporarilyLocked({
         userId:
           user.id,
@@ -1080,22 +1152,20 @@ const createLoginAuthenticationOptions =
           normalizedEmail,
       });
 
-    if (
-      attemptStatus.locked
-    ) {
+    if (lock.locked) {
       const error =
         new Error(
-          'Passkey authentication is temporarily unavailable. Please use your password.'
+          'Passkey authentication is temporarily locked. Please use your password.'
         );
 
       error.code =
         'PASSKEY_FALLBACK_REQUIRED';
 
       error.failedAttempts =
-        attemptStatus.failedAttempts;
+        lock.failedAttempts;
 
       error.lockedUntil =
-        attemptStatus.lockedUntil;
+        lock.lockedUntil;
 
       throw error;
     }
@@ -1134,11 +1204,9 @@ const createLoginAuthenticationOptions =
                 credential.credential_id,
 
               transports:
-                credential.transports
-                  ? JSON.parse(
-                      credential.transports
-                    )
-                  : undefined,
+                parseTransports(
+                  credential.transports
+                ),
             })
           ),
 
@@ -1161,34 +1229,29 @@ const createLoginAuthenticationOptions =
     });
 
     return {
+      user,
+
       options,
-      userId:
-        user.id,
     };
   };
 
 // ============================================================
-// PASSWORDLESS LOGIN VERIFY
+// VERIFY PASSWORDLESS LOGIN
 // ============================================================
 
 const verifyLoginAuthentication =
   async ({
     response,
   }) => {
-    if (!response) {
+    if (!response?.id) {
       throw new Error(
         'Passkey authentication response is required.'
       );
     }
 
-    const credentialId =
-      response.id;
-
-    if (!credentialId) {
-      throw new Error(
-        'Passkey credential ID is missing.'
-      );
-    }
+    // ----------------------------------------------------------
+    // FIND CREDENTIAL + USER
+    // ----------------------------------------------------------
 
     const credentialResult =
       await pool.query(
@@ -1200,11 +1263,15 @@ const verifyLoginAuthentication =
             pc.public_key,
             pc.counter,
             pc.transports,
+
             u.email,
-            u.phone,
-            u.full_name,
             u.role,
-            u.status
+            u.is_active,
+            u.full_name,
+            u.phone,
+            u.kyc_status,
+            u.kyc_tier,
+            u.is_verified
           FROM passkey_credentials pc
           INNER JOIN users u
             ON u.id = pc.user_id
@@ -1212,7 +1279,7 @@ const verifyLoginAuthentication =
           LIMIT 1
         `,
         [
-          credentialId,
+          response.id,
         ]
       );
 
@@ -1220,65 +1287,122 @@ const verifyLoginAuthentication =
       credentialResult.rowCount === 0
     ) {
       throw new Error(
-        'Passkey credential was not found.'
+        'This Passkey is not registered.'
       );
     }
 
-    const passkey =
+    const credential =
       credentialResult.rows[0];
 
+    const userId =
+      credential.user_id;
+
+    const email =
+      credential.email;
+
     if (
-      passkey.status &&
-      passkey.status !== 'active'
+      credential.is_active === false
     ) {
       throw new Error(
-        'This account is not active.'
+        'This account is currently unavailable.'
       );
     }
 
-    const attemptStatus =
-      await isPasskeyTemporarilyLocked({
-        userId:
-          passkey.user_id,
+    // ----------------------------------------------------------
+    // CHECK PASSKEY LOCK
+    // ----------------------------------------------------------
 
-        email:
-          passkey.email,
+    const lock =
+      await isPasskeyTemporarilyLocked({
+        userId,
+
+        email,
       });
 
-    if (
-      attemptStatus.locked
-    ) {
+    if (lock.locked) {
       const error =
         new Error(
-          'Passkey authentication is temporarily unavailable. Please use your password.'
+          'Passkey authentication is temporarily locked. Please use your password.'
         );
 
       error.code =
         'PASSKEY_FALLBACK_REQUIRED';
 
       error.failedAttempts =
-        attemptStatus.failedAttempts;
+        lock.failedAttempts;
 
       error.lockedUntil =
-        attemptStatus.lockedUntil;
+        lock.lockedUntil;
 
       throw error;
     }
 
+    // ----------------------------------------------------------
+    // CONSUME LOGIN CHALLENGE
+    // ----------------------------------------------------------
+
     const expectedChallenge =
       await consumeChallenge({
-        userId:
-          passkey.user_id,
+        userId,
 
         challengeType:
           'login',
       });
 
     if (!expectedChallenge) {
-      throw new Error(
-        'Passkey login challenge expired or was not found. Please try again.'
+      const failure =
+        await recordFailedPasskeyAttempt({
+          userId,
+
+          email,
+        });
+
+      await pool.query(
+        `
+          INSERT INTO audit_logs (
+            user_id,
+            action,
+            description
+          )
+          VALUES (
+            $1,
+            $2,
+            $3
+          )
+        `,
+        [
+          userId,
+
+          'passkey_login_failed',
+
+          'Passkey login failed because the authentication challenge was missing or expired.',
+        ]
       );
+
+      const error =
+        new Error(
+          failure.fallbackRequired
+            ? 'Passkey authentication failed three times. Please use your password.'
+            : 'Passkey authentication challenge expired or was not found.'
+        );
+
+      error.code =
+        failure.fallbackRequired
+          ? 'PASSKEY_FALLBACK_REQUIRED'
+          : 'PASSKEY_AUTH_FAILED';
+
+      error.failedAttempts =
+        failure.failedAttempts;
+
+      error.lockedUntil =
+        failure.lockedUntil;
+
+      throw error;
     }
+
+    // ----------------------------------------------------------
+    // VERIFY CRYPTOGRAPHIC ASSERTION
+    // ----------------------------------------------------------
 
     let verification;
 
@@ -1297,40 +1421,34 @@ const verifyLoginAuthentication =
 
           credential: {
             id:
-              passkey.credential_id,
+              credential.credential_id,
 
             publicKey:
               Buffer.from(
-                passkey.public_key,
+                credential.public_key,
                 'base64'
               ),
 
             counter:
               Number(
-                passkey.counter || 0
+                credential.counter || 0
               ),
 
             transports:
-              passkey.transports
-                ? JSON.parse(
-                    passkey.transports
-                  )
-                : undefined,
+              parseTransports(
+                credential.transports
+              ),
           },
 
           requireUserVerification:
             true,
         });
-    } catch (
-      verificationError
-    ) {
-      const attempt =
+    } catch (error) {
+      const failure =
         await recordFailedPasskeyAttempt({
-          userId:
-            passkey.user_id,
+          userId,
 
-          email:
-            passkey.email,
+          email,
         });
 
       await pool.query(
@@ -1347,58 +1465,50 @@ const verifyLoginAuthentication =
           )
         `,
         [
-          passkey.user_id,
+          userId,
 
           'passkey_login_failed',
 
-          `Passkey login failed. Failed attempt ${attempt.failedAttempts} of ${MAX_FAILED_PASSKEY_ATTEMPTS}.`,
+          'Passkey cryptographic verification failed.',
         ]
       );
 
-      if (
-        attempt.fallbackRequired
-      ) {
-        const error =
-          new Error(
-            'Passkey authentication failed three times. Please use your password to continue.'
-          );
+      const fallbackRequired =
+        failure.fallbackRequired;
 
-        error.code =
-          'PASSKEY_FALLBACK_REQUIRED';
-
-        error.failedAttempts =
-          attempt.failedAttempts;
-
-        error.lockedUntil =
-          attempt.lockedUntil;
-
-        throw error;
-      }
-
-      const error =
+      const authError =
         new Error(
-          `Passkey authentication failed. Attempt ${attempt.failedAttempts} of ${MAX_FAILED_PASSKEY_ATTEMPTS}.`
+          fallbackRequired
+            ? 'Passkey authentication failed three times. Please use your password.'
+            : 'Passkey authentication failed.'
         );
 
-      error.code =
-        'PASSKEY_AUTH_FAILED';
+      authError.code =
+        fallbackRequired
+          ? 'PASSKEY_FALLBACK_REQUIRED'
+          : 'PASSKEY_AUTH_FAILED';
 
-      error.failedAttempts =
-        attempt.failedAttempts;
+      authError.failedAttempts =
+        failure.failedAttempts;
 
-      throw error;
+      authError.lockedUntil =
+        failure.lockedUntil;
+
+      throw authError;
     }
+
+    // ----------------------------------------------------------
+    // VERIFICATION RESULT
+    // ----------------------------------------------------------
 
     if (
       !verification.verified
     ) {
-      const attempt =
+      const failure =
         await recordFailedPasskeyAttempt({
-          userId:
-            passkey.user_id,
+          userId,
 
-          email:
-            passkey.email,
+          email,
         });
 
       await pool.query(
@@ -1415,58 +1525,48 @@ const verifyLoginAuthentication =
           )
         `,
         [
-          passkey.user_id,
+          userId,
 
           'passkey_login_failed',
 
-          `Passkey login failed. Failed attempt ${attempt.failedAttempts} of ${MAX_FAILED_PASSKEY_ATTEMPTS}.`,
+          'Passkey assertion was not verified.',
         ]
       );
 
-      if (
-        attempt.fallbackRequired
-      ) {
-        const error =
-          new Error(
-            'Passkey authentication failed three times. Please use your password to continue.'
-          );
+      const fallbackRequired =
+        failure.fallbackRequired;
 
-        error.code =
-          'PASSKEY_FALLBACK_REQUIRED';
-
-        error.failedAttempts =
-          attempt.failedAttempts;
-
-        error.lockedUntil =
-          attempt.lockedUntil;
-
-        throw error;
-      }
-
-      const error =
+      const authError =
         new Error(
-          `Passkey authentication failed. Attempt ${attempt.failedAttempts} of ${MAX_FAILED_PASSKEY_ATTEMPTS}.`
+          fallbackRequired
+            ? 'Passkey authentication failed three times. Please use your password.'
+            : 'Passkey authentication failed.'
         );
 
-      error.code =
-        'PASSKEY_AUTH_FAILED';
+      authError.code =
+        fallbackRequired
+          ? 'PASSKEY_FALLBACK_REQUIRED'
+          : 'PASSKEY_AUTH_FAILED';
 
-      error.failedAttempts =
-        attempt.failedAttempts;
+      authError.failedAttempts =
+        failure.failedAttempts;
 
-      throw error;
+      authError.lockedUntil =
+        failure.lockedUntil;
+
+      throw authError;
     }
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
     // UPDATE PASSKEY COUNTER
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
 
     const newCounter =
       Number(
-        verification
-          .authenticationInfo
+        verification.authenticationInfo
           ?.newCounter ??
-        passkey.counter
+          credential.counter ??
+          0
       );
 
     await pool.query(
@@ -1479,38 +1579,37 @@ const verifyLoginAuthentication =
       `,
       [
         newCounter,
-        passkey.id,
+
+        credential.id,
       ]
     );
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
     // CLEAR FAILED ATTEMPTS
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
 
     await clearFailedPasskeyAttempts({
-      userId:
-        passkey.user_id,
+      userId,
 
-      email:
-        passkey.email,
+      email,
     });
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
     // CREATE AUTH SESSION
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
 
     const session =
       await createAuthSession({
         id:
-          passkey.user_id,
+          userId,
 
         role:
-          passkey.role,
+          credential.role,
       });
 
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
     // AUDIT SUCCESS
-    // --------------------------------------------------------
+    // ----------------------------------------------------------
 
     await pool.query(
       `
@@ -1526,13 +1625,17 @@ const verifyLoginAuthentication =
         )
       `,
       [
-        passkey.user_id,
+        userId,
 
         'passkey_login_success',
 
-        'Passwordless login succeeded using a Passkey.',
+        'User successfully signed in using a registered Passkey.',
       ]
     );
+
+    // ----------------------------------------------------------
+    // RETURN LOGIN RESULT
+    // ----------------------------------------------------------
 
     return {
       verified: true,
@@ -1540,34 +1643,52 @@ const verifyLoginAuthentication =
       token:
         session.token,
 
+      sessionId:
+        session.sessionId,
+
       sessionExpiresAt:
         session.expiresAt,
 
-      inactivityTimeoutMinutes:
-        5,
-
       user: {
         id:
-          passkey.user_id,
+          userId,
 
         email:
-          passkey.email,
-
-        phone:
-          passkey.phone,
-
-        full_name:
-          passkey.full_name,
+          credential.email,
 
         role:
-          passkey.role,
+          credential.role,
+
+        full_name:
+          credential.full_name,
+
+        phone:
+          credential.phone,
+
+        kyc_status:
+          credential.kyc_status,
+
+        kyc_tier:
+          credential.kyc_tier,
+
+        is_verified:
+          credential.is_verified,
       },
 
       passkeyId:
-        passkey.id,
+        credential.id,
 
       credentialId:
-        passkey.credential_id,
+        credential.credential_id,
+
+      failedAttempts:
+        0,
+
+      fallbackRequired:
+        false,
+
+      lockedUntil:
+        null,
     };
   };
 
@@ -1576,18 +1697,25 @@ const verifyLoginAuthentication =
 // ============================================================
 
 module.exports = {
-  getUserPasskeys,
-
   createRegistrationOptions,
+
   verifyRegistration,
 
   createAuthenticationOptions,
+
   verifyAuthentication,
 
   createLoginAuthenticationOptions,
+
   verifyLoginAuthentication,
 
+  getUserPasskeys,
+
   isPasskeyTemporarilyLocked,
+
   recordFailedPasskeyAttempt,
+
   clearFailedPasskeyAttempts,
+
+  parseTransports,
 };
