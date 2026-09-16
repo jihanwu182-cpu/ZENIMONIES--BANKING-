@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+const API_BASE_URL =
+  'https://zenimonies-banking.onrender.com/api';
 
 type SettingItemProps = {
   icon: string;
@@ -95,20 +98,321 @@ const SettingItem: React.FC<SettingItemProps> = ({
 const Settings: React.FC = () => {
   const navigate = useNavigate();
 
-  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [activeSection, setActiveSection] =
+    useState<string | null>(null);
+
   const [showCloseConfirmation, setShowCloseConfirmation] =
     useState(false);
 
   const [darkMode, setDarkMode] = useState(false);
   const [smsAlerts, setSmsAlerts] = useState(true);
 
+  // ==========================================================
+  // ACCOUNT PASSCODE STATE
+  // ==========================================================
+
+  const [passcodeExists, setPasscodeExists] =
+    useState(false);
+
+  const [passcodeLoading, setPasscodeLoading] =
+    useState(false);
+
+  const [passcodeSaving, setPasscodeSaving] =
+    useState(false);
+
+  const [passcodeMessage, setPasscodeMessage] =
+    useState('');
+
+  const [passcodeError, setPasscodeError] =
+    useState('');
+
+  const [newPasscode, setNewPasscode] =
+    useState('');
+
+  const [confirmPasscode, setConfirmPasscode] =
+    useState('');
+
+  const [currentPasscode, setCurrentPasscode] =
+    useState('');
+
+  const [replacementPasscode, setReplacementPasscode] =
+    useState('');
+
+  const [confirmReplacementPasscode, setConfirmReplacementPasscode] =
+    useState('');
+
+  // ==========================================================
+  // TOKEN
+  // ==========================================================
+
+  const getToken = () => {
+    return (
+      localStorage.getItem('zenimonies_token') ||
+      localStorage.getItem('token') ||
+      ''
+    );
+  };
+
+  // ==========================================================
+  // LOAD PASSCODE STATUS
+  // ==========================================================
+
+  const loadPasscodeStatus = async () => {
+    const token = getToken();
+
+    if (!token) {
+      return;
+    }
+
+    setPasscodeLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/passcode/status`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to load Passcode status.'
+        );
+      }
+
+      setPasscodeExists(
+        data?.passcode?.exists === true
+      );
+    } catch (error) {
+      console.error(
+        'Passcode status error:',
+        error
+      );
+    } finally {
+      setPasscodeLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPasscodeStatus();
+  }, []);
+
+  // ==========================================================
+  // OPEN SECTION
+  // ==========================================================
+
   const openSection = (section: string) => {
     setActiveSection(section);
+
+    if (section === 'Login Settings') {
+      loadPasscodeStatus();
+    }
   };
 
   const closeSection = () => {
     setActiveSection(null);
+
+    setPasscodeMessage('');
+    setPasscodeError('');
+
+    setNewPasscode('');
+    setConfirmPasscode('');
+
+    setCurrentPasscode('');
+    setReplacementPasscode('');
+    setConfirmReplacementPasscode('');
   };
+
+  // ==========================================================
+  // CREATE ACCOUNT PASSCODE
+  // ==========================================================
+
+  const handleCreatePasscode = async () => {
+    setPasscodeMessage('');
+    setPasscodeError('');
+
+    if (!/^\d{6}$/.test(newPasscode)) {
+      setPasscodeError(
+        'Your Account Passcode must be exactly 6 digits.'
+      );
+      return;
+    }
+
+    if (newPasscode !== confirmPasscode) {
+      setPasscodeError(
+        'Passcodes do not match.'
+      );
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      setPasscodeError(
+        'Your session has expired. Please log in again.'
+      );
+      return;
+    }
+
+    setPasscodeSaving(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/passcode/setup`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            passcode: newPasscode,
+            confirm_passcode: confirmPasscode,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to create Account Passcode.'
+        );
+      }
+
+      setPasscodeExists(true);
+
+      setNewPasscode('');
+      setConfirmPasscode('');
+
+      setPasscodeMessage(
+        'Your 6-digit Account Unlock Passcode has been created successfully.'
+      );
+
+    } catch (error) {
+      setPasscodeError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to create Account Passcode.'
+      );
+    } finally {
+      setPasscodeSaving(false);
+    }
+  };
+
+  // ==========================================================
+  // CHANGE ACCOUNT PASSCODE
+  // ==========================================================
+
+  const handleChangePasscode = async () => {
+    setPasscodeMessage('');
+    setPasscodeError('');
+
+    if (!/^\d{6}$/.test(currentPasscode)) {
+      setPasscodeError(
+        'Current Passcode must be exactly 6 digits.'
+      );
+      return;
+    }
+
+    if (!/^\d{6}$/.test(replacementPasscode)) {
+      setPasscodeError(
+        'New Passcode must be exactly 6 digits.'
+      );
+      return;
+    }
+
+    if (
+      replacementPasscode !==
+      confirmReplacementPasscode
+    ) {
+      setPasscodeError(
+        'New Passcodes do not match.'
+      );
+      return;
+    }
+
+    if (
+      currentPasscode ===
+      replacementPasscode
+    ) {
+      setPasscodeError(
+        'Your new Passcode must be different from your current Passcode.'
+      );
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      setPasscodeError(
+        'Your session has expired. Please log in again.'
+      );
+      return;
+    }
+
+    setPasscodeSaving(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/passcode/change`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            current_passcode:
+              currentPasscode,
+
+            new_passcode:
+              replacementPasscode,
+
+            confirm_passcode:
+              confirmReplacementPasscode,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to change Account Passcode.'
+        );
+      }
+
+      setCurrentPasscode('');
+      setReplacementPasscode('');
+      setConfirmReplacementPasscode('');
+
+      setPasscodeMessage(
+        'Your Account Unlock Passcode has been changed successfully.'
+      );
+
+    } catch (error) {
+      setPasscodeError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to change Account Passcode.'
+      );
+    } finally {
+      setPasscodeSaving(false);
+    }
+  };
+
+  // ==========================================================
+  // LOGOUT
+  // ==========================================================
 
   const logout = () => {
     localStorage.removeItem('zenimonies_token');
@@ -116,8 +420,21 @@ const Settings: React.FC = () => {
     localStorage.removeItem('zenimonies_user');
     localStorage.removeItem('zenimonies_accounts');
 
-    sessionStorage.removeItem('zenimonies_otp_email');
-    sessionStorage.removeItem('zenimonies_otp_token');
+    sessionStorage.removeItem(
+      'zenimonies_otp_email'
+    );
+
+    sessionStorage.removeItem(
+      'zenimonies_otp_token'
+    );
+
+    sessionStorage.removeItem(
+      'zenimonies_account_locked'
+    );
+
+    sessionStorage.removeItem(
+      'zenimonies_passkey_fallback'
+    );
 
     navigate('/login');
   };
@@ -207,7 +524,7 @@ const Settings: React.FC = () => {
           paddingTop: 24,
         }}
       >
-        {/* ================= SETTINGS INTRO ================= */}
+        {/* ================= INTRO ================= */}
 
         <section
           style={{
@@ -256,27 +573,9 @@ const Settings: React.FC = () => {
 
         {/* ================= ACCOUNT ================= */}
 
-        <div
-          style={{
-            color: '#6f7d76',
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: 1,
-            margin: '20px 5px 8px',
-          }}
-        >
-          ACCOUNT
-        </div>
+        <SectionTitle title="ACCOUNT" />
 
-        <section
-          style={{
-            background: '#ffffff',
-            borderRadius: 17,
-            overflow: 'hidden',
-            border: '1px solid #e7eee9',
-            boxShadow: '0 5px 18px rgba(26, 61, 47, 0.04)',
-          }}
-        >
+        <section style={styles.sectionCard}>
           <SettingItem
             icon="♙"
             title="My Profile"
@@ -287,139 +586,79 @@ const Settings: React.FC = () => {
 
         {/* ================= PAYMENTS ================= */}
 
-        <div
-          style={{
-            color: '#6f7d76',
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: 1,
-            margin: '20px 5px 8px',
-          }}
-        >
-          PAYMENTS
-        </div>
+        <SectionTitle title="PAYMENTS" />
 
-        <section
-          style={{
-            background: '#ffffff',
-            borderRadius: 17,
-            overflow: 'hidden',
-            border: '1px solid #e7eee9',
-            boxShadow: '0 5px 18px rgba(26, 61, 47, 0.04)',
-          }}
-        >
+        <section style={styles.sectionCard}>
           <SettingItem
             icon="₦"
             title="Payment Settings"
-            description="Create and manage your 4-digit Transaction PIN and payment security."
-            onClick={() => openSection('Payment Settings')}
+            description="Manage your Transaction PIN and payment security."
+            onClick={() =>
+              openSection('Payment Settings')
+            }
           />
         </section>
 
         {/* ================= LOGIN & SECURITY ================= */}
 
-        <div
-          style={{
-            color: '#6f7d76',
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: 1,
-            margin: '20px 5px 8px',
-          }}
-        >
-          LOGIN & SECURITY
-        </div>
+        <SectionTitle title="LOGIN & SECURITY" />
 
-        <section
-          style={{
-            background: '#ffffff',
-            borderRadius: 17,
-            overflow: 'hidden',
-            border: '1px solid #e7eee9',
-            boxShadow: '0 5px 18px rgba(26, 61, 47, 0.04)',
-          }}
-        >
+        <section style={styles.sectionCard}>
           <SettingItem
             icon="🔐"
             title="Login Settings"
-            description="Change your password and 6-digit Login Code."
-            onClick={() => openSection('Login Settings')}
+            description="Manage your password and Account Unlock Passcode."
+            onClick={() =>
+              openSection('Login Settings')
+            }
           />
 
           <SettingItem
             icon="?"
             title="Security Question"
             description="Set or change your account security question."
-            onClick={() => openSection('Security Question')}
+            onClick={() =>
+              openSection('Security Question')
+            }
           />
 
           <SettingItem
             icon="🛡"
             title="Security Center"
             description="Review your account security and protection."
-            onClick={() => openSection('Security Center')}
+            onClick={() =>
+              openSection('Security Center')
+            }
           />
         </section>
 
         {/* ================= SAVINGS ================= */}
 
-        <div
-          style={{
-            color: '#6f7d76',
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: 1,
-            margin: '20px 5px 8px',
-          }}
-        >
-          SAVINGS
-        </div>
+        <SectionTitle title="SAVINGS" />
 
-        <section
-          style={{
-            background: '#ffffff',
-            borderRadius: 17,
-            overflow: 'hidden',
-            border: '1px solid #e7eee9',
-            boxShadow: '0 5px 18px rgba(26, 61, 47, 0.04)',
-          }}
-        >
+        <section style={styles.sectionCard}>
           <SettingItem
             icon="▣"
             title="Saving Settings"
             description="Set the amount and frequency for your SafeBox."
-            onClick={() => openSection('Saving Settings')}
+            onClick={() =>
+              openSection('Saving Settings')
+            }
           />
         </section>
 
-        {/* ================= ALERTS & APPEARANCE ================= */}
+        {/* ================= PREFERENCES ================= */}
 
-        <div
-          style={{
-            color: '#6f7d76',
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: 1,
-            margin: '20px 5px 8px',
-          }}
-        >
-          PREFERENCES
-        </div>
+        <SectionTitle title="PREFERENCES" />
 
-        <section
-          style={{
-            background: '#ffffff',
-            borderRadius: 17,
-            overflow: 'hidden',
-            border: '1px solid #e7eee9',
-            boxShadow: '0 5px 18px rgba(26, 61, 47, 0.04)',
-          }}
-        >
+        <section style={styles.sectionCard}>
           <SettingItem
             icon="SMS"
             title="SMS Alert Settings"
             description="Control transaction and security SMS alerts."
-            onClick={() => openSection('SMS Alert Settings')}
+            onClick={() =>
+              openSection('SMS Alert Settings')
+            }
           />
 
           <SettingItem
@@ -432,33 +671,17 @@ const Settings: React.FC = () => {
 
         {/* ================= SUPPORT ================= */}
 
-        <div
-          style={{
-            color: '#6f7d76',
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: 1,
-            margin: '20px 5px 8px',
-          }}
-        >
-          SUPPORT
-        </div>
+        <SectionTitle title="SUPPORT" />
 
-        <section
-          style={{
-            background: '#ffffff',
-            borderRadius: 17,
-            overflow: 'hidden',
-            border: '1px solid #e7eee9',
-            boxShadow: '0 5px 18px rgba(26, 61, 47, 0.04)',
-          }}
-        >
+        <section style={styles.sectionCard}>
           <SettingItem
             icon="✉"
             title="Feedback and Suggestions"
             description="Tell us how we can improve Zenimonies."
             onClick={() =>
-              openSection('Feedback and Suggestions')
+              openSection(
+                'Feedback and Suggestions'
+              )
             }
           />
 
@@ -472,27 +695,9 @@ const Settings: React.FC = () => {
 
         {/* ================= ACCOUNT ACTIONS ================= */}
 
-        <div
-          style={{
-            color: '#6f7d76',
-            fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: 1,
-            margin: '20px 5px 8px',
-          }}
-        >
-          ACCOUNT ACTIONS
-        </div>
+        <SectionTitle title="ACCOUNT ACTIONS" />
 
-        <section
-          style={{
-            background: '#ffffff',
-            borderRadius: 17,
-            overflow: 'hidden',
-            border: '1px solid #e7eee9',
-            boxShadow: '0 5px 18px rgba(26, 61, 47, 0.04)',
-          }}
-        >
+        <section style={styles.sectionCard}>
           <SettingItem
             icon="↪"
             title="Log Out"
@@ -505,7 +710,9 @@ const Settings: React.FC = () => {
             title="Close Account"
             description="Permanently close your Zenimonies account."
             danger
-            onClick={() => setShowCloseConfirmation(true)}
+            onClick={() =>
+              setShowCloseConfirmation(true)
+            }
           />
         </section>
 
@@ -526,38 +733,9 @@ const Settings: React.FC = () => {
       ===================================================== */}
 
       {activeSection && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(10, 30, 22, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 18,
-            zIndex: 100,
-          }}
-        >
-          <div
-            style={{
-              width: 'min(440px, 100%)',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              background: '#ffffff',
-              borderRadius: 22,
-              padding: 23,
-              boxShadow:
-                '0 25px 70px rgba(0,0,0,0.2)',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: 15,
-              }}
-            >
+        <div style={styles.overlay}>
+          <div style={styles.modal}>
+            <div style={styles.modalHeader}>
               <h2
                 style={{
                   margin: 0,
@@ -570,197 +748,487 @@ const Settings: React.FC = () => {
               <button
                 type="button"
                 onClick={closeSection}
-                style={{
-                  width: 34,
-                  height: 34,
-                  border: 'none',
-                  borderRadius: '50%',
-                  background: '#f1f5f3',
-                  cursor: 'pointer',
-                  fontSize: 20,
-                }}
+                style={styles.closeButton}
               >
                 ×
               </button>
             </div>
 
-            {/* ================= PAYMENT SETTINGS ================= */}
+            {/* =================================================
+                PAYMENT SETTINGS
+            ================================================= */}
 
             {activeSection === 'Payment Settings' && (
               <div style={{ marginTop: 20 }}>
                 <div style={styles.infoBox}>
-                  <strong>Transaction PIN</strong>
+                  <strong>
+                    Transaction PIN
+                  </strong>
 
                   <p style={styles.infoText}>
-                    Create a 4-digit Transaction PIN. This PIN
-                    will be used to authorize transfers and
-                    payments.
+                    Your Transaction PIN will be exactly
+                    4 digits and will be used to authorize
+                    transfers and payments.
+                  </p>
+
+                  <p style={styles.infoText}>
+                    Transaction PIN setup is being connected
+                    to the secure backend separately.
                   </p>
                 </div>
 
-                <label style={styles.label}>
-                  Create Transaction PIN
-                </label>
-
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={4}
-                  placeholder="Enter 4-digit PIN"
-                  style={styles.input}
-                />
-
-                <label style={styles.label}>
-                  Confirm Transaction PIN
-                </label>
-
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={4}
-                  placeholder="Confirm 4-digit PIN"
-                  style={styles.input}
-                />
-
-                <button
-                  type="button"
-                  style={styles.primaryButton}
-                  onClick={() =>
-                    alert(
-                      'Your 4-digit Transaction PIN will be securely connected to the backend next.'
-                    )
-                  }
+                <div
+                  style={{
+                    marginTop: 18,
+                    padding: 15,
+                    borderRadius: 14,
+                    background: '#f7faf8',
+                    border: '1px solid #e5eee9',
+                  }}
                 >
-                  Create Transaction PIN
-                </button>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 750,
+                      color: '#34443c',
+                    }}
+                  >
+                    Payment security
+                  </div>
+
+                  <div
+                    style={{
+                      color: '#7b8982',
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      marginTop: 5,
+                    }}
+                  >
+                    Before a transaction is completed,
+                    Zenimonies will require the appropriate
+                    transaction authorization.
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* ================= LOGIN SETTINGS ================= */}
+            {/* =================================================
+                LOGIN SETTINGS
+            ================================================= */}
 
             {activeSection === 'Login Settings' && (
               <div style={{ marginTop: 20 }}>
+                {/* PASSWORD */}
+
                 <div style={styles.infoBox}>
-                  <strong>Login Password</strong>
+                  <strong>
+                    Login Password
+                  </strong>
 
                   <p style={styles.infoText}>
-                    Your password and Login Code are separate
-                    security credentials.
+                    Your password remains your primary
+                    account recovery credential.
                   </p>
                 </div>
 
-                <label style={styles.label}>
-                  Current Password
-                </label>
-
-                <input
-                  type="password"
-                  placeholder="Enter current password"
-                  style={styles.input}
-                />
-
-                <label style={styles.label}>
-                  New Password
-                </label>
-
-                <input
-                  type="password"
-                  placeholder="Enter new password"
-                  style={styles.input}
-                />
-
-                <label style={styles.label}>
-                  Confirm New Password
-                </label>
-
-                <input
-                  type="password"
-                  placeholder="Confirm new password"
-                  style={styles.input}
-                />
-
-                <button
-                  type="button"
-                  style={styles.primaryButton}
-                  onClick={() =>
-                    alert(
-                      'Password change will be securely connected to the backend next.'
-                    )
-                  }
+                <div
+                  style={{
+                    marginTop: 18,
+                    padding: 15,
+                    borderRadius: 14,
+                    background: '#f7faf8',
+                    border: '1px solid #e5eee9',
+                  }}
                 >
-                  Change Password
-                </button>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 750,
+                      color: '#34443c',
+                    }}
+                  >
+                    Password reset
+                  </div>
+
+                  <div
+                    style={{
+                      color: '#7b8982',
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      marginTop: 5,
+                    }}
+                  >
+                    If you need to change your password,
+                    use the secure password recovery process
+                    from the login screen.
+                  </div>
+
+                  <button
+                    type="button"
+                    style={styles.secondaryButton}
+                    onClick={() => {
+                      closeSection();
+                      navigate('/forgot-password');
+                    }}
+                  >
+                    Reset Password
+                  </button>
+                </div>
+
+                {/* =================================================
+                    ACCOUNT UNLOCK PASSCODE
+                ================================================= */}
 
                 <div
                   style={{
                     height: 1,
                     background: '#edf2ef',
-                    margin: '24px 0',
+                    margin: '25px 0',
                   }}
                 />
 
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: 16,
-                  }}
-                >
-                  6-Digit Login Code
-                </h3>
+                <div>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: 17,
+                      fontWeight: 800,
+                      color: '#14251e',
+                    }}
+                  >
+                    Account Unlock Passcode
+                  </h3>
 
-                <p
-                  style={{
-                    color: '#7b8982',
-                    fontSize: 13,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  Create a separate 6-digit code for quick
-                  login. This is different from your password
-                  and Transaction PIN.
-                </p>
+                  <p
+                    style={{
+                      color: '#7b8982',
+                      fontSize: 13,
+                      lineHeight: 1.55,
+                      margin: '7px 0 0',
+                    }}
+                  >
+                    Your Account Unlock Passcode is exactly
+                    6 digits. It is used only to unlock your
+                    Zenimonies account after Passkey or
+                    biometric authentication fallback.
+                  </p>
 
-                <label style={styles.label}>
-                  New Login Code
-                </label>
+                  {/* STATUS */}
 
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="Enter 6-digit code"
-                  style={styles.input}
-                />
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: 13,
+                      borderRadius: 13,
+                      marginTop: 15,
+                      background: passcodeExists
+                        ? '#effbf5'
+                        : '#fff9ed',
+                      border: passcodeExists
+                        ? '1px solid #d9eee3'
+                        : '1px solid #f0e2c4',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: '50%',
+                        background: passcodeExists
+                          ? '#079447'
+                          : '#e6a21a',
+                        color: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 800,
+                      }}
+                    >
+                      {passcodeExists
+                        ? '✓'
+                        : '!'}
+                    </div>
 
-                <label style={styles.label}>
-                  Confirm Login Code
-                </label>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 800,
+                          color: '#34443c',
+                        }}
+                      >
+                        {passcodeLoading
+                          ? 'Checking status…'
+                          : passcodeExists
+                          ? 'Passcode Active'
+                          : 'Passcode Not Set'}
+                      </div>
 
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="Confirm 6-digit code"
-                  style={styles.input}
-                />
+                      <div
+                        style={{
+                          color: '#7b8982',
+                          fontSize: 11,
+                          marginTop: 2,
+                        }}
+                      >
+                        {passcodeExists
+                          ? 'Your 6-digit Account Unlock Passcode is protected.'
+                          : 'Create your 6-digit Account Unlock Passcode to use it as an unlock fallback.'}
+                      </div>
+                    </div>
+                  </div>
 
-                <button
-                  type="button"
-                  style={styles.primaryButton}
-                  onClick={() =>
-                    alert(
-                      'Login Code will be securely connected to the backend next.'
-                    )
-                  }
-                >
-                  Save Login Code
-                </button>
+                  {/* SUCCESS */}
+
+                  {passcodeMessage && (
+                    <div
+                      style={{
+                        marginTop: 13,
+                        background: '#effbf5',
+                        border: '1px solid #d9eee3',
+                        color: '#12633f',
+                        borderRadius: 12,
+                        padding: 12,
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {passcodeMessage}
+                    </div>
+                  )}
+
+                  {/* ERROR */}
+
+                  {passcodeError && (
+                    <div
+                      style={{
+                        marginTop: 13,
+                        background: '#fff1f1',
+                        border: '1px solid #f3d3d0',
+                        color: '#b42318',
+                        borderRadius: 12,
+                        padding: 12,
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {passcodeError}
+                    </div>
+                  )}
+
+                  {/* CREATE */}
+
+                  {!passcodeExists && (
+                    <div style={{ marginTop: 18 }}>
+                      <label style={styles.label}>
+                        Create 6-Digit Passcode
+                      </label>
+
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        maxLength={6}
+                        placeholder="Enter 6 digits"
+                        value={newPasscode}
+                        onChange={(event) =>
+                          setNewPasscode(
+                            event.target.value
+                              .replace(/\D/g, '')
+                              .slice(0, 6)
+                          )
+                        }
+                        style={styles.input}
+                      />
+
+                      <label style={styles.label}>
+                        Confirm 6-Digit Passcode
+                      </label>
+
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        maxLength={6}
+                        placeholder="Confirm 6 digits"
+                        value={confirmPasscode}
+                        onChange={(event) =>
+                          setConfirmPasscode(
+                            event.target.value
+                              .replace(/\D/g, '')
+                              .slice(0, 6)
+                          )
+                        }
+                        style={styles.input}
+                      />
+
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.primaryButton,
+                          opacity:
+                            passcodeSaving
+                              ? 0.65
+                              : 1,
+                        }}
+                        disabled={passcodeSaving}
+                        onClick={
+                          handleCreatePasscode
+                        }
+                      >
+                        {passcodeSaving
+                          ? 'Creating Passcode…'
+                          : 'Create Account Passcode'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* CHANGE */}
+
+                  {passcodeExists && (
+                    <div style={{ marginTop: 20 }}>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 800,
+                          color: '#34443c',
+                          marginBottom: 4,
+                        }}
+                      >
+                        Change Passcode
+                      </div>
+
+                      <p
+                        style={{
+                          color: '#7b8982',
+                          fontSize: 12,
+                          lineHeight: 1.5,
+                          margin: '0 0 12px',
+                        }}
+                      >
+                        Your current Passcode is required
+                        before a new one can be created.
+                      </p>
+
+                      <label style={styles.label}>
+                        Current Passcode
+                      </label>
+
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="current-password"
+                        maxLength={6}
+                        placeholder="Enter current 6 digits"
+                        value={currentPasscode}
+                        onChange={(event) =>
+                          setCurrentPasscode(
+                            event.target.value
+                              .replace(/\D/g, '')
+                              .slice(0, 6)
+                          )
+                        }
+                        style={styles.input}
+                      />
+
+                      <label style={styles.label}>
+                        New Passcode
+                      </label>
+
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        maxLength={6}
+                        placeholder="Enter new 6 digits"
+                        value={replacementPasscode}
+                        onChange={(event) =>
+                          setReplacementPasscode(
+                            event.target.value
+                              .replace(/\D/g, '')
+                              .slice(0, 6)
+                          )
+                        }
+                        style={styles.input}
+                      />
+
+                      <label style={styles.label}>
+                        Confirm New Passcode
+                      </label>
+
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        maxLength={6}
+                        placeholder="Confirm new 6 digits"
+                        value={
+                          confirmReplacementPasscode
+                        }
+                        onChange={(event) =>
+                          setConfirmReplacementPasscode(
+                            event.target.value
+                              .replace(/\D/g, '')
+                              .slice(0, 6)
+                          )
+                        }
+                        style={styles.input}
+                      />
+
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.primaryButton,
+                          opacity:
+                            passcodeSaving
+                              ? 0.65
+                              : 1,
+                        }}
+                        disabled={passcodeSaving}
+                        onClick={
+                          handleChangePasscode
+                        }
+                      >
+                        {passcodeSaving
+                          ? 'Changing Passcode…'
+                          : 'Change Account Passcode'}
+                      </button>
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      marginTop: 18,
+                      padding: 13,
+                      background: '#f7faf8',
+                      borderRadius: 12,
+                      color: '#6f7d76',
+                      fontSize: 11,
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    <strong
+                      style={{
+                        color: '#34443c',
+                      }}
+                    >
+                      Security
+                    </strong>
+                    <br />
+                    Zenimonies never stores your actual
+                    6-digit Passcode. The backend stores only
+                    a secure cryptographic hash and enforces
+                    failed-attempt protection.
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* ================= SAVING SETTINGS ================= */}
+            {/* =================================================
+                SAVING SETTINGS
+            ================================================= */}
 
             {activeSection === 'Saving Settings' && (
               <div style={{ marginTop: 20 }}>
@@ -789,9 +1257,17 @@ const Settings: React.FC = () => {
                 </label>
 
                 <select style={styles.input}>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
+                  <option value="daily">
+                    Daily
+                  </option>
+
+                  <option value="weekly">
+                    Weekly
+                  </option>
+
+                  <option value="monthly">
+                    Monthly
+                  </option>
                 </select>
 
                 <button
@@ -808,7 +1284,9 @@ const Settings: React.FC = () => {
               </div>
             )}
 
-            {/* ================= SECURITY QUESTION ================= */}
+            {/* =================================================
+                SECURITY QUESTION
+            ================================================= */}
 
             {activeSection === 'Security Question' && (
               <div style={{ marginTop: 20 }}>
@@ -849,7 +1327,7 @@ const Settings: React.FC = () => {
                   style={styles.primaryButton}
                   onClick={() =>
                     alert(
-                      'Security question will be securely connected to the backend next.'
+                      'Security question will be securely connected to the backend.'
                     )
                   }
                 >
@@ -858,7 +1336,9 @@ const Settings: React.FC = () => {
               </div>
             )}
 
-            {/* ================= SMS ================= */}
+            {/* =================================================
+                SMS
+            ================================================= */}
 
             {activeSection === 'SMS Alert Settings' && (
               <div style={{ marginTop: 20 }}>
@@ -887,7 +1367,9 @@ const Settings: React.FC = () => {
                   type="button"
                   style={styles.primaryButton}
                   onClick={() =>
-                    alert('SMS alert preferences saved.')
+                    alert(
+                      'SMS alert preferences saved.'
+                    )
                   }
                 >
                   Save Alert Settings
@@ -895,7 +1377,9 @@ const Settings: React.FC = () => {
               </div>
             )}
 
-            {/* ================= THEMES ================= */}
+            {/* =================================================
+                THEMES
+            ================================================= */}
 
             {activeSection === 'Themes' && (
               <div style={{ marginTop: 20 }}>
@@ -908,26 +1392,33 @@ const Settings: React.FC = () => {
 
                 <div style={styles.infoBox}>
                   <strong>
-                    Current theme: {darkMode ? 'Dark' : 'Light'}
+                    Current theme:{' '}
+                    {darkMode ? 'Dark' : 'Light'}
                   </strong>
 
                   <p style={styles.infoText}>
-                    Theme preferences can later be synchronized
-                    with your account.
+                    Theme preferences can later be
+                    synchronized with your account.
                   </p>
                 </div>
               </div>
             )}
 
-            {/* ================= SECURITY CENTER ================= */}
+            {/* =================================================
+                SECURITY CENTER
+            ================================================= */}
 
             {activeSection === 'Security Center' && (
               <div style={{ marginTop: 20 }}>
                 <div style={styles.securityStatus}>
-                  <div style={styles.securityCheck}>✓</div>
+                  <div style={styles.securityCheck}>
+                    ✓
+                  </div>
 
                   <div>
-                    <strong>Account Security</strong>
+                    <strong>
+                      Account Security
+                    </strong>
 
                     <p style={styles.infoText}>
                       Your account security center is ready.
@@ -936,25 +1427,55 @@ const Settings: React.FC = () => {
                 </div>
 
                 <div style={styles.securityRow}>
-                  <span>Password</span>
-                  <strong>Protected</strong>
+                  <span>
+                    Password
+                  </span>
+
+                  <strong>
+                    Protected
+                  </strong>
                 </div>
 
                 <div style={styles.securityRow}>
-                  <span>Transaction PIN</span>
-                  <strong>Protected</strong>
+                  <span>
+                    Account Unlock Passcode
+                  </span>
+
+                  <strong>
+                    {passcodeExists
+                      ? 'Active'
+                      : 'Not Set'}
+                  </strong>
                 </div>
 
                 <div style={styles.securityRow}>
-                  <span>Login Code</span>
-                  <strong>Available</strong>
+                  <span>
+                    Transaction PIN
+                  </span>
+
+                  <strong>
+                    Separate 4-digit credential
+                  </strong>
+                </div>
+
+                <div style={styles.securityRow}>
+                  <span>
+                    Passkey
+                  </span>
+
+                  <strong>
+                    Available
+                  </strong>
                 </div>
               </div>
             )}
 
-            {/* ================= FEEDBACK ================= */}
+            {/* =================================================
+                FEEDBACK
+            ================================================= */}
 
-            {activeSection === 'Feedback and Suggestions' && (
+            {activeSection ===
+              'Feedback and Suggestions' && (
               <div style={{ marginTop: 20 }}>
                 <label style={styles.label}>
                   Your feedback
@@ -976,7 +1497,9 @@ const Settings: React.FC = () => {
                   type="button"
                   style={styles.primaryButton}
                   onClick={() =>
-                    alert('Thank you for your feedback.')
+                    alert(
+                      'Thank you for your feedback.'
+                    )
                   }
                 >
                   Send Feedback
@@ -984,7 +1507,9 @@ const Settings: React.FC = () => {
               </div>
             )}
 
-            {/* ================= ABOUT ================= */}
+            {/* =================================================
+                ABOUT
+            ================================================= */}
 
             {activeSection === 'About' && (
               <div style={{ marginTop: 20 }}>
@@ -994,7 +1519,9 @@ const Settings: React.FC = () => {
                     padding: '15px 0 25px',
                   }}
                 >
-                  <div style={styles.aboutLogo}>Z</div>
+                  <div style={styles.aboutLogo}>
+                    Z
+                  </div>
 
                   <h3
                     style={{
@@ -1016,23 +1543,40 @@ const Settings: React.FC = () => {
                 </div>
 
                 <div style={styles.securityRow}>
-                  <span>Application</span>
-                  <strong>Zenimonies</strong>
+                  <span>
+                    Application
+                  </span>
+
+                  <strong>
+                    Zenimonies
+                  </strong>
                 </div>
 
                 <div style={styles.securityRow}>
-                  <span>Version</span>
-                  <strong>1.0.0</strong>
+                  <span>
+                    Version
+                  </span>
+
+                  <strong>
+                    1.0.0
+                  </strong>
                 </div>
 
                 <div style={styles.securityRow}>
-                  <span>Platform</span>
-                  <strong>Digital Banking</strong>
+                  <span>
+                    Platform
+                  </span>
+
+                  <strong>
+                    Digital Banking
+                  </strong>
                 </div>
               </div>
             )}
 
-            {/* ================= DEFAULT ================= */}
+            {/* =================================================
+                DEFAULT
+            ================================================= */}
 
             {![
               'Payment Settings',
@@ -1065,46 +1609,13 @@ const Settings: React.FC = () => {
       )}
 
       {/* =====================================================
-          CLOSE ACCOUNT CONFIRMATION
+          CLOSE ACCOUNT
       ===================================================== */}
 
       {showCloseConfirmation && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(10, 20, 16, 0.55)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-            zIndex: 200,
-          }}
-        >
-          <div
-            style={{
-              width: 'min(420px, 100%)',
-              background: '#ffffff',
-              borderRadius: 22,
-              padding: 24,
-              textAlign: 'center',
-            }}
-          >
-            <div
-              style={{
-                width: 60,
-                height: 60,
-                borderRadius: '50%',
-                background: '#fff1f1',
-                color: '#d92d20',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 15px',
-                fontSize: 28,
-                fontWeight: 800,
-              }}
-            >
+        <div style={styles.closeOverlay}>
+          <div style={styles.closeModal}>
+            <div style={styles.warningIcon}>
               !
             </div>
 
@@ -1141,16 +1652,7 @@ const Settings: React.FC = () => {
                 onClick={() =>
                   setShowCloseConfirmation(false)
                 }
-                style={{
-                  flex: 1,
-                  height: 48,
-                  border: '1px solid #d8e1dc',
-                  borderRadius: 13,
-                  background: '#ffffff',
-                  color: '#34443c',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
+                style={styles.cancelButton}
               >
                 Cancel
               </button>
@@ -1162,16 +1664,7 @@ const Settings: React.FC = () => {
                     'Account closure will be securely connected to the backend.'
                   )
                 }
-                style={{
-                  flex: 1,
-                  height: 48,
-                  border: 'none',
-                  borderRadius: 13,
-                  background: '#d92d20',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
+                style={styles.dangerButton}
               >
                 Continue
               </button>
@@ -1182,6 +1675,30 @@ const Settings: React.FC = () => {
     </div>
   );
 };
+
+
+/* ============================================================
+   SECTION TITLE
+============================================================ */
+
+const SectionTitle: React.FC<{
+  title: string;
+}> = ({ title }) => {
+  return (
+    <div
+      style={{
+        color: '#6f7d76',
+        fontSize: 11,
+        fontWeight: 800,
+        letterSpacing: 1,
+        margin: '20px 5px 8px',
+      }}
+    >
+      {title}
+    </div>
+  );
+};
+
 
 /* ============================================================
    TOGGLE
@@ -1242,7 +1759,9 @@ const ToggleRow: React.FC<ToggleRowProps> = ({
           height: 28,
           border: 'none',
           borderRadius: 99,
-          background: enabled ? '#079447' : '#cbd5cf',
+          background: enabled
+            ? '#079447'
+            : '#cbd5cf',
           padding: 3,
           cursor: 'pointer',
           position: 'relative',
@@ -1259,7 +1778,8 @@ const ToggleRow: React.FC<ToggleRowProps> = ({
             transform: enabled
               ? 'translateX(20px)'
               : 'translateX(0)',
-            transition: 'transform 0.15s ease',
+            transition:
+              'transform 0.15s ease',
           }}
         />
       </button>
@@ -1267,11 +1787,63 @@ const ToggleRow: React.FC<ToggleRowProps> = ({
   );
 };
 
+
 /* ============================================================
    STYLES
 ============================================================ */
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
+  sectionCard: {
+    background: '#ffffff',
+    borderRadius: 17,
+    overflow: 'hidden',
+    border: '1px solid #e7eee9',
+    boxShadow:
+      '0 5px 18px rgba(26, 61, 47, 0.04)',
+  },
+
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(10, 30, 22, 0.45)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    zIndex: 100,
+  },
+
+  modal: {
+    width: 'min(440px, 100%)',
+    maxHeight: '90vh',
+    overflowY: 'auto',
+    background: '#ffffff',
+    borderRadius: 22,
+    padding: 23,
+    boxShadow:
+      '0 25px 70px rgba(0,0,0,0.2)',
+  },
+
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 15,
+  },
+
+  closeButton: {
+    width: 34,
+    height: 34,
+    border: 'none',
+    borderRadius: '50%',
+    background: '#f1f5f3',
+    cursor: 'pointer',
+    fontSize: 20,
+  },
+
   label: {
     display: 'block',
     color: '#34443c',
@@ -1304,6 +1876,19 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 750,
     cursor: 'pointer',
     marginTop: 20,
+  },
+
+  secondaryButton: {
+    height: 43,
+    border: '1px solid #d8e2dc',
+    borderRadius: 11,
+    background: '#ffffff',
+    color: '#078b4a',
+    fontSize: 13,
+    fontWeight: 750,
+    cursor: 'pointer',
+    padding: '0 16px',
+    marginTop: 13,
   },
 
   infoBox: {
@@ -1368,6 +1953,61 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0 auto',
     fontSize: 30,
     fontWeight: 800,
+  },
+
+  closeOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(10, 20, 16, 0.55)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    zIndex: 200,
+  },
+
+  closeModal: {
+    width: 'min(420px, 100%)',
+    background: '#ffffff',
+    borderRadius: 22,
+    padding: 24,
+    textAlign: 'center',
+  },
+
+  warningIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: '50%',
+    background: '#fff1f1',
+    color: '#d92d20',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: '0 auto 15px',
+    fontSize: 28,
+    fontWeight: 800,
+  },
+
+  cancelButton: {
+    flex: 1,
+    height: 48,
+    border: '1px solid #d8e1dc',
+    borderRadius: 13,
+    background: '#ffffff',
+    color: '#34443c',
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+
+  dangerButton: {
+    flex: 1,
+    height: 48,
+    border: 'none',
+    borderRadius: 13,
+    background: '#d92d20',
+    color: '#ffffff',
+    fontWeight: 700,
+    cursor: 'pointer',
   },
 };
 
