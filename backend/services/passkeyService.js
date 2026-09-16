@@ -1,5 +1,3 @@
-const crypto = require('crypto');
-
 const {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -57,9 +55,6 @@ const getWebAuthnUserId = (userId) => {
  * and:
  *
  * internal,hybrid
- *
- * This prevents JSON.parse() errors from
- * older or differently formatted records.
  */
 const parseTransports = (value) => {
   if (
@@ -1118,7 +1113,7 @@ const createLoginAuthenticationOptions =
             id,
             email,
             role,
-            is_active
+            status
           FROM users
           WHERE LOWER(email) = LOWER($1)
           LIMIT 1
@@ -1140,7 +1135,7 @@ const createLoginAuthenticationOptions =
       userResult.rows[0];
 
     if (
-      user.is_active === false
+      user.status !== 'active'
     ) {
       throw new Error(
         'This account is currently unavailable.'
@@ -1270,7 +1265,7 @@ const verifyLoginAuthentication =
 
             u.email,
             u.role,
-            u.is_active,
+            u.status,
             u.full_name,
             u.phone,
             u.kyc_status,
@@ -1305,7 +1300,7 @@ const verifyLoginAuthentication =
       credential.email;
 
     if (
-      credential.is_active === false
+      credential.status !== 'active'
     ) {
       throw new Error(
         'This account is currently unavailable.'
