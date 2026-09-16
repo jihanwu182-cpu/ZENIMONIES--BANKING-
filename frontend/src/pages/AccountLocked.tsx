@@ -5,7 +5,9 @@ import React, {
   useState,
 } from 'react';
 
-import axios, { AxiosError } from 'axios';
+import axios, {
+  AxiosError,
+} from 'axios';
 
 import {
   Alert,
@@ -68,27 +70,46 @@ interface ApiErrorResponse {
   locked_until?: string | null;
 }
 
+/* ============================================================
+   AUTH TOKEN
+============================================================ */
+
 const getToken = (): string | null => {
   return (
-    localStorage.getItem('zenimonies_token') ||
-    localStorage.getItem('token')
+    localStorage.getItem(
+      'zenimonies_token'
+    ) ||
+    localStorage.getItem(
+      'token'
+    )
   );
 };
 
-const getStoredUser = (): StoredUser | null => {
-  try {
-    const raw =
-      localStorage.getItem('zenimonies_user');
+/* ============================================================
+   STORED USER
+============================================================ */
 
-    if (!raw) {
+const getStoredUser =
+  (): StoredUser | null => {
+    try {
+      const raw =
+        localStorage.getItem(
+          'zenimonies_user'
+        );
+
+      if (!raw) {
+        return null;
+      }
+
+      return JSON.parse(raw);
+    } catch {
       return null;
     }
+  };
 
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-};
+/* ============================================================
+   DISPLAY NAME
+============================================================ */
 
 const getDisplayName = (
   user: StoredUser | null
@@ -103,10 +124,16 @@ const getDisplayName = (
   }
 
   const firstName =
-    fullName.trim().split(/\s+/)[0];
+    fullName
+      .trim()
+      .split(/\s+/)[0];
 
   return firstName.toUpperCase();
 };
+
+/* ============================================================
+   ERROR MESSAGE
+============================================================ */
 
 const getErrorMessage = (
   error: unknown,
@@ -116,1637 +143,1698 @@ const getErrorMessage = (
     error as AxiosError<ApiErrorResponse>;
 
   return (
-    axiosError.response?.data?.message ||
-    axiosError.response?.data?.error ||
+    axiosError.response?.data
+      ?.message ||
+    axiosError.response?.data
+      ?.error ||
     fallback
   );
 };
 
-const AccountLocked: React.FC = () => {
-  const [mode, setMode] =
-    useState<UnlockMode>('passkey');
+/* ============================================================
+   ACCOUNT LOCKED
+============================================================ */
 
-  const [user, setUser] =
-    useState<StoredUser | null>(
+const AccountLocked: React.FC =
+  () => {
+    const [
+      mode,
+      setMode,
+    ] = useState<UnlockMode>(
+      'passkey'
+    );
+
+    const [
+      user,
+      setUser,
+    ] = useState<StoredUser | null>(
       getStoredUser()
     );
 
-  const [email, setEmail] =
-    useState('');
+    const [
+      email,
+      setEmail,
+    ] = useState('');
 
-  const [loadingProfile, setLoadingProfile] =
-    useState(true);
+    const [
+      loadingProfile,
+      setLoadingProfile,
+    ] = useState(true);
 
-  const [passkeyLoading, setPasskeyLoading] =
-    useState(false);
+    const [
+      passkeyLoading,
+      setPasskeyLoading,
+    ] = useState(false);
 
-  const [passkeyAttempts, setPasskeyAttempts] =
-    useState(0);
+    const [
+      passkeyAttempts,
+      setPasskeyAttempts,
+    ] = useState(0);
 
-  const [passcode, setPasscode] =
-    useState('');
+    const [
+      passcode,
+      setPasscode,
+    ] = useState('');
 
-  const [passcodeLoading, setPasscodeLoading] =
-    useState(false);
+    const [
+      passcodeLoading,
+      setPasscodeLoading,
+    ] = useState(false);
 
-  const [passcodeAttempts, setPasscodeAttempts] =
-    useState(0);
+    const [
+      passcodeAttempts,
+      setPasscodeAttempts,
+    ] = useState(0);
 
-  const [password, setPassword] =
-    useState('');
+    const [
+      password,
+      setPassword,
+    ] = useState('');
 
-  const [passwordLoading, setPasswordLoading] =
-    useState(false);
+    const [
+      passwordLoading,
+      setPasswordLoading,
+    ] = useState(false);
 
-  const [showPassword, setShowPassword] =
-    useState(false);
+    const [
+      showPassword,
+      setShowPassword,
+    ] = useState(false);
 
-  const [error, setError] =
-    useState('');
+    const [
+      error,
+      setError,
+    ] = useState('');
 
-  const [successMessage, setSuccessMessage] =
-    useState('');
+    const [
+      successMessage,
+      setSuccessMessage,
+    ] = useState('');
 
-  const [lockedUntil, setLockedUntil] =
-    useState<string | null>(null);
+    const [
+      lockedUntil,
+      setLockedUntil,
+    ] = useState<string | null>(
+      null
+    );
 
-  /*
-   * ----------------------------------------------------------
-   * LOAD REAL ACCOUNT INFORMATION
-   * ----------------------------------------------------------
-   *
-   * We never ask the user to type their email here.
-   *
-   * First use the authenticated profile endpoint.
-   * The localStorage user is only a fallback.
-   */
-  useEffect(() => {
-    let mounted = true;
+    /* ========================================================
+       LOAD ACCOUNT
+    ======================================================== */
 
-    const loadAccount = async () => {
-      const token = getToken();
-      const storedUser = getStoredUser();
+    useEffect(() => {
+      let mounted = true;
 
-      if (storedUser && mounted) {
-        setUser(storedUser);
+      const loadAccount =
+        async () => {
+          const token =
+            getToken();
 
-        if (storedUser.email) {
-          setEmail(
-            String(storedUser.email)
-              .trim()
-              .toLowerCase()
-          );
-        }
-      }
+          const storedUser =
+            getStoredUser();
 
-      if (!token) {
-        if (mounted) {
-          setLoadingProfile(false);
-          setError(
-            'Your secure session could not be found. Please sign in again.'
-          );
-        }
-
-        return;
-      }
-
-      try {
-        const response = await axios.get(
-          `${API_BASE_URL}/api/profile`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            timeout: 15000,
-          }
-        );
-
-        if (!mounted) {
-          return;
-        }
-
-        const profile =
-          response.data?.user ||
-          response.data?.profile ||
-          response.data;
-
-        if (profile) {
-          setUser(profile);
-
-          const profileEmail =
-            profile.email ||
-            storedUser?.email ||
-            '';
-
-          if (profileEmail) {
-            setEmail(
-              String(profileEmail)
-                .trim()
-                .toLowerCase()
+          if (
+            storedUser &&
+            mounted
+          ) {
+            setUser(
+              storedUser
             );
+
+            if (
+              storedUser.email
+            ) {
+              setEmail(
+                String(
+                  storedUser.email
+                )
+                  .trim()
+                  .toLowerCase()
+              );
+            }
+          }
+
+          if (!token) {
+            if (mounted) {
+              setLoadingProfile(
+                false
+              );
+
+              setError(
+                'Your secure session could not be found. Please sign in again.'
+              );
+            }
+
+            return;
           }
 
           try {
+            const response =
+              await axios.get(
+                `${API_BASE_URL}/api/profile`,
+                {
+                  headers: {
+                    Authorization:
+                      `Bearer ${token}`,
+                  },
+                  timeout: 15000,
+                }
+              );
+
+            if (!mounted) {
+              return;
+            }
+
+            const profile =
+              response.data?.user ||
+              response.data?.profile ||
+              response.data;
+
+            if (profile) {
+              setUser(
+                profile
+              );
+
+              const profileEmail =
+                profile.email ||
+                storedUser?.email ||
+                '';
+
+              if (
+                profileEmail
+              ) {
+                setEmail(
+                  String(
+                    profileEmail
+                  )
+                    .trim()
+                    .toLowerCase()
+                );
+              }
+
+              try {
+                localStorage.setItem(
+                  'zenimonies_user',
+                  JSON.stringify(
+                    profile
+                  )
+                );
+              } catch {
+                // Local storage is only a fallback.
+              }
+            }
+          } catch {
+            /*
+             * The locally stored user remains
+             * available as a fallback.
+             */
+          } finally {
+            if (mounted) {
+              setLoadingProfile(
+                false
+              );
+            }
+          }
+        };
+
+      loadAccount();
+
+      return () => {
+        mounted = false;
+      };
+    }, []);
+
+    /* ========================================================
+       DISPLAY NAME
+    ======================================================== */
+
+    const displayName =
+      useMemo(() => {
+        return getDisplayName(
+          user
+        );
+      }, [user]);
+
+    /* ========================================================
+       UNLOCK SESSION
+    ======================================================== */
+
+    const unlockAccount =
+      useCallback(() => {
+        sessionStorage.removeItem(
+          'zenimonies_account_locked'
+        );
+
+        sessionStorage.removeItem(
+          'zenimonies_passkey_fallback'
+        );
+
+        window.dispatchEvent(
+          new Event(
+            'zenimonies:unlock'
+          )
+        );
+      }, []);
+
+    /* ========================================================
+       SAVE AUTHENTICATED SESSION
+    ======================================================== */
+
+    const saveAuthenticatedSession =
+      useCallback(
+        (data: any) => {
+          const token =
+            data?.token ||
+            data?.access_token ||
+            data?.accessToken ||
+            data?.data?.token;
+
+          if (!token) {
+            throw new Error(
+              'Authentication succeeded but no secure session was returned.'
+            );
+          }
+
+          localStorage.setItem(
+            'zenimonies_token',
+            token
+          );
+
+          localStorage.setItem(
+            'token',
+            token
+          );
+
+          const authenticatedUser =
+            data?.user ||
+            data?.data?.user;
+
+          if (
+            authenticatedUser
+          ) {
             localStorage.setItem(
               'zenimonies_user',
-              JSON.stringify(profile)
+              JSON.stringify(
+                authenticatedUser
+              )
             );
-          } catch {
-            // Local storage is only a convenience fallback.
           }
-        }
-      } catch {
-        /*
-         * Do not show a technical API error.
-         *
-         * If the stored authenticated user already contains
-         * an email, the Passkey flow can still continue.
-         */
-      } finally {
-        if (mounted) {
-          setLoadingProfile(false);
-        }
-      }
-    };
-
-    loadAccount();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const displayName = useMemo(() => {
-    return getDisplayName(user);
-  }, [user]);
-
-  /*
-   * ----------------------------------------------------------
-   * UNLOCK SESSION
-   * ----------------------------------------------------------
-   */
-  const unlockAccount = useCallback(() => {
-    sessionStorage.removeItem(
-      'zenimonies_account_locked'
-    );
-
-    sessionStorage.removeItem(
-      'zenimonies_passkey_fallback'
-    );
-
-    window.dispatchEvent(
-      new Event('zenimonies:unlock')
-    );
-  }, []);
-
-  /*
-   * ----------------------------------------------------------
-   * SAVE AUTHENTICATED PASSKEY SESSION
-   * ----------------------------------------------------------
-   */
-  const saveAuthenticatedSession = useCallback(
-    (data: any) => {
-      const token =
-        data?.token ||
-        data?.access_token ||
-        data?.accessToken;
-
-      if (!token) {
-        throw new Error(
-          'Authentication succeeded but no secure session was returned.'
-        );
-      }
-
-      localStorage.setItem(
-        'zenimonies_token',
-        token
+        },
+        []
       );
 
-      localStorage.setItem(
-        'token',
-        token
+    /* ========================================================
+       PASSKEY FAILURE
+    ======================================================== */
+
+    const handlePasskeyFailure =
+      useCallback(
+        (
+          nextAttempts: number,
+          fallbackRequired = false,
+          message?: string
+        ) => {
+          setPasskeyAttempts(
+            nextAttempts
+          );
+
+          if (
+            fallbackRequired ||
+            nextAttempts >=
+              MAX_PASSKEY_ATTEMPTS
+          ) {
+            sessionStorage.setItem(
+              'zenimonies_passkey_fallback',
+              'true'
+            );
+
+            setMode(
+              'passcode'
+            );
+
+            setError('');
+
+            setSuccessMessage(
+              'Use your 6-digit Account Unlock Passcode to continue.'
+            );
+
+            return;
+          }
+
+          setError(
+            message ||
+              `Passkey verification failed. Attempt ${nextAttempts} of ${MAX_PASSKEY_ATTEMPTS}.`
+          );
+        },
+        []
       );
 
-      if (data?.user) {
-        localStorage.setItem(
-          'zenimonies_user',
-          JSON.stringify(data.user)
-        );
-      }
-    },
-    []
-  );
+    /* ========================================================
+       PASSKEY UNLOCK
+    ======================================================== */
 
-  /*
-   * ----------------------------------------------------------
-   * PASSKEY FAILURE
-   * ----------------------------------------------------------
-   */
-  const handlePasskeyFailure = useCallback(
-    (
-      nextAttempts: number,
-      fallbackRequired = false,
-      message?: string
-    ) => {
-      setPasskeyAttempts(nextAttempts);
-
-      if (
-        fallbackRequired ||
-        nextAttempts >= MAX_PASSKEY_ATTEMPTS
-      ) {
-        sessionStorage.setItem(
-          'zenimonies_passkey_fallback',
-          'true'
-        );
-
-        setMode('passcode');
-
+    const handlePasskeyUnlock =
+      async () => {
         setError('');
+        setSuccessMessage('');
 
-        setSuccessMessage(
-          'Passkey verification could not be completed. Use your 6-digit Account Passcode to unlock.'
-        );
+        if (!email) {
+          setError(
+            'We could not securely load your account details. Please use your Account Unlock Passcode or password.'
+          );
 
-        return;
-      }
-
-      setError(
-        message ||
-          `Passkey verification failed. Attempt ${nextAttempts} of ${MAX_PASSKEY_ATTEMPTS}.`
-      );
-    },
-    []
-  );
-
-  /*
-   * ----------------------------------------------------------
-   * FACE ID / PASSKEY UNLOCK
-   * ----------------------------------------------------------
-   */
-  const handlePasskeyUnlock = async () => {
-    setError('');
-    setSuccessMessage('');
-
-    if (!email) {
-      setError(
-        'We could not securely load your account details. Please use your Account Passcode or password.'
-      );
-
-      return;
-    }
-
-    if (
-      passkeyAttempts >=
-      MAX_PASSKEY_ATTEMPTS
-    ) {
-      setMode('passcode');
-      return;
-    }
-
-    setPasskeyLoading(true);
-
-    try {
-      const optionsResponse =
-        await axios.post(
-          `${API_BASE_URL}/api/passkey/login/options`,
-          {
-            email,
-          },
-          {
-            timeout: 20000,
-          }
-        );
-
-      const options =
-        optionsResponse.data?.options ||
-        optionsResponse.data;
-
-      if (!options) {
-        throw new Error(
-          'Unable to start Passkey authentication.'
-        );
-      }
-
-      const authenticationResponse =
-        await startAuthentication({
-          optionsJSON: options,
-        });
-
-      const verifyResponse =
-        await axios.post(
-          `${API_BASE_URL}/api/passkey/login/verify`,
-          {
-            email,
-            response: authenticationResponse,
-          },
-          {
-            timeout: 30000,
-          }
-        );
-
-      const data =
-        verifyResponse.data || {};
-
-      saveAuthenticatedSession(data);
-
-      setSuccessMessage(
-        'Identity confirmed. Your secure session has been restored.'
-      );
-
-      setPasskeyAttempts(0);
-
-      setTimeout(() => {
-        unlockAccount();
-      }, 350);
-    } catch (error) {
-      const axiosError =
-        error as AxiosError<ApiErrorResponse>;
-
-      /*
-       * User cancelled Face ID / Passkey.
-       * This is not treated as a failed security attempt.
-       */
-      const errorName =
-        (error as any)?.name;
-
-      if (
-        errorName === 'NotAllowedError' ||
-        errorName === 'AbortError'
-      ) {
-        setError(
-          'Authentication was cancelled. You can try again or choose another unlock method.'
-        );
-
-        return;
-      }
-
-      const responseData =
-        axiosError.response?.data;
-
-      const serverAttempts =
-        responseData?.failed_attempts;
-
-      const fallbackRequired =
-        responseData?.fallback_required === true ||
-        responseData?.code ===
-          'PASSKEY_FALLBACK_REQUIRED';
-
-      const nextAttempts =
-        typeof serverAttempts === 'number'
-          ? serverAttempts
-          : passkeyAttempts + 1;
-
-      handlePasskeyFailure(
-        nextAttempts,
-        fallbackRequired,
-        getErrorMessage(
-          error,
-          'Passkey verification could not be completed.'
-        )
-      );
-    } finally {
-      setPasskeyLoading(false);
-    }
-  };
-
-  /*
-   * ----------------------------------------------------------
-   * ACCOUNT PASSCODE
-   * ----------------------------------------------------------
-   */
-  const handlePasscodeUnlock = async () => {
-    setError('');
-    setSuccessMessage('');
-
-    if (!/^\d{6}$/.test(passcode)) {
-      setError(
-        'Enter your 6-digit Account Passcode.'
-      );
-
-      return;
-    }
-
-    if (
-      passcodeAttempts >=
-      MAX_PASSCODE_ATTEMPTS
-    ) {
-      setMode('password');
-      return;
-    }
-
-    const token = getToken();
-
-    if (!token) {
-      setError(
-        'Your secure session has expired. Please use your password to sign in again.'
-      );
-
-      setMode('password');
-
-      return;
-    }
-
-    setPasscodeLoading(true);
-
-    try {
-      const response =
-        await axios.post(
-          `${API_BASE_URL}/api/passcode/verify`,
-          {
-            passcode,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            timeout: 20000,
-          }
-        );
-
-      const data =
-        response.data || {};
-
-      setPasscode('');
-      setPasscodeAttempts(0);
-
-      setSuccessMessage(
-        'Passcode verified. Your secure session has been restored.'
-      );
-
-      setTimeout(() => {
-        unlockAccount();
-      }, 350);
-    } catch (error) {
-      const axiosError =
-        error as AxiosError<ApiErrorResponse>;
-
-      const responseData =
-        axiosError.response?.data;
-
-      const serverAttempts =
-        responseData?.failed_attempts;
-
-      const fallbackRequired =
-        responseData?.fallback_required === true ||
-        responseData?.code ===
-          'PASSCODE_LOCKED';
-
-      const nextAttempts =
-        typeof serverAttempts === 'number'
-          ? serverAttempts
-          : passcodeAttempts + 1;
-
-      setPasscodeAttempts(nextAttempts);
-      setPasscode('');
-
-      if (
-        fallbackRequired ||
-        nextAttempts >= MAX_PASSCODE_ATTEMPTS
-      ) {
-        setError(
-          'Your Account Passcode is temporarily locked. Please use your password instead.'
-        );
+          return;
+        }
 
         if (
-          responseData?.locked_until
+          passkeyAttempts >=
+          MAX_PASSKEY_ATTEMPTS
         ) {
-          setLockedUntil(
-            responseData.locked_until
+          setMode(
+            'passcode'
           );
+
+          return;
         }
 
-        setMode('password');
-
-        return;
-      }
-
-      setError(
-        `Incorrect passcode. Attempt ${nextAttempts} of ${MAX_PASSCODE_ATTEMPTS}.`
-      );
-    } finally {
-      setPasscodeLoading(false);
-    }
-  };
-
-  /*
-   * ----------------------------------------------------------
-   * PASSWORD FALLBACK
-   * ----------------------------------------------------------
-   */
-  const handlePasswordUnlock = async () => {
-    setError('');
-    setSuccessMessage('');
-
-    if (!email) {
-      setError(
-        'We could not load your account email. Please sign in again.'
-      );
-
-      return;
-    }
-
-    if (!password) {
-      setError(
-        'Enter your password to continue.'
-      );
-
-      return;
-    }
-
-    setPasswordLoading(true);
-
-    try {
-      const response =
-        await axios.post(
-          `${API_BASE_URL}/api/auth/login`,
-          {
-            email,
-            password,
-          },
-          {
-            timeout: 20000,
-          }
+        setPasskeyLoading(
+          true
         );
 
-      const data =
-        response.data || {};
+        try {
+          const optionsResponse =
+            await axios.post(
+              `${API_BASE_URL}/api/passkey/login/options`,
+              {
+                email,
+              },
+              {
+                timeout: 20000,
+              }
+            );
 
-      saveAuthenticatedSession(data);
+          const options =
+            optionsResponse
+              .data?.options ||
+            optionsResponse.data;
 
-      setPassword('');
+          if (!options) {
+            throw new Error(
+              'Unable to start Passkey authentication.'
+            );
+          }
 
-      setSuccessMessage(
-        'Password verified. Your secure session has been restored.'
+          const authenticationResponse =
+            await startAuthentication(
+              {
+                optionsJSON:
+                  options,
+              }
+            );
+
+          const verifyResponse =
+            await axios.post(
+              `${API_BASE_URL}/api/passkey/login/verify`,
+              {
+                email,
+                response:
+                  authenticationResponse,
+              },
+              {
+                timeout: 30000,
+              }
+            );
+
+          const data =
+            verifyResponse.data ||
+            {};
+
+          saveAuthenticatedSession(
+            data
+          );
+
+          setPasskeyAttempts(
+            0
+          );
+
+          setSuccessMessage(
+            'Your secure session has been restored.'
+          );
+
+          setTimeout(() => {
+            unlockAccount();
+          }, 350);
+        } catch (error) {
+          const axiosError =
+            error as AxiosError<ApiErrorResponse>;
+
+          const errorName =
+            (error as any)?.name;
+
+          /*
+           * Cancellation is not a failed attempt.
+           */
+          if (
+            errorName ===
+              'NotAllowedError' ||
+            errorName ===
+              'AbortError'
+          ) {
+            setError(
+              'Authentication was cancelled. You can try again.'
+            );
+
+            return;
+          }
+
+          const responseData =
+            axiosError
+              .response?.data;
+
+          const serverAttempts =
+            responseData
+              ?.failed_attempts;
+
+          const fallbackRequired =
+            responseData
+              ?.fallback_required ===
+              true ||
+            responseData
+              ?.code ===
+              'PASSKEY_FALLBACK_REQUIRED';
+
+          const nextAttempts =
+            typeof serverAttempts ===
+            'number'
+              ? serverAttempts
+              : passkeyAttempts + 1;
+
+          handlePasskeyFailure(
+            nextAttempts,
+            fallbackRequired,
+            getErrorMessage(
+              error,
+              'Passkey verification could not be completed.'
+            )
+          );
+        } finally {
+          setPasskeyLoading(
+            false
+          );
+        }
+      };
+
+    /* ========================================================
+       ACCOUNT UNLOCK PASSCODE
+    ======================================================== */
+
+    const handlePasscodeUnlock =
+      async () => {
+        setError('');
+        setSuccessMessage('');
+
+        if (
+          !/^\d{6}$/.test(
+            passcode
+          )
+        ) {
+          setError(
+            'Enter your 6-digit Account Unlock Passcode.'
+          );
+
+          return;
+        }
+
+        if (
+          passcodeAttempts >=
+          MAX_PASSCODE_ATTEMPTS
+        ) {
+          setMode(
+            'password'
+          );
+
+          return;
+        }
+
+        const token =
+          getToken();
+
+        if (!token) {
+          setError(
+            'Your secure session could not be found. Please use your password.'
+          );
+
+          setMode(
+            'password'
+          );
+
+          return;
+        }
+
+        setPasscodeLoading(
+          true
+        );
+
+        try {
+          await axios.post(
+            `${API_BASE_URL}/api/passcode/verify`,
+            {
+              passcode,
+            },
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+              timeout: 20000,
+            }
+          );
+
+          setPasscode(
+            ''
+          );
+
+          setPasscodeAttempts(
+            0
+          );
+
+          setSuccessMessage(
+            'Your secure session has been restored.'
+          );
+
+          setTimeout(() => {
+            unlockAccount();
+          }, 350);
+        } catch (error) {
+          const axiosError =
+            error as AxiosError<ApiErrorResponse>;
+
+          const responseData =
+            axiosError
+              .response?.data;
+
+          const serverAttempts =
+            responseData
+              ?.failed_attempts;
+
+          const nextAttempts =
+            typeof serverAttempts ===
+            'number'
+              ? serverAttempts
+              : passcodeAttempts + 1;
+
+          const locked =
+            responseData
+              ?.code ===
+              'PASSCODE_LOCKED' ||
+            responseData
+              ?.fallback_required ===
+              true;
+
+          setPasscodeAttempts(
+            nextAttempts
+          );
+
+          setPasscode('');
+
+          if (
+            responseData?.locked_until
+          ) {
+            setLockedUntil(
+              responseData.locked_until
+            );
+          }
+
+          if (
+            locked ||
+            nextAttempts >=
+              MAX_PASSCODE_ATTEMPTS
+          ) {
+            setMode(
+              'password'
+            );
+
+            setError(
+              'Your Account Unlock Passcode is temporarily locked. Please use your password.'
+            );
+
+            return;
+          }
+
+          setError(
+            `Incorrect passcode. Attempt ${nextAttempts} of ${MAX_PASSCODE_ATTEMPTS}.`
+          );
+        } finally {
+          setPasscodeLoading(
+            false
+          );
+        }
+      };
+
+    /* ========================================================
+       PASSWORD FALLBACK
+    ======================================================== */
+
+    const handlePasswordUnlock =
+      async () => {
+        setError('');
+        setSuccessMessage('');
+
+        if (!email) {
+          setError(
+            'We could not load your account email. Please sign in again.'
+          );
+
+          return;
+        }
+
+        if (!password) {
+          setError(
+            'Enter your password to continue.'
+          );
+
+          return;
+        }
+
+        setPasswordLoading(
+          true
+        );
+
+        try {
+          const response =
+            await axios.post(
+              `${API_BASE_URL}/api/auth/login`,
+              {
+                email,
+                password,
+              },
+              {
+                timeout: 20000,
+              }
+            );
+
+          const data =
+            response.data ||
+            {};
+
+          saveAuthenticatedSession(
+            data
+          );
+
+          setPassword(
+            ''
+          );
+
+          setSuccessMessage(
+            'Your secure session has been restored.'
+          );
+
+          setTimeout(() => {
+            unlockAccount();
+          }, 350);
+        } catch (error) {
+          setError(
+            getErrorMessage(
+              error,
+              'Password verification failed. Please check your password and try again.'
+            )
+          );
+        } finally {
+          setPasswordLoading(
+            false
+          );
+        }
+      };
+
+    /* ========================================================
+       MODE SWITCHES
+    ======================================================== */
+
+    const handleUsePasscode =
+      () => {
+        setError('');
+        setSuccessMessage('');
+        setPasscode('');
+        setMode(
+          'passcode'
+        );
+      };
+
+    const handleUsePassword =
+      () => {
+        setError('');
+        setSuccessMessage('');
+        setPassword('');
+        setMode(
+          'password'
+        );
+      };
+
+    const handleUsePasskey =
+      () => {
+        setError('');
+        setSuccessMessage('');
+        setPasscode('');
+        setPassword('');
+        setMode(
+          'passkey'
+        );
+      };
+
+    /* ========================================================
+       LOADING STATE
+    ======================================================== */
+
+    if (
+      loadingProfile &&
+      !user
+    ) {
+      return (
+        <Box
+          sx={{
+            minHeight:
+              '100vh',
+            display: 'flex',
+            alignItems:
+              'center',
+            justifyContent:
+              'center',
+            background:
+              '#f3f7f5',
+          }}
+        >
+          <CircularProgress
+            size={30}
+            sx={{
+              color:
+                '#0d674e',
+            }}
+          />
+        </Box>
       );
-
-      setTimeout(() => {
-        unlockAccount();
-      }, 350);
-    } catch (error) {
-      setError(
-        getErrorMessage(
-          error,
-          'Password verification failed. Please check your password and try again.'
-        )
-      );
-    } finally {
-      setPasswordLoading(false);
     }
-  };
 
-  /*
-   * ----------------------------------------------------------
-   * MODE SWITCHING
-   * ----------------------------------------------------------
-   */
-  const handleUsePasscode = () => {
-    setError('');
-    setSuccessMessage('');
-    setMode('passcode');
-    setPasscode('');
-  };
+    const currentLoading =
+      passkeyLoading ||
+      passcodeLoading ||
+      passwordLoading;
 
-  const handleUsePassword = () => {
-    setError('');
-    setSuccessMessage('');
-    setMode('password');
-    setPassword('');
-  };
+    /* ========================================================
+       UI
+    ======================================================== */
 
-  const handleUsePasskey = () => {
-    setError('');
-    setSuccessMessage('');
-    setMode('passkey');
-  };
-
-  /*
-   * ----------------------------------------------------------
-   * LOCK MESSAGE
-   * ----------------------------------------------------------
-   */
-  const lockDescription =
-    mode === 'passkey'
-      ? 'Confirm your identity with your device to securely restore your session.'
-      : mode === 'passcode'
-      ? 'Enter your private 6-digit Account Passcode to restore your session.'
-      : 'Sign in with your password to securely restore your session.';
-
-  /*
-   * ----------------------------------------------------------
-   * LOADING
-   * ----------------------------------------------------------
-   */
-  if (loadingProfile) {
     return (
       <Box
         sx={{
-          minHeight: '100vh',
+          minHeight:
+            '100vh',
+          width: '100%',
+          boxSizing:
+            'border-box',
           background:
-            'linear-gradient(145deg, #082f27 0%, #0b4438 48%, #f4f8f6 48%, #f4f8f6 100%)',
+            'linear-gradient(145deg, #f1f7f4 0%, #f8fbfa 50%, #edf5f2 100%)',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          alignItems:
+            'center',
+          justifyContent:
+            'center',
           px: 2,
+          py: 3,
         }}
       >
-        <Paper
-          elevation={0}
+        <Box
           sx={{
             width: '100%',
-            maxWidth: 430,
-            borderRadius: 5,
-            p: 4,
-            textAlign: 'center',
-            background: 'rgba(255,255,255,0.98)',
-            border:
-              '1px solid rgba(255,255,255,0.8)',
+            maxWidth:
+              430,
           }}
         >
-          <Box
-            sx={{
-              width: 64,
-              height: 64,
-              mx: 'auto',
-              mb: 2,
-              borderRadius: 3,
-              background:
-                'linear-gradient(135deg, #008f4c, #006b39)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow:
-                '0 12px 30px rgba(0,105,60,0.22)',
-            }}
-          >
-            <Typography
-              sx={{
-                color: '#fff',
-                fontSize: 34,
-                fontWeight: 800,
-              }}
-            >
-              Z
-            </Typography>
-          </Box>
-
-          <CircularProgress
-            size={28}
-            thickness={4}
-            sx={{
-              color: '#0b4b3e',
-              mb: 2,
-            }}
-          />
-
-          <Typography
-            sx={{
-              fontWeight: 700,
-              color: '#123f35',
-            }}
-          >
-            Securing your session
-          </Typography>
-
-          <Typography
-            sx={{
-              mt: 0.5,
-              color: '#71807b',
-              fontSize: 14,
-            }}
-          >
-            Please wait...
-          </Typography>
-        </Paper>
-      </Box>
-    );
-  }
-
-  /*
-   * ----------------------------------------------------------
-   * MAIN SCREEN
-   * ----------------------------------------------------------
-   */
-  return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        background:
-          'linear-gradient(145deg, #072d26 0%, #0b4538 44%, #edf4f1 44%, #f7faf8 100%)',
-        display: 'flex',
-        alignItems: {
-          xs: 'flex-start',
-          sm: 'center',
-        },
-        justifyContent: 'center',
-        px: {
-          xs: 1.5,
-          sm: 2,
-        },
-        py: {
-          xs: 2,
-          sm: 4,
-        },
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Decorative security glow */}
-      <Box
-        sx={{
-          position: 'absolute',
-          width: 280,
-          height: 280,
-          borderRadius: '50%',
-          background:
-            'rgba(0, 177, 92, 0.12)',
-          filter: 'blur(10px)',
-          top: -120,
-          right: -100,
-        }}
-      />
-
-      <Paper
-        elevation={0}
-        sx={{
-          width: '100%',
-          maxWidth: 455,
-          borderRadius: {
-            xs: 4,
-            sm: 5,
-          },
-          overflow: 'hidden',
-          background: '#ffffff',
-          boxShadow:
-            '0 30px 80px rgba(4, 45, 37, 0.22)',
-          border:
-            '1px solid rgba(255,255,255,0.75)',
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        {/* -------------------------------------------------- */}
-        {/* PREMIUM SECURITY HEADER */}
-        {/* -------------------------------------------------- */}
-
-        <Box
-          sx={{
-            background:
-              'linear-gradient(135deg, #07382f 0%, #0b5947 100%)',
-            px: {
-              xs: 3,
-              sm: 4,
-            },
-            pt: 3,
-            pb: 3.5,
-            color: '#fff',
-            position: 'relative',
-            overflow: 'hidden',
-          }}
-        >
-          <Box
-            sx={{
-              position: 'absolute',
-              width: 170,
-              height: 170,
-              borderRadius: '50%',
-              border:
-                '1px solid rgba(255,255,255,0.09)',
-              right: -55,
-              top: -70,
-            }}
-          />
+          {/* ==================================================
+              BRAND
+          ================================================== */}
 
           <Box
             sx={{
-              position: 'absolute',
-              width: 110,
-              height: 110,
-              borderRadius: '50%',
-              border:
-                '1px solid rgba(255,255,255,0.08)',
-              right: 10,
-              top: -35,
-            }}
-          />
-
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-            sx={{
-              position: 'relative',
-              zIndex: 1,
-            }}
-          >
-            <Stack
-              direction="row"
-              spacing={1.25}
-              alignItems="center"
-            >
-              <Box
-                sx={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 2.5,
-                  background:
-                    'linear-gradient(135deg, #00a65a, #008346)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow:
-                    '0 8px 20px rgba(0,0,0,0.18)',
-                }}
-              >
-                <Typography
-                  sx={{
-                    color: '#fff',
-                    fontSize: 25,
-                    fontWeight: 900,
-                    lineHeight: 1,
-                  }}
-                >
-                  Z
-                </Typography>
-              </Box>
-
-              <Box>
-                <Typography
-                  sx={{
-                    fontSize: 15,
-                    fontWeight: 900,
-                    letterSpacing: 2,
-                    lineHeight: 1.1,
-                  }}
-                >
-                  ZENIMONIES
-                </Typography>
-
-                <Typography
-                  sx={{
-                    fontSize: 10,
-                    letterSpacing: 1.3,
-                    opacity: 0.65,
-                    mt: 0.4,
-                  }}
-                >
-                  SECURE BANKING
-                </Typography>
-              </Box>
-            </Stack>
-
-            <Box
-              sx={{
-                width: 38,
-                height: 38,
-                borderRadius: '50%',
-                background:
-                  'rgba(255,255,255,0.09)',
-                border:
-                  '1px solid rgba(255,255,255,0.12)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <SecurityRounded
-                sx={{
-                  fontSize: 21,
-                  opacity: 0.9,
-                }}
-              />
-            </Box>
-          </Stack>
-
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            sx={{
-              mt: 3.5,
-              position: 'relative',
-              zIndex: 1,
-            }}
-          >
-            <Box
-              sx={{
-                width: 9,
-                height: 9,
-                borderRadius: '50%',
-                background: '#56e29a',
-                boxShadow:
-                  '0 0 0 5px rgba(86,226,154,0.11)',
-              }}
-            />
-
-            <Typography
-              sx={{
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: 1.4,
-                opacity: 0.78,
-              }}
-            >
-              SECURE SESSION LOCK
-            </Typography>
-          </Stack>
-        </Box>
-
-        {/* -------------------------------------------------- */}
-        {/* CONTENT */}
-        {/* -------------------------------------------------- */}
-
-        <Box
-          sx={{
-            px: {
-              xs: 2.5,
-              sm: 4,
-            },
-            py: {
-              xs: 3,
-              sm: 4,
-            },
-          }}
-        >
-          {/* Security icon */}
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
+              textAlign:
+                'center',
               mb: 2.5,
             }}
           >
-            <Box
-              sx={{
-                width: 76,
-                height: 76,
-                borderRadius: '50%',
-                background:
-                  'linear-gradient(145deg, #edf8f3, #dcefe7)',
-                border:
-                  '1px solid #d1e7de',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow:
-                  'inset 0 0 0 8px rgba(255,255,255,0.65)',
-              }}
-            >
-              <LockRounded
-                sx={{
-                  fontSize: 34,
-                  color: '#0b4b3e',
-                }}
-              />
-            </Box>
-          </Box>
-
-          <Box
-            sx={{
-              textAlign: 'center',
-            }}
-          >
             <Typography
               sx={{
-                color: '#6b7c76',
-                fontSize: 12,
-                fontWeight: 800,
-                letterSpacing: 1.6,
-                mb: 0.7,
+                color:
+                  '#0e3027',
+                fontFamily:
+                  'Georgia, "Times New Roman", serif',
+                fontSize:
+                  {
+                    xs: 29,
+                    sm: 32,
+                  },
+                fontWeight:
+                  700,
+                letterSpacing:
+                  '-1px',
               }}
             >
-              WELCOME BACK, {displayName}
+              Zenimonies
             </Typography>
 
             <Typography
               sx={{
-                color: '#123f35',
-                fontSize: {
-                  xs: 28,
-                  sm: 32,
-                },
-                fontWeight: 850,
-                letterSpacing: -0.7,
-                lineHeight: 1.15,
+                mt: 0.5,
+                color:
+                  '#73827d',
+                fontSize:
+                  10,
+                fontWeight:
+                  800,
+                letterSpacing:
+                  '2.6px',
               }}
             >
-              Verify to continue
-            </Typography>
-
-            <Typography
-              sx={{
-                color: '#75827e',
-                fontSize: 14,
-                lineHeight: 1.65,
-                mt: 1,
-                maxWidth: 350,
-                mx: 'auto',
-              }}
-            >
-              {lockDescription}
+              SECURE MONEY. SIMPLY.
             </Typography>
           </Box>
 
-          {/* Account identity */}
-          {email && (
-            <Box
-              sx={{
-                mt: 2.5,
-                p: 1.5,
-                borderRadius: 2.5,
-                background: '#f7faf8',
-                border:
-                  '1px solid #e3ece8',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.25,
-              }}
-            >
-              <ShieldRounded
-                sx={{
-                  color: '#0b7a50',
-                  fontSize: 21,
-                }}
-              />
+          {/* ==================================================
+              MAIN CARD
+          ================================================== */}
 
-              <Box
-                sx={{
-                  minWidth: 0,
-                }}
-              >
-                <Typography
-                  sx={{
-                    color: '#71807b',
-                    fontSize: 10,
-                    fontWeight: 800,
-                    letterSpacing: 1,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  Protected account
-                </Typography>
-
-                <Typography
-                  sx={{
-                    color: '#173f35',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {email}
-                </Typography>
-              </Box>
-
-              <CheckCircleRounded
-                sx={{
-                  ml: 'auto',
-                  color: '#16a05d',
-                  fontSize: 19,
-                }}
-              />
-            </Box>
-          )}
-
-          {/* Error */}
-          {error && (
-            <Alert
-              severity="error"
-              sx={{
-                mt: 2,
-                borderRadius: 2.5,
-                fontSize: 13,
-                alignItems: 'center',
-              }}
-            >
-              {error}
-            </Alert>
-          )}
-
-          {/* Success */}
-          {successMessage && (
-            <Alert
-              severity="success"
-              sx={{
-                mt: 2,
-                borderRadius: 2.5,
-                fontSize: 13,
-                alignItems: 'center',
-              }}
-            >
-              {successMessage}
-            </Alert>
-          )}
-
-          {/* ------------------------------------------------ */}
-          {/* PASSKEY MODE */}
-          {/* ------------------------------------------------ */}
-
-          {mode === 'passkey' && (
-            <Box sx={{ mt: 3 }}>
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={handlePasskeyUnlock}
-                disabled={
-                  passkeyLoading ||
-                  !email
-                }
-                startIcon={
-                  passkeyLoading ? (
-                    <CircularProgress
-                      size={22}
-                      sx={{
-                        color: '#fff',
-                      }}
-                    />
-                  ) : (
-                    <FingerprintRounded />
-                  )
-                }
-                sx={{
-                  minHeight: 62,
-                  borderRadius: 3,
-                  textTransform: 'none',
-                  fontSize: 16,
-                  fontWeight: 800,
-                  background:
-                    'linear-gradient(135deg, #0b4b3e, #06372e)',
-                  boxShadow:
-                    '0 12px 25px rgba(6,55,46,0.2)',
-                  '&:hover': {
-                    background:
-                      'linear-gradient(135deg, #0d594a, #073d33)',
-                  },
-                }}
-              >
-                {passkeyLoading
-                  ? 'Verifying securely...'
-                  : 'Unlock with Face ID / Passkey'}
-              </Button>
-
-              {passkeyAttempts > 0 && (
-                <Typography
-                  sx={{
-                    textAlign: 'center',
-                    color: '#78847f',
-                    fontSize: 12,
-                    mt: 1.2,
-                  }}
-                >
-                  {passkeyAttempts} of{' '}
-                  {MAX_PASSKEY_ATTEMPTS}{' '}
-                  authentication attempts used
-                </Typography>
-              )}
-
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                  my: 2.5,
-                }}
-              >
-                <Divider sx={{ flex: 1 }} />
-
-                <Typography
-                  sx={{
-                    color: '#a0aaa6',
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
-                >
-                  OR
-                </Typography>
-
-                <Divider sx={{ flex: 1 }} />
-              </Box>
-
-              <Button
-                fullWidth
-                variant="outlined"
-                onClick={handleUsePasscode}
-                startIcon={
-                  <PasswordRounded />
-                }
-                sx={{
-                  minHeight: 56,
-                  borderRadius: 3,
-                  borderColor: '#bdd1c9',
-                  color: '#124d40',
-                  textTransform: 'none',
-                  fontSize: 15,
-                  fontWeight: 800,
-                  '&:hover': {
-                    borderColor: '#0b7a50',
-                    background: '#f4faf7',
-                  },
-                }}
-              >
-                Use Account Passcode
-              </Button>
-
-              <Button
-                fullWidth
-                onClick={handleUsePassword}
-                startIcon={
-                  <LockRounded />
-                }
-                sx={{
-                  mt: 1,
-                  minHeight: 52,
-                  borderRadius: 3,
-                  color: '#36584f',
-                  textTransform: 'none',
-                  fontSize: 14,
-                  fontWeight: 750,
-                  '&:hover': {
-                    background: '#f5f8f6',
-                  },
-                }}
-              >
-                Use Password Instead
-              </Button>
-            </Box>
-          )}
-
-          {/* ------------------------------------------------ */}
-          {/* PASSCODE MODE */}
-          {/* ------------------------------------------------ */}
-
-          {mode === 'passcode' && (
-            <Box sx={{ mt: 3 }}>
-              <Box
-                sx={{
-                  textAlign: 'center',
-                  mb: 2.5,
-                }}
-              >
-                <Typography
-                  sx={{
-                    color: '#123f35',
-                    fontSize: 17,
-                    fontWeight: 800,
-                  }}
-                >
-                  Enter Account Passcode
-                </Typography>
-
-                <Typography
-                  sx={{
-                    color: '#7a8782',
-                    fontSize: 13,
-                    mt: 0.5,
-                  }}
-                >
-                  Your private 6-digit unlock code
-                </Typography>
-              </Box>
-
-              <TextField
-                fullWidth
-                value={passcode}
-                onChange={(event) => {
-                  const value =
-                    event.target.value
-                      .replace(/\D/g, '')
-                      .slice(0, 6);
-
-                  setPasscode(value);
-                  setError('');
-                }}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                type="password"
-                placeholder="••••••"
-                disabled={passcodeLoading}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 3,
-                    background: '#f8faf9',
-                  },
-                  '& input': {
-                    textAlign: 'center',
-                    letterSpacing: 10,
-                    fontSize: 25,
-                    fontWeight: 800,
-                  },
-                }}
-              />
-
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={handlePasscodeUnlock}
-                disabled={
-                  passcodeLoading ||
-                  passcode.length !== 6
-                }
-                sx={{
-                  mt: 2,
-                  minHeight: 58,
-                  borderRadius: 3,
-                  textTransform: 'none',
-                  fontSize: 15,
-                  fontWeight: 800,
-                  background:
-                    'linear-gradient(135deg, #0b4b3e, #06372e)',
-                }}
-              >
-                {passcodeLoading ? (
-                  <CircularProgress
-                    size={23}
-                    sx={{
-                      color: '#fff',
-                    }}
-                  />
-                ) : (
-                  'Unlock Account'
-                )}
-              </Button>
-
-              <Button
-                fullWidth
-                onClick={handleUsePassword}
-                sx={{
-                  mt: 1,
-                  minHeight: 48,
-                  borderRadius: 3,
-                  color: '#36584f',
-                  textTransform: 'none',
-                  fontWeight: 750,
-                }}
-              >
-                Use Password Instead
-              </Button>
-
-              <Button
-                fullWidth
-                onClick={handleUsePasskey}
-                startIcon={
-                  <FingerprintRounded />
-                }
-                sx={{
-                  minHeight: 44,
-                  borderRadius: 3,
-                  color: '#0b7a50',
-                  textTransform: 'none',
-                  fontSize: 13,
-                  fontWeight: 750,
-                }}
-              >
-                Back to Face ID / Passkey
-              </Button>
-            </Box>
-          )}
-
-          {/* ------------------------------------------------ */}
-          {/* PASSWORD MODE */}
-          {/* ------------------------------------------------ */}
-
-          {mode === 'password' && (
-            <Box sx={{ mt: 3 }}>
-              <Box
-                sx={{
-                  textAlign: 'center',
-                  mb: 2.5,
-                }}
-              >
-                <Typography
-                  sx={{
-                    color: '#123f35',
-                    fontSize: 17,
-                    fontWeight: 800,
-                  }}
-                >
-                  Password Verification
-                </Typography>
-
-                <Typography
-                  sx={{
-                    color: '#7a8782',
-                    fontSize: 13,
-                    mt: 0.5,
-                  }}
-                >
-                  Use your Zenimonies password to continue
-                </Typography>
-              </Box>
-
-              <TextField
-                fullWidth
-                type={
-                  showPassword
-                    ? 'text'
-                    : 'password'
-                }
-                value={password}
-                onChange={(event) => {
-                  setPassword(
-                    event.target.value
-                  );
-                  setError('');
-                }}
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                disabled={passwordLoading}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LockRounded
-                        sx={{
-                          color: '#71807b',
-                        }}
-                      />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() =>
-                          setShowPassword(
-                            (current) =>
-                              !current
-                          )
-                        }
-                        edge="end"
-                        aria-label={
-                          showPassword
-                            ? 'Hide password'
-                            : 'Show password'
-                        }
-                      >
-                        {showPassword ? (
-                          <VisibilityOff />
-                        ) : (
-                          <Visibility />
-                        )}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 3,
-                    background: '#f8faf9',
-                  },
-                }}
-              />
-
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={handlePasswordUnlock}
-                disabled={
-                  passwordLoading ||
-                  !password
-                }
-                sx={{
-                  mt: 2,
-                  minHeight: 58,
-                  borderRadius: 3,
-                  textTransform: 'none',
-                  fontSize: 15,
-                  fontWeight: 800,
-                  background:
-                    'linear-gradient(135deg, #0b4b3e, #06372e)',
-                }}
-              >
-                {passwordLoading ? (
-                  <CircularProgress
-                    size={23}
-                    sx={{
-                      color: '#fff',
-                    }}
-                  />
-                ) : (
-                  'Unlock with Password'
-                )}
-              </Button>
-
-              <Button
-                fullWidth
-                onClick={handleUsePasscode}
-                startIcon={
-                  <PasswordRounded />
-                }
-                sx={{
-                  mt: 1,
-                  minHeight: 48,
-                  borderRadius: 3,
-                  color: '#36584f',
-                  textTransform: 'none',
-                  fontWeight: 750,
-                }}
-              >
-                Use Account Passcode
-              </Button>
-
-              <Button
-                fullWidth
-                onClick={handleUsePasskey}
-                startIcon={
-                  <FingerprintRounded />
-                }
-                sx={{
-                  minHeight: 44,
-                  borderRadius: 3,
-                  color: '#0b7a50',
-                  textTransform: 'none',
-                  fontSize: 13,
-                  fontWeight: 750,
-                }}
-              >
-                Back to Face ID / Passkey
-              </Button>
-            </Box>
-          )}
-
-          {/* ------------------------------------------------ */}
-          {/* SECURITY FOOTER */}
-          {/* ------------------------------------------------ */}
-
-          <Box
+          <Paper
+            elevation={0}
             sx={{
-              mt: 3.5,
-              pt: 2.5,
-              borderTop:
-                '1px solid #edf1ef',
+              borderRadius:
+                '26px',
+              border:
+                '1px solid rgba(13,103,78,0.10)',
+              background:
+                'rgba(255,255,255,0.97)',
+              boxShadow:
+                '0 20px 55px rgba(23,55,44,0.09)',
+              px: {
+                xs: 2.5,
+                sm: 3.5,
+              },
+              py: {
+                xs: 3,
+                sm: 3.5,
+              },
             }}
           >
-            <Stack
-              direction="row"
-              spacing={1.25}
-              alignItems="flex-start"
+            {/* =================================================
+                WELCOME LINE
+            ================================================= */}
+
+            <Box
+              sx={{
+                textAlign:
+                  'center',
+                mb: 2.5,
+              }}
+            >
+              <Typography
+                sx={{
+                  color:
+                    '#71817b',
+                  fontSize:
+                    10,
+                  fontWeight:
+                    850,
+                  letterSpacing:
+                    '1.8px',
+                }}
+              >
+                WELCOME BACK{' '}
+                <Box
+                  component="span"
+                  sx={{
+                    color:
+                      '#0d674e',
+                    fontWeight:
+                      900,
+                  }}
+                >
+                  {displayName.replace(
+                    'WELCOME BACK',
+                    ''
+                  ).trim()}
+                </Box>
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 1,
+                  color:
+                    '#122c24',
+                  fontSize:
+                    {
+                      xs: 24,
+                      sm: 26,
+                    },
+                  fontWeight:
+                    800,
+                  letterSpacing:
+                    '-0.5px',
+                }}
+              >
+                Unlock Account
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  color:
+                    '#7a8984',
+                  fontSize:
+                    12,
+                }}
+              >
+                Your session was locked after inactivity.
+              </Typography>
+            </Box>
+
+            {/* =================================================
+                SECURITY ICON
+            ================================================= */}
+
+            <Box
+              sx={{
+                display:
+                  'flex',
+                justifyContent:
+                  'center',
+                mb: 2.5,
+              }}
             >
               <Box
                 sx={{
-                  width: 34,
-                  height: 34,
-                  flexShrink: 0,
-                  borderRadius: 2,
-                  background: '#eef7f3',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  width: 68,
+                  height: 68,
+                  borderRadius:
+                    '21px',
+                  background:
+                    '#eaf5f0',
+                  color:
+                    '#0d674e',
+                  display:
+                    'flex',
+                  alignItems:
+                    'center',
+                  justifyContent:
+                    'center',
                 }}
               >
                 <ShieldRounded
                   sx={{
-                    fontSize: 19,
-                    color: '#0b7a50',
+                    fontSize:
+                      38,
                   }}
                 />
               </Box>
+            </Box>
 
-              <Box>
+            {/* =================================================
+                ERROR
+            ================================================= */}
+
+            {error && (
+              <Alert
+                severity="error"
+                sx={{
+                  mb: 2,
+                  borderRadius:
+                    '13px',
+                  fontSize:
+                    12,
+                  alignItems:
+                    'center',
+                }}
+              >
+                {error}
+              </Alert>
+            )}
+
+            {/* =================================================
+                SUCCESS
+            ================================================= */}
+
+            {successMessage && (
+              <Alert
+                icon={
+                  <CheckCircleRounded
+                    fontSize="inherit"
+                  />
+                }
+                severity="success"
+                sx={{
+                  mb: 2,
+                  borderRadius:
+                    '13px',
+                  fontSize:
+                    12,
+                }}
+              >
+                {successMessage}
+              </Alert>
+            )}
+
+            {/* =================================================
+                PASSKEY MODE
+            ================================================= */}
+
+            {mode ===
+              'passkey' && (
+              <Stack
+                alignItems="center"
+                spacing={2}
+              >
                 <Typography
                   sx={{
-                    color: '#244d42',
-                    fontSize: 12,
-                    fontWeight: 800,
+                    color:
+                      '#475a53',
+                    fontSize:
+                      13,
+                    textAlign:
+                      'center',
+                    lineHeight:
+                      1.5,
                   }}
                 >
-                  Your security stays on your device
+                  Confirm your identity to restore your secure session.
                 </Typography>
 
-                <Typography
+                {/* ---------------------------------------------
+                    COMPACT PASSKEY BUTTON
+                --------------------------------------------- */}
+
+                <Button
+                  variant="contained"
+                  onClick={
+                    handlePasskeyUnlock
+                  }
+                  disabled={
+                    currentLoading
+                  }
+                  startIcon={
+                    passkeyLoading ? (
+                      <CircularProgress
+                        size={18}
+                        sx={{
+                          color:
+                            'inherit',
+                        }}
+                      />
+                    ) : (
+                      <FingerprintRounded />
+                    )
+                  }
                   sx={{
-                    color: '#7b8783',
-                    fontSize: 11.5,
-                    lineHeight: 1.55,
-                    mt: 0.35,
+                    width:
+                      'auto',
+                    minWidth:
+                      {
+                        xs: 225,
+                        sm: 245,
+                      },
+                    maxWidth:
+                      '290px',
+                    minHeight:
+                      50,
+                    px: 3,
+                    borderRadius:
+                      '14px',
+                    background:
+                      '#0d674e',
+                    color:
+                      '#ffffff',
+                    fontSize:
+                      14,
+                    fontWeight:
+                      800,
+                    textTransform:
+                      'none',
+                    boxShadow:
+                      '0 10px 22px rgba(13,103,78,0.18)',
+                    '&:hover': {
+                      background:
+                        '#09563f',
+                    },
                   }}
                 >
-                  Zenimonies never receives or stores
-                  your biometric data. Face ID and
-                  Passkey authentication are performed
-                  by your device's secure authentication
-                  system.
-                </Typography>
-              </Box>
-            </Stack>
-          </Box>
+                  {passkeyLoading
+                    ? 'Verifying...'
+                    : 'Use Passkey'}
+                </Button>
 
-          {lockedUntil && (
-            <Typography
+                {passkeyAttempts >
+                  0 && (
+                  <Typography
+                    sx={{
+                      color:
+                        '#9a5a00',
+                      fontSize:
+                        11,
+                      fontWeight:
+                        700,
+                    }}
+                  >
+                    Attempt{' '}
+                    {
+                      passkeyAttempts
+                    }{' '}
+                    of{' '}
+                    {
+                      MAX_PASSKEY_ATTEMPTS
+                    }
+                  </Typography>
+                )}
+
+                <Button
+                  variant="text"
+                  onClick={
+                    handleUsePasscode
+                  }
+                  disabled={
+                    currentLoading
+                  }
+                  sx={{
+                    color:
+                      '#0d674e',
+                    fontSize:
+                      12,
+                    fontWeight:
+                      750,
+                    textTransform:
+                      'none',
+                    minHeight:
+                      34,
+                  }}
+                >
+                  Use Account Unlock Passcode
+                </Button>
+              </Stack>
+            )}
+
+            {/* =================================================
+                PASSCODE MODE
+            ================================================= */}
+
+            {mode ===
+              'passcode' && (
+              <Stack
+                spacing={2}
+              >
+                <Box
+                  sx={{
+                    textAlign:
+                      'center',
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color:
+                        '#17332a',
+                      fontSize:
+                        17,
+                      fontWeight:
+                        800,
+                    }}
+                  >
+                    Account Unlock Passcode
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.5,
+                      color:
+                        '#7a8984',
+                      fontSize:
+                        12,
+                    }}
+                  >
+                    Enter your 6-digit passcode.
+                  </Typography>
+                </Box>
+
+                <TextField
+                  fullWidth
+                  value={
+                    passcode
+                  }
+                  onChange={(
+                    event
+                  ) => {
+                    const value =
+                      event.target.value
+                        .replace(
+                          /\D/g,
+                          ''
+                        )
+                        .slice(
+                          0,
+                          6
+                        );
+
+                    setPasscode(
+                      value
+                    );
+                  }}
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="••••••"
+                  disabled={
+                    currentLoading
+                  }
+                  onKeyDown={(
+                    event
+                  ) => {
+                    if (
+                      event.key ===
+                        'Enter' &&
+                      passcode.length ===
+                        6
+                    ) {
+                      handlePasscodeUnlock();
+                    }
+                  }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <PasswordRounded
+                          sx={{
+                            color:
+                              '#82918b',
+                          }}
+                        />
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root':
+                      {
+                        borderRadius:
+                          '14px',
+                        background:
+                          '#ffffff',
+                        '& fieldset':
+                          {
+                            borderColor:
+                              '#d6e0dc',
+                          },
+                      },
+                    '& input': {
+                      textAlign:
+                        'center',
+                      letterSpacing:
+                        '6px',
+                      fontWeight:
+                        700,
+                    },
+                  }}
+                />
+
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={
+                    handlePasscodeUnlock
+                  }
+                  disabled={
+                    currentLoading ||
+                    passcode.length !==
+                      6
+                  }
+                  sx={{
+                    minHeight:
+                      52,
+                    borderRadius:
+                      '14px',
+                    background:
+                      '#12362c',
+                    textTransform:
+                      'none',
+                    fontWeight:
+                      800,
+                    '&:hover':
+                      {
+                        background:
+                          '#0d2b23',
+                      },
+                  }}
+                >
+                  {passcodeLoading ? (
+                    <CircularProgress
+                      size={21}
+                      sx={{
+                        color:
+                          '#ffffff',
+                      }}
+                    />
+                  ) : (
+                    'Unlock Account'
+                  )}
+                </Button>
+
+                <Button
+                  variant="text"
+                  onClick={
+                    handleUsePassword
+                  }
+                  disabled={
+                    currentLoading
+                  }
+                  sx={{
+                    color:
+                      '#0d674e',
+                    textTransform:
+                      'none',
+                    fontSize:
+                      12,
+                    fontWeight:
+                      750,
+                  }}
+                >
+                  Use password instead
+                </Button>
+              </Stack>
+            )}
+
+            {/* =================================================
+                PASSWORD MODE
+            ================================================= */}
+
+            {mode ===
+              'password' && (
+              <Stack
+                spacing={2}
+              >
+                <Box
+                  sx={{
+                    textAlign:
+                      'center',
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color:
+                        '#17332a',
+                      fontSize:
+                        17,
+                      fontWeight:
+                        800,
+                    }}
+                  >
+                    Sign in with Password
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.5,
+                      color:
+                        '#7a8984',
+                      fontSize:
+                        12,
+                    }}
+                  >
+                    Use your account password to restore access.
+                  </Typography>
+                </Box>
+
+                <TextField
+                  fullWidth
+                  value={
+                    email
+                  }
+                  disabled
+                  label="Email address"
+                  sx={{
+                    '& .MuiOutlinedInput-root':
+                      {
+                        borderRadius:
+                          '14px',
+                        background:
+                          '#f7faf8',
+                      },
+                  }}
+                />
+
+                <TextField
+                  fullWidth
+                  value={
+                    password
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setPassword(
+                      event.target.value
+                    )
+                  }
+                  type={
+                    showPassword
+                      ? 'text'
+                      : 'password'
+                  }
+                  label="Password"
+                  autoComplete="current-password"
+                  disabled={
+                    currentLoading
+                  }
+                  onKeyDown={(
+                    event
+                  ) => {
+                    if (
+                      event.key ===
+                        'Enter' &&
+                      password
+                    ) {
+                      handlePasswordUnlock();
+                    }
+                  }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LockRounded
+                          sx={{
+                            color:
+                              '#82918b',
+                          }}
+                        />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          onClick={() =>
+                            setShowPassword(
+                              (
+                                previous
+                              ) =>
+                                !previous
+                            )
+                          }
+                          disabled={
+                            currentLoading
+                          }
+                          edge="end"
+                          aria-label={
+                            showPassword
+                              ? 'Hide password'
+                              : 'Show password'
+                          }
+                        >
+                          {showPassword ? (
+                            <VisibilityOff />
+                          ) : (
+                            <Visibility />
+                          )}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root':
+                      {
+                        borderRadius:
+                          '14px',
+                      },
+                  }}
+                />
+
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={
+                    handlePasswordUnlock
+                  }
+                  disabled={
+                    currentLoading ||
+                    !password
+                  }
+                  sx={{
+                    minHeight:
+                      52,
+                    borderRadius:
+                      '14px',
+                    background:
+                      '#12362c',
+                    textTransform:
+                      'none',
+                    fontWeight:
+                      800,
+                    '&:hover':
+                      {
+                        background:
+                          '#0d2b23',
+                      },
+                  }}
+                >
+                  {passwordLoading ? (
+                    <CircularProgress
+                      size={21}
+                      sx={{
+                        color:
+                          '#ffffff',
+                      }}
+                    />
+                  ) : (
+                    'Unlock Account'
+                  )}
+                </Button>
+
+                <Button
+                  variant="text"
+                  onClick={
+                    handleUsePasskey
+                  }
+                  disabled={
+                    currentLoading
+                  }
+                  sx={{
+                    color:
+                      '#0d674e',
+                    textTransform:
+                      'none',
+                    fontSize:
+                      12,
+                    fontWeight:
+                      750,
+                  }}
+                >
+                  Back to Passkey
+                </Button>
+              </Stack>
+            )}
+
+            {/* =================================================
+                SECURITY FOOTER
+            ================================================= */}
+
+            <Divider
               sx={{
-                mt: 2,
-                textAlign: 'center',
-                color: '#8a9691',
-                fontSize: 10.5,
+                my: 2.5,
+                borderColor:
+                  '#e7eeeb',
+              }}
+            />
+
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="center"
+              spacing={1}
+            >
+              <SecurityRounded
+                sx={{
+                  fontSize:
+                    17,
+                  color:
+                    '#6e7f78',
+                }}
+              />
+
+              <Typography
+                sx={{
+                  color:
+                    '#7a8984',
+                  fontSize:
+                    11,
+                  textAlign:
+                    'center',
+                }}
+              >
+                Secure session protection
+              </Typography>
+            </Stack>
+
+            {lockedUntil && (
+              <Typography
+                sx={{
+                  mt: 1,
+                  textAlign:
+                    'center',
+                  color:
+                    '#8a7160',
+                  fontSize:
+                    10,
+                }}
+              >
+                Additional verification is temporarily restricted.
+              </Typography>
+            )}
+          </Paper>
+
+          {/* ==================================================
+              BACK TO LOGIN
+          ================================================== */}
+
+          <Box
+            sx={{
+              display:
+                'flex',
+              justifyContent:
+                'center',
+              mt: 2,
+            }}
+          >
+            <Button
+              startIcon={
+                <ArrowBackRounded
+                  sx={{
+                    fontSize:
+                      17,
+                  }}
+                />
+              }
+              onClick={() => {
+                /*
+                 * This does not unlock the existing
+                 * protected session. It only provides
+                 * a route to normal login when the
+                 * user intentionally chooses it.
+                 */
+                window.location.href =
+                  '/login';
+              }}
+              sx={{
+                color:
+                  '#70817a',
+                fontSize:
+                  11,
+                fontWeight:
+                  650,
+                textTransform:
+                  'none',
               }}
             >
-              Passcode security protection is
-              temporarily active.
-            </Typography>
-          )}
+              Return to sign in
+            </Button>
+          </Box>
         </Box>
-      </Paper>
-    </Box>
-  );
-};
+      </Box>
+    );
+  };
 
 export default AccountLocked;
