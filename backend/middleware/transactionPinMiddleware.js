@@ -106,12 +106,15 @@ const transactionPinMiddleware = async (
     const status =
       statusMap[error?.code] || 500;
 
-    const response = {
-      success: false,
-      message:
-        error?.message ||
-        'Unable to authorize this transaction.',
-    };
+const response = {
+  success: false,
+
+  code: error?.code || 'TRANSACTION_PIN_AUTHORIZATION_FAILED',
+
+  message:
+    error?.message ||
+    'Unable to authorize this transaction.',
+};
 
     if (
       error?.failedAttempts !==
