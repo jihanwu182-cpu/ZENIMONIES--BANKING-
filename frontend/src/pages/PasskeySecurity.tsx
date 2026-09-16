@@ -16,7 +16,6 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import SecurityIcon from '@mui/icons-material/Security';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
 import {
   browserSupportsPasskeys,
@@ -32,9 +31,6 @@ const API_ROOT =
 const API_BASE_URL = API_ROOT.endsWith('/api')
   ? API_ROOT
   : `${API_ROOT}/api`;
-
-const FRONTEND_URL =
-  'https://zenimonies-banking-1.onrender.com';
 
 interface Passkey {
   id: string;
@@ -54,7 +50,7 @@ interface ApiResponse {
   passkeys?: Passkey[];
 }
 
-const getToken = () => {
+const getToken = (): string => {
   return (
     localStorage.getItem('zenimonies_token') ||
     localStorage.getItem('token') ||
@@ -79,6 +75,10 @@ const PasskeySecurity: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // ============================================================
+  // LOAD REGISTERED PASSKEYS
+  // ============================================================
+
   const loadPasskeys = async () => {
     try {
       const token = getToken();
@@ -89,7 +89,7 @@ const PasskeySecurity: React.FC = () => {
       }
 
       const response = await fetch(
-        `${API_BASE_URL}/passkeys`,
+        `${API_BASE_URL}/passkey`,
         {
           method: 'GET',
           headers: {
@@ -98,7 +98,15 @@ const PasskeySecurity: React.FC = () => {
         }
       );
 
-      const data: ApiResponse = await response.json();
+      let data: ApiResponse = {};
+
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(
+          'The Zenimonies server returned an invalid response.'
+        );
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -119,13 +127,17 @@ const PasskeySecurity: React.FC = () => {
       );
 
       setError(
-        err.message ||
+        err?.message ||
           'Unable to load your passkeys.'
       );
     } finally {
       setLoading(false);
     }
   };
+
+  // ============================================================
+  // CHECK DEVICE SUPPORT
+  // ============================================================
 
   useEffect(() => {
     const checkSupport = async () => {
@@ -157,11 +169,9 @@ const PasskeySecurity: React.FC = () => {
     loadPasskeys();
   }, []);
 
-  /*
-   * ============================================================
-   * CREATE PASSKEY
-   * ============================================================
-   */
+  // ============================================================
+  // CREATE PASSKEY
+  // ============================================================
 
   const createPasskey = async () => {
     setError('');
@@ -182,16 +192,12 @@ const PasskeySecurity: React.FC = () => {
     setCreating(true);
 
     try {
-      /*
-       * IMPORTANT:
-       *
-       * We use native fetch here rather than Axios.
-       * This helps preserve Safari/iPhone's user gesture
-       * requirement for WebAuthn.
-       */
+      // ----------------------------------------------------------
+      // 1. REQUEST REGISTRATION OPTIONS
+      // ----------------------------------------------------------
 
       const optionsResponse = await fetch(
-        `${API_BASE_URL}/passkeys/register/options`,
+        `${API_BASE_URL}/passkey/register/options`,
         {
           method: 'POST',
           headers: {
@@ -203,8 +209,16 @@ const PasskeySecurity: React.FC = () => {
         }
       );
 
-      const optionsData: ApiResponse =
-        await optionsResponse.json();
+      let optionsData: ApiResponse = {};
+
+      try {
+        optionsData =
+          await optionsResponse.json();
+      } catch {
+        throw new Error(
+          'The Zenimonies server returned an invalid passkey registration response.'
+        );
+      }
 
       if (!optionsResponse.ok) {
         throw new Error(
@@ -219,10 +233,9 @@ const PasskeySecurity: React.FC = () => {
         );
       }
 
-      /*
-       * The device should now display its native
-       * Face ID / Touch ID / passkey prompt.
-       */
+      // ----------------------------------------------------------
+      // 2. NATIVE DEVICE PASSKEY
+      // ----------------------------------------------------------
 
       const registrationResponse =
         await startRegistration({
@@ -230,8 +243,12 @@ const PasskeySecurity: React.FC = () => {
             optionsData.options,
         });
 
+      // ----------------------------------------------------------
+      // 3. VERIFY REGISTRATION WITH BACKEND
+      // ----------------------------------------------------------
+
       const verifyResponse = await fetch(
-        `${API_BASE_URL}/passkeys/register/verify`,
+        `${API_BASE_URL}/passkey/register/verify`,
         {
           method: 'POST',
           headers: {
@@ -245,8 +262,16 @@ const PasskeySecurity: React.FC = () => {
         }
       );
 
-      const verifyData: ApiResponse =
-        await verifyResponse.json();
+      let verifyData: ApiResponse = {};
+
+      try {
+        verifyData =
+          await verifyResponse.json();
+      } catch {
+        throw new Error(
+          'The Zenimonies server returned an invalid passkey verification response.'
+        );
+      }
 
       if (!verifyResponse.ok) {
         throw new Error(
@@ -282,7 +307,7 @@ const PasskeySecurity: React.FC = () => {
         );
       } else {
         setError(
-          err.message ||
+          err?.message ||
             'Unable to create passkey.'
         );
       }
@@ -291,11 +316,9 @@ const PasskeySecurity: React.FC = () => {
     }
   };
 
-  /*
-   * ============================================================
-   * TEST PASSKEY
-   * ============================================================
-   */
+  // ============================================================
+  // TEST PASSKEY
+  // ============================================================
 
   const testPasskey = async () => {
     setError('');
@@ -308,11 +331,20 @@ const PasskeySecurity: React.FC = () => {
       return;
     }
 
+    if (!getToken()) {
+      window.location.href = '/login';
+      return;
+    }
+
     setTesting(true);
 
     try {
+      // ----------------------------------------------------------
+      // 1. REQUEST AUTHENTICATION OPTIONS
+      // ----------------------------------------------------------
+
       const optionsResponse = await fetch(
-        `${API_BASE_URL}/passkeys/authenticate/options`,
+        `${API_BASE_URL}/passkey/authenticate/options`,
         {
           method: 'POST',
           headers: {
@@ -324,8 +356,16 @@ const PasskeySecurity: React.FC = () => {
         }
       );
 
-      const optionsData: ApiResponse =
-        await optionsResponse.json();
+      let optionsData: ApiResponse = {};
+
+      try {
+        optionsData =
+          await optionsResponse.json();
+      } catch {
+        throw new Error(
+          'The Zenimonies server returned an invalid passkey authentication response.'
+        );
+      }
 
       if (!optionsResponse.ok) {
         throw new Error(
@@ -340,14 +380,22 @@ const PasskeySecurity: React.FC = () => {
         );
       }
 
+      // ----------------------------------------------------------
+      // 2. NATIVE DEVICE AUTHENTICATION
+      // ----------------------------------------------------------
+
       const authenticationResponse =
         await startAuthentication({
           optionsJSON:
             optionsData.options,
         });
 
+      // ----------------------------------------------------------
+      // 3. VERIFY AUTHENTICATION WITH BACKEND
+      // ----------------------------------------------------------
+
       const verifyResponse = await fetch(
-        `${API_BASE_URL}/passkeys/authenticate/verify`,
+        `${API_BASE_URL}/passkey/authenticate/verify`,
         {
           method: 'POST',
           headers: {
@@ -361,8 +409,16 @@ const PasskeySecurity: React.FC = () => {
         }
       );
 
-      const verifyData: ApiResponse =
-        await verifyResponse.json();
+      let verifyData: ApiResponse = {};
+
+      try {
+        verifyData =
+          await verifyResponse.json();
+      } catch {
+        throw new Error(
+          'The Zenimonies server returned an invalid authentication response.'
+        );
+      }
 
       if (!verifyResponse.ok) {
         throw new Error(
@@ -389,9 +445,16 @@ const PasskeySecurity: React.FC = () => {
         setError(
           'Passkey authentication was cancelled or could not be completed.'
         );
+      } else if (
+        err?.name ===
+        'AbortError'
+      ) {
+        setError(
+          'Passkey authentication was cancelled.'
+        );
       } else {
         setError(
-          err.message ||
+          err?.message ||
             'Passkey authentication failed.'
         );
       }
@@ -400,15 +463,13 @@ const PasskeySecurity: React.FC = () => {
     }
   };
 
-  /*
-   * ============================================================
-   * FORMAT HELPERS
-   * ============================================================
-   */
+  // ============================================================
+  // FORMAT HELPERS
+  // ============================================================
 
   const formatDate = (
     value?: string | null
-  ) => {
+  ): string => {
     if (!value) {
       return 'Not used yet';
     }
@@ -426,7 +487,7 @@ const PasskeySecurity: React.FC = () => {
 
   const getDeviceName = (
     passkey: Passkey
-  ) => {
+  ): string => {
     if (
       passkey.device_type ===
       'multiDevice'
@@ -444,11 +505,9 @@ const PasskeySecurity: React.FC = () => {
     return 'Passkey';
   };
 
-  /*
-   * ============================================================
-   * UI
-   * ============================================================
-   */
+  // ============================================================
+  // UI
+  // ============================================================
 
   return (
     <Box
@@ -458,13 +517,12 @@ const PasskeySecurity: React.FC = () => {
         py: 4,
       }}
     >
-      <Container
-        maxWidth="sm"
-      >
-        <Stack
-          spacing={3}
-        >
-          {/* HEADER */}
+      <Container maxWidth="sm">
+        <Stack spacing={3}>
+
+          {/* ==================================================
+              HEADER
+              ================================================== */}
 
           <Stack
             direction="row"
@@ -492,13 +550,14 @@ const PasskeySecurity: React.FC = () => {
                 color="text.secondary"
               >
                 Secure your Zenimonies
-                account with your
-                device
+                account with your device
               </Typography>
             </Box>
           </Stack>
 
-          {/* SUPPORT STATUS */}
+          {/* ==================================================
+              DEVICE SUPPORT STATUS
+              ================================================== */}
 
           {!loading && !supported && (
             <Alert severity="warning">
@@ -533,6 +592,10 @@ const PasskeySecurity: React.FC = () => {
               </Alert>
             )}
 
+          {/* ==================================================
+              ERROR
+              ================================================== */}
+
           {error && (
             <Alert
               severity="error"
@@ -543,6 +606,10 @@ const PasskeySecurity: React.FC = () => {
               {error}
             </Alert>
           )}
+
+          {/* ==================================================
+              SUCCESS
+              ================================================== */}
 
           {success && (
             <Alert
@@ -555,7 +622,9 @@ const PasskeySecurity: React.FC = () => {
             </Alert>
           )}
 
-          {/* MAIN CARD */}
+          {/* ==================================================
+              MAIN PASSKEY CARD
+              ================================================== */}
 
           <Card
             elevation={0}
@@ -570,9 +639,8 @@ const PasskeySecurity: React.FC = () => {
             <CardContent
               sx={{ p: 3 }}
             >
-              <Stack
-                spacing={3}
-              >
+              <Stack spacing={3}>
+
                 <Box
                   sx={{
                     display: 'flex',
@@ -598,9 +666,7 @@ const PasskeySecurity: React.FC = () => {
                   />
                 </Box>
 
-                <Box
-                  textAlign="center"
-                >
+                <Box textAlign="center">
                   <Typography
                     variant="h6"
                     fontWeight={800}
@@ -618,7 +684,7 @@ const PasskeySecurity: React.FC = () => {
                     }}
                   >
                     Passkeys use your
-                    device's secure
+                    device&apos;s secure
                     authentication,
                     such as Face ID,
                     Touch ID, or a
@@ -627,6 +693,8 @@ const PasskeySecurity: React.FC = () => {
                 </Box>
 
                 <Divider />
+
+                {/* CREATE PASSKEY */}
 
                 <Button
                   variant="contained"
@@ -644,6 +712,7 @@ const PasskeySecurity: React.FC = () => {
                   }
                   disabled={
                     creating ||
+                    testing ||
                     !supported
                   }
                   onClick={
@@ -666,6 +735,8 @@ const PasskeySecurity: React.FC = () => {
                     : 'Create Passkey'}
                 </Button>
 
+                {/* TEST PASSKEY */}
+
                 {passkeys.length >
                   0 && (
                   <Button
@@ -681,7 +752,10 @@ const PasskeySecurity: React.FC = () => {
                         <SecurityIcon />
                       )
                     }
-                    disabled={testing}
+                    disabled={
+                      testing ||
+                      creating
+                    }
                     onClick={
                       testPasskey
                     }
@@ -696,11 +770,14 @@ const PasskeySecurity: React.FC = () => {
                       : 'Test Passkey'}
                   </Button>
                 )}
+
               </Stack>
             </CardContent>
           </Card>
 
-          {/* REGISTERED PASSKEYS */}
+          {/* ==================================================
+              REGISTERED PASSKEYS
+              ================================================== */}
 
           <Card
             elevation={0}
@@ -745,9 +822,7 @@ const PasskeySecurity: React.FC = () => {
                   account yet.
                 </Typography>
               ) : (
-                <Stack
-                  spacing={2}
-                >
+                <Stack spacing={2}>
                   {passkeys.map(
                     (passkey) => (
                       <Box
@@ -817,7 +892,9 @@ const PasskeySecurity: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* SECURITY NOTICE */}
+          {/* ==================================================
+              SECURITY NOTICE
+              ================================================== */}
 
           <Card
             elevation={0}
@@ -874,6 +951,10 @@ const PasskeySecurity: React.FC = () => {
             </CardContent>
           </Card>
 
+          {/* ==================================================
+              FOOTER
+              ================================================== */}
+
           <Typography
             variant="caption"
             color="text.secondary"
@@ -882,6 +963,7 @@ const PasskeySecurity: React.FC = () => {
             Zenimonies security •
             Passkeys
           </Typography>
+
         </Stack>
       </Container>
     </Box>
