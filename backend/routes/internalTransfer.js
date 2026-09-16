@@ -9,6 +9,9 @@ const {
   authenticateToken,
 } = require('../utils/authMiddleware');
 
+const transactionPinMiddleware =
+  require('../middleware/transactionPinMiddleware');
+
 const router = express.Router();
 
 /*
