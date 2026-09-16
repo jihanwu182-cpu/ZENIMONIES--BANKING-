@@ -13,6 +13,7 @@ const {
   createAuthSession,
 } = require('../services/sessionService');
 
+const MAX_PASSCODE_ATTEMPTS = 3;
 
 // ============================================================
 // HELPERS
@@ -966,12 +967,9 @@ const unlock = async (req, res) => {
 // ============================================================
 
 module.exports = {
-
   getStatus,
-
   setup,
-
   verify,
-
   change,
+  unlock,
 };
