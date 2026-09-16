@@ -131,6 +131,13 @@ const AccountLocked: React.FC = () => {
         JSON.stringify(data.user)
       );
     }
+
+    if (data?.accounts) {
+      localStorage.setItem(
+        'zenimonies_accounts',
+        JSON.stringify(data.accounts)
+      );
+    }
   };
 
   // ============================================================
@@ -230,7 +237,7 @@ const AccountLocked: React.FC = () => {
 
         const optionsResponse =
           await axios.post(
-            `${API_BASE_URL}/api/passkeys/login/options`,
+            `${API_BASE_URL}/api/passkey/login/options`,
             {
               email,
             }
@@ -284,7 +291,7 @@ const AccountLocked: React.FC = () => {
 
         const verifyResponse =
           await axios.post(
-            `${API_BASE_URL}/api/passkeys/login/verify`,
+            `${API_BASE_URL}/api/passkey/login/verify`,
             {
               email,
               response:
@@ -534,10 +541,6 @@ const AccountLocked: React.FC = () => {
             spacing={3}
             alignItems="center"
           >
-            {/* ------------------------------------------------ */}
-            {/* LOCK ICON */}
-            {/* ------------------------------------------------ */}
-
             <Box
               sx={{
                 width: 72,
@@ -558,10 +561,6 @@ const AccountLocked: React.FC = () => {
                 }}
               />
             </Box>
-
-            {/* ------------------------------------------------ */}
-            {/* TITLE */}
-            {/* ------------------------------------------------ */}
 
             <Box
               sx={{
@@ -591,10 +590,6 @@ const AccountLocked: React.FC = () => {
               </Typography>
             </Box>
 
-            {/* ------------------------------------------------ */}
-            {/* SECURITY INFO */}
-            {/* ------------------------------------------------ */}
-
             {!passwordMode &&
               !fallbackRequired &&
               failedAttempts > 0 && (
@@ -615,10 +610,6 @@ const AccountLocked: React.FC = () => {
                 </Alert>
               )}
 
-            {/* ------------------------------------------------ */}
-            {/* ERROR */}
-            {/* ------------------------------------------------ */}
-
             {error && (
               <Alert
                 severity="error"
@@ -630,10 +621,6 @@ const AccountLocked: React.FC = () => {
               </Alert>
             )}
 
-            {/* ------------------------------------------------ */}
-            {/* SUCCESS MESSAGE */}
-            {/* ------------------------------------------------ */}
-
             {message && (
               <Alert
                 severity="success"
@@ -644,10 +631,6 @@ const AccountLocked: React.FC = () => {
                 {message}
               </Alert>
             )}
-
-            {/* ------------------------------------------------ */}
-            {/* PASSKEY MODE */}
-            {/* ------------------------------------------------ */}
 
             {!passwordMode && (
               <Stack
@@ -730,10 +713,6 @@ const AccountLocked: React.FC = () => {
                 </Button>
               </Stack>
             )}
-
-            {/* ------------------------------------------------ */}
-            {/* PASSWORD MODE */}
-            {/* ------------------------------------------------ */}
 
             {passwordMode && (
               <Box
@@ -884,10 +863,6 @@ const AccountLocked: React.FC = () => {
                 </Stack>
               </Box>
             )}
-
-            {/* ------------------------------------------------ */}
-            {/* SECURITY NOTICE */}
-            {/* ------------------------------------------------ */}
 
             <Typography
               variant="caption"
