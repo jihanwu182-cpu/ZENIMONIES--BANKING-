@@ -3,8 +3,11 @@ const {
   verifyRegistrationResponse,
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
-  isoUint8Array,
 } = require('@simplewebauthn/server');
+
+const {
+  isoUint8Array,
+} = require('@simplewebauthn/server/helpers');
 
 const pool = require('../config/database');
 const { createAuthSession } = require('./sessionService');
