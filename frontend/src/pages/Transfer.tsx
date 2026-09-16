@@ -100,6 +100,32 @@ const Transfer: React.FC = () => {
   const [sending, setSending] =
     useState(false);
 
+  /*
+   * ==========================================================
+   * TRANSACTION PIN STATE
+   * ==========================================================
+   */
+
+  const [
+    showTransactionPin,
+    setShowTransactionPin,
+  ] = useState(false);
+
+  const [
+    transactionPin,
+    setTransactionPin,
+  ] = useState('');
+
+  const [
+    verifyingTransactionPin,
+    setVerifyingTransactionPin,
+  ] = useState(false);
+
+  const [
+    transactionPinError,
+    setTransactionPinError,
+  ] = useState('');
+
   const [error, setError] =
     useState('');
 
@@ -254,7 +280,7 @@ const Transfer: React.FC = () => {
 
   /*
    * ==========================================================
-   * SEND MONEY
+   * SEND MONEY — OPEN PIN PROMPT
    * ==========================================================
    */
 
@@ -267,6 +293,7 @@ const Transfer: React.FC = () => {
     setSuccess('');
     setReference('');
     setBalanceAfter(null);
+    setTransactionPinError('');
 
     if (!token) {
       navigate('/login');
@@ -301,22 +328,64 @@ const Transfer: React.FC = () => {
       return;
     }
 
-    try {
-      setSending(true);
+    /*
+     * Do not send money yet.
+     *
+     * First ask the user for their
+     * Transaction PIN.
+     */
+    setTransactionPin('');
+    setTransactionPinError('');
+    setShowTransactionPin(true);
+  };
 
-      const response =
-        await axios.post<TransferResponse>(
-          `${API_URL}/api/internal-transfers`,
+
+  /*
+   * ==========================================================
+   * VERIFY TRANSACTION PIN + SEND MONEY
+   * ==========================================================
+   */
+
+  const verifyTransactionPinAndSend =
+    async () => {
+      setTransactionPinError('');
+      setError('');
+      setSuccess('');
+
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      if (!recipient) {
+        setTransactionPinError(
+          'Please verify the recipient first.'
+        );
+        return;
+      }
+
+      if (!/^\d{4}$/.test(transactionPin)) {
+        setTransactionPinError(
+          'Please enter your 4-digit Transaction PIN.'
+        );
+        return;
+      }
+
+      try {
+        setVerifyingTransactionPin(true);
+
+        /*
+         * ======================================================
+         * STEP 1
+         *
+         * Verify the Transaction PIN.
+         * ======================================================
+         */
+
+        await axios.post(
+          `${API_URL}/api/transaction-pin/verify`,
           {
-            recipient_phone:
-              cleanPhone,
-
-            amount:
-              transferAmount,
-
-            narration:
-              narration.trim() ||
-              undefined,
+            pin: transactionPin,
           },
           {
             headers: {
@@ -329,83 +398,196 @@ const Transfer: React.FC = () => {
           }
         );
 
-      if (
-        response.data?.success
-      ) {
-        const transfer =
-          response.data.transfer;
-
-        setSuccess(
-          response.data.message ||
-            'Money sent successfully.'
-        );
-
-        setReference(
-          transfer?.reference || ''
-        );
+        /*
+         * PIN VERIFIED.
+         *
+         * Clear it immediately.
+         */
+        setTransactionPin('');
+        setShowTransactionPin(false);
 
         /*
-         * IMPORTANT:
-         * Store the REAL recipient account
-         * returned by the backend.
+         * ======================================================
+         * STEP 2
+         *
+         * Send the actual transfer.
+         * ======================================================
          */
-        setRecipientAccountNumber(
-          transfer?.recipient_account ||
-            recipient.account_number ||
-            ''
-        );
 
-        const newBalance =
-          Number(
-            transfer?.balance_after
+        setSending(true);
+
+        const response =
+          await axios.post<TransferResponse>(
+            `${API_URL}/api/internal-transfers`,
+            {
+              recipient_phone:
+                cleanPhone,
+
+              amount:
+                transferAmount,
+
+              narration:
+                narration.trim() ||
+                undefined,
+            },
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+
+                'Content-Type':
+                  'application/json',
+              },
+            }
           );
 
         if (
-          Number.isFinite(
-            newBalance
-          )
+          response.data?.success
         ) {
-          setBalanceAfter(
-            newBalance
+          const transfer =
+            response.data.transfer;
+
+          setSuccess(
+            response.data.message ||
+              'Money sent successfully.'
+          );
+
+          setReference(
+            transfer?.reference || ''
+          );
+
+          /*
+           * IMPORTANT:
+           * Store the REAL recipient account
+           * returned by the backend.
+           */
+          setRecipientAccountNumber(
+            transfer?.recipient_account ||
+              recipient.account_number ||
+              ''
+          );
+
+          const newBalance =
+            Number(
+              transfer?.balance_after
+            );
+
+          if (
+            Number.isFinite(
+              newBalance
+            )
+          ) {
+            setBalanceAfter(
+              newBalance
+            );
+          }
+
+          setAmount('');
+          setNarration('');
+        } else {
+          setError(
+            response.data?.message ||
+              'Transfer failed.'
           );
         }
 
-        setAmount('');
-        setNarration('');
-      } else {
+      } catch (err: any) {
+
+        const status =
+          err?.response?.status;
+
+        const code =
+          err?.response?.data?.code;
+
+        /*
+         * ======================================================
+         * TRANSACTION PIN ERROR
+         * ======================================================
+         *
+         * A 401 from the PIN endpoint can mean
+         * "incorrect PIN", so handle the PIN request
+         * before treating 401 as a session expiration.
+         */
+
+        if (
+          code ===
+            'INCORRECT_TRANSACTION_PIN' ||
+          code ===
+            'TRANSACTION_PIN_LOCKED' ||
+          status === 423
+        ) {
+          setTransactionPinError(
+            err?.response?.data?.message ||
+              'Transaction PIN verification failed.'
+          );
+
+          setShowTransactionPin(true);
+
+          return;
+        }
+
+        /*
+         * If the response came from the PIN endpoint
+         * and is a normal unauthorized/incorrect-PIN
+         * response without a code, keep the dialog open.
+         */
+        if (
+          status === 401 &&
+          err?.config?.url?.includes(
+            '/api/transaction-pin/verify'
+          )
+        ) {
+          setTransactionPinError(
+            err?.response?.data?.message ||
+              'Incorrect Transaction PIN.'
+          );
+
+          setShowTransactionPin(true);
+
+          return;
+        }
+
+        /*
+         * ======================================================
+         * SESSION EXPIRED
+         * ======================================================
+         */
+
+        if (
+          status === 401
+        ) {
+          localStorage.removeItem(
+            'zenimonies_token'
+          );
+
+          localStorage.removeItem(
+            'token'
+          );
+
+          localStorage.removeItem(
+            'access_token'
+          );
+
+          navigate('/login');
+          return;
+        }
+
+        /*
+         * ======================================================
+         * TRANSFER ERROR
+         * ======================================================
+         */
+
         setError(
-          response.data?.message ||
-            'Transfer failed.'
+          err?.response?.data?.message ||
+            'Unable to complete the transfer.'
         );
+
+      } finally {
+        setVerifyingTransactionPin(false);
+        setSending(false);
       }
-    } catch (err: any) {
-      if (
-        err?.response?.status === 401
-      ) {
-        localStorage.removeItem(
-          'zenimonies_token'
-        );
-
-        localStorage.removeItem(
-          'token'
-        );
-
-        localStorage.removeItem(
-          'access_token'
-        );
-
-        navigate('/login');
-        return;
-      }
-
-      setError(
-        err?.response?.data?.message ||
-          'Unable to complete the transfer.'
-      );
-    } finally {
-      setSending(false);
-    }
-  };
+    };
 
 
   /*
@@ -848,6 +1030,232 @@ const Transfer: React.FC = () => {
           </form>
 
 
+          {/* ==================================================
+              TRANSACTION PIN DIALOG
+              ================================================== */}
+
+          {showTransactionPin && (
+            <div
+              style={
+                styles.pinOverlay
+              }
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="transaction-pin-title"
+            >
+              <div
+                style={
+                  styles.pinDialog
+                }
+              >
+
+                <div
+                  style={
+                    styles.pinIcon
+                  }
+                >
+                  🔐
+                </div>
+
+                <h2
+                  id="transaction-pin-title"
+                  style={
+                    styles.pinTitle
+                  }
+                >
+                  Confirm Transfer
+                </h2>
+
+                <p
+                  style={
+                    styles.pinSubtitle
+                  }
+                >
+                  Enter your 4-digit
+                  Transaction PIN to
+                  authorize this transfer.
+                </p>
+
+
+                {/* TRANSFER SUMMARY */}
+
+                <div
+                  style={
+                    styles.pinSummary
+                  }
+                >
+                  <div
+                    style={
+                      styles.pinSummaryRow
+                    }
+                  >
+                    <span>
+                      Recipient
+                    </span>
+
+                    <strong>
+                      {recipient?.full_name}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={
+                      styles.pinSummaryRow
+                    }
+                  >
+                    <span>
+                      Amount
+                    </span>
+
+                    <strong>
+                      {formatNaira(
+                        transferAmount
+                      )}
+                    </strong>
+                  </div>
+                </div>
+
+
+                {/* PIN ERROR */}
+
+                {transactionPinError && (
+                  <div
+                    style={
+                      styles.pinError
+                    }
+                    role="alert"
+                  >
+                    {transactionPinError}
+                  </div>
+                )}
+
+
+                {/* PIN INPUT */}
+
+                <label
+                  htmlFor="transaction-pin"
+                  style={
+                    styles.pinLabel
+                  }
+                >
+                  Transaction PIN
+                </label>
+
+                <input
+                  id="transaction-pin"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={4}
+                  value={
+                    transactionPin
+                  }
+                  onChange={(event) => {
+                    const value =
+                      event.target.value
+                        .replace(
+                          /\D/g,
+                          ''
+                        )
+                        .slice(0, 4);
+
+                    setTransactionPin(
+                      value
+                    );
+
+                    setTransactionPinError(
+                      ''
+                    );
+                  }}
+                  placeholder="••••"
+                  disabled={
+                    verifyingTransactionPin
+                  }
+                  style={
+                    styles.pinInput
+                  }
+                  autoFocus
+                />
+
+
+                {/* PIN ACTIONS */}
+
+                <div
+                  style={
+                    styles.pinActions
+                  }
+                >
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTransactionPin(
+                        false
+                      );
+
+                      setTransactionPin(
+                        ''
+                      );
+
+                      setTransactionPinError(
+                        ''
+                      );
+                    }}
+                    disabled={
+                      verifyingTransactionPin
+                    }
+                    style={
+                      styles.cancelPinButton
+                    }
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={
+                      verifyTransactionPinAndSend
+                    }
+                    disabled={
+                      verifyingTransactionPin ||
+                      transactionPin.length !==
+                        4
+                    }
+                    style={{
+                      ...styles.confirmPinButton,
+
+                      opacity:
+                        verifyingTransactionPin ||
+                        transactionPin.length !==
+                          4
+                          ? 0.55
+                          : 1,
+                    }}
+                  >
+                    {verifyingTransactionPin
+                      ? 'Verifying...'
+                      : 'Confirm Transfer'}
+                  </button>
+
+                </div>
+
+
+                <div
+                  style={
+                    styles.pinSecurity
+                  }
+                >
+                  🔒 Your Transaction PIN
+                  is securely verified and
+                  is never stored on this
+                  device.
+                </div>
+
+              </div>
+            </div>
+          )}
+
+
           {/* SECURITY */}
 
           <div
@@ -1195,6 +1603,166 @@ const styles: Record<
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+  },
+
+  /*
+   * ==========================================================
+   * TRANSACTION PIN DIALOG
+   * ==========================================================
+   */
+
+  pinOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background:
+      'rgba(10, 25, 19, 0.55)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    zIndex: 9999,
+    boxSizing: 'border-box',
+  },
+
+  pinDialog: {
+    width: 'min(420px, 100%)',
+    maxHeight: '90vh',
+    overflowY: 'auto',
+    background: '#ffffff',
+    borderRadius: 24,
+    padding: 24,
+    boxShadow:
+      '0 25px 70px rgba(0, 0, 0, 0.22)',
+    boxSizing: 'border-box',
+  },
+
+  pinIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 17,
+    background: '#e7f8ef',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 25,
+    marginBottom: 15,
+  },
+
+  pinTitle: {
+    margin: 0,
+    color: '#10251d',
+    fontSize: 23,
+    fontWeight: 850,
+  },
+
+  pinSubtitle: {
+    margin:
+      '7px 0 18px',
+    color: '#748079',
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+
+  pinSummary: {
+    background: '#f5faf7',
+    border:
+      '1px solid #e0ebe5',
+    borderRadius: 14,
+    padding: 13,
+    marginBottom: 17,
+  },
+
+  pinSummaryRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: '5px 0',
+  },
+
+  pinSummaryRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: '5px 0',
+    color: '#6d7c75',
+    fontSize: 12,
+  },
+
+  pinLabel: {
+    display: 'block',
+    color: '#263d33',
+    fontSize: 13,
+    fontWeight: 800,
+    marginBottom: 7,
+  },
+
+  pinInput: {
+    width: '100%',
+    boxSizing: 'border-box',
+    border:
+      '1px solid #cfdcd5',
+    borderRadius: 13,
+    padding: '14px',
+    textAlign: 'center',
+    letterSpacing: 9,
+    fontSize: 24,
+    fontWeight: 800,
+    outline: 'none',
+    color: '#10251d',
+    background: '#ffffff',
+    marginBottom: 12,
+  },
+
+  pinError: {
+    background: '#fff1ef',
+    color: '#a53227',
+    border:
+      '1px solid #f4d1cb',
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 14,
+    fontSize: 12,
+    fontWeight: 700,
+    lineHeight: 1.4,
+  },
+
+  pinActions: {
+    display: 'flex',
+    gap: 9,
+    marginTop: 4,
+  },
+
+  cancelPinButton: {
+    flex: 1,
+    border:
+      '1px solid #d7e0dc',
+    borderRadius: 12,
+    padding: '13px 10px',
+    background: '#ffffff',
+    color: '#52625a',
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+
+  confirmPinButton: {
+    flex: 1.5,
+    border: 'none',
+    borderRadius: 12,
+    padding: '13px 10px',
+    background: '#079447',
+    color: '#ffffff',
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+
+  pinSecurity: {
+    marginTop: 14,
+    color: '#7a8781',
+    fontSize: 10,
+    lineHeight: 1.45,
+    textAlign: 'center',
   },
 
   securityNote: {
