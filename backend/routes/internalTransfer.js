@@ -35,6 +35,7 @@ router.get(
 router.post(
   '/',
   authenticateToken,
+  transactionPinMiddleware,
   transferToZenimoniesUser
 );
 
