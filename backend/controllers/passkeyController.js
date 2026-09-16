@@ -336,10 +336,10 @@ const getLoginAuthenticationOptions =
         });
       }
 
-      const result =
-        await passkeyService.createLoginAuthenticationOptions(
-          email
-        );
+const result =
+  await passkeyService.createLoginAuthenticationOptions({
+    email,
+  });
 
       return res.json({
         success: true,
