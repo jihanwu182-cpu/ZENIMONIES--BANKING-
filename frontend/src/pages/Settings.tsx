@@ -108,7 +108,7 @@ const Settings: React.FC = () => {
   const [smsAlerts, setSmsAlerts] = useState(true);
 
   // ==========================================================
-  // ACCOUNT PASSCODE STATE
+  // ACCOUNT UNLOCK PASSCODE STATE
   // ==========================================================
 
   const [passcodeExists, setPasscodeExists] =
@@ -138,8 +138,66 @@ const Settings: React.FC = () => {
   const [replacementPasscode, setReplacementPasscode] =
     useState('');
 
-  const [confirmReplacementPasscode, setConfirmReplacementPasscode] =
+  const [
+    confirmReplacementPasscode,
+    setConfirmReplacementPasscode,
+  ] = useState('');
+
+  // ==========================================================
+  // TRANSACTION PIN STATE
+  // ==========================================================
+
+  const [transactionPinExists, setTransactionPinExists] =
+    useState(false);
+
+  const [transactionPinLocked, setTransactionPinLocked] =
+    useState(false);
+
+  const [transactionPinLoading, setTransactionPinLoading] =
+    useState(false);
+
+  const [transactionPinSaving, setTransactionPinSaving] =
+    useState(false);
+
+  const [transactionPinMessage, setTransactionPinMessage] =
     useState('');
+
+  const [transactionPinError, setTransactionPinError] =
+    useState('');
+
+  const [newTransactionPin, setNewTransactionPin] =
+    useState('');
+
+  const [
+    confirmTransactionPin,
+    setConfirmTransactionPin,
+  ] = useState('');
+
+  const [currentTransactionPin, setCurrentTransactionPin] =
+    useState('');
+
+  const [replacementTransactionPin, setReplacementTransactionPin] =
+    useState('');
+
+  const [
+    confirmReplacementTransactionPin,
+    setConfirmReplacementTransactionPin,
+  ] = useState('');
+
+  const [
+    transactionPinFailedAttempts,
+    setTransactionPinFailedAttempts,
+  ] = useState(0);
+
+  const [
+    transactionPinRemainingAttempts,
+    setTransactionPinRemainingAttempts,
+  ] = useState(3);
+
+  const [
+    transactionPinLockedUntil,
+    setTransactionPinLockedUntil,
+  ] = useState<string | null>(null);
 
   // ==========================================================
   // TOKEN
@@ -154,7 +212,7 @@ const Settings: React.FC = () => {
   };
 
   // ==========================================================
-  // LOAD PASSCODE STATUS
+  // LOAD ACCOUNT PASSCODE STATUS
   // ==========================================================
 
   const loadPasscodeStatus = async () => {
@@ -199,8 +257,81 @@ const Settings: React.FC = () => {
     }
   };
 
+  // ==========================================================
+  // LOAD TRANSACTION PIN STATUS
+  // ==========================================================
+
+  const loadTransactionPinStatus = async () => {
+    const token = getToken();
+
+    if (!token) {
+      return;
+    }
+
+    setTransactionPinLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/transaction-pin/status`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to load Transaction PIN status.'
+        );
+      }
+
+      setTransactionPinExists(
+        data?.exists === true
+      );
+
+      setTransactionPinLocked(
+        data?.locked === true
+      );
+
+      setTransactionPinFailedAttempts(
+        Number(
+          data?.failedAttempts || 0
+        )
+      );
+
+      setTransactionPinRemainingAttempts(
+        Math.max(
+          Number(
+            data?.maxFailedAttempts || 3
+          ) -
+            Number(
+              data?.failedAttempts || 0
+            ),
+          0
+        )
+      );
+
+      setTransactionPinLockedUntil(
+        data?.lockedUntil || null
+      );
+    } catch (error) {
+      console.error(
+        'Transaction PIN status error:',
+        error
+      );
+    } finally {
+      setTransactionPinLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadPasscodeStatus();
+    loadTransactionPinStatus();
   }, []);
 
   // ==========================================================
@@ -213,11 +344,23 @@ const Settings: React.FC = () => {
     if (section === 'Login Settings') {
       loadPasscodeStatus();
     }
+
+    if (
+      section === 'Payment Settings' ||
+      section === 'Security Center'
+    ) {
+      loadTransactionPinStatus();
+    }
   };
+
+  // ==========================================================
+  // CLOSE SECTION
+  // ==========================================================
 
   const closeSection = () => {
     setActiveSection(null);
 
+    // Account Passcode
     setPasscodeMessage('');
     setPasscodeError('');
 
@@ -227,6 +370,17 @@ const Settings: React.FC = () => {
     setCurrentPasscode('');
     setReplacementPasscode('');
     setConfirmReplacementPasscode('');
+
+    // Transaction PIN
+    setTransactionPinMessage('');
+    setTransactionPinError('');
+
+    setNewTransactionPin('');
+    setConfirmTransactionPin('');
+
+    setCurrentTransactionPin('');
+    setReplacementTransactionPin('');
+    setConfirmReplacementTransactionPin('');
   };
 
   // ==========================================================
@@ -273,7 +427,8 @@ const Settings: React.FC = () => {
           },
           body: JSON.stringify({
             passcode: newPasscode,
-            confirm_passcode: confirmPasscode,
+            confirm_passcode:
+              confirmPasscode,
           }),
         }
       );
@@ -295,7 +450,6 @@ const Settings: React.FC = () => {
       setPasscodeMessage(
         'Your 6-digit Account Unlock Passcode has been created successfully.'
       );
-
     } catch (error) {
       setPasscodeError(
         error instanceof Error
@@ -398,7 +552,6 @@ const Settings: React.FC = () => {
       setPasscodeMessage(
         'Your Account Unlock Passcode has been changed successfully.'
       );
-
     } catch (error) {
       setPasscodeError(
         error instanceof Error
@@ -411,14 +564,299 @@ const Settings: React.FC = () => {
   };
 
   // ==========================================================
+  // CREATE TRANSACTION PIN
+  // ==========================================================
+
+  const handleCreateTransactionPin =
+    async () => {
+      setTransactionPinMessage('');
+      setTransactionPinError('');
+
+      if (
+        !/^\d{4}$/.test(
+          newTransactionPin
+        )
+      ) {
+        setTransactionPinError(
+          'Your Transaction PIN must be exactly 4 digits.'
+        );
+        return;
+      }
+
+      if (
+        newTransactionPin !==
+        confirmTransactionPin
+      ) {
+        setTransactionPinError(
+          'Transaction PINs do not match.'
+        );
+        return;
+      }
+
+      const token = getToken();
+
+      if (!token) {
+        setTransactionPinError(
+          'Your session has expired. Please log in again.'
+        );
+        return;
+      }
+
+      setTransactionPinSaving(true);
+
+      try {
+        const response =
+          await fetch(
+            `${API_BASE_URL}/transaction-pin/setup`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type':
+                  'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                pin: newTransactionPin,
+                confirmPin:
+                  confirmTransactionPin,
+              }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              'Unable to create Transaction PIN.'
+          );
+        }
+
+        setTransactionPinExists(
+          true
+        );
+
+        setTransactionPinLocked(
+          false
+        );
+
+        setTransactionPinFailedAttempts(
+          0
+        );
+
+        setTransactionPinRemainingAttempts(
+          3
+        );
+
+        setNewTransactionPin('');
+        setConfirmTransactionPin('');
+
+        setTransactionPinMessage(
+          'Your 4-digit Transaction PIN has been created successfully.'
+        );
+      } catch (error) {
+        setTransactionPinError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to create Transaction PIN.'
+        );
+      } finally {
+        setTransactionPinSaving(false);
+      }
+    };
+
+  // ==========================================================
+  // CHANGE TRANSACTION PIN
+  // ==========================================================
+
+  const handleChangeTransactionPin =
+    async () => {
+      setTransactionPinMessage('');
+      setTransactionPinError('');
+
+      if (
+        !/^\d{4}$/.test(
+          currentTransactionPin
+        )
+      ) {
+        setTransactionPinError(
+          'Current Transaction PIN must be exactly 4 digits.'
+        );
+        return;
+      }
+
+      if (
+        !/^\d{4}$/.test(
+          replacementTransactionPin
+        )
+      ) {
+        setTransactionPinError(
+          'New Transaction PIN must be exactly 4 digits.'
+        );
+        return;
+      }
+
+      if (
+        replacementTransactionPin !==
+        confirmReplacementTransactionPin
+      ) {
+        setTransactionPinError(
+          'New Transaction PINs do not match.'
+        );
+        return;
+      }
+
+      if (
+        currentTransactionPin ===
+        replacementTransactionPin
+      ) {
+        setTransactionPinError(
+          'Your new Transaction PIN must be different from your current PIN.'
+        );
+        return;
+      }
+
+      if (transactionPinLocked) {
+        setTransactionPinError(
+          'Your Transaction PIN is temporarily locked. Please try again after the lock period.'
+        );
+        return;
+      }
+
+      const token = getToken();
+
+      if (!token) {
+        setTransactionPinError(
+          'Your session has expired. Please log in again.'
+        );
+        return;
+      }
+
+      setTransactionPinSaving(true);
+
+      try {
+        const response =
+          await fetch(
+            `${API_BASE_URL}/transaction-pin/change`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type':
+                  'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                currentPin:
+                  currentTransactionPin,
+
+                newPin:
+                  replacementTransactionPin,
+
+                confirmPin:
+                  confirmReplacementTransactionPin,
+              }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          if (
+            data?.failedAttempts !==
+            undefined
+          ) {
+            setTransactionPinFailedAttempts(
+              Number(
+                data.failedAttempts
+              )
+            );
+          }
+
+          if (
+            data?.remainingAttempts !==
+            undefined
+          ) {
+            setTransactionPinRemainingAttempts(
+              Number(
+                data.remainingAttempts
+              )
+            );
+          }
+
+          if (
+            data?.lockedUntil
+          ) {
+            setTransactionPinLocked(
+              true
+            );
+
+            setTransactionPinLockedUntil(
+              data.lockedUntil
+            );
+          }
+
+          throw new Error(
+            data?.message ||
+              'Unable to change Transaction PIN.'
+          );
+        }
+
+        setCurrentTransactionPin('');
+        setReplacementTransactionPin('');
+        setConfirmReplacementTransactionPin('');
+
+        setTransactionPinLocked(
+          false
+        );
+
+        setTransactionPinFailedAttempts(
+          0
+        );
+
+        setTransactionPinRemainingAttempts(
+          3
+        );
+
+        setTransactionPinLockedUntil(
+          null
+        );
+
+        setTransactionPinMessage(
+          'Your Transaction PIN has been changed successfully.'
+        );
+      } catch (error) {
+        setTransactionPinError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to change Transaction PIN.'
+        );
+      } finally {
+        setTransactionPinSaving(false);
+      }
+    };
+
+  // ==========================================================
   // LOGOUT
   // ==========================================================
 
   const logout = () => {
-    localStorage.removeItem('zenimonies_token');
-    localStorage.removeItem('token');
-    localStorage.removeItem('zenimonies_user');
-    localStorage.removeItem('zenimonies_accounts');
+    localStorage.removeItem(
+      'zenimonies_token'
+    );
+
+    localStorage.removeItem(
+      'token'
+    );
+
+    localStorage.removeItem(
+      'zenimonies_user'
+    );
+
+    localStorage.removeItem(
+      'zenimonies_accounts'
+    );
 
     sessionStorage.removeItem(
       'zenimonies_otp_email'
@@ -456,7 +894,8 @@ const Settings: React.FC = () => {
         style={{
           height: 68,
           background: '#ffffff',
-          borderBottom: '1px solid #e8efeb',
+          borderBottom:
+            '1px solid #e8efeb',
           display: 'flex',
           alignItems: 'center',
           position: 'sticky',
@@ -475,7 +914,9 @@ const Settings: React.FC = () => {
         >
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() =>
+              navigate('/')
+            }
             style={{
               width: 38,
               height: 38,
@@ -575,12 +1016,16 @@ const Settings: React.FC = () => {
 
         <SectionTitle title="ACCOUNT" />
 
-        <section style={styles.sectionCard}>
+        <section
+          style={styles.sectionCard}
+        >
           <SettingItem
             icon="♙"
             title="My Profile"
             description="Manage your personal and contact information."
-            onClick={() => navigate('/profile')}
+            onClick={() =>
+              navigate('/profile')
+            }
           />
         </section>
 
@@ -588,13 +1033,17 @@ const Settings: React.FC = () => {
 
         <SectionTitle title="PAYMENTS" />
 
-        <section style={styles.sectionCard}>
+        <section
+          style={styles.sectionCard}
+        >
           <SettingItem
             icon="₦"
             title="Payment Settings"
             description="Manage your Transaction PIN and payment security."
             onClick={() =>
-              openSection('Payment Settings')
+              openSection(
+                'Payment Settings'
+              )
             }
           />
         </section>
@@ -603,13 +1052,17 @@ const Settings: React.FC = () => {
 
         <SectionTitle title="LOGIN & SECURITY" />
 
-        <section style={styles.sectionCard}>
+        <section
+          style={styles.sectionCard}
+        >
           <SettingItem
             icon="🔐"
             title="Login Settings"
             description="Manage your password and Account Unlock Passcode."
             onClick={() =>
-              openSection('Login Settings')
+              openSection(
+                'Login Settings'
+              )
             }
           />
 
@@ -618,7 +1071,9 @@ const Settings: React.FC = () => {
             title="Security Question"
             description="Set or change your account security question."
             onClick={() =>
-              openSection('Security Question')
+              openSection(
+                'Security Question'
+              )
             }
           />
 
@@ -627,7 +1082,9 @@ const Settings: React.FC = () => {
             title="Security Center"
             description="Review your account security and protection."
             onClick={() =>
-              openSection('Security Center')
+              openSection(
+                'Security Center'
+              )
             }
           />
         </section>
@@ -636,13 +1093,17 @@ const Settings: React.FC = () => {
 
         <SectionTitle title="SAVINGS" />
 
-        <section style={styles.sectionCard}>
+        <section
+          style={styles.sectionCard}
+        >
           <SettingItem
             icon="▣"
             title="Saving Settings"
             description="Set the amount and frequency for your SafeBox."
             onClick={() =>
-              openSection('Saving Settings')
+              openSection(
+                'Saving Settings'
+              )
             }
           />
         </section>
@@ -651,13 +1112,17 @@ const Settings: React.FC = () => {
 
         <SectionTitle title="PREFERENCES" />
 
-        <section style={styles.sectionCard}>
+        <section
+          style={styles.sectionCard}
+        >
           <SettingItem
             icon="SMS"
             title="SMS Alert Settings"
             description="Control transaction and security SMS alerts."
             onClick={() =>
-              openSection('SMS Alert Settings')
+              openSection(
+                'SMS Alert Settings'
+              )
             }
           />
 
@@ -665,7 +1130,9 @@ const Settings: React.FC = () => {
             icon="☼"
             title="Themes"
             description="Choose your preferred app appearance."
-            onClick={() => openSection('Themes')}
+            onClick={() =>
+              openSection('Themes')
+            }
           />
         </section>
 
@@ -673,7 +1140,9 @@ const Settings: React.FC = () => {
 
         <SectionTitle title="SUPPORT" />
 
-        <section style={styles.sectionCard}>
+        <section
+          style={styles.sectionCard}
+        >
           <SettingItem
             icon="✉"
             title="Feedback and Suggestions"
@@ -689,7 +1158,9 @@ const Settings: React.FC = () => {
             icon="ⓘ"
             title="About"
             description="Learn more about Zenimonies and this app."
-            onClick={() => openSection('About')}
+            onClick={() =>
+              openSection('About')
+            }
           />
         </section>
 
@@ -697,7 +1168,9 @@ const Settings: React.FC = () => {
 
         <SectionTitle title="ACCOUNT ACTIONS" />
 
-        <section style={styles.sectionCard}>
+        <section
+          style={styles.sectionCard}
+        >
           <SettingItem
             icon="↪"
             title="Log Out"
@@ -711,7 +1184,9 @@ const Settings: React.FC = () => {
             description="Permanently close your Zenimonies account."
             danger
             onClick={() =>
-              setShowCloseConfirmation(true)
+              setShowCloseConfirmation(
+                true
+              )
             }
           />
         </section>
@@ -735,7 +1210,11 @@ const Settings: React.FC = () => {
       {activeSection && (
         <div style={styles.overlay}>
           <div style={styles.modal}>
-            <div style={styles.modalHeader}>
+            <div
+              style={
+                styles.modalHeader
+              }
+            >
               <h2
                 style={{
                   margin: 0,
@@ -748,7 +1227,9 @@ const Settings: React.FC = () => {
               <button
                 type="button"
                 onClick={closeSection}
-                style={styles.closeButton}
+                style={
+                  styles.closeButton
+                }
               >
                 ×
               </button>
@@ -758,56 +1239,539 @@ const Settings: React.FC = () => {
                 PAYMENT SETTINGS
             ================================================= */}
 
-            {activeSection === 'Payment Settings' && (
-              <div style={{ marginTop: 20 }}>
-                <div style={styles.infoBox}>
+            {activeSection ===
+              'Payment Settings' && (
+              <div
+                style={{
+                  marginTop: 20,
+                }}
+              >
+                <div
+                  style={
+                    styles.infoBox
+                  }
+                >
                   <strong>
                     Transaction PIN
                   </strong>
 
-                  <p style={styles.infoText}>
-                    Your Transaction PIN will be exactly
-                    4 digits and will be used to authorize
-                    transfers and payments.
+                  <p
+                    style={
+                      styles.infoText
+                    }
+                  >
+                    Your Transaction PIN is exactly
+                    4 digits and is used to authorize
+                    transfers, payments and other
+                    money-moving actions.
                   </p>
 
-                  <p style={styles.infoText}>
-                    Transaction PIN setup is being connected
-                    to the secure backend separately.
+                  <p
+                    style={
+                      styles.infoText
+                    }
+                  >
+                    Your Transaction PIN is completely
+                    separate from your Account Unlock
+                    Passcode.
                   </p>
                 </div>
 
+                {/* STATUS */}
+
                 <div
                   style={{
-                    marginTop: 18,
-                    padding: 15,
-                    borderRadius: 14,
-                    background: '#f7faf8',
-                    border: '1px solid #e5eee9',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: 13,
+                    borderRadius: 13,
+                    marginTop: 15,
+                    background:
+                      transactionPinLocked
+                        ? '#fff1f1'
+                        : transactionPinExists
+                        ? '#effbf5'
+                        : '#fff9ed',
+                    border:
+                      transactionPinLocked
+                        ? '1px solid #f3d3d0'
+                        : transactionPinExists
+                        ? '1px solid #d9eee3'
+                        : '1px solid #f0e2c4',
                   }}
                 >
                   <div
                     style={{
-                      fontSize: 13,
-                      fontWeight: 750,
+                      width: 34,
+                      height: 34,
+                      borderRadius: '50%',
+                      background:
+                        transactionPinLocked
+                          ? '#d92d20'
+                          : transactionPinExists
+                          ? '#079447'
+                          : '#e6a21a',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent:
+                        'center',
+                      fontWeight: 800,
+                    }}
+                  >
+                    {transactionPinLocked
+                      ? '!'
+                      : transactionPinExists
+                      ? '✓'
+                      : '!'}
+                  </div>
+
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 800,
+                        color: '#34443c',
+                      }}
+                    >
+                      {transactionPinLoading
+                        ? 'Checking status…'
+                        : transactionPinLocked
+                        ? 'Transaction PIN Locked'
+                        : transactionPinExists
+                        ? 'Transaction PIN Active'
+                        : 'Transaction PIN Not Set'}
+                    </div>
+
+                    <div
+                      style={{
+                        color: '#7b8982',
+                        fontSize: 11,
+                        marginTop: 2,
+                      }}
+                    >
+                      {transactionPinLocked
+                        ? 'Your PIN is temporarily locked after multiple incorrect attempts.'
+                        : transactionPinExists
+                        ? 'Your 4-digit Transaction PIN is protected.'
+                        : 'Create a 4-digit Transaction PIN to authorize payments and transfers.'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* LOCK MESSAGE */}
+
+                {transactionPinLocked && (
+                  <div
+                    style={{
+                      marginTop: 13,
+                      background:
+                        '#fff1f1',
+                      border:
+                        '1px solid #f3d3d0',
+                      color: '#b42318',
+                      borderRadius: 12,
+                      padding: 12,
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <strong>
+                      Transaction PIN temporarily locked.
+                    </strong>
+                    <br />
+                    Please wait until the security
+                    lock expires before trying again.
+                    {transactionPinLockedUntil && (
+                      <>
+                        <br />
+                        Lock expires:{' '}
+                        {new Date(
+                          transactionPinLockedUntil
+                        ).toLocaleString()}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* SUCCESS */}
+
+                {transactionPinMessage && (
+                  <div
+                    style={{
+                      marginTop: 13,
+                      background:
+                        '#effbf5',
+                      border:
+                        '1px solid #d9eee3',
+                      color: '#12633f',
+                      borderRadius: 12,
+                      padding: 12,
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {transactionPinMessage}
+                  </div>
+                )}
+
+                {/* ERROR */}
+
+                {transactionPinError && (
+                  <div
+                    style={{
+                      marginTop: 13,
+                      background:
+                        '#fff1f1',
+                      border:
+                        '1px solid #f3d3d0',
+                      color: '#b42318',
+                      borderRadius: 12,
+                      padding: 12,
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {transactionPinError}
+                  </div>
+                )}
+
+                {/* CREATE */}
+
+                {!transactionPinExists &&
+                  !transactionPinLocked && (
+                    <div
+                      style={{
+                        marginTop: 18,
+                      }}
+                    >
+                      <label
+                        style={
+                          styles.label
+                        }
+                      >
+                        Create 4-Digit Transaction PIN
+                      </label>
+
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        placeholder="Enter 4 digits"
+                        value={
+                          newTransactionPin
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setNewTransactionPin(
+                            event.target.value
+                              .replace(
+                                /\D/g,
+                                ''
+                              )
+                              .slice(
+                                0,
+                                4
+                              )
+                          )
+                        }
+                        style={
+                          styles.input
+                        }
+                      />
+
+                      <label
+                        style={
+                          styles.label
+                        }
+                      >
+                        Confirm Transaction PIN
+                      </label>
+
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        placeholder="Confirm 4 digits"
+                        value={
+                          confirmTransactionPin
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setConfirmTransactionPin(
+                            event.target.value
+                              .replace(
+                                /\D/g,
+                                ''
+                              )
+                              .slice(
+                                0,
+                                4
+                              )
+                          )
+                        }
+                        style={
+                          styles.input
+                        }
+                      />
+
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.primaryButton,
+                          opacity:
+                            transactionPinSaving
+                              ? 0.65
+                              : 1,
+                        }}
+                        disabled={
+                          transactionPinSaving
+                        }
+                        onClick={
+                          handleCreateTransactionPin
+                        }
+                      >
+                        {transactionPinSaving
+                          ? 'Creating Transaction PIN…'
+                          : 'Create Transaction PIN'}
+                      </button>
+                    </div>
+                  )}
+
+                {/* CHANGE */}
+
+                {transactionPinExists &&
+                  !transactionPinLocked && (
+                    <div
+                      style={{
+                        marginTop: 20,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 800,
+                          color: '#34443c',
+                          marginBottom: 4,
+                        }}
+                      >
+                        Change Transaction PIN
+                      </div>
+
+                      <p
+                        style={{
+                          color: '#7b8982',
+                          fontSize: 12,
+                          lineHeight: 1.5,
+                          margin:
+                            '0 0 12px',
+                        }}
+                      >
+                        Your current 4-digit Transaction
+                        PIN is required before a new PIN
+                        can be created.
+                      </p>
+
+                      <label
+                        style={
+                          styles.label
+                        }
+                      >
+                        Current Transaction PIN
+                      </label>
+
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="current-password"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        placeholder="Enter current 4 digits"
+                        value={
+                          currentTransactionPin
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setCurrentTransactionPin(
+                            event.target.value
+                              .replace(
+                                /\D/g,
+                                ''
+                              )
+                              .slice(
+                                0,
+                                4
+                              )
+                          )
+                        }
+                        style={
+                          styles.input
+                        }
+                      />
+
+                      <label
+                        style={
+                          styles.label
+                        }
+                      >
+                        New Transaction PIN
+                      </label>
+
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        placeholder="Enter new 4 digits"
+                        value={
+                          replacementTransactionPin
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setReplacementTransactionPin(
+                            event.target.value
+                              .replace(
+                                /\D/g,
+                                ''
+                              )
+                              .slice(
+                                0,
+                                4
+                              )
+                          )
+                        }
+                        style={
+                          styles.input
+                        }
+                      />
+
+                      <label
+                        style={
+                          styles.label
+                        }
+                      >
+                        Confirm New Transaction PIN
+                      </label>
+
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        placeholder="Confirm new 4 digits"
+                        value={
+                          confirmReplacementTransactionPin
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setConfirmReplacementTransactionPin(
+                            event.target.value
+                              .replace(
+                                /\D/g,
+                                ''
+                              )
+                              .slice(
+                                0,
+                                4
+                              )
+                          )
+                        }
+                        style={
+                          styles.input
+                        }
+                      />
+
+                      {transactionPinFailedAttempts >
+                        0 && (
+                        <div
+                          style={{
+                            marginTop: 12,
+                            color: '#8a5a00',
+                            background:
+                              '#fff9ed',
+                            border:
+                              '1px solid #f0e2c4',
+                            borderRadius: 11,
+                            padding: 10,
+                            fontSize: 11,
+                          }}
+                        >
+                          Incorrect attempts:{' '}
+                          {
+                            transactionPinFailedAttempts
+                          }
+                          . Remaining attempts:{' '}
+                          {
+                            transactionPinRemainingAttempts
+                          }
+                          .
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.primaryButton,
+                          opacity:
+                            transactionPinSaving
+                              ? 0.65
+                              : 1,
+                        }}
+                        disabled={
+                          transactionPinSaving
+                        }
+                        onClick={
+                          handleChangeTransactionPin
+                        }
+                      >
+                        {transactionPinSaving
+                          ? 'Changing Transaction PIN…'
+                          : 'Change Transaction PIN'}
+                      </button>
+                    </div>
+                  )}
+
+                <div
+                  style={{
+                    marginTop: 18,
+                    padding: 13,
+                    background:
+                      '#f7faf8',
+                    borderRadius: 12,
+                    color: '#6f7d76',
+                    fontSize: 11,
+                    lineHeight: 1.55,
+                  }}
+                >
+                  <strong
+                    style={{
                       color: '#34443c',
                     }}
                   >
-                    Payment security
-                  </div>
-
-                  <div
-                    style={{
-                      color: '#7b8982',
-                      fontSize: 12,
-                      lineHeight: 1.5,
-                      marginTop: 5,
-                    }}
-                  >
-                    Before a transaction is completed,
-                    Zenimonies will require the appropriate
-                    transaction authorization.
-                  </div>
+                    Payment Security
+                  </strong>
+                  <br />
+                  Your Transaction PIN is stored securely
+                  as a cryptographic hash. Zenimonies does
+                  not store or display your actual 4-digit
+                  PIN.
+                  <br />
+                  <br />
+                  This PIN is separate from your Account
+                  Unlock Passcode and will be used for
+                  transaction authorization.
                 </div>
               </div>
             )}
@@ -816,16 +1780,29 @@ const Settings: React.FC = () => {
                 LOGIN SETTINGS
             ================================================= */}
 
-            {activeSection === 'Login Settings' && (
-              <div style={{ marginTop: 20 }}>
+            {activeSection ===
+              'Login Settings' && (
+              <div
+                style={{
+                  marginTop: 20,
+                }}
+              >
                 {/* PASSWORD */}
 
-                <div style={styles.infoBox}>
+                <div
+                  style={
+                    styles.infoBox
+                  }
+                >
                   <strong>
                     Login Password
                   </strong>
 
-                  <p style={styles.infoText}>
+                  <p
+                    style={
+                      styles.infoText
+                    }
+                  >
                     Your password remains your primary
                     account recovery credential.
                   </p>
@@ -836,8 +1813,10 @@ const Settings: React.FC = () => {
                     marginTop: 18,
                     padding: 15,
                     borderRadius: 14,
-                    background: '#f7faf8',
-                    border: '1px solid #e5eee9',
+                    background:
+                      '#f7faf8',
+                    border:
+                      '1px solid #e5eee9',
                   }}
                 >
                   <div
@@ -865,24 +1844,27 @@ const Settings: React.FC = () => {
 
                   <button
                     type="button"
-                    style={styles.secondaryButton}
+                    style={
+                      styles.secondaryButton
+                    }
                     onClick={() => {
                       closeSection();
-                      navigate('/forgot-password');
+                      navigate(
+                        '/forgot-password'
+                      );
                     }}
                   >
                     Reset Password
                   </button>
                 </div>
 
-                {/* =================================================
-                    ACCOUNT UNLOCK PASSCODE
-                ================================================= */}
+                {/* ACCOUNT UNLOCK PASSCODE */}
 
                 <div
                   style={{
                     height: 1,
-                    background: '#edf2ef',
+                    background:
+                      '#edf2ef',
                     margin: '25px 0',
                   }}
                 />
@@ -904,7 +1886,8 @@ const Settings: React.FC = () => {
                       color: '#7b8982',
                       fontSize: 13,
                       lineHeight: 1.55,
-                      margin: '7px 0 0',
+                      margin:
+                        '7px 0 0',
                     }}
                   >
                     Your Account Unlock Passcode is exactly
@@ -923,26 +1906,34 @@ const Settings: React.FC = () => {
                       padding: 13,
                       borderRadius: 13,
                       marginTop: 15,
-                      background: passcodeExists
-                        ? '#effbf5'
-                        : '#fff9ed',
-                      border: passcodeExists
-                        ? '1px solid #d9eee3'
-                        : '1px solid #f0e2c4',
+                      background:
+                        passcodeExists
+                          ? '#effbf5'
+                          : '#fff9ed',
+                      border:
+                        passcodeExists
+                          ? '1px solid #d9eee3'
+                          : '1px solid #f0e2c4',
                     }}
                   >
                     <div
                       style={{
                         width: 34,
                         height: 34,
-                        borderRadius: '50%',
-                        background: passcodeExists
-                          ? '#079447'
-                          : '#e6a21a',
-                        color: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        borderRadius:
+                          '50%',
+                        background:
+                          passcodeExists
+                            ? '#079447'
+                            : '#e6a21a',
+                        color:
+                          '#ffffff',
+                        display:
+                          'flex',
+                        alignItems:
+                          'center',
+                        justifyContent:
+                          'center',
                         fontWeight: 800,
                       }}
                     >
@@ -986,8 +1977,10 @@ const Settings: React.FC = () => {
                     <div
                       style={{
                         marginTop: 13,
-                        background: '#effbf5',
-                        border: '1px solid #d9eee3',
+                        background:
+                          '#effbf5',
+                        border:
+                          '1px solid #d9eee3',
                         color: '#12633f',
                         borderRadius: 12,
                         padding: 12,
@@ -1005,8 +1998,10 @@ const Settings: React.FC = () => {
                     <div
                       style={{
                         marginTop: 13,
-                        background: '#fff1f1',
-                        border: '1px solid #f3d3d0',
+                        background:
+                          '#fff1f1',
+                        border:
+                          '1px solid #f3d3d0',
                         color: '#b42318',
                         borderRadius: 12,
                         padding: 12,
@@ -1021,8 +2016,16 @@ const Settings: React.FC = () => {
                   {/* CREATE */}
 
                   {!passcodeExists && (
-                    <div style={{ marginTop: 18 }}>
-                      <label style={styles.label}>
+                    <div
+                      style={{
+                        marginTop: 18,
+                      }}
+                    >
+                      <label
+                        style={
+                          styles.label
+                        }
+                      >
                         Create 6-Digit Passcode
                       </label>
 
@@ -1032,18 +2035,34 @@ const Settings: React.FC = () => {
                         autoComplete="new-password"
                         maxLength={6}
                         placeholder="Enter 6 digits"
-                        value={newPasscode}
-                        onChange={(event) =>
+                        value={
+                          newPasscode
+                        }
+                        onChange={(
+                          event
+                        ) =>
                           setNewPasscode(
                             event.target.value
-                              .replace(/\D/g, '')
-                              .slice(0, 6)
+                              .replace(
+                                /\D/g,
+                                ''
+                              )
+                              .slice(
+                                0,
+                                6
+                              )
                           )
                         }
-                        style={styles.input}
+                        style={
+                          styles.input
+                        }
                       />
 
-                      <label style={styles.label}>
+                      <label
+                        style={
+                          styles.label
+                        }
+                      >
                         Confirm 6-Digit Passcode
                       </label>
 
@@ -1053,15 +2072,27 @@ const Settings: React.FC = () => {
                         autoComplete="new-password"
                         maxLength={6}
                         placeholder="Confirm 6 digits"
-                        value={confirmPasscode}
-                        onChange={(event) =>
+                        value={
+                          confirmPasscode
+                        }
+                        onChange={(
+                          event
+                        ) =>
                           setConfirmPasscode(
                             event.target.value
-                              .replace(/\D/g, '')
-                              .slice(0, 6)
+                              .replace(
+                                /\D/g,
+                                ''
+                              )
+                              .slice(
+                                0,
+                                6
+                              )
                           )
                         }
-                        style={styles.input}
+                        style={
+                          styles.input
+                        }
                       />
 
                       <button
@@ -1073,7 +2104,9 @@ const Settings: React.FC = () => {
                               ? 0.65
                               : 1,
                         }}
-                        disabled={passcodeSaving}
+                        disabled={
+                          passcodeSaving
+                        }
                         onClick={
                           handleCreatePasscode
                         }
@@ -1088,7 +2121,11 @@ const Settings: React.FC = () => {
                   {/* CHANGE */}
 
                   {passcodeExists && (
-                    <div style={{ marginTop: 20 }}>
+                    <div
+                      style={{
+                        marginTop: 20,
+                      }}
+                    >
                       <div
                         style={{
                           fontSize: 14,
@@ -1105,14 +2142,19 @@ const Settings: React.FC = () => {
                           color: '#7b8982',
                           fontSize: 12,
                           lineHeight: 1.5,
-                          margin: '0 0 12px',
+                          margin:
+                            '0 0 12px',
                         }}
                       >
                         Your current Passcode is required
                         before a new one can be created.
                       </p>
 
-                      <label style={styles.label}>
+                      <label
+                        style={
+                          styles.label
+                        }
+                      >
                         Current Passcode
                       </label>
 
@@ -1122,18 +2164,34 @@ const Settings: React.FC = () => {
                         autoComplete="current-password"
                         maxLength={6}
                         placeholder="Enter current 6 digits"
-                        value={currentPasscode}
-                        onChange={(event) =>
+                        value={
+                          currentPasscode
+                        }
+                        onChange={(
+                          event
+                        ) =>
                           setCurrentPasscode(
                             event.target.value
-                              .replace(/\D/g, '')
-                              .slice(0, 6)
+                              .replace(
+                                /\D/g,
+                                ''
+                              )
+                              .slice(
+                                0,
+                                6
+                              )
                           )
                         }
-                        style={styles.input}
+                        style={
+                          styles.input
+                        }
                       />
 
-                      <label style={styles.label}>
+                      <label
+                        style={
+                          styles.label
+                        }
+                      >
                         New Passcode
                       </label>
 
@@ -1143,18 +2201,34 @@ const Settings: React.FC = () => {
                         autoComplete="new-password"
                         maxLength={6}
                         placeholder="Enter new 6 digits"
-                        value={replacementPasscode}
-                        onChange={(event) =>
+                        value={
+                          replacementPasscode
+                        }
+                        onChange={(
+                          event
+                        ) =>
                           setReplacementPasscode(
                             event.target.value
-                              .replace(/\D/g, '')
-                              .slice(0, 6)
+                              .replace(
+                                /\D/g,
+                                ''
+                              )
+                              .slice(
+                                0,
+                                6
+                              )
                           )
                         }
-                        style={styles.input}
+                        style={
+                          styles.input
+                        }
                       />
 
-                      <label style={styles.label}>
+                      <label
+                        style={
+                          styles.label
+                        }
+                      >
                         Confirm New Passcode
                       </label>
 
@@ -1167,14 +2241,24 @@ const Settings: React.FC = () => {
                         value={
                           confirmReplacementPasscode
                         }
-                        onChange={(event) =>
+                        onChange={(
+                          event
+                        ) =>
                           setConfirmReplacementPasscode(
                             event.target.value
-                              .replace(/\D/g, '')
-                              .slice(0, 6)
+                              .replace(
+                                /\D/g,
+                                ''
+                              )
+                              .slice(
+                                0,
+                                6
+                              )
                           )
                         }
-                        style={styles.input}
+                        style={
+                          styles.input
+                        }
                       />
 
                       <button
@@ -1186,7 +2270,9 @@ const Settings: React.FC = () => {
                               ? 0.65
                               : 1,
                         }}
-                        disabled={passcodeSaving}
+                        disabled={
+                          passcodeSaving
+                        }
                         onClick={
                           handleChangePasscode
                         }
@@ -1202,7 +2288,8 @@ const Settings: React.FC = () => {
                     style={{
                       marginTop: 18,
                       padding: 13,
-                      background: '#f7faf8',
+                      background:
+                        '#f7faf8',
                       borderRadius: 12,
                       color: '#6f7d76',
                       fontSize: 11,
@@ -1230,18 +2317,35 @@ const Settings: React.FC = () => {
                 SAVING SETTINGS
             ================================================= */}
 
-            {activeSection === 'Saving Settings' && (
-              <div style={{ marginTop: 20 }}>
-                <div style={styles.infoBox}>
-                  <strong>SafeBox</strong>
+            {activeSection ===
+              'Saving Settings' && (
+              <div
+                style={{
+                  marginTop: 20,
+                }}
+              >
+                <div
+                  style={
+                    styles.infoBox
+                  }
+                >
+                  <strong>
+                    SafeBox
+                  </strong>
 
-                  <p style={styles.infoText}>
+                  <p
+                    style={
+                      styles.infoText
+                    }
+                  >
                     Set an amount you want to save regularly
                     in your Zenimonies SafeBox.
                   </p>
                 </div>
 
-                <label style={styles.label}>
+                <label
+                  style={styles.label}
+                >
                   Saving Amount
                 </label>
 
@@ -1252,11 +2356,15 @@ const Settings: React.FC = () => {
                   style={styles.input}
                 />
 
-                <label style={styles.label}>
+                <label
+                  style={styles.label}
+                >
                   Saving Frequency
                 </label>
 
-                <select style={styles.input}>
+                <select
+                  style={styles.input}
+                >
                   <option value="daily">
                     Daily
                   </option>
@@ -1272,7 +2380,9 @@ const Settings: React.FC = () => {
 
                 <button
                   type="button"
-                  style={styles.primaryButton}
+                  style={
+                    styles.primaryButton
+                  }
                   onClick={() =>
                     alert(
                       'SafeBox saving settings will be connected to the backend next.'
@@ -1288,13 +2398,22 @@ const Settings: React.FC = () => {
                 SECURITY QUESTION
             ================================================= */}
 
-            {activeSection === 'Security Question' && (
-              <div style={{ marginTop: 20 }}>
-                <label style={styles.label}>
+            {activeSection ===
+              'Security Question' && (
+              <div
+                style={{
+                  marginTop: 20,
+                }}
+              >
+                <label
+                  style={styles.label}
+                >
                   Security Question
                 </label>
 
-                <select style={styles.input}>
+                <select
+                  style={styles.input}
+                >
                   <option>
                     Select a security question
                   </option>
@@ -1312,7 +2431,9 @@ const Settings: React.FC = () => {
                   </option>
                 </select>
 
-                <label style={styles.label}>
+                <label
+                  style={styles.label}
+                >
                   Your Answer
                 </label>
 
@@ -1324,7 +2445,9 @@ const Settings: React.FC = () => {
 
                 <button
                   type="button"
-                  style={styles.primaryButton}
+                  style={
+                    styles.primaryButton
+                  }
                   onClick={() =>
                     alert(
                       'Security question will be securely connected to the backend.'
@@ -1340,32 +2463,45 @@ const Settings: React.FC = () => {
                 SMS
             ================================================= */}
 
-            {activeSection === 'SMS Alert Settings' && (
-              <div style={{ marginTop: 20 }}>
+            {activeSection ===
+              'SMS Alert Settings' && (
+              <div
+                style={{
+                  marginTop: 20,
+                }}
+              >
                 <ToggleRow
                   title="SMS Alerts"
                   description="Receive important account notifications by SMS."
                   enabled={smsAlerts}
-                  onChange={setSmsAlerts}
+                  onChange={
+                    setSmsAlerts
+                  }
                 />
 
                 <ToggleRow
                   title="Transaction Alerts"
                   description="Receive alerts when money is sent or received."
                   enabled={smsAlerts}
-                  onChange={setSmsAlerts}
+                  onChange={
+                    setSmsAlerts
+                  }
                 />
 
                 <ToggleRow
                   title="Security Alerts"
                   description="Receive alerts for important security events."
                   enabled={smsAlerts}
-                  onChange={setSmsAlerts}
+                  onChange={
+                    setSmsAlerts
+                  }
                 />
 
                 <button
                   type="button"
-                  style={styles.primaryButton}
+                  style={
+                    styles.primaryButton
+                  }
                   onClick={() =>
                     alert(
                       'SMS alert preferences saved.'
@@ -1381,22 +2517,39 @@ const Settings: React.FC = () => {
                 THEMES
             ================================================= */}
 
-            {activeSection === 'Themes' && (
-              <div style={{ marginTop: 20 }}>
+            {activeSection ===
+              'Themes' && (
+              <div
+                style={{
+                  marginTop: 20,
+                }}
+              >
                 <ToggleRow
                   title="Dark Theme"
                   description="Use a darker appearance throughout the app."
                   enabled={darkMode}
-                  onChange={setDarkMode}
+                  onChange={
+                    setDarkMode
+                  }
                 />
 
-                <div style={styles.infoBox}>
+                <div
+                  style={
+                    styles.infoBox
+                  }
+                >
                   <strong>
                     Current theme:{' '}
-                    {darkMode ? 'Dark' : 'Light'}
+                    {darkMode
+                      ? 'Dark'
+                      : 'Light'}
                   </strong>
 
-                  <p style={styles.infoText}>
+                  <p
+                    style={
+                      styles.infoText
+                    }
+                  >
                     Theme preferences can later be
                     synchronized with your account.
                   </p>
@@ -1408,10 +2561,23 @@ const Settings: React.FC = () => {
                 SECURITY CENTER
             ================================================= */}
 
-            {activeSection === 'Security Center' && (
-              <div style={{ marginTop: 20 }}>
-                <div style={styles.securityStatus}>
-                  <div style={styles.securityCheck}>
+            {activeSection ===
+              'Security Center' && (
+              <div
+                style={{
+                  marginTop: 20,
+                }}
+              >
+                <div
+                  style={
+                    styles.securityStatus
+                  }
+                >
+                  <div
+                    style={
+                      styles.securityCheck
+                    }
+                  >
                     ✓
                   </div>
 
@@ -1420,13 +2586,21 @@ const Settings: React.FC = () => {
                       Account Security
                     </strong>
 
-                    <p style={styles.infoText}>
+                    <p
+                      style={
+                        styles.infoText
+                      }
+                    >
                       Your account security center is ready.
                     </p>
                   </div>
                 </div>
 
-                <div style={styles.securityRow}>
+                <div
+                  style={
+                    styles.securityRow
+                  }
+                >
                   <span>
                     Password
                   </span>
@@ -1436,7 +2610,11 @@ const Settings: React.FC = () => {
                   </strong>
                 </div>
 
-                <div style={styles.securityRow}>
+                <div
+                  style={
+                    styles.securityRow
+                  }
+                >
                   <span>
                     Account Unlock Passcode
                   </span>
@@ -1448,17 +2626,40 @@ const Settings: React.FC = () => {
                   </strong>
                 </div>
 
-                <div style={styles.securityRow}>
+                <div
+                  style={
+                    styles.securityRow
+                  }
+                >
                   <span>
                     Transaction PIN
                   </span>
 
-                  <strong>
-                    Separate 4-digit credential
+                  <strong
+                    style={{
+                      color:
+                        transactionPinLocked
+                          ? '#d92d20'
+                          : transactionPinExists
+                          ? '#078b4a'
+                          : '#b77900',
+                    }}
+                  >
+                    {transactionPinLoading
+                      ? 'Checking…'
+                      : transactionPinLocked
+                      ? 'Temporarily Locked'
+                      : transactionPinExists
+                      ? 'Active'
+                      : 'Not Set'}
                   </strong>
                 </div>
 
-                <div style={styles.securityRow}>
+                <div
+                  style={
+                    styles.securityRow
+                  }
+                >
                   <span>
                     Passkey
                   </span>
@@ -1466,6 +2667,35 @@ const Settings: React.FC = () => {
                   <strong>
                     Available
                   </strong>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 16,
+                    background:
+                      '#f7faf8',
+                    border:
+                      '1px solid #e5eee9',
+                    borderRadius: 13,
+                    padding: 13,
+                    color: '#6f7d76',
+                    fontSize: 11,
+                    lineHeight: 1.55,
+                  }}
+                >
+                  <strong
+                    style={{
+                      color: '#34443c',
+                    }}
+                  >
+                    Credential separation
+                  </strong>
+                  <br />
+                  Account Unlock Passcode and Transaction
+                  PIN are separate security credentials.
+                  The Account Unlock Passcode is used for
+                  account unlocking, while the Transaction PIN
+                  is reserved for transaction authorization.
                 </div>
               </div>
             )}
@@ -1476,8 +2706,14 @@ const Settings: React.FC = () => {
 
             {activeSection ===
               'Feedback and Suggestions' && (
-              <div style={{ marginTop: 20 }}>
-                <label style={styles.label}>
+              <div
+                style={{
+                  marginTop: 20,
+                }}
+              >
+                <label
+                  style={styles.label}
+                >
                   Your feedback
                 </label>
 
@@ -1495,7 +2731,9 @@ const Settings: React.FC = () => {
 
                 <button
                   type="button"
-                  style={styles.primaryButton}
+                  style={
+                    styles.primaryButton
+                  }
                   onClick={() =>
                     alert(
                       'Thank you for your feedback.'
@@ -1511,21 +2749,33 @@ const Settings: React.FC = () => {
                 ABOUT
             ================================================= */}
 
-            {activeSection === 'About' && (
-              <div style={{ marginTop: 20 }}>
+            {activeSection ===
+              'About' && (
+              <div
+                style={{
+                  marginTop: 20,
+                }}
+              >
                 <div
                   style={{
-                    textAlign: 'center',
-                    padding: '15px 0 25px',
+                    textAlign:
+                      'center',
+                    padding:
+                      '15px 0 25px',
                   }}
                 >
-                  <div style={styles.aboutLogo}>
+                  <div
+                    style={
+                      styles.aboutLogo
+                    }
+                  >
                     Z
                   </div>
 
                   <h3
                     style={{
-                      margin: '12px 0 4px',
+                      margin:
+                        '12px 0 4px',
                     }}
                   >
                     Zenimonies
@@ -1542,7 +2792,11 @@ const Settings: React.FC = () => {
                   </p>
                 </div>
 
-                <div style={styles.securityRow}>
+                <div
+                  style={
+                    styles.securityRow
+                  }
+                >
                   <span>
                     Application
                   </span>
@@ -1552,7 +2806,11 @@ const Settings: React.FC = () => {
                   </strong>
                 </div>
 
-                <div style={styles.securityRow}>
+                <div
+                  style={
+                    styles.securityRow
+                  }
+                >
                   <span>
                     Version
                   </span>
@@ -1562,7 +2820,11 @@ const Settings: React.FC = () => {
                   </strong>
                 </div>
 
-                <div style={styles.securityRow}>
+                <div
+                  style={
+                    styles.securityRow
+                  }
+                >
                   <span>
                     Platform
                   </span>
@@ -1588,11 +2850,14 @@ const Settings: React.FC = () => {
               'Security Center',
               'Feedback and Suggestions',
               'About',
-            ].includes(activeSection) && (
+            ].includes(
+              activeSection
+            ) && (
               <div
                 style={{
                   marginTop: 20,
-                  background: '#f6faf8',
+                  background:
+                    '#f6faf8',
                   borderRadius: 14,
                   padding: 16,
                   color: '#68766f',
@@ -1613,9 +2878,21 @@ const Settings: React.FC = () => {
       ===================================================== */}
 
       {showCloseConfirmation && (
-        <div style={styles.closeOverlay}>
-          <div style={styles.closeModal}>
-            <div style={styles.warningIcon}>
+        <div
+          style={
+            styles.closeOverlay
+          }
+        >
+          <div
+            style={
+              styles.closeModal
+            }
+          >
+            <div
+              style={
+                styles.warningIcon
+              }
+            >
               !
             </div>
 
@@ -1633,7 +2910,8 @@ const Settings: React.FC = () => {
                 color: '#66756e',
                 fontSize: 13,
                 lineHeight: 1.6,
-                margin: '10px 0 22px',
+                margin:
+                  '10px 0 22px',
               }}
             >
               Closing your account is a serious action. Your
@@ -1650,9 +2928,13 @@ const Settings: React.FC = () => {
               <button
                 type="button"
                 onClick={() =>
-                  setShowCloseConfirmation(false)
+                  setShowCloseConfirmation(
+                    false
+                  )
                 }
-                style={styles.cancelButton}
+                style={
+                  styles.cancelButton
+                }
               >
                 Cancel
               </button>
@@ -1664,7 +2946,9 @@ const Settings: React.FC = () => {
                     'Account closure will be securely connected to the backend.'
                   )
                 }
-                style={styles.dangerButton}
+                style={
+                  styles.dangerButton
+                }
               >
                 Continue
               </button>
@@ -1675,7 +2959,6 @@ const Settings: React.FC = () => {
     </div>
   );
 };
-
 
 /* ============================================================
    SECTION TITLE
@@ -1698,7 +2981,6 @@ const SectionTitle: React.FC<{
     </div>
   );
 };
-
 
 /* ============================================================
    TOGGLE
@@ -1724,10 +3006,15 @@ const ToggleRow: React.FC<ToggleRowProps> = ({
         alignItems: 'center',
         gap: 12,
         padding: '14px 0',
-        borderBottom: '1px solid #edf2ef',
+        borderBottom:
+          '1px solid #edf2ef',
       }}
     >
-      <div style={{ flex: 1 }}>
+      <div
+        style={{
+          flex: 1,
+        }}
+      >
         <strong
           style={{
             display: 'block',
@@ -1752,7 +3039,9 @@ const ToggleRow: React.FC<ToggleRowProps> = ({
 
       <button
         type="button"
-        onClick={() => onChange(!enabled)}
+        onClick={() =>
+          onChange(!enabled)
+        }
         aria-label={title}
         style={{
           width: 48,
@@ -1787,7 +3076,6 @@ const ToggleRow: React.FC<ToggleRowProps> = ({
   );
 };
 
-
 /* ============================================================
    STYLES
 ============================================================ */
@@ -1808,7 +3096,8 @@ const styles: Record<
   overlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(10, 30, 22, 0.45)',
+    background:
+      'rgba(10, 30, 22, 0.45)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1829,7 +3118,8 @@ const styles: Record<
 
   modalHeader: {
     display: 'flex',
-    justifyContent: 'space-between',
+    justifyContent:
+      'space-between',
     alignItems: 'center',
     gap: 15,
   },
@@ -1856,7 +3146,8 @@ const styles: Record<
     width: '100%',
     boxSizing: 'border-box',
     height: 47,
-    border: '1px solid #d8e2dc',
+    border:
+      '1px solid #d8e2dc',
     borderRadius: 12,
     padding: '0 13px',
     outline: 'none',
@@ -1880,7 +3171,8 @@ const styles: Record<
 
   secondaryButton: {
     height: 43,
-    border: '1px solid #d8e2dc',
+    border:
+      '1px solid #d8e2dc',
     borderRadius: 11,
     background: '#ffffff',
     color: '#078b4a',
@@ -1893,7 +3185,8 @@ const styles: Record<
 
   infoBox: {
     background: '#effbf5',
-    border: '1px solid #dcefe5',
+    border:
+      '1px solid #dcefe5',
     borderRadius: 13,
     padding: 13,
     color: '#12633f',
@@ -1913,7 +3206,8 @@ const styles: Record<
     alignItems: 'center',
     gap: 12,
     background: '#effbf5',
-    border: '1px solid #dcefe5',
+    border:
+      '1px solid #dcefe5',
     borderRadius: 14,
     padding: 14,
     marginBottom: 15,
@@ -1933,11 +3227,13 @@ const styles: Record<
 
   securityRow: {
     display: 'flex',
-    justifyContent: 'space-between',
+    justifyContent:
+      'space-between',
     alignItems: 'center',
     gap: 15,
     padding: '14px 0',
-    borderBottom: '1px solid #edf2ef',
+    borderBottom:
+      '1px solid #edf2ef',
     fontSize: 13,
   },
 
@@ -1958,7 +3254,8 @@ const styles: Record<
   closeOverlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(10, 20, 16, 0.55)',
+    background:
+      'rgba(10, 20, 16, 0.55)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1991,7 +3288,8 @@ const styles: Record<
   cancelButton: {
     flex: 1,
     height: 48,
-    border: '1px solid #d8e1dc',
+    border:
+      '1px solid #d8e1dc',
     borderRadius: 13,
     background: '#ffffff',
     color: '#34443c',
