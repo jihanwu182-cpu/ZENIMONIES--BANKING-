@@ -35,6 +35,7 @@ const getProfile = async (req, res) => {
         u.email,
         u.phone,
         u.date_of_birth,
+        u.gender,
 
         u.address,
         u.city,
@@ -109,6 +110,7 @@ const getProfile = async (req, res) => {
         phone: row.phone,
 
         date_of_birth: row.date_of_birth,
+        gender: row.gender,
 
         address: row.address,
         city: row.city,
@@ -232,6 +234,7 @@ const updateProfile = async (req, res) => {
       email,
       phone,
       date_of_birth,
+      gender,
       address,
       city,
       state,
@@ -262,6 +265,7 @@ const updateProfile = async (req, res) => {
           phone,
 
           date_of_birth,
+          gender,
 
           address,
           city,
@@ -378,6 +382,47 @@ const updateProfile = async (req, res) => {
         : currentUser.phone;
 
     // ========================================================
+    // NORMALIZE GENDER
+    // ========================================================
+
+    const normalizedGender =
+      gender !== undefined
+        ? String(gender).trim()
+        : currentUser.gender;
+
+    // ========================================================
+    // VALIDATE GENDER
+    // ========================================================
+    //
+    // Keep the available profile choices controlled.
+    //
+    // ========================================================
+
+    const allowedGenders = [
+      'Male',
+      'Female',
+      'Other',
+      'Prefer not to say',
+    ];
+
+    if (
+      normalizedGender &&
+      !allowedGenders.includes(
+        normalizedGender
+      )
+    ) {
+      await client.query(
+        'ROLLBACK'
+      );
+
+      return res.status(400).json({
+        success: false,
+        message:
+          'Please select a valid gender.',
+      });
+    }
+
+    // ========================================================
     // NORMALIZE ADDRESS
     // ========================================================
 
@@ -475,17 +520,18 @@ const updateProfile = async (req, res) => {
         phone = $4,
 
         date_of_birth = $5,
+        gender = $6,
 
-        address = $6,
-        city = $7,
-        state = $8,
-        lga = $9,
-        country = $10,
+        address = $7,
+        city = $8,
+        state = $9,
+        lga = $10,
+        country = $11,
 
         updated_at =
           CURRENT_TIMESTAMP
 
-      WHERE id = $11
+      WHERE id = $12
       `,
       [
         // ----------------------------------------------------
@@ -526,6 +572,12 @@ const updateProfile = async (req, res) => {
         // ----------------------------------------------------
 
         date_of_birth || null,
+
+        // ----------------------------------------------------
+        // Gender
+        // ----------------------------------------------------
+
+        normalizedGender || null,
 
         // ----------------------------------------------------
         // Address
