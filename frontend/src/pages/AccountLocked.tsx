@@ -60,14 +60,23 @@ interface StoredUser {
 }
 
 interface ApiErrorResponse {
+  success?: boolean;
   message?: string;
   error?: string;
   code?: string;
+
   failed_attempts?: number;
   remaining_attempts?: number;
   max_failed_attempts?: number;
+
   fallback_required?: boolean;
   locked_until?: string | null;
+
+  token?: string;
+  access_token?: string;
+  accessToken?: string;
+
+  user?: StoredUser;
 }
 
 /* ============================================================
@@ -120,36 +129,63 @@ const getDisplayName = (
     '';
 
   if (!fullName.trim()) {
-    return 'WELCOME BACK';
+    return '';
   }
 
-  const firstName =
-    fullName
-      .trim()
-      .split(/\s+/)[0];
-
-  return firstName.toUpperCase();
+  return fullName
+    .trim()
+    .split(/\s+/)[0]
+    .toUpperCase();
 };
 
 /* ============================================================
-   ERROR MESSAGE
+   API ERROR
 ============================================================ */
 
-const getErrorMessage = (
-  error: unknown,
-  fallback: string
-): string => {
-  const axiosError =
-    error as AxiosError<ApiErrorResponse>;
+const getApiError =
+  (
+    error: unknown,
+    fallback: string
+  ): string => {
+    if (
+      axios.isAxiosError(error)
+    ) {
+      const axiosError =
+        error as AxiosError<ApiErrorResponse>;
 
-  return (
-    axiosError.response?.data
-      ?.message ||
-    axiosError.response?.data
-      ?.error ||
-    fallback
-  );
-};
+      const data =
+        axiosError.response?.data;
+
+      if (
+        data?.message
+      ) {
+        return data.message;
+      }
+
+      if (
+        data?.error
+      ) {
+        return data.error;
+      }
+
+      if (
+        axiosError.response
+      ) {
+        return `Server error: HTTP ${axiosError.response.status}`;
+      }
+
+      return 'Unable to reach the Zenimonies server.';
+    }
+
+    if (
+      error instanceof Error &&
+      error.message
+    ) {
+      return error.message;
+    }
+
+    return fallback;
+  };
 
 /* ============================================================
    ACCOUNT LOCKED
@@ -231,28 +267,24 @@ const AccountLocked: React.FC =
       setSuccessMessage,
     ] = useState('');
 
-    const [
-      lockedUntil,
-      setLockedUntil,
-    ] = useState<string | null>(
-      null
-    );
-
-    /* ========================================================
-       LOAD ACCOUNT
-    ======================================================== */
+    /* ==========================================================
+       LOAD USER PROFILE
+    ========================================================== */
 
     useEffect(() => {
       let mounted = true;
 
       const loadAccount =
         async () => {
-          const token =
-            getToken();
-
           const storedUser =
             getStoredUser();
 
+          const token =
+            getToken();
+
+          /*
+           * Use local profile immediately.
+           */
           if (
             storedUser &&
             mounted
@@ -274,20 +306,28 @@ const AccountLocked: React.FC =
             }
           }
 
+          /*
+           * If there is no token, don't
+           * prevent the password fallback
+           * from being displayed.
+           */
           if (!token) {
             if (mounted) {
               setLoadingProfile(
                 false
-              );
-
-              setError(
-                'Your secure session could not be found. Please sign in again.'
               );
             }
 
             return;
           }
 
+          /*
+           * Try to refresh the user profile.
+           *
+           * Failure here must NOT destroy
+           * the locally available account
+           * information.
+           */
           try {
             const response =
               await axios.get(
@@ -315,17 +355,12 @@ const AccountLocked: React.FC =
                 profile
               );
 
-              const profileEmail =
-                profile.email ||
-                storedUser?.email ||
-                '';
-
               if (
-                profileEmail
+                profile.email
               ) {
                 setEmail(
                   String(
-                    profileEmail
+                    profile.email
                   )
                     .trim()
                     .toLowerCase()
@@ -340,13 +375,12 @@ const AccountLocked: React.FC =
                   )
                 );
               } catch {
-                // Local storage is only a fallback.
+                // Ignore local storage errors.
               }
             }
           } catch {
             /*
-             * The locally stored user remains
-             * available as a fallback.
+             * Keep the locally stored user.
              */
           } finally {
             if (mounted) {
@@ -364,9 +398,9 @@ const AccountLocked: React.FC =
       };
     }, []);
 
-    /* ========================================================
+    /* ==========================================================
        DISPLAY NAME
-    ======================================================== */
+    ========================================================== */
 
     const displayName =
       useMemo(() => {
@@ -375,19 +409,23 @@ const AccountLocked: React.FC =
         );
       }, [user]);
 
-    /* ========================================================
-       UNLOCK SESSION
-    ======================================================== */
+    /* ==========================================================
+       UNLOCK EVENT
+    ========================================================== */
 
     const unlockAccount =
       useCallback(() => {
-        sessionStorage.removeItem(
-          'zenimonies_account_locked'
-        );
+        try {
+          sessionStorage.removeItem(
+            'zenimonies_account_locked'
+          );
 
-        sessionStorage.removeItem(
-          'zenimonies_passkey_fallback'
-        );
+          sessionStorage.removeItem(
+            'zenimonies_passkey_fallback'
+          );
+        } catch {
+          // Ignore storage errors.
+        }
 
         window.dispatchEvent(
           new Event(
@@ -396,22 +434,23 @@ const AccountLocked: React.FC =
         );
       }, []);
 
-    /* ========================================================
-       SAVE AUTHENTICATED SESSION
-    ======================================================== */
+    /* ==========================================================
+       SAVE NEW AUTH SESSION
+    ========================================================== */
 
     const saveAuthenticatedSession =
       useCallback(
-        (data: any) => {
+        (
+          data: ApiErrorResponse
+        ) => {
           const token =
-            data?.token ||
-            data?.access_token ||
-            data?.accessToken ||
-            data?.data?.token;
+            data.token ||
+            data.access_token ||
+            data.accessToken;
 
           if (!token) {
             throw new Error(
-              'Authentication succeeded but no secure session was returned.'
+              'Authentication succeeded but no secure session token was returned.'
             );
           }
 
@@ -425,17 +464,13 @@ const AccountLocked: React.FC =
             token
           );
 
-          const authenticatedUser =
-            data?.user ||
-            data?.data?.user;
-
           if (
-            authenticatedUser
+            data.user
           ) {
             localStorage.setItem(
               'zenimonies_user',
               JSON.stringify(
-                authenticatedUser
+                data.user
               )
             );
           }
@@ -443,34 +478,31 @@ const AccountLocked: React.FC =
         []
       );
 
-    /* ========================================================
+    /* ==========================================================
        PASSKEY FAILURE
-    ======================================================== */
+    ========================================================== */
 
     const handlePasskeyFailure =
       useCallback(
         (
-          nextAttempts: number,
-          fallbackRequired = false,
-          message?: string
+          attempts: number,
+          fallbackRequired: boolean,
+          message: string
         ) => {
           setPasskeyAttempts(
-            nextAttempts
+            attempts
           );
 
           if (
             fallbackRequired ||
-            nextAttempts >=
+            attempts >=
               MAX_PASSKEY_ATTEMPTS
           ) {
-            sessionStorage.setItem(
-              'zenimonies_passkey_fallback',
-              'true'
-            );
-
             setMode(
               'passcode'
             );
+
+            setPasscode('');
 
             setError('');
 
@@ -482,25 +514,29 @@ const AccountLocked: React.FC =
           }
 
           setError(
-            message ||
-              `Passkey verification failed. Attempt ${nextAttempts} of ${MAX_PASSKEY_ATTEMPTS}.`
+            message
           );
         },
         []
       );
 
-    /* ========================================================
+    /* ==========================================================
        PASSKEY UNLOCK
-    ======================================================== */
+    ========================================================== */
 
     const handlePasskeyUnlock =
       async () => {
         setError('');
         setSuccessMessage('');
 
-        if (!email) {
+        const cleanEmail =
+          email
+            .trim()
+            .toLowerCase();
+
+        if (!cleanEmail) {
           setError(
-            'We could not securely load your account details. Please use your Account Unlock Passcode or password.'
+            'Your account email could not be loaded. Please use your password.'
           );
 
           return;
@@ -522,21 +558,28 @@ const AccountLocked: React.FC =
         );
 
         try {
+          /*
+           * 1. Request WebAuthn options.
+           */
           const optionsResponse =
             await axios.post(
               `${API_BASE_URL}/api/passkey/login/options`,
               {
-                email,
+                email:
+                  cleanEmail,
               },
               {
                 timeout: 20000,
+                headers: {
+                  'Content-Type':
+                    'application/json',
+                },
               }
             );
 
           const options =
-            optionsResponse
-              .data?.options ||
-            optionsResponse.data;
+            optionsResponse.data
+              ?.options;
 
           if (!options) {
             throw new Error(
@@ -544,6 +587,9 @@ const AccountLocked: React.FC =
             );
           }
 
+          /*
+           * 2. Real device authentication.
+           */
           const authenticationResponse =
             await startAuthentication(
               {
@@ -552,22 +598,31 @@ const AccountLocked: React.FC =
               }
             );
 
+          /*
+           * 3. Verify cryptographic
+           *    assertion on backend.
+           */
           const verifyResponse =
             await axios.post(
               `${API_BASE_URL}/api/passkey/login/verify`,
               {
-                email,
+                email:
+                  cleanEmail,
+
                 response:
                   authenticationResponse,
               },
               {
                 timeout: 30000,
+                headers: {
+                  'Content-Type':
+                    'application/json',
+                },
               }
             );
 
           const data =
-            verifyResponse.data ||
-            {};
+            verifyResponse.data;
 
           saveAuthenticatedSession(
             data
@@ -581,9 +636,10 @@ const AccountLocked: React.FC =
             'Your secure session has been restored.'
           );
 
-          setTimeout(() => {
-            unlockAccount();
-          }, 350);
+          setTimeout(
+            unlockAccount,
+            350
+          );
         } catch (error) {
           const axiosError =
             error as AxiosError<ApiErrorResponse>;
@@ -592,7 +648,8 @@ const AccountLocked: React.FC =
             (error as any)?.name;
 
           /*
-           * Cancellation is not a failed attempt.
+           * User cancellation is NOT
+           * a failed authentication.
            */
           if (
             errorName ===
@@ -608,12 +665,14 @@ const AccountLocked: React.FC =
           }
 
           const responseData =
-            axiosError
-              .response?.data;
+            axiosError.response
+              ?.data;
 
           const serverAttempts =
-            responseData
-              ?.failed_attempts;
+            Number(
+              responseData
+                ?.failed_attempts
+            );
 
           const fallbackRequired =
             responseData
@@ -624,17 +683,16 @@ const AccountLocked: React.FC =
               'PASSKEY_FALLBACK_REQUIRED';
 
           const nextAttempts =
-            typeof serverAttempts ===
-            'number'
+            serverAttempts > 0
               ? serverAttempts
               : passkeyAttempts + 1;
 
           handlePasskeyFailure(
             nextAttempts,
             fallbackRequired,
-            getErrorMessage(
+            getApiError(
               error,
-              'Passkey verification could not be completed.'
+              'Passkey authentication could not be completed.'
             )
           );
         } finally {
@@ -644,18 +702,24 @@ const AccountLocked: React.FC =
         }
       };
 
-    /* ========================================================
+    /* ==========================================================
        ACCOUNT UNLOCK PASSCODE
-    ======================================================== */
+    ========================================================== */
 
     const handlePasscodeUnlock =
       async () => {
         setError('');
         setSuccessMessage('');
 
+        /*
+         * EXACTLY 6 DIGITS
+         */
+        const cleanPasscode =
+          passcode.trim();
+
         if (
           !/^\d{6}$/.test(
-            passcode
+            cleanPasscode
           )
         ) {
           setError(
@@ -665,12 +729,23 @@ const AccountLocked: React.FC =
           return;
         }
 
+        /*
+         * Local fallback limit.
+         *
+         * The backend remains authoritative.
+         */
         if (
           passcodeAttempts >=
           MAX_PASSCODE_ATTEMPTS
         ) {
           setMode(
             'password'
+          );
+
+          setPasscode('');
+
+          setError(
+            'Please use your password to restore access.'
           );
 
           return;
@@ -680,12 +755,14 @@ const AccountLocked: React.FC =
           getToken();
 
         if (!token) {
-          setError(
-            'Your secure session could not be found. Please use your password.'
-          );
-
           setMode(
             'password'
+          );
+
+          setPasscode('');
+
+          setError(
+            'Your secure session could not be found. Please use your password.'
           );
 
           return;
@@ -696,93 +773,197 @@ const AccountLocked: React.FC =
         );
 
         try {
-          await axios.post(
-            `${API_BASE_URL}/api/passcode/verify`,
-            {
-              passcode,
-            },
-            {
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
+          /*
+           * IMPORTANT:
+           *
+           * This is the dedicated Account
+           * Unlock Passcode verification
+           * endpoint.
+           *
+           * It is NOT the Transaction PIN.
+           */
+          const response =
+            await axios.post<ApiErrorResponse>(
+              `${API_BASE_URL}/api/passcode/verify`,
+              {
+                passcode:
+                  cleanPasscode,
               },
-              timeout: 20000,
-            }
-          );
+              {
+                timeout: 20000,
 
-          setPasscode(
-            ''
-          );
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+
+                  'Content-Type':
+                    'application/json',
+                },
+              }
+            );
+
+          const data =
+            response.data;
+
+          /*
+           * Backend must explicitly
+           * confirm verification.
+           */
+          if (
+            data.success !== true ||
+            data.verified !== true
+          ) {
+            throw new Error(
+              data.message ||
+                'Account Unlock Passcode verification could not be completed.'
+            );
+          }
+
+          /*
+           * SUCCESS
+           */
+          setPasscode('');
 
           setPasscodeAttempts(
             0
           );
 
+          setError('');
+
           setSuccessMessage(
             'Your secure session has been restored.'
           );
 
-          setTimeout(() => {
-            unlockAccount();
-          }, 350);
+          setTimeout(
+            unlockAccount,
+            350
+          );
         } catch (error) {
           const axiosError =
             error as AxiosError<ApiErrorResponse>;
 
           const responseData =
-            axiosError
-              .response?.data;
+            axiosError.response
+              ?.data;
 
           const serverAttempts =
-            responseData
-              ?.failed_attempts;
-
-          const nextAttempts =
-            typeof serverAttempts ===
+            typeof responseData
+              ?.failed_attempts ===
             'number'
-              ? serverAttempts
-              : passcodeAttempts + 1;
+              ? responseData.failed_attempts
+              : null;
 
-          const locked =
+          /*
+           * IMPORTANT:
+           *
+           * Do not assume every error
+           * means the passcode was wrong.
+           */
+          if (
             responseData
               ?.code ===
-              'PASSCODE_LOCKED' ||
-            responseData
-              ?.fallback_required ===
-              true;
-
-          setPasscodeAttempts(
-            nextAttempts
-          );
-
-          setPasscode('');
-
-          if (
-            responseData?.locked_until
+            'PASSCODE_NOT_SET'
           ) {
-            setLockedUntil(
-              responseData.locked_until
+            setPasscode('');
+
+            setError(
+              'You have not created an Account Unlock Passcode yet. Please use your password to restore access.'
             );
+
+            setMode(
+              'password'
+            );
+
+            return;
           }
 
           if (
-            locked ||
-            nextAttempts >=
-              MAX_PASSCODE_ATTEMPTS
+            responseData
+              ?.code ===
+            'PASSCODE_LOCKED'
           ) {
-            setMode(
-              'password'
+            setPasscode('');
+
+            setPasscodeAttempts(
+              MAX_PASSCODE_ATTEMPTS
             );
 
             setError(
               'Your Account Unlock Passcode is temporarily locked. Please use your password.'
             );
 
+            setMode(
+              'password'
+            );
+
             return;
           }
 
+          /*
+           * Actual incorrect-passcode response.
+           */
+          if (
+            responseData
+              ?.code ===
+              'INCORRECT_PASSCODE'
+          ) {
+            const nextAttempts =
+              serverAttempts !== null
+                ? serverAttempts
+                : passcodeAttempts + 1;
+
+            setPasscode('');
+
+            setPasscodeAttempts(
+              nextAttempts
+            );
+
+            if (
+              nextAttempts >=
+              MAX_PASSCODE_ATTEMPTS
+            ) {
+              setMode(
+                'password'
+              );
+
+              setError(
+                'Your Account Unlock Passcode has reached the maximum number of failed attempts. Please use your password.'
+              );
+
+              return;
+            }
+
+            const remaining =
+              Math.max(
+                MAX_PASSCODE_ATTEMPTS -
+                  nextAttempts,
+                0
+              );
+
+            setError(
+              `Incorrect passcode. ${remaining} attempt${
+                remaining === 1
+                  ? ''
+                  : 's'
+              } remaining.`
+            );
+
+            return;
+          }
+
+          /*
+           * Authentication problem,
+           * network problem, or unexpected
+           * server error.
+           *
+           * Do NOT count it as a wrong
+           * passcode.
+           */
           setError(
-            `Incorrect passcode. Attempt ${nextAttempts} of ${MAX_PASSCODE_ATTEMPTS}.`
+            getApiError(
+              error,
+              'We could not verify your Account Unlock Passcode. Please try again.'
+            )
           );
         } finally {
           setPasscodeLoading(
@@ -791,18 +972,23 @@ const AccountLocked: React.FC =
         }
       };
 
-    /* ========================================================
+    /* ==========================================================
        PASSWORD FALLBACK
-    ======================================================== */
+    ========================================================== */
 
     const handlePasswordUnlock =
       async () => {
         setError('');
         setSuccessMessage('');
 
-        if (!email) {
+        const cleanEmail =
+          email
+            .trim()
+            .toLowerCase();
+
+        if (!cleanEmail) {
           setError(
-            'We could not load your account email. Please sign in again.'
+            'Your account email could not be loaded. Please sign in again.'
           );
 
           return;
@@ -822,39 +1008,53 @@ const AccountLocked: React.FC =
 
         try {
           const response =
-            await axios.post(
+            await axios.post<ApiErrorResponse>(
               `${API_BASE_URL}/api/auth/login`,
               {
-                email,
+                email:
+                  cleanEmail,
+
                 password,
               },
               {
-                timeout: 20000,
+                timeout: 30000,
+
+                headers: {
+                  'Content-Type':
+                    'application/json',
+                },
               }
             );
 
           const data =
-            response.data ||
-            {};
+            response.data;
+
+          if (
+            data.success === false
+          ) {
+            throw new Error(
+              data.message ||
+                'Password verification failed.'
+            );
+          }
 
           saveAuthenticatedSession(
             data
           );
 
-          setPassword(
-            ''
-          );
+          setPassword('');
 
           setSuccessMessage(
             'Your secure session has been restored.'
           );
 
-          setTimeout(() => {
-            unlockAccount();
-          }, 350);
+          setTimeout(
+            unlockAccount,
+            350
+          );
         } catch (error) {
           setError(
-            getErrorMessage(
+            getApiError(
               error,
               'Password verification failed. Please check your password and try again.'
             )
@@ -866,9 +1066,9 @@ const AccountLocked: React.FC =
         }
       };
 
-    /* ========================================================
+    /* ==========================================================
        MODE SWITCHES
-    ======================================================== */
+    ========================================================== */
 
     const handleUsePasscode =
       () => {
@@ -901,9 +1101,14 @@ const AccountLocked: React.FC =
         );
       };
 
-    /* ========================================================
-       LOADING STATE
-    ======================================================== */
+    const busy =
+      passkeyLoading ||
+      passcodeLoading ||
+      passwordLoading;
+
+    /* ==========================================================
+       LOADING
+    ========================================================== */
 
     if (
       loadingProfile &&
@@ -914,7 +1119,8 @@ const AccountLocked: React.FC =
           sx={{
             minHeight:
               '100vh',
-            display: 'flex',
+            display:
+              'flex',
             alignItems:
               'center',
             justifyContent:
@@ -934,26 +1140,23 @@ const AccountLocked: React.FC =
       );
     }
 
-    const currentLoading =
-      passkeyLoading ||
-      passcodeLoading ||
-      passwordLoading;
-
-    /* ========================================================
+    /* ==========================================================
        UI
-    ======================================================== */
+    ========================================================== */
 
     return (
       <Box
         sx={{
           minHeight:
             '100vh',
-          width: '100%',
+          width:
+            '100%',
           boxSizing:
             'border-box',
           background:
             'linear-gradient(145deg, #f1f7f4 0%, #f8fbfa 50%, #edf5f2 100%)',
-          display: 'flex',
+          display:
+            'flex',
           alignItems:
             'center',
           justifyContent:
@@ -964,7 +1167,8 @@ const AccountLocked: React.FC =
       >
         <Box
           sx={{
-            width: '100%',
+            width:
+              '100%',
             maxWidth:
               430,
           }}
@@ -1018,7 +1222,7 @@ const AccountLocked: React.FC =
           </Box>
 
           {/* ==================================================
-              MAIN CARD
+              CARD
           ================================================== */}
 
           <Paper
@@ -1032,18 +1236,20 @@ const AccountLocked: React.FC =
                 'rgba(255,255,255,0.97)',
               boxShadow:
                 '0 20px 55px rgba(23,55,44,0.09)',
-              px: {
-                xs: 2.5,
-                sm: 3.5,
-              },
-              py: {
-                xs: 3,
-                sm: 3.5,
-              },
+              px:
+                {
+                  xs: 2.5,
+                  sm: 3.5,
+                },
+              py:
+                {
+                  xs: 3,
+                  sm: 3.5,
+                },
             }}
           >
             {/* =================================================
-                WELCOME LINE
+                WELCOME
             ================================================= */}
 
             <Box
@@ -1066,20 +1272,20 @@ const AccountLocked: React.FC =
                 }}
               >
                 WELCOME BACK{' '}
-                <Box
-                  component="span"
-                  sx={{
-                    color:
-                      '#0d674e',
-                    fontWeight:
-                      900,
-                  }}
-                >
-                  {displayName.replace(
-                    'WELCOME BACK',
-                    ''
-                  ).trim()}
-                </Box>
+
+                {displayName && (
+                  <Box
+                    component="span"
+                    sx={{
+                      color:
+                        '#0d674e',
+                      fontWeight:
+                        900,
+                    }}
+                  >
+                    {displayName}
+                  </Box>
+                )}
               </Typography>
 
               <Typography
@@ -1129,8 +1335,10 @@ const AccountLocked: React.FC =
             >
               <Box
                 sx={{
-                  width: 68,
-                  height: 68,
+                  width:
+                    68,
+                  height:
+                    68,
                   borderRadius:
                     '21px',
                   background:
@@ -1167,8 +1375,6 @@ const AccountLocked: React.FC =
                     '13px',
                   fontSize:
                     12,
-                  alignItems:
-                    'center',
                 }}
               >
                 {error}
@@ -1181,12 +1387,12 @@ const AccountLocked: React.FC =
 
             {successMessage && (
               <Alert
+                severity="success"
                 icon={
                   <CheckCircleRounded
                     fontSize="inherit"
                   />
                 }
-                severity="success"
                 sx={{
                   mb: 2,
                   borderRadius:
@@ -1200,7 +1406,7 @@ const AccountLocked: React.FC =
             )}
 
             {/* =================================================
-                PASSKEY MODE
+                PASSKEY
             ================================================= */}
 
             {mode ===
@@ -1224,17 +1430,13 @@ const AccountLocked: React.FC =
                   Confirm your identity to restore your secure session.
                 </Typography>
 
-                {/* ---------------------------------------------
-                    COMPACT PASSKEY BUTTON
-                --------------------------------------------- */}
-
                 <Button
                   variant="contained"
                   onClick={
                     handlePasskeyUnlock
                   }
                   disabled={
-                    currentLoading
+                    busy
                   }
                   startIcon={
                     passkeyLoading ? (
@@ -1258,7 +1460,7 @@ const AccountLocked: React.FC =
                         sm: 245,
                       },
                     maxWidth:
-                      '290px',
+                      290,
                     minHeight:
                       50,
                     px: 3,
@@ -1276,10 +1478,11 @@ const AccountLocked: React.FC =
                       'none',
                     boxShadow:
                       '0 10px 22px rgba(13,103,78,0.18)',
-                    '&:hover': {
-                      background:
-                        '#09563f',
-                    },
+                    '&:hover':
+                      {
+                        background:
+                          '#09563f',
+                      },
                   }}
                 >
                   {passkeyLoading
@@ -1316,7 +1519,7 @@ const AccountLocked: React.FC =
                     handleUsePasscode
                   }
                   disabled={
-                    currentLoading
+                    busy
                   }
                   sx={{
                     color:
@@ -1327,8 +1530,6 @@ const AccountLocked: React.FC =
                       750,
                     textTransform:
                       'none',
-                    minHeight:
-                      34,
                   }}
                 >
                   Use Account Unlock Passcode
@@ -1337,7 +1538,7 @@ const AccountLocked: React.FC =
             )}
 
             {/* =================================================
-                PASSCODE MODE
+                PASSCODE
             ================================================= */}
 
             {mode ===
@@ -1379,6 +1580,7 @@ const AccountLocked: React.FC =
 
                 <TextField
                   fullWidth
+                  autoFocus
                   value={
                     passcode
                   }
@@ -1399,13 +1601,19 @@ const AccountLocked: React.FC =
                     setPasscode(
                       value
                     );
+
+                    if (
+                      error
+                    ) {
+                      setError('');
+                    }
                   }}
                   type="password"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   placeholder="••••••"
                   disabled={
-                    currentLoading
+                    busy
                   }
                   onKeyDown={(
                     event
@@ -1414,22 +1622,26 @@ const AccountLocked: React.FC =
                       event.key ===
                         'Enter' &&
                       passcode.length ===
-                        6
+                        6 &&
+                      !busy
                     ) {
+                      event.preventDefault();
+
                       handlePasscodeUnlock();
                     }
                   }}
                   InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <PasswordRounded
-                          sx={{
-                            color:
-                              '#82918b',
-                          }}
-                        />
-                      </InputAdornment>
-                    ),
+                    startAdornment:
+                      (
+                        <InputAdornment position="start">
+                          <PasswordRounded
+                            sx={{
+                              color:
+                                '#82918b',
+                            }}
+                          />
+                        </InputAdornment>
+                      ),
                   }}
                   sx={{
                     '& .MuiOutlinedInput-root':
@@ -1438,19 +1650,17 @@ const AccountLocked: React.FC =
                           '14px',
                         background:
                           '#ffffff',
-                        '& fieldset':
-                          {
-                            borderColor:
-                              '#d6e0dc',
-                          },
                       },
+
                     '& input': {
                       textAlign:
                         'center',
                       letterSpacing:
                         '6px',
                       fontWeight:
-                        700,
+                        800,
+                      fontSize:
+                        18,
                     },
                   }}
                 />
@@ -1462,7 +1672,7 @@ const AccountLocked: React.FC =
                     handlePasscodeUnlock
                   }
                   disabled={
-                    currentLoading ||
+                    busy ||
                     passcode.length !==
                       6
                   }
@@ -1503,26 +1713,46 @@ const AccountLocked: React.FC =
                     handleUsePassword
                   }
                   disabled={
-                    currentLoading
+                    busy
                   }
                   sx={{
                     color:
                       '#0d674e',
-                    textTransform:
-                      'none',
                     fontSize:
                       12,
                     fontWeight:
                       750,
+                    textTransform:
+                      'none',
                   }}
                 >
                   Use password instead
+                </Button>
+
+                <Button
+                  variant="text"
+                  onClick={
+                    handleUsePasskey
+                  }
+                  disabled={
+                    busy
+                  }
+                  sx={{
+                    color:
+                      '#7a8984',
+                    fontSize:
+                      11,
+                    textTransform:
+                      'none',
+                  }}
+                >
+                  Back to Passkey
                 </Button>
               </Stack>
             )}
 
             {/* =================================================
-                PASSWORD MODE
+                PASSWORD
             ================================================= */}
 
             {mode ===
@@ -1600,7 +1830,7 @@ const AccountLocked: React.FC =
                   label="Password"
                   autoComplete="current-password"
                   disabled={
-                    currentLoading
+                    busy
                   }
                   onKeyDown={(
                     event
@@ -1608,51 +1838,57 @@ const AccountLocked: React.FC =
                     if (
                       event.key ===
                         'Enter' &&
-                      password
+                      password &&
+                      !busy
                     ) {
+                      event.preventDefault();
+
                       handlePasswordUnlock();
                     }
                   }}
                   InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <LockRounded
-                          sx={{
-                            color:
-                              '#82918b',
-                          }}
-                        />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          onClick={() =>
-                            setShowPassword(
-                              (
-                                previous
-                              ) =>
-                                !previous
-                            )
-                          }
-                          disabled={
-                            currentLoading
-                          }
-                          edge="end"
-                          aria-label={
-                            showPassword
-                              ? 'Hide password'
-                              : 'Show password'
-                          }
-                        >
-                          {showPassword ? (
-                            <VisibilityOff />
-                          ) : (
-                            <Visibility />
-                          )}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
+                    startAdornment:
+                      (
+                        <InputAdornment position="start">
+                          <LockRounded
+                            sx={{
+                              color:
+                                '#82918b',
+                            }}
+                          />
+                        </InputAdornment>
+                      ),
+
+                    endAdornment:
+                      (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() =>
+                              setShowPassword(
+                                (
+                                  previous
+                                ) =>
+                                  !previous
+                              )
+                            }
+                            disabled={
+                              busy
+                            }
+                            edge="end"
+                            aria-label={
+                              showPassword
+                                ? 'Hide password'
+                                : 'Show password'
+                            }
+                          >
+                            {showPassword ? (
+                              <VisibilityOff />
+                            ) : (
+                              <Visibility />
+                            )}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
                   }}
                   sx={{
                     '& .MuiOutlinedInput-root':
@@ -1670,7 +1906,7 @@ const AccountLocked: React.FC =
                     handlePasswordUnlock
                   }
                   disabled={
-                    currentLoading ||
+                    busy ||
                     !password
                   }
                   sx={{
@@ -1710,17 +1946,17 @@ const AccountLocked: React.FC =
                     handleUsePasskey
                   }
                   disabled={
-                    currentLoading
+                    busy
                   }
                   sx={{
                     color:
                       '#0d674e',
-                    textTransform:
-                      'none',
                     fontSize:
                       12,
                     fontWeight:
                       750,
+                    textTransform:
+                      'none',
                   }}
                 >
                   Back to Passkey
@@ -1761,33 +1997,15 @@ const AccountLocked: React.FC =
                     '#7a8984',
                   fontSize:
                     11,
-                  textAlign:
-                    'center',
                 }}
               >
                 Secure session protection
               </Typography>
             </Stack>
-
-            {lockedUntil && (
-              <Typography
-                sx={{
-                  mt: 1,
-                  textAlign:
-                    'center',
-                  color:
-                    '#8a7160',
-                  fontSize:
-                    10,
-                }}
-              >
-                Additional verification is temporarily restricted.
-              </Typography>
-            )}
           </Paper>
 
           {/* ==================================================
-              BACK TO LOGIN
+              RETURN TO LOGIN
           ================================================== */}
 
           <Box
@@ -1809,12 +2027,6 @@ const AccountLocked: React.FC =
                 />
               }
               onClick={() => {
-                /*
-                 * This does not unlock the existing
-                 * protected session. It only provides
-                 * a route to normal login when the
-                 * user intentionally chooses it.
-                 */
                 window.location.href =
                   '/login';
               }}
