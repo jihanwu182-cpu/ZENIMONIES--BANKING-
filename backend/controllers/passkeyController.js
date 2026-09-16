@@ -12,6 +12,10 @@ const getUserId = (req) => {
   );
 };
 
+// ============================================================
+// STANDARD PASSKEY ERROR RESPONSE
+// ============================================================
+
 const sendPasskeyError = (res, error) => {
   const statusCode =
     error?.code === 'PASSKEY_FALLBACK_REQUIRED'
@@ -22,13 +26,19 @@ const sendPasskeyError = (res, error) => {
 
   return res.status(statusCode).json({
     success: false,
-    code: error?.code || 'PASSKEY_ERROR',
+
+    code:
+      error?.code ||
+      'PASSKEY_ERROR',
+
     message:
       error?.message ||
       'Passkey authentication failed.',
 
     failed_attempts:
-      Number(error?.failedAttempts || 0),
+      Number(
+        error?.failedAttempts || 0
+      ),
 
     max_failed_attempts: 3,
 
@@ -37,7 +47,8 @@ const sendPasskeyError = (res, error) => {
       'PASSKEY_FALLBACK_REQUIRED',
 
     locked_until:
-      error?.lockedUntil || null,
+      error?.lockedUntil ||
+      null,
   });
 };
 
@@ -50,12 +61,16 @@ const getRegistrationOptions = async (
   res
 ) => {
   try {
-    const userId = getUserId(req);
+    const userId =
+      getUserId(req);
 
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required.',
+        code:
+          'AUTHENTICATION_REQUIRED',
+        message:
+          'Authentication required.',
       });
     }
 
@@ -88,8 +103,11 @@ const getRegistrationOptions = async (
 
     return res.status(400).json({
       success: false,
+      code:
+        error?.code ||
+        'PASSKEY_REGISTRATION_OPTIONS_ERROR',
       message:
-        error.message ||
+        error?.message ||
         'Unable to create Passkey registration options.',
     });
   }
@@ -104,12 +122,16 @@ const verifyRegistration = async (
   res
 ) => {
   try {
-    const userId = getUserId(req);
+    const userId =
+      getUserId(req);
 
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required.',
+        code:
+          'AUTHENTICATION_REQUIRED',
+        message:
+          'Authentication required.',
       });
     }
 
@@ -120,6 +142,8 @@ const verifyRegistration = async (
     if (!response) {
       return res.status(400).json({
         success: false,
+        code:
+          'PASSKEY_RESPONSE_REQUIRED',
         message:
           'Passkey registration response is required.',
       });
@@ -133,10 +157,14 @@ const verifyRegistration = async (
 
     return res.json({
       success: true,
+
       message:
         'Passkey registered successfully.',
+
       verified: true,
-      passkey: result.passkey,
+
+      passkey:
+        result.passkey,
     });
   } catch (error) {
     console.error(
@@ -146,15 +174,20 @@ const verifyRegistration = async (
 
     return res.status(400).json({
       success: false,
+
+      code:
+        error?.code ||
+        'PASSKEY_REGISTRATION_ERROR',
+
       message:
-        error.message ||
+        error?.message ||
         'Passkey registration failed.',
     });
   }
 };
 
 // ============================================================
-// AUTHENTICATION OPTIONS
+// AUTHENTICATED PASSKEY OPTIONS
 // ============================================================
 
 const getAuthenticationOptions = async (
@@ -162,12 +195,16 @@ const getAuthenticationOptions = async (
   res
 ) => {
   try {
-    const userId = getUserId(req);
+    const userId =
+      getUserId(req);
 
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required.',
+        code:
+          'AUTHENTICATION_REQUIRED',
+        message:
+          'Authentication required.',
       });
     }
 
@@ -188,15 +225,20 @@ const getAuthenticationOptions = async (
 
     return res.status(400).json({
       success: false,
+
+      code:
+        error?.code ||
+        'PASSKEY_AUTHENTICATION_OPTIONS_ERROR',
+
       message:
-        error.message ||
+        error?.message ||
         'Unable to create Passkey authentication options.',
     });
   }
 };
 
 // ============================================================
-// VERIFY AUTHENTICATION
+// VERIFY AUTHENTICATED PASSKEY
 // ============================================================
 
 const verifyAuthentication = async (
@@ -204,12 +246,16 @@ const verifyAuthentication = async (
   res
 ) => {
   try {
-    const userId = getUserId(req);
+    const userId =
+      getUserId(req);
 
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required.',
+        code:
+          'AUTHENTICATION_REQUIRED',
+        message:
+          'Authentication required.',
       });
     }
 
@@ -220,6 +266,8 @@ const verifyAuthentication = async (
     if (!response) {
       return res.status(400).json({
         success: false,
+        code:
+          'PASSKEY_RESPONSE_REQUIRED',
         message:
           'Passkey authentication response is required.',
       });
@@ -233,11 +281,15 @@ const verifyAuthentication = async (
 
     return res.json({
       success: true,
+
       message:
         'Passkey authentication successful.',
+
       verified: true,
+
       passkey_id:
         result.passkeyId,
+
       credential_id:
         result.credentialId,
     });
@@ -259,18 +311,26 @@ const verifyAuthentication = async (
 // ============================================================
 
 const getLoginAuthenticationOptions =
-  async (req, res) => {
+  async (
+    req,
+    res
+  ) => {
     try {
-      const email = String(
-        req.body?.email || ''
-      )
-        .trim()
-        .toLowerCase();
+      const email =
+        String(
+          req.body?.email ||
+          ''
+        )
+          .trim()
+          .toLowerCase();
 
       if (!email) {
         return res.status(400).json({
           success: false,
-          code: 'EMAIL_REQUIRED',
+
+          code:
+            'EMAIL_REQUIRED',
+
           message:
             'Email address is required.',
         });
@@ -283,7 +343,9 @@ const getLoginAuthenticationOptions =
 
       return res.json({
         success: true,
-        options: result.options,
+
+        options:
+          result.options,
       });
     } catch (error) {
       console.error(
@@ -297,26 +359,36 @@ const getLoginAuthenticationOptions =
       ) {
         return res.status(429).json({
           success: false,
+
           code:
             'PASSKEY_FALLBACK_REQUIRED',
+
           message:
             'Passkey authentication is temporarily unavailable. Please use your password.',
+
           failed_attempts:
             Number(
               error.failedAttempts || 3
             ),
+
           max_failed_attempts: 3,
-          fallback_required: true,
+
+          fallback_required:
+            true,
+
           locked_until:
-            error.lockedUntil || null,
+            error.lockedUntil ||
+            null,
         });
       }
 
       return res.status(400).json({
         success: false,
+
         code:
           error?.code ||
           'PASSKEY_LOGIN_OPTIONS_ERROR',
+
         message:
           error?.message ||
           'Unable to start Passkey login.',
@@ -329,7 +401,10 @@ const getLoginAuthenticationOptions =
 // ============================================================
 
 const verifyLoginAuthentication =
-  async (req, res) => {
+  async (
+    req,
+    res
+  ) => {
     try {
       const response =
         req.body?.response ||
@@ -338,8 +413,10 @@ const verifyLoginAuthentication =
       if (!response) {
         return res.status(400).json({
           success: false,
+
           code:
             'PASSKEY_RESPONSE_REQUIRED',
+
           message:
             'Passkey authentication response is required.',
         });
@@ -381,6 +458,8 @@ const verifyLoginAuthentication =
         max_failed_attempts: 3,
 
         fallback_required: false,
+
+        locked_until: null,
       });
     } catch (error) {
       console.error(
@@ -404,12 +483,18 @@ const getPasskeys = async (
   res
 ) => {
   try {
-    const userId = getUserId(req);
+    const userId =
+      getUserId(req);
 
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required.',
+
+        code:
+          'AUTHENTICATION_REQUIRED',
+
+        message:
+          'Authentication required.',
       });
     }
 
@@ -430,6 +515,10 @@ const getPasskeys = async (
 
     return res.status(500).json({
       success: false,
+
+      code:
+        'PASSKEY_LIST_ERROR',
+
       message:
         'Unable to retrieve Passkeys.',
     });
