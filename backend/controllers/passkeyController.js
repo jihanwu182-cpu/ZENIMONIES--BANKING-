@@ -135,17 +135,40 @@ const verifyRegistration = async (
       });
     }
 
-    const response =
-      req.body?.response ||
-      req.body;
+    // IMPORTANT:
+    // The complete WebAuthn credential must be passed
+    // unchanged to SimpleWebAuthn.
+    //
+    // The object contains:
+    // id
+    // rawId
+    // response
+    // type
+    //
+    // Do NOT use req.body.response here because that
+    // removes the top-level credential ID.
+    const response = req.body;
 
-    if (!response) {
+    if (
+      !response ||
+      typeof response !== 'object'
+    ) {
       return res.status(400).json({
         success: false,
         code:
           'PASSKEY_RESPONSE_REQUIRED',
         message:
           'Passkey registration response is required.',
+      });
+    }
+
+    if (!response.id) {
+      return res.status(400).json({
+        success: false,
+        code:
+          'PASSKEY_CREDENTIAL_ID_MISSING',
+        message:
+          'Passkey credential ID is missing.',
       });
     }
 
@@ -259,17 +282,36 @@ const verifyAuthentication = async (
       });
     }
 
-    const response =
-      req.body?.response ||
-      req.body;
+    // IMPORTANT:
+    // Pass the complete WebAuthn credential unchanged.
+    //
+    // Required fields include:
+    // id
+    // rawId
+    // response
+    // type
+    const response = req.body;
 
-    if (!response) {
+    if (
+      !response ||
+      typeof response !== 'object'
+    ) {
       return res.status(400).json({
         success: false,
         code:
           'PASSKEY_RESPONSE_REQUIRED',
         message:
           'Passkey authentication response is required.',
+      });
+    }
+
+    if (!response.id) {
+      return res.status(400).json({
+        success: false,
+        code:
+          'PASSKEY_CREDENTIAL_ID_MISSING',
+        message:
+          'Passkey credential ID is missing.',
       });
     }
 
@@ -336,10 +378,10 @@ const getLoginAuthenticationOptions =
         });
       }
 
-const result =
-  await passkeyService.createLoginAuthenticationOptions({
-    email,
-  });
+      const result =
+        await passkeyService.createLoginAuthenticationOptions({
+          email,
+        });
 
       return res.json({
         success: true,
@@ -406,6 +448,22 @@ const verifyLoginAuthentication =
     res
   ) => {
     try {
+      /*
+       * Login sends:
+       *
+       * {
+       *   email: "...",
+       *   response: {
+       *     id: "...",
+       *     rawId: "...",
+       *     response: {...},
+       *     type: "public-key"
+       *   }
+       * }
+       *
+       * Therefore we intentionally extract req.body.response
+       * for this endpoint.
+       */
       const response =
         req.body?.response ||
         req.body;
