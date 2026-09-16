@@ -485,7 +485,9 @@ const Login: React.FC = () => {
 
         const optionsResponse =
           await fetch(
-            `${API_URL}/api/passkey/login/options';
+            const optionsResponse =
+  await fetch(
+    `${API_URL}/api/passkey/login/options`,
             {
               method:
                 'POST',
@@ -596,7 +598,9 @@ const Login: React.FC = () => {
 
         const verifyResponse =
           await fetch(
-            `${API_URL}/api/passkey/login/verify;
+            const verifyResponse =
+  await fetch(
+    `${API_URL}/api/passkey/login/verify`,
             {
               method:
                 'POST',
