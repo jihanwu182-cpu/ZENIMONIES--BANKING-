@@ -996,6 +996,59 @@ ON passkey_auth_attempts(email);
 CREATE INDEX IF NOT EXISTS idx_passkey_auth_attempts_type
 ON passkey_auth_attempts(attempt_type);
 
+
+-- ============================================================
+-- ACCOUNT UNLOCK PASSCODE
+-- ============================================================
+--
+-- This is the 6-digit Passcode used ONLY to unlock the
+-- Zenimonies account/app after Passkey/Face ID fallback.
+--
+-- IMPORTANT:
+-- - This is NOT the Transaction PIN.
+-- - Transaction PIN will be exactly 4 digits and stored
+--   separately.
+-- - The actual Passcode is NEVER stored.
+-- - Only a secure password hash is stored.
+-- - Failed attempts are tracked server-side.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS account_passcodes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    passcode_hash TEXT NOT NULL,
+
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+
+    locked_until TIMESTAMP,
+
+    last_failed_at TIMESTAMP,
+
+    last_used_at TIMESTAMP,
+
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT account_passcodes_one_per_user
+        UNIQUE (user_id),
+
+    CONSTRAINT account_passcodes_failed_attempts_check
+        CHECK (failed_attempts >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_passcodes_user_id
+ON account_passcodes(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_account_passcodes_locked_until
+ON account_passcodes(locked_until);
+
 -- ============================================================
 -- INDEXES
 -- ============================================================
