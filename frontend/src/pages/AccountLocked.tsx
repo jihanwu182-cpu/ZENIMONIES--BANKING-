@@ -784,7 +784,7 @@ const AccountLocked: React.FC =
            */
           const response =
             await axios.post<ApiErrorResponse>(
-              `${API_BASE_URL}/api/passcode/verify`,
+              `${API_BASE_URL}/api/passcode/unlock`,
               {
                 passcode:
                   cleanPasscode,
