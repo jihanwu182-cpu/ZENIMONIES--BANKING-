@@ -483,10 +483,8 @@ const Login: React.FC = () => {
         // 1. REQUEST PASSKEY CHALLENGE
         // ======================================================
 
-        const optionsResponse =
-          await fetch(
             const optionsResponse =
-  await fetch(
+        await fetch(
     `${API_URL}/api/passkey/login/options`,
             {
               method:
