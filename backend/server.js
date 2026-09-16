@@ -192,7 +192,7 @@ app.use(
 // ============================================================
 
 app.use(
-  '/api/passkeys',
+  '/api/passkey',
   passkeyRoutes
 );
 // ============================================================
@@ -757,6 +757,11 @@ console.log(
         console.log(
          'Profile:',
          '/api/profile'
+        );
+
+        console.log(
+         'Passkey:',
+         '/api/passkey'
         );
 
         console.log(
