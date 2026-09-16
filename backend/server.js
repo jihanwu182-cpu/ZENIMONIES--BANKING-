@@ -226,6 +226,11 @@ app.use(
   '/api/passkey',
   passkeyRoutes
 );
+
+// ============================================================
+// PASSCODE
+// ============================================================
+
 app.use(
   '/api/passcode',
   passcodeRoutes
@@ -511,10 +516,14 @@ const startServer = async () => {
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS
       profile_photo TEXT;
+
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS
+      gender VARCHAR(30);
     `);
 
     console.log(
-      'Database migration completed: profile fields are available on users'
+      'Database migration completed: profile fields and gender are available on users'
     );
 
     // ========================================================
@@ -764,8 +773,8 @@ const startServer = async () => {
 
         console.log(
           'Passcode:',
-         '/api/passcode'
-       );
+          '/api/passcode'
+        );
 
         console.log(
           'Admin:',
