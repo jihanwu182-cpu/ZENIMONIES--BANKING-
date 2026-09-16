@@ -6,7 +6,7 @@ import React, {
 } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import AccountLocked from '../pages/AccountLocked';
+import AccountLocked from '../pages/AccountLocked.tsx';
 
 const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
 
