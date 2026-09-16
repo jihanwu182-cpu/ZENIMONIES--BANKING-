@@ -16,39 +16,67 @@ const MAX_PASSKEY_FAILURES = 3;
 type LoginPayload = {
   success?: boolean;
   message?: string;
+
   token?: string;
   accessToken?: string;
   access_token?: string;
+
   user?: any;
   accounts?: any[];
+
   requiresOtp?: boolean;
   requires_otp?: boolean;
   otpRequired?: boolean;
   otp_required?: boolean;
+
   otpToken?: string;
   otp_token?: string;
+
   requires_phone_verification?: boolean;
+
+  error_detail?: string;
+
   data?: LoginPayload;
 };
 
 type PasskeyLoginOptionsResponse = {
   success?: boolean;
   message?: string;
+  code?: string;
   options?: any;
+
+  failed_attempts?: number;
+  max_failed_attempts?: number;
+  fallback_required?: boolean;
+  locked_until?: string | null;
 };
 
 type PasskeyLoginResponse = {
   success?: boolean;
   message?: string;
+
+  code?: string;
+
   token?: string;
+
   user?: any;
   accounts?: any[];
+
+  failed_attempts?: number;
+  max_failed_attempts?: number;
+  fallback_required?: boolean;
+  locked_until?: string | null;
+
   data?: {
     token?: string;
     user?: any;
     accounts?: any[];
   };
 };
+
+// ============================================================
+// UNWRAP LOGIN RESPONSE
+// ============================================================
 
 function unwrapLoginPayload(
   raw: LoginPayload
@@ -66,6 +94,10 @@ function unwrapLoginPayload(
   return raw || {};
 }
 
+// ============================================================
+// SERVER ERROR
+// ============================================================
+
 function getServerError(
   err: unknown
 ): string {
@@ -82,13 +114,9 @@ function getServerError(
 
       if (
         data.message &&
-        (data as any).error_detail
+        data.error_detail
       ) {
-        return `${
-          data.message
-        }: ${
-          (data as any).error_detail
-        }`;
+        return `${data.message}: ${data.error_detail}`;
       }
 
       if (data.message) {
@@ -118,6 +146,10 @@ function getServerError(
 
   return 'Unknown login error.';
 }
+
+// ============================================================
+// SAVE AUTHENTICATED SESSION
+// ============================================================
 
 function saveAuthenticatedSession(
   data: {
@@ -161,6 +193,10 @@ function saveAuthenticatedSession(
     )
   );
 }
+
+// ============================================================
+// LOGIN PAGE
+// ============================================================
 
 const Login: React.FC = () => {
   const navigate =
@@ -218,6 +254,7 @@ const Login: React.FC = () => {
       setError(
         'Email and password are required.'
       );
+
       return;
     }
 
@@ -252,14 +289,12 @@ const Login: React.FC = () => {
 
       if (data.success === false) {
         setError(
-          (data as any)
-            .error_detail
+          data.error_detail
             ? `${
                 data.message ||
                 'Login failed'
               }: ${
-                (data as any)
-                  .error_detail
+                data.error_detail
               }`
             : data.message ||
               'Login was rejected by the server.'
@@ -269,7 +304,7 @@ const Login: React.FC = () => {
       }
 
       // ========================================================
-      // GET TOKEN
+      // TOKEN
       // ========================================================
 
       const token =
@@ -278,7 +313,7 @@ const Login: React.FC = () => {
         data.access_token;
 
       // ========================================================
-      // OTP CHECK
+      // OTP
       // ========================================================
 
       const requiresOtp =
@@ -413,19 +448,27 @@ const Login: React.FC = () => {
         setError(
           'Enter your email address first, then tap Sign in with Passkey.'
         );
+
         return;
       }
 
+      // --------------------------------------------------------
+      // FRONTEND FALLBACK STATE
+      //
+      // Backend remains authoritative.
+      // --------------------------------------------------------
+
       if (
+        passkeyFallback ||
         passkeyFailures >=
-        MAX_PASSKEY_FAILURES
+          MAX_PASSKEY_FAILURES
       ) {
         setPasskeyFallback(
           true
         );
 
         setError(
-          'Passkey authentication failed 3 times. Please sign in with your password.'
+          'Passkey authentication is unavailable. Please sign in with your password.'
         );
 
         return;
@@ -468,8 +511,34 @@ const Login: React.FC = () => {
             await optionsResponse.json();
         } catch {
           throw new Error(
-            'The Zenimonies server returned an invalid passkey response.'
+            'The Zenimonies server returned an invalid Passkey response.'
           );
+        }
+
+        // ======================================================
+        // BACKEND FALLBACK RESPONSE
+        // ======================================================
+
+        if (
+          optionsData.fallback_required ===
+            true ||
+          optionsData.code ===
+            'PASSKEY_FALLBACK_REQUIRED'
+        ) {
+          setPasskeyFallback(
+            true
+          );
+
+          setPasskeyFailures(
+            MAX_PASSKEY_FAILURES
+          );
+
+          setError(
+            optionsData.message ||
+              'Passkey authentication is temporarily unavailable. Please use your password.'
+          );
+
+          return;
         }
 
         if (
@@ -479,22 +548,50 @@ const Login: React.FC = () => {
         ) {
           throw new Error(
             optionsData.message ||
-              'Unable to start passkey login.'
+              'Unable to start Passkey login.'
           );
         }
 
         // ======================================================
-        // 2. OPEN REAL DEVICE PASSKEY AUTHENTICATION
+        // 2. REAL DEVICE PASSKEY
         // ======================================================
 
-        const authenticationResponse =
-          await startAuthentication({
-            optionsJSON:
-              optionsData.options,
-          });
+        let authenticationResponse;
+
+        try {
+          authenticationResponse =
+            await startAuthentication({
+              optionsJSON:
+                optionsData.options,
+            });
+        } catch (
+          browserError: any
+        ) {
+          /*
+           * Cancelling Face ID, Touch ID,
+           * device PIN, or the Passkey prompt
+           * is NOT counted as a failed
+           * cryptographic authentication attempt.
+           */
+
+          if (
+            browserError?.name ===
+              'NotAllowedError' ||
+            browserError?.name ===
+              'AbortError'
+          ) {
+            setError(
+              'Passkey authentication was cancelled. You can try again or use your password.'
+            );
+
+            return;
+          }
+
+          throw browserError;
+        }
 
         // ======================================================
-        // 3. VERIFY PASSKEY WITH ZENIMONIES
+        // 3. VERIFY WITH BACKEND
         // ======================================================
 
         const verifyResponse =
@@ -510,9 +607,12 @@ const Login: React.FC = () => {
               },
 
               body:
-                JSON.stringify(
-                  authenticationResponse
-                ),
+                JSON.stringify({
+                  email:
+                    cleanEmail,
+                  response:
+                    authenticationResponse,
+                }),
             }
           );
 
@@ -528,15 +628,100 @@ const Login: React.FC = () => {
           );
         }
 
+        // ======================================================
+        // BACKEND FAILURE RESPONSE
+        // ======================================================
+
         if (
           !verifyResponse.ok ||
           !verifyData.success
         ) {
-          throw new Error(
+          const serverFailures =
+            Number(
+              verifyData.failed_attempts ||
+                0
+            );
+
+          const serverFallback =
+            verifyData.fallback_required ===
+              true ||
+            verifyData.code ===
+              'PASSKEY_FALLBACK_REQUIRED';
+
+          // ----------------------------------------------
+          // USE SERVER COUNTER
+          // ----------------------------------------------
+
+          if (
+            serverFailures > 0
+          ) {
+            setPasskeyFailures(
+              Math.min(
+                serverFailures,
+                MAX_PASSKEY_FAILURES
+              )
+            );
+          }
+
+          // ----------------------------------------------
+          // FORCE PASSWORD FALLBACK
+          // ----------------------------------------------
+
+          if (
+            serverFallback ||
+            serverFailures >=
+              MAX_PASSKEY_FAILURES
+          ) {
+            setPasskeyFallback(
+              true
+            );
+
+            setPasskeyFailures(
+              MAX_PASSKEY_FAILURES
+            );
+
+            setError(
+              verifyData.message ||
+                'Passkey authentication failed three times. Please sign in with your password.'
+            );
+
+            return;
+          }
+
+          // ----------------------------------------------
+          // NORMAL PASSKEY FAILURE
+          // ----------------------------------------------
+
+          if (
+            serverFailures > 0
+          ) {
+            const remaining =
+              MAX_PASSKEY_FAILURES -
+              serverFailures;
+
+            setError(
+              verifyData.message ||
+                `Passkey authentication failed. ${remaining} attempt${
+                  remaining === 1
+                    ? ''
+                    : 's'
+                } remaining.`
+            );
+
+            return;
+          }
+
+          setError(
             verifyData.message ||
               'Passkey login failed.'
           );
+
+          return;
         }
+
+        // ======================================================
+        // 4. SUCCESS
+        // ======================================================
 
         const responseData =
           verifyData.data ||
@@ -552,7 +737,7 @@ const Login: React.FC = () => {
         }
 
         // ======================================================
-        // 4. SAVE SESSION
+        // 5. SAVE SERVER SESSION
         // ======================================================
 
         saveAuthenticatedSession({
@@ -563,12 +748,20 @@ const Login: React.FC = () => {
             responseData.accounts,
         });
 
+        // ======================================================
+        // 6. RESET LOCAL STATE
+        // ======================================================
+
         setPasskeyFailures(
           0
         );
 
+        setPasskeyFallback(
+          false
+        );
+
         // ======================================================
-        // 5. DASHBOARD
+        // 7. DASHBOARD
         // ======================================================
 
         navigate('/');
@@ -578,12 +771,9 @@ const Login: React.FC = () => {
           err
         );
 
-        const nextFailures =
-          passkeyFailures + 1;
-
-        setPasskeyFailures(
-          nextFailures
-        );
+        // ------------------------------------------------------
+        // DO NOT COUNT USER CANCELLATION
+        // ------------------------------------------------------
 
         const errorName =
           err instanceof Error
@@ -598,6 +788,8 @@ const Login: React.FC = () => {
         const userCancelled =
           errorName ===
             'NotAllowedError' ||
+          errorName ===
+            'AbortError' ||
           /cancel|abort|not allowed/i.test(
             errorMessage
           );
@@ -610,34 +802,20 @@ const Login: React.FC = () => {
           return;
         }
 
-        if (
-          nextFailures >=
-          MAX_PASSKEY_FAILURES
-        ) {
-          setPasskeyFallback(
-            true
-          );
-
-          setError(
-            'Passkey authentication failed 3 times. Please sign in with your password.'
-          );
-
-          return;
-        }
-
-        const remaining =
-          MAX_PASSKEY_FAILURES -
-          nextFailures;
+        /*
+         * Important:
+         *
+         * We do NOT increment passkeyFailures
+         * here.
+         *
+         * The backend is responsible for counting
+         * actual failed WebAuthn authentication
+         * attempts.
+         */
 
         setError(
-          `${
-            errorMessage ||
-            'Passkey authentication failed.'
-          } ${remaining} attempt${
-            remaining === 1
-              ? ''
-              : 's'
-          } remaining.`
+          errorMessage ||
+            'Unable to complete Passkey authentication.'
         );
       } finally {
         setPasskeyLoading(
@@ -650,19 +828,28 @@ const Login: React.FC = () => {
     loading ||
     passkeyLoading;
 
+  // ============================================================
+  // UI
+  // ============================================================
+
   return (
     <div
       style={{
         minHeight:
           '100vh',
+
         display:
           'flex',
+
         alignItems:
           'center',
+
         justifyContent:
           'center',
+
         padding:
           '24px',
+
         background:
           '#f5f7fb',
       }}
@@ -671,14 +858,19 @@ const Login: React.FC = () => {
         style={{
           width:
             '100%',
+
           maxWidth:
             '420px',
+
           background:
             '#ffffff',
+
           padding:
             '32px',
+
           borderRadius:
             '16px',
+
           boxShadow:
             '0 8px 30px rgba(0, 0, 0, 0.08)',
         }}
@@ -691,10 +883,13 @@ const Login: React.FC = () => {
           style={{
             marginTop:
               0,
+
             marginBottom:
               '8px',
+
             textAlign:
               'center',
+
             color:
               '#172033',
           }}
@@ -706,8 +901,10 @@ const Login: React.FC = () => {
           style={{
             textAlign:
               'center',
+
             color:
               '#667085',
+
             marginBottom:
               '28px',
           }}
@@ -725,18 +922,25 @@ const Login: React.FC = () => {
             style={{
               padding:
                 '14px',
+
               marginBottom:
                 '18px',
+
               borderRadius:
                 '8px',
+
               background:
                 '#fee4e2',
+
               color:
                 '#b42318',
+
               fontSize:
                 '14px',
+
               lineHeight:
                 1.5,
+
               wordBreak:
                 'break-word',
             }}
@@ -754,10 +958,13 @@ const Login: React.FC = () => {
           style={{
             display:
               'block',
+
             marginBottom:
               '6px',
+
             fontWeight:
               600,
+
             color:
               '#172033',
           }}
@@ -767,82 +974,111 @@ const Login: React.FC = () => {
 
         <input
           id="email"
+
           type="email"
+
           value={email}
+
           onChange={(
             event
           ) =>
             setEmail(
-              event.target
-                .value
+              event.target.value
             )
           }
+
           placeholder="Enter your email"
+
           autoComplete="username"
+
           disabled={busy}
+
           style={{
             boxSizing:
               'border-box',
+
             width:
               '100%',
+
             padding:
               '12px',
+
             marginBottom:
               '14px',
+
             border:
               '1px solid #d0d5dd',
+
             borderRadius:
               '8px',
+
             outline:
               'none',
+
             fontSize:
               '15px',
           }}
         />
 
         {/* =====================================================
-            PASSKEY — PRIMARY PASSWORDLESS LOGIN
+            PASSKEY
             ===================================================== */}
 
         {!passkeyFallback && (
           <>
             <button
               type="button"
+
               onClick={
                 handlePasskeyLogin
               }
+
               disabled={busy}
+
               style={{
                 width:
                   '100%',
+
                 padding:
                   '14px',
+
                 border:
                   'none',
+
                 borderRadius:
                   '8px',
+
                 background:
                   '#0b5cff',
+
                 color:
                   '#ffffff',
+
                 fontWeight:
                   700,
+
                 fontSize:
                   '15px',
+
                 cursor:
                   busy
                     ? 'not-allowed'
                     : 'pointer',
+
                 opacity:
                   busy
                     ? 0.7
                     : 1,
+
                 display:
                   'flex',
+
                 alignItems:
                   'center',
+
                 justifyContent:
                   'center',
+
                 gap:
                   '10px',
               }}
@@ -851,6 +1087,7 @@ const Login: React.FC = () => {
                 style={{
                   fontSize:
                     '21px',
+
                   lineHeight:
                     1,
                 }}
@@ -863,24 +1100,54 @@ const Login: React.FC = () => {
                 : 'Sign in with Passkey'}
             </button>
 
+            {passkeyFailures > 0 && (
+              <p
+                style={{
+                  textAlign:
+                    'center',
+
+                  color:
+                    '#b54708',
+
+                  fontSize:
+                    '12px',
+
+                  marginTop:
+                    '9px',
+
+                  marginBottom:
+                    '4px',
+                }}
+              >
+                Passkey attempt{' '}
+                {passkeyFailures} of{' '}
+                {MAX_PASSKEY_FAILURES}
+              </p>
+            )}
+
             <p
               style={{
                 textAlign:
                   'center',
+
                 color:
                   '#667085',
+
                 fontSize:
                   '12px',
+
                 lineHeight:
                   1.5,
+
                 marginTop:
                   '9px',
+
                 marginBottom:
                   '20px',
               }}
             >
               Use Face ID, Touch ID,
-              your device passkey,
+              your device Passkey,
               or security key.
             </p>
 
@@ -888,14 +1155,19 @@ const Login: React.FC = () => {
               style={{
                 display:
                   'flex',
+
                 alignItems:
                   'center',
+
                 gap:
                   '12px',
+
                 margin:
                   '4px 0 20px',
+
                 color:
                   '#98a2b3',
+
                 fontSize:
                   '13px',
               }}
@@ -904,8 +1176,10 @@ const Login: React.FC = () => {
                 style={{
                   flex:
                     1,
+
                   height:
                     '1px',
+
                   background:
                     '#eaecf0',
                 }}
@@ -919,8 +1193,10 @@ const Login: React.FC = () => {
                 style={{
                   flex:
                     1,
+
                   height:
                     '1px',
+
                   background:
                     '#eaecf0',
                 }}
@@ -930,23 +1206,27 @@ const Login: React.FC = () => {
         )}
 
         {/* =====================================================
-            PASSWORD FALLBACK
+            PASSWORD
             ===================================================== */}
 
         <form
           onSubmit={
             handleSubmit
           }
+
           noValidate
         >
           <div
             style={{
               display:
                 'flex',
+
               alignItems:
                 'center',
+
               justifyContent:
                 'space-between',
+
               marginBottom:
                 '6px',
             }}
@@ -956,6 +1236,7 @@ const Login: React.FC = () => {
               style={{
                 fontWeight:
                   600,
+
                 color:
                   '#172033',
               }}
@@ -965,13 +1246,17 @@ const Login: React.FC = () => {
 
             <Link
               to="/forgot-password"
+
               style={{
                 color:
                   '#0b5cff',
+
                 fontWeight:
                   600,
+
                 fontSize:
                   '13px',
+
                 textDecoration:
                   'none',
               }}
@@ -984,44 +1269,58 @@ const Login: React.FC = () => {
             style={{
               position:
                 'relative',
+
               width:
                 '100%',
+
               marginBottom:
                 '22px',
             }}
           >
             <input
               id="password"
+
               type={
                 showPassword
                   ? 'text'
                   : 'password'
               }
+
               value={password}
+
               onChange={(
                 event
               ) =>
                 setPassword(
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
+
               placeholder="Enter your password"
+
               autoComplete="current-password"
+
               disabled={busy}
+
               style={{
                 boxSizing:
                   'border-box',
+
                 width:
                   '100%',
+
                 padding:
                   '12px 48px 12px 12px',
+
                 border:
                   '1px solid #d0d5dd',
+
                 borderRadius:
                   '8px',
+
                 outline:
                   'none',
+
                 fontSize:
                   '15px',
               }}
@@ -1029,6 +1328,7 @@ const Login: React.FC = () => {
 
             <button
               type="button"
+
               onClick={() =>
                 setShowPassword(
                   (
@@ -1037,38 +1337,51 @@ const Login: React.FC = () => {
                     !previous
                 )
               }
+
               disabled={busy}
+
               aria-label={
                 showPassword
                   ? 'Hide password'
                   : 'Show password'
               }
+
               title={
                 showPassword
                   ? 'Hide password'
                   : 'Show password'
               }
+
               style={{
                 position:
                   'absolute',
+
                 right:
                   '10px',
+
                 top:
                   '50%',
+
                 transform:
                   'translateY(-50%)',
+
                 border:
                   'none',
+
                 background:
                   'transparent',
+
                 cursor:
                   busy
                     ? 'not-allowed'
                     : 'pointer',
+
                 fontSize:
                   '20px',
+
                 lineHeight:
                   1,
+
                 padding:
                   '4px',
               }}
@@ -1081,28 +1394,39 @@ const Login: React.FC = () => {
 
           <button
             type="submit"
+
             disabled={busy}
+
             style={{
               width:
                 '100%',
+
               padding:
                 '13px',
+
               border:
                 'none',
+
               borderRadius:
                 '8px',
+
               background:
                 '#0b5cff',
+
               color:
                 '#ffffff',
+
               fontWeight:
                 600,
+
               fontSize:
                 '15px',
+
               cursor:
                 busy
                   ? 'not-allowed'
                   : 'pointer',
+
               opacity:
                 busy
                   ? 0.7
@@ -1116,7 +1440,7 @@ const Login: React.FC = () => {
         </form>
 
         {/* =====================================================
-            FALLBACK MESSAGE AFTER 3 PASSKEY FAILURES
+            PASSKEY FALLBACK NOTICE
             ===================================================== */}
 
         {passkeyFallback && (
@@ -1124,25 +1448,32 @@ const Login: React.FC = () => {
             style={{
               marginTop:
                 '18px',
+
               padding:
                 '12px',
+
               borderRadius:
                 '8px',
+
               background:
                 '#f2f4f7',
+
               color:
                 '#475467',
+
               fontSize:
                 '13px',
+
               lineHeight:
                 1.5,
+
               textAlign:
                 'center',
             }}
           >
-            Passkey login is temporarily
-            unavailable after 3 failed
-            attempts. Please use your
+            Passkey authentication has
+            reached the maximum number of
+            failed attempts. Please use your
             password to sign in.
           </div>
         )}
@@ -1155,20 +1486,26 @@ const Login: React.FC = () => {
           style={{
             textAlign:
               'center',
+
             marginTop:
               '24px',
+
             color:
               '#667085',
           }}
         >
           Don&apos;t have an account?{' '}
+
           <Link
             to="/register"
+
             style={{
               color:
                 '#0b5cff',
+
               fontWeight:
                 600,
+
               textDecoration:
                 'none',
             }}
