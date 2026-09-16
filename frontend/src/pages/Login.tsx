@@ -593,11 +593,9 @@ const Login: React.FC = () => {
         // ======================================================
         // 3. VERIFY WITH BACKEND
         // ======================================================
-
+        
         const verifyResponse =
-          await fetch(
-            const verifyResponse =
-  await fetch(
+              await fetch(
     `${API_URL}/api/passkey/login/verify`,
             {
               method:
