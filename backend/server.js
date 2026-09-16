@@ -526,6 +526,41 @@ const startServer = async () => {
       'Database migration completed: profile fields and gender are available on users'
     );
 
+// ========================================================
+// TRANSACTION PIN DATABASE
+// ========================================================
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS transaction_pins (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL UNIQUE
+      REFERENCES users(id)
+      ON DELETE CASCADE,
+
+    pin_hash TEXT NOT NULL,
+
+    failed_attempts INTEGER
+      NOT NULL DEFAULT 0,
+
+    locked_until TIMESTAMP,
+
+    last_failed_at TIMESTAMP,
+
+    last_used_at TIMESTAMP,
+
+    created_at TIMESTAMP
+      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP
+      NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+console.log(
+  'Database migration completed: transaction_pins table is available'
+);
+
     // ========================================================
     // NOTIFICATIONS DATABASE
     // ========================================================
