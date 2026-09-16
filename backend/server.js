@@ -35,11 +35,14 @@ const {
   handlePaystackWebhook,
 } = require('./controllers/paystackWebhookController');
 
+// ============================================================
+// DOJAH
+// ============================================================
+
 const {
   handleDojahWebhook,
-} = require(
-  './controllers/dojahWebhookController'
-);
+} = require('./controllers/dojahWebhookController');
+
 // ============================================================
 // APP
 // ============================================================
@@ -95,43 +98,64 @@ app.use(
 // API ROUTES
 // ============================================================
 
-// Authentication
+// ------------------------------------------------------------
+// AUTHENTICATION
+// ------------------------------------------------------------
+
 app.use(
   '/api/auth',
   authRoutes
 );
 
-// Customer accounts
+// ------------------------------------------------------------
+// CUSTOMER ACCOUNTS
+// ------------------------------------------------------------
+
 app.use(
   '/api/account',
   accountRoutes
 );
 
-// External bank transfers
+// ------------------------------------------------------------
+// EXTERNAL BANK TRANSFERS
+// ------------------------------------------------------------
+
 app.use(
   '/api/transfers',
   transferRoutes
 );
 
-// Zenimonies-to-Zenimonies transfers
+// ------------------------------------------------------------
+// ZENIMONIES-TO-ZENIMONIES TRANSFERS
+// ------------------------------------------------------------
+
 app.use(
   '/api/internal-transfers',
   internalTransferRoutes
 );
 
-// Deposits
+// ------------------------------------------------------------
+// DEPOSITS
+// ------------------------------------------------------------
+
 app.use(
   '/api/deposits',
   depositRoutes
 );
 
-// Banks
+// ------------------------------------------------------------
+// BANKS
+// ------------------------------------------------------------
+
 app.use(
   '/api/banks',
   bankRoutes
 );
 
-// Virtual cards
+// ------------------------------------------------------------
+// VIRTUAL CARDS
+// ------------------------------------------------------------
+
 app.use(
   '/api/virtual-cards',
   virtualCardRoutes
@@ -139,14 +163,6 @@ app.use(
 
 // ============================================================
 // PAYSTACK
-// ============================================================
-//
-// POST /api/paystack/initialize
-// POST /api/paystack/webhook
-//
-// The initialize route creates a Paystack Checkout session.
-//
-// The webhook is the ONLY mechanism that credits the account.
 // ============================================================
 
 app.use(
@@ -156,12 +172,6 @@ app.use(
 
 // ============================================================
 // KYC
-// ============================================================
-//
-// GET  /api/kyc/status
-// POST /api/kyc/bvn
-// POST /api/kyc/tier-2
-// POST /api/kyc/tier-3
 // ============================================================
 
 app.use(
@@ -188,13 +198,34 @@ app.use(
 );
 
 // ============================================================
-// PASSKEYS
+// PASSKEY
+// ============================================================
+//
+// PASSWORDLESS LOGIN:
+//
+// POST /api/passkey/login/options
+// POST /api/passkey/login/verify
+//
+// PASSKEY REGISTRATION:
+//
+// POST /api/passkey/register/options
+// POST /api/passkey/register/verify
+//
+// AUTHENTICATED PASSKEY:
+//
+// POST /api/passkey/authenticate/options
+// POST /api/passkey/authenticate/verify
+//
+// PASSKEY LIST:
+//
+// GET /api/passkey
 // ============================================================
 
 app.use(
   '/api/passkey',
   passkeyRoutes
 );
+
 // ============================================================
 // ADMIN
 // ============================================================
@@ -208,50 +239,59 @@ app.use(
 // ROOT
 // ============================================================
 
-app.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message:
-      'Zenimonies Banking API is running',
-  });
-});
+app.get(
+  '/',
+  (req, res) => {
+    return res.json({
+      success: true,
+      message: 'Zenimonies Banking API is running',
+    });
+  }
+);
 
 // ============================================================
 // API HOME
 // ============================================================
 
-app.get('/api', (req, res) => {
-  res.json({
-    success: true,
-    message:
-      'Zenimonies Banking API is running',
-  });
-});
+app.get(
+  '/api',
+  (req, res) => {
+    return res.json({
+      success: true,
+      message: 'Zenimonies Banking API is running',
+    });
+  }
+);
 
 // ============================================================
 // GENERAL HEALTH CHECK
 // ============================================================
 
-app.get('/health.json', (req, res) => {
-  res.json({
-    success: true,
-    status: 'ok',
-    platform: 'Zenimonies',
-    timestamp:
-      new Date().toISOString(),
-  });
-});
+app.get(
+  '/health.json',
+  (req, res) => {
+    return res.json({
+      success: true,
+      status: 'ok',
+      platform: 'Zenimonies',
+      timestamp: new Date().toISOString(),
+    });
+  }
+);
 
 // ============================================================
 // API HEALTH
 // ============================================================
 
-app.get('/api/health', (req, res) => {
-  res.json({
-    success: true,
-    status: 'healthy',
-  });
-});
+app.get(
+  '/api/health',
+  (req, res) => {
+    return res.json({
+      success: true,
+      status: 'healthy',
+    });
+  }
+);
 
 // ============================================================
 // DATABASE HEALTH
@@ -261,17 +301,15 @@ app.get(
   '/api/health/database',
   async (req, res) => {
     try {
-      const result =
-        await pool.query(
-          'SELECT NOW()'
-        );
+      const result = await pool.query(
+        'SELECT NOW()'
+      );
 
       return res.status(200).json({
         success: true,
         status: 'healthy',
         database: 'connected',
-        time:
-          result.rows[0].now,
+        time: result.rows[0].now,
       });
     } catch (error) {
       console.error(
@@ -289,139 +327,85 @@ app.get(
 );
 
 // ============================================================
-// DOJAH BVN CONNECTION HEALTH CHECK
+// DOJAH HEALTH
+// ============================================================
+//
+// This endpoint checks that the required Dojah configuration
+// exists.
+//
+// It does NOT submit a real customer's BVN.
+// It does NOT mark anyone as verified.
+// It does NOT change any KYC status.
 // ============================================================
 
 app.get(
   '/api/health/dojah',
   async (req, res) => {
     try {
-      const {
-        testDojahConnection,
-        verifyBvn,
-      } = require(
-        './services/dojahService'
-      );
+      const appId =
+        process.env.DOJAH_APP_ID;
 
-      // --------------------------------------------------------
-      // STEP 1: CHECK CONFIGURATION
-      // --------------------------------------------------------
+      const secretKey =
+        process.env.DOJAH_SECRET_KEY;
 
-      const config =
-        testDojahConnection();
+      const baseUrl =
+        process.env.DOJAH_BASE_URL ||
+        'https://sandbox.dojah.io';
 
-      if (!config.success) {
+      if (!appId || !secretKey) {
         return res.status(500).json({
           success: false,
+          status: 'unhealthy',
           message:
             'Dojah configuration is incomplete.',
-          dojah: config,
-        });
-      }
-
-      // --------------------------------------------------------
-      // STEP 2: ACTUALLY CALL DOJAH SANDBOX
-      // --------------------------------------------------------
-      //
-      // This is Dojah's official sandbox test BVN.
-      //
-      // We NEVER use this to verify a real customer.
-      // It is only a connectivity test.
-      //
-
-      console.log(
-        '================================================'
-      );
-
-      console.log(
-        'DOJAH SANDBOX CONNECTION TEST'
-      );
-
-      console.log(
-        '================================================'
-      );
-
-      const result =
-        await verifyBvn(
-          '22222222222'
-        );
-
-      console.log(
-        'Dojah test status:',
-        result.status
-      );
-
-      console.log(
-        'Dojah test success:',
-        result.success
-      );
-
-      console.log(
-        '================================================'
-      );
-
-      // --------------------------------------------------------
-      // DOJAH REQUEST FAILED
-      // --------------------------------------------------------
-
-      if (!result.success) {
-        return res.status(502).json({
-          success: false,
-          message:
-            'Dojah Sandbox request failed.',
           dojah: {
-            configured: true,
-            baseUrl:
-              config.baseUrl,
-            status:
-              result.status,
-            error:
-              result.message,
+            configured: false,
+            baseUrl,
           },
         });
       }
 
-      // --------------------------------------------------------
-      // DOJAH REQUEST SUCCEEDED
-      // --------------------------------------------------------
-
       return res.status(200).json({
         success: true,
+        status: 'healthy',
         message:
-          'Dojah Sandbox connection is working.',
+          'Dojah configuration is available.',
         dojah: {
           configured: true,
-          connected: true,
-          baseUrl:
-            config.baseUrl,
-          status:
-            result.status,
+          baseUrl,
         },
       });
     } catch (error) {
       console.error(
-        'Dojah Sandbox health check failed:',
+        'Dojah health check failed:',
         error
       );
 
       return res.status(500).json({
         success: false,
+        status: 'unhealthy',
         message:
-          'Unable to connect to Dojah Sandbox.',
-        error:
-          error.message,
+          'Unable to check Dojah configuration.',
       });
     }
   }
 );
+
 // ============================================================
 // DOJAH WEBHOOK
+// ============================================================
+//
+// Dojah sends verification results to this endpoint.
+//
+// The webhook controller is responsible for processing
+// the provider result.
 // ============================================================
 
 app.post(
   '/api/webhooks/dojah',
   handleDojahWebhook
 );
+
 // ============================================================
 // 404 HANDLER
 // ============================================================
@@ -458,8 +442,7 @@ app.use(
 
     return res.status(500).json({
       success: false,
-      message:
-        'Internal server error',
+      message: 'Internal server error',
     });
   }
 );
@@ -470,215 +453,219 @@ app.use(
 
 const startServer = async () => {
   try {
-    // --------------------------------------------------------
+    // ========================================================
     // DATABASE
-    // --------------------------------------------------------
+    // ========================================================
 
     await initializeDatabase();
 
-    // --------------------------------------------------------
-    // DATABASE MIGRATIONS
-    // --------------------------------------------------------
-    //
-    // Add recipient phone number to bank transfers.
-    //
-    // This runs against the existing live PostgreSQL
-    // database. IF NOT EXISTS makes it safe to run
-    // whenever the backend starts.
-    //
+    console.log(
+      'Database initialization completed.'
+    );
+
+    // ========================================================
+    // BANK TRANSFERS COMPATIBILITY MIGRATION
+    // ========================================================
 
     await pool.query(`
       ALTER TABLE bank_transfers
-      ADD COLUMN IF NOT EXISTS recipient_phone VARCHAR(30);
+      ADD COLUMN IF NOT EXISTS
+      recipient_phone VARCHAR(30);
     `);
 
     console.log(
       'Database migration completed: recipient_phone is available on bank_transfers'
     );
-    
-    // --------------------------------------------------------
-    // PROFILE DATABASE MIGRATION
-    // --------------------------------------------------------
-    //
-    // Add persistent profile fields to existing users.
-    // IF NOT EXISTS makes this safe on every server restart.
-    //
+
+    // ========================================================
+    // PROFILE COMPATIBILITY MIGRATION
+    // ========================================================
 
     await pool.query(`
       ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS address TEXT;
+      ADD COLUMN IF NOT EXISTS
+      address TEXT;
 
       ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+      ADD COLUMN IF NOT EXISTS
+      city VARCHAR(100);
 
       ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS state VARCHAR(100);
+      ADD COLUMN IF NOT EXISTS
+      state VARCHAR(100);
 
       ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS lga VARCHAR(100);
+      ADD COLUMN IF NOT EXISTS
+      lga VARCHAR(100);
 
       ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS country VARCHAR(100)
+      ADD COLUMN IF NOT EXISTS
+      country VARCHAR(100)
       NOT NULL DEFAULT 'Nigeria';
 
       ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS profile_photo TEXT;
+      ADD COLUMN IF NOT EXISTS
+      profile_photo TEXT;
     `);
 
     console.log(
       'Database migration completed: profile fields are available on users'
     );
-    
+
+    // ========================================================
+    // NOTIFICATIONS DATABASE
+    // ========================================================
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        user_id UUID NOT NULL
+          REFERENCES users(id)
+          ON DELETE CASCADE,
+
+        type VARCHAR(50)
+          NOT NULL DEFAULT 'general',
+
+        title VARCHAR(200)
+          NOT NULL,
+
+        message TEXT
+          NOT NULL,
+
+        is_read BOOLEAN
+          NOT NULL DEFAULT false,
+
+        created_at TIMESTAMP
+          NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+        read_at TIMESTAMP
+      );
+    `);
+
     // --------------------------------------------------------
-// NOTIFICATIONS DATABASE
-// --------------------------------------------------------
-//
-// Stores real customer notifications.
-// No mock notifications are created.
-//
-
-await pool.query(`
-  CREATE TABLE IF NOT EXISTS notifications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    user_id UUID NOT NULL
-      REFERENCES users(id)
-      ON DELETE CASCADE,
-
-    type VARCHAR(50) NOT NULL DEFAULT 'general',
-
-    title VARCHAR(200) NOT NULL,
-
-    message TEXT NOT NULL,
-
-    is_read BOOLEAN NOT NULL DEFAULT false,
-
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    read_at TIMESTAMP
-  );
-`);
-
-await pool.query(`
-  CREATE INDEX IF NOT EXISTS idx_notifications_user_id
-  ON notifications(user_id);
-`);
-
-await pool.query(`
-  CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
-  ON notifications(user_id, is_read);
-`);
-
-await pool.query(`
-  CREATE INDEX IF NOT EXISTS idx_notifications_created_at
-  ON notifications(created_at DESC);
-`);
-
-console.log(
-  'Database migration completed: notifications table is available'
-);
+    // Notification indexes
     // --------------------------------------------------------
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS
+      idx_notifications_user_id
+      ON notifications(user_id);
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS
+      idx_notifications_user_unread
+      ON notifications(user_id, is_read);
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS
+      idx_notifications_created_at
+      ON notifications(created_at DESC);
+    `);
+
+    console.log(
+      'Database migration completed: notifications table is available'
+    );
+
+    // ========================================================
     // LEGAL NAME VERIFICATION LOCK
-   // --------------------------------------------------------
-  // LEGAL NAME VERIFICATION LOCK
-  // --------------------------------------------------------
- //
- // The first successful verification permanently locks
- // the user's legal name.
-//
+    // ========================================================
+    //
+    // The first successful account verification permanently
+    // locks the user's legal name.
+    //
+    // This trigger DOES NOT perform verification.
+    //
+    // It only reacts when:
+    //
+    // is_verified: false → true
+    //
+    // and then sets:
+    //
+    // legal_name_locked = true
+    //
+    // The actual verification decision must come from the
+    // authorized verification process/provider.
+    // ========================================================
 
-await pool.query(`
-  CREATE OR REPLACE FUNCTION lock_legal_name_after_verification()
-  RETURNS TRIGGER AS $$
-  BEGIN
-    IF
-      OLD.is_verified = false
-      AND NEW.is_verified = true
-    THEN
-      NEW.legal_name_locked = true;
-    END IF;
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION
+      lock_legal_name_after_verification()
+      RETURNS TRIGGER AS $$
+      BEGIN
 
-    RETURN NEW;
-  END;
-  $$ LANGUAGE plpgsql;
+        IF
+          OLD.is_verified = false
+          AND NEW.is_verified = true
+        THEN
+          NEW.legal_name_locked = true;
+        END IF;
 
-  DROP TRIGGER IF EXISTS users_legal_name_verification_lock
-  ON users;
+        RETURN NEW;
 
-  CREATE TRIGGER users_legal_name_verification_lock
-  BEFORE UPDATE OF is_verified
-  ON users
-  FOR EACH ROW
-  EXECUTE FUNCTION lock_legal_name_after_verification();
-`);
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
 
-await pool.query(`
-  UPDATE users
-  SET
-    legal_name_locked = true,
-    updated_at = CURRENT_TIMESTAMP
-  WHERE is_verified = true
-    AND legal_name_locked = false;
-`);
+    await pool.query(`
+      DROP TRIGGER IF EXISTS
+      users_legal_name_verification_lock
+      ON users;
+    `);
 
-console.log(
-  'Database migration completed: legal name verification lock is active'
-);
-    // --------------------------------------------------------
-   //
-   // The first successful verification permanently locks
-  // the user's legal name.
-  //
-
-await pool.query(`
-  CREATE OR REPLACE FUNCTION lock_legal_name_after_verification()
-  RETURNS TRIGGER AS $$
-  BEGIN
-    IF
-      OLD.is_verified = false
-      AND NEW.is_verified = true
-    THEN
-      NEW.legal_name_locked = true;
-    END IF;
-
-    RETURN NEW;
-  END;
-  $$ LANGUAGE plpgsql;
-
-  DROP TRIGGER IF EXISTS users_legal_name_verification_lock
-  ON users;
-
-  CREATE TRIGGER users_legal_name_verification_lock
-  BEFORE UPDATE OF is_verified
-  ON users
-  FOR EACH ROW
-  EXECUTE FUNCTION lock_legal_name_after_verification();
-`);
-
-await pool.query(`
-  UPDATE users
-  SET
-    legal_name_locked = true,
-    updated_at = CURRENT_TIMESTAMP
-  WHERE is_verified = true
-    AND legal_name_locked = false;
-`);
-
-console.log(
-  'Database migration completed: legal name verification lock is active'
-);
+    await pool.query(`
+      CREATE TRIGGER
+      users_legal_name_verification_lock
+      BEFORE UPDATE OF is_verified
+      ON users
+      FOR EACH ROW
+      EXECUTE FUNCTION
+      lock_legal_name_after_verification();
+    `);
 
     // --------------------------------------------------------
-    // SERVER
+    // Lock legal names for users who are already verified.
     // --------------------------------------------------------
+
+    await pool.query(`
+      UPDATE users
+      SET
+        legal_name_locked = true,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE
+        is_verified = true
+        AND legal_name_locked = false;
+    `);
+
+    console.log(
+      'Database migration completed: legal name verification lock is active'
+    );
+
+    // ========================================================
+    // START SERVER
+    // ========================================================
 
     app.listen(
       PORT,
       () => {
+        console.log('');
         console.log(
-          `Zenimonies Banking API running on port ${PORT}`
+          '================================================'
+        );
+        console.log(
+          'ZENIMONIES BANKING API'
+        );
+        console.log(
+          '================================================'
         );
 
+        console.log(
+          `Server running on port ${PORT}`
+        );
+
+        console.log('');
         console.log(
           'API:',
           '/api'
@@ -699,6 +686,7 @@ console.log(
           '/api/health/dojah'
         );
 
+        console.log('');
         console.log(
           'Auth:',
           '/api/auth'
@@ -755,19 +743,34 @@ console.log(
         );
 
         console.log(
-         'Profile:',
-         '/api/profile'
+          'Profile:',
+          '/api/profile'
         );
 
         console.log(
-         'Passkey:',
-         '/api/passkey'
+          'Notifications:',
+          '/api/notifications'
+        );
+
+        console.log(
+          'Passkey:',
+          '/api/passkey'
         );
 
         console.log(
           'Admin:',
           '/api/admin'
         );
+
+        console.log(
+          'Dojah Webhook:',
+          '/api/webhooks/dojah'
+        );
+
+        console.log(
+          '================================================'
+        );
+        console.log('');
       }
     );
   } catch (error) {
