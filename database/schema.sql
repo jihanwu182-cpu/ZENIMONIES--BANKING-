@@ -623,6 +623,33 @@ CREATE TABLE IF NOT EXISTS security_tokens (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ============================================================
+-- TRANSACTION PIN
+-- 4-digit PIN used to authorize transactions
+-- Separate from Account Unlock Passcode
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS transaction_pins (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL UNIQUE
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    pin_hash TEXT NOT NULL,
+
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+
+    locked_until TIMESTAMP,
+
+    last_failed_at TIMESTAMP,
+
+    last_used_at TIMESTAMP,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- ============================================================
 -- AUDIT LOG
