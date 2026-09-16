@@ -11,7 +11,6 @@ import { useNavigate } from 'react-router-dom';
 const API_URL =
   'https://zenimonies-banking.onrender.com';
 
-
 // ============================================================
 // TYPES
 // ============================================================
@@ -26,12 +25,16 @@ interface User {
   phone?: string;
   date_of_birth?: string;
   dob?: string;
+
+  gender?: string;
+
   address?: string;
   residential_address?: string;
   city?: string;
   state?: string;
   lga?: string;
   country?: string;
+
   role?: string;
   status?: string;
 
@@ -62,7 +65,6 @@ interface Account {
   balance?: number | string;
   status?: string;
 }
-
 
 // ============================================================
 // NIGERIA
@@ -108,7 +110,6 @@ const NIGERIAN_STATES = [
   'Zamfara',
   'Federal Capital Territory',
 ];
-
 
 // ============================================================
 // NIGERIAN LGAs
@@ -998,7 +999,6 @@ const NIGERIAN_LGAS: Record<string, string[]> = {
   ],
 };
 
-
 // ============================================================
 // SOUTH AFRICA
 // ============================================================
@@ -1015,6 +1015,16 @@ const SOUTH_AFRICAN_PROVINCES = [
   'Western Cape',
 ];
 
+// ============================================================
+// GENDER OPTIONS
+// ============================================================
+
+const GENDER_OPTIONS = [
+  'Male',
+  'Female',
+  'Other',
+  'Prefer not to say',
+];
 
 // ============================================================
 // PROFILE
@@ -1052,13 +1062,13 @@ const Profile: React.FC = () => {
     email: '',
     phone: '',
     dateOfBirth: '',
+    gender: '',
     address: '',
     city: '',
     state: '',
     lga: '',
     country: 'Nigeria',
   });
-
 
   // ==========================================================
   // LOAD PROFILE
@@ -1067,7 +1077,6 @@ const Profile: React.FC = () => {
   useEffect(() => {
     loadProfile();
   }, []);
-
 
   const loadProfile = async () => {
     try {
@@ -1130,6 +1139,9 @@ const Profile: React.FC = () => {
                 serverUser.date_of_birth
               ).slice(0, 10)
             : '',
+
+        gender:
+          serverUser.gender || '',
 
         address:
           serverUser.address ||
@@ -1207,7 +1219,6 @@ const Profile: React.FC = () => {
     }
   };
 
-
   // ==========================================================
   // DISPLAY NAME
   // ==========================================================
@@ -1219,7 +1230,6 @@ const Profile: React.FC = () => {
       user?.last_name || ''
     }`.trim() ||
     'Zenimonies User';
-
 
   // ==========================================================
   // INITIALS
@@ -1237,15 +1247,9 @@ const Profile: React.FC = () => {
       .join('')
       .toUpperCase();
 
-
   // ==========================================================
   // VERIFICATION STATUS
   // ==========================================================
-
-  const kycStatus =
-    String(
-      user?.kyc_status || ''
-    ).toLowerCase();
 
   const accountVerified =
     user?.is_verified === true;
@@ -1255,7 +1259,6 @@ const Profile: React.FC = () => {
 
   const profileLocked =
     accountVerified;
-
 
   // ==========================================================
   // LOCATION OPTIONS
@@ -1274,7 +1277,6 @@ const Profile: React.FC = () => {
         ] || []
       : [];
 
-
   // ==========================================================
   // UPDATE FIELD
   // ==========================================================
@@ -1290,7 +1292,6 @@ const Profile: React.FC = () => {
       })
     );
   };
-
 
   // ==========================================================
   // COUNTRY
@@ -1309,7 +1310,6 @@ const Profile: React.FC = () => {
     );
   };
 
-
   // ==========================================================
   // STATE
   // ==========================================================
@@ -1325,7 +1325,6 @@ const Profile: React.FC = () => {
       })
     );
   };
-
 
   // ==========================================================
   // SAVE PROFILE
@@ -1370,6 +1369,10 @@ const Profile: React.FC = () => {
 
             date_of_birth:
               form.dateOfBirth ||
+              null,
+
+            gender:
+              form.gender ||
               null,
 
             address:
@@ -1456,7 +1459,6 @@ const Profile: React.FC = () => {
       setSaving(false);
     }
   };
-
 
   // ==========================================================
   // CHANGE PROFILE PHOTO
@@ -1590,7 +1592,6 @@ const Profile: React.FC = () => {
     }
   };
 
-
   // ==========================================================
   // CANCEL
   // ==========================================================
@@ -1602,7 +1603,6 @@ const Profile: React.FC = () => {
 
     await loadProfile();
   };
-
 
   // ==========================================================
   // RENDER
@@ -1646,7 +1646,6 @@ const Profile: React.FC = () => {
         </button>
 
       </header>
-
 
       <main style={styles.main}>
 
@@ -1692,7 +1691,6 @@ const Profile: React.FC = () => {
 
             </div>
 
-
             {/* HIDDEN FILE INPUT */}
 
             <input
@@ -1708,7 +1706,6 @@ const Profile: React.FC = () => {
                 display: 'none',
               }}
             />
-
 
             {/* PHOTO BUTTON */}
 
@@ -1730,7 +1727,6 @@ const Profile: React.FC = () => {
             </button>
 
           </div>
-
 
           <div
             style={
@@ -1755,7 +1751,6 @@ const Profile: React.FC = () => {
                 'Email not available'}
             </p>
 
-
             <span
               style={{
                 ...styles.statusBadge,
@@ -1771,7 +1766,6 @@ const Profile: React.FC = () => {
             </span>
 
           </div>
-
 
           {!editing &&
             !profileLocked && (
@@ -1791,7 +1785,6 @@ const Profile: React.FC = () => {
               </button>
 
             )}
-
 
           {profileLocked && (
 
@@ -1815,7 +1808,6 @@ const Profile: React.FC = () => {
           )}
 
         </section>
-
 
         {/* ====================================================
             MESSAGES
@@ -1841,7 +1833,6 @@ const Profile: React.FC = () => {
 
         )}
 
-
         {/* ====================================================
             PERSONAL INFORMATION
         ==================================================== */}
@@ -1864,7 +1855,6 @@ const Profile: React.FC = () => {
             Keep your personal
             information up to date.
           </p>
-
 
           <div style={styles.grid}>
 
@@ -1918,7 +1908,6 @@ const Profile: React.FC = () => {
               )}
 
             </div>
-
 
             {/* DATE OF BIRTH */}
 
@@ -1975,6 +1964,78 @@ const Profile: React.FC = () => {
 
             </div>
 
+            {/* GENDER */}
+
+            <div
+              style={styles.field}
+            >
+
+              <label
+                style={styles.label}
+              >
+                Gender
+              </label>
+
+              <select
+                value={
+                  form.gender
+                }
+                disabled={
+                  !editing ||
+                  profileLocked
+                }
+                onChange={(
+                  event
+                ) =>
+                  updateField(
+                    'gender',
+                    event.target.value
+                  )
+                }
+                style={{
+                  ...styles.input,
+
+                  ...(editing &&
+                  !profileLocked
+                    ? styles.editableInput
+                    : styles.disabledInput),
+                }}
+              >
+
+                <option value="">
+                  Select Gender
+                </option>
+
+                {GENDER_OPTIONS.map(
+                  (gender) => (
+
+                    <option
+                      key={gender}
+                      value={gender}
+                    >
+                      {gender}
+                    </option>
+
+                  )
+                )}
+
+              </select>
+
+              {profileLocked && (
+
+                <small
+                  style={
+                    styles.helper
+                  }
+                >
+                  🔒 Your verified profile
+                  information cannot be
+                  changed.
+                </small>
+
+              )}
+
+            </div>
 
             {/* EMAIL */}
 
@@ -2027,7 +2088,6 @@ const Profile: React.FC = () => {
               )}
 
             </div>
-
 
             {/* PHONE */}
 
@@ -2085,7 +2145,6 @@ const Profile: React.FC = () => {
 
         </section>
 
-
         {/* ====================================================
             RESIDENTIAL ADDRESS
         ==================================================== */}
@@ -2109,7 +2168,6 @@ const Profile: React.FC = () => {
             state and Local Government
             Area.
           </p>
-
 
           <div style={styles.grid}>
 
@@ -2161,7 +2219,6 @@ const Profile: React.FC = () => {
               </select>
 
             </div>
-
 
             {/* STATE / PROVINCE */}
 
@@ -2227,7 +2284,6 @@ const Profile: React.FC = () => {
               </select>
 
             </div>
-
 
             {/* LGA */}
 
@@ -2301,7 +2357,6 @@ const Profile: React.FC = () => {
 
             )}
 
-
             {/* CITY */}
 
             <div
@@ -2341,7 +2396,6 @@ const Profile: React.FC = () => {
               />
 
             </div>
-
 
             {/* ADDRESS */}
 
@@ -2394,7 +2448,6 @@ const Profile: React.FC = () => {
 
         </section>
 
-
         {/* ====================================================
             ACCOUNT INFORMATION
         ==================================================== */}
@@ -2408,7 +2461,6 @@ const Profile: React.FC = () => {
           >
             Account Information
           </h2>
-
 
           <div
             style={
@@ -2437,7 +2489,6 @@ const Profile: React.FC = () => {
 
             </div>
 
-
             <div>
 
               <span
@@ -2458,7 +2509,6 @@ const Profile: React.FC = () => {
               </strong>
 
             </div>
-
 
             <div>
 
@@ -2485,7 +2535,6 @@ const Profile: React.FC = () => {
 
         </section>
 
-
         {/* ====================================================
             ACTION BUTTONS
         ==================================================== */}
@@ -2509,7 +2558,6 @@ const Profile: React.FC = () => {
             >
               Cancel
             </button>
-
 
             <button
               type="button"
@@ -2536,7 +2584,6 @@ const Profile: React.FC = () => {
   );
 };
 
-
 // ============================================================
 // STYLES
 // ============================================================
@@ -2555,7 +2602,6 @@ const styles: Record<
     paddingBottom: '50px',
   },
 
-
   header: {
     minHeight: '64px',
     backgroundColor: '#087a4b',
@@ -2567,7 +2613,6 @@ const styles: Record<
     boxSizing: 'border-box',
   },
 
-
   backButton: {
     border: 'none',
     background: 'transparent',
@@ -2577,13 +2622,11 @@ const styles: Record<
     padding: '5px 8px',
   },
 
-
   headerTitle: {
     flex: 1,
     fontSize: '20px',
     fontWeight: 700,
   },
-
 
   homeButton: {
     border:
@@ -2596,7 +2639,6 @@ const styles: Record<
     fontWeight: 600,
   },
 
-
   main: {
     width: '100%',
     maxWidth: '900px',
@@ -2604,7 +2646,6 @@ const styles: Record<
     padding: '22px 16px',
     boxSizing: 'border-box',
   },
-
 
   profileCard: {
     backgroundColor: '#ffffff',
@@ -2619,14 +2660,12 @@ const styles: Record<
     flexWrap: 'wrap',
   },
 
-
   avatarWrapper: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: '8px',
   },
-
 
   avatar: {
     width: '72px',
@@ -2643,13 +2682,11 @@ const styles: Record<
     overflow: 'hidden',
   },
 
-
   avatarImage: {
     width: '100%',
     height: '100%',
     objectFit: 'cover',
   },
-
 
   photoButton: {
     border:
@@ -2663,12 +2700,10 @@ const styles: Record<
     fontWeight: 700,
   },
 
-
   profileInfo: {
     flex: 1,
     minWidth: '180px',
   },
-
 
   profileName: {
     margin: 0,
@@ -2676,13 +2711,11 @@ const styles: Record<
     fontWeight: 800,
   },
 
-
   emailText: {
     margin: '5px 0 9px',
     color: '#69756e',
     fontSize: '14px',
   },
-
 
   statusBadge: {
     display: 'inline-block',
@@ -2692,18 +2725,15 @@ const styles: Record<
     fontWeight: 700,
   },
 
-
   verifiedBadge: {
     backgroundColor: '#e5f7ed',
     color: '#087a4b',
   },
 
-
   notVerifiedBadge: {
     backgroundColor: '#fff4df',
     color: '#916100',
   },
-
 
   lockMessage: {
     width: '100%',
@@ -2717,7 +2747,6 @@ const styles: Record<
     boxSizing: 'border-box',
   },
 
-
   editButton: {
     border: 'none',
     backgroundColor: '#087a4b',
@@ -2728,7 +2757,6 @@ const styles: Record<
     fontWeight: 700,
   },
 
-
   success: {
     backgroundColor: '#e7f7ee',
     color: '#087a4b',
@@ -2737,7 +2765,6 @@ const styles: Record<
     marginBottom: '15px',
     fontWeight: 600,
   },
-
 
   error: {
     backgroundColor: '#fdeaea',
@@ -2748,7 +2775,6 @@ const styles: Record<
     fontWeight: 600,
   },
 
-
   card: {
     backgroundColor: '#ffffff',
     borderRadius: '18px',
@@ -2758,20 +2784,17 @@ const styles: Record<
     marginBottom: '18px',
   },
 
-
   sectionTitle: {
     margin: 0,
     fontSize: '18px',
     fontWeight: 800,
   },
 
-
   description: {
     margin: '6px 0 20px',
     color: '#69756e',
     fontSize: '14px',
   },
-
 
   grid: {
     display: 'grid',
@@ -2780,20 +2803,17 @@ const styles: Record<
     gap: '17px',
   },
 
-
   field: {
     display: 'flex',
     flexDirection: 'column',
     gap: '7px',
   },
 
-
   label: {
     fontSize: '13px',
     fontWeight: 700,
     color: '#344039',
   },
-
 
   input: {
     width: '100%',
@@ -2808,20 +2828,17 @@ const styles: Record<
     outline: 'none',
   },
 
-
   editableInput: {
     border:
       '1px solid #087a4b',
     backgroundColor: '#ffffff',
   },
 
-
   disabledInput: {
     backgroundColor: '#f1f3f2',
     color: '#68736d',
     cursor: 'not-allowed',
   },
-
 
   textarea: {
     resize: 'vertical',
@@ -2830,12 +2847,10 @@ const styles: Record<
       'Arial, Helvetica, sans-serif',
   },
 
-
   helper: {
     color: '#69756e',
     fontSize: '11px',
   },
-
 
   accountGrid: {
     display: 'grid',
@@ -2844,7 +2859,6 @@ const styles: Record<
     gap: '20px',
   },
 
-
   accountLabel: {
     display: 'block',
     color: '#69756e',
@@ -2852,12 +2866,10 @@ const styles: Record<
     marginBottom: '5px',
   },
 
-
   accountValue: {
     display: 'block',
     fontSize: '15px',
   },
-
 
   actions: {
     display: 'flex',
@@ -2865,7 +2877,6 @@ const styles: Record<
     gap: '10px',
     marginTop: '5px',
   },
-
 
   cancelButton: {
     border:
@@ -2878,7 +2889,6 @@ const styles: Record<
     fontWeight: 700,
   },
 
-
   saveButton: {
     border: 'none',
     backgroundColor: '#087a4b',
@@ -2889,6 +2899,5 @@ const styles: Record<
     fontWeight: 700,
   },
 };
-
 
 export default Profile;
