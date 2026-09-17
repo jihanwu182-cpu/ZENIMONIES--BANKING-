@@ -380,23 +380,34 @@ const getDataPlans = async (
       method: 'GET',
     });
 
+const variations =
+  result?.content?.variations ||
+  result?.content?.varations ||
+  [];
 
-  const variations =
-    result?.content?.variations ||
-    result?.content?.varations ||
-    [];
 
-  console.log(
-  `VTpass ${normalizedNetwork} returned ${variations.length} data variations.`
+// ============================================================
+// TEMPORARY VTpass CATALOGUE DIAGNOSTIC
+// ============================================================
+
+console.log(
+  `VTpass ${normalizedNetwork} returned ${variations.length} variations.`
 );
 
 console.log(
-  `VTpass ${normalizedNetwork} variation codes:`,
-  variations.map(
-    (variation) =>
-      variation?.variation_code
-  )
+  `VTpass ${normalizedNetwork} catalogue:`,
+  variations.map((variation) => ({
+    code:
+      variation?.variation_code,
+
+    name:
+      variation?.name,
+
+    amount:
+      variation?.variation_amount,
+  }))
 );
+  
 
   const plans =
     variations.map(
