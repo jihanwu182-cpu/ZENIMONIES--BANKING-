@@ -223,26 +223,14 @@ const validateAndRefreshSession = async ({
       session.expires_at
     ).getTime();
 
+if (now >= expiresAt) {
 
-  if (now >= expiresAt) {
-
-    await pool.query(
-      `
-      UPDATE auth_sessions
-      SET revoked_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-        AND revoked_at IS NULL
-      `,
-      [session.id]
-    );
-
-
-    return {
-      valid: false,
-      reason: 'SESSION_EXPIRED',
-    };
-  }
-
+  return {
+    valid: false,
+    reason: 'SESSION_EXPIRED',
+  };
+}
+  
 
   // ----------------------------------------------------------
   // Refresh inactivity timer
