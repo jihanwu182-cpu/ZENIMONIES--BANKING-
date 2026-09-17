@@ -183,10 +183,41 @@ const getPlanCategory = (
     }
   }
 
-  const text =
-    `${plan.name || ''} ${
+  // IMPORTANT:
+  // VTpass identifies the actual data product
+  // using variation_code. We therefore check:
+  //
+  // 1. variation_code
+  // 2. plan name
+  // 3. description
+  //
+  // This prevents valid Glo/Airtel/MTN plans
+  // from disappearing into "Other".
+
+  const variationCode =
+    String(
+      plan.variation_code || ''
+    ).toLowerCase();
+
+  const name =
+    String(
+      plan.name || ''
+    ).toLowerCase();
+
+  const description =
+    String(
       plan.description || ''
-    }`.toLowerCase();
+    ).toLowerCase();
+
+  const text =
+    `${variationCode} ${name} ${description}`;
+
+
+  // ==========================================================
+  // HOT
+  // Only use this when the provider/catalogue explicitly
+  // identifies a plan as hot, popular or featured.
+  // ==========================================================
 
   if (
     text.includes('hot') ||
@@ -195,6 +226,11 @@ const getPlanCategory = (
   ) {
     return 'HOT';
   }
+
+
+  // ==========================================================
+  // ROUTER / MIFI / ODU
+  // ==========================================================
 
   if (
     text.includes('router') ||
@@ -205,6 +241,11 @@ const getPlanCategory = (
     return 'Router';
   }
 
+
+  // ==========================================================
+  // 3 MONTHS+
+  // ==========================================================
+
   if (
     text.includes('3 month') ||
     text.includes('3-month') ||
@@ -212,6 +253,8 @@ const getPlanCategory = (
     text.includes('90-day') ||
     text.includes('120 day') ||
     text.includes('120-day') ||
+    text.includes('180 day') ||
+    text.includes('180-day') ||
     text.includes('365 day') ||
     text.includes('365-day') ||
     text.includes('long term') ||
@@ -220,45 +263,34 @@ const getPlanCategory = (
     return '3 Months+';
   }
 
-  if (
-    text.includes('night') ||
-    text.includes('12am') ||
-    text.includes('12 am') ||
-    text.includes('1am') ||
-    text.includes('2am') ||
-    text.includes('3am') ||
-    text.includes('4am') ||
-    text.includes('5am')
-  ) {
-    return 'Night';
-  }
+
+  // ==========================================================
+  // MONTHLY
+  //
+  // Check monthly BEFORE generic day detection.
+  // ==========================================================
 
   if (
-    text.includes('social') ||
-    text.includes('instagram') ||
-    text.includes('tiktok') ||
-    text.includes('whatsapp') ||
-    text.includes('facebook')
+    variationCode.includes('monthly') ||
+    variationCode.includes('month') ||
+    text.includes('monthly') ||
+    text.includes('30 day') ||
+    text.includes('30-day') ||
+    text.includes('30days') ||
+    text.includes('30 days')
   ) {
-    return 'Social';
+    return 'Monthly';
   }
 
-  if (
-    text.includes('youtube') ||
-    text.includes('binge')
-  ) {
-    return 'Binge';
-  }
+
+  // ==========================================================
+  // SPECIAL
+  // ==========================================================
 
   if (
-    text.includes('weekend') ||
-    text.includes('saturday') ||
-    text.includes('sunday')
-  ) {
-    return 'Weekend';
-  }
-
-  if (
+    variationCode.includes('special') ||
+    variationCode.includes('combo') ||
+    variationCode.includes('collabo') ||
     text.includes('special') ||
     text.includes('combo') ||
     text.includes('collabo')
@@ -266,36 +298,173 @@ const getPlanCategory = (
     return 'Special';
   }
 
+
+  // ==========================================================
+  // WEEKEND
+  // ==========================================================
+
   if (
+    variationCode.includes('weekend') ||
+    text.includes('weekend') ||
+    text.includes('saturday') ||
+    text.includes('sunday')
+  ) {
+    return 'Weekend';
+  }
+
+
+  // ==========================================================
+  // SOCIAL
+  // ==========================================================
+
+  if (
+    variationCode.includes('social') ||
+    variationCode.includes('myg') ||
+    variationCode.includes('whatsapp') ||
+    variationCode.includes('instagram') ||
+    variationCode.includes('tiktok') ||
+    variationCode.includes('facebook') ||
+    variationCode.includes('telegram') ||
+    variationCode.includes('opera') ||
+    variationCode.includes('insta') ||
+    variationCode.includes('text') ||
+    text.includes('social') ||
+    text.includes('whatsapp') ||
+    text.includes('instagram') ||
+    text.includes('tiktok') ||
+    text.includes('facebook') ||
+    text.includes('telegram')
+  ) {
+    return 'Social';
+  }
+
+
+  // ==========================================================
+  // BINGE / YOUTUBE
+  // ==========================================================
+
+  if (
+    variationCode.includes('binge') ||
+    variationCode.includes('youtube') ||
+    text.includes('binge') ||
+    text.includes('youtube')
+  ) {
+    return 'Binge';
+  }
+
+
+  // ==========================================================
+  // NIGHT
+  // ==========================================================
+
+  if (
+    variationCode.includes('night') ||
+    text.includes('night') ||
+    text.includes('12am') ||
+    text.includes('12 am') ||
+    text.includes('1am') ||
+    text.includes('1 am') ||
+    text.includes('2am') ||
+    text.includes('2 am') ||
+    text.includes('3am') ||
+    text.includes('3 am') ||
+    text.includes('4am') ||
+    text.includes('4 am') ||
+    text.includes('5am') ||
+    text.includes('5 am')
+  ) {
+    return 'Night';
+  }
+
+
+  // ==========================================================
+  // EXTRA NIGHT
+  //
+  // Some providers include night bonuses inside the
+  // daily bundle name. Those are still Daily plans,
+  // not pure Night plans, so we don't move them to Night
+  // unless the variation itself is explicitly a night plan.
+  // ==========================================================
+
+
+  // ==========================================================
+  // WEEKLY
+  // ==========================================================
+
+  if (
+    variationCode.includes('weekly') ||
+    variationCode.includes('week') ||
+    variationCode.includes('2weeks') ||
+    variationCode.includes('2-weeks') ||
     text.includes('weekly') ||
     text.includes('7 day') ||
-    text.includes('7-day')
+    text.includes('7-day') ||
+    text.includes('7days') ||
+    text.includes('7 days') ||
+    text.includes('14 day') ||
+    text.includes('14-day') ||
+    text.includes('14days') ||
+    text.includes('14 days')
   ) {
     return 'Weekly';
   }
 
-  if (
-    text.includes('monthly') ||
-    text.includes('30 day') ||
-    text.includes('30-day')
-  ) {
-    return 'Monthly';
-  }
+
+  // ==========================================================
+  // DAILY
+  //
+  // This is the important fix.
+  //
+  // Examples:
+  // glo-daily-50
+  // glo-daily-100
+  // glo-2days-200
+  // glo-3days-400
+  // etc.
+  // ==========================================================
 
   if (
+    variationCode.includes('daily') ||
+    variationCode.includes('1day') ||
+    variationCode.includes('1-day') ||
+    variationCode.includes('2days') ||
+    variationCode.includes('2-days') ||
+    variationCode.includes('3days') ||
+    variationCode.includes('3-days') ||
+    variationCode.includes('4days') ||
+    variationCode.includes('4-days') ||
+    variationCode.includes('5days') ||
+    variationCode.includes('5-days') ||
+    variationCode.includes('6days') ||
+    variationCode.includes('6-days') ||
     text.includes('daily') ||
     text.includes('1 day') ||
     text.includes('1-day') ||
-    text.includes('2 day') ||
+    text.includes('1days') ||
+    text.includes('2 days') ||
     text.includes('2-day') ||
-    text.includes('3 day') ||
-    text.includes('3-day')
+    text.includes('2 days') ||
+    text.includes('3 days') ||
+    text.includes('3-day') ||
+    text.includes('4 days') ||
+    text.includes('4-day') ||
+    text.includes('5 days') ||
+    text.includes('5-day') ||
+    text.includes('6 days') ||
+    text.includes('6-day')
   ) {
     return 'Daily';
   }
 
+
+  // ==========================================================
+  // OTHER
+  // ==========================================================
+
   return 'Other';
 };
+
+  
 
 const Data: React.FC = () => {
   const [network, setNetwork] =
