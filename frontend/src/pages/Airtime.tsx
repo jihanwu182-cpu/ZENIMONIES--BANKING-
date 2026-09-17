@@ -626,10 +626,15 @@ const Airtime: React.FC = () => {
               }}
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 3,
-                  backgroundColor: '#fafcfb',
+                 borderRadius: 3,
+                  '&.Mui-focused fieldset': {
+                   borderColor: '#176b45',
                 },
-              }}
+               },
+              '& .MuiInputLabel-root.Mui-focused': {
+                  color: '#176b45',
+              },
+            }}
             />
 
             {selectedAmount > 0 && (
