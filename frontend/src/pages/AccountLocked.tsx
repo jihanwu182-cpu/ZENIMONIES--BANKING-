@@ -822,6 +822,7 @@ const AccountLocked: React.FC =
           /*
            * SUCCESS
            */
+          saveAuthenticatedSession(data);
           setPasscode('');
 
           setPasscodeAttempts(
