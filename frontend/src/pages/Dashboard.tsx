@@ -138,41 +138,50 @@ const Dashboard: React.FC = () => {
     displayName.charAt(0).toUpperCase() ||
     'U';
 
+    /* ==========================================================
+     FAST DASHBOARD DATA LOADING
+  ========================================================== */
+
+  const getToken = () => {
+    return (
+      localStorage.getItem(
+        'zenimonies_token'
+      ) ||
+      localStorage.getItem('token') ||
+      localStorage.getItem(
+        'access_token'
+      )
+    );
+  };
+
   /* ==========================================================
      LOAD ACCOUNT
   ========================================================== */
 
-  const loadAccount = async () => {
+  const loadAccount = async (
+    showLoader = true
+  ) => {
     try {
-      setAccountLoading(true);
+      if (showLoader) {
+        setAccountLoading(true);
+      }
 
-      const token =
-        localStorage.getItem(
-          'zenimonies_token'
-        ) ||
-        localStorage.getItem('token') ||
-        localStorage.getItem(
-          'access_token'
-        );
+      const token = getToken();
 
       if (!token) {
-        setAccountLoading(false);
         return;
       }
 
-      const response =
-        await fetch(
-          `${apiBase}/api/account`,
-          {
-            method: 'GET',
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-              'Content-Type':
-                'application/json',
-            },
-          }
-        );
+      const response = await fetch(
+        `${apiBase}/api/account`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
 
       if (!response.ok) {
         throw new Error(
@@ -188,6 +197,55 @@ const Dashboard: React.FC = () => {
         data.account
       ) {
         setAccount(data.account);
+
+        /*
+         * Keep the latest account information
+         * available locally for faster rendering
+         * when Dashboard is opened again.
+         */
+        try {
+          const storedAccounts =
+            JSON.parse(
+              localStorage.getItem(
+                'zenimonies_accounts'
+              ) || '[]'
+            );
+
+          const accounts =
+            Array.isArray(
+              storedAccounts
+            )
+              ? storedAccounts
+              : [];
+
+          const updatedAccounts =
+            accounts.length > 0
+              ? accounts.map(
+                  (item: any) =>
+                    item?.id ===
+                    data.account?.id
+                      ? {
+                          ...item,
+                          ...data.account,
+                        }
+                      : item
+                )
+              : [
+                  data.account,
+                ];
+
+          localStorage.setItem(
+            'zenimonies_accounts',
+            JSON.stringify(
+              updatedAccounts
+            )
+          );
+        } catch {
+          /*
+           * Local cache failure must never
+           * affect the real account request.
+           */
+        }
       }
     } catch (error) {
       console.error(
@@ -195,7 +253,9 @@ const Dashboard: React.FC = () => {
         error
       );
     } finally {
-      setAccountLoading(false);
+      if (showLoader) {
+        setAccountLoading(false);
+      }
     }
   };
 
@@ -203,96 +263,171 @@ const Dashboard: React.FC = () => {
      LOAD KYC
   ========================================================== */
 
-  useEffect(() => {
-    const loadKycStatus =
-      async () => {
-        try {
-          setKycLoading(true);
+  const loadKycStatus = async () => {
+    try {
+      setKycLoading(true);
 
-          const token =
-            localStorage.getItem(
-              'zenimonies_token'
-            ) ||
-            localStorage.getItem(
-              'token'
-            ) ||
-            localStorage.getItem(
-              'access_token'
-            );
+      const token = getToken();
 
-          if (!token) {
-            setKycLoading(false);
-            return;
-          }
+      if (!token) {
+        return;
+      }
 
-          const response =
-            await fetch(
-              `${apiBase}/api/kyc/status`,
-              {
-                method: 'GET',
-                headers: {
-                  Authorization:
-                    `Bearer ${token}`,
-                  'Content-Type':
-                    'application/json',
-                },
-              }
-            );
+      const response = await fetch(
+        `${apiBase}/api/kyc/status`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
 
-          if (!response.ok) {
-            throw new Error(
-              `KYC request failed: ${response.status}`
-            );
-          }
+      if (!response.ok) {
+        throw new Error(
+          `KYC request failed: ${response.status}`
+        );
+      }
 
-          const data: KycResponse =
-            await response.json();
+      const data: KycResponse =
+        await response.json();
 
-          if (
-            data.success &&
-            data.kyc
-          ) {
-            setKyc(data.kyc);
-          } else {
-            setKyc({
-              status:
-                'not_verified',
-              tier: 0,
-              bvn_verified:
-                false,
-              id_verified:
-                false,
-              tier_3_verified:
-                false,
-            });
-          }
-        } catch (error) {
-          console.error(
-            'Dashboard KYC loading error:',
-            error
+      if (
+        data.success &&
+        data.kyc
+      ) {
+        setKyc(data.kyc);
+      } else {
+        setKyc({
+          status:
+            'not_verified',
+          tier: 0,
+          bvn_verified:
+            false,
+          id_verified:
+            false,
+          tier_3_verified:
+            false,
+        });
+      }
+    } catch (error) {
+      console.error(
+        'Dashboard KYC loading error:',
+        error
+      );
+
+      setKyc({
+        status:
+          'not_verified',
+        tier: 0,
+        bvn_verified:
+          false,
+        id_verified:
+          false,
+        tier_3_verified:
+          false,
+      });
+    } finally {
+      setKycLoading(false);
+    }
+  };
+
+  /* ==========================================================
+     LOAD NOTIFICATION COUNT
+  ========================================================== */
+
+  const loadUnreadNotificationCount =
+    async () => {
+      try {
+        const token = getToken();
+
+        if (!token) {
+          return;
+        }
+
+        const response =
+          await fetch(
+            `${apiBase}/api/notifications/unread-count`,
+            {
+              method: 'GET',
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
           );
 
-          setKyc({
-            status:
-              'not_verified',
-            tier: 0,
-            bvn_verified:
-              false,
-            id_verified:
-              false,
-            tier_3_verified:
-              false,
-          });
-        } finally {
-          setKycLoading(false);
+        if (!response.ok) {
+          throw new Error(
+            `Notification request failed: ${response.status}`
+          );
         }
-      };
 
+        const data =
+          await response.json();
+
+        if (data?.success) {
+          setUnreadNotificationCount(
+            Number(
+              data.unread_count || 0
+            )
+          );
+        }
+      } catch (error) {
+        console.error(
+          'Failed to load notification count:',
+          error
+        );
+      }
+    };
+
+  /* ==========================================================
+     INITIAL DASHBOARD LOAD
+  ========================================================== */
+
+  useEffect(() => {
+    /*
+     * Load account and KYC at the same time.
+     * They do not need to wait for each other.
+     */
+    loadAccount(true);
     loadKycStatus();
-    loadAccount();
 
-    const handleFocus = () => {
-      loadAccount();
+    /*
+     * Notification count is not required to display
+     * the main Dashboard, so load it separately.
+     */
+    loadUnreadNotificationCount();
+
+  }, [apiBase]);
+
+  /* ==========================================================
+     REFRESH ACCOUNT WHEN RETURNING TO DASHBOARD
+  ========================================================== */
+
+  useEffect(() => {
+    let lastRefresh = 0;
+
+    const refreshAccount = () => {
+      const now = Date.now();
+
+      /*
+       * Prevent duplicate requests when focus and
+       * visibilitychange happen together.
+       *
+       * Only refresh once every 15 seconds.
+       */
+      if (
+        now - lastRefresh <
+        15000
+      ) {
+        return;
+      }
+
+      lastRefresh = now;
+
+      loadAccount(false);
     };
 
     const handleVisibility =
@@ -301,13 +436,13 @@ const Dashboard: React.FC = () => {
           document.visibilityState ===
           'visible'
         ) {
-          loadAccount();
+          refreshAccount();
         }
       };
 
     window.addEventListener(
       'focus',
-      handleFocus
+      refreshAccount
     );
 
     document.addEventListener(
@@ -318,7 +453,7 @@ const Dashboard: React.FC = () => {
     return () => {
       window.removeEventListener(
         'focus',
-        handleFocus
+        refreshAccount
       );
 
       document.removeEventListener(
@@ -327,54 +462,7 @@ const Dashboard: React.FC = () => {
       );
     };
   }, [apiBase]);
-
-  useEffect(() => {
-  const loadUnreadNotificationCount = async () => {
-    try {
-      const token =
-        localStorage.getItem('zenimonies_token') ||
-        localStorage.getItem('token') ||
-        localStorage.getItem('access_token');
-
-      if (!token) {
-        return;
-      }
-
-      const response = await fetch(
-        `${apiBase}/api/notifications/unread-count`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `Notification request failed: ${response.status}`
-        );
-      }
-
-      const data = await response.json();
-
-      if (data?.success) {
-        setUnreadNotificationCount(
-          Number(data.unread_count || 0)
-        );
-      }
-    } catch (error) {
-      console.error(
-        'Failed to load notification count:',
-        error
-      );
-    }
-  };
-
-  loadUnreadNotificationCount();
-}, [apiBase]);
-
+    
   /* ==========================================================
      BALANCE
   ========================================================== */
