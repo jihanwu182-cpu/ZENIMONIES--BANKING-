@@ -6,7 +6,8 @@ const crypto = require('crypto');
 // ============================================================
 
 const VTPASS_BASE_URL =
-  process.env.VTPASS_BASE_URL || 'https://sandbox.vtpass.com';
+  process.env.VTPASS_BASE_URL ||
+  'https://sandbox.vtpass.com';
 
 const VTPASS_API_KEY =
   process.env.VTPASS_API_KEY;
@@ -114,7 +115,7 @@ const getAirtimeServiceId = (network) => {
 
 
 // ============================================================
-// GENERATE VTpass REQUEST ID
+// GENERATE VTPASS REQUEST ID
 // ============================================================
 
 const generateRequestId = () => {
@@ -441,6 +442,89 @@ const purchaseAirtime = async ({
       body:
         payload,
     });
+
+
+  // ==========================================================
+  // SAFE VTPASS DIAGNOSTIC
+  //
+  // IMPORTANT:
+  // Never log API keys, secret keys, or transaction PINs.
+  // ==========================================================
+
+  const providerTransaction =
+    result?.content?.transactions ||
+    {};
+
+  console.log(
+    '================================================'
+  );
+
+  console.log(
+    'VTPASS AIRTIME RESPONSE'
+  );
+
+  console.log(
+    '================================================'
+  );
+
+  console.log(
+    'Environment:',
+    VTPASS_BASE_URL
+      .includes('sandbox')
+      ? 'SANDBOX'
+      : 'LIVE'
+  );
+
+  console.log(
+    'Network:',
+    normalizedNetwork
+  );
+
+  console.log(
+    'Service ID:',
+    serviceId
+  );
+
+  console.log(
+    'Amount:',
+    numericAmount
+  );
+
+  console.log(
+    'Request ID:',
+    requestId
+  );
+
+  console.log(
+    'Response Code:',
+    result?.code ||
+      result?.response_code ||
+      'N/A'
+  );
+
+  console.log(
+    'Response Description:',
+    result?.response_description ||
+      result?.message ||
+      'N/A'
+  );
+
+  console.log(
+    'Provider Transaction Status:',
+    providerTransaction?.status ||
+      'N/A'
+  );
+
+  console.log(
+    'Provider Transaction ID:',
+    providerTransaction?.transactionId ||
+      result?.transactionId ||
+      'N/A'
+  );
+
+  console.log(
+    '================================================'
+  );
 
 
   // ----------------------------------------------------------
