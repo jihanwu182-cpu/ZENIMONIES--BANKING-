@@ -1,272 +1,956 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import axios from 'axios';
+import React, { useMemo, useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Grid,
+  IconButton,
+  InputAdornment,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 
-const API_URL = 'https://zenimonies-banking.onrender.com';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
+import HistoryIcon from '@mui/icons-material/History';
+import LockIcon from '@mui/icons-material/Lock';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+
+import { useNavigate } from 'react-router-dom';
+
+type Network = 'MTN' | 'Airtel' | 'Glo' | '9mobile';
+
+interface AirtimeAmount {
+  amount: number;
+  label: string;
+}
+
+const NETWORKS: {
+  name: Network;
+  logo: string;
+}[] = [
+  {
+    name: 'MTN',
+    logo:
+      'https://raw.githubusercontent.com/josephajibodu/utility-providers-assets/main/network-providers/mtn.svg',
+  },
+  {
+    name: 'Airtel',
+    logo:
+      'https://raw.githubusercontent.com/josephajibodu/utility-providers-assets/main/network-providers/airtel.svg',
+  },
+  {
+    name: 'Glo',
+    logo:
+      'https://raw.githubusercontent.com/josephajibodu/utility-providers-assets/main/network-providers/glo.svg',
+  },
+  {
+    name: '9mobile',
+    logo:
+      'https://raw.githubusercontent.com/josephajibodu/utility-providers-assets/main/network-providers/9mobile.svg',
+  },
+];
+
+const QUICK_AMOUNTS: AirtimeAmount[] = [
+  { amount: 100, label: '₦100' },
+  { amount: 200, label: '₦200' },
+  { amount: 500, label: '₦500' },
+  { amount: 1000, label: '₦1,000' },
+  { amount: 2000, label: '₦2,000' },
+  { amount: 5000, label: '₦5,000' },
+];
+
+const API_BASE =
+  'https://zenimonies-banking.onrender.com/api';
 
 const Airtime: React.FC = () => {
-  const [network, setNetwork] = useState('');
+  const navigate = useNavigate();
+
+  const [network, setNetwork] = useState<Network>('MTN');
   const [phone, setPhone] = useState('');
   const [amount, setAmount] = useState('');
+  const [customAmount, setCustomAmount] = useState('');
+
+  const [showTransactionPin, setShowTransactionPin] =
+    useState(false);
+
+  const [transactionPin, setTransactionPin] = useState('');
+  const [transactionPinError, setTransactionPinError] =
+    useState('');
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [successMessage, setSuccessMessage] =
+    useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = async (
-    event: React.FormEvent<HTMLFormElement>
+  const [transactionReference, setTransactionReference] =
+    useState('');
+
+  const selectedAmount = useMemo(() => {
+    if (amount) {
+      return Number(amount);
+    }
+
+    if (customAmount) {
+      return Number(customAmount);
+    }
+
+    return 0;
+  }, [amount, customAmount]);
+
+  const formatMoney = (value: number) =>
+    new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN',
+      maximumFractionDigits: 2,
+    }).format(value);
+
+  const cleanPhoneNumber = (value: string) => {
+    let cleaned = value.replace(/\D/g, '');
+
+    if (cleaned.startsWith('234')) {
+      cleaned = `0${cleaned.slice(3)}`;
+    }
+
+    return cleaned;
+  };
+
+  const handlePhoneChange = (
+    event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    event.preventDefault();
+    const value = event.target.value;
 
-    setError('');
-    setMessage('');
+    setPhone(cleanPhoneNumber(value));
+    setErrorMessage('');
+  };
 
-    const numericAmount = Number(amount);
+  const handleQuickAmount = (value: number) => {
+    setAmount(String(value));
+    setCustomAmount('');
+    setErrorMessage('');
+  };
 
-    if (!network || !phone || !amount) {
-      setError('Please complete all required fields.');
+  const handleCustomAmountChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = event.target.value.replace(/\D/g, '');
+
+    setCustomAmount(value);
+    setAmount('');
+    setErrorMessage('');
+  };
+
+  const validatePurchase = () => {
+    const cleanPhone = cleanPhoneNumber(phone);
+
+    if (!cleanPhone) {
+      setErrorMessage('Please enter a phone number.');
+      return false;
+    }
+
+    if (!/^0[7-9][0-1][0-9]{8}$/.test(cleanPhone)) {
+      setErrorMessage(
+        'Please enter a valid Nigerian phone number.'
+      );
+      return false;
+    }
+
+    if (!selectedAmount || selectedAmount <= 0) {
+      setErrorMessage('Please select or enter an airtime amount.');
+      return false;
+    }
+
+    if (selectedAmount < 50) {
+      setErrorMessage(
+        'Minimum airtime purchase is ₦50.'
+      );
+      return false;
+    }
+
+    if (selectedAmount > 100000) {
+      setErrorMessage(
+        'Maximum airtime purchase is ₦100,000.'
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleBuyAirtime = () => {
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    if (!validatePurchase()) {
       return;
     }
 
-    if (phone.length < 10) {
-      setError('Please enter a valid phone number.');
+    setTransactionPin('');
+    setTransactionPinError('');
+    setShowTransactionPin(true);
+  };
+
+  const verifyTransactionPinAndPurchase = async () => {
+    if (!/^\d{4}$/.test(transactionPin)) {
+      setTransactionPinError(
+        'Transaction PIN must be exactly 4 digits.'
+      );
       return;
     }
 
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError('Please enter a valid airtime amount.');
-      return;
-    }
-
+    setTransactionPinError('');
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('zenimonies_token');
+      const token =
+        localStorage.getItem('zenimonies_token') ||
+        localStorage.getItem('accessToken') ||
+        localStorage.getItem('token');
 
-      const response = await axios.post(
-        `${API_URL}/api/airtime`,
-        {
-          network,
-          phone: phone.trim(),
-          amount: numericAmount,
+      if (!token) {
+        setShowTransactionPin(false);
+        navigate('/login');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/airtime`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        body: JSON.stringify({
+          network,
+          phone: cleanPhoneNumber(phone),
+          amount: selectedAmount,
+          transaction_pin: transactionPin,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setShowTransactionPin(false);
+          navigate('/login');
+          return;
         }
+
+        if (response.status === 423) {
+          setTransactionPinError(
+            data?.message ||
+              'Your Transaction PIN is temporarily locked.'
+          );
+          return;
+        }
+
+        setTransactionPinError(
+          data?.message ||
+            data?.error ||
+            'Airtime purchase failed.'
+        );
+        return;
+      }
+
+      setShowTransactionPin(false);
+      setTransactionPin('');
+
+      setTransactionReference(
+        data?.reference ||
+          data?.transaction?.reference ||
+          data?.data?.reference ||
+          ''
       );
 
-      if (response.data?.success) {
-        setMessage(
-          response.data?.message ||
-            'Airtime purchase submitted successfully.'
-        );
+      setSuccessMessage(
+        data?.message ||
+          'Airtime purchased successfully.'
+      );
 
-        setNetwork('');
-        setPhone('');
-        setAmount('');
-      } else {
-        setError(
-          response.data?.message ||
-            'Unable to process airtime purchase.'
-        );
-      }
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.message ||
-          'Airtime service is not connected yet.'
+      setErrorMessage('');
+
+      setAmount('');
+      setCustomAmount('');
+      setPhone('');
+    } catch (error) {
+      console.error('Airtime purchase error:', error);
+
+      setTransactionPinError(
+        'Unable to complete the purchase right now. Please try again.'
       );
     } finally {
       setLoading(false);
     }
   };
 
+  const closeSuccess = () => {
+    setSuccessMessage('');
+    setTransactionReference('');
+  };
+
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         minHeight: '100vh',
-        background: '#f5f7fb',
-        padding: '24px',
+        backgroundColor: '#f7faf8',
+        pb: 10,
       }}
     >
-      <div
-        style={{
-          maxWidth: '600px',
-          margin: '0 auto',
+      <Container
+        maxWidth="md"
+        sx={{
+          pt: { xs: 2, sm: 3 },
         }}
       >
-        <Link
-          to="/"
-          style={{
-            display: 'inline-block',
-            marginBottom: '20px',
-            color: '#0b5cff',
-            fontWeight: 600,
-          }}
+        {/* HEADER */}
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          sx={{ mb: 2.5 }}
         >
-          ← Back to Dashboard
-        </Link>
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+          >
+            <IconButton
+              onClick={() => navigate(-1)}
+              sx={{
+                color: '#176b45',
+                backgroundColor: '#edf7f1',
+                '&:hover': {
+                  backgroundColor: '#e0f0e7',
+                },
+              }}
+            >
+              <ArrowBackIcon />
+            </IconButton>
 
-        <div
-          style={{
-            background: '#ffffff',
-            borderRadius: '18px',
-            padding: '30px',
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08)',
-          }}
-        >
-          <h1 style={{ marginTop: 0 }}>Buy Airtime</h1>
+            <Box>
+              <Typography
+                variant="h5"
+                sx={{
+                  fontWeight: 800,
+                  color: '#123b29',
+                  lineHeight: 1.1,
+                }}
+              >
+                Airtime
+              </Typography>
 
-          <p
-            style={{
-              color: '#667085',
-              marginBottom: '28px',
+              <Typography
+                variant="body2"
+                sx={{
+                  color: '#718078',
+                  mt: 0.4,
+                }}
+              >
+                Buy airtime instantly
+              </Typography>
+            </Box>
+          </Stack>
+
+          <IconButton
+            onClick={() => navigate('/transactions')}
+            sx={{
+              color: '#176b45',
+              backgroundColor: '#edf7f1',
+              '&:hover': {
+                backgroundColor: '#e0f0e7',
+              },
             }}
           >
-            Buy airtime for your phone or another phone number.
-          </p>
+            <HistoryIcon />
+          </IconButton>
+        </Stack>
 
-          {error && (
-            <div
-              style={{
-                padding: '12px',
-                marginBottom: '18px',
-                borderRadius: '8px',
-                background: '#fee4e2',
-                color: '#b42318',
+        {/* NETWORK SELECTOR */}
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: 4,
+            border: '1px solid #e4eee8',
+            backgroundColor: '#ffffff',
+            mb: 2,
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 800,
+                color: '#183d2d',
+                mb: 1.5,
               }}
             >
-              {error}
-            </div>
-          )}
+              Select Network
+            </Typography>
 
-          {message && (
-            <div
-              style={{
-                padding: '12px',
-                marginBottom: '18px',
-                borderRadius: '8px',
-                background: '#ecfdf3',
-                color: '#027a48',
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 1.2,
+                overflowX: 'auto',
+                pb: 0.5,
+                '&::-webkit-scrollbar': {
+                  display: 'none',
+                },
               }}
             >
-              {message}
-            </div>
-          )}
+              {NETWORKS.map((item) => {
+                const selected =
+                  network === item.name;
 
-          <form onSubmit={handleSubmit}>
-            <label
-              htmlFor="network"
-              style={{
-                display: 'block',
-                marginBottom: '6px',
-                fontWeight: 600,
+                return (
+                  <Paper
+                    key={item.name}
+                    onClick={() => {
+                      setNetwork(item.name);
+                      setErrorMessage('');
+                    }}
+                    elevation={0}
+                    sx={{
+                      minWidth: 82,
+                      flexShrink: 0,
+                      cursor: 'pointer',
+                      borderRadius: 3,
+                      border: selected
+                        ? '2px solid #176b45'
+                        : '1px solid #e1ebe5',
+                      backgroundColor: selected
+                        ? '#edf7f1'
+                        : '#ffffff',
+                      p: 1.2,
+                      textAlign: 'center',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 42,
+                        height: 42,
+                        mx: 'auto',
+                        mb: 0.7,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <img
+                        src={item.logo}
+                        alt={`${item.name} logo`}
+                        style={{
+                          maxWidth: '100%',
+                          maxHeight: '100%',
+                          objectFit: 'contain',
+                        }}
+                      />
+                    </Box>
+
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 800,
+                        color: selected
+                          ? '#176b45'
+                          : '#4f6258',
+                      }}
+                    >
+                      {item.name}
+                    </Typography>
+                  </Paper>
+                );
+              })}
+            </Box>
+          </CardContent>
+        </Card>
+
+        {/* PHONE NUMBER */}
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: 4,
+            border: '1px solid #e4eee8',
+            backgroundColor: '#ffffff',
+            mb: 2,
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 800,
+                color: '#183d2d',
+                mb: 1.5,
               }}
             >
-              Network
-            </label>
+              Mobile Number
+            </Typography>
 
-            <select
-              id="network"
-              value={network}
-              onChange={(event) => setNetwork(event.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                marginBottom: '18px',
-                border: '1px solid #d0d5dd',
-                borderRadius: '8px',
-                background: '#ffffff',
-              }}
-            >
-              <option value="">Select network</option>
-              <option value="MTN">MTN</option>
-              <option value="Airtel">Airtel</option>
-              <option value="Glo">Glo</option>
-              <option value="9mobile">9mobile</option>
-            </select>
-
-            <label
-              htmlFor="phone"
-              style={{
-                display: 'block',
-                marginBottom: '6px',
-                fontWeight: 600,
-              }}
-            >
-              Phone Number
-            </label>
-
-            <input
-              id="phone"
-              type="tel"
+            <TextField
+              fullWidth
               value={phone}
-              onChange={(event) =>
-                setPhone(
-                  event.target.value.replace(/[^\d+]/g, '')
-                )
-              }
-              placeholder="Enter phone number"
-              autoComplete="tel"
-              style={{
-                width: '100%',
-                padding: '12px',
-                marginBottom: '18px',
-                border: '1px solid #d0d5dd',
-                borderRadius: '8px',
+              onChange={handlePhoneChange}
+              placeholder="08012345678"
+              inputMode="numeric"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <PhoneAndroidIcon
+                      sx={{ color: '#176b45' }}
+                    />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 3,
+                  backgroundColor: '#fafcfb',
+                },
               }}
             />
+          </CardContent>
+        </Card>
 
-            <label
-              htmlFor="amount"
-              style={{
-                display: 'block',
-                marginBottom: '6px',
-                fontWeight: 600,
-              }}
+        {/* QUICK AMOUNTS */}
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: 4,
+            border: '1px solid #e4eee8',
+            backgroundColor: '#ffffff',
+            mb: 2,
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ mb: 1.5 }}
             >
-              Amount (NGN)
-            </label>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: 800,
+                  color: '#183d2d',
+                }}
+              >
+                Select Amount
+              </Typography>
 
-            <input
-              id="amount"
-              type="number"
-              min="50"
-              step="1"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              <Typography
+                variant="caption"
+                sx={{
+                  color: '#718078',
+                }}
+              >
+                Choose an amount
+              </Typography>
+            </Stack>
+
+            <Grid container spacing={1.2}>
+              {QUICK_AMOUNTS.map((item) => {
+                const selected =
+                  Number(amount) === item.amount;
+
+                return (
+                  <Grid
+                    item
+                    xs={4}
+                    sm={2}
+                    key={item.amount}
+                  >
+                    <Button
+                      fullWidth
+                      onClick={() =>
+                        handleQuickAmount(item.amount)
+                      }
+                      sx={{
+                        minHeight: 58,
+                        borderRadius: 3,
+                        textTransform: 'none',
+                        fontWeight: 800,
+                        border: selected
+                          ? '2px solid #176b45'
+                          : '1px solid #e0ebe5',
+                        backgroundColor: selected
+                          ? '#edf7f1'
+                          : '#ffffff',
+                        color: selected
+                          ? '#176b45'
+                          : '#40554a',
+                        '&:hover': {
+                          backgroundColor: '#edf7f1',
+                        },
+                      }}
+                    >
+                      {item.label}
+                    </Button>
+                  </Grid>
+                );
+              })}
+            </Grid>
+
+            <Divider sx={{ my: 2 }} />
+
+            <TextField
+              fullWidth
+              label="Custom Amount"
+              value={customAmount}
+              onChange={handleCustomAmountChange}
               placeholder="Enter amount"
-              style={{
-                width: '100%',
-                padding: '12px',
-                marginBottom: '24px',
-                border: '1px solid #d0d5dd',
-                borderRadius: '8px',
+              type="number"
+              inputProps={{
+                min: 50,
+                max: 100000,
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    ₦
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 3,
+                  backgroundColor: '#fafcfb',
+                },
               }}
             />
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '14px',
-                border: 'none',
-                borderRadius: '8px',
-                background: '#0b5cff',
-                color: '#ffffff',
-                fontWeight: 600,
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
+            {selectedAmount > 0 && (
+              <Box
+                sx={{
+                  mt: 2,
+                  p: 1.5,
+                  borderRadius: 3,
+                  backgroundColor: '#edf7f1',
+                }}
+              >
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{ color: '#607168' }}
+                  >
+                    Purchase amount
+                  </Typography>
+
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      fontWeight: 900,
+                      color: '#176b45',
+                    }}
+                  >
+                    {formatMoney(selectedAmount)}
+                  </Typography>
+                </Stack>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ERROR */}
+        {errorMessage && (
+          <Alert
+            severity="error"
+            onClose={() => setErrorMessage('')}
+            sx={{
+              mb: 2,
+              borderRadius: 3,
+            }}
+          >
+            {errorMessage}
+          </Alert>
+        )}
+
+        {/* SUCCESS */}
+        {successMessage && (
+          <Alert
+            severity="success"
+            icon={<CheckCircleIcon />}
+            onClose={closeSuccess}
+            sx={{
+              mb: 2,
+              borderRadius: 3,
+            }}
+          >
+            <Typography
+              sx={{
+                fontWeight: 800,
               }}
             >
-              {loading ? 'Processing...' : 'Buy Airtime'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
+              {successMessage}
+            </Typography>
+
+            {transactionReference && (
+              <Typography
+                variant="caption"
+                sx={{
+                  display: 'block',
+                  mt: 0.5,
+                }}
+              >
+                Reference: {transactionReference}
+              </Typography>
+            )}
+          </Alert>
+        )}
+
+        {/* BUY BUTTON */}
+        <Button
+          fullWidth
+          variant="contained"
+          size="large"
+          onClick={handleBuyAirtime}
+          disabled={loading}
+          sx={{
+            minHeight: 56,
+            borderRadius: 3.5,
+            textTransform: 'none',
+            fontSize: '1rem',
+            fontWeight: 900,
+            backgroundColor: '#176b45',
+            boxShadow:
+              '0 8px 20px rgba(23, 107, 69, 0.18)',
+            '&:hover': {
+              backgroundColor: '#125b3a',
+            },
+          }}
+        >
+          {loading ? (
+            <CircularProgress
+              size={24}
+              sx={{ color: '#ffffff' }}
+            />
+          ) : (
+            `Buy ${network} Airtime`
+          )}
+        </Button>
+
+        <Typography
+          variant="caption"
+          sx={{
+            display: 'block',
+            textAlign: 'center',
+            color: '#7b8982',
+            mt: 1.5,
+          }}
+        >
+          Your Transaction PIN will be required to
+          complete this purchase.
+        </Typography>
+      </Container>
+
+      {/* TRANSACTION PIN DIALOG */}
+      <Dialog
+        open={showTransactionPin}
+        onClose={() => {
+          if (!loading) {
+            setShowTransactionPin(false);
+            setTransactionPin('');
+            setTransactionPinError('');
+          }
+        }}
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 900,
+            color: '#183d2d',
+          }}
+        >
+          Confirm Airtime Purchase
+        </DialogTitle>
+
+        <DialogContent>
+          <Box
+            sx={{
+              p: 2,
+              mb: 2,
+              borderRadius: 3,
+              backgroundColor: '#edf7f1',
+            }}
+          >
+            <Stack spacing={0.7}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+              >
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Network
+                </Typography>
+
+                <Typography fontWeight={800}>
+                  {network}
+                </Typography>
+              </Stack>
+
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+              >
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Phone
+                </Typography>
+
+                <Typography fontWeight={800}>
+                  {cleanPhoneNumber(phone)}
+                </Typography>
+              </Stack>
+
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+              >
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Amount
+                </Typography>
+
+                <Typography
+                  fontWeight={900}
+                  sx={{ color: '#176b45' }}
+                >
+                  {formatMoney(selectedAmount)}
+                </Typography>
+              </Stack>
+            </Stack>
+          </Box>
+
+          <TextField
+            fullWidth
+            autoFocus
+            label="Transaction PIN"
+            value={transactionPin}
+            onChange={(event) => {
+              const value =
+                event.target.value
+                  .replace(/\D/g, '')
+                  .slice(0, 4);
+
+              setTransactionPin(value);
+              setTransactionPinError('');
+            }}
+            type="password"
+            inputMode="numeric"
+            placeholder="••••"
+            error={Boolean(transactionPinError)}
+            helperText={transactionPinError}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LockIcon
+                    sx={{ color: '#176b45' }}
+                  />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 3,
+              },
+            }}
+          />
+
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'block',
+              mt: 1,
+              color: '#7b8982',
+            }}
+          >
+            Enter your 4-digit Transaction PIN to
+            authorize this payment.
+          </Typography>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            pb: 3,
+          }}
+        >
+          <Button
+            onClick={() => {
+              if (!loading) {
+                setShowTransactionPin(false);
+                setTransactionPin('');
+                setTransactionPinError('');
+              }
+            }}
+            disabled={loading}
+            sx={{
+              color: '#64746c',
+              textTransform: 'none',
+              fontWeight: 700,
+            }}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={verifyTransactionPinAndPurchase}
+            disabled={
+              loading ||
+              transactionPin.length !== 4
+            }
+            sx={{
+              backgroundColor: '#176b45',
+              borderRadius: 2.5,
+              px: 3,
+              textTransform: 'none',
+              fontWeight: 800,
+              '&:hover': {
+                backgroundColor: '#125b3a',
+              },
+            }}
+          >
+            {loading ? (
+              <CircularProgress
+                size={22}
+                sx={{ color: '#ffffff' }}
+              />
+            ) : (
+              'Confirm Purchase'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 };
 
