@@ -640,22 +640,24 @@ const change = async (req, res) => {
 // POST /api/passcode/unlock
 // ============================================================
 //
-// IMPORTANT:
-//
 // This endpoint intentionally does NOT use authMiddleware.
 //
-// The user's 5-minute inactivity session has already expired.
+// The user's database session may have expired because of
+// 5-minute inactivity, but the JWT can still be cryptographically
+// valid because JWT expiry is 24 hours.
 //
 // We therefore:
 //
-// 1. Validate the JWT.
-// 2. Extract the user ID.
+// 1. Validate the JWT signature without requiring JWT expiry.
+// 2. Extract the user ID and session ID.
 // 3. Confirm the user still exists and is active.
-// 4. Verify the 6-digit Account Unlock Passcode.
-// 5. Create a brand-new server authentication session.
-// 6. Return a brand-new JWT.
+// 4. Confirm the JWT belongs to a real database session.
+// 5. Allow that session to be expired ONLY because of inactivity.
+// 6. Verify the 6-digit Account Unlock Passcode.
+// 7. Create a completely new authentication session.
+// 8. Return a brand-new JWT.
 //
-// The old expired session is never reused.
+// The old session is never reused.
 // ============================================================
 
 const unlock = async (req, res) => {
@@ -678,10 +680,6 @@ const unlock = async (req, res) => {
           'Authentication is required to unlock this session.',
       });
     }
-
-    // ========================================================
-    // EXTRACT JWT
-    // ========================================================
 
     const token =
       authHeader
@@ -714,7 +712,17 @@ const unlock = async (req, res) => {
     }
 
     // ========================================================
-    // VERIFY JWT
+    // VERIFY JWT SIGNATURE
+    // ========================================================
+    //
+    // IMPORTANT:
+    //
+    // We intentionally use ignoreExpiration here.
+    //
+    // The database session is responsible for the 5-minute
+    // inactivity timeout.
+    //
+    // We still require the JWT signature to be valid.
     // ========================================================
 
     let decoded;
@@ -723,14 +731,17 @@ const unlock = async (req, res) => {
       decoded =
         jwt.verify(
           token,
-          process.env.JWT_SECRET
+          process.env.JWT_SECRET,
+          {
+            ignoreExpiration: true,
+          }
         );
     } catch (error) {
       return res.status(401).json({
         success: false,
-        code: 'INVALID_OR_EXPIRED_TOKEN',
+        code: 'INVALID_AUTHENTICATION_TOKEN',
         message:
-          'Your secure authentication token has expired. Please sign in again.',
+          'Your authentication token is invalid. Please sign in again.',
       });
     }
 
@@ -754,22 +765,38 @@ const unlock = async (req, res) => {
     }
 
     // ========================================================
-    // LOAD USER
+    // SESSION ID
+    // ========================================================
+
+    const sessionId =
+      decoded?.sessionId;
+
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        code: 'INVALID_AUTHENTICATION_TOKEN',
+        message:
+          'Your authentication session could not be identified. Please sign in again.',
+      });
+    }
+
+    // ========================================================
+    // CONFIRM USER
     // ========================================================
 
     const userResult =
       await pool.query(
         `
-          SELECT
-            id,
-            full_name,
-            email,
-            phone,
-            role,
-            status
-          FROM users
-          WHERE id = $1
-          LIMIT 1
+        SELECT
+          id,
+          full_name,
+          email,
+          phone,
+          role,
+          status
+        FROM users
+        WHERE id = $1
+        LIMIT 1
         `,
         [userId]
       );
@@ -805,6 +832,104 @@ const unlock = async (req, res) => {
     }
 
     // ========================================================
+    // CONFIRM THE JWT SESSION
+    // ========================================================
+    //
+    // We hash the session ID exactly the same way
+    // sessionService.js does.
+    //
+    // This prevents someone from using an arbitrary valid
+    // JWT for the user to unlock the account.
+    // ========================================================
+
+    const crypto =
+      require('crypto');
+
+    const sessionTokenHash =
+      crypto
+        .createHash('sha256')
+        .update(String(sessionId))
+        .digest('hex');
+
+    const sessionResult =
+      await pool.query(
+        `
+        SELECT
+          id,
+          user_id,
+          last_activity_at,
+          expires_at,
+          revoked_at
+        FROM auth_sessions
+        WHERE user_id = $1
+          AND session_token_hash = $2
+        LIMIT 1
+        `,
+        [
+          userId,
+          sessionTokenHash,
+        ]
+      );
+
+    if (
+      sessionResult.rows.length === 0
+    ) {
+      return res.status(401).json({
+        success: false,
+        code: 'SESSION_NOT_FOUND',
+        message:
+          'Your secure session could not be found. Please sign in again.',
+      });
+    }
+
+    const session =
+      sessionResult.rows[0];
+
+    // ========================================================
+    // REVOKED SESSION
+    // ========================================================
+
+    if (session.revoked_at) {
+      return res.status(401).json({
+        success: false,
+        code: 'SESSION_REVOKED',
+        message:
+          'This secure session has already been ended. Please sign in again.',
+      });
+    }
+
+    // ========================================================
+    // SESSION EXPIRY
+    // ========================================================
+    //
+    // The session MUST actually be expired because of
+    // inactivity before we allow Account Unlock Passcode
+    // recovery.
+    //
+    // If the session is still active, we do not need the
+    // Account Locked recovery flow.
+    // ========================================================
+
+    const expiresAt =
+      new Date(
+        session.expires_at
+      ).getTime();
+
+    const now =
+      Date.now();
+
+    if (
+      now < expiresAt
+    ) {
+      return res.status(400).json({
+        success: false,
+        code: 'SESSION_NOT_LOCKED',
+        message:
+          'Your secure session is still active.',
+      });
+    }
+
+    // ========================================================
     // PASSCODE
     // ========================================================
 
@@ -814,7 +939,9 @@ const unlock = async (req, res) => {
       ).trim();
 
     if (
-      !/^\d{6}$/.test(passcode)
+      !/^\d{6}$/.test(
+        passcode
+      )
     ) {
       return res.status(400).json({
         success: false,
@@ -851,16 +978,15 @@ const unlock = async (req, res) => {
             metadata.userAgent,
         });
     } catch (error) {
-      /*
-       * Preserve the existing secure Passcode
-       * failure handling.
-       */
-
       return handlePasscodeError(
         res,
         error
       );
     }
+
+    // ========================================================
+    // PASSCODE FAILURE
+    // ========================================================
 
     if (
       !passcodeResult?.success ||
@@ -879,6 +1005,24 @@ const unlock = async (req, res) => {
           passcodeResult?.maxFailedAttempts || 3,
       });
     }
+
+    // ========================================================
+    // REVOKE OLD SESSION
+    // ========================================================
+    //
+    // The old inactive session is no longer used.
+    // A completely new session is created below.
+    // ========================================================
+
+    await pool.query(
+      `
+      UPDATE auth_sessions
+      SET revoked_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+        AND revoked_at IS NULL
+      `,
+      [session.id]
+    );
 
     // ========================================================
     // CREATE BRAND-NEW AUTH SESSION
@@ -951,7 +1095,8 @@ const unlock = async (req, res) => {
   } catch (error) {
     console.error(
       'Account unlock error:',
-      error
+      error?.message ||
+        error
     );
 
     return res.status(500).json({
@@ -961,7 +1106,6 @@ const unlock = async (req, res) => {
     });
   }
 };
-
 // ============================================================
 // EXPORTS
 // ============================================================
