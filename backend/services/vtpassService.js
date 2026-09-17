@@ -386,6 +386,17 @@ const getDataPlans = async (
     result?.content?.varations ||
     [];
 
+  console.log(
+  `VTpass ${normalizedNetwork} returned ${variations.length} data variations.`
+);
+
+console.log(
+  `VTpass ${normalizedNetwork} variation codes:`,
+  variations.map(
+    (variation) =>
+      variation?.variation_code
+  )
+);
 
   const plans =
     variations.map(
