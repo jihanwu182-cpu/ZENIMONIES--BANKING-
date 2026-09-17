@@ -418,6 +418,25 @@ CREATE TABLE IF NOT EXISTS airtime_transactions (
     completed_at TIMESTAMP
 );
 
+-- ============================================================
+-- AIRTIME PAYMENT DETAILS
+-- ============================================================
+
+ALTER TABLE airtime_transactions
+ADD COLUMN IF NOT EXISTS provider_request_id VARCHAR(150);
+
+ALTER TABLE airtime_transactions
+ADD COLUMN IF NOT EXISTS commission_details JSONB;
+
+ALTER TABLE airtime_transactions
+ADD COLUMN IF NOT EXISTS provider_response JSONB;
+
+-- ============================================================
+-- AIRTIME PROVIDER REQUEST INDEX
+-- ============================================================
+
+CREATE INDEX IF NOT EXISTS idx_airtime_provider_request
+ON airtime_transactions(provider_request_id);
 
 -- ============================================================
 -- DATA
@@ -454,7 +473,15 @@ CREATE TABLE IF NOT EXISTS data_transactions (
 
     completed_at TIMESTAMP
 );
+-- ============================================================
+-- DATA PAYMENT DETAILS
+-- ============================================================
 
+ALTER TABLE data_transactions
+ADD COLUMN IF NOT EXISTS commission_details JSONB;
+
+ALTER TABLE data_transactions
+ADD COLUMN IF NOT EXISTS provider_response JSONB;
 
 -- ============================================================
 -- BILLERS
