@@ -16,6 +16,7 @@ const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
 const transferRoutes = require('./routes/transfer');
 const dataRoutes = require('./routes/data');
+const airtimeRoutes = require('./routes/airtime');
 const internalTransferRoutes = require('./routes/internalTransfer');
 const depositRoutes = require('./routes/deposit');
 const bankRoutes = require('./routes/bankRoutes');
@@ -145,6 +146,14 @@ app.use(
   dataRoutes
 );
 
+// ============================================================
+// AIRTIME
+// ============================================================
+
+app.use(
+  '/api/airtime',
+  airtimeRoutes
+);
 // ------------------------------------------------------------
 // DEPOSITS
 // ------------------------------------------------------------
