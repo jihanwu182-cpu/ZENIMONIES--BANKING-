@@ -347,45 +347,50 @@ const Transfer: React.FC = () => {
    */
 
   const verifyTransactionPinAndSend =
-    async () => {
-      setTransactionPinError('');
-      setError('');
-      setSuccess('');
+  async () => {
+    setTransactionPinError('');
+    setError('');
+    setSuccess('');
 
-      if (!token) {
-        navigate('/login');
-        return;
-      }
+    if (!token) {
+      navigate('/login');
+      return;
+    }
 
-      if (!recipient) {
-        setTransactionPinError(
-          'Please verify the recipient first.'
-        );
-        return;
-      }
+    if (!recipient) {
+      setTransactionPinError(
+        'Please verify the recipient first.'
+      );
+      return;
+    }
 
-      if (!/^\d{4}$/.test(transactionPin)) {
-        setTransactionPinError(
-          'Please enter your 4-digit Transaction PIN.'
-        );
-        return;
-      }
+    if (!/^\d{4}$/.test(transactionPin)) {
+      setTransactionPinError(
+        'Please enter your 4-digit Transaction PIN.'
+      );
+      return;
+    }
 
-      try {
-        setVerifyingTransactionPin(true);
+    try {
+      setVerifyingTransactionPin(true);
+      setSending(true);
 
-        /*
-         * ======================================================
-         * STEP 1
-         *
-         * Verify the Transaction PIN.
-         * ======================================================
-         */
-
-        await axios.post(
-          `${API_URL}/api/transaction-pin/verify`,
+      const response =
+        await axios.post<TransferResponse>(
+          `${API_URL}/api/internal-transfers`,
           {
-            pin: transactionPin,
+            recipient_phone:
+              cleanPhone,
+
+            amount:
+              transferAmount,
+
+            narration:
+              narration.trim() ||
+              undefined,
+
+            transaction_pin:
+              transactionPin,
           },
           {
             headers: {
@@ -398,196 +403,109 @@ const Transfer: React.FC = () => {
           }
         );
 
-        /*
-         * PIN VERIFIED.
-         *
-         * Clear it immediately.
-         */
+      setTransactionPin('');
+      setShowTransactionPin(false);
+
+      if (response.data?.success) {
+        const transfer =
+          response.data.transfer;
+
+        setSuccess(
+          response.data.message ||
+            'Money sent successfully.'
+        );
+
+        setReference(
+          transfer?.reference || ''
+        );
+
+        setRecipientAccountNumber(
+          transfer?.recipient_account ||
+            recipient.account_number ||
+            ''
+        );
+
+        const newBalance =
+          Number(
+            transfer?.balance_after
+          );
+
+        if (
+          Number.isFinite(
+            newBalance
+          )
+        ) {
+          setBalanceAfter(
+            newBalance
+          );
+        }
+
+        setAmount('');
+        setNarration('');
+      } else {
+        setError(
+          response.data?.message ||
+            'Transfer failed.'
+        );
+      }
+
+    } catch (err: any) {
+      const status =
+        err?.response?.status;
+
+      const code =
+        err?.response?.data?.code;
+
+      if (
+        code ===
+          'INCORRECT_TRANSACTION_PIN' ||
+        code ===
+          'TRANSACTION_PIN_LOCKED' ||
+        code ===
+          'TRANSACTION_PIN_NOT_SET' ||
+        status === 423
+      ) {
+        setTransactionPinError(
+          err?.response?.data?.message ||
+            'Transaction PIN verification failed.'
+        );
+
+        setShowTransactionPin(true);
+
+        return;
+      }
+
+      if (status === 401) {
+        localStorage.removeItem(
+          'zenimonies_token'
+        );
+
+        localStorage.removeItem(
+          'token'
+        );
+
+        localStorage.removeItem(
+          'access_token'
+        );
+
         setTransactionPin('');
         setShowTransactionPin(false);
 
-        /*
-         * ======================================================
-         * STEP 2
-         *
-         * Send the actual transfer.
-         * ======================================================
-         */
+        navigate('/login');
 
-        setSending(true);
-
-        const response =
-          await axios.post<TransferResponse>(
-            `${API_URL}/api/internal-transfers`,
-            {
-              recipient_phone:
-                cleanPhone,
-
-              amount:
-                transferAmount,
-
-              narration:
-                narration.trim() ||
-                undefined,
-            },
-            {
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
-
-                'Content-Type':
-                  'application/json',
-              },
-            }
-          );
-
-        if (
-          response.data?.success
-        ) {
-          const transfer =
-            response.data.transfer;
-
-          setSuccess(
-            response.data.message ||
-              'Money sent successfully.'
-          );
-
-          setReference(
-            transfer?.reference || ''
-          );
-
-          /*
-           * IMPORTANT:
-           * Store the REAL recipient account
-           * returned by the backend.
-           */
-          setRecipientAccountNumber(
-            transfer?.recipient_account ||
-              recipient.account_number ||
-              ''
-          );
-
-          const newBalance =
-            Number(
-              transfer?.balance_after
-            );
-
-          if (
-            Number.isFinite(
-              newBalance
-            )
-          ) {
-            setBalanceAfter(
-              newBalance
-            );
-          }
-
-          setAmount('');
-          setNarration('');
-        } else {
-          setError(
-            response.data?.message ||
-              'Transfer failed.'
-          );
-        }
-
-      } catch (err: any) {
-
-        const status =
-          err?.response?.status;
-
-        const code =
-          err?.response?.data?.code;
-
-        /*
-         * ======================================================
-         * TRANSACTION PIN ERROR
-         * ======================================================
-         *
-         * A 401 from the PIN endpoint can mean
-         * "incorrect PIN", so handle the PIN request
-         * before treating 401 as a session expiration.
-         */
-
-        if (
-          code ===
-            'INCORRECT_TRANSACTION_PIN' ||
-          code ===
-            'TRANSACTION_PIN_LOCKED' ||
-          status === 423
-        ) {
-          setTransactionPinError(
-            err?.response?.data?.message ||
-              'Transaction PIN verification failed.'
-          );
-
-          setShowTransactionPin(true);
-
-          return;
-        }
-
-        /*
-         * If the response came from the PIN endpoint
-         * and is a normal unauthorized/incorrect-PIN
-         * response without a code, keep the dialog open.
-         */
-        if (
-          status === 401 &&
-          err?.config?.url?.includes(
-            '/api/transaction-pin/verify'
-          )
-        ) {
-          setTransactionPinError(
-            err?.response?.data?.message ||
-              'Incorrect Transaction PIN.'
-          );
-
-          setShowTransactionPin(true);
-
-          return;
-        }
-
-        /*
-         * ======================================================
-         * SESSION EXPIRED
-         * ======================================================
-         */
-
-        if (
-          status === 401
-        ) {
-          localStorage.removeItem(
-            'zenimonies_token'
-          );
-
-          localStorage.removeItem(
-            'token'
-          );
-
-          localStorage.removeItem(
-            'access_token'
-          );
-
-          navigate('/login');
-          return;
-        }
-
-        /*
-         * ======================================================
-         * TRANSFER ERROR
-         * ======================================================
-         */
-
-        setError(
-          err?.response?.data?.message ||
-            'Unable to complete the transfer.'
-        );
-
-      } finally {
-        setVerifyingTransactionPin(false);
-        setSending(false);
+        return;
       }
-    };
+
+      setError(
+        err?.response?.data?.message ||
+          'Unable to complete the transfer.'
+      );
+
+    } finally {
+      setVerifyingTransactionPin(false);
+      setSending(false);
+    }
+  };
 
 
   /*
