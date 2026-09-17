@@ -150,7 +150,15 @@ const getProviderReference = (
 // ============================================================
 
 const buyAirtime = async (req, res) => {
-
+  
+  console.log('================================================');
+  console.log('ZENIMONIES AIRTIME REQUEST RECEIVED');
+  console.log('================================================');
+  console.log('Network:', req.body?.network || 'N/A');
+  console.log('Amount:', req.body?.amount || 'N/A');
+  console.log('Phone received:', Boolean(req.body?.phone));
+  console.log('User authenticated:', Boolean(req.user));
+  console.log('================================================');
   const userId =
     getUserId(req);
 
