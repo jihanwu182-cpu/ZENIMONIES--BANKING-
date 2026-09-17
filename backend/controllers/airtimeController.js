@@ -47,6 +47,7 @@ const getProviderStatus = (providerResponse) => {
       ''
   ).trim();
 
+
   const transactionStatus = String(
     providerResponse
       ?.content
@@ -59,7 +60,7 @@ const getProviderStatus = (providerResponse) => {
 
 
   // ----------------------------------------------------------
-  // Successfully delivered
+  // SUCCESS
   // ----------------------------------------------------------
 
   if (
@@ -71,7 +72,7 @@ const getProviderStatus = (providerResponse) => {
 
 
   // ----------------------------------------------------------
-  // Provider accepted transaction but it is still processing
+  // PENDING
   // ----------------------------------------------------------
 
   if (
@@ -84,7 +85,7 @@ const getProviderStatus = (providerResponse) => {
 
 
   // ----------------------------------------------------------
-  // Explicit provider failure
+  // FAILURE
   // ----------------------------------------------------------
 
   return 'failed';
@@ -92,7 +93,7 @@ const getProviderStatus = (providerResponse) => {
 
 
 // ============================================================
-// COMMISSION EXTRACTION
+// COMMISSION DETAILS
 // ============================================================
 
 const getCommissionDetails = (
@@ -139,7 +140,13 @@ const getProviderReference = (
 //
 // POST /api/airtime
 //
-// Transaction PIN middleware should run BEFORE this controller.
+// Route protection:
+//
+// authenticateToken
+//       ↓
+// transactionPinMiddleware
+//       ↓
+// buyAirtime
 // ============================================================
 
 const buyAirtime = async (req, res) => {
@@ -180,7 +187,7 @@ const buyAirtime = async (req, res) => {
 
 
   // ==========================================================
-  // NETWORK VALIDATION
+  // NETWORK
   // ==========================================================
 
   if (!network) {
@@ -193,7 +200,7 @@ const buyAirtime = async (req, res) => {
 
 
   // ==========================================================
-  // PHONE VALIDATION
+  // PHONE
   // ==========================================================
 
   if (
@@ -208,7 +215,7 @@ const buyAirtime = async (req, res) => {
 
 
   // ==========================================================
-  // AMOUNT VALIDATION
+  // AMOUNT
   // ==========================================================
 
   if (
@@ -224,10 +231,7 @@ const buyAirtime = async (req, res) => {
 
 
   // ==========================================================
-  // SAFETY LIMIT
-  //
-  // This prevents accidental extremely large requests.
-  // We can adjust this later based on the final product rules.
+  // MAXIMUM AIRTIME AMOUNT
   // ==========================================================
 
   if (amount > 100000) {
@@ -242,7 +246,7 @@ const buyAirtime = async (req, res) => {
 
 
   // ==========================================================
-  // CREATE ZENIMONIES REFERENCE
+  // ZENIMONIES REFERENCE
   // ==========================================================
 
   const reference =
@@ -251,11 +255,17 @@ const buyAirtime = async (req, res) => {
 
   let account;
   let transactionId;
+  let airtimeTransactionId;
 
 
   // ==========================================================
   // STEP 1
-  // LOCK AND DEDUCT CUSTOMER WALLET
+  //
+  // LOCK CUSTOMER ACCOUNT
+  // CREATE BOTH TRANSACTIONS
+  // DEDUCT WALLET
+  //
+  // Everything is committed together.
   // ==========================================================
 
   const client =
@@ -270,7 +280,7 @@ const buyAirtime = async (req, res) => {
 
 
     // --------------------------------------------------------
-    // Lock active NGN account
+    // Find and lock NGN account
     // --------------------------------------------------------
 
     const accountResult =
@@ -338,7 +348,7 @@ const buyAirtime = async (req, res) => {
 
 
     // --------------------------------------------------------
-    // Check balance
+    // Balance check
     // --------------------------------------------------------
 
     if (
@@ -367,9 +377,48 @@ const buyAirtime = async (req, res) => {
 
 
     // ========================================================
-    // CREATE AIRTIME TRANSACTION
-    //
-    // We use the central transactions table.
+    // CREATE SPECIALIZED AIRTIME TRANSACTION
+    // ========================================================
+
+    const airtimeResult =
+      await client.query(
+        `
+        INSERT INTO airtime_transactions (
+          account_id,
+          network,
+          phone_number,
+          amount,
+          currency,
+          reference,
+          status
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          'NGN',
+          $5,
+          'pending'
+        )
+        RETURNING id
+        `,
+        [
+          account.id,
+          network,
+          phone,
+          amount,
+          reference,
+        ]
+      );
+
+
+    airtimeTransactionId =
+      airtimeResult.rows[0].id;
+
+
+    // ========================================================
+    // CREATE CENTRAL TRANSACTION
     // ========================================================
 
     const transactionResult =
@@ -415,7 +464,7 @@ const buyAirtime = async (req, res) => {
 
 
     // ========================================================
-    // DEDUCT WALLET
+    // DEDUCT CUSTOMER WALLET
     // ========================================================
 
     await client.query(
@@ -474,6 +523,7 @@ const buyAirtime = async (req, res) => {
 
   // ==========================================================
   // STEP 2
+  //
   // SEND AIRTIME TO VTPASS
   // ==========================================================
 
@@ -501,13 +551,11 @@ const buyAirtime = async (req, res) => {
 
 
     // --------------------------------------------------------
-    // IMPORTANT
+    // Provider/network uncertainty.
     //
-    // If the provider request times out or the network fails,
-    // we DO NOT immediately refund.
+    // DO NOT REFUND automatically.
     //
-    // The provider may have received the transaction.
-    // The transaction therefore remains pending for requery.
+    // The provider may have received the request.
     // --------------------------------------------------------
 
     return res.status(202).json({
@@ -552,6 +600,7 @@ const buyAirtime = async (req, res) => {
 
   // ==========================================================
   // STEP 3
+  //
   // SUCCESSFUL AIRTIME
   // ==========================================================
 
@@ -562,24 +611,50 @@ const buyAirtime = async (req, res) => {
 
     try {
 
+      // ------------------------------------------------------
+      // Update specialized Airtime transaction
+      // ------------------------------------------------------
+
+      await pool.query(
+        `
+        UPDATE airtime_transactions
+        SET
+          provider_reference = $1,
+          provider_request_id = $2,
+          commission_details = $3::jsonb,
+          provider_response = $4::jsonb,
+          status = 'completed',
+          completed_at = CURRENT_TIMESTAMP
+        WHERE id = $5
+        `,
+        [
+          providerReference,
+          providerResult.requestId,
+          commissionDetails
+            ? JSON.stringify(
+                commissionDetails
+              )
+            : null,
+          JSON.stringify(
+            providerResponse
+          ),
+          airtimeTransactionId,
+        ]
+      );
+
+
+      // ------------------------------------------------------
+      // Update central transaction
+      // ------------------------------------------------------
+
       await pool.query(
         `
         UPDATE transactions
         SET
-          status = 'completed',
-          description = $1
-        WHERE id = $2
+          status = 'completed'
+        WHERE id = $1
         `,
-        [
-          `Airtime purchase - ${network} for ${phone}${
-            commissionDetails
-              ? ` | Commission: ${JSON.stringify(
-                  commissionDetails
-                )}`
-              : ''
-          }`,
-          transactionId,
-        ]
+        [transactionId]
       );
 
 
@@ -592,8 +667,8 @@ const buyAirtime = async (req, res) => {
       );
 
 
-      // Provider already delivered airtime.
-      // Never automatically refund here.
+      // Provider has already delivered airtime.
+      // Never refund automatically here.
 
       return res.status(202).json({
         success: true,
@@ -623,6 +698,7 @@ const buyAirtime = async (req, res) => {
 
   // ==========================================================
   // STEP 4
+  //
   // PENDING
   // ==========================================================
 
@@ -630,6 +706,33 @@ const buyAirtime = async (req, res) => {
     providerStatus ===
     'pending'
   ) {
+
+    await pool.query(
+      `
+      UPDATE airtime_transactions
+      SET
+        provider_reference = $1,
+        provider_request_id = $2,
+        commission_details = $3::jsonb,
+        provider_response = $4::jsonb,
+        status = 'pending'
+      WHERE id = $5
+      `,
+      [
+        providerReference,
+        providerResult.requestId,
+        commissionDetails
+          ? JSON.stringify(
+              commissionDetails
+            )
+          : null,
+        JSON.stringify(
+          providerResponse
+        ),
+        airtimeTransactionId,
+      ]
+    );
+
 
     await pool.query(
       `
@@ -659,10 +762,10 @@ const buyAirtime = async (req, res) => {
 
   // ==========================================================
   // STEP 5
+  //
   // EXPLICIT PROVIDER FAILURE
   //
-  // VTpass rejected the transaction.
-  // Refund the customer's wallet.
+  // Refund customer's wallet.
   // ==========================================================
 
   const refundClient =
@@ -677,7 +780,7 @@ const buyAirtime = async (req, res) => {
 
 
     // --------------------------------------------------------
-    // Lock account again
+    // Lock account
     // --------------------------------------------------------
 
     const lockedAccount =
@@ -710,6 +813,17 @@ const buyAirtime = async (req, res) => {
       );
 
 
+    if (
+      !Number.isFinite(
+        currentBalance
+      )
+    ) {
+      throw new Error(
+        'Unable to read account balance during airtime refund.'
+      );
+    }
+
+
     const refundedBalance =
       currentBalance + amount;
 
@@ -734,24 +848,51 @@ const buyAirtime = async (req, res) => {
 
 
     // --------------------------------------------------------
-    // Mark transaction failed
+    // Update Airtime transaction
+    // --------------------------------------------------------
+
+    await refundClient.query(
+      `
+      UPDATE airtime_transactions
+      SET
+        provider_reference = $1,
+        provider_request_id = $2,
+        commission_details = $3::jsonb,
+        provider_response = $4::jsonb,
+        status = 'failed',
+        failure_reason = $5
+      WHERE id = $6
+      `,
+      [
+        providerReference,
+        providerResult.requestId,
+        commissionDetails
+          ? JSON.stringify(
+              commissionDetails
+            )
+          : null,
+        JSON.stringify(
+          providerResponse
+        ),
+        providerMessage ||
+          'VTpass rejected the airtime purchase.',
+        airtimeTransactionId,
+      ]
+    );
+
+
+    // --------------------------------------------------------
+    // Update central transaction
     // --------------------------------------------------------
 
     await refundClient.query(
       `
       UPDATE transactions
       SET
-        status = 'failed',
-        description = $1
-      WHERE id = $2
+        status = 'failed'
+      WHERE id = $1
       `,
-      [
-        `Airtime purchase failed - ${
-          providerMessage ||
-          'VTpass rejected the transaction.'
-        }`,
-        transactionId,
-      ]
+      [transactionId]
     );
 
 
@@ -778,8 +919,6 @@ const buyAirtime = async (req, res) => {
     );
 
 
-    // Do not pretend refund succeeded.
-
     return res.status(500).json({
       success: false,
       code:
@@ -798,7 +937,7 @@ const buyAirtime = async (req, res) => {
 
 
   // ==========================================================
-  // FINAL FAILURE RESPONSE
+  // FINAL FAILURE
   // ==========================================================
 
   return res.status(400).json({
