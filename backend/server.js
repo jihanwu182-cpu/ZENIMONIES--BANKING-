@@ -543,28 +543,27 @@ const startServer = async () => {
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS
       gender VARCHAR(30);
-    `);
 
-    ALTER TABLE airtime_transactions
-    ADD COLUMN IF NOT EXISTS
-    provider_request_id VARCHAR(150);
+      ALTER TABLE airtime_transactions
+      ADD COLUMN IF NOT EXISTS
+      provider_request_id VARCHAR(150);
 
-    ALTER TABLE airtime_transactions
-    ADD COLUMN IF NOT EXISTS
-    commission_details JSONB;
+      ALTER TABLE airtime_transactions
+      ADD COLUMN IF NOT EXISTS
+      commission_details JSONB;
 
-    ALTER TABLE airtime_transactions
-    ADD COLUMN IF NOT EXISTS
-    provider_response JSONB;
+      ALTER TABLE airtime_transactions
+      ADD COLUMN IF NOT EXISTS
+      provider_response JSONB;
 
-    ALTER TABLE data_transactions
-    ADD COLUMN IF NOT EXISTS
-    commission_details JSONB;
+      ALTER TABLE data_transactions
+      ADD COLUMN IF NOT EXISTS
+      commission_details JSONB;
 
-    ALTER TABLE data_transactions
-    ADD COLUMN IF NOT EXISTS
-    provider_response JSONB;
-
+      ALTER TABLE data_transactions
+      ADD COLUMN IF NOT EXISTS
+      provider_response JSONB;
+     `);
     console.log(
       'Database migration completed: profile fields and gender are available on users'
     );
