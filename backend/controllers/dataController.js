@@ -99,11 +99,28 @@ const getPlans = async (req, res) => {
       await getDataPlans(network);
 
     return res.status(200).json({
-      success: true,
-      network: result.network,
-      serviceID: result.serviceID,
-      plans: result.plans,
-    });
+  success: true,
+  network: result.network,
+  serviceID: result.serviceID,
+  plans: result.plans,
+
+  // TEMPORARY DIAGNOSTIC
+  diagnostic: {
+    totalPlans: result.plans.length,
+    airtelPlans: result.plans
+      .filter(
+        (plan) =>
+          String(plan.variation_code || '')
+            .toLowerCase()
+            .includes('airtel')
+      )
+      .map((plan) => ({
+        code: plan.variation_code,
+        name: plan.name,
+        amount: plan.amount,
+      })),
+  },
+});
 
   } catch (error) {
     console.error(
