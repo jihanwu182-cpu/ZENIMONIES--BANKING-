@@ -803,10 +803,7 @@ console.log(
           '/api/deposits'
         );
         
-         console.log(
-          'Airtime: 
-          '/api/airtime'
-         );
+        console.log('Airtime: /api/airtime');
         
         console.log(
           'Banks:',
