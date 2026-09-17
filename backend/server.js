@@ -802,7 +802,12 @@ console.log(
           'Deposits:',
           '/api/deposits'
         );
-
+        
+         console.log(
+          'Airtime: 
+          '/api/airtime'
+         );
+        
         console.log(
           'Banks:',
           '/api/banks'
