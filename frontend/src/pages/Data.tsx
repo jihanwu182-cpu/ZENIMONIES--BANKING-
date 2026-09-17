@@ -1,10 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import axios from 'axios';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  IconButton,
+  Snackbar,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 
-const API_URL =
-  process.env.REACT_APP_API_URL ||
-  'https://zenimonies-banking.onrender.com';
+import CloseIcon from '@mui/icons-material/Close';
+import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
+import WifiIcon from '@mui/icons-material/Wifi';
+import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
+import SecurityIcon from '@mui/icons-material/Security';
 
 type Network =
   | 'MTN'
@@ -15,11 +32,12 @@ type Network =
 interface DataPlan {
   variation_code: string;
   name: string;
-  amount: number;
+  amount: number | string;
   validity?: string;
   fixedPrice?: boolean;
   description?: string;
   serviceID?: string;
+  category?: string;
 }
 
 interface NetworkOption {
@@ -28,157 +46,412 @@ interface NetworkOption {
   fallback: string;
 }
 
-/*
- * Network logos
- *
- * These are remote logo assets. If you later add the official
- * network logo files to frontend/public, we can switch these
- * to local files for even better reliability.
- */
-const networks: NetworkOption[] = [
+const API_URL =
+  process.env.REACT_APP_API_URL ||
+  'https://zenimonies-banking.onrender.com';
+
+const NETWORKS: NetworkOption[] = [
   {
     name: 'MTN',
     logo:
-      'https://nigerialogos.netlify.app/logos/MTN.svg',
+      'https://raw.githubusercontent.com/josephajibodu/utility-providers-assets/main/network-providers/mtn.svg',
     fallback: 'MTN',
   },
   {
     name: 'Airtel',
     logo:
-      'https://nigerialogos.netlify.app/logos/Airtel%20Nigeria.svg',
+      'https://raw.githubusercontent.com/josephajibodu/utility-providers-assets/main/network-providers/airtel.svg',
     fallback: 'A',
   },
   {
     name: 'Glo',
     logo:
-      'https://nigerialogos.netlify.app/logos/Globacom%20Limited.svg',
+      'https://raw.githubusercontent.com/josephajibodu/utility-providers-assets/main/network-providers/glo.svg',
     fallback: 'G',
   },
   {
     name: '9mobile',
     logo:
-      'https://nigerialogos.netlify.app/logos/9mobile.svg',
+      'https://raw.githubusercontent.com/josephajibodu/utility-providers-assets/main/network-providers/9mobile.svg',
     fallback: '9',
   },
 ];
 
-const networkColors: Record<Network, string> = {
-  MTN: '#ffcc00',
-  Airtel: '#e60000',
-  Glo: '#008f39',
-  '9mobile': '#00a651',
+const CATEGORY_ORDER = [
+  'HOT',
+  'Daily',
+  'Weekly',
+  'Monthly',
+  'Night',
+  'Social',
+  'Weekend',
+  'Binge',
+  'Special',
+  '3 Months+',
+  'Router',
+  'Other',
+];
+
+const getToken = (): string => {
+  return (
+    localStorage.getItem('zenimonies_token') ||
+    localStorage.getItem('access_token') ||
+    localStorage.getItem('token') ||
+    ''
+  );
 };
 
-const formatAmount = (amount: number) =>
-  `₦${Number(amount || 0).toLocaleString('en-NG')}`;
+const normalizeAmount = (
+  value: number | string | undefined
+): number => {
+  if (value === undefined || value === null) {
+    return 0;
+  }
 
-const getToken = () =>
-  localStorage.getItem('zenimonies_token') ||
-  localStorage.getItem('token') ||
-  '';
+  const cleaned = String(value)
+    .replace(/₦/g, '')
+    .replace(/,/g, '')
+    .trim();
+
+  const parsed = Number(cleaned);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
+};
+
+const formatNaira = (
+  value: number | string
+): string => {
+  const amount = normalizeAmount(value);
+
+  return new Intl.NumberFormat(
+    'en-NG',
+    {
+      style: 'currency',
+      currency: 'NGN',
+      maximumFractionDigits: 0,
+    }
+  ).format(amount);
+};
+
+const cleanPhoneNumber = (
+  value: string
+): string => {
+  let phone = value.replace(/\D/g, '');
+
+  if (phone.startsWith('234')) {
+    phone = `0${phone.slice(3)}`;
+  }
+
+  if (phone.length === 10) {
+    phone = `0${phone}`;
+  }
+
+  return phone;
+};
+
+const isValidPhone = (
+  value: string
+): boolean => {
+  return /^0\d{10}$/.test(value);
+};
+
+const getPlanCategory = (
+  plan: DataPlan
+): string => {
+  if (plan.category) {
+    const normalized = plan.category
+      .toLowerCase()
+      .trim();
+
+    const match =
+      CATEGORY_ORDER.find(
+        (category) =>
+          category.toLowerCase() === normalized
+      );
+
+    if (match) {
+      return match;
+    }
+  }
+
+  const text =
+    `${plan.name || ''} ${
+      plan.description || ''
+    }`.toLowerCase();
+
+  /*
+   * Only explicitly identifiable categories
+   * are assigned here.
+   *
+   * We do NOT randomly label plans as HOT.
+   */
+
+  if (
+    text.includes('hot') ||
+    text.includes('popular') ||
+    text.includes('featured')
+  ) {
+    return 'HOT';
+  }
+
+  if (
+    text.includes('router') ||
+    text.includes('mifi') ||
+    text.includes('mi-fi') ||
+    text.includes('odu')
+  ) {
+    return 'Router';
+  }
+
+  if (
+    text.includes('3 month') ||
+    text.includes('3-month') ||
+    text.includes('90 day') ||
+    text.includes('90-day') ||
+    text.includes('120 day') ||
+    text.includes('120-day') ||
+    text.includes('365 day') ||
+    text.includes('365-day') ||
+    text.includes('long term') ||
+    text.includes('long-term')
+  ) {
+    return '3 Months+';
+  }
+
+  if (
+    text.includes('night') ||
+    text.includes('12am') ||
+    text.includes('12 am') ||
+    text.includes('1am') ||
+    text.includes('2am') ||
+    text.includes('3am') ||
+    text.includes('4am') ||
+    text.includes('5am')
+  ) {
+    return 'Night';
+  }
+
+  if (
+    text.includes('social') ||
+    text.includes('instagram') ||
+    text.includes('tiktok') ||
+    text.includes('whatsapp') ||
+    text.includes('facebook')
+  ) {
+    return 'Social';
+  }
+
+  if (
+    text.includes('youtube') ||
+    text.includes('binge')
+  ) {
+    return 'Binge';
+  }
+
+  if (
+    text.includes('weekend') ||
+    text.includes('saturday') ||
+    text.includes('sunday')
+  ) {
+    return 'Weekend';
+  }
+
+  if (
+    text.includes('special') ||
+    text.includes('combo') ||
+    text.includes('collabo')
+  ) {
+    return 'Special';
+  }
+
+  if (
+    text.includes('weekly') ||
+    text.includes('7 day') ||
+    text.includes('7-day')
+  ) {
+    return 'Weekly';
+  }
+
+  if (
+    text.includes('monthly') ||
+    text.includes('30 day') ||
+    text.includes('30-day')
+  ) {
+    return 'Monthly';
+  }
+
+  if (
+    text.includes('daily') ||
+    text.includes('1 day') ||
+    text.includes('1-day') ||
+    text.includes('2 day') ||
+    text.includes('2-day') ||
+    text.includes('3 day') ||
+    text.includes('3-day')
+  ) {
+    return 'Daily';
+  }
+
+  return 'Other';
+};
 
 const Data: React.FC = () => {
   const [network, setNetwork] =
-    useState<Network | ''>('');
+    useState<Network>('MTN');
 
-  const [phone, setPhone] =
-    useState('');
-
-  const [plans, setPlans] =
-    useState<DataPlan[]>([]);
-
-  const [selectedPlan, setSelectedPlan] =
-    useState<DataPlan | null>(null);
+  const [plans, setPlans] = useState<DataPlan[]>(
+    []
+  );
 
   const [loadingPlans, setLoadingPlans] =
     useState(false);
 
-  const [loadingPurchase, setLoadingPurchase] =
+  const [buying, setBuying] =
     useState(false);
 
-  const [error, setError] =
+  const [phone, setPhone] =
     useState('');
 
-  const [message, setMessage] =
-    useState('');
+  const [selectedPlan, setSelectedPlan] =
+    useState<DataPlan | null>(null);
 
-  const [showPin, setShowPin] =
-    useState(false);
+  const [activeCategory, setActiveCategory] =
+    useState('HOT');
 
   const [transactionPin, setTransactionPin] =
     useState('');
 
-  const [pinError, setPinError] =
-    useState('');
+  const [
+    showTransactionPin,
+    setShowTransactionPin,
+  ] = useState(false);
 
-  /*
-   * Load plans from Zenimonies backend.
-   *
-   * The backend gets the current catalogue from VTpass.
-   * We do NOT trust prices or variation codes supplied
-   * directly by the frontend.
-   */
-  useEffect(() => {
-    if (!network) {
-      setPlans([]);
-      setSelectedPlan(null);
-      return;
-    }
+  const [
+    transactionPinError,
+    setTransactionPinError,
+  ] = useState('');
 
-    const loadPlans = async () => {
+  const [snackbar, setSnackbar] =
+    useState<{
+      open: boolean;
+      message: string;
+      severity: 'success' | 'error';
+    }>({
+      open: false,
+      message: '',
+      severity: 'success',
+    });
+
+  const [logoErrors, setLogoErrors] =
+    useState<Record<string, boolean>>({});
+
+  const showMessage = (
+    message: string,
+    severity: 'success' | 'error'
+  ) => {
+    setSnackbar({
+      open: true,
+      message,
+      severity,
+    });
+  };
+
+  const loadPlans = async (
+    selectedNetwork: Network
+  ) => {
+    try {
       setLoadingPlans(true);
-      setError('');
-      setMessage('');
-      setSelectedPlan(null);
 
-      try {
-        const token = getToken();
+      setPlans([]);
 
-        const response = await axios.get(
-          `${API_URL}/api/data/plans`,
-          {
-            params: {
-              network,
-            },
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            timeout: 30000,
-          }
+      const token = getToken();
+
+      if (!token) {
+        showMessage(
+          'Your session has expired. Please sign in again.',
+          'error'
         );
-
-        const returnedPlans =
-          response.data?.plans ||
-          response.data?.data ||
-          [];
-
-        if (!Array.isArray(returnedPlans)) {
-          throw new Error(
-            'Invalid data plan response.'
-          );
-        }
-
-        setPlans(returnedPlans);
-      } catch (err: any) {
-        console.error(
-          'Data plans loading error:',
-          err?.response?.data?.code ||
-            err?.message ||
-            'Unknown error'
-        );
-
-        setPlans([]);
-
-        setError(
-          err?.response?.data?.message ||
-            'Unable to load data plans right now.'
-        );
-      } finally {
-        setLoadingPlans(false);
+        return;
       }
-    };
 
-    loadPlans();
+      const response = await fetch(
+        `${API_URL}/api/data/plans?network=${encodeURIComponent(
+          selectedNetwork
+        )}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to load data plans.'
+        );
+      }
+
+      const receivedPlans =
+        Array.isArray(data?.plans)
+          ? data.plans
+          : Array.isArray(data?.data)
+          ? data.data
+          : [];
+
+      const normalizedPlans: DataPlan[] =
+        receivedPlans.map(
+          (plan: any) => ({
+            variation_code:
+              plan.variation_code ||
+              plan.variationCode ||
+              '',
+            name:
+              plan.name ||
+              plan.plan_name ||
+              'Data Plan',
+            amount:
+              plan.amount ??
+              plan.variation_amount ??
+              plan.price ??
+              0,
+            validity:
+              plan.validity ||
+              plan.duration ||
+              '',
+            fixedPrice:
+              plan.fixedPrice,
+            description:
+              plan.description || '',
+            serviceID:
+              plan.serviceID ||
+              plan.service_id ||
+              '',
+            category:
+              plan.category || '',
+          })
+        );
+
+      setPlans(normalizedPlans);
+    } catch (error: any) {
+      showMessage(
+        error?.message ||
+          'Unable to load data plans.',
+        'error'
+      );
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPlans(network);
   }, [network]);
 
   const groupedPlans = useMemo(() => {
@@ -187,36 +460,15 @@ const Data: React.FC = () => {
       DataPlan[]
     > = {};
 
-    plans.forEach((plan) => {
-      const name =
-        String(plan.name || '').trim();
-
-      let category = 'All Plans';
-
-      const lowerName =
-        name.toLowerCase();
-
-      if (
-        lowerName.includes('night')
-      ) {
-        category = 'Night';
-      } else if (
-        lowerName.includes('social')
-      ) {
-        category = 'Social';
-      } else if (
-        lowerName.includes('weekly')
-      ) {
-        category = 'Weekly';
-      } else if (
-        lowerName.includes('monthly')
-      ) {
-        category = 'Monthly';
-      } else if (
-        lowerName.includes('daily')
-      ) {
-        category = 'Daily';
+    CATEGORY_ORDER.forEach(
+      (category) => {
+        groups[category] = [];
       }
+    );
+
+    plans.forEach((plan) => {
+      const category =
+        getPlanCategory(plan);
 
       if (!groups[category]) {
         groups[category] = [];
@@ -228,1091 +480,1243 @@ const Data: React.FC = () => {
     return groups;
   }, [plans]);
 
-  const categoryNames =
-    Object.keys(groupedPlans);
+  const availableCategories =
+    useMemo(() => {
+      return CATEGORY_ORDER.filter(
+        (category) =>
+          groupedPlans[category] &&
+          groupedPlans[category].length > 0
+      );
+    }, [groupedPlans]);
+
+  useEffect(() => {
+    if (
+      availableCategories.length === 0
+    ) {
+      setActiveCategory('HOT');
+      return;
+    }
+
+    if (
+      !availableCategories.includes(
+        activeCategory
+      )
+    ) {
+      setActiveCategory(
+        availableCategories[0]
+      );
+    }
+  }, [
+    availableCategories,
+    activeCategory,
+  ]);
+
+  const activePlans =
+    groupedPlans[activeCategory] || [];
+
+  const selectedNetwork =
+    NETWORKS.find(
+      (item) => item.name === network
+    );
 
   const handleNetworkChange = (
-    selectedNetwork: Network
+    selectedNetworkName: Network
   ) => {
-    setNetwork(selectedNetwork);
-    setSelectedPlan(null);
-    setError('');
-    setMessage('');
-    setShowPin(false);
-    setTransactionPin('');
-    setPinError('');
+    setNetwork(selectedNetworkName);
+    setActiveCategory('HOT');
   };
 
-  const handlePhoneChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const value =
-      event.target.value.replace(
-        /[^\d+]/g,
-        ''
-      );
-
-    setPhone(value);
-    setError('');
-  };
-
-  const handlePlanSelect = (
+  const handleBuyClick = (
     plan: DataPlan
   ) => {
-    setSelectedPlan(plan);
-    setError('');
-    setMessage('');
-  };
+    const cleanPhone =
+      cleanPhoneNumber(phone);
 
-  const handleBuyClick = () => {
-    setError('');
-    setMessage('');
-    setPinError('');
-
-    if (!network) {
-      setError(
-        'Please select a network.'
+    if (!isValidPhone(cleanPhone)) {
+      showMessage(
+        'Please enter a valid Nigerian phone number.',
+        'error'
       );
       return;
     }
 
-    if (!phone.trim()) {
-      setError(
-        'Please enter the phone number.'
-      );
+    setPhone(cleanPhone);
+    setSelectedPlan(plan);
+    setTransactionPin('');
+    setTransactionPinError('');
+    setShowTransactionPin(true);
+  };
+
+  const completePurchase = async () => {
+    if (!selectedPlan) {
       return;
     }
 
     const cleanPhone =
-      phone.replace(/\D/g, '');
+      cleanPhoneNumber(phone);
 
-    if (
-      cleanPhone.length < 10 ||
-      cleanPhone.length > 11
-    ) {
-      setError(
+    if (!isValidPhone(cleanPhone)) {
+      setTransactionPinError(
         'Please enter a valid Nigerian phone number.'
       );
       return;
     }
 
-    if (!selectedPlan) {
-      setError(
-        'Please select a data plan.'
-      );
-      return;
-    }
-
-    setTransactionPin('');
-    setPinError('');
-    setShowPin(true);
-  };
-
-  const handlePurchase = async () => {
-    setPinError('');
-    setError('');
-    setMessage('');
-
-    if (!selectedPlan || !network) {
-      setPinError(
-        'Please select a network and data plan.'
-      );
-      return;
-    }
-
     if (!/^\d{4}$/.test(transactionPin)) {
-      setPinError(
-        'Transaction PIN must be exactly 4 digits.'
+      setTransactionPinError(
+        'Enter your 4-digit Transaction PIN.'
       );
       return;
     }
-
-    setLoadingPurchase(true);
 
     try {
+      setBuying(true);
+      setTransactionPinError('');
+
       const token = getToken();
 
       if (!token) {
-        setPinError(
+        throw new Error(
           'Your session has expired. Please sign in again.'
         );
-        return;
       }
 
-      const cleanPhone =
-        phone.replace(/\D/g, '');
-
-      const response = await axios.post(
+      const response = await fetch(
         `${API_URL}/api/data`,
         {
-          network,
-          phone: cleanPhone,
-          variation_code:
-            selectedPlan.variation_code,
-          transaction_pin:
-            transactionPin,
-        },
-        {
+          method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
+            'Content-Type':
+              'application/json',
           },
-          timeout: 60000,
+          body: JSON.stringify({
+            network,
+            phone: cleanPhone,
+            variation_code:
+              selectedPlan.variation_code,
+            transaction_pin:
+              transactionPin,
+          }),
         }
       );
 
-      if (response.data?.success) {
-        setMessage(
-          response.data?.message ||
-            'Data purchase submitted successfully.'
+      const data = await response.json();
+
+      if (!response.ok) {
+        const error: any = new Error(
+          data?.message ||
+            'Unable to purchase this data plan.'
         );
 
-        setShowPin(false);
-        setTransactionPin('');
-        setSelectedPlan(null);
-        setPlans((current) => [
-          ...current,
-        ]);
+        error.code = data?.code;
+
+        error.remainingAttempts =
+          data?.remainingAttempts;
+
+        error.lockedUntil =
+          data?.lockedUntil;
+
+        throw error;
+      }
+
+      setShowTransactionPin(false);
+      setTransactionPin('');
+      setSelectedPlan(null);
+
+      showMessage(
+        data?.message ||
+          'Data purchase submitted successfully.',
+        'success'
+      );
+    } catch (error: any) {
+      if (
+        error?.code ===
+        'INCORRECT_TRANSACTION_PIN'
+      ) {
+        const remaining =
+          error?.remainingAttempts;
+
+        setTransactionPinError(
+          remaining !== undefined
+            ? `Incorrect Transaction PIN. ${remaining} attempt${
+                remaining === 1
+                  ? ''
+                  : 's'
+              } remaining.`
+            : 'Incorrect Transaction PIN.'
+        );
+      } else if (
+        error?.code ===
+        'TRANSACTION_PIN_LOCKED'
+      ) {
+        setTransactionPinError(
+          'Your Transaction PIN is temporarily locked. Please try again later.'
+        );
+      } else if (
+        error?.code ===
+        'TRANSACTION_PIN_NOT_SET'
+      ) {
+        setTransactionPinError(
+          'Please create your Transaction PIN in Settings before making a purchase.'
+        );
       } else {
-        setPinError(
-          response.data?.message ||
+        setTransactionPinError(
+          error?.message ||
             'Unable to complete the data purchase.'
         );
       }
-    } catch (err: any) {
-      const responseData =
-        err?.response?.data;
-
-      const code =
-        responseData?.code;
-
-      if (
-        code ===
-        'INCORRECT_TRANSACTION_PIN'
-      ) {
-        setPinError(
-          responseData?.message ||
-            'Incorrect Transaction PIN.'
-        );
-      } else if (
-        code ===
-        'TRANSACTION_PIN_LOCKED'
-      ) {
-        setPinError(
-          responseData?.message ||
-            'Your Transaction PIN is temporarily locked.'
-        );
-      } else if (
-        code ===
-        'TRANSACTION_PIN_NOT_SET'
-      ) {
-        setPinError(
-          'Please create a Transaction PIN in Settings before buying data.'
-        );
-      } else if (
-        err?.response?.status === 401
-      ) {
-        setPinError(
-          'Your session has expired. Please sign in again.'
-        );
-      } else {
-        setPinError(
-          responseData?.message ||
-            'Unable to complete the data purchase. Please try again.'
-        );
-      }
-
-      console.error(
-        'Data purchase error:',
-        code ||
-          err?.message ||
-          'Unknown error'
-      );
     } finally {
-      setLoadingPurchase(false);
+      setBuying(false);
     }
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background:
-          'linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%)',
-        padding: '20px 14px 40px',
-      }}
-    >
-      <div
-        style={{
-          maxWidth: '760px',
-          margin: '0 auto',
-        }}
-      >
-        <Link
-          to="/"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            marginBottom: '18px',
-            color: '#0b5cff',
-            fontWeight: 700,
-            textDecoration: 'none',
-          }}
-        >
-          ← Back to Dashboard
-        </Link>
+    <>
+      <style>
+        {`
+          .zen-data-page {
+            min-height: 100vh;
+            background:
+              radial-gradient(
+                circle at top right,
+                rgba(212, 175, 55, 0.08),
+                transparent 34%
+              ),
+              #0b0b0b;
+            color: #f8f5ed;
+            padding: 24px 16px 48px;
+          }
 
-        <div
-          style={{
-            background: '#ffffff',
-            borderRadius: '24px',
-            padding: '22px',
-            boxShadow:
-              '0 12px 35px rgba(16, 24, 40, 0.08)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '14px',
-              marginBottom: '6px',
-            }}
-          >
-            <div
-              style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '15px',
-                background:
-                  'linear-gradient(135deg, #0b5cff, #1749b7)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#ffffff',
-                fontSize: '24px',
-                fontWeight: 800,
-              }}
+          .zen-data-shell {
+            width: 100%;
+            max-width: 760px;
+            margin: 0 auto;
+          }
+
+          .zen-premium-header {
+            background:
+              linear-gradient(
+                145deg,
+                #171717 0%,
+                #101010 100%
+              );
+            border: 1px solid rgba(212, 175, 55, 0.20);
+            border-radius: 24px;
+            padding: 22px;
+            box-shadow:
+              0 18px 45px rgba(0,0,0,0.35);
+          }
+
+          .zen-network-scroll {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 4px 2px 8px;
+            scrollbar-width: none;
+          }
+
+          .zen-network-scroll::-webkit-scrollbar {
+            display: none;
+          }
+
+          .zen-network-button {
+            min-width: 104px;
+            flex: 0 0 auto;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: #151515;
+            color: #ddd8cc;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition:
+              transform 0.18s ease,
+              border-color 0.18s ease,
+              background 0.18s ease;
+          }
+
+          .zen-network-button:hover {
+            transform: translateY(-1px);
+            border-color: rgba(212,175,55,0.38);
+          }
+
+          .zen-network-button.active {
+            background:
+              linear-gradient(
+                145deg,
+                rgba(212,175,55,0.18),
+                rgba(212,175,55,0.07)
+              );
+            border-color: rgba(212,175,55,0.72);
+            color: #f4d77a;
+          }
+
+          .zen-logo-box {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            margin: 0 auto 7px;
+          }
+
+          .zen-logo-box img {
+            width: 31px;
+            height: 31px;
+            object-fit: contain;
+          }
+
+          .zen-category-bar {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 4px 2px 12px;
+            scrollbar-width: none;
+          }
+
+          .zen-category-bar::-webkit-scrollbar {
+            display: none;
+          }
+
+          .zen-category-tab {
+            flex: 0 0 auto;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: #141414;
+            color: #aaa59b;
+            border-radius: 999px;
+            padding: 10px 17px;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.15px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+          }
+
+          .zen-category-tab:hover {
+            border-color: rgba(212,175,55,0.35);
+            color: #e8dfcb;
+          }
+
+          .zen-category-tab.active {
+            background: #d4af37;
+            color: #111111;
+            border-color: #d4af37;
+            box-shadow:
+              0 8px 20px rgba(212,175,55,0.18);
+          }
+
+          .zen-category-tab.empty {
+            opacity: 0.38;
+            cursor: default;
+          }
+
+          .zen-plans-grid {
+            display: grid;
+            grid-template-columns:
+              repeat(3, minmax(0, 1fr));
+            gap: 12px;
+          }
+
+          .zen-plan-card {
+            background:
+              linear-gradient(
+                145deg,
+                #181818,
+                #101010
+              );
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 20px;
+            padding: 16px;
+            min-height: 176px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition:
+              transform 0.18s ease,
+              border-color 0.18s ease,
+              box-shadow 0.18s ease;
+          }
+
+          .zen-plan-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(212,175,55,0.35);
+            box-shadow:
+              0 16px 35px rgba(0,0,0,0.28);
+          }
+
+          .zen-plan-size {
+            font-size: 22px;
+            font-weight: 800;
+            color: #f7f2e8;
+            line-height: 1.15;
+          }
+
+          .zen-plan-validity {
+            color: #aaa59b;
+            font-size: 12px;
+            margin-top: 5px;
+          }
+
+          .zen-plan-price {
+            color: #d8b84d;
+            font-size: 19px;
+            font-weight: 800;
+            margin-top: 12px;
+          }
+
+          .zen-buy-button {
+            margin-top: 14px;
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid rgba(212,175,55,0.65);
+            background: transparent;
+            color: #e1c15a;
+            font-weight: 800;
+            padding: 9px 8px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+          }
+
+          .zen-buy-button:hover {
+            background: #d4af37;
+            color: #111111;
+          }
+
+          .zen-section-card {
+            background:
+              linear-gradient(
+                145deg,
+                #141414,
+                #0f0f0f
+              );
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 24px;
+            padding: 18px;
+          }
+
+          .zen-phone-field .MuiOutlinedInput-root {
+            color: #f5f0e6;
+            background: #111111;
+            border-radius: 14px;
+          }
+
+          .zen-phone-field .MuiInputLabel-root {
+            color: #918c82;
+          }
+
+          .zen-phone-field
+            .MuiOutlinedInput-notchedOutline {
+            border-color:
+              rgba(255,255,255,0.10);
+          }
+
+          .zen-phone-field
+            .MuiOutlinedInput-root:hover
+            .MuiOutlinedInput-notchedOutline {
+            border-color:
+              rgba(212,175,55,0.40);
+          }
+
+          @media (max-width: 620px) {
+            .zen-data-page {
+              padding: 14px 10px 36px;
+            }
+
+            .zen-premium-header {
+              padding: 17px;
+              border-radius: 20px;
+            }
+
+            .zen-plans-grid {
+              grid-template-columns:
+                repeat(2, minmax(0, 1fr));
+              gap: 10px;
+            }
+
+            .zen-plan-card {
+              padding: 13px;
+              min-height: 165px;
+              border-radius: 17px;
+            }
+
+            .zen-plan-size {
+              font-size: 18px;
+            }
+
+            .zen-plan-price {
+              font-size: 16px;
+            }
+
+            .zen-category-tab {
+              padding: 9px 14px;
+              font-size: 12px;
+            }
+          }
+
+          @media (max-width: 380px) {
+            .zen-plans-grid {
+              grid-template-columns:
+                repeat(2, minmax(0, 1fr));
+            }
+
+            .zen-plan-card {
+              padding: 11px;
+            }
+          }
+        `}
+      </style>
+
+      <Box className="zen-data-page">
+        <Box className="zen-data-shell">
+
+          {/* =====================================================
+              PREMIUM HEADER
+          ===================================================== */}
+
+          <Box className="zen-premium-header">
+
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              spacing={2}
+              mb={2.5}
             >
-              📶
-            </div>
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    color: '#a49d91',
+                    letterSpacing: 1.5,
+                    fontWeight: 700,
+                    textTransform:
+                      'uppercase',
+                  }}
+                >
+                  Zenimonies
+                </Typography>
 
-            <div>
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: '26px',
+                <Typography
+                  sx={{
+                    fontSize: {
+                      xs: 25,
+                      sm: 29,
+                    },
+                    fontWeight: 850,
+                    letterSpacing: -0.8,
+                    color: '#f8f3e8',
+                    mt: 0.4,
+                  }}
+                >
+                  Mobile Data
+                </Typography>
+
+                <Typography
+                  sx={{
+                    color: '#969188',
+                    fontSize: 13,
+                    mt: 0.6,
+                  }}
+                >
+                  Choose your network and
+                  select a data plan.
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  width: 46,
+                  height: 46,
+                  borderRadius: '15px',
+                  border:
+                    '1px solid rgba(212,175,55,0.35)',
+                  background:
+                    'rgba(212,175,55,0.08)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
-                Mobile Data
-              </h1>
+                <WifiIcon
+                  sx={{
+                    color: '#d4af37',
+                    fontSize: 23,
+                  }}
+                />
+              </Box>
+            </Stack>
 
-              <p
-                style={{
-                  margin: '4px 0 0',
-                  color: '#667085',
-                  fontSize: '14px',
+            {/* PHONE NUMBER */}
+
+            <Box mb={2.5}>
+              <TextField
+                className="zen-phone-field"
+                fullWidth
+                label="Recipient phone number"
+                placeholder="08012345678"
+                value={phone}
+                onChange={(event) =>
+                  setPhone(
+                    event.target.value
+                  )
+                }
+                inputProps={{
+                  inputMode: 'numeric',
+                  maxLength: 14,
                 }}
-              >
-                Fast and secure data purchase
-              </p>
-            </div>
-          </div>
+              />
+            </Box>
 
-          {error && (
-            <div
-              style={{
-                padding: '13px',
-                marginTop: '20px',
-                marginBottom: '18px',
-                borderRadius: '12px',
-                background: '#fee4e2',
-                color: '#b42318',
-                fontSize: '14px',
-                fontWeight: 600,
-              }}
-            >
-              {error}
-            </div>
-          )}
+            {/* NETWORKS */}
 
-          {message && (
-            <div
-              style={{
-                padding: '13px',
-                marginTop: '20px',
-                marginBottom: '18px',
-                borderRadius: '12px',
-                background: '#ecfdf3',
-                color: '#027a48',
-                fontSize: '14px',
-                fontWeight: 600,
-              }}
-            >
-              {message}
-            </div>
-          )}
-
-          {/* NETWORK SELECTOR */}
-
-          <div
-            style={{
-              marginTop: '24px',
-            }}
-          >
-            <div
-              style={{
+            <Typography
+              sx={{
+                color: '#b7b0a3',
+                fontSize: 12,
                 fontWeight: 700,
-                marginBottom: '12px',
-                fontSize: '15px',
+                mb: 1,
+                textTransform:
+                  'uppercase',
+                letterSpacing: 1,
               }}
             >
               Select Network
-            </div>
+            </Typography>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns:
-                  'repeat(4, minmax(0, 1fr))',
-                gap: '10px',
-              }}
+            <Box className="zen-network-scroll">
+              {NETWORKS.map((item) => {
+                const failed =
+                  logoErrors[item.name];
+
+                return (
+                  <Box
+                    key={item.name}
+                    className={`zen-network-button ${
+                      network === item.name
+                        ? 'active'
+                        : ''
+                    }`}
+                    onClick={() =>
+                      handleNetworkChange(
+                        item.name
+                      )
+                    }
+                  >
+                    <Box className="zen-logo-box">
+                      {!failed ? (
+                        <img
+                          src={item.logo}
+                          alt={`${item.name} logo`}
+                          onError={() =>
+                            setLogoErrors(
+                              (previous) => ({
+                                ...previous,
+                                [item.name]:
+                                  true,
+                              })
+                            )
+                          }
+                        />
+                      ) : (
+                        <Typography
+                          sx={{
+                            fontWeight: 900,
+                            color: '#171717',
+                            fontSize: 16,
+                          }}
+                        >
+                          {item.fallback}
+                        </Typography>
+                      )}
+                    </Box>
+
+                    <Typography
+                      sx={{
+                        textAlign: 'center',
+                        fontSize: 12,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {item.name}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+          </Box>
+
+          <Box mt={2} />
+
+          {/* =====================================================
+              CATEGORY TABS
+          ===================================================== */}
+
+          <Box className="zen-section-card">
+
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              mb={1.2}
             >
-              {networks.map(
-                (networkOption) => {
-                  const selected =
-                    network ===
-                    networkOption.name;
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 17,
+                    fontWeight: 800,
+                    color: '#f4efe5',
+                  }}
+                >
+                  Data Plans
+                </Typography>
+
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    color: '#817c73',
+                    mt: 0.3,
+                  }}
+                >
+                  {network} plans
+                </Typography>
+              </Box>
+
+              <PhoneAndroidIcon
+                sx={{
+                  color: '#d4af37',
+                  fontSize: 20,
+                }}
+              />
+            </Stack>
+
+            <Box className="zen-category-bar">
+              {CATEGORY_ORDER.map(
+                (category) => {
+                  const hasPlans =
+                    groupedPlans[
+                      category
+                    ]?.length > 0;
 
                   return (
                     <button
-                      key={
-                        networkOption.name
-                      }
+                      key={category}
                       type="button"
-                      onClick={() =>
-                        handleNetworkChange(
-                          networkOption.name
-                        )
-                      }
-                      style={{
-                        border: selected
-                          ? `2px solid ${
-                              networkColors[
-                                networkOption.name
-                              ]
-                            }`
-                          : '1px solid #e4e7ec',
-                        background: selected
-                          ? '#f8fafc'
-                          : '#ffffff',
-                        borderRadius: '16px',
-                        padding: '12px 8px',
-                        cursor: 'pointer',
-                        transition:
-                          'all 0.2s ease',
-                        boxShadow: selected
-                          ? '0 4px 14px rgba(16,24,40,0.08)'
-                          : 'none',
+                      className={`zen-category-tab ${
+                        activeCategory ===
+                        category
+                          ? 'active'
+                          : ''
+                      } ${
+                        !hasPlans
+                          ? 'empty'
+                          : ''
+                      }`}
+                      onClick={() => {
+                        if (hasPlans) {
+                          setActiveCategory(
+                            category
+                          );
+                        }
                       }}
                     >
-                      <div
-                        style={{
-                          width: '46px',
-                          height: '46px',
-                          borderRadius: '50%',
-                          margin: '0 auto 8px',
-                          background:
-                            '#ffffff',
-                          display: 'flex',
-                          alignItems:
-                            'center',
-                          justifyContent:
-                            'center',
-                          overflow: 'hidden',
-                          border:
-                            '1px solid #eaecf0',
-                        }}
-                      >
-                        <img
-                          src={
-                            networkOption.logo
-                          }
-                          alt={`${networkOption.name} logo`}
-                          style={{
-                            width: '34px',
-                            height: '34px',
-                            objectFit:
-                              'contain',
-                          }}
-                          onError={(
-                            event
-                          ) => {
-                            event.currentTarget.style.display =
-                              'none';
-
-                            const parent =
-                              event.currentTarget
-                                .parentElement;
-
-                            if (
-                              parent &&
-                              !parent.querySelector(
-                                '.network-fallback'
-                              )
-                            ) {
-                              const fallback =
-                                document.createElement(
-                                  'span'
-                                );
-
-                              fallback.className =
-                                'network-fallback';
-
-                              fallback.textContent =
-                                networkOption.fallback;
-
-                              fallback.style.fontWeight =
-                                '800';
-
-                              fallback.style.fontSize =
-                                '17px';
-
-                              parent.appendChild(
-                                fallback
-                              );
-                            }
-                          }}
-                        />
-                      </div>
-
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          fontSize: '13px',
-                          color: '#101828',
-                        }}
-                      >
-                        {
-                          networkOption.name
-                        }
-                      </div>
+                      {category}
                     </button>
                   );
                 }
               )}
-            </div>
-          </div>
+            </Box>
 
-          {/* PHONE NUMBER */}
-
-          <div
-            style={{
-              marginTop: '24px',
-            }}
-          >
-            <label
-              htmlFor="phone"
-              style={{
-                display: 'block',
-                marginBottom: '8px',
-                fontWeight: 700,
-                fontSize: '15px',
-              }}
-            >
-              Phone Number
-            </label>
-
-            <input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={
-                handlePhoneChange
-              }
-              placeholder="08012345678"
-              autoComplete="tel"
-              inputMode="numeric"
-              style={{
-                width: '100%',
-                boxSizing:
-                  'border-box',
-                padding: '14px 15px',
-                border:
-                  '1px solid #d0d5dd',
-                borderRadius: '12px',
-                outline: 'none',
-                fontSize: '16px',
+            <Divider
+              sx={{
+                borderColor:
+                  'rgba(255,255,255,0.07)',
+                mb: 2,
               }}
             />
-          </div>
 
-          {/* PLANS */}
+            {/* =================================================
+                LOADING
+            ================================================= */}
 
-          {network && (
-            <div
-              style={{
-                marginTop: '28px',
-              }}
-            >
-              <div
-                style={{
+            {loadingPlans ? (
+              <Box
+                sx={{
+                  minHeight: 220,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent:
-                    'space-between',
-                  marginBottom: '14px',
+                    'center',
+                  flexDirection: 'column',
+                  gap: 1.5,
                 }}
               >
-                <div>
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: '20px',
+                <CircularProgress
+                  size={30}
+                  thickness={3}
+                  sx={{
+                    color: '#d4af37',
+                  }}
+                />
+
+                <Typography
+                  sx={{
+                    color: '#858078',
+                    fontSize: 13,
+                  }}
+                >
+                  Loading {network} data
+                  plans...
+                </Typography>
+              </Box>
+            ) : activePlans.length ===
+              0 ? (
+              <Box
+                sx={{
+                  minHeight: 220,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent:
+                    'center',
+                  textAlign: 'center',
+                  px: 2,
+                }}
+              >
+                <Box>
+                  <WifiIcon
+                    sx={{
+                      color:
+                        'rgba(212,175,55,0.45)',
+                      fontSize: 38,
+                      mb: 1,
+                    }}
+                  />
+
+                  <Typography
+                    sx={{
+                      color: '#d7d1c6',
+                      fontWeight: 700,
+                      mb: 0.5,
                     }}
                   >
-                    Data Plans
-                  </h2>
+                    No {activeCategory}{' '}
+                    plans available
+                  </Typography>
 
-                  <p
-                    style={{
-                      margin:
-                        '4px 0 0',
-                      color: '#667085',
-                      fontSize:
-                        '13px',
+                  <Typography
+                    sx={{
+                      color: '#77726a',
+                      fontSize: 12,
                     }}
                   >
-                    {
-                      network
-                    }{' '}
-                    plans available now
-                  </p>
-                </div>
+                    Select another category
+                    to view available plans.
+                  </Typography>
+                </Box>
+              </Box>
+            ) : (
+              <>
+                <Typography
+                  sx={{
+                    color: '#77726a',
+                    fontSize: 11,
+                    mb: 1.4,
+                  }}
+                >
+                  {activePlans.length}{' '}
+                  {activeCategory} plan
+                  {activePlans.length ===
+                  1
+                    ? ''
+                    : 's'} available
+                </Typography>
 
-                {loadingPlans && (
-                  <span
-                    style={{
-                      color: '#667085',
-                      fontSize:
-                        '13px',
-                    }}
-                  >
-                    Loading...
-                  </span>
-                )}
-              </div>
+                <Box className="zen-plans-grid">
+                  {activePlans.map(
+                    (plan) => (
+                      <Card
+                        key={
+                          plan.variation_code
+                        }
+                        className="zen-plan-card"
+                        elevation={0}
+                      >
+                        <Box>
+                          <Typography
+                            className="zen-plan-size"
+                          >
+                            {plan.name}
+                          </Typography>
 
-              {!loadingPlans &&
-                plans.length === 0 && (
-                  <div
-                    style={{
-                      padding: '20px',
-                      borderRadius: '14px',
-                      background:
-                        '#f9fafb',
-                      color: '#667085',
-                      textAlign:
-                        'center',
-                    }}
-                  >
-                    No data plans are
-                    available right now.
-                  </div>
-                )}
-
-              {categoryNames.map(
-                (category) => (
-                  <div
-                    key={category}
-                    style={{
-                      marginBottom:
-                        '26px',
-                    }}
-                  >
-                    <h3
-                      style={{
-                        margin:
-                          '0 0 12px',
-                        fontSize:
-                          '15px',
-                      }}
-                    >
-                      {category}
-                    </h3>
-
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns:
-                          'repeat(2, minmax(0, 1fr))',
-                        gap: '12px',
-                      }}
-                    >
-                      {groupedPlans[
-                        category
-                      ].map(
-                        (plan) => {
-                          const selected =
-                            selectedPlan
-                              ?.variation_code ===
-                            plan.variation_code;
-
-                          return (
-                            <button
-                              key={
-                                plan.variation_code
+                          {plan.validity && (
+                            <Typography
+                              className="zen-plan-validity"
+                            >
+                              Valid for{' '}
+                              {
+                                plan.validity
                               }
-                              type="button"
-                              onClick={() =>
-                                handlePlanSelect(
-                                  plan
-                                )
-                              }
-                              style={{
-                                textAlign:
-                                  'left',
-                                border:
-                                  selected
-                                    ? '2px solid #0b5cff'
-                                    : '1px solid #eaecf0',
-                                background:
-                                  selected
-                                    ? '#f5f8ff'
-                                    : '#ffffff',
-                                borderRadius:
-                                  '16px',
-                                padding:
-                                  '15px',
-                                cursor:
-                                  'pointer',
-                                boxShadow:
-                                  selected
-                                    ? '0 6px 18px rgba(11,92,255,0.12)'
-                                    : '0 2px 8px rgba(16,24,40,0.04)',
+                            </Typography>
+                          )}
+
+                          {plan.description && (
+                            <Typography
+                              sx={{
+                                color:
+                                  '#77726a',
+                                fontSize: 10,
+                                mt: 0.8,
+                                lineHeight: 1.4,
+                                display:
+                                  '-webkit-box',
+                                WebkitLineClamp:
+                                  2,
+                                WebkitBoxOrient:
+                                  'vertical',
+                                overflow:
+                                  'hidden',
                               }}
                             >
-                              <div
-                                style={{
-                                  display:
-                                    'flex',
-                                  alignItems:
-                                    'center',
-                                  justifyContent:
-                                    'space-between',
-                                  gap: '8px',
-                                }}
-                              >
-                                <strong
-                                  style={{
-                                    fontSize:
-                                      '16px',
-                                    color:
-                                      '#101828',
-                                  }}
-                                >
-                                  {
-                                    plan.name
-                                  }
-                                </strong>
+                              {
+                                plan.description
+                              }
+                            </Typography>
+                          )}
 
-                                {selected && (
-                                  <span
-                                    style={{
-                                      fontSize:
-                                        '12px',
-                                      color:
-                                        '#0b5cff',
-                                      fontWeight:
-                                        800,
-                                    }}
-                                  >
-                                    ✓
-                                  </span>
-                                )}
-                              </div>
+                          <Typography
+                            className="zen-plan-price"
+                          >
+                            {formatNaira(
+                              plan.amount
+                            )}
+                          </Typography>
+                        </Box>
 
-                              <div
-                                style={{
-                                  marginTop:
-                                    '10px',
-                                  fontSize:
-                                    '18px',
-                                  fontWeight:
-                                    800,
-                                  color:
-                                    '#0b5cff',
-                                }}
-                              >
-                                {formatAmount(
-                                  plan.amount
-                                )}
-                              </div>
-
-                              {plan.validity && (
-                                <div
-                                  style={{
-                                    marginTop:
-                                      '5px',
-                                    fontSize:
-                                      '12px',
-                                    color:
-                                      '#667085',
-                                  }}
-                                >
-                                  {
-                                    plan.validity
-                                  }
-                                </div>
-                              )}
-                            </button>
-                          );
-                        }
-                      )}
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
-          )}
-
-          {/* SELECTED PLAN */}
-
-          {selectedPlan && (
-            <div
-              style={{
-                marginTop: '8px',
-                padding: '16px',
-                borderRadius: '16px',
-                background:
-                  'linear-gradient(135deg, #f5f8ff, #eef4ff)',
-                border:
-                  '1px solid #d9e4ff',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '12px',
-                  color: '#667085',
-                  marginBottom: '5px',
-                }}
-              >
-                Selected plan
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent:
-                    'space-between',
-                  gap: '12px',
-                }}
-              >
-                <strong
-                  style={{
-                    fontSize: '17px',
-                  }}
-                >
-                  {selectedPlan.name}
-                </strong>
-
-                <strong
-                  style={{
-                    color: '#0b5cff',
-                    fontSize: '18px',
-                  }}
-                >
-                  {formatAmount(
-                    selectedPlan.amount
+                        <button
+                          type="button"
+                          className="zen-buy-button"
+                          onClick={() =>
+                            handleBuyClick(
+                              plan
+                            )
+                          }
+                        >
+                          Buy Data
+                        </button>
+                      </Card>
+                    )
                   )}
-                </strong>
-              </div>
-            </div>
-          )}
-
-          {/* BUY BUTTON */}
-
-          <button
-            type="button"
-            onClick={handleBuyClick}
-            disabled={
-              loadingPurchase ||
-              !selectedPlan
-            }
-            style={{
-              width: '100%',
-              marginTop: '22px',
-              padding: '15px',
-              border: 'none',
-              borderRadius: '13px',
-              background:
-                !selectedPlan
-                  ? '#98a2b3'
-                  : '#0b5cff',
-              color: '#ffffff',
-              fontWeight: 800,
-              fontSize: '15px',
-              cursor:
-                !selectedPlan
-                  ? 'not-allowed'
-                  : 'pointer',
-            }}
-          >
-            {loadingPurchase
-              ? 'Processing...'
-              : 'Continue to Buy'}
-          </button>
-        </div>
-      </div>
-
-      {/* TRANSACTION PIN MODAL */}
-
-      {showPin && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background:
-              'rgba(16, 24, 40, 0.55)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent:
-              'center',
-            padding: '20px',
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              width: '100%',
-              maxWidth: '390px',
-              background: '#ffffff',
-              borderRadius: '22px',
-              padding: '24px',
-              boxShadow:
-                '0 25px 70px rgba(0,0,0,0.25)',
-            }}
-          >
-            <div
-              style={{
-                width: '54px',
-                height: '54px',
-                borderRadius: '16px',
-                background:
-                  '#eef4ff',
-                display: 'flex',
-                alignItems:
-                  'center',
-                justifyContent:
-                  'center',
-                fontSize: '25px',
-                marginBottom:
-                  '14px',
-              }}
-            >
-              🔐
-            </div>
-
-            <h2
-              style={{
-                margin:
-                  '0 0 6px',
-              }}
-            >
-              Confirm Purchase
-            </h2>
-
-            <p
-              style={{
-                margin:
-                  '0 0 18px',
-                color: '#667085',
-                fontSize: '14px',
-                lineHeight: 1.5,
-              }}
-            >
-              Enter your 4-digit
-              Transaction PIN to
-              authorize this data
-              purchase.
-            </p>
-
-            <div
-              style={{
-                padding: '13px',
-                marginBottom:
-                  '16px',
-                background:
-                  '#f9fafb',
-                borderRadius:
-                  '12px',
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 700,
-                }}
-              >
-                {selectedPlan?.name}
-              </div>
-
-              <div
-                style={{
-                  color: '#0b5cff',
-                  fontWeight: 800,
-                  marginTop: '4px',
-                }}
-              >
-                {selectedPlan &&
-                  formatAmount(
-                    selectedPlan.amount
-                  )}
-              </div>
-
-              <div
-                style={{
-                  color: '#667085',
-                  fontSize: '13px',
-                  marginTop: '3px',
-                }}
-              >
-                To: {phone}
-              </div>
-            </div>
-
-            {pinError && (
-              <div
-                style={{
-                  padding: '11px',
-                  marginBottom:
-                    '14px',
-                  borderRadius:
-                    '10px',
-                  background:
-                    '#fee4e2',
-                  color: '#b42318',
-                  fontSize:
-                    '13px',
-                  fontWeight:
-                    600,
-                }}
-              >
-                {pinError}
-              </div>
+                </Box>
+              </>
             )}
+          </Box>
 
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              autoComplete="off"
-              value={
-                transactionPin
-              }
-              onChange={(event) =>
-                setTransactionPin(
-                  event.target.value.replace(
-                    /\D/g,
-                    ''
-                  )
-                )
-              }
-              placeholder="••••"
-              style={{
-                width: '100%',
-                boxSizing:
-                  'border-box',
-                padding: '15px',
-                textAlign:
-                  'center',
-                letterSpacing:
-                  '10px',
-                fontSize: '24px',
-                border:
-                  '1px solid #d0d5dd',
-                borderRadius:
-                  '12px',
-                outline: 'none',
+          {/* =====================================================
+              SECURITY NOTE
+          ===================================================== */}
+
+          <Box
+            sx={{
+              mt: 2,
+              px: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent:
+                'center',
+              gap: 0.8,
+            }}
+          >
+            <SecurityIcon
+              sx={{
+                color:
+                  'rgba(212,175,55,0.75)',
+                fontSize: 15,
               }}
             />
 
-            <button
-              type="button"
-              onClick={
-                handlePurchase
-              }
-              disabled={
-                loadingPurchase ||
-                transactionPin.length !==
-                  4
-              }
-              style={{
-                width: '100%',
-                marginTop: '16px',
-                padding: '14px',
-                border: 'none',
-                borderRadius:
-                  '12px',
-                background:
-                  transactionPin.length ===
-                  4
-                    ? '#0b5cff'
-                    : '#98a2b3',
-                color: '#ffffff',
-                fontWeight: 800,
-                cursor:
-                  transactionPin.length ===
-                  4
-                    ? 'pointer'
-                    : 'not-allowed',
+            <Typography
+              sx={{
+                color: '#706b63',
+                fontSize: 10,
+                textAlign: 'center',
               }}
             >
-              {loadingPurchase
-                ? 'Authorizing...'
-                : 'Confirm & Buy'}
-            </button>
+              Secured by Zenimonies
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (
-                  !loadingPurchase
-                ) {
-                  setShowPin(false);
-                  setTransactionPin(
-                    ''
-                  );
-                  setPinError('');
-                }
-              }}
-              disabled={
-                loadingPurchase
+      {/* =========================================================
+          TRANSACTION PIN DIALOG
+      ========================================================= */}
+
+      <Dialog
+        open={showTransactionPin}
+        onClose={() => {
+          if (!buying) {
+            setShowTransactionPin(false);
+            setTransactionPin('');
+            setTransactionPinError('');
+          }
+        }}
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{
+          sx: {
+            background:
+              'linear-gradient(145deg, #181818, #101010)',
+            color: '#f5f0e7',
+            border:
+              '1px solid rgba(212,175,55,0.22)',
+            borderRadius: '22px',
+            boxShadow:
+              '0 25px 70px rgba(0,0,0,0.55)',
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 800,
+            color: '#f5f0e7',
+            pb: 1,
+          }}
+        >
+          Confirm Purchase
+
+          <IconButton
+            onClick={() => {
+              if (!buying) {
+                setShowTransactionPin(
+                  false
+                );
+                setTransactionPin('');
+                setTransactionPinError('');
               }
-              style={{
-                width: '100%',
-                marginTop: '10px',
-                padding: '13px',
+            }}
+            disabled={buying}
+            sx={{
+              position: 'absolute',
+              right: 10,
+              top: 10,
+              color: '#aaa49a',
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent>
+          {selectedPlan && (
+            <Box
+              sx={{
+                background: '#111111',
                 border:
-                  '1px solid #d0d5dd',
-                borderRadius:
-                  '12px',
-                background:
-                  '#ffffff',
-                color: '#344054',
-                fontWeight: 700,
-                cursor:
-                  loadingPurchase
-                    ? 'not-allowed'
-                    : 'pointer',
+                  '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '15px',
+                p: 1.8,
+                mb: 2,
               }}
             >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+              <Typography
+                sx={{
+                  fontWeight: 800,
+                  color: '#f3eee5',
+                }}
+              >
+                {selectedPlan.name}
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: '#d4af37',
+                  fontWeight: 800,
+                  mt: 0.4,
+                }}
+              >
+                {formatNaira(
+                  selectedPlan.amount
+                )}
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: '#77726a',
+                  fontSize: 11,
+                  mt: 0.4,
+                }}
+              >
+                {network} • {phone}
+              </Typography>
+            </Box>
+          )}
+
+          <TextField
+            fullWidth
+            label="Transaction PIN"
+            value={transactionPin}
+            onChange={(event) => {
+              const value =
+                event.target.value.replace(
+                  /\D/g,
+                  ''
+                );
+
+              if (value.length <= 4) {
+                setTransactionPin(value);
+              }
+
+              setTransactionPinError('');
+            }}
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="••••"
+            inputProps={{
+              maxLength: 4,
+              inputMode: 'numeric',
+            }}
+            error={
+              Boolean(transactionPinError)
+            }
+            helperText={
+              transactionPinError ||
+              'Enter your 4-digit Transaction PIN.'
+            }
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                color: '#f5f0e7',
+                borderRadius: '14px',
+                background: '#101010',
+              },
+
+              '& .MuiInputLabel-root': {
+                color: '#8d887f',
+              },
+
+              '& .MuiOutlinedInput-notchedOutline':
+                {
+                  borderColor:
+                    'rgba(255,255,255,0.10)',
+                },
+
+              '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline':
+                {
+                  borderColor:
+                    'rgba(212,175,55,0.45)',
+                },
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            p: 2,
+            pt: 0.5,
+          }}
+        >
+          <Button
+            onClick={() => {
+              if (!buying) {
+                setShowTransactionPin(
+                  false
+                );
+                setTransactionPin('');
+                setTransactionPinError('');
+              }
+            }}
+            disabled={buying}
+            sx={{
+              color: '#99938a',
+              textTransform: 'none',
+              fontWeight: 700,
+            }}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            onClick={
+              completePurchase
+            }
+            disabled={
+              buying ||
+              transactionPin.length !== 4
+            }
+            variant="contained"
+            endIcon={
+              buying ? (
+                <CircularProgress
+                  size={16}
+                  sx={{
+                    color: '#111111',
+                  }}
+                />
+              ) : (
+                <ArrowForwardIosIcon
+                  sx={{
+                    fontSize: 13,
+                  }}
+                />
+              )
+            }
+            sx={{
+              background: '#d4af37',
+              color: '#111111',
+              textTransform: 'none',
+              fontWeight: 850,
+              borderRadius: '12px',
+              px: 2.2,
+              '&:hover': {
+                background: '#e0bd4f',
+              },
+              '&.Mui-disabled': {
+                background:
+                  'rgba(212,175,55,0.25)',
+                color:
+                  'rgba(255,255,255,0.35)',
+              },
+            }}
+          >
+            {buying
+              ? 'Processing...'
+              : 'Confirm'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* =========================================================
+          SNACKBAR
+      ========================================================= */}
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4500}
+        onClose={() =>
+          setSnackbar((previous) => ({
+            ...previous,
+            open: false,
+          }))
+        }
+      >
+        <Alert
+          severity={snackbar.severity}
+          onClose={() =>
+            setSnackbar((previous) => ({
+              ...previous,
+              open: false,
+            }))
+          }
+          sx={{
+            width: '100%',
+          }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </>
   );
 };
 
