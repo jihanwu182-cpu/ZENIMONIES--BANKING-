@@ -296,12 +296,12 @@ const getTransactions = async (
           a.account_number
             AS current_account_number,
 
-          current_user.full_name
-            AS current_user_name,
+          
+          cu.full_name
+          AS current_user_name,
 
-          current_user.phone
-            AS current_user_phone,
-
+            cu.phone
+           AS current_user_phone,
 
           -- ==================================================
           -- REAL TRANSACTION FEE
@@ -468,10 +468,9 @@ const getTransactions = async (
         -- CUSTOMER USER
         -- ====================================================
 
-        INNER JOIN users current_user
-          ON current_user.id =
-             a.user_id
-
+        INNER JOIN users cu
+          ON cu.id =
+          a.user_id
 
         -- ====================================================
         -- ZENIMONIES / BANK TRANSFERS
