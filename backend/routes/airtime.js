@@ -25,11 +25,6 @@ const router = express.Router();
 // Airtime controller
 // ============================================================
 
-// ============================================================
-// REQUERY PENDING AIRTIME
-// POST /api/airtime/requery/:reference
-// ============================================================
-
 router.post(
   '/requery/:reference',
   authenticateToken,
