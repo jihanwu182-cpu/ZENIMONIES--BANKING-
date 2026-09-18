@@ -39,7 +39,9 @@ const AIRTIME_SERVICE_IDS = {
 // ============================================================
 
 const validateConfig = () => {
+
   if (!VTPASS_API_KEY) {
+
     const error =
       new Error(
         'VTPASS_API_KEY is not configured.'
@@ -51,7 +53,9 @@ const validateConfig = () => {
     throw error;
   }
 
+
   if (!VTPASS_PUBLIC_KEY) {
+
     const error =
       new Error(
         'VTPASS_PUBLIC_KEY is not configured.'
@@ -63,7 +67,9 @@ const validateConfig = () => {
     throw error;
   }
 
+
   if (!VTPASS_SECRET_KEY) {
+
     const error =
       new Error(
         'VTPASS_SECRET_KEY is not configured.'
@@ -84,22 +90,33 @@ const validateConfig = () => {
 const normalizeNetwork = (
   network
 ) => {
+
   const value =
     String(network || '')
       .trim()
       .toLowerCase();
 
-  if (value === 'mtn') {
+
+  if (
+    value === 'mtn'
+  ) {
     return 'MTN';
   }
 
-  if (value === 'airtel') {
+
+  if (
+    value === 'airtel'
+  ) {
     return 'Airtel';
   }
 
-  if (value === 'glo') {
+
+  if (
+    value === 'glo'
+  ) {
     return 'Glo';
   }
+
 
   if (
     value === '9mobile' ||
@@ -107,6 +124,7 @@ const normalizeNetwork = (
   ) {
     return '9mobile';
   }
+
 
   return null;
 };
@@ -119,10 +137,17 @@ const normalizeNetwork = (
 const getAirtimeServiceId = (
   network
 ) => {
-  const normalizedNetwork =
-    normalizeNetwork(network);
 
-  if (!normalizedNetwork) {
+  const normalizedNetwork =
+    normalizeNetwork(
+      network
+    );
+
+
+  if (
+    !normalizedNetwork
+  ) {
+
     const error =
       new Error(
         'Unsupported airtime network.'
@@ -134,7 +159,9 @@ const getAirtimeServiceId = (
     throw error;
   }
 
+
   return {
+
     network:
       normalizedNetwork,
 
@@ -142,6 +169,7 @@ const getAirtimeServiceId = (
       AIRTIME_SERVICE_IDS[
         normalizedNetwork
       ],
+
   };
 };
 
@@ -150,13 +178,18 @@ const getAirtimeServiceId = (
 // GENERATE VTPASS REQUEST ID
 //
 // VTpass requires the first 12 characters to contain
-// today's date/time in Africa/Lagos format:
+// Lagos date/time:
+//
 // YYYYMMDDHHII
+//
+// The remaining characters provide uniqueness.
 // ============================================================
 
 const generateRequestId = () => {
+
   const now =
     new Date();
+
 
   const lagosParts =
     new Intl.DateTimeFormat(
@@ -164,32 +197,55 @@ const generateRequestId = () => {
       {
         timeZone:
           'Africa/Lagos',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hourCycle: 'h23',
+
+        year:
+          'numeric',
+
+        month:
+          '2-digit',
+
+        day:
+          '2-digit',
+
+        hour:
+          '2-digit',
+
+        minute:
+          '2-digit',
+
+        hourCycle:
+          'h23',
       }
-    ).formatToParts(now);
+    ).formatToParts(
+      now
+    );
+
 
   const parts = {};
+
 
   for (
     const part of lagosParts
   ) {
-    parts[part.type] =
+
+    parts[
+      part.type
+    ] =
       part.value;
+
   }
+
 
   const datePrefix =
     `${parts.year}${parts.month}${parts.day}${parts.hour}${parts.minute}`;
+
 
   const randomPart =
     crypto
       .randomBytes(6)
       .toString('hex')
       .toUpperCase();
+
 
   return (
     `${datePrefix}${randomPart}`
@@ -198,7 +254,7 @@ const generateRequestId = () => {
 
 
 // ============================================================
-// VTpass HTTP REQUEST
+// VTPASS HTTP REQUEST
 // ============================================================
 
 const vtpassRequest = async ({
@@ -209,13 +265,17 @@ const vtpassRequest = async ({
 
   validateConfig();
 
+
   const headers = {
+
     Accept:
       'application/json',
 
     'Content-Type':
       'application/json',
+
   };
+
 
   // ----------------------------------------------------------
   // GET
@@ -224,12 +284,15 @@ const vtpassRequest = async ({
   if (
     method === 'GET'
   ) {
+
     headers['api-key'] =
       VTPASS_API_KEY;
 
     headers['public-key'] =
       VTPASS_PUBLIC_KEY;
+
   }
+
 
   // ----------------------------------------------------------
   // POST
@@ -238,23 +301,30 @@ const vtpassRequest = async ({
   if (
     method === 'POST'
   ) {
+
     headers['api-key'] =
       VTPASS_API_KEY;
 
     headers['secret-key'] =
       VTPASS_SECRET_KEY;
+
   }
+
 
   const controller =
     new AbortController();
 
+
   const timeout =
     setTimeout(
       () => {
+
         controller.abort();
+
       },
       30000
     );
+
 
   // ==========================================================
   // SAFE REQUEST DIAGNOSTIC
@@ -262,20 +332,26 @@ const vtpassRequest = async ({
 
   const diagnosticPhone =
     body?.phone
-      ? String(body.phone).slice(-4)
+      ? String(
+          body.phone
+        ).slice(-4)
       : 'N/A';
+
 
   console.log(
     '================================================'
   );
+
 
   console.log(
     'VTPASS PROVIDER REQUEST'
   );
 
+
   console.log(
     '================================================'
   );
+
 
   console.log(
     'Environment:',
@@ -286,15 +362,18 @@ const vtpassRequest = async ({
       : 'LIVE'
   );
 
+
   console.log(
     'Endpoint:',
     endpoint
   );
 
+
   console.log(
     'Method:',
     method
   );
+
 
   console.log(
     'Service ID:',
@@ -302,11 +381,13 @@ const vtpassRequest = async ({
       'N/A'
   );
 
+
   console.log(
     'Amount:',
     body?.amount ||
       'N/A'
   );
+
 
   console.log(
     'Request ID:',
@@ -314,14 +395,17 @@ const vtpassRequest = async ({
       'N/A'
   );
 
+
   console.log(
     'Phone last 4:',
     diagnosticPhone
   );
 
+
   console.log(
     '================================================'
   );
+
 
   try {
 
@@ -330,37 +414,48 @@ const vtpassRequest = async ({
         `${VTPASS_BASE_URL}${endpoint}`,
         {
           method,
+
           headers,
 
           body:
             body !== null
-              ? JSON.stringify(body)
+              ? JSON.stringify(
+                  body
+                )
               : undefined,
 
           signal:
             controller.signal,
+
         }
       );
+
 
     const text =
       await response.text();
 
+
     let data;
+
 
     try {
 
       data =
         text
-          ? JSON.parse(text)
+          ? JSON.parse(
+              text
+            )
           : null;
 
     } catch {
 
       data = {
-        raw: text,
+        raw:
+          text,
       };
 
     }
+
 
     // ========================================================
     // SAFE RESPONSE DIAGNOSTIC
@@ -373,12 +468,14 @@ const vtpassRequest = async ({
         'N/A'
     );
 
+
     console.log(
       'VTPASS PROVIDER RESPONSE DESCRIPTION:',
       data?.response_description ||
         data?.message ||
         'N/A'
     );
+
 
     console.log(
       'VTPASS PROVIDER TRANSACTION STATUS:',
@@ -387,6 +484,7 @@ const vtpassRequest = async ({
         ?.status ||
         'N/A'
     );
+
 
     console.log(
       'VTPASS PROVIDER TRANSACTION ID:',
@@ -397,11 +495,14 @@ const vtpassRequest = async ({
         'N/A'
     );
 
+
     // --------------------------------------------------------
     // HTTP ERROR
     // --------------------------------------------------------
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
 
       const error =
         new Error(
@@ -410,25 +511,32 @@ const vtpassRequest = async ({
             `VTpass request failed with status ${response.status}.`
         );
 
+
       error.code =
         'VTPASS_HTTP_ERROR';
+
 
       error.status =
         response.status;
 
+
       error.response =
         data;
+
 
       throw error;
     }
 
+
     return data;
+
 
   } catch (error) {
 
     console.error(
       'VTPASS PROVIDER REQUEST ERROR:',
       {
+
         code:
           error?.code ||
           'UNKNOWN',
@@ -453,8 +561,10 @@ const vtpassRequest = async ({
           error?.response
             ?.message ||
           null,
+
       }
     );
+
 
     if (
       error?.name ===
@@ -466,13 +576,17 @@ const vtpassRequest = async ({
           'VTpass request timed out.'
         );
 
+
       timeoutError.code =
         'VTPASS_TIMEOUT';
+
 
       throw timeoutError;
     }
 
+
     throw error;
+
 
   } finally {
 
@@ -486,47 +600,79 @@ const vtpassRequest = async ({
 
 // ============================================================
 // PURCHASE AIRTIME
+//
+// IMPORTANT:
+// The controller can provide a requestId that was already
+// saved in the database. This guarantees that the exact same
+// request ID is sent to VTpass.
 // ============================================================
 
 const purchaseAirtime = async ({
   network,
   phone,
   amount,
+  requestId,
 }) => {
 
   const {
     network:
       normalizedNetwork,
+
     serviceID,
+
   } =
     getAirtimeServiceId(
       network
     );
 
-  const requestId =
+
+  const finalRequestId =
+    requestId ||
     generateRequestId();
 
+
   const cleanPhone =
-    String(phone || '')
-      .replace(/\s+/g, '')
+    String(
+      phone || ''
+    )
+      .replace(
+        /\s+/g,
+        ''
+      )
       .trim();
 
+
   const numericAmount =
-    Number(amount);
+    Number(
+      amount
+    );
+
+
+  // ----------------------------------------------------------
+  // PHONE VALIDATION
+  // ----------------------------------------------------------
 
   if (
     !cleanPhone
   ) {
+
     const error =
       new Error(
         'Airtime phone number is required.'
       );
 
+
     error.code =
       'INVALID_PHONE';
 
+
     throw error;
   }
+
+
+  // ----------------------------------------------------------
+  // AMOUNT VALIDATION
+  // ----------------------------------------------------------
 
   if (
     !Number.isFinite(
@@ -534,29 +680,28 @@ const purchaseAirtime = async ({
     ) ||
     numericAmount <= 0
   ) {
+
     const error =
       new Error(
         'A valid airtime amount is required.'
       );
 
+
     error.code =
       'INVALID_AMOUNT';
+
 
     throw error;
   }
 
+
   // ----------------------------------------------------------
-  // VTpass Airtime Purchase
-  //
-  // Official Airtime API requires:
-  // request_id
-  // serviceID
-  // amount
-  // phone
+  // VTPASS AIRTIME PURCHASE
   // ----------------------------------------------------------
 
   const response =
     await vtpassRequest({
+
       endpoint:
         '/api/pay',
 
@@ -564,8 +709,9 @@ const purchaseAirtime = async ({
         'POST',
 
       body: {
+
         request_id:
-          requestId,
+          finalRequestId,
 
         serviceID:
           serviceID,
@@ -575,18 +721,24 @@ const purchaseAirtime = async ({
 
         phone:
           cleanPhone,
+
       },
+
     });
 
+
   return {
+
     response,
 
-    requestId,
+    requestId:
+      finalRequestId,
 
     network:
       normalizedNetwork,
 
     serviceID,
+
   };
 };
 
@@ -602,19 +754,24 @@ const requeryAirtimeTransaction = async ({
   if (
     !requestId
   ) {
+
     const error =
       new Error(
         'VTpass request ID is required for requery.'
       );
 
+
     error.code =
       'INVALID_REQUEST_ID';
+
 
     throw error;
   }
 
+
   const response =
     await vtpassRequest({
+
       endpoint:
         '/api/requery',
 
@@ -622,15 +779,21 @@ const requeryAirtimeTransaction = async ({
         'POST',
 
       body: {
+
         request_id:
           requestId,
+
       },
+
     });
 
+
   return {
+
     response,
 
     requestId,
+
   };
 };
 
@@ -640,9 +803,15 @@ const requeryAirtimeTransaction = async ({
 // ============================================================
 
 module.exports = {
+
   purchaseAirtime,
+
   requeryAirtimeTransaction,
+
   generateRequestId,
+
   normalizeNetwork,
+
   getAirtimeServiceId,
+
 };
