@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const pool = require('../config/database');
 
+
 /*
  * ============================================================
  * GENERATE INTERNAL TRANSFER REFERENCE
@@ -20,14 +21,12 @@ const generateReference = () => {
  * CALCULATE ZENIMONIES TRANSFER FEE
  * ============================================================
  *
- * ₦20 - ₦999       = ₦0
- * ₦1,000 - ₦9,999  = ₦20
- * ₦10,000 - ₦99,999 = ₦56
- * ₦100,000+        = ₦75
+ * ₦20 - ₦999         = ₦0
+ * ₦1,000 - ₦9,999    = ₦20
+ * ₦10,000 - ₦99,999  = ₦56
+ * ₦100,000+          = ₦75
  *
- * IMPORTANT:
- * The backend is the source of truth for the fee.
- * The frontend must never be trusted to provide the fee.
+ * The backend is the source of truth.
  */
 
 const calculateTransferFee = (amount) => {
@@ -76,16 +75,6 @@ const findUserByPhone = async (req, res) => {
 
     const cleanPhone = phone.replace(/\s+/g, '');
 
-    /*
-     * Find the user by their REAL registered phone number.
-     *
-     * The internal account number is intentionally NOT
-     * returned to the frontend.
-     *
-     * The accounts table is still checked because the
-     * account record contains the user's balance/currency.
-     */
-
     const result = await pool.query(
       `SELECT
         u.id,
@@ -116,7 +105,7 @@ const findUserByPhone = async (req, res) => {
     const user = result.rows[0];
 
     /*
-     * Do not allow self-transfer.
+     * Prevent self-transfer.
      */
 
     if (user.id === currentUserId) {
@@ -128,8 +117,7 @@ const findUserByPhone = async (req, res) => {
     }
 
     /*
-     * Only active users can receive
-     * internal transfers.
+     * Recipient must be active.
      */
 
     if (user.status !== 'active') {
@@ -141,10 +129,7 @@ const findUserByPhone = async (req, res) => {
     }
 
     /*
-     * The recipient must have an active internal
-     * balance account.
-     *
-     * The account number itself is NOT exposed.
+     * Recipient must have an active account.
      */
 
     if (!user.account_id) {
@@ -155,23 +140,26 @@ const findUserByPhone = async (req, res) => {
       });
     }
 
-    /*
-     * Return ONLY the information required to identify
-     * the recipient.
-     */
-
     return res.status(200).json({
       success: true,
 
       user: {
         id: user.id,
-        full_name: user.full_name,
-        phone: user.phone,
+
+        full_name:
+          user.full_name,
+
+        phone:
+          user.phone,
+
         currency:
           user.account_currency || 'NGN',
-        is_verified: user.is_verified,
+
+        is_verified:
+          user.is_verified,
       },
     });
+
   } catch (error) {
     console.error(
       'Find Zenimonies user error:',
@@ -202,7 +190,8 @@ const transferToZenimoniesUser = async (
   let transactionStarted = false;
 
   try {
-    const senderUserId = req.user.id;
+    const senderUserId =
+      req.user.id;
 
     const {
       recipient_phone,
@@ -210,10 +199,11 @@ const transferToZenimoniesUser = async (
       narration,
     } = req.body;
 
+
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * VALIDATION
-     * --------------------------------------------------------
+     * ========================================================
      */
 
     if (!recipient_phone) {
@@ -235,9 +225,11 @@ const transferToZenimoniesUser = async (
       });
     }
 
-    const cleanPhone = String(
-      recipient_phone
-    ).replace(/\s+/g, '');
+    const cleanPhone =
+      String(
+        recipient_phone
+      ).replace(/\s+/g, '');
+
 
     if (!cleanPhone) {
       return res.status(400).json({
@@ -247,14 +239,20 @@ const transferToZenimoniesUser = async (
       });
     }
 
-    const transferAmount = Number(amount);
 
     /*
-     * Minimum transfer is ₦20.
+     * ========================================================
+     * AMOUNT VALIDATION
+     * ========================================================
      */
 
+    const transferAmount =
+      Number(amount);
+
     if (
-      !Number.isFinite(transferAmount) ||
+      !Number.isFinite(
+        transferAmount
+      ) ||
       transferAmount < 20
     ) {
       return res.status(400).json({
@@ -264,10 +262,9 @@ const transferToZenimoniesUser = async (
       });
     }
 
+
     /*
-     * Prevent invalid decimal amounts beyond 2 places.
-     *
-     * Money is stored in NGN with two decimal places.
+     * Maximum two decimal places.
      */
 
     if (
@@ -283,7 +280,14 @@ const transferToZenimoniesUser = async (
       });
     }
 
-    if (transferAmount > 100000000) {
+
+    /*
+     * Maximum transfer amount.
+     */
+
+    if (
+      transferAmount > 100000000
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -291,38 +295,38 @@ const transferToZenimoniesUser = async (
       });
     }
 
+
     /*
-     * --------------------------------------------------------
-     * CALCULATE TRANSFER FEE
-     * --------------------------------------------------------
-     *
-     * The server calculates this independently.
+     * ========================================================
+     * CALCULATE FEE
+     * ========================================================
      */
 
     const transactionFee =
-      calculateTransferFee(transferAmount);
+      calculateTransferFee(
+        transferAmount
+      );
 
     const totalDebit =
-      transferAmount + transactionFee;
+      transferAmount +
+      transactionFee;
+
 
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * START DATABASE TRANSACTION
-     * --------------------------------------------------------
+     * ========================================================
      */
 
     await client.query('BEGIN');
+
     transactionStarted = true;
 
+
     /*
-     * --------------------------------------------------------
-     * FIND SENDER ACCOUNT
-     * --------------------------------------------------------
-     *
-     * The internal account record is still used for the
-     * balance ledger.
-     *
-     * The account number is NOT used as an identifier.
+     * ========================================================
+     * LOCK SENDER ACCOUNT
+     * ========================================================
      */
 
     const senderAccountResult =
@@ -342,10 +346,14 @@ const transferToZenimoniesUser = async (
         [senderUserId]
       );
 
+
     if (
       senderAccountResult.rows.length === 0
     ) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
+
       transactionStarted = false;
 
       return res.status(404).json({
@@ -355,18 +363,26 @@ const transferToZenimoniesUser = async (
       });
     }
 
+
     const senderAccount =
       senderAccountResult.rows[0];
 
+
     /*
-     * Internal transfers currently support NGN.
+     * ========================================================
+     * SENDER CURRENCY
+     * ========================================================
      */
 
     if (
-      String(senderAccount.currency)
-        .toUpperCase() !== 'NGN'
+      String(
+        senderAccount.currency
+      ).toUpperCase() !== 'NGN'
     ) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
+
       transactionStarted = false;
 
       return res.status(400).json({
@@ -376,24 +392,31 @@ const transferToZenimoniesUser = async (
       });
     }
 
-    const senderBalance = Number(
-      senderAccount.balance
-    );
+
+    const senderBalance =
+      Number(
+        senderAccount.balance
+      );
+
 
     /*
-     * --------------------------------------------------------
-     * CHECK BALANCE
-     * --------------------------------------------------------
+     * ========================================================
+     * BALANCE CHECK
+     * ========================================================
      *
-     * The sender must have enough for:
+     * Sender must have:
      *
-     * transfer amount + transfer fee
+     * transfer amount + fee
      */
 
     if (
-      senderBalance < totalDebit
+      senderBalance <
+      totalDebit
     ) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
+
       transactionStarted = false;
 
       return res.status(400).json({
@@ -409,10 +432,11 @@ const transferToZenimoniesUser = async (
       });
     }
 
+
     /*
-     * --------------------------------------------------------
-     * FIND RECIPIENT BY PHONE
-     * --------------------------------------------------------
+     * ========================================================
+     * FIND RECIPIENT
+     * ========================================================
      */
 
     const recipientUserResult =
@@ -429,10 +453,14 @@ const transferToZenimoniesUser = async (
         [cleanPhone]
       );
 
+
     if (
       recipientUserResult.rows.length === 0
     ) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
+
       transactionStarted = false;
 
       return res.status(404).json({
@@ -442,17 +470,25 @@ const transferToZenimoniesUser = async (
       });
     }
 
+
     const recipientUser =
       recipientUserResult.rows[0];
 
+
     /*
-     * Prevent self-transfer.
+     * ========================================================
+     * PREVENT SELF TRANSFER
+     * ========================================================
      */
 
     if (
-      recipientUser.id === senderUserId
+      recipientUser.id ===
+      senderUserId
     ) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
+
       transactionStarted = false;
 
       return res.status(400).json({
@@ -462,14 +498,21 @@ const transferToZenimoniesUser = async (
       });
     }
 
+
     /*
-     * Recipient must be active.
+     * ========================================================
+     * RECIPIENT STATUS
+     * ========================================================
      */
 
     if (
-      recipientUser.status !== 'active'
+      recipientUser.status !==
+      'active'
     ) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
+
       transactionStarted = false;
 
       return res.status(400).json({
@@ -479,15 +522,11 @@ const transferToZenimoniesUser = async (
       });
     }
 
+
     /*
-     * --------------------------------------------------------
-     * FIND RECIPIENT BALANCE ACCOUNT
-     * --------------------------------------------------------
-     *
-     * We still need the internal accounts record because
-     * that is where the balance is stored.
-     *
-     * The account number is NOT used.
+     * ========================================================
+     * LOCK RECIPIENT ACCOUNT
+     * ========================================================
      */
 
     const recipientAccountResult =
@@ -507,10 +546,14 @@ const transferToZenimoniesUser = async (
         [recipientUser.id]
       );
 
+
     if (
       recipientAccountResult.rows.length === 0
     ) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
+
       transactionStarted = false;
 
       return res.status(404).json({
@@ -520,18 +563,26 @@ const transferToZenimoniesUser = async (
       });
     }
 
+
     const recipientAccount =
       recipientAccountResult.rows[0];
 
+
     /*
-     * Both accounts must use NGN.
+     * ========================================================
+     * RECIPIENT CURRENCY
+     * ========================================================
      */
 
     if (
-      String(recipientAccount.currency)
-        .toUpperCase() !== 'NGN'
+      String(
+        recipientAccount.currency
+      ).toUpperCase() !== 'NGN'
     ) {
-      await client.query('ROLLBACK');
+      await client.query(
+        'ROLLBACK'
+      );
+
       transactionStarted = false;
 
       return res.status(400).json({
@@ -541,38 +592,41 @@ const transferToZenimoniesUser = async (
       });
     }
 
+
     /*
-     * --------------------------------------------------------
-     * CALCULATE BALANCES
-     * --------------------------------------------------------
-     *
-     * IMPORTANT:
-     *
-     * Sender loses:
-     *
-     *   transfer amount + fee
-     *
-     * Recipient receives:
-     *
-     *   transfer amount only
+     * ========================================================
+     * CALCULATE NEW BALANCES
+     * ========================================================
      */
 
-    const senderNewBalance =
-      senderBalance - totalDebit;
-
     const recipientOldBalance =
-      Number(recipientAccount.balance);
+      Number(
+        recipientAccount.balance
+      );
+
+    const senderNewBalance =
+      senderBalance -
+      totalDebit;
 
     const recipientNewBalance =
-      recipientOldBalance + transferAmount;
+      recipientOldBalance +
+      transferAmount;
+
+
+    /*
+     * ========================================================
+     * GENERATE REFERENCE
+     * ========================================================
+     */
 
     const reference =
       generateReference();
 
+
     /*
-     * --------------------------------------------------------
-     * UPDATE SENDER
-     * --------------------------------------------------------
+     * ========================================================
+     * UPDATE SENDER BALANCE
+     * ========================================================
      */
 
     await client.query(
@@ -587,10 +641,11 @@ const transferToZenimoniesUser = async (
       ]
     );
 
+
     /*
-     * --------------------------------------------------------
-     * UPDATE RECIPIENT
-     * --------------------------------------------------------
+     * ========================================================
+     * UPDATE RECIPIENT BALANCE
+     * ========================================================
      */
 
     await client.query(
@@ -605,75 +660,90 @@ const transferToZenimoniesUser = async (
       ]
     );
 
+
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * SENDER TRANSACTION
-     * --------------------------------------------------------
+     * ========================================================
      *
-     * The transaction amount remains the actual amount
-     * sent to the recipient.
+     * IMPORTANT:
      *
-     * The transaction_fee column contains the Zenimonies fee.
+     * amount = money actually sent
      *
-     * The balance_after reflects the total amount deducted.
+     * transaction_fee = Zenimonies fee
+     *
+     * balance_after = balance after BOTH amount + fee
+     *
+     * We intentionally do NOT create a separate
+     * "transfer_fee" customer transaction.
      */
 
-    await client.query(
-      `INSERT INTO transactions (
-        account_id,
-        type,
-        amount,
-        currency,
-        reference,
-        description,
-        status,
-        balance_before,
-        balance_after,
-        transaction_fee
-      )
-      VALUES (
-        $1,
-        'internal_transfer',
-        $2,
-        'NGN',
-        $3,
-        $4,
-        'completed',
-        $5,
-        $6,
-        $7
-      )`,
-      [
-        senderAccount.id,
+    const senderTransactionResult =
+      await client.query(
+        `INSERT INTO transactions (
+          account_id,
+          type,
+          amount,
+          currency,
+          reference,
+          description,
+          status,
+          balance_before,
+          balance_after,
+          transaction_fee
+        )
+        VALUES (
+          $1,
+          'internal_transfer',
+          $2,
+          'NGN',
+          $3,
+          $4,
+          'completed',
+          $5,
+          $6,
+          $7
+        )
+        RETURNING
+          id,
+          created_at`,
+        [
+          senderAccount.id,
 
-        transferAmount,
+          transferAmount,
 
-        reference,
+          reference,
 
-        narration
-          ? String(narration).trim()
-          : `Transfer to ${recipientUser.full_name}`,
+          narration
+            ? String(narration).trim()
+            : `Transfer to ${recipientUser.full_name}`,
 
-        senderBalance,
+          senderBalance,
 
-        senderNewBalance,
+          senderNewBalance,
 
-        transactionFee,
-      ]
-    );
+          transactionFee,
+        ]
+      );
+
+
+    const senderTransaction =
+      senderTransactionResult.rows[0];
+
 
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * RECIPIENT TRANSACTION
-     * --------------------------------------------------------
+     * ========================================================
      *
-     * Recipient receives the transfer amount.
+     * Recipient receives the amount only.
      *
-     * Recipient does NOT pay the sender's transfer fee.
+     * The sender's fee is NOT charged to recipient.
      */
 
     const recipientReference =
       `${reference}-R`;
+
 
     await client.query(
       `INSERT INTO transactions (
@@ -707,7 +777,7 @@ const transferToZenimoniesUser = async (
 
         recipientReference,
 
-        `Money received from Zenimonies user ${senderUserId}`,
+        `Money received from Zenimonies user`,
 
         recipientOldBalance,
 
@@ -717,18 +787,11 @@ const transferToZenimoniesUser = async (
       ]
     );
 
+
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * BANK TRANSFER RECORD
-     * --------------------------------------------------------
-     *
-     * recipient_phone contains the ACTUAL phone number
-     * used to identify the recipient.
-     *
-     * recipient_account_number remains null because the
-     * phone number is the internal transfer identifier.
-     *
-     * The account number is NOT exposed to the frontend.
+     * ========================================================
      */
 
     await client.query(
@@ -783,72 +846,11 @@ const transferToZenimoniesUser = async (
       ]
     );
 
-    /*
-     * --------------------------------------------------------
-     * RECORD TRANSFER FEE
-     * --------------------------------------------------------
-     *
-     * The fee belongs to Zenimonies.
-     *
-     * We record it separately so it can be accounted for
-     * without giving the fee to the recipient.
-     *
-     * IMPORTANT:
-     *
-     * This uses the existing transactions table.
-     */
-
-    if (transactionFee > 0) {
-      const feeReference =
-        `${reference}-FEE`;
-
-      await client.query(
-        `INSERT INTO transactions (
-          account_id,
-          type,
-          amount,
-          currency,
-          reference,
-          description,
-          status,
-          balance_before,
-          balance_after,
-          transaction_fee
-        )
-        VALUES (
-          $1,
-          'transfer_fee',
-          $2,
-          'NGN',
-          $3,
-          $4,
-          'completed',
-          $5,
-          $6,
-          $7
-        )`,
-        [
-          senderAccount.id,
-
-          transactionFee,
-
-          feeReference,
-
-          `Zenimonies transfer fee for ${reference}`,
-
-          senderNewBalance + transactionFee,
-
-          senderNewBalance,
-
-          transactionFee,
-        ]
-      );
-    }
 
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * RECIPIENT NOTIFICATION
-     * --------------------------------------------------------
+     * ========================================================
      */
 
     await client.query(
@@ -883,19 +885,26 @@ const transferToZenimoniesUser = async (
       ]
     );
 
+
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * COMMIT
-     * --------------------------------------------------------
+     * ========================================================
      */
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
+
     transactionStarted = false;
 
+
     /*
-     * --------------------------------------------------------
-     * RESPONSE
-     * --------------------------------------------------------
+     * ========================================================
+     * SUCCESS RESPONSE
+     * ========================================================
+     *
+     * created_at comes directly from PostgreSQL.
      */
 
     return res.status(201).json({
@@ -905,6 +914,9 @@ const transferToZenimoniesUser = async (
         'Money sent successfully to the Zenimonies user',
 
       transfer: {
+        id:
+          senderTransaction.id,
+
         reference,
 
         recipient_name:
@@ -933,13 +945,32 @@ const transferToZenimoniesUser = async (
 
         balance_after:
           senderNewBalance,
+
+        created_at:
+          senderTransaction.created_at,
       },
     });
+
   } catch (error) {
+
     console.error(
       'Zenimonies internal transfer error:',
       error
     );
+
+
+    /*
+     * ========================================================
+     * ROLLBACK
+     * ========================================================
+     *
+     * Because the transfer is atomic, if anything fails
+     * before COMMIT, the sender balance, recipient balance,
+     * transaction records and notification are all rolled
+     * back together.
+     *
+     * Therefore we do NOT perform a second manual refund here.
+     */
 
     if (transactionStarted) {
       try {
@@ -954,16 +985,24 @@ const transferToZenimoniesUser = async (
       }
     }
 
+
     return res.status(500).json({
       success: false,
       message:
         'Unable to complete Zenimonies transfer',
     });
+
   } finally {
     client.release();
   }
 };
 
+
+/*
+ * ============================================================
+ * EXPORTS
+ * ============================================================
+ */
 
 module.exports = {
   findUserByPhone,
