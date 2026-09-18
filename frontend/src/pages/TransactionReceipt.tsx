@@ -14,7 +14,6 @@ import {
 } from '@mui/material';
 
 import {
-  AccountBalanceRounded,
   ArrowBackRounded,
   ArrowDownwardRounded,
   ArrowUpwardRounded,
@@ -24,12 +23,12 @@ import {
   DownloadRounded,
   ErrorRounded,
   PhoneRounded,
-  ReceiptLongRounded,
   ScheduleRounded,
   ShareRounded,
   TagRounded,
   PersonRounded,
-  LayersRounded,
+  AccountBalanceRounded,
+  ReceiptLongRounded,
 } from '@mui/icons-material';
 
 import {
@@ -37,19 +36,17 @@ import {
   useNavigate,
 } from 'react-router-dom';
 
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-
 import {
   QRCodeSVG,
 } from 'qrcode.react';
 
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
-/*
- * ============================================================
- * TRANSACTION
- * ============================================================
- */
+
+// ============================================================
+// TRANSACTION
+// ============================================================
 
 interface Transaction {
   id?: string;
@@ -62,31 +59,37 @@ interface Transaction {
   amount?: number | string;
   currency?: string;
 
-  recipient_name?: string;
-  recipient_phone?: string;
-  phone?: string;
-
-  recipient_bank?: string;
-  bank_name?: string;
-
-  recipient_account?: string;
-  account_number?: string;
-
+  // Transfer
   sender_name?: string;
   sender_phone?: string;
   sender_account?: string;
 
-  network?: string;
-  provider?: string;
+  recipient_name?: string;
+  recipient_phone?: string;
+  recipient_account?: string;
+  recipient_bank?: string;
+  recipient_bank_code?: string;
 
+  bank_name?: string;
+  account_number?: string;
+
+  // Airtime / Data
+  provider?: string;
+  network?: string;
+  phone?: string;
   data_plan?: string;
   plan_name?: string;
   variation_name?: string;
 
+  // Bills
   customer_number?: string;
   meter_number?: string;
   smartcard_number?: string;
   decoder_number?: string;
+  customer_name?: string;
+
+  // Provider
+  provider_reference?: string;
 
   reference?: string;
   transaction_reference?: string;
@@ -95,7 +98,6 @@ interface Transaction {
 
   transaction_fee?: number | string;
   fee?: number | string;
-
   total_debit?: number | string;
 
   created_at?: string;
@@ -104,32 +106,12 @@ interface Transaction {
 }
 
 
-/*
- * ============================================================
- * STORED USER / ACCOUNT TYPES
- * ============================================================
- */
-
-interface StoredUser {
-  full_name?: string;
-  name?: string;
-  phone?: string;
-  email?: string;
-}
-
-interface StoredAccount {
-  account_number?: string;
-  accountNumber?: string;
-}
-
-
-/*
- * ============================================================
- * COMPONENT
- * ============================================================
- */
+// ============================================================
+// COMPONENT
+// ============================================================
 
 const TransactionReceipt: React.FC = () => {
+
   const location =
     useLocation();
 
@@ -145,11 +127,9 @@ const TransactionReceipt: React.FC = () => {
   ] = useState(false);
 
 
-  /*
-   * ============================================================
-   * REAL TRANSACTION
-   * ============================================================
-   */
+  // ==========================================================
+  // REAL TRANSACTION
+  // ==========================================================
 
   const transaction =
     location.state?.transaction as
@@ -157,18 +137,16 @@ const TransactionReceipt: React.FC = () => {
       | undefined;
 
 
-  /*
-   * ============================================================
-   * NO TRANSACTION
-   * ============================================================
-   */
+  // ==========================================================
+  // NO TRANSACTION
+  // ==========================================================
 
   if (!transaction) {
     return (
       <Box
         sx={{
           minHeight: '100vh',
-          bgcolor: '#f4faf7',
+          bgcolor: '#f3faf7',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -178,44 +156,39 @@ const TransactionReceipt: React.FC = () => {
         <Card
           sx={{
             width: '100%',
-            maxWidth: 400,
-            p: 3,
+            maxWidth: 360,
+            p: 2.5,
             borderRadius: 3,
             textAlign: 'center',
-            border:
-              '1px solid #dcebe4',
-            boxShadow:
-              '0 12px 35px rgba(7, 94, 66, 0.08)',
           }}
         >
           <ReceiptLongRounded
             sx={{
-              fontSize: 50,
+              fontSize: 46,
               color: '#087f5b',
-              mb: 1.5,
+              mb: 1,
             }}
           />
 
           <Typography
             sx={{
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: 850,
               color: '#063b2b',
-              mb: 0.8,
+              mb: 0.7,
             }}
           >
             Receipt unavailable
           </Typography>
 
           <Typography
-            color="text.secondary"
             sx={{
-              fontSize: 14,
-              mb: 2.5,
+              fontSize: 13,
+              color: '#718079',
+              mb: 2,
             }}
           >
-            We could not find the transaction
-            details for this receipt.
+            Transaction details could not be found.
           </Typography>
 
           <Button
@@ -230,7 +203,6 @@ const TransactionReceipt: React.FC = () => {
             sx={{
               bgcolor: '#087f5b',
               borderRadius: 2,
-              py: 1.15,
               fontWeight: 800,
               '&:hover': {
                 bgcolor: '#066b4c',
@@ -245,31 +217,26 @@ const TransactionReceipt: React.FC = () => {
   }
 
 
-  /*
-   * ============================================================
-   * BASIC VALUES
-   * ============================================================
-   */
+  // ==========================================================
+  // BASIC VALUES
+  // ==========================================================
 
   const numericAmount =
     Number(
       transaction.amount ?? 0
     );
 
-
   const numericFee =
     Number(
       transaction.transaction_fee ??
-        transaction.fee ??
-        0
+      transaction.fee ??
+      0
     );
-
 
   const numericTotalDebit =
     Number(
       transaction.total_debit ?? 0
     );
-
 
   const currency =
     (
@@ -278,82 +245,40 @@ const TransactionReceipt: React.FC = () => {
     ).toUpperCase();
 
 
-  /*
-   * ============================================================
-   * REAL TOTAL DEBIT
-   * ============================================================
-   *
-   * For transfers:
-   *
-   * Amount transferred + fee = amount actually debited.
-   *
-   * We prefer the backend's total_debit.
-   */
+  // ==========================================================
+  // MONEY
+  // ==========================================================
 
-  let totalAmountDebited =
-    Math.abs(
-      numericAmount
-    );
+  const formatMoney =
+    (value: number) => {
 
+      const safe =
+        Number.isFinite(value)
+          ? Math.abs(value)
+          : 0;
 
-  if (
-    Number.isFinite(
-      numericTotalDebit
-    ) &&
-    numericTotalDebit > 0
-  ) {
-    totalAmountDebited =
-      Math.abs(
-        numericTotalDebit
-      );
-  } else if (
-    numericFee > 0
-  ) {
-    totalAmountDebited =
-      Math.abs(
-        numericAmount +
-          numericFee
-      );
-  }
+      try {
+
+        return new Intl.NumberFormat(
+          'en-NG',
+          {
+            style: 'currency',
+            currency,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }
+        ).format(safe);
+
+      } catch {
+
+        return `₦${safe.toFixed(2)}`;
+      }
+    };
 
 
-  /*
-   * ============================================================
-   * MONEY FORMAT
-   * ============================================================
-   */
-
-  const formatMoney = (
-    value: number
-  ) => {
-    const safeValue =
-      Number.isFinite(value)
-        ? Math.abs(value)
-        : 0;
-
-    try {
-      return new Intl.NumberFormat(
-        'en-NG',
-        {
-          style: 'currency',
-          currency,
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }
-      ).format(
-        safeValue
-      );
-    } catch {
-      return `₦${safeValue.toFixed(2)}`;
-    }
-  };
-
-
-  /*
-   * ============================================================
-   * REAL REFERENCE
-   * ============================================================
-   */
+  // ==========================================================
+  // REAL REFERENCE
+  // ==========================================================
 
   const reference =
     transaction.reference ||
@@ -361,11 +286,9 @@ const TransactionReceipt: React.FC = () => {
     '';
 
 
-  /*
-   * ============================================================
-   * DATE
-   * ============================================================
-   */
+  // ==========================================================
+  // DATE
+  // ==========================================================
 
   const transactionDate =
     transaction.created_at ||
@@ -373,55 +296,52 @@ const TransactionReceipt: React.FC = () => {
     transaction.timestamp;
 
 
-  const formatDate = (
-    value?: string
-  ) => {
-    if (!value) {
-      return 'Date not available';
-    }
+  const formatDate =
+    (value?: string) => {
 
-    const parsed =
-      new Date(value);
-
-    if (
-      Number.isNaN(
-        parsed.getTime()
-      )
-    ) {
-      return value;
-    }
-
-    return parsed.toLocaleString(
-      'en-NG',
-      {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
+      if (!value) {
+        return 'Date unavailable';
       }
-    );
-  };
+
+      const parsed =
+        new Date(value);
+
+      if (
+        Number.isNaN(
+          parsed.getTime()
+        )
+      ) {
+        return value;
+      }
+
+      return parsed.toLocaleString(
+        'en-NG',
+        {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }
+      );
+    };
 
 
-  /*
-   * ============================================================
-   * TYPE
-   * ============================================================
-   */
+  // ==========================================================
+  // TYPE DETECTION
+  // ==========================================================
 
   const rawType =
-    (
+    String(
       transaction.transaction_type ||
       transaction.type ||
       transaction.category ||
       ''
     ).toLowerCase();
 
-
   const rawDescription =
-    (
+    String(
       transaction.description ||
       ''
     ).toLowerCase();
@@ -437,94 +357,139 @@ const TransactionReceipt: React.FC = () => {
     rawDescription.includes('data');
 
 
+  const isBill =
+    rawType.includes('bill') ||
+    rawDescription.includes('electricity') ||
+    rawDescription.includes('tv') ||
+    rawDescription.includes('betting');
+
+
   const isTransfer =
     rawType.includes('transfer') ||
     rawDescription.includes('transfer');
 
 
-  const isDeposit =
-    rawType.includes('deposit') ||
-    rawType.includes('fund') ||
-    rawType.includes('credit') ||
-    rawDescription.includes('deposit') ||
-    rawDescription.includes('funding');
-
-
-  const isElectricity =
-    rawType.includes('electricity') ||
-    rawDescription.includes('electricity');
-
-
-  const isTV =
-    rawType.includes('tv') ||
-    rawDescription.includes('television') ||
-    rawDescription.includes('cable') ||
-    rawDescription.includes('dstv') ||
-    rawDescription.includes('gotv') ||
-    rawDescription.includes('startimes');
-
-
-  const isBill =
-    rawType.includes('bill') ||
-    isElectricity ||
-    isTV ||
-    rawDescription.includes('betting');
-
-
-  /*
-   * ============================================================
-   * INCOMING
-   * ============================================================
-   */
-
   const isIncoming =
-    isDeposit ||
-    transaction.category === 'credit' ||
-    transaction.category === 'incoming' ||
     rawType.includes('received') ||
     rawDescription.includes('received') ||
-    rawDescription.includes('money received');
+    rawDescription.includes('money received') ||
+    transaction.category === 'credit' ||
+    transaction.category === 'incoming';
 
 
-  /*
-   * ============================================================
-   * RECEIPT TITLE
-   * ============================================================
-   */
+  // ==========================================================
+  // ZENIMONIES INTERNAL TRANSFER
+  // ==========================================================
+  //
+  // Internal transfer:
+  // sender bank = Zenimonies
+  // receiver bank = Zenimonies
+  //
+  // Account numbers are NOT displayed.
+  //
+  // External bank transfer:
+  // account information may be displayed.
+  // ==========================================================
+
+  const recipientBank =
+    transaction.recipient_bank ||
+    transaction.bank_name ||
+    '';
+
+  const isZenimoniesTransfer =
+    isTransfer &&
+    (
+      recipientBank
+        .toLowerCase()
+        .includes('zenimonies') ||
+      rawType.includes(
+        'internal_transfer'
+      )
+    );
+
+
+  // ==========================================================
+  // TRANSFER AMOUNTS
+  // ==========================================================
+
+  let totalDebited =
+    Math.abs(
+      numericAmount
+    );
+
+
+  if (
+    isTransfer &&
+    !isIncoming
+  ) {
+
+    if (
+      Number.isFinite(
+        numericTotalDebit
+      ) &&
+      numericTotalDebit > 0
+    ) {
+
+      totalDebited =
+        Math.abs(
+          numericTotalDebit
+        );
+
+    } else {
+
+      totalDebited =
+        Math.abs(
+          numericAmount +
+          numericFee
+        );
+    }
+  }
+
+
+  const topAmount =
+    isIncoming
+      ? `+${formatMoney(
+          numericAmount
+        )}`
+      : `−${formatMoney(
+          isTransfer
+            ? totalDebited
+            : numericAmount
+        )}`;
+
+
+  const topAmountLabel =
+    isTransfer &&
+    !isIncoming
+      ? 'Total Amount Debited'
+      : 'Amount';
+
+
+  // ==========================================================
+  // TITLE
+  // ==========================================================
 
   let receiptTitle =
     'Transaction Receipt';
 
-
-  if (isAirtime) {
+  if (isTransfer) {
+    receiptTitle =
+      'Transfer Receipt';
+  } else if (isAirtime) {
     receiptTitle =
       'Airtime Purchase Receipt';
   } else if (isData) {
     receiptTitle =
       'Data Purchase Receipt';
-  } else if (isTransfer) {
-    receiptTitle =
-      'Transfer Receipt';
-  } else if (isElectricity) {
-    receiptTitle =
-      'Electricity Payment Receipt';
-  } else if (isTV) {
-    receiptTitle =
-      'TV Subscription Receipt';
-  } else if (isDeposit) {
-    receiptTitle =
-      'Funding Receipt';
   } else if (isBill) {
     receiptTitle =
       'Bill Payment Receipt';
   }
 
 
-  /*
-   * ============================================================
-   * STATUS
-   * ============================================================
-   */
+  // ==========================================================
+  // STATUS
+  // ==========================================================
 
   const rawStatus =
     String(
@@ -535,94 +500,48 @@ const TransactionReceipt: React.FC = () => {
 
 
   const isSuccessful =
-    rawStatus === 'successful' ||
-    rawStatus === 'completed' ||
-    rawStatus === 'success' ||
-    rawStatus === 'delivered';
+    [
+      'successful',
+      'completed',
+      'success',
+      'delivered',
+    ].includes(
+      rawStatus
+    );
 
 
   const isFailed =
-    rawStatus === 'failed' ||
-    rawStatus === 'failure' ||
-    rawStatus === 'reversed' ||
-    rawStatus === 'cancelled' ||
-    rawStatus === 'canceled';
+    [
+      'failed',
+      'failure',
+      'reversed',
+      'cancelled',
+      'canceled',
+    ].includes(
+      rawStatus
+    );
 
 
   const isPending =
-    rawStatus === 'pending' ||
-    rawStatus === 'processing' ||
-    rawStatus === 'initiated' ||
-    rawStatus === 'queued';
+    [
+      'pending',
+      'processing',
+      'initiated',
+      'queued',
+    ].includes(
+      rawStatus
+    );
 
 
-  let statusText =
-    'Unconfirmed';
+  const statusText =
+    isSuccessful
+      ? 'Successful'
+      : isFailed
+        ? 'Failed'
+        : isPending
+          ? 'Pending'
+          : 'Unconfirmed';
 
-
-  if (isSuccessful) {
-    statusText =
-      'Successful';
-  } else if (isFailed) {
-    statusText =
-      'Failed';
-  } else if (isPending) {
-    statusText =
-      'Pending';
-  }
-
-
-  /*
-   * ============================================================
-   * STATUS MESSAGE
-   * ============================================================
-   */
-
-  let statusMessage =
-    'The current transaction status is shown below.';
-
-
-  if (isSuccessful) {
-
-    if (isAirtime) {
-      statusMessage =
-        'Your airtime purchase has been completed successfully.';
-    } else if (isData) {
-      statusMessage =
-        'Your data purchase has been completed successfully.';
-    } else if (isTransfer) {
-      statusMessage =
-        'Your transfer has been completed successfully.';
-    } else if (isDeposit) {
-      statusMessage =
-        'Your account funding has been completed successfully.';
-    } else {
-      statusMessage =
-        'Your transaction has been completed successfully.';
-    }
-
-  } else if (isPending) {
-
-    statusMessage =
-      'Your transaction is still being processed.';
-
-  } else if (isFailed) {
-
-    statusMessage =
-      'Your transaction could not be completed.';
-
-  } else {
-
-    statusMessage =
-      'The current transaction status could not be confirmed.';
-  }
-
-
-  /*
-   * ============================================================
-   * STATUS COLORS
-   * ============================================================
-   */
 
   const statusColor =
     isSuccessful
@@ -640,168 +559,56 @@ const TransactionReceipt: React.FC = () => {
         : '#fff3d6';
 
 
-  const statusIcon =
-    isSuccessful ? (
-      <CheckCircleRounded
-        sx={{
-          fontSize: 32,
-          color: '#087f5b',
-        }}
-      />
-    ) : isFailed ? (
-      <ErrorRounded
-        sx={{
-          fontSize: 32,
-          color: '#c62828',
-        }}
-      />
-    ) : (
-      <ScheduleRounded
-        sx={{
-          fontSize: 32,
-          color: '#a76500',
-        }}
-      />
-    );
+  const StatusIcon =
+    isSuccessful
+      ? CheckCircleRounded
+      : isFailed
+        ? ErrorRounded
+        : ScheduleRounded;
 
 
-  /*
-   * ============================================================
-   * STORED CUSTOMER DATA
-   * ============================================================
-   *
-   * These are only used as a fallback when the transaction
-   * object itself does not contain sender details.
-   */
-
-  let storedUser:
-    StoredUser = {};
-
-  let storedAccount:
-    StoredAccount = {};
-
-
-  try {
-
-    const userRaw =
-      localStorage.getItem(
-        'zenimonies_user'
-      );
-
-    if (userRaw) {
-      storedUser =
-        JSON.parse(
-          userRaw
-        ) as StoredUser;
-    }
-
-
-    const accountsRaw =
-      localStorage.getItem(
-        'zenimonies_accounts'
-      );
-
-
-    if (accountsRaw) {
-
-      const parsedAccounts =
-        JSON.parse(
-          accountsRaw
-        );
-
-
-      if (
-        Array.isArray(
-          parsedAccounts
-        ) &&
-        parsedAccounts.length > 0
-      ) {
-        storedAccount =
-          parsedAccounts.find(
-            (
-              account: StoredAccount
-            ) =>
-              Boolean(
-                account.account_number ||
-                account.accountNumber
-              )
-          ) ||
-          parsedAccounts[0];
-      }
-    }
-
-  } catch {
-    /*
-     * Do not break the receipt if local storage
-     * contains malformed data.
-     */
-  }
-
-
-  /*
-   * ============================================================
-   * SENDER DETAILS
-   * ============================================================
-   */
+  // ==========================================================
+  // PEOPLE / PROVIDER DETAILS
+  // ==========================================================
 
   const senderName =
     transaction.sender_name ||
-    storedUser.full_name ||
-    storedUser.name ||
     '';
-
 
   const senderPhone =
     transaction.sender_phone ||
-    storedUser.phone ||
     '';
-
 
   const senderAccount =
     transaction.sender_account ||
-    storedAccount.account_number ||
-    storedAccount.accountNumber ||
     '';
 
 
-  /*
-   * ============================================================
-   * RECEIVER DETAILS
-   * ============================================================
-   */
-
-  const recipientName =
+  const receiverName =
     transaction.recipient_name ||
     '';
 
-
-  const recipientPhone =
+  const receiverPhone =
     transaction.recipient_phone ||
     transaction.phone ||
     '';
 
 
-  const recipientBank =
-    transaction.recipient_bank ||
-    transaction.bank_name ||
-    '';
-
-
-  const recipientAccount =
+  const receiverAccount =
     transaction.recipient_account ||
     transaction.account_number ||
     '';
 
 
-  /*
-   * ============================================================
-   * PROVIDER DETAILS
-   * ============================================================
-   */
-
-  const network =
-    transaction.network ||
+  const provider =
     transaction.provider ||
+    transaction.network ||
+    '';
+
+
+  const servicePhone =
+    transaction.phone ||
+    transaction.recipient_phone ||
     '';
 
 
@@ -820,19 +627,19 @@ const TransactionReceipt: React.FC = () => {
     '';
 
 
-  /*
-   * ============================================================
-   * COPY REFERENCE
-   * ============================================================
-   */
+  const customerName =
+    transaction.customer_name ||
+    '';
+
+
+  // ==========================================================
+  // COPY REFERENCE
+  // ==========================================================
 
   const copyReference =
     async () => {
 
       if (!reference) {
-        alert(
-          'Transaction reference is not available.'
-        );
         return;
       }
 
@@ -855,16 +662,14 @@ const TransactionReceipt: React.FC = () => {
     };
 
 
-  /*
-   * ============================================================
-   * FILE NAME
-   * ============================================================
-   */
+  // ==========================================================
+  // PDF FILE NAME
+  // ==========================================================
 
-  const getSafeFileName =
+  const getFileName =
     () => {
 
-      const safeReference =
+      const safe =
         reference
           ? reference.replace(
               /[^a-zA-Z0-9_-]/g,
@@ -872,43 +677,20 @@ const TransactionReceipt: React.FC = () => {
             )
           : 'transaction';
 
-      return `Zenimonies-${safeReference}.pdf`;
+      return `Zenimonies-${safe}.pdf`;
     };
 
 
-  /*
-   * ============================================================
-   * QR VALUE
-   * ============================================================
-   *
-   * Only the real transaction reference is encoded.
-   *
-   * No password.
-   * No PIN.
-   * No access token.
-   * No account balance.
-   */
-
-  const qrValue =
-    reference
-      ? `ZENIMONIES|TRANSACTION|${reference}`
-      : 'ZENIMONIES|TRANSACTION|REFERENCE-UNAVAILABLE';
-
-
-  /*
-   * ============================================================
-   * CREATE PDF
-   * ============================================================
-   */
+  // ==========================================================
+  // CREATE PDF
+  // ==========================================================
 
   const createReceiptPDF =
     async () => {
 
-      if (
-        !receiptRef.current
-      ) {
+      if (!receiptRef.current) {
         throw new Error(
-          'Receipt is not available.'
+          'Receipt unavailable.'
         );
       }
 
@@ -917,68 +699,63 @@ const TransactionReceipt: React.FC = () => {
         await html2canvas(
           receiptRef.current,
           {
-            scale: 2.5,
+            scale: 2.2,
             useCORS: true,
-            backgroundColor:
-              '#ffffff',
+            backgroundColor: '#ffffff',
             logging: false,
           }
         );
 
 
-      const imageData =
+      const image =
         canvas.toDataURL(
           'image/png',
           1
         );
 
 
-      const pdfWidth =
+      const width =
         80;
 
-
-      const pdfHeight =
+      const height =
         (
           canvas.height /
           canvas.width
         ) *
-        pdfWidth;
+        width;
 
 
-      const doc =
+      const pdf =
         new jsPDF({
-          orientation:
-            'portrait',
+          orientation: 'portrait',
           unit: 'mm',
           format: [
-            pdfWidth,
-            pdfHeight,
+            width,
+            height,
           ],
           compress: true,
         });
 
 
-      doc.addImage(
-        imageData,
+      pdf.addImage(
+        image,
         'PNG',
         0,
         0,
-        pdfWidth,
-        pdfHeight,
+        width,
+        height,
         undefined,
         'FAST'
       );
 
 
-      return doc;
+      return pdf;
     };
 
 
-  /*
-   * ============================================================
-   * DOWNLOAD PDF
-   * ============================================================
-   */
+  // ==========================================================
+  // DOWNLOAD PDF
+  // ==========================================================
 
   const handleDownloadPDF =
     async () => {
@@ -987,30 +764,26 @@ const TransactionReceipt: React.FC = () => {
         return;
       }
 
-
       try {
 
         setPdfLoading(true);
 
-
-        const doc =
+        const pdf =
           await createReceiptPDF();
 
-
-        doc.save(
-          getSafeFileName()
+        pdf.save(
+          getFileName()
         );
 
       } catch (error) {
 
         console.error(
-          'Receipt PDF generation failed:',
+          'Receipt PDF error:',
           error
         );
 
-
         alert(
-          'Unable to generate the PDF receipt. Please try again.'
+          'Unable to generate receipt PDF.'
         );
 
       } finally {
@@ -1020,11 +793,9 @@ const TransactionReceipt: React.FC = () => {
     };
 
 
-  /*
-   * ============================================================
-   * SHARE PDF
-   * ============================================================
-   */
+  // ==========================================================
+  // SHARE PDF
+  // ==========================================================
 
   const handleSharePDF =
     async () => {
@@ -1033,26 +804,22 @@ const TransactionReceipt: React.FC = () => {
         return;
       }
 
-
       try {
 
         setPdfLoading(true);
 
-
-        const doc =
+        const pdf =
           await createReceiptPDF();
 
+        const blob =
+          pdf.output('blob');
 
-        const pdfBlob =
-          doc.output('blob');
-
-
-        const pdfFile =
+        const file =
           new File(
             [
-              pdfBlob,
+              blob,
             ],
-            getSafeFileName(),
+            getFileName(),
             {
               type:
                 'application/pdf',
@@ -1060,22 +827,16 @@ const TransactionReceipt: React.FC = () => {
           );
 
 
-        const canShareFiles =
-          typeof navigator !==
-            'undefined' &&
+        if (
           typeof navigator.share ===
             'function' &&
           typeof navigator.canShare ===
             'function' &&
           navigator.canShare({
             files: [
-              pdfFile,
+              file,
             ],
-          });
-
-
-        if (
-          canShareFiles
+          })
         ) {
 
           try {
@@ -1090,10 +851,9 @@ const TransactionReceipt: React.FC = () => {
                   : 'Zenimonies transaction receipt',
 
               files: [
-                pdfFile,
+                file,
               ],
             });
-
 
             return;
 
@@ -1103,7 +863,6 @@ const TransactionReceipt: React.FC = () => {
               error as {
                 name?: string;
               };
-
 
             if (
               shareError?.name ===
@@ -1115,20 +874,19 @@ const TransactionReceipt: React.FC = () => {
         }
 
 
-        doc.save(
-          getSafeFileName()
+        pdf.save(
+          getFileName()
         );
 
       } catch (error) {
 
         console.error(
-          'Receipt PDF sharing failed:',
+          'Receipt sharing error:',
           error
         );
 
-
         alert(
-          'Unable to create the PDF receipt. Please try again.'
+          'Unable to share receipt.'
         );
 
       } finally {
@@ -1138,58 +896,57 @@ const TransactionReceipt: React.FC = () => {
     };
 
 
-  /*
-   * ============================================================
-   * DETAIL ROW
-   * ============================================================
-   */
+  // ==========================================================
+  // COMPACT ROW
+  // ==========================================================
 
-  const DetailRow = ({
-    icon,
+  const Row = ({
     label,
     value,
+    icon,
     valueNode,
   }: {
-    icon?: React.ReactNode;
     label: string;
     value?: React.ReactNode;
+    icon?: React.ReactNode;
     valueNode?: React.ReactNode;
   }) => (
 
     <Box
       sx={{
-        display: 'grid',
-        gridTemplateColumns:
-          'minmax(92px, 40%) 1fr',
+        display: 'flex',
         alignItems: 'center',
-        minHeight: 36,
-        py: 0.35,
+        justifyContent: 'space-between',
+        gap: 1,
+        minHeight: 30,
+        py: 0.2,
         borderBottom:
-          '1px solid #e7eeeb',
+          '1px solid #e1ebe6',
+
         '&:last-child': {
-          borderBottom:
-            'none',
+          borderBottom: 'none',
         },
       }}
     >
 
       <Stack
         direction="row"
-        spacing={0.6}
+        spacing={0.45}
         alignItems="center"
         sx={{
           minWidth: 0,
+          flexShrink: 0,
         }}
       >
 
         {icon && (
           <Box
             sx={{
-              display: 'flex',
               color: '#71817b',
-              flexShrink: 0,
+              display: 'flex',
+
               '& svg': {
-                fontSize: 16,
+                fontSize: 14,
               },
             }}
           >
@@ -1197,12 +954,12 @@ const TransactionReceipt: React.FC = () => {
           </Box>
         )}
 
-
         <Typography
           sx={{
             color: '#687871',
-            fontSize: 11.5,
-            fontWeight: 550,
+            fontSize: 10.5,
+            fontWeight: 650,
+            whiteSpace: 'nowrap',
           }}
         >
           {label}
@@ -1215,11 +972,11 @@ const TransactionReceipt: React.FC = () => {
         <Typography
           sx={{
             color: '#10221c',
-            fontSize: 12,
-            fontWeight: 650,
-            wordBreak:
-              'break-word',
+            fontSize: 10.8,
+            fontWeight: 750,
             textAlign: 'right',
+            wordBreak: 'break-word',
+            minWidth: 0,
           }}
         >
           {value}
@@ -1230,1281 +987,1217 @@ const TransactionReceipt: React.FC = () => {
   );
 
 
-  /*
-   * ============================================================
-   * PARTY SECTION
-   * ============================================================
-   */
+  // ==========================================================
+  // PERSON COMPACT BLOCK
+  // ==========================================================
 
-  const PartySection = ({
+  const PersonBlock = ({
     title,
     name,
     phone,
     account,
     bank,
+    showAccount,
   }: {
     title: string;
     name?: string;
     phone?: string;
     account?: string;
     bank?: string;
-  }) => {
+    showAccount: boolean;
+  }) => (
 
-    const hasAny =
-      Boolean(
-        name ||
-        phone ||
-        account ||
-        bank
-      );
+    <Box
+      sx={{
+        py: 0.55,
+        borderBottom:
+          '1px solid #dfe9e4',
+      }}
+    >
 
-
-    if (!hasAny) {
-      return null;
-    }
-
-
-    return (
-      <Box
+      <Typography
         sx={{
-          mt: 0.9,
-          mb: 0.7,
-          p: 0.9,
-          borderRadius: 1.5,
-          bgcolor: '#f7faf8',
-          border:
-            '1px solid #e1ebe6',
+          color: '#087f5b',
+          fontSize: 11.5,
+          fontWeight: 850,
+          mb: 0.15,
         }}
       >
+        {title}
+      </Typography>
 
+
+      {name && (
         <Typography
           sx={{
-            color: '#075c43',
-            fontSize: 11.5,
-            fontWeight: 850,
-            mb: 0.2,
+            color: '#10221c',
+            fontSize: 12,
+            fontWeight: 800,
+            lineHeight: 1.25,
           }}
         >
-          {title}
+          {name}
         </Typography>
+      )}
 
 
-        {name && (
-          <DetailRow
-            icon={
-              <PersonRounded />
-            }
-            label="Name"
-            value={name}
-          />
-        )}
-
-
-        {phone && (
-          <DetailRow
-            icon={
-              <PhoneRounded />
-            }
-            label="Phone Number"
-            value={phone}
-          />
-        )}
-
-
-        {account && (
-          <DetailRow
-            icon={
-              <TagRounded />
-            }
-            label="Account Number"
-            value={account}
-          />
-        )}
-
-
-        {bank && (
-          <DetailRow
-            icon={
-              <AccountBalanceRounded />
-            }
-            label="Bank"
-            value={bank}
-          />
-        )}
-
-      </Box>
-    );
-  };
-
-
-  /*
-   * ============================================================
-   * TRANSACTION DETAILS
-   * ============================================================
-   */
-
-  const renderTransactionDetails =
-    () => {
-
-      /*
-       * --------------------------------------------------------
-       * ZENIMONIES → ZENIMONIES
-       * --------------------------------------------------------
-       */
-
-      if (isTransfer) {
-
-        return (
-          <>
-
-            <PartySection
-              title="Sender Details"
-              name={
-                senderName
-              }
-              phone={
-                senderPhone
-              }
-              account={
-                senderAccount
-              }
-              bank="Zenimonies"
-            />
-
-
-            <PartySection
-              title="Receiver Details"
-              name={
-                recipientName
-              }
-              phone={
-                recipientPhone
-              }
-              account={
-                recipientAccount
-              }
-              bank={
-                recipientBank ||
-                'Zenimonies'
-              }
-            />
-
-
-            <DetailRow
-              icon={
-                <ArrowUpwardRounded />
-              }
-              label="Amount Transferred"
-              value={
-                formatMoney(
-                  Math.abs(
-                    numericAmount
-                  )
-                )
-              }
-            />
-
-
-            {numericFee > 0 && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Transaction Fee"
-                value={
-                  formatMoney(
-                    Math.abs(
-                      numericFee
-                    )
-                  )
-                }
-              />
-            )}
-
-
-            <DetailRow
-              icon={
-                <LayersRounded />
-              }
-              label="Total Amount Debited"
-              value={
-                formatMoney(
-                  totalAmountDebited
-                )
-              }
-            />
-
-
-            {reference && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Reference"
-                valueNode={
-                  <ReferenceValue
-                    reference={
-                      reference
-                    }
-                    onCopy={
-                      copyReference
-                    }
-                  />
-                }
-              />
-            )}
-
-
-            <DetailRow
-              icon={
-                <CalendarMonthRounded />
-              }
-              label="Date & Time"
-              value={
-                formatDate(
-                  transactionDate
-                )
-              }
-            />
-
-
-            <DetailRow
-              icon={
-                <CheckCircleRounded />
-              }
-              label="Status"
-              valueNode={
-                <StatusChip
-                  label={
-                    statusText
-                  }
-                  background={
-                    statusBackground
-                  }
-                  color={
-                    statusColor
-                  }
-                />
-              }
-            />
-
-          </>
-        );
-      }
-
-
-      /*
-       * --------------------------------------------------------
-       * AIRTIME
-       * --------------------------------------------------------
-       */
-
-      if (isAirtime) {
-
-        return (
-          <>
-
-            {network && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Provider"
-                value={
-                  network
-                }
-              />
-            )}
-
-
-            {recipientPhone && (
-              <DetailRow
-                icon={
-                  <PhoneRounded />
-                }
-                label="Phone Number"
-                value={
-                  recipientPhone
-                }
-              />
-            )}
-
-
-            <DetailRow
-              icon={
-                <ArrowUpwardRounded />
-              }
-              label="Amount"
-              value={
-                formatMoney(
-                  Math.abs(
-                    numericAmount
-                  )
-                )
-              }
-            />
-
-
-            {reference && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Reference"
-                valueNode={
-                  <ReferenceValue
-                    reference={
-                      reference
-                    }
-                    onCopy={
-                      copyReference
-                    }
-                  />
-                }
-              />
-            )}
-
-
-            <DetailRow
-              icon={
-                <CalendarMonthRounded />
-              }
-              label="Date & Time"
-              value={
-                formatDate(
-                  transactionDate
-                )
-              }
-            />
-
-
-            <DetailRow
-              icon={
-                <CheckCircleRounded />
-              }
-              label="Status"
-              valueNode={
-                <StatusChip
-                  label={
-                    statusText
-                  }
-                  background={
-                    statusBackground
-                  }
-                  color={
-                    statusColor
-                  }
-                />
-              }
-            />
-
-          </>
-        );
-      }
-
-
-      /*
-       * --------------------------------------------------------
-       * DATA
-       * --------------------------------------------------------
-       */
-
-      if (isData) {
-
-        return (
-          <>
-
-            {network && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Provider"
-                value={
-                  network
-                }
-              />
-            )}
-
-
-            {recipientPhone && (
-              <DetailRow
-                icon={
-                  <PhoneRounded />
-                }
-                label="Phone Number"
-                value={
-                  recipientPhone
-                }
-              />
-            )}
-
-
-            {dataPlan && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Data Plan"
-                value={
-                  dataPlan
-                }
-              />
-            )}
-
-
-            <DetailRow
-              icon={
-                <ArrowUpwardRounded />
-              }
-              label="Amount"
-              value={
-                formatMoney(
-                  Math.abs(
-                    numericAmount
-                  )
-                )
-              }
-            />
-
-
-            {reference && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Reference"
-                valueNode={
-                  <ReferenceValue
-                    reference={
-                      reference
-                    }
-                    onCopy={
-                      copyReference
-                    }
-                  />
-                }
-              />
-            )}
-
-
-            <DetailRow
-              icon={
-                <CalendarMonthRounded />
-              }
-              label="Date & Time"
-              value={
-                formatDate(
-                  transactionDate
-                )
-              }
-            />
-
-
-            <DetailRow
-              icon={
-                <CheckCircleRounded />
-              }
-              label="Status"
-              valueNode={
-                <StatusChip
-                  label={
-                    statusText
-                  }
-                  background={
-                    statusBackground
-                  }
-                  color={
-                    statusColor
-                  }
-                />
-              }
-            />
-
-          </>
-        );
-      }
-
-
-      /*
-       * --------------------------------------------------------
-       * ELECTRICITY
-       * --------------------------------------------------------
-       */
-
-      if (isElectricity) {
-
-        return (
-          <>
-
-            {network && (
-              <DetailRow
-                icon={
-                  <AccountBalanceRounded />
-                }
-                label="Provider"
-                value={
-                  network
-                }
-              />
-            )}
-
-
-            {customerNumber && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Meter Number"
-                value={
-                  customerNumber
-                }
-              />
-            )}
-
-
-            <DetailRow
-              icon={
-                <ArrowUpwardRounded />
-              }
-              label="Amount"
-              value={
-                formatMoney(
-                  Math.abs(
-                    numericAmount
-                  )
-                )
-              }
-            />
-
-
-            {reference && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Reference"
-                valueNode={
-                  <ReferenceValue
-                    reference={
-                      reference
-                    }
-                    onCopy={
-                      copyReference
-                    }
-                  />
-                }
-              />
-            )}
-
-
-            <DetailRow
-              icon={
-                <CalendarMonthRounded />
-              }
-              label="Date & Time"
-              value={
-                formatDate(
-                  transactionDate
-                )
-              }
-            />
-
-
-            <DetailRow
-              icon={
-                <CheckCircleRounded />
-              }
-              label="Status"
-              valueNode={
-                <StatusChip
-                  label={
-                    statusText
-                  }
-                  background={
-                    statusBackground
-                  }
-                  color={
-                    statusColor
-                  }
-                />
-              }
-            />
-
-          </>
-        );
-      }
-
-
-      /*
-       * --------------------------------------------------------
-       * TV
-       * --------------------------------------------------------
-       */
-
-      if (isTV) {
-
-        return (
-          <>
-
-            {network && (
-              <DetailRow
-                icon={
-                  <AccountBalanceRounded />
-                }
-                label="Provider"
-                value={
-                  network
-                }
-              />
-            )}
-
-
-            {customerNumber && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Customer Number"
-                value={
-                  customerNumber
-                }
-              />
-            )}
-
-
-            {dataPlan && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Package"
-                value={
-                  dataPlan
-                }
-              />
-            )}
-
-
-            <DetailRow
-              icon={
-                <ArrowUpwardRounded />
-              }
-              label="Amount"
-              value={
-                formatMoney(
-                  Math.abs(
-                    numericAmount
-                  )
-                )
-              }
-            />
-
-
-            {reference && (
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Reference"
-                valueNode={
-                  <ReferenceValue
-                    reference={
-                      reference
-                    }
-                    onCopy={
-                      copyReference
-                    }
-                  />
-                }
-              />
-            )}
-
-
-            <DetailRow
-              icon={
-                <CalendarMonthRounded />
-              }
-              label="Date & Time"
-              value={
-                formatDate(
-                  transactionDate
-                )
-              }
-            />
-
-
-            <DetailRow
-              icon={
-                <CheckCircleRounded />
-              }
-              label="Status"
-              valueNode={
-                <StatusChip
-                  label={
-                    statusText
-                  }
-                  background={
-                    statusBackground
-                  }
-                  color={
-                    statusColor
-                  }
-                />
-              }
-            />
-
-          </>
-        );
-      }
-
-
-      /*
-       * --------------------------------------------------------
-       * OTHER / FUNDING
-       * --------------------------------------------------------
-       */
-
-      return (
-        <>
-
-          {recipientName && (
-            <DetailRow
-              icon={
-                <PersonRounded />
-              }
-              label="Customer"
-              value={
-                recipientName
-              }
-            />
-          )}
-
-
-          {customerNumber && (
-            <DetailRow
-              icon={
-                <TagRounded />
-              }
-              label="Customer Number"
-              value={
-                customerNumber
-              }
-            />
-          )}
-
-
-          {network && (
-            <DetailRow
-              icon={
-                <AccountBalanceRounded />
-              }
-              label="Provider"
-              value={
-                network
-              }
-            />
-          )}
-
-
-          <DetailRow
-            icon={
-              isIncoming
-                ? (
-                  <ArrowDownwardRounded />
-                )
-                : (
-                  <ArrowUpwardRounded />
-                )
-            }
-            label="Amount"
-            value={
-              formatMoney(
-                Math.abs(
-                  numericAmount
-                )
-              )
-            }
-          />
-
-
-          {reference && (
-            <DetailRow
-              icon={
-                <TagRounded />
-              }
-              label="Reference"
-              valueNode={
-                <ReferenceValue
-                  reference={
-                    reference
-                  }
-                  onCopy={
-                    copyReference
-                  }
-                />
-              }
-            />
-          )}
-
-
-          <DetailRow
-            icon={
-              <CalendarMonthRounded />
-            }
-            label="Date & Time"
-            value={
-              formatDate(
-                transactionDate
-              )
-            }
-          />
-
-
-          <DetailRow
-            icon={
-              <CheckCircleRounded />
-            }
-            label="Status"
-            valueNode={
-              <StatusChip
-                label={
-                  statusText
-                }
-                background={
-                  statusBackground
-                }
-                color={
-                  statusColor
-                }
-              />
-            }
-          />
-
-        </>
-      );
-    };
-
-
-  /*
-   * ============================================================
-   * RECEIPT UI
-   * ============================================================
-   */
-
-  return (
-    <>
-      <Box
-        className="receipt-page"
+      <Stack
+        direction="row"
+        spacing={0.8}
+        flexWrap="wrap"
         sx={{
-          minHeight: '100vh',
-          bgcolor: '#f3faf7',
-          py: {
-            xs: 1,
-            sm: 2.5,
-          },
-          px: 0.75,
+          mt: 0.15,
         }}
       >
 
-        <Box
-          className="receipt-container"
+        {phone && (
+          <Typography
+            sx={{
+              color: '#687871',
+              fontSize: 10,
+              fontWeight: 650,
+            }}
+          >
+            {phone}
+          </Typography>
+        )}
+
+
+        {showAccount &&
+          account && (
+            <Typography
+              sx={{
+                color: '#687871',
+                fontSize: 10,
+                fontWeight: 650,
+              }}
+            >
+              • {account}
+            </Typography>
+          )}
+
+      </Stack>
+
+
+      {bank && (
+        <Typography
           sx={{
-            width: '100%',
-            maxWidth: 390,
-            mx: 'auto',
+            color: '#687871',
+            fontSize: 9.5,
+            fontWeight: 650,
+            mt: 0.1,
+          }}
+        >
+          {bank}
+        </Typography>
+      )}
+
+    </Box>
+  );
+
+
+  // ==========================================================
+  // RECEIPT
+  // ==========================================================
+
+  return (
+    <Box
+      className="receipt-page"
+      sx={{
+        minHeight: '100vh',
+        bgcolor: '#f3faf7',
+        py: 0.6,
+        px: 0.5,
+      }}
+    >
+
+      <Box
+        className="receipt-container"
+        sx={{
+          width: '100%',
+          maxWidth: 360,
+          mx: 'auto',
+        }}
+      >
+
+        {/* ====================================================
+            RECEIPT CARD
+        ===================================================== */}
+
+        <Card
+          ref={receiptRef}
+          className="receipt-card"
+          elevation={0}
+          sx={{
+            overflow: 'hidden',
+            borderRadius: 2.2,
+            border:
+              '1px solid #dcebe4',
+            bgcolor: '#ffffff',
+            boxShadow:
+              '0 5px 18px rgba(7,94,66,0.07)',
           }}
         >
 
-          <Card
-            ref={receiptRef}
-            className="receipt-card"
-            elevation={0}
+          {/* ==================================================
+              HEADER
+          =================================================== */}
+
+          <Box
+            className="receipt-header"
             sx={{
-              overflow: 'hidden',
-              borderRadius: 2.5,
-              border:
-                '1px solid #dcebe4',
-              boxShadow:
-                '0 10px 30px rgba(7, 94, 66, 0.08)',
-              bgcolor: '#ffffff',
+              bgcolor: '#087f5b',
+              color: '#ffffff',
+              px: 1.25,
+              py: 0.9,
             }}
           >
 
-            {/* =================================================
-                APPROVED ZENIMONIES HEADER
-            ================================================== */}
-
-            <Box
-              className="receipt-header"
-              sx={{
-                bgcolor: '#087f5b',
-                color: '#ffffff',
-                mx: 1,
-                mt: 1,
-                borderRadius: 2,
-                px: 1.5,
-                py: 1.25,
-              }}
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              spacing={1}
             >
 
               <Stack
                 direction="row"
                 alignItems="center"
-                justifyContent="space-between"
-                spacing={1}
+                spacing={0.7}
               >
-
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  spacing={0.8}
-                  sx={{
-                    minWidth: 0,
-                  }}
-                >
-
-                  {/* Zenimonies Z mark */}
-
-                  <Box
-                    sx={{
-                      width: 38,
-                      height: 38,
-                      border:
-                        '2px solid rgba(255,255,255,0.95)',
-                      borderRadius: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 23,
-                      fontWeight: 900,
-                      flexShrink: 0,
-                    }}
-                  >
-                    Z
-                  </Box>
-
-
-                  <Box
-                    sx={{
-                      minWidth: 0,
-                    }}
-                  >
-
-                    <Box
-                      sx={{
-                        position:
-                          'relative',
-                        display:
-                          'inline-block',
-                      }}
-                    >
-
-                      <Typography
-                        sx={{
-                          fontSize: 19,
-                          fontWeight: 900,
-                          letterSpacing: 0.3,
-                          lineHeight: 1,
-                          whiteSpace:
-                            'nowrap',
-                        }}
-                      >
-                        ZENIMONIES
-                      </Typography>
-
-
-                      {/* Leaf / flower accent above i */}
-
-                      <Box
-                        sx={{
-                          position:
-                            'absolute',
-                          left:
-                            '55.5%',
-                          top:
-                            -12,
-                          transform:
-                            'translateX(-50%)',
-                          fontSize:
-                            13,
-                          lineHeight:
-                            1,
-                        }}
-                      >
-                        ❧
-                      </Box>
-
-                    </Box>
-
-
-                    <Typography
-                      sx={{
-                        mt: 0.35,
-                        fontSize: 6,
-                        letterSpacing: 1.7,
-                        fontWeight: 650,
-                        opacity: 0.88,
-                      }}
-                    >
-                      DIGITAL BANKING
-                    </Typography>
-
-                  </Box>
-
-                </Stack>
-
 
                 <Box
                   sx={{
-                    borderLeft:
-                      '1px solid rgba(255,255,255,0.7)',
-                    pl: 1,
+                    width: 31,
+                    height: 31,
+                    border:
+                      '2px solid #ffffff',
+                    borderRadius: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 19,
+                    fontWeight: 900,
                     flexShrink: 0,
                   }}
                 >
+                  Z
+                </Box>
+
+
+                <Box>
 
                   <Typography
                     sx={{
-                      fontSize: 10.5,
-                      fontWeight: 800,
-                      textAlign: 'right',
-                      lineHeight: 1.2,
-                      maxWidth: 105,
+                      fontSize: 15.5,
+                      fontWeight: 900,
+                      letterSpacing: 0.4,
+                      lineHeight: 1,
                     }}
                   >
-                    {receiptTitle}
+                    ZENIMONIES
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.2,
+                      fontSize: 5.5,
+                      letterSpacing: 1.7,
+                      fontWeight: 650,
+                      opacity: 0.9,
+                    }}
+                  >
+                    DIGITAL BANKING
                   </Typography>
 
                 </Box>
 
               </Stack>
 
-            </Box>
-
-
-            {/* =================================================
-                STATUS + TOTAL DEBIT
-            ================================================== */}
-
-            <Box
-              sx={{
-                px: 1.8,
-                pt: 1.45,
-                pb: 1.25,
-                textAlign: 'center',
-              }}
-            >
 
               <Box
                 sx={{
-                  width: 43,
-                  height: 43,
-                  mx: 'auto',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  bgcolor:
-                    statusBackground,
+                  borderLeft:
+                    '1px solid rgba(255,255,255,0.75)',
+                  pl: 1,
+                  textAlign: 'right',
                 }}
               >
-                {statusIcon}
-              </Box>
-
-
-              <Typography
-                sx={{
-                  mt: 0.75,
-                  color: '#063b2b',
-                  fontSize: 18,
-                  fontWeight: 850,
-                  lineHeight: 1.15,
-                }}
-              >
-                {isSuccessful
-                  ? 'Transaction Successful'
-                  : isFailed
-                    ? 'Transaction Failed'
-                    : isPending
-                      ? 'Transaction Pending'
-                      : 'Transaction Status Unconfirmed'}
-              </Typography>
-
-
-              <Typography
-                sx={{
-                  mt: 0.3,
-                  color: '#718079',
-                  fontSize: 10.5,
-                  lineHeight: 1.35,
-                }}
-              >
-                {statusMessage}
-              </Typography>
-
-
-              {/* TOTAL ACTUALLY DEBITED */}
-
-              <Typography
-                sx={{
-                  mt: 0.75,
-                  color:
-                    isIncoming
-                      ? '#087f5b'
-                      : '#063b2b',
-                  fontSize: 28,
-                  fontWeight: 900,
-                  letterSpacing: -0.7,
-                  lineHeight: 1,
-                }}
-              >
-                {isIncoming
-                  ? `+${formatMoney(
-                      Math.abs(
-                        numericAmount
-                      )
-                    )}`
-                  : `−${formatMoney(
-                      totalAmountDebited
-                    )}`}
-              </Typography>
-
-
-              <Typography
-                sx={{
-                  mt: 0.4,
-                  color: '#6c7b75',
-                  fontSize: 9.5,
-                  fontWeight: 700,
-                }}
-              >
-                {isTransfer &&
-                !isIncoming
-                  ? 'Total Amount Debited'
-                  : 'Amount'}
-              </Typography>
-
-            </Box>
-
-
-            <Divider
-              sx={{
-                mx: 1.8,
-                borderColor:
-                  '#dce6e1',
-              }}
-            />
-
-
-            {/* =================================================
-                DETAILS
-            ================================================== */}
-
-            <Box
-              sx={{
-                px: 1.8,
-                py: 1.05,
-              }}
-            >
-
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.8,
-                  bgcolor: '#eaf8f2',
-                  borderRadius: 1.5,
-                  px: 1,
-                  py: 0.6,
-                  mb: 0.55,
-                }}
-              >
-
-                <Box
-                  sx={{
-                    width: 25,
-                    height: 25,
-                    borderRadius: 1,
-                    bgcolor: '#087f5b',
-                    color: '#ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <ReceiptLongRounded
-                    sx={{
-                      fontSize: 15,
-                    }}
-                  />
-                </Box>
-
 
                 <Typography
                   sx={{
-                    color: '#075c43',
-                    fontSize: 14,
+                    fontSize: 9.5,
                     fontWeight: 800,
+                    lineHeight: 1.15,
                   }}
                 >
-                  {isTransfer
-                    ? 'Transfer Details'
-                    : 'Payment Details'}
+                  {receiptTitle}
                 </Typography>
 
               </Box>
 
+            </Stack>
 
-              <DetailRow
-                icon={
-                  <TagRounded />
-                }
-                label="Transaction Type"
-                value={
-                  isTransfer
-                    ? 'Transfer (Zenimonies to Zenimonies)'
-                    : receiptTitle.replace(
-                        ' Receipt',
-                        ''
-                      )
-                }
+          </Box>
+
+
+          {/* ==================================================
+              STATUS + TOTAL
+          =================================================== */}
+
+          <Box
+            sx={{
+              textAlign: 'center',
+              px: 1.2,
+              pt: 1.05,
+              pb: 0.8,
+            }}
+          >
+
+            <Box
+              sx={{
+                width: 34,
+                height: 34,
+                mx: 'auto',
+                borderRadius: '50%',
+                bgcolor:
+                  statusBackground,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+
+              <StatusIcon
+                sx={{
+                  fontSize: 22,
+                  color: statusColor,
+                }}
               />
-
-
-              {renderTransactionDetails()}
 
             </Box>
 
 
-            {/* =================================================
-                QR CODE
-            ================================================== */}
+            <Typography
+              sx={{
+                mt: 0.45,
+                color: '#063b2b',
+                fontSize: 16,
+                fontWeight: 900,
+                lineHeight: 1.1,
+              }}
+            >
+              {isSuccessful
+                ? 'Transaction Successful'
+                : isFailed
+                  ? 'Transaction Failed'
+                  : isPending
+                    ? 'Transaction Pending'
+                    : 'Transaction Unconfirmed'}
+            </Typography>
 
+
+            <Typography
+              sx={{
+                mt: 0.2,
+                color: '#718079',
+                fontSize: 9.5,
+              }}
+            >
+              {isSuccessful
+                ? `Your ${
+                    isTransfer
+                      ? 'transfer'
+                      : isAirtime
+                        ? 'airtime purchase'
+                        : isData
+                          ? 'data purchase'
+                          : isBill
+                            ? 'bill payment'
+                            : 'transaction'
+                  } has been completed.`
+                : isPending
+                  ? 'Your transaction is still being processed.'
+                  : isFailed
+                    ? 'Your transaction could not be completed.'
+                    : 'The transaction status could not be confirmed.'}
+            </Typography>
+
+
+            <Typography
+              sx={{
+                mt: 0.55,
+                color: isIncoming
+                  ? '#087f5b'
+                  : '#063b2b',
+                fontSize: 26,
+                fontWeight: 950,
+                letterSpacing: -0.7,
+                lineHeight: 1,
+              }}
+            >
+              {topAmount}
+            </Typography>
+
+
+            <Typography
+              sx={{
+                mt: 0.15,
+                color: '#687871',
+                fontSize: 9.5,
+                fontWeight: 750,
+              }}
+            >
+              {topAmountLabel}
+            </Typography>
+
+          </Box>
+
+
+          <Divider
+            sx={{
+              mx: 1.2,
+              borderColor: '#dce6e1',
+            }}
+          />
+
+
+          {/* ==================================================
+              CONTENT
+          =================================================== */}
+
+          <Box
+            sx={{
+              px: 1.2,
+              py: 0.55,
+            }}
+          >
+
+            {/* =================================================
+                TRANSFER
+            ================================================= */}
+
+            {isTransfer && (
+              <>
+
+                <Box
+                  sx={{
+                    bgcolor: '#eaf8f2',
+                    borderRadius: 1.2,
+                    px: 0.8,
+                    py: 0.5,
+                    mb: 0.35,
+                  }}
+                >
+
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={0.55}
+                  >
+
+                    <Box
+                      sx={{
+                        width: 23,
+                        height: 23,
+                        bgcolor: '#087f5b',
+                        color: '#ffffff',
+                        borderRadius: 0.8,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <ArrowUpwardRounded
+                        sx={{
+                          fontSize: 14,
+                        }}
+                      />
+                    </Box>
+
+                    <Typography
+                      sx={{
+                        color: '#075c43',
+                        fontSize: 12.5,
+                        fontWeight: 850,
+                      }}
+                    >
+                      Transfer Details
+                    </Typography>
+
+                  </Stack>
+
+                </Box>
+
+
+                <Row
+                  icon={
+                    <TagRounded />
+                  }
+                  label="Transaction Type"
+                  value={
+                    isZenimoniesTransfer
+                      ? 'Zenimonies to Zenimonies'
+                      : 'Bank Transfer'
+                  }
+                />
+
+
+                {/* SENDER */}
+
+                <PersonBlock
+                  title="From (Sender)"
+                  name={
+                    senderName
+                  }
+                  phone={
+                    senderPhone
+                  }
+                  account={
+                    senderAccount
+                  }
+                  bank="Zenimonies"
+                  showAccount={
+                    !isZenimoniesTransfer
+                  }
+                />
+
+
+                {/* RECEIVER */}
+
+                <PersonBlock
+                  title="To (Receiver)"
+                  name={
+                    receiverName
+                  }
+                  phone={
+                    receiverPhone
+                  }
+                  account={
+                    receiverAccount
+                  }
+                  bank={
+                    recipientBank ||
+                    'Zenimonies'
+                  }
+                  showAccount={
+                    !isZenimoniesTransfer
+                  }
+                />
+
+
+                <Row
+                  icon={
+                    <ArrowUpwardRounded />
+                  }
+                  label="Amount Transferred"
+                  value={
+                    formatMoney(
+                      numericAmount
+                    )
+                  }
+                />
+
+
+                {numericFee > 0 && (
+                  <Row
+                    icon={
+                      <TagRounded />
+                    }
+                    label="Transaction Fee"
+                    value={
+                      formatMoney(
+                        numericFee
+                      )
+                    }
+                  />
+                )}
+
+
+                <Row
+                  icon={
+                    <ArrowUpwardRounded />
+                  }
+                  label="Total Amount Debited"
+                  value={
+                    formatMoney(
+                      totalDebited
+                    )
+                  }
+                />
+
+
+                {reference && (
+                  <Row
+                    icon={
+                      <TagRounded />
+                    }
+                    label="Reference"
+                    valueNode={
+                      <Stack
+                        direction="row"
+                        spacing={0.3}
+                        alignItems="center"
+                        justifyContent="flex-end"
+                        sx={{
+                          minWidth: 0,
+                        }}
+                      >
+
+                        <Typography
+                          sx={{
+                            fontSize: 9.2,
+                            fontWeight: 750,
+                            color: '#10221c',
+                            wordBreak:
+                              'break-all',
+                            textAlign: 'right',
+                          }}
+                        >
+                          {reference}
+                        </Typography>
+
+                        <Button
+                          className="no-print"
+                          onClick={
+                            copyReference
+                          }
+                          sx={{
+                            minWidth: 21,
+                            width: 21,
+                            height: 21,
+                            p: 0,
+                            color: '#087f5b',
+                          }}
+                        >
+                          <ContentCopyRounded
+                            sx={{
+                              fontSize: 13,
+                            }}
+                          />
+                        </Button>
+
+                      </Stack>
+                    }
+                  />
+                )}
+
+
+                <Row
+                  icon={
+                    <CalendarMonthRounded />
+                  }
+                  label="Date & Time"
+                  value={
+                    formatDate(
+                      transactionDate
+                    )
+                  }
+                />
+
+
+                <Row
+                  icon={
+                    <CheckCircleRounded />
+                  }
+                  label="Status"
+                  valueNode={
+                    <Chip
+                      label={
+                        statusText
+                      }
+                      size="small"
+                      sx={{
+                        height: 20,
+                        bgcolor:
+                          statusBackground,
+                        color:
+                          statusColor,
+                        fontSize: 9,
+                        fontWeight: 850,
+                        borderRadius: 1,
+                      }}
+                    />
+                  }
+                />
+
+              </>
+            )}
+
+
+            {/* =================================================
+                AIRTIME
+            ================================================= */}
+
+            {isAirtime && (
+              <>
+
+                <Box
+                  sx={{
+                    bgcolor: '#eaf8f2',
+                    borderRadius: 1.2,
+                    px: 0.8,
+                    py: 0.5,
+                    mb: 0.35,
+                  }}
+                >
+
+                  <Typography
+                    sx={{
+                      color: '#075c43',
+                      fontSize: 12.5,
+                      fontWeight: 850,
+                    }}
+                  >
+                    Airtime Purchase
+                  </Typography>
+
+                </Box>
+
+
+                <Row
+                  icon={
+                    <TagRounded />
+                  }
+                  label="Provider"
+                  value={
+                    provider ||
+                    'Provider unavailable'
+                  }
+                />
+
+
+                <Row
+                  icon={
+                    <PhoneRounded />
+                  }
+                  label="Phone Number"
+                  value={
+                    servicePhone ||
+                    'Phone unavailable'
+                  }
+                />
+
+
+                <Row
+                  icon={
+                    <ArrowUpwardRounded />
+                  }
+                  label="Amount"
+                  value={
+                    formatMoney(
+                      numericAmount
+                    )
+                  }
+                />
+
+
+                {reference && (
+                  <Row
+                    icon={
+                      <TagRounded />
+                    }
+                    label="Reference"
+                    valueNode={
+                      <Stack
+                        direction="row"
+                        spacing={0.3}
+                        alignItems="center"
+                      >
+
+                        <Typography
+                          sx={{
+                            fontSize: 9,
+                            fontWeight: 750,
+                            wordBreak:
+                              'break-all',
+                            textAlign: 'right',
+                          }}
+                        >
+                          {reference}
+                        </Typography>
+
+                        <Button
+                          className="no-print"
+                          onClick={
+                            copyReference
+                          }
+                          sx={{
+                            minWidth: 21,
+                            width: 21,
+                            height: 21,
+                            p: 0,
+                            color: '#087f5b',
+                          }}
+                        >
+                          <ContentCopyRounded
+                            sx={{
+                              fontSize: 13,
+                            }}
+                          />
+                        </Button>
+
+                      </Stack>
+                    }
+                  />
+                )}
+
+
+                <Row
+                  icon={
+                    <CalendarMonthRounded />
+                  }
+                  label="Date & Time"
+                  value={
+                    formatDate(
+                      transactionDate
+                    )
+                  }
+                />
+
+
+                <Row
+                  icon={
+                    <CheckCircleRounded />
+                  }
+                  label="Status"
+                  valueNode={
+                    <Chip
+                      label={
+                        statusText
+                      }
+                      size="small"
+                      sx={{
+                        height: 20,
+                        bgcolor:
+                          statusBackground,
+                        color:
+                          statusColor,
+                        fontSize: 9,
+                        fontWeight: 850,
+                      }}
+                    />
+                  }
+                />
+
+              </>
+            )}
+
+
+            {/* =================================================
+                DATA
+            ================================================= */}
+
+            {isData && (
+              <>
+
+                <Box
+                  sx={{
+                    bgcolor: '#eaf8f2',
+                    borderRadius: 1.2,
+                    px: 0.8,
+                    py: 0.5,
+                    mb: 0.35,
+                  }}
+                >
+
+                  <Typography
+                    sx={{
+                      color: '#075c43',
+                      fontSize: 12.5,
+                      fontWeight: 850,
+                    }}
+                  >
+                    Data Purchase
+                  </Typography>
+
+                </Box>
+
+
+                <Row
+                  icon={
+                    <TagRounded />
+                  }
+                  label="Provider"
+                  value={
+                    provider ||
+                    'Provider unavailable'
+                  }
+                />
+
+
+                <Row
+                  icon={
+                    <PhoneRounded />
+                  }
+                  label="Phone Number"
+                  value={
+                    servicePhone ||
+                    'Phone unavailable'
+                  }
+                />
+
+
+                {dataPlan && (
+                  <Row
+                    icon={
+                      <TagRounded />
+                    }
+                    label="Data Plan"
+                    value={
+                      dataPlan
+                    }
+                  />
+                )}
+
+
+                <Row
+                  icon={
+                    <ArrowUpwardRounded />
+                  }
+                  label="Amount"
+                  value={
+                    formatMoney(
+                      numericAmount
+                    )
+                  }
+                />
+
+
+                {reference && (
+                  <Row
+                    icon={
+                      <TagRounded />
+                    }
+                    label="Reference"
+                    value={
+                      reference
+                    }
+                  />
+                )}
+
+
+                <Row
+                  icon={
+                    <CalendarMonthRounded />
+                  }
+                  label="Date & Time"
+                  value={
+                    formatDate(
+                      transactionDate
+                    )
+                  }
+                />
+
+
+                <Row
+                  icon={
+                    <CheckCircleRounded />
+                  }
+                  label="Status"
+                  valueNode={
+                    <Chip
+                      label={
+                        statusText
+                      }
+                      size="small"
+                      sx={{
+                        height: 20,
+                        bgcolor:
+                          statusBackground,
+                        color:
+                          statusColor,
+                        fontSize: 9,
+                        fontWeight: 850,
+                      }}
+                    />
+                  }
+                />
+
+              </>
+            )}
+
+
+            {/* =================================================
+                BILLS
+            ================================================= */}
+
+            {isBill && (
+              <>
+
+                <Box
+                  sx={{
+                    bgcolor: '#eaf8f2',
+                    borderRadius: 1.2,
+                    px: 0.8,
+                    py: 0.5,
+                    mb: 0.35,
+                  }}
+                >
+
+                  <Typography
+                    sx={{
+                      color: '#075c43',
+                      fontSize: 12.5,
+                      fontWeight: 850,
+                    }}
+                  >
+                    Bill Payment
+                  </Typography>
+
+                </Box>
+
+
+                <Row
+                  icon={
+                    <AccountBalanceRounded />
+                  }
+                  label="Provider"
+                  value={
+                    provider ||
+                    'Provider unavailable'
+                  }
+                />
+
+
+                {customerName && (
+                  <Row
+                    icon={
+                      <PersonRounded />
+                    }
+                    label="Customer"
+                    value={
+                      customerName
+                    }
+                  />
+                )}
+
+
+                {customerNumber && (
+                  <Row
+                    icon={
+                      <TagRounded />
+                    }
+                    label="Customer Number"
+                    value={
+                      customerNumber
+                    }
+                  />
+                )}
+
+
+                <Row
+                  icon={
+                    <ArrowUpwardRounded />
+                  }
+                  label="Amount"
+                  value={
+                    formatMoney(
+                      numericAmount
+                    )
+                  }
+                />
+
+
+                {reference && (
+                  <Row
+                    icon={
+                      <TagRounded />
+                    }
+                    label="Reference"
+                    value={
+                      reference
+                    }
+                  />
+                )}
+
+
+                <Row
+                  icon={
+                    <CalendarMonthRounded />
+                  }
+                  label="Date & Time"
+                  value={
+                    formatDate(
+                      transactionDate
+                    )
+                  }
+                />
+
+
+                <Row
+                  icon={
+                    <CheckCircleRounded />
+                  }
+                  label="Status"
+                  valueNode={
+                    <Chip
+                      label={
+                        statusText
+                      }
+                      size="small"
+                      sx={{
+                        height: 20,
+                        bgcolor:
+                          statusBackground,
+                        color:
+                          statusColor,
+                        fontSize: 9,
+                        fontWeight: 850,
+                      }}
+                    />
+                  }
+                />
+
+              </>
+            )}
+
+
+            {/* =================================================
+                OTHER TRANSACTIONS
+            ================================================= */}
+
+            {!isTransfer &&
+              !isAirtime &&
+              !isData &&
+              !isBill && (
+                <>
+
+                  <Box
+                    sx={{
+                      bgcolor: '#eaf8f2',
+                      borderRadius: 1.2,
+                      px: 0.8,
+                      py: 0.5,
+                      mb: 0.35,
+                    }}
+                  >
+
+                    <Typography
+                      sx={{
+                        color: '#075c43',
+                        fontSize: 12.5,
+                        fontWeight: 850,
+                      }}
+                    >
+                      Transaction Details
+                    </Typography>
+
+                  </Box>
+
+
+                  <Row
+                    icon={
+                      <ReceiptLongRounded />
+                    }
+                    label="Type"
+                    value={
+                      receiptTitle.replace(
+                        ' Receipt',
+                        ''
+                      )
+                    }
+                  />
+
+
+                  <Row
+                    icon={
+                      <ArrowUpwardRounded />
+                    }
+                    label="Amount"
+                    value={
+                      formatMoney(
+                        numericAmount
+                      )
+                    }
+                  />
+
+
+                  {reference && (
+                    <Row
+                      icon={
+                        <TagRounded />
+                      }
+                      label="Reference"
+                      value={
+                        reference
+                      }
+                    />
+                  )}
+
+
+                  <Row
+                    icon={
+                      <CalendarMonthRounded />
+                    }
+                    label="Date & Time"
+                    value={
+                      formatDate(
+                        transactionDate
+                      )
+                    }
+                  />
+
+
+                  <Row
+                    icon={
+                      <CheckCircleRounded />
+                    }
+                    label="Status"
+                    valueNode={
+                      <Chip
+                        label={
+                          statusText
+                        }
+                        size="small"
+                        sx={{
+                          height: 20,
+                          bgcolor:
+                            statusBackground,
+                          color:
+                            statusColor,
+                          fontSize: 9,
+                          fontWeight: 850,
+                        }}
+                      />
+                    }
+                  />
+
+                </>
+              )}
+
+          </Box>
+
+
+          {/* ==================================================
+              QR CODE
+          =================================================== */}
+
+          {reference && (
             <Box
               sx={{
                 textAlign: 'center',
-                px: 1.8,
-                pb: 1.25,
-                pt: 0.05,
+                pt: 0.35,
+                pb: 0.65,
               }}
             >
 
               <Box
                 sx={{
                   display: 'inline-flex',
-                  p: 0.8,
-                  bgcolor: '#ffffff',
+                  p: 0.45,
                   border:
-                    '1px solid #dce8e2',
-                  borderRadius: 1.5,
+                    '1px solid #d5e5de',
+                  borderRadius: 1.2,
+                  bgcolor: '#ffffff',
                 }}
               >
 
                 <QRCodeSVG
-                  value={qrValue}
-                  size={92}
+                  value={
+                    reference
+                  }
+                  size={82}
                   level="M"
                   includeMargin={false}
                 />
@@ -2514,212 +2207,190 @@ const TransactionReceipt: React.FC = () => {
 
               <Typography
                 sx={{
-                  mt: 0.5,
-                  color: '#52635c',
+                  mt: 0.25,
+                  color: '#687871',
                   fontSize: 8.5,
                   fontWeight: 650,
                 }}
               >
-                Scan to view transaction reference
+                Scan to verify this transaction
               </Typography>
 
 
-              {reference && (
-                <Typography
-                  sx={{
-                    mt: 0.15,
-                    color: '#087f5b',
-                    fontSize: 8,
-                    fontWeight: 750,
-                    wordBreak:
-                      'break-all',
-                  }}
-                >
-                  {reference}
-                </Typography>
-              )}
-
-            </Box>
-
-
-            {/* =================================================
-                NOTICE
-            ================================================== */}
-
-            <Box
-              sx={{
-                mx: 1.8,
-                mb: 1.15,
-                p: 0.85,
-                borderRadius: 1.5,
-                bgcolor: '#f4f8f6',
-                border:
-                  '1px solid #e1ebe6',
-              }}
-            >
-
               <Typography
                 sx={{
-                  color: '#52635c',
-                  fontSize: 9,
-                  lineHeight: 1.35,
-                  textAlign: 'center',
-                }}
-              >
-                Keep this receipt and transaction
-                reference for your records.
-              </Typography>
-
-            </Box>
-
-
-            {/* =================================================
-                APPROVED FOOTER
-            ================================================== */}
-
-            <Box
-              className="receipt-footer"
-              sx={{
-                bgcolor: '#075b42',
-                color: '#ffffff',
-                textAlign: 'center',
-                px: 1.5,
-                py: 1.1,
-              }}
-            >
-
-              <Typography
-                sx={{
-                  fontSize: 11.5,
+                  mt: 0.05,
+                  color: '#087f5b',
+                  fontSize: 8.2,
                   fontWeight: 800,
+                  wordBreak: 'break-all',
+                  px: 2,
                 }}
               >
-                Thanks for banking with us
+                {reference}
               </Typography>
 
             </Box>
-
-          </Card>
+          )}
 
 
           {/* ==================================================
-              ACTIONS
+              FOOTER
           =================================================== */}
 
-          <Stack
-            className="no-print"
-            spacing={0.8}
+          <Box
+            className="receipt-footer"
             sx={{
-              mt: 1.2,
+              bgcolor: '#075b42',
+              color: '#ffffff',
+              textAlign: 'center',
+              py: 0.7,
+              px: 1,
             }}
           >
 
-            <Stack
-              direction="row"
-              spacing={0.8}
+            <Typography
+              sx={{
+                fontSize: 10.5,
+                fontWeight: 800,
+                lineHeight: 1.1,
+              }}
             >
+              Thanks for banking with us
+              {' '}
+              ♡
+            </Typography>
 
-              <Button
-                fullWidth
-                variant="contained"
-                startIcon={
-                  <DownloadRounded />
-                }
-                onClick={
-                  handleDownloadPDF
-                }
-                disabled={
-                  pdfLoading
-                }
-                sx={{
-                  bgcolor: '#087f5b',
-                  borderRadius: 2,
-                  py: 0.95,
-                  fontSize: 12,
-                  fontWeight: 800,
-                  '&:hover': {
-                    bgcolor: '#066b4c',
-                  },
-                }}
-              >
-                {pdfLoading
-                  ? 'Preparing PDF...'
-                  : 'Download PDF'}
-              </Button>
+          </Box>
+
+        </Card>
 
 
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={
-                  <ShareRounded />
-                }
-                onClick={
-                  handleSharePDF
-                }
-                disabled={
-                  pdfLoading
-                }
-                sx={{
-                  borderColor:
-                    '#087f5b',
-                  color:
-                    '#087f5b',
-                  borderRadius: 2,
-                  py: 0.95,
-                  fontSize: 12,
-                  fontWeight: 800,
-                  '&:hover': {
-                    borderColor:
-                      '#066b4c',
-                    bgcolor:
-                      '#eaf8f2',
-                  },
-                }}
-              >
-                Share PDF
-              </Button>
+        {/* ====================================================
+            ACTION BUTTONS
+        ===================================================== */}
 
-            </Stack>
+        <Stack
+          className="no-print"
+          spacing={0.55}
+          sx={{
+            mt: 0.7,
+          }}
+        >
+
+          <Stack
+            direction="row"
+            spacing={0.55}
+          >
+
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={
+                <DownloadRounded
+                  sx={{
+                    fontSize: 17,
+                  }}
+                />
+              }
+              onClick={
+                handleDownloadPDF
+              }
+              disabled={
+                pdfLoading
+              }
+              sx={{
+                bgcolor: '#087f5b',
+                borderRadius: 1.6,
+                py: 0.7,
+                fontSize: 10.5,
+                fontWeight: 850,
+                minHeight: 38,
+                '&:hover': {
+                  bgcolor: '#066b4c',
+                },
+              }}
+            >
+              {pdfLoading
+                ? 'Preparing...'
+                : 'Download PDF'}
+            </Button>
 
 
             <Button
               fullWidth
               variant="outlined"
               startIcon={
-                <ArrowBackRounded />
+                <ShareRounded
+                  sx={{
+                    fontSize: 17,
+                  }}
+                />
               }
-              onClick={() =>
-                navigate(
-                  '/transactions'
-                )
+              onClick={
+                handleSharePDF
               }
               disabled={
                 pdfLoading
               }
               sx={{
-                borderColor:
-                  '#d2ded9',
-                color:
-                  '#42534c',
-                borderRadius: 2,
-                py: 0.9,
-                fontSize: 12,
-                fontWeight: 700,
+                borderColor: '#087f5b',
+                color: '#087f5b',
+                borderRadius: 1.6,
+                py: 0.7,
+                fontSize: 10.5,
+                fontWeight: 850,
+                minHeight: 38,
+                '&:hover': {
+                  borderColor: '#066b4c',
+                  bgcolor: '#eaf8f2',
+                },
               }}
             >
-              Back to Transactions
+              Share PDF
             </Button>
 
           </Stack>
 
-        </Box>
+
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={
+              <ArrowBackRounded
+                sx={{
+                  fontSize: 18,
+                }}
+              />
+            }
+            onClick={() =>
+              navigate(
+                '/transactions'
+              )
+            }
+            disabled={
+              pdfLoading
+            }
+            sx={{
+              borderColor: '#d2ded9',
+              color: '#42534c',
+              borderRadius: 1.6,
+              py: 0.65,
+              fontSize: 10.5,
+              fontWeight: 750,
+              minHeight: 36,
+            }}
+          >
+            Back to Transactions
+          </Button>
+
+        </Stack>
 
       </Box>
 
 
       {/* ======================================================
-          PRINT STYLES
+          PRINT
       ======================================================= */}
 
       <style>
@@ -2777,104 +2448,10 @@ const TransactionReceipt: React.FC = () => {
           }
         `}
       </style>
-    </>
+
+    </Box>
   );
 };
-
-
-/*
- * ============================================================
- * REFERENCE VALUE
- * ============================================================
- */
-
-const ReferenceValue = ({
-  reference,
-  onCopy,
-}: {
-  reference: string;
-  onCopy: () => void;
-}) => (
-
-  <Stack
-    direction="row"
-    spacing={0.4}
-    alignItems="center"
-    justifyContent="flex-end"
-    sx={{
-      minWidth: 0,
-    }}
-  >
-
-    <Typography
-      sx={{
-        color: '#10221c',
-        fontSize: 10.5,
-        fontWeight: 650,
-        wordBreak: 'break-all',
-        textAlign: 'right',
-      }}
-    >
-      {reference}
-    </Typography>
-
-
-    <Button
-      className="no-print"
-      onClick={onCopy}
-      aria-label="Copy transaction reference"
-      sx={{
-        minWidth: 25,
-        width: 25,
-        height: 25,
-        p: 0,
-        borderRadius: 1,
-        color: '#087f5b',
-        flexShrink: 0,
-      }}
-    >
-      <ContentCopyRounded
-        sx={{
-          fontSize: 14,
-        }}
-      />
-    </Button>
-
-  </Stack>
-);
-
-
-/*
- * ============================================================
- * STATUS CHIP
- * ============================================================
- */
-
-const StatusChip = ({
-  label,
-  background,
-  color,
-}: {
-  label: string;
-  background: string;
-  color: string;
-}) => (
-
-  <Chip
-    label={label}
-    size="small"
-    sx={{
-      justifySelf: 'end',
-      bgcolor: background,
-      color,
-      fontWeight: 800,
-      borderRadius: 1.3,
-      height: 23,
-      fontSize: 10,
-    }}
-  />
-
-);
 
 
 export default TransactionReceipt;
