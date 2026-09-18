@@ -17,6 +17,44 @@ const generateReference = () => {
 
 /*
  * ============================================================
+ * CALCULATE ZENIMONIES TRANSFER FEE
+ * ============================================================
+ *
+ * ₦20 - ₦999       = ₦0
+ * ₦1,000 - ₦9,999  = ₦20
+ * ₦10,000 - ₦99,999 = ₦56
+ * ₦100,000+        = ₦75
+ *
+ * IMPORTANT:
+ * The backend is the source of truth for the fee.
+ * The frontend must never be trusted to provide the fee.
+ */
+
+const calculateTransferFee = (amount) => {
+  const transferAmount = Number(amount);
+
+  if (!Number.isFinite(transferAmount)) {
+    return 0;
+  }
+
+  if (transferAmount < 1000) {
+    return 0;
+  }
+
+  if (transferAmount < 10000) {
+    return 20;
+  }
+
+  if (transferAmount < 100000) {
+    return 56;
+  }
+
+  return 75;
+};
+
+
+/*
+ * ============================================================
  * FIND ZENIMONIES USER BY PHONE NUMBER
  * ============================================================
  */
@@ -211,14 +249,37 @@ const transferToZenimoniesUser = async (
 
     const transferAmount = Number(amount);
 
+    /*
+     * Minimum transfer is ₦20.
+     */
+
     if (
       !Number.isFinite(transferAmount) ||
-      transferAmount <= 0
+      transferAmount < 20
     ) {
       return res.status(400).json({
         success: false,
         message:
-          'Transfer amount must be greater than zero',
+          'Minimum transfer amount is ₦20',
+      });
+    }
+
+    /*
+     * Prevent invalid decimal amounts beyond 2 places.
+     *
+     * Money is stored in NGN with two decimal places.
+     */
+
+    if (
+      Math.round(
+        transferAmount * 100
+      ) !==
+      transferAmount * 100
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Transfer amount can have a maximum of two decimal places',
       });
     }
 
@@ -229,6 +290,20 @@ const transferToZenimoniesUser = async (
           'Transfer amount is too large',
       });
     }
+
+    /*
+     * --------------------------------------------------------
+     * CALCULATE TRANSFER FEE
+     * --------------------------------------------------------
+     *
+     * The server calculates this independently.
+     */
+
+    const transactionFee =
+      calculateTransferFee(transferAmount);
+
+    const totalDebit =
+      transferAmount + transactionFee;
 
     /*
      * --------------------------------------------------------
@@ -309,10 +384,14 @@ const transferToZenimoniesUser = async (
      * --------------------------------------------------------
      * CHECK BALANCE
      * --------------------------------------------------------
+     *
+     * The sender must have enough for:
+     *
+     * transfer amount + transfer fee
      */
 
     if (
-      senderBalance < transferAmount
+      senderBalance < totalDebit
     ) {
       await client.query('ROLLBACK');
       transactionStarted = false;
@@ -320,7 +399,13 @@ const transferToZenimoniesUser = async (
       return res.status(400).json({
         success: false,
         message:
-          'Insufficient account balance',
+          `Insufficient account balance. You need ₦${totalDebit.toLocaleString(
+            'en-NG',
+            {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }
+          )} including the transfer fee.`,
       });
     }
 
@@ -460,22 +545,26 @@ const transferToZenimoniesUser = async (
      * --------------------------------------------------------
      * CALCULATE BALANCES
      * --------------------------------------------------------
+     *
+     * IMPORTANT:
+     *
+     * Sender loses:
+     *
+     *   transfer amount + fee
+     *
+     * Recipient receives:
+     *
+     *   transfer amount only
      */
 
     const senderNewBalance =
-      senderBalance - transferAmount;
+      senderBalance - totalDebit;
 
     const recipientOldBalance =
       Number(recipientAccount.balance);
 
     const recipientNewBalance =
       recipientOldBalance + transferAmount;
-
-    /*
-     * Transaction fee is currently zero.
-     */
-
-    const transactionFee = 0;
 
     const reference =
       generateReference();
@@ -520,6 +609,13 @@ const transferToZenimoniesUser = async (
      * --------------------------------------------------------
      * SENDER TRANSACTION
      * --------------------------------------------------------
+     *
+     * The transaction amount remains the actual amount
+     * sent to the recipient.
+     *
+     * The transaction_fee column contains the Zenimonies fee.
+     *
+     * The balance_after reflects the total amount deducted.
      */
 
     await client.query(
@@ -532,7 +628,8 @@ const transferToZenimoniesUser = async (
         description,
         status,
         balance_before,
-        balance_after
+        balance_after,
+        transaction_fee
       )
       VALUES (
         $1,
@@ -543,17 +640,25 @@ const transferToZenimoniesUser = async (
         $4,
         'completed',
         $5,
-        $6
+        $6,
+        $7
       )`,
       [
         senderAccount.id,
+
         transferAmount,
+
         reference,
+
         narration
           ? String(narration).trim()
           : `Transfer to ${recipientUser.full_name}`,
+
         senderBalance,
+
         senderNewBalance,
+
+        transactionFee,
       ]
     );
 
@@ -561,6 +666,10 @@ const transferToZenimoniesUser = async (
      * --------------------------------------------------------
      * RECIPIENT TRANSACTION
      * --------------------------------------------------------
+     *
+     * Recipient receives the transfer amount.
+     *
+     * Recipient does NOT pay the sender's transfer fee.
      */
 
     const recipientReference =
@@ -576,7 +685,8 @@ const transferToZenimoniesUser = async (
         description,
         status,
         balance_before,
-        balance_after
+        balance_after,
+        transaction_fee
       )
       VALUES (
         $1,
@@ -587,15 +697,23 @@ const transferToZenimoniesUser = async (
         $4,
         'completed',
         $5,
-        $6
+        $6,
+        $7
       )`,
       [
         recipientAccount.id,
+
         transferAmount,
+
         recipientReference,
+
         `Money received from Zenimonies user ${senderUserId}`,
+
         recipientOldBalance,
+
         recipientNewBalance,
+
+        0,
       ]
     );
 
@@ -604,16 +722,13 @@ const transferToZenimoniesUser = async (
      * BANK TRANSFER RECORD
      * --------------------------------------------------------
      *
-     * IMPORTANT:
-     *
      * recipient_phone contains the ACTUAL phone number
      * used to identify the recipient.
      *
-     * recipient_account_number is intentionally retained
-     * in the database for existing/historical compatibility.
+     * recipient_account_number remains null because the
+     * phone number is the internal transfer identifier.
      *
-     * It is NOT returned to the frontend.
-     * It is NOT used to identify the recipient.
+     * The account number is NOT exposed to the frontend.
      */
 
     await client.query(
@@ -650,10 +765,6 @@ const transferToZenimoniesUser = async (
 
         recipientUser.full_name,
 
-        /*
-         * Kept only for existing database compatibility.
-         * This value is not exposed to the frontend.
-         */
         null,
 
         recipientUser.phone,
@@ -671,6 +782,68 @@ const transferToZenimoniesUser = async (
         reference,
       ]
     );
+
+    /*
+     * --------------------------------------------------------
+     * RECORD TRANSFER FEE
+     * --------------------------------------------------------
+     *
+     * The fee belongs to Zenimonies.
+     *
+     * We record it separately so it can be accounted for
+     * without giving the fee to the recipient.
+     *
+     * IMPORTANT:
+     *
+     * This uses the existing transactions table.
+     */
+
+    if (transactionFee > 0) {
+      const feeReference =
+        `${reference}-FEE`;
+
+      await client.query(
+        `INSERT INTO transactions (
+          account_id,
+          type,
+          amount,
+          currency,
+          reference,
+          description,
+          status,
+          balance_before,
+          balance_after,
+          transaction_fee
+        )
+        VALUES (
+          $1,
+          'transfer_fee',
+          $2,
+          'NGN',
+          $3,
+          $4,
+          'completed',
+          $5,
+          $6,
+          $7
+        )`,
+        [
+          senderAccount.id,
+
+          transactionFee,
+
+          feeReference,
+
+          `Zenimonies transfer fee for ${reference}`,
+
+          senderNewBalance + transactionFee,
+
+          senderNewBalance,
+
+          transactionFee,
+        ]
+      );
+    }
 
     /*
      * --------------------------------------------------------
@@ -695,7 +868,9 @@ const transferToZenimoniesUser = async (
       )`,
       [
         recipientUser.id,
+
         'Money received',
+
         `You received ₦${transferAmount.toLocaleString(
           'en-NG',
           {
@@ -703,6 +878,7 @@ const transferToZenimoniesUser = async (
             maximumFractionDigits: 2,
           }
         )} from a Zenimonies user.`,
+
         'transfer',
       ]
     );
@@ -720,13 +896,6 @@ const transferToZenimoniesUser = async (
      * --------------------------------------------------------
      * RESPONSE
      * --------------------------------------------------------
-     *
-     * IMPORTANT:
-     *
-     * The recipient is represented by their REAL phone
-     * number.
-     *
-     * The internal account number is NOT returned.
      */
 
     return res.status(201).json({
@@ -752,6 +921,9 @@ const transferToZenimoniesUser = async (
 
         transaction_fee:
           transactionFee,
+
+        total_debit:
+          totalDebit,
 
         currency:
           'NGN',
@@ -796,4 +968,5 @@ const transferToZenimoniesUser = async (
 module.exports = {
   findUserByPhone,
   transferToZenimoniesUser,
+  calculateTransferFee,
 };
