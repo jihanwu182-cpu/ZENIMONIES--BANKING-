@@ -1,4 +1,4 @@
-import React, {
+himport React, {
   useRef,
   useState,
 } from 'react';
@@ -1083,36 +1083,6 @@ const TransactionReceipt: React.FC = () => {
     }
   };
 
-        /*
-         * Browser does not support PDF file sharing.
-         * Download the real PDF instead.
-         */
-
-        doc.save(
-          getSafeFileName()
-        );
-
-
-        alert(
-          'PDF sharing is not supported by this browser, so the receipt was downloaded instead.'
-        );
-
-      } catch (error) {
-
-        console.error(
-          'Receipt PDF sharing failed:',
-          error
-        );
-
-        alert(
-          'Unable to share the PDF receipt. Please try again.'
-        );
-
-      } finally {
-
-        setPdfLoading(false);
-      }
-    };
 
   /*
    * ============================================================
