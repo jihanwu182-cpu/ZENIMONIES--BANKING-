@@ -248,6 +248,8 @@ CREATE TABLE IF NOT EXISTS transactions (
 
     balance_after NUMERIC(18,2),
 
+    transaction_fee NUMERIC(18,2) NOT NULL DEFAULT 0.00,
+    
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
