@@ -1083,7 +1083,6 @@ const TransactionReceipt: React.FC = () => {
     }
   };
 
-
         /*
          * Browser does not support PDF file sharing.
          * Download the real PDF instead.
@@ -1114,7 +1113,6 @@ const TransactionReceipt: React.FC = () => {
         setPdfLoading(false);
       }
     };
-
 
   /*
    * ============================================================
