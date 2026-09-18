@@ -83,6 +83,12 @@ const isValidNigerianPhone = (
 };
 
 
+/*
+ * ============================================================
+ * PROVIDER STATUS
+ * ============================================================
+ */
+
 const getProviderStatus = (
   response
 ) => {
@@ -149,6 +155,12 @@ const getProviderStatus = (
 };
 
 
+/*
+ * ============================================================
+ * PROVIDER REFERENCE
+ * ============================================================
+ */
+
 const getProviderReference = (
   response,
   fallback
@@ -165,6 +177,12 @@ const getProviderReference = (
   );
 };
 
+
+/*
+ * ============================================================
+ * COMMISSION DETAILS
+ * ============================================================
+ */
 
 const getCommissionDetails = (
   response
@@ -600,7 +618,23 @@ const buyAirtime = async (
 
     try {
 
-      providerResponse =
+      /*
+       * IMPORTANT:
+       *
+       * purchaseAirtime() returns:
+       *
+       * {
+       *   response,
+       *   requestId,
+       *   network,
+       *   serviceID
+       * }
+       *
+       * The actual VTpass response is inside
+       * providerResult.response.
+       */
+
+      const providerResult =
         await purchaseAirtime({
           network:
             normalizedNetwork,
@@ -615,6 +649,10 @@ const buyAirtime = async (
             providerRequestId,
         });
 
+
+      providerResponse =
+        providerResult.response;
+
     } catch (providerError) {
 
       /*
@@ -625,7 +663,8 @@ const buyAirtime = async (
        *
        * Therefore we DO NOT automatically refund here.
        *
-       * The transaction stays pending and can be re-queried.
+       * The transaction stays pending and can later be
+       * re-queried.
        */
 
       console.error(
