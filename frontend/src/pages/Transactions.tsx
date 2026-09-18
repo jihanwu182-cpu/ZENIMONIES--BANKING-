@@ -22,7 +22,6 @@ import {
 } from '@mui/material';
 
 import {
-  AccountBalanceRounded,
   AccountBalanceWalletRounded,
   ArrowDownwardRounded,
   ArrowUpwardRounded,
@@ -43,6 +42,12 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 
+/*
+ * ============================================================
+ * TRANSACTION TYPE
+ * ============================================================
+ */
+
 interface Transaction {
   id: string | number;
 
@@ -62,17 +67,25 @@ interface Transaction {
 
   recipient_name?: string;
 
+  recipient_phone?: string;
+
   recipient_account?: string;
 
   recipient_bank?: string;
 
   sender_name?: string;
 
+  sender_phone?: string;
+
   sender_account?: string;
 
   balance_before?: number;
 
   balance_after?: number;
+
+  transaction_fee?: number;
+
+  total_debit?: number;
 }
 
 
@@ -80,9 +93,14 @@ const API_URL =
   'https://zenimonies-banking.onrender.com';
 
 
+/*
+ * ============================================================
+ * COMPONENT
+ * ============================================================
+ */
+
 const Transactions: React.FC = () => {
   const navigate = useNavigate();
-
 
   const [transactions, setTransactions] =
     useState<Transaction[]>([]);
@@ -110,6 +128,7 @@ const Transactions: React.FC = () => {
 
   const [requeryMessage, setRequeryMessage] =
     useState('');
+
 
   /*
    * ============================================================
@@ -160,7 +179,9 @@ const Transactions: React.FC = () => {
       } else if (
         Array.isArray(data?.transactions)
       ) {
-        setTransactions(data.transactions);
+        setTransactions(
+          data.transactions
+        );
       } else {
         setTransactions([]);
       }
@@ -170,6 +191,25 @@ const Transactions: React.FC = () => {
         'Failed to load transactions:',
         err
       );
+
+      if (
+        err?.response?.status === 401
+      ) {
+        localStorage.removeItem(
+          'zenimonies_token'
+        );
+
+        localStorage.removeItem(
+          'token'
+        );
+
+        localStorage.removeItem(
+          'access_token'
+        );
+
+        navigate('/login');
+        return;
+      }
 
       setError(
         err?.response?.data?.message ||
@@ -189,6 +229,41 @@ const Transactions: React.FC = () => {
 
   /*
    * ============================================================
+   * MONEY AMOUNT NORMALIZATION
+   * ============================================================
+   *
+   * IMPORTANT:
+   *
+   * The database may contain:
+   *
+   *   1000
+   *
+   * or
+   *
+   *   -1000
+   *
+   * The transaction direction is determined by the
+   * transaction TYPE, not by the sign stored in amount.
+   *
+   * Therefore the UI always uses the ABSOLUTE amount.
+   */
+
+  const getAbsoluteAmount = (
+    transaction: Transaction
+  ) => {
+    const value =
+      Number(transaction.amount);
+
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+
+    return Math.abs(value);
+  };
+
+
+  /*
+   * ============================================================
    * CURRENCY
    * ============================================================
    */
@@ -200,6 +275,11 @@ const Transactions: React.FC = () => {
     const selectedCurrency =
       currency || 'NGN';
 
+    const safeAmount =
+      Math.abs(
+        Number(amount || 0)
+      );
+
     try {
       return new Intl.NumberFormat(
         selectedCurrency === 'ZAR'
@@ -207,17 +287,17 @@ const Transactions: React.FC = () => {
           : 'en-NG',
         {
           style: 'currency',
-          currency: selectedCurrency,
+          currency:
+            selectedCurrency,
           minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
         }
       ).format(
-        Number(amount || 0)
+        safeAmount
       );
 
     } catch {
-      return `${selectedCurrency} ${Number(
-        amount || 0
-      ).toFixed(2)}`;
+      return `${selectedCurrency} ${safeAmount.toFixed(2)}`;
     }
   };
 
@@ -246,13 +326,15 @@ const Transactions: React.FC = () => {
   const getDescription = (
     transaction: Transaction
   ) => {
-    if (transaction.description) {
+    if (
+      transaction.description &&
+      transaction.description.trim()
+    ) {
       return transaction.description;
     }
 
     const type =
       getType(transaction);
-
 
     if (
       type.includes('deposit') ||
@@ -261,37 +343,52 @@ const Transactions: React.FC = () => {
       return 'Account Funding';
     }
 
+    if (
+      type ===
+        'internal_transfer_received' ||
+      type.includes('received')
+    ) {
+      return 'Money Received';
+    }
 
     if (
-      type.includes('internal') ||
-      type.includes('zenimonies')
+      type ===
+        'internal_transfer'
     ) {
       return 'Zenimonies Transfer';
     }
 
-
     if (
-      type.includes('bank') ||
-      type.includes('transfer')
+      type.includes('transfer') ||
+      type.includes('bank')
     ) {
       return 'Bank Transfer';
     }
 
-
-    if (type.includes('airtime')) {
+    if (
+      type.includes('airtime')
+    ) {
       return 'Airtime Purchase';
     }
 
-
-    if (type.includes('data')) {
+    if (
+      type.includes('data')
+    ) {
       return 'Mobile Data';
     }
 
-
-    if (type.includes('bill')) {
+    if (
+      type.includes('bill')
+    ) {
       return 'Bill Payment';
     }
 
+    if (
+      type.includes('refund') ||
+      type.includes('reversal')
+    ) {
+      return 'Transaction Reversal';
+    }
 
     return String(
       transaction.type ||
@@ -310,6 +407,13 @@ const Transactions: React.FC = () => {
    * ============================================================
    * CREDIT / DEBIT
    * ============================================================
+   *
+   * VERY IMPORTANT:
+   *
+   * We determine whether money came IN or went OUT from
+   * the transaction type.
+   *
+   * We DO NOT use the numeric sign of amount.
    */
 
   const isCredit = (
@@ -324,18 +428,58 @@ const Transactions: React.FC = () => {
         ''
       ).toLowerCase();
 
-    return (
+
+    /*
+     * Explicit incoming transaction types.
+     */
+
+    if (
+      type ===
+        'internal_transfer_received' ||
+      type.includes('received')
+    ) {
+      return true;
+    }
+
+
+    if (
       type.includes('deposit') ||
-      type.includes('credit') ||
       type.includes('funding') ||
+      type.includes('credit')
+    ) {
+      return true;
+    }
+
+
+    if (
       type.includes('refund') ||
-      type.includes('received') ||
+      type.includes('reversal')
+    ) {
+      return true;
+    }
+
+
+    /*
+     * Description-based fallback.
+     */
+
+    if (
+      description.includes('money received') ||
+      description.includes('received') ||
       description.includes('deposit') ||
-      description.includes('credit') ||
       description.includes('funding') ||
       description.includes('refund') ||
-      description.includes('received')
-    );
+      description.includes('reversal')
+    ) {
+      return true;
+    }
+
+
+    /*
+     * Everything else is outgoing.
+     */
+
+    return false;
   };
 
 
@@ -511,7 +655,8 @@ const Transactions: React.FC = () => {
     if (
       status === 'completed' ||
       status === 'success' ||
-      status === 'successful'
+      status === 'successful' ||
+      status === 'delivered'
     ) {
       return {
         background: '#E8F8F1',
@@ -531,12 +676,16 @@ const Transactions: React.FC = () => {
     if (
       status === 'failed' ||
       status === 'cancelled' ||
-      status === 'canceled'
+      status === 'canceled' ||
+      status === 'reversed'
     ) {
       return {
         background: '#FDECEC',
         color: '#D93636',
-        label: 'Failed',
+        label:
+          status === 'reversed'
+            ? 'Reversed'
+            : 'Failed',
         icon: (
           <ErrorRounded
             sx={{
@@ -702,6 +851,7 @@ const Transactions: React.FC = () => {
 
       return transactions.filter(
         (transaction) => {
+
           const matchesCategory =
             category === 'all' ||
             getCategory(
@@ -718,7 +868,8 @@ const Transactions: React.FC = () => {
 
           const normalizedStatus =
             rawStatus === 'success' ||
-            rawStatus === 'successful'
+            rawStatus === 'successful' ||
+            rawStatus === 'delivered'
               ? 'completed'
               : rawStatus;
 
@@ -737,9 +888,11 @@ const Transactions: React.FC = () => {
             transaction.type,
             transaction.reference,
             transaction.recipient_name,
+            transaction.recipient_phone,
             transaction.recipient_account,
             transaction.recipient_bank,
             transaction.sender_name,
+            transaction.sender_phone,
             transaction.sender_account,
             transaction.status,
           ]
@@ -779,16 +932,17 @@ const Transactions: React.FC = () => {
   const moneyIn =
     useMemo(() => {
       return filteredTransactions
-        .filter(isCredit)
+        .filter(
+          isCredit
+        )
         .reduce(
           (
             total,
             transaction
           ) =>
             total +
-            Number(
-              transaction.amount ||
-              0
+            getAbsoluteAmount(
+              transaction
             ),
           0
         );
@@ -818,9 +972,8 @@ const Transactions: React.FC = () => {
             transaction
           ) =>
             total +
-            Number(
-              transaction.amount ||
-              0
+            getAbsoluteAmount(
+              transaction
             ),
           0
         );
@@ -873,6 +1026,12 @@ const Transactions: React.FC = () => {
   };
 
 
+  /*
+   * ============================================================
+   * RECEIPT
+   * ============================================================
+   */
+
   const handleOpenReceipt = (
     transaction: Transaction
   ) => {
@@ -891,10 +1050,22 @@ const Transactions: React.FC = () => {
   };
 
 
+  /*
+   * ============================================================
+   * PRINT / PDF
+   * ============================================================
+   */
+
   const handlePrint = () => {
     window.print();
   };
 
+
+  /*
+   * ============================================================
+   * COPY REFERENCE
+   * ============================================================
+   */
 
   const copyReference = async (
     reference?: string
@@ -917,7 +1088,7 @@ const Transactions: React.FC = () => {
 
   /*
    * ============================================================
-   * CHECK AIRTIME STATUS
+   * AIRTIME REQUERY
    * ============================================================
    */
 
@@ -931,7 +1102,8 @@ const Transactions: React.FC = () => {
       return;
     }
 
-    const token = getToken();
+    const token =
+      getToken();
 
     if (!token) {
       navigate('/login');
@@ -953,7 +1125,8 @@ const Transactions: React.FC = () => {
           {},
           {
             headers: {
-              Authorization: `Bearer ${token}`,
+              Authorization:
+                `Bearer ${token}`,
             },
           }
         );
@@ -966,67 +1139,62 @@ const Transactions: React.FC = () => {
           result?.status || ''
         ).toLowerCase();
 
-      /*
-       * Update the transaction currently
-       * open in the dialog immediately.
-       */
 
-      if (
-        returnedStatus === 'completed' ||
-        returnedStatus === 'success' ||
-        returnedStatus === 'successful'
-      ) {
-        setSelectedTransaction(
-          (previous) =>
-            previous
-              ? {
-                  ...previous,
-                  status:
-                    'completed',
-                }
-              : previous
-        );
-      }
+      setSelectedTransaction(
+        (previous) => {
+          if (!previous) {
+            return previous;
+          }
 
-      if (
-        returnedStatus === 'failed'
-      ) {
-        setSelectedTransaction(
-          (previous) =>
-            previous
-              ? {
-                  ...previous,
-                  status:
-                    'failed',
-                }
-              : previous
-        );
-      }
+          if (
+            returnedStatus ===
+              'completed' ||
+            returnedStatus ===
+              'success' ||
+            returnedStatus ===
+              'successful' ||
+            returnedStatus ===
+              'delivered'
+          ) {
+            return {
+              ...previous,
+              status:
+                'completed',
+            };
+          }
 
-      if (
-        returnedStatus === 'pending'
-      ) {
-        setSelectedTransaction(
-          (previous) =>
-            previous
-              ? {
-                  ...previous,
-                  status:
-                    'pending',
-                }
-              : previous
-        );
-      }
+          if (
+            returnedStatus ===
+            'failed'
+          ) {
+            return {
+              ...previous,
+              status:
+                'failed',
+            };
+          }
+
+          if (
+            returnedStatus ===
+            'pending'
+          ) {
+            return {
+              ...previous,
+              status:
+                'pending',
+            };
+          }
+
+          return previous;
+        }
+      );
+
 
       setRequeryMessage(
         result?.message ||
         'Transaction status checked successfully.'
       );
 
-      /*
-       * Refresh the full transaction history
-       * so the transaction list also updates.
-       */
 
       await loadTransactions();
 
@@ -1071,30 +1239,28 @@ const Transactions: React.FC = () => {
         background:
           'linear-gradient(180deg, #F1FAF6 0px, #F7F9F8 330px)',
 
-        pb: 7,
+        pb: 6,
       }}
     >
 
-      {/* ======================================================
-          HEADER
-      ======================================================= */}
+      {/* HEADER */}
 
       <Box
         className="transaction-print-header"
         sx={{
           pt: {
-            xs: 2,
-            sm: 3,
+            xs: 1.5,
+            sm: 2.5,
           },
 
-          pb: 2,
+          pb: 1.5,
         }}
       >
         <Container
           maxWidth="md"
           sx={{
             px: {
-              xs: 2,
+              xs: 1.5,
               sm: 3,
             },
           }}
@@ -1111,25 +1277,14 @@ const Transactions: React.FC = () => {
                 navigate(-1)
               }
               sx={{
-                width: 44,
-                height: 44,
-
-                background:
-                  '#FFFFFF',
-
-                color:
-                  '#18231F',
-
+                width: 42,
+                height: 42,
+                background: '#FFFFFF',
+                color: '#18231F',
                 border:
                   '1px solid rgba(0,0,0,0.05)',
-
                 boxShadow:
                   '0 5px 16px rgba(20,50,40,0.06)',
-
-                '&:hover': {
-                  background:
-                    '#FFFFFF',
-                },
               }}
             >
               <ChevronRightRounded
@@ -1146,19 +1301,14 @@ const Transactions: React.FC = () => {
                 textAlign: 'center',
               }}
             >
-
               <Typography
                 sx={{
                   fontSize: {
-                    xs: 21,
-                    sm: 25,
+                    xs: 19,
+                    sm: 24,
                   },
-
                   fontWeight: 900,
-
-                  color:
-                    '#14221D',
-
+                  color: '#14221D',
                   letterSpacing:
                     '-0.5px',
                 }}
@@ -1166,45 +1316,29 @@ const Transactions: React.FC = () => {
                 Transaction History
               </Typography>
 
-
               <Typography
                 sx={{
-                  fontSize: 12,
-
-                  color:
-                    '#7D8984',
-
-                  mt: 0.3,
+                  fontSize: 11,
+                  color: '#7D8984',
+                  mt: 0.2,
                 }}
               >
                 Your complete money trail
               </Typography>
-
             </Box>
 
 
             <IconButton
               onClick={handlePrint}
               sx={{
-                width: 44,
-                height: 44,
-
-                background:
-                  '#FFFFFF',
-
-                color:
-                  '#008C68',
-
+                width: 42,
+                height: 42,
+                background: '#FFFFFF',
+                color: '#008C68',
                 border:
                   '1px solid rgba(0,0,0,0.05)',
-
                 boxShadow:
                   '0 5px 16px rgba(20,50,40,0.06)',
-
-                '&:hover': {
-                  background:
-                    '#FFFFFF',
-                },
               }}
             >
               <DownloadRounded />
@@ -1220,44 +1354,33 @@ const Transactions: React.FC = () => {
         maxWidth="md"
         sx={{
           px: {
-            xs: 2,
+            xs: 1.5,
             sm: 3,
           },
         }}
       >
 
-        {/* ====================================================
-            SUMMARY
-        ===================================================== */}
+        {/* SUMMARY */}
 
         <Card
           sx={{
-            borderRadius: 5,
-
-            overflow:
-              'hidden',
-
+            borderRadius: 4,
+            overflow: 'hidden',
             background:
               'linear-gradient(135deg, #063F31 0%, #087A4B 58%, #00A875 100%)',
-
-            color:
-              '#FFFFFF',
-
+            color: '#FFFFFF',
             boxShadow:
-              '0 16px 35px rgba(0,104,75,0.18)',
-
-            mb: 2.2,
-
-            border:
-              'none',
+              '0 14px 30px rgba(0,104,75,0.16)',
+            mb: 1.7,
+            border: 'none',
           }}
         >
 
           <Box
             sx={{
               p: {
-                xs: 2.5,
-                sm: 3,
+                xs: 2,
+                sm: 2.7,
               },
             }}
           >
@@ -1272,18 +1395,18 @@ const Transactions: React.FC = () => {
 
                 <Stack
                   direction="row"
-                  spacing={1}
+                  spacing={0.7}
                   alignItems="center"
                 >
                   <AccountBalanceWalletRounded
                     sx={{
-                      fontSize: 20,
+                      fontSize: 18,
                     }}
                   />
 
                   <Typography
                     sx={{
-                      fontSize: 13,
+                      fontSize: 12,
                       opacity: 0.78,
                       fontWeight: 600,
                     }}
@@ -1292,29 +1415,22 @@ const Transactions: React.FC = () => {
                   </Typography>
                 </Stack>
 
-
                 <Typography
                   sx={{
                     fontSize: {
-                      xs: 25,
-                      sm: 30,
+                      xs: 24,
+                      sm: 28,
                     },
-
                     fontWeight: 900,
-
-                    mt: 1,
-
-                    letterSpacing:
-                      '-0.7px',
+                    mt: 0.6,
                   }}
                 >
                   {filteredTransactions.length}
                 </Typography>
 
-
                 <Typography
                   sx={{
-                    fontSize: 13,
+                    fontSize: 12,
                     opacity: 0.75,
                   }}
                 >
@@ -1326,22 +1442,14 @@ const Transactions: React.FC = () => {
 
               <Box
                 sx={{
-                  width: 45,
-                  height: 45,
-
-                  borderRadius:
-                    '50%',
-
+                  width: 42,
+                  height: 42,
+                  borderRadius: '50%',
                   background:
                     'rgba(255,255,255,0.13)',
-
                   display: 'flex',
-
-                  alignItems:
-                    'center',
-
-                  justifyContent:
-                    'center',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
                 <ReceiptLongRounded />
@@ -1352,23 +1460,19 @@ const Transactions: React.FC = () => {
 
             <Stack
               direction="row"
-              spacing={1.2}
+              spacing={1}
               sx={{
-                mt: 3,
+                mt: 2,
               }}
             >
 
               <Box
                 sx={{
                   flex: 1,
-
-                  p: 1.5,
-
-                  borderRadius: 3,
-
+                  p: 1.2,
+                  borderRadius: 2.5,
                   background:
                     'rgba(255,255,255,0.10)',
-
                   border:
                     '1px solid rgba(255,255,255,0.08)',
                 }}
@@ -1376,38 +1480,33 @@ const Transactions: React.FC = () => {
 
                 <Stack
                   direction="row"
-                  spacing={0.7}
+                  spacing={0.5}
                   alignItems="center"
                 >
-
                   <ArrowDownwardRounded
                     sx={{
-                      fontSize: 17,
+                      fontSize: 16,
                     }}
                   />
 
                   <Typography
                     sx={{
-                      fontSize: 11,
+                      fontSize: 10,
                       opacity: 0.75,
                     }}
                   >
                     Money in
                   </Typography>
-
                 </Stack>
-
 
                 <Typography
                   sx={{
                     fontWeight: 800,
-
                     fontSize: {
-                      xs: 14,
-                      sm: 16,
+                      xs: 13,
+                      sm: 15,
                     },
-
-                    mt: 0.6,
+                    mt: 0.4,
                   }}
                 >
                   {formatAmount(
@@ -1421,14 +1520,10 @@ const Transactions: React.FC = () => {
               <Box
                 sx={{
                   flex: 1,
-
-                  p: 1.5,
-
-                  borderRadius: 3,
-
+                  p: 1.2,
+                  borderRadius: 2.5,
                   background:
                     'rgba(255,255,255,0.10)',
-
                   border:
                     '1px solid rgba(255,255,255,0.08)',
                 }}
@@ -1436,38 +1531,33 @@ const Transactions: React.FC = () => {
 
                 <Stack
                   direction="row"
-                  spacing={0.7}
+                  spacing={0.5}
                   alignItems="center"
                 >
-
                   <ArrowUpwardRounded
                     sx={{
-                      fontSize: 17,
+                      fontSize: 16,
                     }}
                   />
 
                   <Typography
                     sx={{
-                      fontSize: 11,
+                      fontSize: 10,
                       opacity: 0.75,
                     }}
                   >
                     Money out
                   </Typography>
-
                 </Stack>
-
 
                 <Typography
                   sx={{
                     fontWeight: 800,
-
                     fontSize: {
-                      xs: 14,
-                      sm: 16,
+                      xs: 13,
+                      sm: 15,
                     },
-
-                    mt: 0.6,
+                    mt: 0.4,
                   }}
                 >
                   {formatAmount(
@@ -1480,63 +1570,40 @@ const Transactions: React.FC = () => {
             </Stack>
 
           </Box>
-
         </Card>
 
 
-        {/* ====================================================
-            SEARCH
-        ===================================================== */}
+        {/* SEARCH */}
 
         <TextField
           fullWidth
-
           value={search}
-
           onChange={(event) =>
             setSearch(
               event.target.value
             )
           }
-
           placeholder="Search transactions..."
-
           variant="outlined"
-
           sx={{
-            mb: 1.5,
+            mb: 1.2,
+            background: '#FFFFFF',
+            borderRadius: 3,
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 3,
+              height: 50,
 
-            background:
-              '#FFFFFF',
-
-            borderRadius:
-              3.5,
-
-            '& .MuiOutlinedInput-root':
-              {
-                borderRadius:
-                  3.5,
-
-                height: 54,
-
-                '& fieldset': {
-                  borderColor:
-                    '#E8EEEB',
-                },
-
-                '&:hover fieldset': {
-                  borderColor:
-                    '#C9DAD3',
-                },
-
-                '&.Mui-focused fieldset':
-                  {
-                    borderColor:
-                      '#00A875',
-                  },
+              '& fieldset': {
+                borderColor:
+                  '#E8EEEB',
               },
-          }}
 
+              '&.Mui-focused fieldset': {
+                borderColor:
+                  '#00A875',
+              },
+            },
+          }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -1552,22 +1619,15 @@ const Transactions: React.FC = () => {
         />
 
 
-        {/* ====================================================
-            FILTERS
-        ===================================================== */}
+        {/* FILTERS */}
 
         <Card
           sx={{
-            p: 1.3,
-
-            borderRadius:
-              3.5,
-
-            mb: 2,
-
+            p: 1,
+            borderRadius: 3,
+            mb: 1.6,
             boxShadow:
-              '0 5px 20px rgba(21,39,32,0.05)',
-
+              '0 5px 18px rgba(21,39,32,0.05)',
             border:
               '1px solid #EAEFED',
           }}
@@ -1575,7 +1635,7 @@ const Transactions: React.FC = () => {
 
           <Stack
             direction="row"
-            spacing={1}
+            spacing={0.5}
             alignItems="center"
           >
 
@@ -1583,8 +1643,7 @@ const Transactions: React.FC = () => {
               sx={{
                 color:
                   '#75817D',
-
-                ml: 0.5,
+                ml: 0.3,
               }}
             />
 
@@ -1597,18 +1656,11 @@ const Transactions: React.FC = () => {
               size="small"
               fullWidth
               sx={{
-                height: 40,
-
-                borderRadius:
-                  2.5,
-
-                fontSize: 13,
-
+                height: 38,
+                fontSize: 12,
                 fontWeight: 600,
-
                 '& fieldset': {
-                  border:
-                    'none',
+                  border: 'none',
                 },
               }}
             >
@@ -1648,18 +1700,11 @@ const Transactions: React.FC = () => {
               size="small"
               fullWidth
               sx={{
-                height: 40,
-
-                borderRadius:
-                  2.5,
-
-                fontSize: 13,
-
+                height: 38,
+                fontSize: 12,
                 fontWeight: 600,
-
                 '& fieldset': {
-                  border:
-                    'none',
+                  border: 'none',
                 },
               }}
             >
@@ -1691,22 +1736,15 @@ const Transactions: React.FC = () => {
         </Card>
 
 
-        {/* ====================================================
-            ERROR
-        ===================================================== */}
+        {/* ERROR */}
 
         {error && (
           <Card
             sx={{
-              p: 2,
-
-              mb: 2,
-
+              p: 1.5,
+              mb: 1.5,
               borderRadius: 3,
-
-              background:
-                '#FFF7F7',
-
+              background: '#FFF7F7',
               border:
                 '1px solid #F5D4D4',
             }}
@@ -1729,9 +1767,7 @@ const Transactions: React.FC = () => {
                 sx={{
                   color:
                     '#B52F2F',
-
-                  fontSize: 14,
-
+                  fontSize: 13,
                   fontWeight: 600,
                 }}
               >
@@ -1744,31 +1780,22 @@ const Transactions: React.FC = () => {
         )}
 
 
-        {/* ====================================================
-            LOADING
-        ===================================================== */}
+        {/* LOADING */}
 
         {loading ? (
 
           <Card
             sx={{
-              borderRadius: 4,
-
-              p: 6,
-
-              textAlign:
-                'center',
-
+              borderRadius: 3.5,
+              p: 5,
+              textAlign: 'center',
               border:
                 '1px solid #EAEFED',
-
-              boxShadow:
-                '0 5px 20px rgba(21,39,32,0.04)',
             }}
           >
 
             <CircularProgress
-              size={34}
+              size={32}
               sx={{
                 color:
                   '#00A875',
@@ -1777,12 +1804,10 @@ const Transactions: React.FC = () => {
 
             <Typography
               sx={{
-                mt: 2,
-
+                mt: 1.5,
                 color:
                   '#7B8782',
-
-                fontSize: 14,
+                fontSize: 13,
               }}
             >
               Loading your transactions...
@@ -1794,68 +1819,41 @@ const Transactions: React.FC = () => {
 
           <Card
             sx={{
-              borderRadius: 4,
-
-              p: {
-                xs: 4,
-                sm: 6,
-              },
-
-              textAlign:
-                'center',
-
+              borderRadius: 3.5,
+              p: 4,
+              textAlign: 'center',
               border:
                 '1px solid #EAEFED',
-
-              boxShadow:
-                '0 5px 20px rgba(21,39,32,0.04)',
             }}
           >
 
             <Box
               sx={{
-                width: 72,
-                height: 72,
-
-                borderRadius:
-                  '50%',
-
+                width: 64,
+                height: 64,
+                borderRadius: '50%',
                 background:
                   '#EAF7F3',
-
                 color:
                   '#008C68',
-
-                display:
-                  'flex',
-
-                alignItems:
-                  'center',
-
-                justifyContent:
-                  'center',
-
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 mx: 'auto',
               }}
             >
-
               <ReceiptLongRounded
                 sx={{
-                  fontSize: 34,
+                  fontSize: 30,
                 }}
               />
-
             </Box>
-
 
             <Typography
               sx={{
-                mt: 2,
-
-                fontSize: 19,
-
+                mt: 1.7,
+                fontSize: 18,
                 fontWeight: 800,
-
                 color:
                   '#18231F',
               }}
@@ -1863,22 +1861,18 @@ const Transactions: React.FC = () => {
               No transactions found
             </Typography>
 
-
             <Typography
               sx={{
-                mt: 0.7,
-
+                mt: 0.5,
                 color:
                   '#7E8985',
-
-                fontSize: 13,
+                fontSize: 12,
               }}
             >
               {search
                 ? 'Try a different search.'
                 : 'Your transaction activity will appear here.'}
             </Typography>
-
 
             {(search ||
               category !== 'all' ||
@@ -1888,16 +1882,15 @@ const Transactions: React.FC = () => {
                 onClick={() => {
                   setSearch('');
                   setCategory('all');
-                  setStatusFilter('all');
+                  setStatusFilter(
+                    'all'
+                  );
                 }}
                 sx={{
-                  mt: 2,
-
+                  mt: 1.5,
                   color:
                     '#008C68',
-
                   fontWeight: 800,
-
                   textTransform:
                     'none',
                 }}
@@ -1918,17 +1911,15 @@ const Transactions: React.FC = () => {
               justifyContent="space-between"
               alignItems="center"
               sx={{
-                mb: 1.2,
-                px: 0.5,
+                mb: 1,
+                px: 0.3,
               }}
             >
 
               <Typography
                 sx={{
-                  fontSize: 15,
-
+                  fontSize: 14,
                   fontWeight: 800,
-
                   color:
                     '#24302B',
                 }}
@@ -1936,18 +1927,17 @@ const Transactions: React.FC = () => {
                 Recent activity
               </Typography>
 
-
               <Typography
                 sx={{
-                  fontSize: 12,
-
+                  fontSize: 11,
                   color:
                     '#89938F',
                 }}
               >
                 {filteredTransactions.length}{' '}
                 result
-                {filteredTransactions.length !== 1
+                {filteredTransactions.length !==
+                1
                   ? 's'
                   : ''}
               </Typography>
@@ -1955,7 +1945,7 @@ const Transactions: React.FC = () => {
             </Stack>
 
 
-            <Stack spacing={1.2}>
+            <Stack spacing={0.9}>
 
               {filteredTransactions.map(
                 (transaction) => {
@@ -1975,6 +1965,11 @@ const Transactions: React.FC = () => {
                       transaction.status
                     );
 
+                  const absoluteAmount =
+                    getAbsoluteAmount(
+                      transaction
+                    );
+
 
                   return (
 
@@ -1991,12 +1986,12 @@ const Transactions: React.FC = () => {
 
                       sx={{
                         p: {
-                          xs: 1.5,
-                          sm: 1.8,
+                          xs: 1.25,
+                          sm: 1.6,
                         },
 
                         borderRadius:
-                          3.5,
+                          3,
 
                         cursor:
                           'pointer',
@@ -2005,7 +2000,7 @@ const Transactions: React.FC = () => {
                           '1px solid #EAEFED',
 
                         boxShadow:
-                          '0 5px 18px rgba(21,39,32,0.045)',
+                          '0 4px 14px rgba(21,39,32,0.04)',
 
                         transition:
                           'all 0.18s ease',
@@ -2013,50 +2008,32 @@ const Transactions: React.FC = () => {
                         '&:hover': {
                           transform:
                             'translateY(-1px)',
-
                           boxShadow:
-                            '0 8px 25px rgba(21,39,32,0.08)',
-
-                          borderColor:
-                            '#D7E7E0',
-                        },
-
-                        '&:active': {
-                          transform:
-                            'scale(0.99)',
+                            '0 7px 20px rgba(21,39,32,0.07)',
                         },
                       }}
                     >
 
                       <Stack
                         direction="row"
-                        spacing={1.4}
+                        spacing={1.1}
                         alignItems="center"
                       >
 
                         <Box
                           sx={{
-                            width: 52,
-                            height: 52,
-
-                            minWidth:
-                              52,
-
-                            borderRadius:
-                              3,
-
+                            width: 46,
+                            height: 46,
+                            minWidth: 46,
+                            borderRadius: 2.7,
                             background:
                               iconColors.background,
-
                             color:
                               iconColors.color,
-
                             display:
                               'flex',
-
                             alignItems:
                               'center',
-
                             justifyContent:
                               'center',
                           }}
@@ -2069,28 +2046,21 @@ const Transactions: React.FC = () => {
 
                         <Box
                           sx={{
-                            minWidth:
-                              0,
-
+                            minWidth: 0,
                             flex: 1,
                           }}
                         >
 
                           <Typography
                             sx={{
-                              fontSize: 15,
-
+                              fontSize: 14,
                               fontWeight: 800,
-
                               color:
                                 '#1B2722',
-
                               overflow:
                                 'hidden',
-
                               textOverflow:
                                 'ellipsis',
-
                               whiteSpace:
                                 'nowrap',
                             }}
@@ -2103,19 +2073,14 @@ const Transactions: React.FC = () => {
 
                           <Typography
                             sx={{
-                              fontSize: 12,
-
+                              fontSize: 11,
                               color:
                                 '#8A9590',
-
-                              mt: 0.45,
-
+                              mt: 0.3,
                               overflow:
                                 'hidden',
-
                               textOverflow:
                                 'ellipsis',
-
                               whiteSpace:
                                 'nowrap',
                             }}
@@ -2134,7 +2099,6 @@ const Transactions: React.FC = () => {
                                   {
                                     hour:
                                       'numeric',
-
                                     minute:
                                       '2-digit',
                                   }
@@ -2145,38 +2109,28 @@ const Transactions: React.FC = () => {
 
                           <Box
                             sx={{
-                              mt: 0.7,
+                              mt: 0.55,
                             }}
                           >
-
                             <Chip
                               size="small"
-
                               icon={
                                 status.icon
                               }
-
                               label={
                                 status.label
                               }
-
                               sx={{
-                                height: 22,
-
+                                height: 21,
                                 borderRadius:
                                   1.5,
-
                                 background:
                                   status.background,
-
                                 color:
                                   status.color,
-
-                                fontSize: 10,
-
+                                fontSize: 9.5,
                                 fontWeight:
                                   800,
-
                                 '& .MuiChip-icon':
                                   {
                                     color:
@@ -2184,11 +2138,12 @@ const Transactions: React.FC = () => {
                                   },
                               }}
                             />
-
                           </Box>
 
                         </Box>
 
+
+                        {/* CORRECT AMOUNT DISPLAY */}
 
                         <Box
                           sx={{
@@ -2196,8 +2151,8 @@ const Transactions: React.FC = () => {
                               'right',
 
                             minWidth: {
-                              xs: 92,
-                              sm: 125,
+                              xs: 90,
+                              sm: 120,
                             },
                           }}
                         >
@@ -2205,8 +2160,8 @@ const Transactions: React.FC = () => {
                           <Typography
                             sx={{
                               fontSize: {
-                                xs: 14,
-                                sm: 17,
+                                xs: 13,
+                                sm: 16,
                               },
 
                               fontWeight:
@@ -2225,27 +2180,12 @@ const Transactions: React.FC = () => {
                           >
                             {credit
                               ? '+'
-                              : '-'}
+                              : '−'}
 
                             {formatAmount(
-                              transaction.amount,
+                              absoluteAmount,
                               transaction.currency
                             )}
-                          </Typography>
-
-
-                          <Typography
-                            sx={{
-                              fontSize: 10,
-
-                              color:
-                                '#9AA39F',
-
-                              mt: 0.4,
-                            }}
-                          >
-                            {transaction.currency ||
-                              'NGN'}
                           </Typography>
 
                         </Box>
@@ -2255,8 +2195,7 @@ const Transactions: React.FC = () => {
                           sx={{
                             color:
                               '#AAB3AF',
-
-                            fontSize: 22,
+                            fontSize: 21,
                           }}
                         />
 
@@ -2275,42 +2214,30 @@ const Transactions: React.FC = () => {
         )}
 
 
-        {/* ====================================================
-            REFRESH
-        ===================================================== */}
+        {/* REFRESH */}
 
         {!loading && (
 
           <Button
             fullWidth
-
             startIcon={
               <RefreshRounded />
             }
-
             onClick={
               loadTransactions
             }
-
             sx={{
-              mt: 2.5,
-
-              height: 48,
-
-              borderRadius: 3,
-
+              mt: 2,
+              height: 46,
+              borderRadius: 2.8,
               color:
                 '#087A4B',
-
               background:
                 '#EAF7F3',
-
               fontWeight:
                 800,
-
               textTransform:
                 'none',
-
               '&:hover': {
                 background:
                   '#DDF2EA',
@@ -2335,24 +2262,16 @@ const Transactions: React.FC = () => {
             selectedTransaction
           )
         }
-
         onClose={
           handleCloseTransaction
         }
-
         fullWidth
-
         maxWidth="sm"
-
         PaperProps={{
           sx: {
-            borderRadius:
-              5,
-
-            overflow:
-              'hidden',
-
-            margin: 2,
+            borderRadius: 4,
+            overflow: 'hidden',
+            margin: 1.5,
           },
         }}
       >
@@ -2361,17 +2280,14 @@ const Transactions: React.FC = () => {
 
           <>
 
-            {/* DIALOG HEADER */}
+            {/* HEADER */}
 
             <Box
               sx={{
                 background:
                   'linear-gradient(135deg, #063F31, #008C68)',
-
-                color:
-                  '#FFFFFF',
-
-                p: 2.5,
+                color: '#FFFFFF',
+                p: 2,
               }}
             >
 
@@ -2383,24 +2299,20 @@ const Transactions: React.FC = () => {
 
                 <Typography
                   sx={{
-                    fontSize: 18,
-
+                    fontSize: 17,
                     fontWeight: 900,
                   }}
                 >
                   Transaction details
                 </Typography>
 
-
                 <IconButton
                   onClick={
                     handleCloseTransaction
                   }
-
                   sx={{
                     color:
                       '#FFFFFF',
-
                     background:
                       'rgba(255,255,255,0.12)',
                   }}
@@ -2415,74 +2327,58 @@ const Transactions: React.FC = () => {
                 sx={{
                   textAlign:
                     'center',
-
-                  py: 3,
+                  py: 2,
                 }}
               >
 
                 <Box
                   sx={{
-                    width: 58,
-                    height: 58,
-
-                    borderRadius:
-                      '50%',
-
+                    width: 50,
+                    height: 50,
+                    borderRadius: '50%',
                     background:
                       'rgba(255,255,255,0.14)',
-
-                    display:
-                      'flex',
-
-                    alignItems:
-                      'center',
-
-                    justifyContent:
-                      'center',
-
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     mx: 'auto',
-
-                    mb: 1.5,
+                    mb: 1,
                   }}
                 >
-
                   {isCredit(
                     selectedTransaction
                   ) ? (
                     <ArrowDownwardRounded
                       sx={{
-                        fontSize: 31,
+                        fontSize: 27,
                       }}
                     />
                   ) : (
                     <ArrowUpwardRounded
                       sx={{
-                        fontSize: 31,
+                        fontSize: 27,
                       }}
                     />
                   )}
-
                 </Box>
 
 
                 <Typography
                   sx={{
-                    fontSize: 29,
-
+                    fontSize: 25,
                     fontWeight: 900,
-
-                    letterSpacing:
-                      '-0.7px',
                   }}
                 >
                   {isCredit(
                     selectedTransaction
                   )
                     ? '+'
-                    : '-'}
+                    : '−'}
 
                   {formatAmount(
-                    selectedTransaction.amount,
+                    getAbsoluteAmount(
+                      selectedTransaction
+                    ),
                     selectedTransaction.currency
                   )}
                 </Typography>
@@ -2490,12 +2386,9 @@ const Transactions: React.FC = () => {
 
                 <Typography
                   sx={{
-                    opacity:
-                      0.75,
-
-                    fontSize: 13,
-
-                    mt: 0.5,
+                    opacity: 0.75,
+                    fontSize: 12,
+                    mt: 0.3,
                   }}
                 >
                   {getDescription(
@@ -2505,28 +2398,21 @@ const Transactions: React.FC = () => {
 
 
                 {selectedStatus && (
-
                   <Chip
                     icon={
                       selectedStatus.icon
                     }
-
                     label={
                       selectedStatus.label
                     }
-
                     sx={{
-                      mt: 1.5,
-
+                      mt: 1.2,
                       background:
                         'rgba(255,255,255,0.13)',
-
                       color:
                         '#FFFFFF',
-
                       fontWeight:
                         700,
-
                       '& .MuiChip-icon':
                         {
                           color:
@@ -2534,7 +2420,6 @@ const Transactions: React.FC = () => {
                         },
                     }}
                   />
-
                 )}
 
               </Box>
@@ -2542,11 +2427,11 @@ const Transactions: React.FC = () => {
             </Box>
 
 
-            {/* DIALOG CONTENT */}
+            {/* DETAILS */}
 
             <DialogContent
               sx={{
-                p: 2.5,
+                p: 2,
               }}
             >
 
@@ -2561,100 +2446,91 @@ const Transactions: React.FC = () => {
 
 
                 {selectedTransaction.reference && (
-
                   <DetailRow
                     label="Transaction reference"
                     value={
                       selectedTransaction.reference
                     }
-
                     action={
-
                       <IconButton
                         size="small"
-
                         onClick={() =>
                           copyReference(
                             selectedTransaction.reference
                           )
                         }
                       >
-
                         <ContentCopyRounded
                           sx={{
                             fontSize:
-                              17,
-
+                              16,
                             color:
                               '#008C68',
                           }}
                         />
-
                       </IconButton>
-
                     }
                   />
-
                 )}
 
 
                 {selectedTransaction.recipient_name && (
-
                   <DetailRow
                     label="Recipient"
                     value={
                       selectedTransaction.recipient_name
                     }
                   />
+                )}
 
+
+                {selectedTransaction.recipient_phone && (
+                  <DetailRow
+                    label="Recipient phone"
+                    value={
+                      selectedTransaction.recipient_phone
+                    }
+                  />
                 )}
 
 
                 {selectedTransaction.recipient_account && (
-
                   <DetailRow
                     label="Recipient account"
                     value={
                       selectedTransaction.recipient_account
                     }
                   />
-
                 )}
 
 
                 {selectedTransaction.recipient_bank && (
-
                   <DetailRow
                     label="Bank"
                     value={
                       selectedTransaction.recipient_bank
                     }
                   />
-
                 )}
 
 
                 {selectedTransaction.sender_name && (
-
                   <DetailRow
                     label="Sender"
                     value={
                       selectedTransaction.sender_name
                     }
                   />
-
                 )}
 
 
-                {selectedTransaction.sender_account && (
-
+                {selectedTransaction.sender_phone && (
                   <DetailRow
-                    label="Sender account"
+                    label="Sender phone"
                     value={
-                      selectedTransaction.sender_account
+                      selectedTransaction.sender_phone
                     }
                   />
-
                 )}
 
 
@@ -2669,6 +2545,39 @@ const Transactions: React.FC = () => {
 
 
                 <DetailRow
+                  label="Amount"
+                  value={
+                    formatAmount(
+                      getAbsoluteAmount(
+                        selectedTransaction
+                      ),
+                      selectedTransaction.currency
+                    )
+                  }
+                />
+
+
+                {Number(
+                  selectedTransaction.transaction_fee ||
+                    0
+                ) > 0 && (
+                  <DetailRow
+                    label="Transaction fee"
+                    value={
+                      formatAmount(
+                        Math.abs(
+                          Number(
+                            selectedTransaction.transaction_fee
+                          )
+                        ),
+                        selectedTransaction.currency
+                      )
+                    }
+                  />
+                )}
+
+
+                <DetailRow
                   label="Currency"
                   value={
                     selectedTransaction.currency ||
@@ -2679,7 +2588,6 @@ const Transactions: React.FC = () => {
 
                 {typeof selectedTransaction.balance_before ===
                   'number' && (
-
                   <DetailRow
                     label="Balance before"
                     value={
@@ -2689,13 +2597,11 @@ const Transactions: React.FC = () => {
                       )
                     }
                   />
-
                 )}
 
 
                 {typeof selectedTransaction.balance_after ===
                   'number' && (
-
                   <DetailRow
                     label="Balance after"
                     value={
@@ -2705,15 +2611,12 @@ const Transactions: React.FC = () => {
                       )
                     }
                   />
-
                 )}
 
               </Stack>
 
 
-              {/* =================================================
-                  REQUERY MESSAGE
-              ================================================== */}
+              {/* REQUERY */}
 
               {requeryMessage && (
                 <Alert
@@ -2729,16 +2632,9 @@ const Transactions: React.FC = () => {
                       : 'info'
                   }
                   sx={{
-                    mt: 2,
-
-                    borderRadius: 3,
-
-                    fontSize: 13,
-
-                    '& .MuiAlert-icon': {
-                      alignItems:
-                        'center',
-                    },
+                    mt: 1.5,
+                    borderRadius: 2.5,
+                    fontSize: 12,
                   }}
                 >
                   {requeryMessage}
@@ -2748,25 +2644,20 @@ const Transactions: React.FC = () => {
 
               <Divider
                 sx={{
-                  my: 2,
+                  my: 1.5,
                 }}
               />
 
 
-              {/* =================================================
-                  ACTION BUTTONS
-              ================================================== */}
+              {/* ACTIONS */}
 
               <Stack
                 direction={{
                   xs: 'column',
                   sm: 'row',
                 }}
-
-                spacing={1}
+                spacing={0.8}
               >
-
-                {/* CHECK STATUS */}
 
                 {getType(
                   selectedTransaction
@@ -2779,14 +2670,12 @@ const Transactions: React.FC = () => {
 
                   <Button
                     fullWidth
-
                     variant="outlined"
-
                     startIcon={
                       requeryingReference ===
                       selectedTransaction.reference ? (
                         <CircularProgress
-                          size={18}
+                          size={17}
                           sx={{
                             color:
                               '#008C68',
@@ -2796,50 +2685,26 @@ const Transactions: React.FC = () => {
                         <RefreshRounded />
                       )
                     }
-
                     onClick={() =>
                       handleRequeryAirtime(
                         selectedTransaction
                       )
                     }
-
                     disabled={
                       requeryingReference ===
                       selectedTransaction.reference
                     }
-
                     sx={{
-                      height: 48,
-
-                      borderRadius: 3,
-
+                      height: 46,
+                      borderRadius: 2.7,
                       borderColor:
                         '#008C68',
-
                       color:
                         '#008C68',
-
                       textTransform:
                         'none',
-
                       fontWeight:
                         800,
-
-                      '&:hover': {
-                        borderColor:
-                          '#007858',
-
-                        background:
-                          '#EAF7F3',
-                      },
-
-                      '&.Mui-disabled': {
-                        borderColor:
-                          '#B8D8CC',
-
-                        color:
-                          '#7FAF9F',
-                      },
                     }}
                   >
                     {requeryingReference ===
@@ -2851,44 +2716,31 @@ const Transactions: React.FC = () => {
                 )}
 
 
-                {/* VIEW RECEIPT */}
-
                 <Button
                   fullWidth
-
                   variant="contained"
-
                   startIcon={
                     <ReceiptLongRounded />
                   }
-
                   onClick={() =>
                     handleOpenReceipt(
                       selectedTransaction
                     )
                   }
-
                   sx={{
-                    height: 48,
-
-                    borderRadius: 3,
-
+                    height: 46,
+                    borderRadius: 2.7,
                     background:
                       '#008C68',
-
                     textTransform:
                       'none',
-
                     fontWeight:
                       800,
-
                     boxShadow:
                       'none',
-
                     '&:hover': {
                       background:
                         '#007858',
-
                       boxShadow:
                         'none',
                     },
@@ -2898,31 +2750,21 @@ const Transactions: React.FC = () => {
                 </Button>
 
 
-                {/* CLOSE */}
-
                 <Button
                   fullWidth
-
                   variant="outlined"
-
                   onClick={
                     handleCloseTransaction
                   }
-
                   sx={{
-                    height: 48,
-
-                    borderRadius: 3,
-
+                    height: 46,
+                    borderRadius: 2.7,
                     borderColor:
                       '#DCE5E1',
-
                     color:
                       '#34423C',
-
                     textTransform:
                       'none',
-
                     fontWeight:
                       800,
                   }}
@@ -2941,9 +2783,7 @@ const Transactions: React.FC = () => {
       </Dialog>
 
 
-      {/* ======================================================
-          PRINT
-      ======================================================= */}
+      {/* PRINT */}
 
       <style>
         {`
@@ -2954,7 +2794,8 @@ const Transactions: React.FC = () => {
 
             button,
             .MuiIconButton-root,
-            input {
+            input,
+            .MuiSelect-select {
               display: none !important;
             }
 
@@ -2979,9 +2820,7 @@ const Transactions: React.FC = () => {
 
 interface DetailRowProps {
   label: string;
-
   value: string;
-
   action?: React.ReactNode;
 }
 
@@ -2992,11 +2831,9 @@ const DetailRow: React.FC<DetailRowProps> = ({
   action,
 }) => {
   return (
-
     <Box
       sx={{
-        py: 1.45,
-
+        py: 1.15,
         borderBottom:
           '1px solid #F0F3F2',
       }}
@@ -3006,15 +2843,15 @@ const DetailRow: React.FC<DetailRowProps> = ({
         direction="row"
         justifyContent="space-between"
         alignItems="center"
-        spacing={2}
+        spacing={1.5}
       >
 
         <Typography
           sx={{
             color:
               '#8A9590',
-
-            fontSize: 12,
+            fontSize: 11.5,
+            flexShrink: 0,
           }}
         >
           {label}
@@ -3024,7 +2861,7 @@ const DetailRow: React.FC<DetailRowProps> = ({
         <Stack
           direction="row"
           alignItems="center"
-          spacing={0.5}
+          spacing={0.3}
           sx={{
             minWidth: 0,
           }}
@@ -3034,21 +2871,16 @@ const DetailRow: React.FC<DetailRowProps> = ({
             sx={{
               color:
                 '#26332E',
-
-              fontSize: 13,
-
+              fontSize: 12.5,
               fontWeight: 700,
-
               textAlign:
                 'right',
-
               wordBreak:
                 'break-word',
             }}
           >
             {value}
           </Typography>
-
 
           {action}
 
@@ -3057,7 +2889,6 @@ const DetailRow: React.FC<DetailRowProps> = ({
       </Stack>
 
     </Box>
-
   );
 };
 
