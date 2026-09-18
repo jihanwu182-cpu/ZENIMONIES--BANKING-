@@ -563,7 +563,11 @@ const startServer = async () => {
       ALTER TABLE data_transactions
       ADD COLUMN IF NOT EXISTS
       provider_response JSONB;
-     `);
+     
+      await pool.query(`
+      ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS transaction_fee NUMERIC(18,2) NOT NULL DEFAULT 0.00;
+    `);
     console.log(
       'Database migration completed: profile fields and gender are available on users'
     );
