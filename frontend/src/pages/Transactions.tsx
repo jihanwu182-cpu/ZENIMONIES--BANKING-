@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -104,6 +105,11 @@ const Transactions: React.FC = () => {
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null);
 
+  const [requeryingReference, setRequeryingReference] =
+    useState<string | null>(null);
+
+  const [requeryMessage, setRequeryMessage] =
+    useState('');
 
   /*
    * ============================================================
@@ -853,6 +859,8 @@ const Transactions: React.FC = () => {
     setSelectedTransaction(
       transaction
     );
+
+    setRequeryMessage('');
   };
 
 
@@ -860,6 +868,8 @@ const Transactions: React.FC = () => {
     setSelectedTransaction(
       null
     );
+
+    setRequeryMessage('');
   };
 
 
@@ -900,6 +910,140 @@ const Transactions: React.FC = () => {
     } catch {
       console.log(
         'Unable to copy reference.'
+      );
+    }
+  };
+
+
+  /*
+   * ============================================================
+   * CHECK AIRTIME STATUS
+   * ============================================================
+   */
+
+  const handleRequeryAirtime = async (
+    transaction: Transaction
+  ) => {
+    if (!transaction.reference) {
+      setRequeryMessage(
+        'This transaction does not have a reference number for status checking.'
+      );
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      setRequeryingReference(
+        transaction.reference
+      );
+
+      setRequeryMessage('');
+
+      const response =
+        await axios.post(
+          `${API_URL}/api/airtime/requery/${encodeURIComponent(
+            transaction.reference
+          )}`,
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+      const result =
+        response.data;
+
+      const returnedStatus =
+        String(
+          result?.status || ''
+        ).toLowerCase();
+
+      /*
+       * Update the transaction currently
+       * open in the dialog immediately.
+       */
+
+      if (
+        returnedStatus === 'completed' ||
+        returnedStatus === 'success' ||
+        returnedStatus === 'successful'
+      ) {
+        setSelectedTransaction(
+          (previous) =>
+            previous
+              ? {
+                  ...previous,
+                  status:
+                    'completed',
+                }
+              : previous
+        );
+      }
+
+      if (
+        returnedStatus === 'failed'
+      ) {
+        setSelectedTransaction(
+          (previous) =>
+            previous
+              ? {
+                  ...previous,
+                  status:
+                    'failed',
+                }
+              : previous
+        );
+      }
+
+      if (
+        returnedStatus === 'pending'
+      ) {
+        setSelectedTransaction(
+          (previous) =>
+            previous
+              ? {
+                  ...previous,
+                  status:
+                    'pending',
+                }
+              : previous
+        );
+      }
+
+      setRequeryMessage(
+        result?.message ||
+        'Transaction status checked successfully.'
+      );
+
+      /*
+       * Refresh the full transaction history
+       * so the transaction list also updates.
+       */
+
+      await loadTransactions();
+
+    } catch (err: any) {
+      console.error(
+        'Failed to requery airtime transaction:',
+        err
+      );
+
+      setRequeryMessage(
+        err?.response?.data?.message ||
+        'Unable to check the transaction status right now. Please try again later.'
+      );
+
+    } finally {
+      setRequeryingReference(
+        null
       );
     }
   };
@@ -1648,10 +1792,6 @@ const Transactions: React.FC = () => {
 
         ) : filteredTransactions.length === 0 ? (
 
-          /* ==================================================
-             EMPTY
-          =================================================== */
-
           <Card
             sx={{
               borderRadius: 4,
@@ -1770,10 +1910,6 @@ const Transactions: React.FC = () => {
           </Card>
 
         ) : (
-
-          /* ==================================================
-             TRANSACTION LIST
-          =================================================== */
 
           <Box>
 
@@ -1898,8 +2034,6 @@ const Transactions: React.FC = () => {
                         alignItems="center"
                       >
 
-                        {/* ICON */}
-
                         <Box
                           sx={{
                             width: 52,
@@ -1932,8 +2066,6 @@ const Transactions: React.FC = () => {
                           )}
                         </Box>
 
-
-                        {/* DETAILS */}
 
                         <Box
                           sx={{
@@ -2057,8 +2189,6 @@ const Transactions: React.FC = () => {
 
                         </Box>
 
-
-                        {/* AMOUNT */}
 
                         <Box
                           sx={{
@@ -2581,12 +2711,51 @@ const Transactions: React.FC = () => {
               </Stack>
 
 
+              {/* =================================================
+                  REQUERY MESSAGE
+              ================================================== */}
+
+              {requeryMessage && (
+                <Alert
+                  severity={
+                    selectedTransaction.status
+                      .toLowerCase() ===
+                    'completed'
+                      ? 'success'
+                      : selectedTransaction.status
+                          .toLowerCase() ===
+                        'failed'
+                      ? 'error'
+                      : 'info'
+                  }
+                  sx={{
+                    mt: 2,
+
+                    borderRadius: 3,
+
+                    fontSize: 13,
+
+                    '& .MuiAlert-icon': {
+                      alignItems:
+                        'center',
+                    },
+                  }}
+                >
+                  {requeryMessage}
+                </Alert>
+              )}
+
+
               <Divider
                 sx={{
                   my: 2,
                 }}
               />
 
+
+              {/* =================================================
+                  ACTION BUTTONS
+              ================================================== */}
 
               <Stack
                 direction={{
@@ -2596,6 +2765,93 @@ const Transactions: React.FC = () => {
 
                 spacing={1}
               >
+
+                {/* CHECK STATUS */}
+
+                {getType(
+                  selectedTransaction
+                ).includes('airtime') &&
+                  String(
+                    selectedTransaction.status ||
+                      ''
+                  ).toLowerCase() ===
+                    'pending' && (
+
+                  <Button
+                    fullWidth
+
+                    variant="outlined"
+
+                    startIcon={
+                      requeryingReference ===
+                      selectedTransaction.reference ? (
+                        <CircularProgress
+                          size={18}
+                          sx={{
+                            color:
+                              '#008C68',
+                          }}
+                        />
+                      ) : (
+                        <RefreshRounded />
+                      )
+                    }
+
+                    onClick={() =>
+                      handleRequeryAirtime(
+                        selectedTransaction
+                      )
+                    }
+
+                    disabled={
+                      requeryingReference ===
+                      selectedTransaction.reference
+                    }
+
+                    sx={{
+                      height: 48,
+
+                      borderRadius: 3,
+
+                      borderColor:
+                        '#008C68',
+
+                      color:
+                        '#008C68',
+
+                      textTransform:
+                        'none',
+
+                      fontWeight:
+                        800,
+
+                      '&:hover': {
+                        borderColor:
+                          '#007858',
+
+                        background:
+                          '#EAF7F3',
+                      },
+
+                      '&.Mui-disabled': {
+                        borderColor:
+                          '#B8D8CC',
+
+                        color:
+                          '#7FAF9F',
+                      },
+                    }}
+                  >
+                    {requeryingReference ===
+                    selectedTransaction.reference
+                      ? 'Checking...'
+                      : 'Check status'}
+                  </Button>
+
+                )}
+
+
+                {/* VIEW RECEIPT */}
 
                 <Button
                   fullWidth
@@ -2641,6 +2897,8 @@ const Transactions: React.FC = () => {
                   View receipt
                 </Button>
 
+
+                {/* CLOSE */}
 
                 <Button
                   fullWidth
