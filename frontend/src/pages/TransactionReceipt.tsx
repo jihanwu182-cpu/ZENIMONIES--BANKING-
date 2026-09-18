@@ -963,92 +963,125 @@ const TransactionReceipt: React.FC = () => {
    */
 
   const handleSharePDF =
-    async () => {
+  async () => {
 
-      if (pdfLoading) {
-        return;
-      }
+    if (pdfLoading) {
+      return;
+    }
 
-      try {
+    try {
 
-        setPdfLoading(true);
+      setPdfLoading(true);
 
+      const doc =
+        await createReceiptPDF();
 
-        const doc =
-          await createReceiptPDF();
+      const pdfBlob =
+        doc.output('blob');
 
+      const pdfFile =
+        new File(
+          [
+            pdfBlob,
+          ],
+          getSafeFileName(),
+          {
+            type:
+              'application/pdf',
+          }
+        );
 
-        const pdfBlob =
-          doc.output('blob');
+      /*
+       * iPhone/Safari can reject a file share even when
+       * navigator.canShare() says it is supported.
+       */
 
+      const canShareFiles =
+        typeof navigator !==
+          'undefined' &&
+        typeof navigator.share ===
+          'function' &&
+        typeof navigator.canShare ===
+          'function' &&
+        navigator.canShare({
+          files: [
+            pdfFile,
+          ],
+        });
 
-        const pdfFile =
-          new File(
-            [
-              pdfBlob,
-            ],
-            getSafeFileName(),
-            {
-              type:
-                'application/pdf',
-            }
-          );
+      if (
+        canShareFiles
+      ) {
 
+        try {
 
-        const canShareFiles =
-          typeof navigator !==
-            'undefined' &&
-          typeof navigator.share ===
-            'function' &&
-          typeof navigator.canShare ===
-            'function' &&
-          navigator.canShare({
+          await navigator.share({
+            title:
+              `Zenimonies ${receiptTitle}`,
+
+            text:
+              reference
+                ? `Zenimonies transaction receipt — ${reference}`
+                : 'Zenimonies transaction receipt',
+
             files: [
               pdfFile,
             ],
           });
 
+          return;
 
-        if (
-          canShareFiles
-        ) {
+        } catch (error) {
 
-          try {
+          const shareError =
+            error as {
+              name?: string;
+            };
 
-            await navigator.share({
-              title:
-                `Zenimonies ${receiptTitle}`,
+          /*
+           * User cancelled the share sheet.
+           * Do nothing.
+           */
 
-              text:
-                reference
-                  ? `Zenimonies transaction receipt — ${reference}`
-                  : 'Zenimonies transaction receipt',
-
-              files: [
-                pdfFile,
-              ],
-            });
-
+          if (
+            shareError?.name ===
+            'AbortError'
+          ) {
             return;
-
-          } catch (error) {
-
-            const shareError =
-              error as {
-                name?: string;
-              };
-
-
-            if (
-              shareError?.name ===
-              'AbortError'
-            ) {
-              return;
-            }
-
-            throw error;
           }
+
+          /*
+           * iOS/Safari rejected the PDF share.
+           * Fall through to the PDF download.
+           */
         }
+      }
+
+      /*
+       * Reliable fallback:
+       * save the exact same generated PDF.
+       */
+
+      doc.save(
+        getSafeFileName()
+      );
+
+    } catch (error) {
+
+      console.error(
+        'Receipt PDF sharing failed:',
+        error
+      );
+
+      alert(
+        'Unable to create the PDF receipt. Please try again.'
+      );
+
+    } finally {
+
+      setPdfLoading(false);
+    }
+  };
 
 
         /*
