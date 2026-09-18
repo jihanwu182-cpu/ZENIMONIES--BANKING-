@@ -2,7 +2,6 @@ const express = require('express');
 
 const {
   buyAirtime,
-  requeryPendingAirtime,
 } = require('../controllers/airtimeController');
 
 const {
