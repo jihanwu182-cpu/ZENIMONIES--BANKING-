@@ -5,6 +5,10 @@ const {
 } = require('../controllers/airtimeController');
 
 const {
+  requeryPendingAirtime,
+} = require('../controllers/airtimeRequeryController');
+
+const {
   authenticateToken,
 } = require('../utils/authMiddleware');
 
@@ -16,13 +20,6 @@ const router = express.Router();
 
 // ============================================================
 // BUY AIRTIME
-// POST /api/airtime
-//
-// Authentication
-//      ↓
-// Transaction PIN verification
-//      ↓
-// Airtime controller
 // ============================================================
 
 router.post(
@@ -30,6 +27,17 @@ router.post(
   authenticateToken,
   transactionPinMiddleware,
   buyAirtime
+);
+
+
+// ============================================================
+// REQUERY PENDING AIRTIME
+// ============================================================
+
+router.post(
+  '/requery/:reference',
+  authenticateToken,
+  requeryPendingAirtime
 );
 
 
