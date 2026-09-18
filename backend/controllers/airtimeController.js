@@ -1,25 +1,141 @@
+const crypto = require('crypto');
+
+const pool = require('../config/database');
+
+const {
+  purchaseAirtime,
+} = require('../services/airtimeService');
+
+
 // ============================================================
-// REQUERY PENDING AIRTIME
-//
-// POST /api/airtime/requery/:reference
-//
-// This checks a pending airtime transaction directly with
-// VTpass using the saved provider request ID.
-//
-// IMPORTANT:
-// - Successful provider result -> complete transaction
-// - Failed provider result -> refund customer
-// - Pending provider result -> remain pending
-// - Never refund twice
+// HELPERS
 // ============================================================
 
-const requeryPendingAirtime = async (
-  req,
-  res
+const createReference = () => {
+  return `ZEN-AIRTIME-${Date.now()}-${crypto
+    .randomBytes(6)
+    .toString('hex')
+    .toUpperCase()}`;
+};
+
+
+const getUserId = (req) => {
+  return (
+    req.user?.id ||
+    req.user?.userId ||
+    req.user?.user_id ||
+    null
+  );
+};
+
+
+const cleanPhoneNumber = (phone) => {
+  return String(phone || '')
+    .replace(/\s+/g, '')
+    .trim();
+};
+
+
+// ============================================================
+// PROVIDER STATUS
+// ============================================================
+
+const getProviderStatus = (providerResponse) => {
+  const code = String(
+    providerResponse?.code ||
+      providerResponse?.response_code ||
+      ''
+  ).trim();
+
+  const transactionStatus = String(
+    providerResponse
+      ?.content
+      ?.transactions
+      ?.status ||
+      ''
+  )
+    .trim()
+    .toLowerCase();
+
+  // SUCCESS
+  if (
+    code === '000' &&
+    transactionStatus === 'delivered'
+  ) {
+    return 'completed';
+  }
+
+  // PENDING
+  if (
+    code === '099' ||
+    transactionStatus === 'pending' ||
+    transactionStatus === 'initiated'
+  ) {
+    return 'pending';
+  }
+
+  // FAILURE
+  return 'failed';
+};
+
+
+// ============================================================
+// COMMISSION DETAILS
+// ============================================================
+
+const getCommissionDetails = (
+  providerResponse
 ) => {
+  return (
+    providerResponse
+      ?.content
+      ?.transactions
+      ?.commission_details ||
+    providerResponse
+      ?.content
+      ?.commission_details ||
+    providerResponse
+      ?.commission_details ||
+    null
+  );
+};
+
+
+// ============================================================
+// PROVIDER REFERENCE
+// ============================================================
+
+const getProviderReference = (
+  providerResponse,
+  requestId
+) => {
+  return (
+    providerResponse
+      ?.content
+      ?.transactions
+      ?.transactionId ||
+    providerResponse?.transactionId ||
+    providerResponse?.requestId ||
+    requestId ||
+    null
+  );
+};
+
+
+// ============================================================
+// BUY AIRTIME
+//
+// POST /api/airtime
+// ============================================================
+
+const buyAirtime = async (req, res) => {
 
   const userId =
     getUserId(req);
+
+  // ==========================================================
+  // AUTHENTICATION
+  // ==========================================================
 
   if (!userId) {
     return res.status(401).json({
@@ -29,165 +145,375 @@ const requeryPendingAirtime = async (
     });
   }
 
-  const reference =
-    String(
-      req.params?.reference ||
-        ''
-    ).trim();
+  // ==========================================================
+  // INPUT
+  // ==========================================================
 
-  if (!reference) {
+  const network =
+    req.body?.network;
+
+  const phone =
+    cleanPhoneNumber(
+      req.body?.phone
+    );
+
+  const amount =
+    Number(
+      req.body?.amount
+    );
+
+  // ==========================================================
+  // NETWORK
+  // ==========================================================
+
+  if (!network) {
     return res.status(400).json({
       success: false,
       message:
-        'Transaction reference is required.',
+        'Network is required.',
     });
   }
 
-  // ----------------------------------------------------------
-  // Find customer's pending airtime transaction
-  // ----------------------------------------------------------
+  // ==========================================================
+  // PHONE
+  // ==========================================================
 
-  let transaction;
+  if (
+    !/^0\d{10}$/.test(phone)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message:
+        'Enter a valid Nigerian phone number.',
+    });
+  }
+
+  // ==========================================================
+  // AMOUNT
+  // ==========================================================
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    return res.status(400).json({
+      success: false,
+      message:
+        'Enter a valid airtime amount.',
+    });
+  }
+
+  // ==========================================================
+  // MAXIMUM AIRTIME AMOUNT
+  // ==========================================================
+
+  if (amount > 100000) {
+    return res.status(400).json({
+      success: false,
+      code:
+        'AIRTIME_AMOUNT_TOO_HIGH',
+      message:
+        'The maximum airtime amount per transaction is ₦100,000.',
+    });
+  }
+
+  // ==========================================================
+  // ZENIMONIES REFERENCE
+  // ==========================================================
+
+  const reference =
+    createReference();
+
+  let account;
+  let transactionId;
+  let airtimeTransactionId;
+
+  // ==========================================================
+  // STEP 1
+  //
+  // LOCK ACCOUNT
+  // CREATE TRANSACTIONS
+  // DEDUCT WALLET
+  // ==========================================================
+
+  const client =
+    await pool.connect();
 
   try {
 
-    const result =
-      await pool.query(
+    await client.query(
+      'BEGIN'
+    );
+
+    // --------------------------------------------------------
+    // Find and lock NGN account
+    // --------------------------------------------------------
+
+    const accountResult =
+      await client.query(
         `
         SELECT
-          at.id,
-          at.account_id,
-          at.network,
-          at.phone_number,
-          at.amount,
-          at.currency,
-          at.reference,
-          at.status,
-          at.provider_request_id,
-          at.provider_reference,
-          a.user_id,
-          a.balance
-        FROM airtime_transactions at
-        INNER JOIN accounts a
-          ON a.id = at.account_id
-        WHERE at.reference = $1
-          AND a.user_id = $2
+          id,
+          user_id,
+          account_number,
+          currency,
+          balance,
+          status
+        FROM accounts
+        WHERE user_id = $1
+          AND currency = 'NGN'
+          AND status = 'active'
+        ORDER BY created_at ASC
         LIMIT 1
+        FOR UPDATE
         `,
-        [
-          reference,
-          userId,
-        ]
+        [userId]
       );
 
     if (
-      result.rows.length === 0
+      accountResult.rows.length === 0
     ) {
+
+      await client.query(
+        'ROLLBACK'
+      );
+
       return res.status(404).json({
         success: false,
         message:
-          'Airtime transaction not found.',
+          'Active NGN wallet account not found.',
       });
     }
 
-    transaction =
-      result.rows[0];
+    account =
+      accountResult.rows[0];
+
+    const balance =
+      Number(
+        account.balance
+      );
+
+    if (
+      !Number.isFinite(balance)
+    ) {
+
+      await client.query(
+        'ROLLBACK'
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'Unable to read wallet balance.',
+      });
+    }
+
+    // --------------------------------------------------------
+    // Balance check
+    // --------------------------------------------------------
+
+    if (
+      balance < amount
+    ) {
+
+      await client.query(
+        'ROLLBACK'
+      );
+
+      return res.status(400).json({
+        success: false,
+        code:
+          'INSUFFICIENT_BALANCE',
+        message:
+          'Insufficient wallet balance.',
+      });
+    }
+
+    const balanceBefore =
+      balance;
+
+    const balanceAfter =
+      balance - amount;
+
+    // ========================================================
+    // CREATE AIRTIME TRANSACTION
+    // ========================================================
+
+    const airtimeResult =
+      await client.query(
+        `
+        INSERT INTO airtime_transactions (
+          account_id,
+          network,
+          phone_number,
+          amount,
+          currency,
+          reference,
+          status
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          'NGN',
+          $5,
+          'pending'
+        )
+        RETURNING id
+        `,
+        [
+          account.id,
+          network,
+          phone,
+          amount,
+          reference,
+        ]
+      );
+
+    airtimeTransactionId =
+      airtimeResult.rows[0].id;
+
+    // ========================================================
+    // CREATE CENTRAL TRANSACTION
+    // ========================================================
+
+    const transactionResult =
+      await client.query(
+        `
+        INSERT INTO transactions (
+          account_id,
+          type,
+          amount,
+          currency,
+          reference,
+          description,
+          status,
+          balance_before,
+          balance_after
+        )
+        VALUES (
+          $1,
+          'airtime_purchase',
+          $2,
+          'NGN',
+          $3,
+          $4,
+          'pending',
+          $5,
+          $6
+        )
+        RETURNING id
+        `,
+        [
+          account.id,
+          amount,
+          reference,
+          `Airtime purchase - ${network} for ${phone}`,
+          balanceBefore,
+          balanceAfter,
+        ]
+      );
+
+    transactionId =
+      transactionResult.rows[0].id;
+
+    // ========================================================
+    // DEDUCT CUSTOMER WALLET
+    // ========================================================
+
+    await client.query(
+      `
+      UPDATE accounts
+      SET
+        balance = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      `,
+      [
+        balanceAfter,
+        account.id,
+      ]
+    );
+
+    await client.query(
+      'COMMIT'
+    );
 
   } catch (error) {
 
+    try {
+      await client.query(
+        'ROLLBACK'
+      );
+    } catch (_) {
+      // Ignore rollback errors.
+    }
+
     console.error(
-      'Airtime requery lookup error:',
+      'Airtime wallet transaction error:',
       error?.message ||
         'Unknown error'
     );
 
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to find the airtime transaction.',
-    });
-  }
-
-  // ----------------------------------------------------------
-  // Only pending transactions may be requeried
-  // ----------------------------------------------------------
-
-  if (
-    transaction.status !==
-    'pending'
-  ) {
-    return res.status(200).json({
-      success: true,
-      status:
-        transaction.status,
-      reference:
-        transaction.reference,
-      message:
-        'This airtime transaction has already been resolved.',
-    });
-  }
-
-  // ----------------------------------------------------------
-  // Provider request ID is required
-  // ----------------------------------------------------------
-
-  if (
-    !transaction.provider_request_id
-  ) {
-    return res.status(409).json({
-      success: false,
       code:
-        'PROVIDER_REQUEST_ID_MISSING',
-      status: 'pending',
-      reference:
-        transaction.reference,
+        'AIRTIME_WALLET_TRANSACTION_FAILED',
       message:
-        'This transaction is pending, but the provider request ID is not available yet.',
+        'Unable to start the airtime purchase.',
     });
+
+  } finally {
+
+    client.release();
+
   }
 
-  // ----------------------------------------------------------
-  // Ask VTpass for the current status
-  // ----------------------------------------------------------
+  // ==========================================================
+  // STEP 2
+  //
+  // SEND AIRTIME TO VTPASS
+  // ==========================================================
 
-  let providerResponse;
+  let providerResult;
 
   try {
 
-    const {
-      requeryAirtimeTransaction,
-    } = require('../services/airtimeService');
-
-    providerResponse =
-      await requeryAirtimeTransaction(
-        transaction.provider_request_id
-      );
+    providerResult =
+      await purchaseAirtime({
+        network,
+        phone,
+        amount,
+      });
 
   } catch (error) {
 
     console.error(
-      'VTpass airtime requery error:',
+      'VTpass airtime purchase error:',
       error?.code ||
         error?.message ||
         'Unknown error'
     );
 
-    // Do not change the wallet when the provider
-    // cannot be contacted.
+    // --------------------------------------------------------
+    // Provider/network uncertainty.
+    //
+    // DO NOT REFUND automatically.
+    // The provider may have received the request.
+    // --------------------------------------------------------
 
     return res.status(202).json({
       success: true,
       status: 'pending',
-      reference:
-        transaction.reference,
+      reference,
       message:
-        'The provider could not be reached. The transaction remains pending and will be checked again.',
+        'Your airtime purchase is being processed. Please check your transaction history for the final status.',
     });
   }
 
-  // ----------------------------------------------------------
-  // Determine provider status
-  // ----------------------------------------------------------
+  const providerResponse =
+    providerResult.response;
 
   const providerStatus =
     getProviderStatus(
@@ -197,7 +523,7 @@ const requeryPendingAirtime = async (
   const providerReference =
     getProviderReference(
       providerResponse,
-      transaction.provider_request_id
+      providerResult.requestId
     );
 
   const providerMessage =
@@ -212,7 +538,9 @@ const requeryPendingAirtime = async (
     );
 
   // ==========================================================
-  // SUCCESS
+  // STEP 3
+  //
+  // SUCCESSFUL AIRTIME
   // ==========================================================
 
   if (
@@ -222,157 +550,90 @@ const requeryPendingAirtime = async (
 
     try {
 
-      const client =
-        await pool.connect();
+      // ------------------------------------------------------
+      // Update specialized Airtime transaction
+      // ------------------------------------------------------
 
-      try {
+      await pool.query(
+        `
+        UPDATE airtime_transactions
+        SET
+          provider_reference = $1,
+          provider_request_id = $2,
+          commission_details = $3::jsonb,
+          provider_response = $4::jsonb,
+          status = 'completed',
+          completed_at = CURRENT_TIMESTAMP
+        WHERE id = $5
+        `,
+        [
+          providerReference,
+          providerResult.requestId,
+          commissionDetails
+            ? JSON.stringify(
+                commissionDetails
+              )
+            : null,
+          JSON.stringify(
+            providerResponse
+          ),
+          airtimeTransactionId,
+        ]
+      );
 
-        await client.query(
-          'BEGIN'
-        );
+      // ------------------------------------------------------
+      // Update central transaction
+      // ------------------------------------------------------
 
-        // Lock the transaction so two
-        // simultaneous requeries cannot
-        // process it twice.
-
-        const locked =
-          await client.query(
-            `
-            SELECT
-              id,
-              account_id,
-              status
-            FROM airtime_transactions
-            WHERE id = $1
-            FOR UPDATE
-            `,
-            [transaction.id]
-          );
-
-        if (
-          locked.rows.length === 0
-        ) {
-          throw new Error(
-            'Airtime transaction disappeared during reconciliation.'
-          );
-        }
-
-        // Another request may have already
-        // completed it.
-
-        if (
-          locked.rows[0].status !==
-          'pending'
-        ) {
-
-          await client.query(
-            'COMMIT'
-          );
-
-          return res.status(200).json({
-            success: true,
-            status:
-              locked.rows[0].status,
-            reference:
-              transaction.reference,
-            message:
-              'This transaction has already been resolved.',
-          });
-        }
-
-        await client.query(
-          `
-          UPDATE airtime_transactions
-          SET
-            provider_reference = $1,
-            provider_request_id = $2,
-            commission_details = $3::jsonb,
-            provider_response = $4::jsonb,
-            status = 'completed',
-            completed_at = CURRENT_TIMESTAMP
-          WHERE id = $5
-          `,
-          [
-            providerReference,
-            transaction.provider_request_id,
-            commissionDetails
-              ? JSON.stringify(
-                  commissionDetails
-                )
-              : null,
-            JSON.stringify(
-              providerResponse
-            ),
-            transaction.id,
-          ]
-        );
-
-        await client.query(
-          `
-          UPDATE transactions
-          SET
-            status = 'completed'
-          WHERE reference = $1
-            AND status = 'pending'
-          `,
-          [
-            transaction.reference,
-          ]
-        );
-
-        await client.query(
-          'COMMIT'
-        );
-
-      } catch (error) {
-
-        try {
-          await client.query(
-            'ROLLBACK'
-          );
-        } catch (_) {
-          // Ignore rollback errors.
-        }
-
-        throw error;
-
-      } finally {
-
-        client.release();
-
-      }
-
-      return res.status(200).json({
-        success: true,
-        status: 'completed',
-        reference:
-          transaction.reference,
-        providerReference,
-        message:
-          'Airtime purchase confirmed successfully.',
-      });
+      await pool.query(
+        `
+        UPDATE transactions
+        SET
+          status = 'completed'
+        WHERE id = $1
+        `,
+        [transactionId]
+      );
 
     } catch (error) {
 
       console.error(
-        'Airtime successful reconciliation error:',
+        'Airtime completion update error:',
         error?.message ||
           'Unknown error'
       );
 
+      // Provider already delivered airtime.
+      // Never refund automatically here.
+
       return res.status(202).json({
         success: true,
         status: 'pending',
-        reference:
-          transaction.reference,
+        reference,
         message:
-          'VTpass confirmed the airtime, but Zenimonies is still finalizing the transaction.',
+          'The airtime was processed by the provider and is being finalized in your account.',
       });
     }
+
+    return res.status(200).json({
+      success: true,
+      status: 'completed',
+      reference,
+      providerReference,
+      network:
+        providerResult.network,
+      phone,
+      amount,
+      commissionDetails,
+      message:
+        'Airtime purchase successful.',
+    });
   }
 
   // ==========================================================
-  // STILL PENDING
+  // STEP 4
+  //
+  // PENDING
   // ==========================================================
 
   if (
@@ -390,11 +651,10 @@ const requeryPendingAirtime = async (
         provider_response = $4::jsonb,
         status = 'pending'
       WHERE id = $5
-        AND status = 'pending'
       `,
       [
         providerReference,
-        transaction.provider_request_id,
+        providerResult.requestId,
         commissionDetails
           ? JSON.stringify(
               commissionDetails
@@ -403,97 +663,57 @@ const requeryPendingAirtime = async (
         JSON.stringify(
           providerResponse
         ),
-        transaction.id,
+        airtimeTransactionId,
       ]
+    );
+
+    await pool.query(
+      `
+      UPDATE transactions
+      SET
+        status = 'pending'
+      WHERE id = $1
+      `,
+      [transactionId]
     );
 
     return res.status(202).json({
       success: true,
       status: 'pending',
-      reference:
-        transaction.reference,
+      reference,
+      providerReference,
+      network:
+        providerResult.network,
+      phone,
+      amount,
       message:
-        'The provider is still processing this airtime transaction.',
+        'Your airtime purchase is being processed. Please check your transaction history for the final status.',
     });
   }
 
   // ==========================================================
-  // EXPLICIT FAILURE
+  // STEP 5
   //
-  // Refund exactly once.
+  // EXPLICIT PROVIDER FAILURE
+  //
+  // REFUND CUSTOMER
   // ==========================================================
 
-  const client =
+  const refundClient =
     await pool.connect();
 
   try {
 
-    await client.query(
+    await refundClient.query(
       'BEGIN'
     );
 
     // --------------------------------------------------------
-    // Lock airtime transaction
+    // Lock account
     // --------------------------------------------------------
 
-    const lockedTransaction =
-      await client.query(
-        `
-        SELECT
-          id,
-          account_id,
-          amount,
-          status
-        FROM airtime_transactions
-        WHERE id = $1
-        FOR UPDATE
-        `,
-        [transaction.id]
-      );
-
-    if (
-      lockedTransaction.rows.length === 0
-    ) {
-      throw new Error(
-        'Airtime transaction not found during refund.'
-      );
-    }
-
-    const locked =
-      lockedTransaction.rows[0];
-
-    // --------------------------------------------------------
-    // IMPORTANT:
-    // If another process already resolved this transaction,
-    // do not refund again.
-    // --------------------------------------------------------
-
-    if (
-      locked.status !==
-      'pending'
-    ) {
-
-      await client.query(
-        'COMMIT'
-      );
-
-      return res.status(200).json({
-        success: true,
-        status:
-          locked.status,
-        reference:
-          transaction.reference,
-        message:
-          'This transaction has already been resolved.',
-      });
-    }
-
-    // --------------------------------------------------------
-    // Lock wallet
-    // --------------------------------------------------------
-
-    const accountResult =
-      await client.query(
+    const lockedAccount =
+      await refundClient.query(
         `
         SELECT
           id,
@@ -502,49 +722,41 @@ const requeryPendingAirtime = async (
         WHERE id = $1
         FOR UPDATE
         `,
-        [locked.account_id]
+        [account.id]
       );
 
     if (
-      accountResult.rows.length === 0
+      lockedAccount.rows.length === 0
     ) {
       throw new Error(
-        'Customer wallet not found during airtime refund.'
+        'Account disappeared during airtime refund.'
       );
     }
 
     const currentBalance =
       Number(
-        accountResult.rows[0].balance
-      );
-
-    const refundAmount =
-      Number(
-        locked.amount
+        lockedAccount.rows[0]
+          .balance
       );
 
     if (
       !Number.isFinite(
         currentBalance
-      ) ||
-      !Number.isFinite(
-        refundAmount
       )
     ) {
       throw new Error(
-        'Invalid wallet balance or airtime amount during refund.'
+        'Unable to read account balance during airtime refund.'
       );
     }
 
     const refundedBalance =
-      currentBalance +
-      refundAmount;
+      currentBalance + amount;
 
     // --------------------------------------------------------
     // Refund wallet
     // --------------------------------------------------------
 
-    await client.query(
+    await refundClient.query(
       `
       UPDATE accounts
       SET
@@ -554,111 +766,65 @@ const requeryPendingAirtime = async (
       `,
       [
         refundedBalance,
-        locked.account_id,
+        account.id,
       ]
     );
 
     // --------------------------------------------------------
-    // Mark airtime transaction failed
+    // Update Airtime transaction
     // --------------------------------------------------------
 
-    await client.query(
+    await refundClient.query(
       `
       UPDATE airtime_transactions
       SET
         provider_reference = $1,
         provider_request_id = $2,
-        provider_response = $3::jsonb,
-        status = 'failed'
-      WHERE id = $4
-        AND status = 'pending'
+        commission_details = $3::jsonb,
+        provider_response = $4::jsonb,
+        status = 'failed',
+        failure_reason = $5
+      WHERE id = $6
       `,
       [
         providerReference,
-        transaction.provider_request_id,
+        providerResult.requestId,
+        commissionDetails
+          ? JSON.stringify(
+              commissionDetails
+            )
+          : null,
         JSON.stringify(
           providerResponse
         ),
-        locked.id,
+        providerMessage ||
+          'VTpass rejected the airtime purchase.',
+        airtimeTransactionId,
       ]
     );
 
     // --------------------------------------------------------
-    // Mark central transaction failed
+    // Update central transaction
     // --------------------------------------------------------
 
-    await client.query(
+    await refundClient.query(
       `
       UPDATE transactions
       SET
         status = 'failed'
-      WHERE reference = $1
-        AND status = 'pending'
+      WHERE id = $1
       `,
-      [
-        transaction.reference,
-      ]
+      [transactionId]
     );
 
-    // --------------------------------------------------------
-    // Record refund in central transaction ledger
-    // --------------------------------------------------------
-
-    await client.query(
-      `
-      INSERT INTO transactions (
-        account_id,
-        type,
-        amount,
-        currency,
-        reference,
-        description,
-        status,
-        balance_before,
-        balance_after
-      )
-      VALUES (
-        $1,
-        'airtime_refund',
-        $2,
-        'NGN',
-        $3,
-        $4,
-        'completed',
-        $5,
-        $6
-      )
-      `,
-      [
-        locked.account_id,
-        refundAmount,
-        `ZEN-REFUND-${transaction.reference}`,
-        `Refund for failed airtime purchase ${transaction.reference}`,
-        currentBalance,
-        refundedBalance,
-      ]
-    );
-
-    await client.query(
+    await refundClient.query(
       'COMMIT'
     );
-
-    return res.status(200).json({
-      success: true,
-      status: 'failed',
-      reference:
-        transaction.reference,
-      refunded: true,
-      refundAmount,
-      providerMessage,
-      message:
-        'The airtime purchase failed and the wallet has been refunded.',
-    });
 
   } catch (error) {
 
     try {
-      await client.query(
+      await refundClient.query(
         'ROLLBACK'
       );
     } catch (_) {
@@ -666,7 +832,7 @@ const requeryPendingAirtime = async (
     }
 
     console.error(
-      'Airtime refund reconciliation error:',
+      'Airtime refund error:',
       error?.message ||
         'Unknown error'
     );
@@ -674,19 +840,34 @@ const requeryPendingAirtime = async (
     return res.status(500).json({
       success: false,
       code:
-        'AIRTIME_RECONCILIATION_FAILED',
-      status: 'pending',
-      reference:
-        transaction.reference,
+        'AIRTIME_REFUND_PENDING',
+      reference,
       message:
-        'The transaction could not be reconciled automatically. No refund was made.',
+        'The provider rejected the purchase, but wallet reconciliation requires attention. Please contact support with the transaction reference.',
     });
 
   } finally {
 
-    client.release();
+    refundClient.release();
 
   }
+
+  // ==========================================================
+  // FINAL FAILURE
+  // ==========================================================
+
+  return res.status(400).json({
+    success: false,
+    status: 'failed',
+    reference,
+    network:
+      providerResult.network,
+    phone,
+    amount,
+    message:
+      providerMessage ||
+      'Airtime purchase failed. Your wallet has been refunded.',
+  });
 };
 
 
@@ -696,5 +877,4 @@ const requeryPendingAirtime = async (
 
 module.exports = {
   buyAirtime,
-  requeryPendingAirtime,
 };
