@@ -28,6 +28,9 @@ interface Recipient {
 
   /*
    * REAL Zenimonies account number.
+   *
+   * This is optional because the recipient lookup endpoint
+   * may intentionally not expose it.
    */
   account_number?: string;
 
@@ -63,6 +66,8 @@ interface TransferResponse {
     amount?: number;
 
     transaction_fee?: number;
+
+    total_debit?: number;
 
     currency?: string;
 
@@ -100,6 +105,7 @@ const Transfer: React.FC = () => {
   const [sending, setSending] =
     useState(false);
 
+
   /*
    * ==========================================================
    * TRANSACTION PIN STATE
@@ -126,6 +132,7 @@ const Transfer: React.FC = () => {
     setTransactionPinError,
   ] = useState('');
 
+
   const [error, setError] =
     useState('');
 
@@ -138,14 +145,23 @@ const Transfer: React.FC = () => {
   const [balanceAfter, setBalanceAfter] =
     useState<number | null>(null);
 
+
   /*
    * REAL ACCOUNT NUMBER FROM
    * THE COMPLETED TRANSFER.
    */
+
   const [
     recipientAccountNumber,
     setRecipientAccountNumber,
   ] = useState('');
+
+
+  /*
+   * ==========================================================
+   * AUTH TOKEN
+   * ==========================================================
+   */
 
   const token =
     localStorage.getItem(
@@ -156,6 +172,13 @@ const Transfer: React.FC = () => {
       'access_token'
     );
 
+
+  /*
+   * ==========================================================
+   * CLEAN PHONE
+   * ==========================================================
+   */
+
   const cleanPhone = useMemo(
     () =>
       phone
@@ -164,8 +187,100 @@ const Transfer: React.FC = () => {
     [phone]
   );
 
+
+  /*
+   * ==========================================================
+   * TRANSFER AMOUNT
+   * ==========================================================
+   */
+
   const transferAmount =
     Number(amount);
+
+
+  /*
+   * ==========================================================
+   * TRANSFER FEE
+   * ==========================================================
+   *
+   * ₦20 - ₦999       = ₦0
+   * ₦1,000 - ₦9,999  = ₦20
+   * ₦10,000 - ₦99,999 = ₦56
+   * ₦100,000+        = ₦75
+   *
+   * This is only for displaying the expected fee.
+   *
+   * The backend independently calculates the authoritative
+   * fee when the transfer is submitted.
+   */
+
+  const transactionFee =
+    useMemo(() => {
+      if (
+        !Number.isFinite(
+          transferAmount
+        ) ||
+        transferAmount < 20
+      ) {
+        return 0;
+      }
+
+      if (
+        transferAmount < 1000
+      ) {
+        return 0;
+      }
+
+      if (
+        transferAmount < 10000
+      ) {
+        return 20;
+      }
+
+      if (
+        transferAmount < 100000
+      ) {
+        return 56;
+      }
+
+      return 75;
+    }, [transferAmount]);
+
+
+  /*
+   * ==========================================================
+   * TOTAL AMOUNT TO BE DEDUCTED
+   * ==========================================================
+   */
+
+  const totalDebit =
+    Number.isFinite(
+      transferAmount
+    ) &&
+    transferAmount >= 20
+      ? transferAmount +
+        transactionFee
+      : 0;
+
+
+  /*
+   * ==========================================================
+   * FORMAT MONEY
+   * ==========================================================
+   */
+
+  const formatNaira = (
+    value: number
+  ) =>
+    `₦${Number(
+      value || 0
+    ).toLocaleString(
+      'en-NG',
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }
+    )}`;
 
 
   /*
@@ -232,8 +347,10 @@ const Transfer: React.FC = () => {
           );
 
           /*
-           * Store the REAL account number.
+           * Store the REAL account number
+           * only if the backend actually supplies it.
            */
+
           setRecipientAccountNumber(
             verifiedRecipient.account_number ||
               ''
@@ -311,10 +428,22 @@ const Transfer: React.FC = () => {
       !Number.isFinite(
         transferAmount
       ) ||
-      transferAmount <= 0
+      transferAmount < 20
     ) {
       setError(
-        'Please enter a valid transfer amount.'
+        'Minimum transfer amount is ₦20.'
+      );
+      return;
+    }
+
+    if (
+      Math.round(
+        transferAmount * 100
+      ) !==
+      transferAmount * 100
+    ) {
+      setError(
+        'Transfer amount can have a maximum of two decimal places.'
       );
       return;
     }
@@ -331,9 +460,12 @@ const Transfer: React.FC = () => {
     /*
      * Do not send money yet.
      *
-     * First ask the user for their
-     * Transaction PIN.
+     * The customer first sees the transfer amount,
+     * fee and total deduction.
+     *
+     * Then the Transaction PIN dialog opens.
      */
+
     setTransactionPin('');
     setTransactionPinError('');
     setShowTransactionPin(true);
@@ -364,7 +496,11 @@ const Transfer: React.FC = () => {
       return;
     }
 
-    if (!/^\d{4}$/.test(transactionPin)) {
+    if (
+      !/^\d{4}$/.test(
+        transactionPin
+      )
+    ) {
       setTransactionPinError(
         'Please enter your 4-digit Transaction PIN.'
       );
@@ -372,7 +508,10 @@ const Transfer: React.FC = () => {
     }
 
     try {
-      setVerifyingTransactionPin(true);
+      setVerifyingTransactionPin(
+        true
+      );
+
       setSending(true);
 
       const response =
@@ -442,6 +581,7 @@ const Transfer: React.FC = () => {
 
         setAmount('');
         setNarration('');
+
       } else {
         setError(
           response.data?.message ||
@@ -475,7 +615,9 @@ const Transfer: React.FC = () => {
         return;
       }
 
-      if (status === 401) {
+      if (
+        status === 401
+      ) {
         localStorage.removeItem(
           'zenimonies_token'
         );
@@ -502,30 +644,13 @@ const Transfer: React.FC = () => {
       );
 
     } finally {
-      setVerifyingTransactionPin(false);
+      setVerifyingTransactionPin(
+        false
+      );
+
       setSending(false);
     }
   };
-
-
-  /*
-   * ==========================================================
-   * FORMAT MONEY
-   * ==========================================================
-   */
-
-  const formatNaira = (
-    value: number
-  ) =>
-    `₦${Number(
-      value || 0
-    ).toLocaleString(
-      'en-NG',
-      {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }
-    )}`;
 
 
   /*
@@ -537,7 +662,9 @@ const Transfer: React.FC = () => {
   return (
     <div style={styles.page}>
 
-      {/* HEADER */}
+      {/* ======================================================
+          HEADER
+          ====================================================== */}
 
       <header
         style={styles.header}
@@ -554,9 +681,7 @@ const Transfer: React.FC = () => {
 
           <div>
             <div
-              style={
-                styles.brandName
-              }
+              style={styles.brandName}
             >
               Zenimonies
             </div>
@@ -580,7 +705,9 @@ const Transfer: React.FC = () => {
       </header>
 
 
-      {/* MAIN */}
+      {/* ======================================================
+          MAIN
+          ====================================================== */}
 
       <main style={styles.main}>
 
@@ -620,7 +747,9 @@ const Transfer: React.FC = () => {
           </p>
 
 
-          {/* ERROR */}
+          {/* ==================================================
+              ERROR
+              ================================================== */}
 
           {error && (
             <div
@@ -634,7 +763,9 @@ const Transfer: React.FC = () => {
           )}
 
 
-          {/* SUCCESS */}
+          {/* ==================================================
+              SUCCESS
+              ================================================== */}
 
           {success && (
             <div
@@ -694,7 +825,9 @@ const Transfer: React.FC = () => {
           )}
 
 
-          {/* FORM */}
+          {/* ==================================================
+              FORM
+              ================================================== */}
 
           <form
             onSubmit={
@@ -702,7 +835,9 @@ const Transfer: React.FC = () => {
             }
           >
 
-            {/* PHONE */}
+            {/* ==================================================
+                PHONE
+                ================================================== */}
 
             <label
               htmlFor="phone"
@@ -773,7 +908,9 @@ const Transfer: React.FC = () => {
             </div>
 
 
-            {/* RECIPIENT */}
+            {/* ==================================================
+                RECIPIENT
+                ================================================== */}
 
             {recipient && (
               <div
@@ -843,7 +980,9 @@ const Transfer: React.FC = () => {
             )}
 
 
-            {/* AMOUNT */}
+            {/* ==================================================
+                AMOUNT
+                ================================================== */}
 
             <label
               htmlFor="amount"
@@ -868,7 +1007,7 @@ const Transfer: React.FC = () => {
               <input
                 id="amount"
                 type="number"
-                min="1"
+                min="20"
                 step="0.01"
                 inputMode="decimal"
                 value={amount}
@@ -880,7 +1019,7 @@ const Transfer: React.FC = () => {
                   setSuccess('');
                   setError('');
                 }}
-                placeholder="0.00"
+                placeholder="20.00"
                 disabled={sending}
                 style={
                   styles.amountInput
@@ -889,7 +1028,97 @@ const Transfer: React.FC = () => {
             </div>
 
 
-            {/* NARRATION */}
+            {/* ==================================================
+                TRANSFER FEE PREVIEW
+                ================================================== */}
+
+            {Number.isFinite(
+              transferAmount
+            ) &&
+              transferAmount >= 20 && (
+                <div
+                  style={
+                    styles.feeCard
+                  }
+                >
+                  <div
+                    style={
+                      styles.feeHeader
+                    }
+                  >
+                    <span>
+                      Transfer Summary
+                    </span>
+
+                    <span
+                      style={
+                        styles.feeBadge
+                      }
+                    >
+                      NGN
+                    </span>
+                  </div>
+
+                  <div
+                    style={
+                      styles.feeRow
+                    }
+                  >
+                    <span>
+                      Transfer amount
+                    </span>
+
+                    <strong>
+                      {formatNaira(
+                        transferAmount
+                      )}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={
+                      styles.feeRow
+                    }
+                  >
+                    <span>
+                      Transfer fee
+                    </span>
+
+                    <strong>
+                      {formatNaira(
+                        transactionFee
+                      )}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={
+                      styles.feeDivider
+                    }
+                  />
+
+                  <div
+                    style={
+                      styles.totalRow
+                    }
+                  >
+                    <span>
+                      Total to be deducted
+                    </span>
+
+                    <strong>
+                      {formatNaira(
+                        totalDebit
+                      )}
+                    </strong>
+                  </div>
+                </div>
+              )}
+
+
+            {/* ==================================================
+                NARRATION
+                ================================================== */}
 
             <label
               htmlFor="narration"
@@ -916,7 +1145,9 @@ const Transfer: React.FC = () => {
             />
 
 
-            {/* SEND */}
+            {/* ==================================================
+                SEND
+                ================================================== */}
 
             <button
               type="submit"
@@ -924,7 +1155,11 @@ const Transfer: React.FC = () => {
                 sending ||
                 checking ||
                 !recipient ||
-                !amount
+                !amount ||
+                !Number.isFinite(
+                  transferAmount
+                ) ||
+                transferAmount < 20
               }
               style={{
                 ...styles.sendButton,
@@ -933,14 +1168,18 @@ const Transfer: React.FC = () => {
                   sending ||
                   checking ||
                   !recipient ||
-                  !amount
+                  !amount ||
+                  !Number.isFinite(
+                    transferAmount
+                  ) ||
+                  transferAmount < 20
                     ? 0.55
                     : 1,
               }}
             >
               {sending
                 ? 'Processing Transfer...'
-                : 'Send Money'}
+                : 'Continue'}
 
               <span>›</span>
             </button>
@@ -989,19 +1228,23 @@ const Transfer: React.FC = () => {
                     styles.pinSubtitle
                   }
                 >
-                  Enter your 4-digit
-                  Transaction PIN to
-                  authorize this transfer.
+                  Review the transfer
+                  details below, then enter
+                  your 4-digit Transaction PIN
+                  to authorize it.
                 </p>
 
 
-                {/* TRANSFER SUMMARY */}
+                {/* ==================================================
+                    TRANSFER SUMMARY
+                    ================================================== */}
 
                 <div
                   style={
                     styles.pinSummary
                   }
                 >
+
                   <div
                     style={
                       styles.pinSummaryRow
@@ -1022,7 +1265,21 @@ const Transfer: React.FC = () => {
                     }
                   >
                     <span>
-                      Amount
+                      Phone
+                    </span>
+
+                    <strong>
+                      {recipient?.phone}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={
+                      styles.pinSummaryRow
+                    }
+                  >
+                    <span>
+                      Transfer amount
                     </span>
 
                     <strong>
@@ -1031,10 +1288,51 @@ const Transfer: React.FC = () => {
                       )}
                     </strong>
                   </div>
+
+                  <div
+                    style={
+                      styles.pinSummaryRow
+                    }
+                  >
+                    <span>
+                      Transfer fee
+                    </span>
+
+                    <strong>
+                      {formatNaira(
+                        transactionFee
+                      )}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={
+                      styles.pinSummaryDivider
+                    }
+                  />
+
+                  <div
+                    style={
+                      styles.pinTotalRow
+                    }
+                  >
+                    <span>
+                      Total deducted
+                    </span>
+
+                    <strong>
+                      {formatNaira(
+                        totalDebit
+                      )}
+                    </strong>
+                  </div>
+
                 </div>
 
 
-                {/* PIN ERROR */}
+                {/* ==================================================
+                    PIN ERROR
+                    ================================================== */}
 
                 {transactionPinError && (
                   <div
@@ -1048,7 +1346,9 @@ const Transfer: React.FC = () => {
                 )}
 
 
-                {/* PIN INPUT */}
+                {/* ==================================================
+                    PIN INPUT
+                    ================================================== */}
 
                 <label
                   htmlFor="transaction-pin"
@@ -1096,7 +1396,9 @@ const Transfer: React.FC = () => {
                 />
 
 
-                {/* PIN ACTIONS */}
+                {/* ==================================================
+                    PIN ACTIONS
+                    ================================================== */}
 
                 <div
                   style={
@@ -1174,7 +1476,9 @@ const Transfer: React.FC = () => {
           )}
 
 
-          {/* SECURITY */}
+          {/* ==================================================
+              SECURITY
+              ================================================== */}
 
           <div
             style={
@@ -1466,7 +1770,7 @@ const styles: Record<
     border:
       '1px solid #d7e0dc',
     borderRadius: 12,
-    marginBottom: 17,
+    marginBottom: 15,
     overflow: 'hidden',
     background: '#ffffff',
   },
@@ -1489,6 +1793,71 @@ const styles: Record<
     fontWeight: 800,
     color: '#10251d',
     background: 'transparent',
+  },
+
+  /*
+   * ==========================================================
+   * FEE CARD
+   * ==========================================================
+   */
+
+  feeCard: {
+    background: '#f2faf6',
+    border:
+      '1px solid #d7ebe1',
+    borderRadius: 15,
+    padding: 14,
+    marginBottom: 19,
+  },
+
+  feeHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    color: '#15543d',
+    fontSize: 13,
+    fontWeight: 850,
+    marginBottom: 8,
+  },
+
+  feeBadge: {
+    background: '#dcefe6',
+    color: '#087c43',
+    borderRadius: 999,
+    padding:
+      '4px 8px',
+    fontSize: 9,
+    fontWeight: 850,
+  },
+
+  feeRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    padding:
+      '6px 0',
+    color: '#65756d',
+    fontSize: 12.5,
+  },
+
+  feeDivider: {
+    height: 1,
+    background: '#d9e8e1',
+    margin:
+      '5px 0',
+  },
+
+  totalRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    padding:
+      '7px 0 2px',
+    color: '#10251d',
+    fontSize: 14,
+    fontWeight: 850,
   },
 
   inputFull: {
@@ -1581,6 +1950,12 @@ const styles: Record<
     lineHeight: 1.5,
   },
 
+  /*
+   * ==========================================================
+   * PIN SUMMARY
+   * ==========================================================
+   */
+
   pinSummary: {
     background: '#f5faf7',
     border:
@@ -1596,16 +1971,26 @@ const styles: Record<
     justifyContent: 'space-between',
     gap: 12,
     padding: '5px 0',
+    color: '#6d7c75',
+    fontSize: 12,
   },
 
-  pinSummaryRow: {
+  pinSummaryDivider: {
+    height: 1,
+    background: '#d9e5df',
+    margin:
+      '7px 0',
+  },
+
+  pinTotalRow: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    padding: '5px 0',
-    color: '#6d7c75',
-    fontSize: 12,
+    padding: '5px 0 2px',
+    color: '#10251d',
+    fontSize: 14,
+    fontWeight: 850,
   },
 
   pinLabel: {
