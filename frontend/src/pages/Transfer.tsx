@@ -25,17 +25,8 @@ interface Recipient {
   id: string;
   full_name: string;
   phone: string;
-
-  /*
-   * REAL Zenimonies account number.
-   *
-   * This is optional because the recipient lookup endpoint
-   * may intentionally not expose it.
-   */
   account_number?: string;
-
   currency?: string;
-
   is_verified?: boolean;
 }
 
@@ -43,7 +34,6 @@ interface Recipient {
 interface LookupResponse {
   success?: boolean;
   message?: string;
-
   user?: Recipient;
 }
 
@@ -54,25 +44,15 @@ interface TransferResponse {
 
   transfer?: {
     reference?: string;
-
     recipient_name?: string;
-
     recipient_phone?: string;
-
     recipient_account?: string;
-
     recipient_bank?: string;
-
     amount?: number;
-
     transaction_fee?: number;
-
     total_debit?: number;
-
     currency?: string;
-
     status?: string;
-
     balance_after?: number;
   };
 }
@@ -203,12 +183,12 @@ const Transfer: React.FC = () => {
    * TRANSFER FEE
    * ==========================================================
    *
-   * ₦20 - ₦999       = ₦0
-   * ₦1,000 - ₦9,999  = ₦20
+   * ₦20 - ₦999        = ₦0
+   * ₦1,000 - ₦9,999   = ₦20
    * ₦10,000 - ₦99,999 = ₦56
-   * ₦100,000+        = ₦75
+   * ₦100,000+         = ₦75
    *
-   * This is only for displaying the expected fee.
+   * This is only the frontend preview.
    *
    * The backend independently calculates the authoritative
    * fee when the transfer is submitted.
@@ -347,8 +327,8 @@ const Transfer: React.FC = () => {
           );
 
           /*
-           * Store the REAL account number
-           * only if the backend actually supplies it.
+           * Store the REAL account number only if
+           * the backend actually supplies one.
            */
 
           setRecipientAccountNumber(
@@ -460,10 +440,8 @@ const Transfer: React.FC = () => {
     /*
      * Do not send money yet.
      *
-     * The customer first sees the transfer amount,
+     * First show the customer the amount,
      * fee and total deduction.
-     *
-     * Then the Transaction PIN dialog opens.
      */
 
     setTransactionPin('');
@@ -479,178 +457,277 @@ const Transfer: React.FC = () => {
    */
 
   const verifyTransactionPinAndSend =
-  async () => {
-    setTransactionPinError('');
-    setError('');
-    setSuccess('');
+    async () => {
+      setTransactionPinError('');
+      setError('');
+      setSuccess('');
 
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-
-    if (!recipient) {
-      setTransactionPinError(
-        'Please verify the recipient first.'
-      );
-      return;
-    }
-
-    if (
-      !/^\d{4}$/.test(
-        transactionPin
-      )
-    ) {
-      setTransactionPinError(
-        'Please enter your 4-digit Transaction PIN.'
-      );
-      return;
-    }
-
-    try {
-      setVerifyingTransactionPin(
-        true
-      );
-
-      setSending(true);
-
-      const response =
-        await axios.post<TransferResponse>(
-          `${API_URL}/api/internal-transfers`,
-          {
-            recipient_phone:
-              cleanPhone,
-
-            amount:
-              transferAmount,
-
-            narration:
-              narration.trim() ||
-              undefined,
-
-            transaction_pin:
-              transactionPin,
-          },
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-
-              'Content-Type':
-                'application/json',
-            },
-          }
-        );
-
-      setTransactionPin('');
-      setShowTransactionPin(false);
-
-      if (response.data?.success) {
-        const transfer =
-          response.data.transfer;
-
-        setSuccess(
-          response.data.message ||
-            'Money sent successfully.'
-        );
-
-        setReference(
-          transfer?.reference || ''
-        );
-
-        setRecipientAccountNumber(
-          transfer?.recipient_account ||
-            recipient.account_number ||
-            ''
-        );
-
-        const newBalance =
-          Number(
-            transfer?.balance_after
-          );
-
-        if (
-          Number.isFinite(
-            newBalance
-          )
-        ) {
-          setBalanceAfter(
-            newBalance
-          );
-        }
-
-        setAmount('');
-        setNarration('');
-
-      } else {
-        setError(
-          response.data?.message ||
-            'Transfer failed.'
-        );
+      if (!token) {
+        navigate('/login');
+        return;
       }
 
-    } catch (err: any) {
-      const status =
-        err?.response?.status;
-
-      const code =
-        err?.response?.data?.code;
-
-      if (
-        code ===
-          'INCORRECT_TRANSACTION_PIN' ||
-        code ===
-          'TRANSACTION_PIN_LOCKED' ||
-        code ===
-          'TRANSACTION_PIN_NOT_SET' ||
-        status === 423
-      ) {
+      if (!recipient) {
         setTransactionPinError(
-          err?.response?.data?.message ||
-            'Transaction PIN verification failed.'
+          'Please verify the recipient first.'
         );
-
-        setShowTransactionPin(true);
-
         return;
       }
 
       if (
-        status === 401
+        !/^\d{4}$/.test(
+          transactionPin
+        )
       ) {
-        localStorage.removeItem(
-          'zenimonies_token'
+        setTransactionPinError(
+          'Please enter your 4-digit Transaction PIN.'
+        );
+        return;
+      }
+
+      try {
+        setVerifyingTransactionPin(
+          true
         );
 
-        localStorage.removeItem(
-          'token'
-        );
+        setSending(true);
 
-        localStorage.removeItem(
-          'access_token'
-        );
+        const response =
+          await axios.post<TransferResponse>(
+            `${API_URL}/api/internal-transfers`,
+            {
+              recipient_phone:
+                cleanPhone,
+
+              amount:
+                transferAmount,
+
+              narration:
+                narration.trim() ||
+                undefined,
+
+              transaction_pin:
+                transactionPin,
+            },
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+
+                'Content-Type':
+                  'application/json',
+              },
+            }
+          );
 
         setTransactionPin('');
         setShowTransactionPin(false);
 
-        navigate('/login');
+        /*
+         * ======================================================
+         * SUCCESSFUL TRANSFER
+         * ======================================================
+         */
 
-        return;
+        if (response.data?.success) {
+          const transfer =
+            response.data.transfer;
+
+          /*
+           * Use the ACTUAL values returned by the backend.
+           *
+           * We do not calculate the fee again here.
+           * We do not create a fake receipt.
+           */
+
+          const receiptTransaction = {
+            id:
+              transfer?.reference ||
+              '',
+
+            reference:
+              transfer?.reference ||
+              '',
+
+            transaction_reference:
+              transfer?.reference ||
+              '',
+
+            type:
+              'internal_transfer',
+
+            status:
+              transfer?.status ||
+              'completed',
+
+            amount:
+              Number(
+                transfer?.amount || 0
+              ),
+
+            transaction_fee:
+              Number(
+                transfer?.transaction_fee || 0
+              ),
+
+            total_debit:
+              Number(
+                transfer?.total_debit || 0
+              ),
+
+            currency:
+              transfer?.currency ||
+              'NGN',
+
+            recipient_name:
+              transfer?.recipient_name ||
+              recipient.full_name,
+
+            recipient_phone:
+              transfer?.recipient_phone ||
+              recipient.phone,
+
+            recipient_account:
+              transfer?.recipient_account ||
+              recipient.account_number ||
+              '',
+
+            recipient_bank:
+              transfer?.recipient_bank ||
+              'Zenimonies',
+
+            balance_after:
+              Number(
+                transfer?.balance_after
+              ),
+
+            description:
+              narration.trim() ||
+              `Transfer to ${
+                transfer?.recipient_name ||
+                recipient.full_name
+              }`,
+          };
+
+
+          /*
+           * ====================================================
+           * OPEN PROFESSIONAL RECEIPT
+           * ====================================================
+           */
+
+          navigate(
+            '/transaction-receipt',
+            {
+              state: {
+                transaction:
+                  receiptTransaction,
+              },
+            }
+          );
+
+          return;
+        }
+
+
+        /*
+         * ======================================================
+         * BACKEND RETURNED FAILURE
+         * ======================================================
+         */
+
+        setError(
+          response.data?.message ||
+            'Transfer failed.'
+        );
+
+      } catch (err: any) {
+        const status =
+          err?.response?.status;
+
+        const code =
+          err?.response?.data?.code;
+
+
+        /*
+         * ====================================================
+         * TRANSACTION PIN ERRORS
+         * ====================================================
+         */
+
+        if (
+          code ===
+            'INCORRECT_TRANSACTION_PIN' ||
+          code ===
+            'TRANSACTION_PIN_LOCKED' ||
+          code ===
+            'TRANSACTION_PIN_NOT_SET' ||
+          status === 423
+        ) {
+          setTransactionPinError(
+            err?.response?.data?.message ||
+              'Transaction PIN verification failed.'
+          );
+
+          setShowTransactionPin(
+            true
+          );
+
+          return;
+        }
+
+
+        /*
+         * ====================================================
+         * AUTHENTICATION EXPIRED
+         * ====================================================
+         */
+
+        if (
+          status === 401
+        ) {
+          localStorage.removeItem(
+            'zenimonies_token'
+          );
+
+          localStorage.removeItem(
+            'token'
+          );
+
+          localStorage.removeItem(
+            'access_token'
+          );
+
+          setTransactionPin('');
+          setShowTransactionPin(
+            false
+          );
+
+          navigate('/login');
+
+          return;
+        }
+
+
+        /*
+         * ====================================================
+         * GENERAL TRANSFER ERROR
+         * ====================================================
+         */
+
+        setError(
+          err?.response?.data?.message ||
+            'Unable to complete the transfer.'
+        );
+
+      } finally {
+        setVerifyingTransactionPin(
+          false
+        );
+
+        setSending(false);
       }
-
-      setError(
-        err?.response?.data?.message ||
-          'Unable to complete the transfer.'
-      );
-
-    } finally {
-      setVerifyingTransactionPin(
-        false
-      );
-
-      setSending(false);
-    }
-  };
+    };
 
 
   /*
