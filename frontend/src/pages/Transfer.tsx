@@ -38,23 +38,38 @@ interface LookupResponse {
 }
 
 
+interface TransferRecord {
+  id?: string;
+
+  reference?: string;
+  transaction_reference?: string;
+
+  recipient_name?: string;
+  recipient_phone?: string;
+  recipient_account?: string;
+  recipient_bank?: string;
+
+  amount?: number;
+  transaction_fee?: number;
+  total_debit?: number;
+
+  currency?: string;
+  status?: string;
+
+  balance_before?: number;
+  balance_after?: number;
+
+  created_at?: string;
+
+  description?: string;
+}
+
+
 interface TransferResponse {
   success?: boolean;
   message?: string;
 
-  transfer?: {
-    reference?: string;
-    recipient_name?: string;
-    recipient_phone?: string;
-    recipient_account?: string;
-    recipient_bank?: string;
-    amount?: number;
-    transaction_fee?: number;
-    total_debit?: number;
-    currency?: string;
-    status?: string;
-    balance_after?: number;
-  };
+  transfer?: TransferRecord;
 }
 
 
@@ -129,6 +144,9 @@ const Transfer: React.FC = () => {
   /*
    * REAL ACCOUNT NUMBER FROM
    * THE COMPLETED TRANSFER.
+   *
+   * This is only populated when the
+   * backend actually provides one.
    */
 
   const [
@@ -180,18 +198,27 @@ const Transfer: React.FC = () => {
 
   /*
    * ==========================================================
-   * TRANSFER FEE
+   * TRANSFER FEE PREVIEW
    * ==========================================================
    *
-   * ₦20 - ₦999        = ₦0
-   * ₦1,000 - ₦9,999   = ₦20
-   * ₦10,000 - ₦99,999 = ₦56
-   * ₦100,000+         = ₦75
+   * ₦20 - ₦999
+   * = ₦0
    *
-   * This is only the frontend preview.
+   * ₦1,000 - ₦9,999
+   * = ₦20
    *
-   * The backend independently calculates the authoritative
-   * fee when the transfer is submitted.
+   * ₦10,000 - ₦99,999
+   * = ₦56
+   *
+   * ₦100,000+
+   * = ₦75
+   *
+   * IMPORTANT:
+   *
+   * This is only a customer-facing preview.
+   *
+   * The backend independently calculates
+   * the authoritative fee.
    */
 
   const transactionFee =
@@ -290,7 +317,9 @@ const Transfer: React.FC = () => {
         return;
       }
 
-      if (cleanPhone.length < 10) {
+      if (
+        cleanPhone.length < 10
+      ) {
         setError(
           'Please enter a valid Zenimonies phone number.'
         );
@@ -327,8 +356,10 @@ const Transfer: React.FC = () => {
           );
 
           /*
-           * Store the REAL account number only if
+           * Only use an account number when
            * the backend actually supplies one.
+           *
+           * We never invent one.
            */
 
           setRecipientAccountNumber(
@@ -440,8 +471,14 @@ const Transfer: React.FC = () => {
     /*
      * Do not send money yet.
      *
-     * First show the customer the amount,
-     * fee and total deduction.
+     * First show the customer:
+     *
+     * Amount
+     * Fee
+     * Total deduction
+     *
+     * The backend will independently
+     * recalculate the fee.
      */
 
     setTransactionPin('');
@@ -520,8 +557,17 @@ const Transfer: React.FC = () => {
             }
           );
 
+        /*
+         * Clear the PIN immediately after
+         * the request has completed.
+         *
+         * The PIN is never placed in
+         * the receipt.
+         */
+
         setTransactionPin('');
         setShowTransactionPin(false);
+
 
         /*
          * ======================================================
@@ -529,82 +575,181 @@ const Transfer: React.FC = () => {
          * ======================================================
          */
 
-        if (response.data?.success) {
+        if (
+          response.data?.success &&
+          response.data?.transfer
+        ) {
           const transfer =
             response.data.transfer;
 
+
           /*
-           * Use the ACTUAL values returned by the backend.
+           * IMPORTANT:
            *
-           * We do not calculate the fee again here.
-           * We do not create a fake receipt.
+           * Everything below comes from
+           * the backend response.
+           *
+           * We do NOT recalculate:
+           *
+           * - fee
+           * - total
+           * - status
+           * - reference
+           * - timestamp
+           *
+           * The backend/database is the
+           * source of truth.
            */
 
           const receiptTransaction = {
+
+            /*
+             * REAL PostgreSQL transaction ID
+             */
+
             id:
-              transfer?.reference ||
-              '',
+              transfer.id || '',
+
+
+            /*
+             * REAL transaction reference
+             */
 
             reference:
-              transfer?.reference ||
-              '',
+              transfer.reference || '',
 
             transaction_reference:
-              transfer?.reference ||
+              transfer.transaction_reference ||
+              transfer.reference ||
               '',
+
+
+            /*
+             * REAL transaction type
+             */
 
             type:
               'internal_transfer',
 
+            transaction_type:
+              'internal_transfer',
+
+            category:
+              'debit',
+
+
+            /*
+             * REAL backend status
+             */
+
             status:
-              transfer?.status ||
-              'completed',
+              transfer.status ||
+              'pending',
+
+
+            /*
+             * REAL TRANSFER AMOUNT
+             */
 
             amount:
               Number(
-                transfer?.amount || 0
+                transfer.amount ?? 0
               ),
+
+
+            /*
+             * REAL TRANSACTION FEE
+             */
 
             transaction_fee:
               Number(
-                transfer?.transaction_fee || 0
+                transfer.transaction_fee ?? 0
               ),
+
+
+            /*
+             * REAL TOTAL DEBIT
+             */
 
             total_debit:
               Number(
-                transfer?.total_debit || 0
+                transfer.total_debit ?? 0
               ),
 
+
+            /*
+             * REAL CURRENCY
+             */
+
             currency:
-              transfer?.currency ||
+              transfer.currency ||
               'NGN',
 
+
+            /*
+             * REAL RECIPIENT
+             */
+
             recipient_name:
-              transfer?.recipient_name ||
+              transfer.recipient_name ||
               recipient.full_name,
 
             recipient_phone:
-              transfer?.recipient_phone ||
+              transfer.recipient_phone ||
               recipient.phone,
 
+
+            /*
+             * Only use a real account number
+             * when one was returned.
+             */
+
             recipient_account:
-              transfer?.recipient_account ||
-              recipient.account_number ||
+              transfer.recipient_account ||
               '',
 
+
+            /*
+             * REAL recipient bank/type
+             */
+
             recipient_bank:
-              transfer?.recipient_bank ||
+              transfer.recipient_bank ||
               'Zenimonies',
+
+
+            /*
+             * REAL BALANCE AFTER TRANSFER
+             */
 
             balance_after:
               Number(
-                transfer?.balance_after
+                transfer.balance_after ?? 0
               ),
 
+
+            /*
+             * REAL PostgreSQL timestamp
+             */
+
+            created_at:
+              transfer.created_at ||
+              '',
+
+
+            /*
+             * REAL description when supplied.
+             *
+             * If the backend doesn't return one,
+             * the narration is only used as the
+             * display description.
+             */
+
             description:
+              transfer.description ||
               narration.trim() ||
               `Transfer to ${
-                transfer?.recipient_name ||
+                transfer.recipient_name ||
                 recipient.full_name
               }`,
           };
@@ -614,6 +759,9 @@ const Transfer: React.FC = () => {
            * ====================================================
            * OPEN PROFESSIONAL RECEIPT
            * ====================================================
+           *
+           * The receipt receives the actual
+           * backend transaction record.
            */
 
           navigate(
@@ -1553,9 +1701,9 @@ const Transfer: React.FC = () => {
           )}
 
 
-          {/* ==================================================
+          {/* ======================================================
               SECURITY
-              ================================================== */}
+              ====================================================== */}
 
           <div
             style={
@@ -1872,12 +2020,6 @@ const styles: Record<
     background: 'transparent',
   },
 
-  /*
-   * ==========================================================
-   * FEE CARD
-   * ==========================================================
-   */
-
   feeCard: {
     background: '#f2faf6',
     border:
@@ -1969,12 +2111,6 @@ const styles: Record<
     gap: 8,
   },
 
-  /*
-   * ==========================================================
-   * TRANSACTION PIN DIALOG
-   * ==========================================================
-   */
-
   pinOverlay: {
     position: 'fixed',
     inset: 0,
@@ -2026,12 +2162,6 @@ const styles: Record<
     fontSize: 13,
     lineHeight: 1.5,
   },
-
-  /*
-   * ==========================================================
-   * PIN SUMMARY
-   * ==========================================================
-   */
 
   pinSummary: {
     background: '#f5faf7',
