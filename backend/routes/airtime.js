@@ -26,11 +26,6 @@ const router = express.Router();
 // ============================================================
 
 router.post(
-  '/requery/:reference',
-  authenticateToken,
-  requeryPendingAirtime
-);
-router.post(
   '/',
   authenticateToken,
   transactionPinMiddleware,
