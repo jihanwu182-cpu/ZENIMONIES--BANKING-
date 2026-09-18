@@ -28,6 +28,8 @@ import {
   ScheduleRounded,
   ShareRounded,
   TagRounded,
+  PersonRounded,
+  LayersRounded,
 } from '@mui/icons-material';
 
 import {
@@ -53,72 +55,71 @@ interface Transaction {
   id?: string;
 
   type?: string;
-
   transaction_type?: string;
-
   category?: string;
-
   description?: string;
 
   amount?: number | string;
-
   currency?: string;
 
   recipient_name?: string;
-
   recipient_phone?: string;
-
   phone?: string;
 
   recipient_bank?: string;
-
   bank_name?: string;
 
   recipient_account?: string;
-
-  sender_name?: string;
-
-  sender_phone?: string;
-
-  sender_account?: string;
-
   account_number?: string;
 
-  network?: string;
+  sender_name?: string;
+  sender_phone?: string;
+  sender_account?: string;
 
+  network?: string;
   provider?: string;
 
   data_plan?: string;
-
   plan_name?: string;
-
   variation_name?: string;
 
   customer_number?: string;
-
   meter_number?: string;
-
   smartcard_number?: string;
-
   decoder_number?: string;
 
   reference?: string;
-
   transaction_reference?: string;
 
   status?: string;
 
   transaction_fee?: number | string;
-
   fee?: number | string;
 
   total_debit?: number | string;
 
   created_at?: string;
-
   date?: string;
-
   timestamp?: string;
+}
+
+
+/*
+ * ============================================================
+ * STORED USER / ACCOUNT TYPES
+ * ============================================================
+ */
+
+interface StoredUser {
+  full_name?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+}
+
+interface StoredAccount {
+  account_number?: string;
+  accountNumber?: string;
 }
 
 
@@ -255,6 +256,7 @@ const TransactionReceipt: React.FC = () => {
       transaction.amount ?? 0
     );
 
+
   const numericFee =
     Number(
       transaction.transaction_fee ??
@@ -262,11 +264,57 @@ const TransactionReceipt: React.FC = () => {
         0
     );
 
+
+  const numericTotalDebit =
+    Number(
+      transaction.total_debit ?? 0
+    );
+
+
   const currency =
     (
       transaction.currency ||
       'NGN'
     ).toUpperCase();
+
+
+  /*
+   * ============================================================
+   * REAL TOTAL DEBIT
+   * ============================================================
+   *
+   * For transfers:
+   *
+   * Amount transferred + fee = amount actually debited.
+   *
+   * We prefer the backend's total_debit.
+   */
+
+  let totalAmountDebited =
+    Math.abs(
+      numericAmount
+    );
+
+
+  if (
+    Number.isFinite(
+      numericTotalDebit
+    ) &&
+    numericTotalDebit > 0
+  ) {
+    totalAmountDebited =
+      Math.abs(
+        numericTotalDebit
+      );
+  } else if (
+    numericFee > 0
+  ) {
+    totalAmountDebited =
+      Math.abs(
+        numericAmount +
+          numericFee
+      );
+  }
 
 
   /*
@@ -303,10 +351,8 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * REAL TRANSACTION REFERENCE
+   * REAL REFERENCE
    * ============================================================
-   *
-   * NEVER use the database UUID as the customer reference.
    */
 
   const reference =
@@ -325,6 +371,7 @@ const TransactionReceipt: React.FC = () => {
     transaction.created_at ||
     transaction.date ||
     transaction.timestamp;
+
 
   const formatDate = (
     value?: string
@@ -360,7 +407,7 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * TYPE DETECTION
+   * TYPE
    * ============================================================
    */
 
@@ -371,6 +418,7 @@ const TransactionReceipt: React.FC = () => {
       transaction.category ||
       ''
     ).toLowerCase();
+
 
   const rawDescription =
     (
@@ -447,6 +495,7 @@ const TransactionReceipt: React.FC = () => {
   let receiptTitle =
     'Transaction Receipt';
 
+
   if (isAirtime) {
     receiptTitle =
       'Airtime Purchase Receipt';
@@ -510,12 +559,16 @@ const TransactionReceipt: React.FC = () => {
   let statusText =
     'Unconfirmed';
 
+
   if (isSuccessful) {
-    statusText = 'Successful';
+    statusText =
+      'Successful';
   } else if (isFailed) {
-    statusText = 'Failed';
+    statusText =
+      'Failed';
   } else if (isPending) {
-    statusText = 'Pending';
+    statusText =
+      'Pending';
   }
 
 
@@ -528,7 +581,9 @@ const TransactionReceipt: React.FC = () => {
   let statusMessage =
     'The current transaction status is shown below.';
 
+
   if (isSuccessful) {
+
     if (isAirtime) {
       statusMessage =
         'Your airtime purchase has been completed successfully.';
@@ -545,13 +600,19 @@ const TransactionReceipt: React.FC = () => {
       statusMessage =
         'Your transaction has been completed successfully.';
     }
+
   } else if (isPending) {
+
     statusMessage =
       'Your transaction is still being processed.';
+
   } else if (isFailed) {
+
     statusMessage =
       'Your transaction could not be completed.';
+
   } else {
+
     statusMessage =
       'The current transaction status could not be confirmed.';
   }
@@ -559,7 +620,7 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * STATUS STYLE
+   * STATUS COLORS
    * ============================================================
    */
 
@@ -606,42 +667,137 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * PARTY / PROVIDER DETAILS
+   * STORED CUSTOMER DATA
+   * ============================================================
+   *
+   * These are only used as a fallback when the transaction
+   * object itself does not contain sender details.
+   */
+
+  let storedUser:
+    StoredUser = {};
+
+  let storedAccount:
+    StoredAccount = {};
+
+
+  try {
+
+    const userRaw =
+      localStorage.getItem(
+        'zenimonies_user'
+      );
+
+    if (userRaw) {
+      storedUser =
+        JSON.parse(
+          userRaw
+        ) as StoredUser;
+    }
+
+
+    const accountsRaw =
+      localStorage.getItem(
+        'zenimonies_accounts'
+      );
+
+
+    if (accountsRaw) {
+
+      const parsedAccounts =
+        JSON.parse(
+          accountsRaw
+        );
+
+
+      if (
+        Array.isArray(
+          parsedAccounts
+        ) &&
+        parsedAccounts.length > 0
+      ) {
+        storedAccount =
+          parsedAccounts.find(
+            (
+              account: StoredAccount
+            ) =>
+              Boolean(
+                account.account_number ||
+                account.accountNumber
+              )
+          ) ||
+          parsedAccounts[0];
+      }
+    }
+
+  } catch {
+    /*
+     * Do not break the receipt if local storage
+     * contains malformed data.
+     */
+  }
+
+
+  /*
+   * ============================================================
+   * SENDER DETAILS
    * ============================================================
    */
 
   const senderName =
     transaction.sender_name ||
+    storedUser.full_name ||
+    storedUser.name ||
     '';
+
 
   const senderPhone =
     transaction.sender_phone ||
+    storedUser.phone ||
     '';
+
 
   const senderAccount =
     transaction.sender_account ||
+    storedAccount.account_number ||
+    storedAccount.accountNumber ||
     '';
 
+
+  /*
+   * ============================================================
+   * RECEIVER DETAILS
+   * ============================================================
+   */
 
   const recipientName =
     transaction.recipient_name ||
     '';
+
 
   const recipientPhone =
     transaction.recipient_phone ||
     transaction.phone ||
     '';
 
+
   const recipientBank =
     transaction.recipient_bank ||
     transaction.bank_name ||
     '';
+
 
   const recipientAccount =
     transaction.recipient_account ||
     transaction.account_number ||
     '';
 
+
+  /*
+   * ============================================================
+   * PROVIDER DETAILS
+   * ============================================================
+   */
 
   const network =
     transaction.network ||
@@ -666,69 +822,13 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * TRANSFER FEE
-   * ============================================================
-   *
-   * The fee is shown separately.
-   *
-   * The amount transferred remains the amount field.
-   */
-
-  const transferFee =
-    Number.isFinite(numericFee) &&
-    numericFee > 0
-      ? numericFee
-      : 0;
-
-
-  /*
-   * ============================================================
-   * DISPLAY AMOUNT
-   * ============================================================
-   */
-
-  const displayAmount =
-    isIncoming
-      ? `+${formatMoney(
-          numericAmount
-        )}`
-      : `−${formatMoney(
-          numericAmount
-        )}`;
-
-
-  /*
-   * ============================================================
-   * QR CODE
-   * ============================================================
-   *
-   * The QR contains real transaction information only.
-   *
-   * We intentionally do NOT put:
-   * - password
-   * - transaction PIN
-   * - access token
-   * - wallet balance
-   * - sensitive authentication data
-   *
-   * A future backend verification endpoint can use this
-   * reference to provide a secure online verification page.
-   */
-
-  const qrValue =
-    reference
-      ? `ZENIMONIES|TRANSACTION|${reference}`
-      : 'ZENIMONIES|TRANSACTION|REFERENCE-UNAVAILABLE';
-
-
-  /*
-   * ============================================================
    * COPY REFERENCE
    * ============================================================
    */
 
   const copyReference =
     async () => {
+
       if (!reference) {
         alert(
           'Transaction reference is not available.'
@@ -737,6 +837,7 @@ const TransactionReceipt: React.FC = () => {
       }
 
       try {
+
         await navigator.clipboard.writeText(
           reference
         );
@@ -744,7 +845,9 @@ const TransactionReceipt: React.FC = () => {
         alert(
           'Transaction reference copied.'
         );
+
       } catch {
+
         alert(
           'Unable to copy transaction reference.'
         );
@@ -760,6 +863,7 @@ const TransactionReceipt: React.FC = () => {
 
   const getSafeFileName =
     () => {
+
       const safeReference =
         reference
           ? reference.replace(
@@ -774,17 +878,40 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * PDF
+   * QR VALUE
+   * ============================================================
+   *
+   * Only the real transaction reference is encoded.
+   *
+   * No password.
+   * No PIN.
+   * No access token.
+   * No account balance.
+   */
+
+  const qrValue =
+    reference
+      ? `ZENIMONIES|TRANSACTION|${reference}`
+      : 'ZENIMONIES|TRANSACTION|REFERENCE-UNAVAILABLE';
+
+
+  /*
+   * ============================================================
+   * CREATE PDF
    * ============================================================
    */
 
   const createReceiptPDF =
     async () => {
-      if (!receiptRef.current) {
+
+      if (
+        !receiptRef.current
+      ) {
         throw new Error(
           'Receipt is not available.'
         );
       }
+
 
       const canvas =
         await html2canvas(
@@ -798,13 +925,17 @@ const TransactionReceipt: React.FC = () => {
           }
         );
 
+
       const imageData =
         canvas.toDataURL(
           'image/png',
           1
         );
 
-      const pdfWidth = 80;
+
+      const pdfWidth =
+        80;
+
 
       const pdfHeight =
         (
@@ -812,6 +943,7 @@ const TransactionReceipt: React.FC = () => {
           canvas.width
         ) *
         pdfWidth;
+
 
       const doc =
         new jsPDF({
@@ -825,6 +957,7 @@ const TransactionReceipt: React.FC = () => {
           compress: true,
         });
 
+
       doc.addImage(
         imageData,
         'PNG',
@@ -835,6 +968,7 @@ const TransactionReceipt: React.FC = () => {
         undefined,
         'FAST'
       );
+
 
       return doc;
     };
@@ -848,29 +982,39 @@ const TransactionReceipt: React.FC = () => {
 
   const handleDownloadPDF =
     async () => {
+
       if (pdfLoading) {
         return;
       }
 
+
       try {
+
         setPdfLoading(true);
+
 
         const doc =
           await createReceiptPDF();
 
+
         doc.save(
           getSafeFileName()
         );
+
       } catch (error) {
+
         console.error(
           'Receipt PDF generation failed:',
           error
         );
 
+
         alert(
           'Unable to generate the PDF receipt. Please try again.'
         );
+
       } finally {
+
         setPdfLoading(false);
       }
     };
@@ -884,28 +1028,37 @@ const TransactionReceipt: React.FC = () => {
 
   const handleSharePDF =
     async () => {
+
       if (pdfLoading) {
         return;
       }
 
+
       try {
+
         setPdfLoading(true);
+
 
         const doc =
           await createReceiptPDF();
 
+
         const pdfBlob =
           doc.output('blob');
 
+
         const pdfFile =
           new File(
-            [pdfBlob],
+            [
+              pdfBlob,
+            ],
             getSafeFileName(),
             {
               type:
                 'application/pdf',
             }
           );
+
 
         const canShareFiles =
           typeof navigator !==
@@ -920,8 +1073,13 @@ const TransactionReceipt: React.FC = () => {
             ],
           });
 
-        if (canShareFiles) {
+
+        if (
+          canShareFiles
+        ) {
+
           try {
+
             await navigator.share({
               title:
                 `Zenimonies ${receiptTitle}`,
@@ -936,12 +1094,16 @@ const TransactionReceipt: React.FC = () => {
               ],
             });
 
+
             return;
+
           } catch (error) {
+
             const shareError =
               error as {
                 name?: string;
               };
+
 
             if (
               shareError?.name ===
@@ -952,19 +1114,25 @@ const TransactionReceipt: React.FC = () => {
           }
         }
 
+
         doc.save(
           getSafeFileName()
         );
+
       } catch (error) {
+
         console.error(
           'Receipt PDF sharing failed:',
           error
         );
 
+
         alert(
           'Unable to create the PDF receipt. Please try again.'
         );
+
       } finally {
+
         setPdfLoading(false);
       }
     };
@@ -987,11 +1155,12 @@ const TransactionReceipt: React.FC = () => {
     value?: React.ReactNode;
     valueNode?: React.ReactNode;
   }) => (
+
     <Box
       sx={{
         display: 'grid',
         gridTemplateColumns:
-          'minmax(92px, 38%) 1fr',
+          'minmax(92px, 40%) 1fr',
         alignItems: 'center',
         minHeight: 36,
         py: 0.35,
@@ -1003,6 +1172,7 @@ const TransactionReceipt: React.FC = () => {
         },
       }}
     >
+
       <Stack
         direction="row"
         spacing={0.6}
@@ -1011,6 +1181,7 @@ const TransactionReceipt: React.FC = () => {
           minWidth: 0,
         }}
       >
+
         {icon && (
           <Box
             sx={{
@@ -1026,6 +1197,7 @@ const TransactionReceipt: React.FC = () => {
           </Box>
         )}
 
+
         <Typography
           sx={{
             color: '#687871',
@@ -1035,7 +1207,9 @@ const TransactionReceipt: React.FC = () => {
         >
           {label}
         </Typography>
+
       </Stack>
+
 
       {valueNode || (
         <Typography
@@ -1043,13 +1217,15 @@ const TransactionReceipt: React.FC = () => {
             color: '#10221c',
             fontSize: 12,
             fontWeight: 650,
-            wordBreak: 'break-word',
+            wordBreak:
+              'break-word',
             textAlign: 'right',
           }}
         >
           {value}
         </Typography>
       )}
+
     </Box>
   );
 
@@ -1073,6 +1249,7 @@ const TransactionReceipt: React.FC = () => {
     account?: string;
     bank?: string;
   }) => {
+
     const hasAny =
       Boolean(
         name ||
@@ -1081,42 +1258,47 @@ const TransactionReceipt: React.FC = () => {
         bank
       );
 
+
     if (!hasAny) {
       return null;
     }
 
+
     return (
       <Box
         sx={{
-          mt: 1,
-          mb: 0.8,
-          p: 1,
+          mt: 0.9,
+          mb: 0.7,
+          p: 0.9,
           borderRadius: 1.5,
           bgcolor: '#f7faf8',
           border:
             '1px solid #e1ebe6',
         }}
       >
+
         <Typography
           sx={{
             color: '#075c43',
             fontSize: 11.5,
             fontWeight: 850,
-            mb: 0.35,
+            mb: 0.2,
           }}
         >
           {title}
         </Typography>
 
+
         {name && (
           <DetailRow
             icon={
-              <AccountBalanceRounded />
+              <PersonRounded />
             }
             label="Name"
             value={name}
           />
         )}
+
 
         {phone && (
           <DetailRow
@@ -1128,6 +1310,7 @@ const TransactionReceipt: React.FC = () => {
           />
         )}
 
+
         {account && (
           <DetailRow
             icon={
@@ -1138,6 +1321,7 @@ const TransactionReceipt: React.FC = () => {
           />
         )}
 
+
         {bank && (
           <DetailRow
             icon={
@@ -1147,6 +1331,7 @@ const TransactionReceipt: React.FC = () => {
             value={bank}
           />
         )}
+
       </Box>
     );
   };
@@ -1168,44 +1353,27 @@ const TransactionReceipt: React.FC = () => {
        */
 
       if (isTransfer) {
+
         return (
           <>
-            <PartySection
-              title={
-                isIncoming
-                  ? 'Sender Details'
-                  : 'Sender Details'
-              }
-              name={
-                isIncoming
-                  ? (
-                    transaction.sender_name ||
-                    ''
-                  )
-                  : senderName
-              }
-              phone={
-                isIncoming
-                  ? (
-                    transaction.sender_phone ||
-                    ''
-                  )
-                  : senderPhone
-              }
-              account={
-                isIncoming
-                  ? (
-                    transaction.sender_account ||
-                    ''
-                  )
-                  : senderAccount
-              }
-            />
 
             <PartySection
-              title={
-                'Receiver Details'
+              title="Sender Details"
+              name={
+                senderName
               }
+              phone={
+                senderPhone
+              }
+              account={
+                senderAccount
+              }
+              bank="Zenimonies"
+            />
+
+
+            <PartySection
+              title="Receiver Details"
               name={
                 recipientName
               }
@@ -1216,19 +1384,15 @@ const TransactionReceipt: React.FC = () => {
                 recipientAccount
               }
               bank={
-                recipientBank
+                recipientBank ||
+                'Zenimonies'
               }
             />
 
+
             <DetailRow
               icon={
-                isIncoming
-                  ? (
-                    <ArrowDownwardRounded />
-                  )
-                  : (
-                    <ArrowUpwardRounded />
-                  )
+                <ArrowUpwardRounded />
               }
               label="Amount Transferred"
               value={
@@ -1240,7 +1404,8 @@ const TransactionReceipt: React.FC = () => {
               }
             />
 
-            {transferFee > 0 && (
+
+            {numericFee > 0 && (
               <DetailRow
                 icon={
                   <TagRounded />
@@ -1248,11 +1413,27 @@ const TransactionReceipt: React.FC = () => {
                 label="Transaction Fee"
                 value={
                   formatMoney(
-                    transferFee
+                    Math.abs(
+                      numericFee
+                    )
                   )
                 }
               />
             )}
+
+
+            <DetailRow
+              icon={
+                <LayersRounded />
+              }
+              label="Total Amount Debited"
+              value={
+                formatMoney(
+                  totalAmountDebited
+                )
+              }
+            />
+
 
             {reference && (
               <DetailRow
@@ -1273,6 +1454,7 @@ const TransactionReceipt: React.FC = () => {
               />
             )}
 
+
             <DetailRow
               icon={
                 <CalendarMonthRounded />
@@ -1284,6 +1466,7 @@ const TransactionReceipt: React.FC = () => {
                 )
               }
             />
+
 
             <DetailRow
               icon={
@@ -1304,6 +1487,7 @@ const TransactionReceipt: React.FC = () => {
                 />
               }
             />
+
           </>
         );
       }
@@ -1316,8 +1500,10 @@ const TransactionReceipt: React.FC = () => {
        */
 
       if (isAirtime) {
+
         return (
           <>
+
             {network && (
               <DetailRow
                 icon={
@@ -1330,6 +1516,7 @@ const TransactionReceipt: React.FC = () => {
               />
             )}
 
+
             {recipientPhone && (
               <DetailRow
                 icon={
@@ -1341,6 +1528,7 @@ const TransactionReceipt: React.FC = () => {
                 }
               />
             )}
+
 
             <DetailRow
               icon={
@@ -1356,6 +1544,7 @@ const TransactionReceipt: React.FC = () => {
               }
             />
 
+
             {reference && (
               <DetailRow
                 icon={
@@ -1375,6 +1564,7 @@ const TransactionReceipt: React.FC = () => {
               />
             )}
 
+
             <DetailRow
               icon={
                 <CalendarMonthRounded />
@@ -1386,6 +1576,7 @@ const TransactionReceipt: React.FC = () => {
                 )
               }
             />
+
 
             <DetailRow
               icon={
@@ -1406,6 +1597,7 @@ const TransactionReceipt: React.FC = () => {
                 />
               }
             />
+
           </>
         );
       }
@@ -1418,8 +1610,10 @@ const TransactionReceipt: React.FC = () => {
        */
 
       if (isData) {
+
         return (
           <>
+
             {network && (
               <DetailRow
                 icon={
@@ -1432,6 +1626,7 @@ const TransactionReceipt: React.FC = () => {
               />
             )}
 
+
             {recipientPhone && (
               <DetailRow
                 icon={
@@ -1443,6 +1638,7 @@ const TransactionReceipt: React.FC = () => {
                 }
               />
             )}
+
 
             {dataPlan && (
               <DetailRow
@@ -1456,6 +1652,7 @@ const TransactionReceipt: React.FC = () => {
               />
             )}
 
+
             <DetailRow
               icon={
                 <ArrowUpwardRounded />
@@ -1469,6 +1666,7 @@ const TransactionReceipt: React.FC = () => {
                 )
               }
             />
+
 
             {reference && (
               <DetailRow
@@ -1489,6 +1687,7 @@ const TransactionReceipt: React.FC = () => {
               />
             )}
 
+
             <DetailRow
               icon={
                 <CalendarMonthRounded />
@@ -1500,6 +1699,7 @@ const TransactionReceipt: React.FC = () => {
                 )
               }
             />
+
 
             <DetailRow
               icon={
@@ -1520,6 +1720,7 @@ const TransactionReceipt: React.FC = () => {
                 />
               }
             />
+
           </>
         );
       }
@@ -1532,8 +1733,10 @@ const TransactionReceipt: React.FC = () => {
        */
 
       if (isElectricity) {
+
         return (
           <>
+
             {network && (
               <DetailRow
                 icon={
@@ -1545,6 +1748,7 @@ const TransactionReceipt: React.FC = () => {
                 }
               />
             )}
+
 
             {customerNumber && (
               <DetailRow
@@ -1558,6 +1762,7 @@ const TransactionReceipt: React.FC = () => {
               />
             )}
 
+
             <DetailRow
               icon={
                 <ArrowUpwardRounded />
@@ -1571,6 +1776,7 @@ const TransactionReceipt: React.FC = () => {
                 )
               }
             />
+
 
             {reference && (
               <DetailRow
@@ -1591,6 +1797,7 @@ const TransactionReceipt: React.FC = () => {
               />
             )}
 
+
             <DetailRow
               icon={
                 <CalendarMonthRounded />
@@ -1602,6 +1809,7 @@ const TransactionReceipt: React.FC = () => {
                 )
               }
             />
+
 
             <DetailRow
               icon={
@@ -1622,6 +1830,7 @@ const TransactionReceipt: React.FC = () => {
                 />
               }
             />
+
           </>
         );
       }
@@ -1634,8 +1843,10 @@ const TransactionReceipt: React.FC = () => {
        */
 
       if (isTV) {
+
         return (
           <>
+
             {network && (
               <DetailRow
                 icon={
@@ -1647,6 +1858,7 @@ const TransactionReceipt: React.FC = () => {
                 }
               />
             )}
+
 
             {customerNumber && (
               <DetailRow
@@ -1660,6 +1872,7 @@ const TransactionReceipt: React.FC = () => {
               />
             )}
 
+
             {dataPlan && (
               <DetailRow
                 icon={
@@ -1671,6 +1884,7 @@ const TransactionReceipt: React.FC = () => {
                 }
               />
             )}
+
 
             <DetailRow
               icon={
@@ -1685,6 +1899,7 @@ const TransactionReceipt: React.FC = () => {
                 )
               }
             />
+
 
             {reference && (
               <DetailRow
@@ -1705,6 +1920,7 @@ const TransactionReceipt: React.FC = () => {
               />
             )}
 
+
             <DetailRow
               icon={
                 <CalendarMonthRounded />
@@ -1716,6 +1932,7 @@ const TransactionReceipt: React.FC = () => {
                 )
               }
             />
+
 
             <DetailRow
               icon={
@@ -1736,6 +1953,7 @@ const TransactionReceipt: React.FC = () => {
                 />
               }
             />
+
           </>
         );
       }
@@ -1743,16 +1961,17 @@ const TransactionReceipt: React.FC = () => {
 
       /*
        * --------------------------------------------------------
-       * FUNDING / OTHER
+       * OTHER / FUNDING
        * --------------------------------------------------------
        */
 
       return (
         <>
+
           {recipientName && (
             <DetailRow
               icon={
-                <AccountBalanceRounded />
+                <PersonRounded />
               }
               label="Customer"
               value={
@@ -1760,6 +1979,7 @@ const TransactionReceipt: React.FC = () => {
               }
             />
           )}
+
 
           {customerNumber && (
             <DetailRow
@@ -1773,6 +1993,7 @@ const TransactionReceipt: React.FC = () => {
             />
           )}
 
+
           {network && (
             <DetailRow
               icon={
@@ -1784,6 +2005,7 @@ const TransactionReceipt: React.FC = () => {
               }
             />
           )}
+
 
           <DetailRow
             icon={
@@ -1805,6 +2027,7 @@ const TransactionReceipt: React.FC = () => {
             }
           />
 
+
           {reference && (
             <DetailRow
               icon={
@@ -1824,6 +2047,7 @@ const TransactionReceipt: React.FC = () => {
             />
           )}
 
+
           <DetailRow
             icon={
               <CalendarMonthRounded />
@@ -1835,6 +2059,7 @@ const TransactionReceipt: React.FC = () => {
               )
             }
           />
+
 
           <DetailRow
             icon={
@@ -1855,6 +2080,7 @@ const TransactionReceipt: React.FC = () => {
               />
             }
           />
+
         </>
       );
     };
@@ -1880,6 +2106,7 @@ const TransactionReceipt: React.FC = () => {
           px: 0.75,
         }}
       >
+
         <Box
           className="receipt-container"
           sx={{
@@ -1888,6 +2115,7 @@ const TransactionReceipt: React.FC = () => {
             mx: 'auto',
           }}
         >
+
           <Card
             ref={receiptRef}
             className="receipt-card"
@@ -1904,7 +2132,7 @@ const TransactionReceipt: React.FC = () => {
           >
 
             {/* =================================================
-                HEADER
+                APPROVED ZENIMONIES HEADER
             ================================================== */}
 
             <Box
@@ -1912,67 +2140,162 @@ const TransactionReceipt: React.FC = () => {
               sx={{
                 bgcolor: '#087f5b',
                 color: '#ffffff',
-                px: 1.8,
-                py: 1.5,
+                mx: 1,
+                mt: 1,
+                borderRadius: 2,
+                px: 1.5,
+                py: 1.25,
               }}
             >
+
               <Stack
                 direction="row"
                 alignItems="center"
                 justifyContent="space-between"
                 spacing={1}
               >
-                <Box>
-                  <Typography
-                    sx={{
-                      fontSize: 18,
-                      fontWeight: 900,
-                      letterSpacing: 0.8,
-                      lineHeight: 1,
-                    }}
-                  >
-                    ZENIMONIES
-                  </Typography>
 
-                  <Typography
-                    sx={{
-                      mt: 0.35,
-                      fontSize: 6.5,
-                      letterSpacing: 2,
-                      fontWeight: 600,
-                      opacity: 0.85,
-                    }}
-                  >
-                    DIGITAL BANKING
-                  </Typography>
-                </Box>
-
-                <Typography
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  spacing={0.8}
                   sx={{
-                    fontSize: 11,
-                    fontWeight: 750,
-                    textAlign: 'right',
-                    maxWidth: 150,
+                    minWidth: 0,
                   }}
                 >
-                  {receiptTitle}
-                </Typography>
+
+                  {/* Zenimonies Z mark */}
+
+                  <Box
+                    sx={{
+                      width: 38,
+                      height: 38,
+                      border:
+                        '2px solid rgba(255,255,255,0.95)',
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 23,
+                      fontWeight: 900,
+                      flexShrink: 0,
+                    }}
+                  >
+                    Z
+                  </Box>
+
+
+                  <Box
+                    sx={{
+                      minWidth: 0,
+                    }}
+                  >
+
+                    <Box
+                      sx={{
+                        position:
+                          'relative',
+                        display:
+                          'inline-block',
+                      }}
+                    >
+
+                      <Typography
+                        sx={{
+                          fontSize: 19,
+                          fontWeight: 900,
+                          letterSpacing: 0.3,
+                          lineHeight: 1,
+                          whiteSpace:
+                            'nowrap',
+                        }}
+                      >
+                        ZENIMONIES
+                      </Typography>
+
+
+                      {/* Leaf / flower accent above i */}
+
+                      <Box
+                        sx={{
+                          position:
+                            'absolute',
+                          left:
+                            '55.5%',
+                          top:
+                            -12,
+                          transform:
+                            'translateX(-50%)',
+                          fontSize:
+                            13,
+                          lineHeight:
+                            1,
+                        }}
+                      >
+                        ❧
+                      </Box>
+
+                    </Box>
+
+
+                    <Typography
+                      sx={{
+                        mt: 0.35,
+                        fontSize: 6,
+                        letterSpacing: 1.7,
+                        fontWeight: 650,
+                        opacity: 0.88,
+                      }}
+                    >
+                      DIGITAL BANKING
+                    </Typography>
+
+                  </Box>
+
+                </Stack>
+
+
+                <Box
+                  sx={{
+                    borderLeft:
+                      '1px solid rgba(255,255,255,0.7)',
+                    pl: 1,
+                    flexShrink: 0,
+                  }}
+                >
+
+                  <Typography
+                    sx={{
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      textAlign: 'right',
+                      lineHeight: 1.2,
+                      maxWidth: 105,
+                    }}
+                  >
+                    {receiptTitle}
+                  </Typography>
+
+                </Box>
+
               </Stack>
+
             </Box>
 
 
             {/* =================================================
-                STATUS + AMOUNT
+                STATUS + TOTAL DEBIT
             ================================================== */}
 
             <Box
               sx={{
                 px: 1.8,
-                pt: 1.6,
-                pb: 1.35,
+                pt: 1.45,
+                pb: 1.25,
                 textAlign: 'center',
               }}
             >
+
               <Box
                 sx={{
                   width: 43,
@@ -1982,15 +2305,17 @@ const TransactionReceipt: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  bgcolor: statusBackground,
+                  bgcolor:
+                    statusBackground,
                 }}
               >
                 {statusIcon}
               </Box>
 
+
               <Typography
                 sx={{
-                  mt: 0.8,
+                  mt: 0.75,
                   color: '#063b2b',
                   fontSize: 18,
                   fontWeight: 850,
@@ -2006,20 +2331,24 @@ const TransactionReceipt: React.FC = () => {
                       : 'Transaction Status Unconfirmed'}
               </Typography>
 
+
               <Typography
                 sx={{
-                  mt: 0.35,
+                  mt: 0.3,
                   color: '#718079',
                   fontSize: 10.5,
-                  lineHeight: 1.4,
+                  lineHeight: 1.35,
                 }}
               >
                 {statusMessage}
               </Typography>
 
+
+              {/* TOTAL ACTUALLY DEBITED */}
+
               <Typography
                 sx={{
-                  mt: 0.85,
+                  mt: 0.75,
                   color:
                     isIncoming
                       ? '#087f5b'
@@ -2030,26 +2359,40 @@ const TransactionReceipt: React.FC = () => {
                   lineHeight: 1,
                 }}
               >
-                {displayAmount}
+                {isIncoming
+                  ? `+${formatMoney(
+                      Math.abs(
+                        numericAmount
+                      )
+                    )}`
+                  : `−${formatMoney(
+                      totalAmountDebited
+                    )}`}
               </Typography>
+
 
               <Typography
                 sx={{
-                  mt: 0.45,
+                  mt: 0.4,
                   color: '#6c7b75',
                   fontSize: 9.5,
-                  fontWeight: 650,
+                  fontWeight: 700,
                 }}
               >
-                Amount Transferred
+                {isTransfer &&
+                !isIncoming
+                  ? 'Total Amount Debited'
+                  : 'Amount'}
               </Typography>
+
             </Box>
 
 
             <Divider
               sx={{
                 mx: 1.8,
-                borderColor: '#dce6e1',
+                borderColor:
+                  '#dce6e1',
               }}
             />
 
@@ -2061,9 +2404,10 @@ const TransactionReceipt: React.FC = () => {
             <Box
               sx={{
                 px: 1.8,
-                py: 1.2,
+                py: 1.05,
               }}
             >
+
               <Box
                 sx={{
                   display: 'flex',
@@ -2072,10 +2416,11 @@ const TransactionReceipt: React.FC = () => {
                   bgcolor: '#eaf8f2',
                   borderRadius: 1.5,
                   px: 1,
-                  py: 0.65,
-                  mb: 0.7,
+                  py: 0.6,
+                  mb: 0.55,
                 }}
               >
+
                 <Box
                   sx={{
                     width: 25,
@@ -2096,6 +2441,7 @@ const TransactionReceipt: React.FC = () => {
                   />
                 </Box>
 
+
                 <Typography
                   sx={{
                     color: '#075c43',
@@ -2107,6 +2453,7 @@ const TransactionReceipt: React.FC = () => {
                     ? 'Transfer Details'
                     : 'Payment Details'}
                 </Typography>
+
               </Box>
 
 
@@ -2116,10 +2463,12 @@ const TransactionReceipt: React.FC = () => {
                 }
                 label="Transaction Type"
                 value={
-                  receiptTitle.replace(
-                    ' Receipt',
-                    ''
-                  )
+                  isTransfer
+                    ? 'Transfer (Zenimonies to Zenimonies)'
+                    : receiptTitle.replace(
+                        ' Receipt',
+                        ''
+                      )
                 }
               />
 
@@ -2137,31 +2486,35 @@ const TransactionReceipt: React.FC = () => {
               sx={{
                 textAlign: 'center',
                 px: 1.8,
-                pb: 1.4,
-                pt: 0.2,
+                pb: 1.25,
+                pt: 0.05,
               }}
             >
+
               <Box
                 sx={{
                   display: 'inline-flex',
-                  p: 0.9,
+                  p: 0.8,
                   bgcolor: '#ffffff',
                   border:
                     '1px solid #dce8e2',
                   borderRadius: 1.5,
                 }}
               >
+
                 <QRCodeSVG
                   value={qrValue}
                   size={92}
                   level="M"
                   includeMargin={false}
                 />
+
               </Box>
+
 
               <Typography
                 sx={{
-                  mt: 0.55,
+                  mt: 0.5,
                   color: '#52635c',
                   fontSize: 8.5,
                   fontWeight: 650,
@@ -2170,6 +2523,7 @@ const TransactionReceipt: React.FC = () => {
                 Scan to view transaction reference
               </Typography>
 
+
               {reference && (
                 <Typography
                   sx={{
@@ -2177,12 +2531,14 @@ const TransactionReceipt: React.FC = () => {
                     color: '#087f5b',
                     fontSize: 8,
                     fontWeight: 750,
-                    wordBreak: 'break-all',
+                    wordBreak:
+                      'break-all',
                   }}
                 >
                   {reference}
                 </Typography>
               )}
+
             </Box>
 
 
@@ -2193,30 +2549,32 @@ const TransactionReceipt: React.FC = () => {
             <Box
               sx={{
                 mx: 1.8,
-                mb: 1.3,
-                p: 1,
+                mb: 1.15,
+                p: 0.85,
                 borderRadius: 1.5,
                 bgcolor: '#f4f8f6',
                 border:
                   '1px solid #e1ebe6',
               }}
             >
+
               <Typography
                 sx={{
                   color: '#52635c',
-                  fontSize: 9.5,
-                  lineHeight: 1.4,
+                  fontSize: 9,
+                  lineHeight: 1.35,
                   textAlign: 'center',
                 }}
               >
                 Keep this receipt and transaction
                 reference for your records.
               </Typography>
+
             </Box>
 
 
             {/* =================================================
-                FOOTER
+                APPROVED FOOTER
             ================================================== */}
 
             <Box
@@ -2226,29 +2584,19 @@ const TransactionReceipt: React.FC = () => {
                 color: '#ffffff',
                 textAlign: 'center',
                 px: 1.5,
-                py: 1.05,
+                py: 1.1,
               }}
             >
-              <Typography
-                sx={{
-                  fontSize: 10.5,
-                  fontWeight: 750,
-                }}
-              >
-                Thank you for banking with Zenimonies.
-              </Typography>
 
               <Typography
                 sx={{
-                  mt: 0.2,
-                  fontSize: 6,
-                  letterSpacing: 2,
-                  opacity: 0.8,
-                  fontWeight: 600,
+                  fontSize: 11.5,
+                  fontWeight: 800,
                 }}
               >
-                BIGGER POSSIBILITIES TOGETHER.
+                Thanks for banking with us
               </Typography>
+
             </Box>
 
           </Card>
@@ -2265,10 +2613,12 @@ const TransactionReceipt: React.FC = () => {
               mt: 1.2,
             }}
           >
+
             <Stack
               direction="row"
               spacing={0.8}
             >
+
               <Button
                 fullWidth
                 variant="contained"
@@ -2297,6 +2647,7 @@ const TransactionReceipt: React.FC = () => {
                   : 'Download PDF'}
               </Button>
 
+
               <Button
                 fullWidth
                 variant="outlined"
@@ -2310,21 +2661,27 @@ const TransactionReceipt: React.FC = () => {
                   pdfLoading
                 }
                 sx={{
-                  borderColor: '#087f5b',
-                  color: '#087f5b',
+                  borderColor:
+                    '#087f5b',
+                  color:
+                    '#087f5b',
                   borderRadius: 2,
                   py: 0.95,
                   fontSize: 12,
                   fontWeight: 800,
                   '&:hover': {
-                    borderColor: '#066b4c',
-                    bgcolor: '#eaf8f2',
+                    borderColor:
+                      '#066b4c',
+                    bgcolor:
+                      '#eaf8f2',
                   },
                 }}
               >
                 Share PDF
               </Button>
+
             </Stack>
+
 
             <Button
               fullWidth
@@ -2341,8 +2698,10 @@ const TransactionReceipt: React.FC = () => {
                 pdfLoading
               }
               sx={{
-                borderColor: '#d2ded9',
-                color: '#42534c',
+                borderColor:
+                  '#d2ded9',
+                color:
+                  '#42534c',
                 borderRadius: 2,
                 py: 0.9,
                 fontSize: 12,
@@ -2351,9 +2710,11 @@ const TransactionReceipt: React.FC = () => {
             >
               Back to Transactions
             </Button>
+
           </Stack>
 
         </Box>
+
       </Box>
 
 
@@ -2434,6 +2795,7 @@ const ReferenceValue = ({
   reference: string;
   onCopy: () => void;
 }) => (
+
   <Stack
     direction="row"
     spacing={0.4}
@@ -2443,6 +2805,7 @@ const ReferenceValue = ({
       minWidth: 0,
     }}
   >
+
     <Typography
       sx={{
         color: '#10221c',
@@ -2454,6 +2817,7 @@ const ReferenceValue = ({
     >
       {reference}
     </Typography>
+
 
     <Button
       className="no-print"
@@ -2475,6 +2839,7 @@ const ReferenceValue = ({
         }}
       />
     </Button>
+
   </Stack>
 );
 
@@ -2494,6 +2859,7 @@ const StatusChip = ({
   background: string;
   color: string;
 }) => (
+
   <Chip
     label={label}
     size="small"
@@ -2507,6 +2873,7 @@ const StatusChip = ({
       fontSize: 10,
     }}
   />
+
 );
 
 
