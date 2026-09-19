@@ -36,6 +36,7 @@ import PasskeySecurity from './pages/PasskeySecurity.tsx';
 import AccountLocked from './pages/AccountLocked.tsx';
 
 import SessionGuard from './components/SessionGuard.tsx';
+import AirtimeReconciliation from './pages/AirtimeReconciliation';
 
 interface ServicePageProps {
   title: string;
@@ -349,6 +350,11 @@ const App: React.FC = () => {
               />
             }
           />
+
+          <Route
+           path="/airtime-reconciliation"
+           element={<AirtimeReconciliation />}
+        />
 
           <Route
             path="/admin"
