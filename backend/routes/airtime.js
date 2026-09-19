@@ -7,6 +7,7 @@ const {
 const {
   requeryPendingAirtime,
   getPendingAirtimeForReconciliation,
+  getLatestAirtimeProviderDiagnostic,
 } = require('../controllers/airtimeRequeryController');
 
 const {
@@ -48,4 +49,10 @@ router.get(
   getPendingAirtimeForReconciliation
 );
 
+// TEMPORARY - REMOVE AFTER AIRTIME INTEGRATION IS FIXED
+router.get(
+  '/reconciliation/latest',
+  authenticateToken,
+  getLatestAirtimeProviderDiagnostic
+);
 module.exports = router;
