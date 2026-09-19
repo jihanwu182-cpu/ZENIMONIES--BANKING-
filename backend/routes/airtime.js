@@ -6,6 +6,7 @@ const {
 
 const {
   requeryPendingAirtime,
+  getPendingAirtimeForReconciliation,
 } = require('../controllers/airtimeRequeryController');
 
 const {
@@ -40,5 +41,11 @@ router.post(
   requeryPendingAirtime
 );
 
+// TEMPORARY - REMOVE AFTER RECONCILIATION
+router.get(
+  '/reconciliation/pending',
+  authenticateToken,
+  getPendingAirtimeForReconciliation
+);
 
 module.exports = router;
