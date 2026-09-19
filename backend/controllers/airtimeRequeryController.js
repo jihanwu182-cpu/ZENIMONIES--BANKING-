@@ -52,32 +52,35 @@ const getProviderStatus = (response) => {
   // ----------------------------------------------------------
 
   if (
-    code === '000' &&
-    (
-      status === '' ||
-      status === 'delivered' ||
-      status === 'completed' ||
-      status === 'successful' ||
-      status === 'success'
-    )
-  ) {
-    return 'completed';
-  }
+  (
+    code === '000' ||
+    code === '001'
+  ) &&
+  (
+    status === 'delivered' ||
+    status === 'completed' ||
+    status === 'successful' ||
+    status === 'success'
+  )
+) {
+  return 'completed';
+}
 
 
   // ----------------------------------------------------------
   // PENDING
   // ----------------------------------------------------------
 
-  if (
-    code === '099' ||
-    status === 'pending' ||
-    status === 'initiated' ||
-    status === 'processing'
-  ) {
-    return 'pending';
-  }
-
+  
+if (
+  code === '099' ||
+  code === '001' ||
+  status === 'pending' ||
+  status === 'initiated' ||
+  status === 'processing'
+) {
+  return 'pending';
+}
 
   // ----------------------------------------------------------
   // EXPLICIT FAILURE
