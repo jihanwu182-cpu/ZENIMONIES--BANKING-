@@ -407,27 +407,52 @@ const requeryPendingAirtime = async (
           transaction.provider_request_id,
       });
 
-  } catch (error) {
+} catch (error) {
+  console.error('Airtime requery diagnostic:', {
+    code: error?.code || null,
+    status: error?.status || error?.response?.status || null,
+    providerCode:
+      error?.providerCode ||
+      error?.response?.data?.code ||
+      error?.response?.data?.response_code ||
+      error?.response?.code ||
+      null,
+    providerDescription:
+      error?.providerDescription ||
+      error?.response?.data?.response_description ||
+      error?.response?.data?.message ||
+      error?.response?.message ||
+      null,
+  });
 
-    console.error(
-      'VTpass airtime requery error:',
-      error?.code ||
-        error?.message ||
-        'Unknown provider error'
-    );
-
-
-    return res.status(202).json({
-      success: true,
-      status:
-        'pending',
-      reference,
-      message:
-        'VTpass could not confirm the final status yet. Your wallet has not been refunded automatically.',
-    });
-
-  }
-
+  return res.status(202).json({
+    success: true,
+    status: 'pending',
+    reference: transaction.reference,
+    message:
+      'VTpass could not confirm the final status yet. Your wallet has not been refunded automatically.',
+    diagnostic: {
+      requestId: transaction.provider_request_id,
+      errorCode: error?.code || null,
+      httpStatus:
+        error?.status ||
+        error?.response?.status ||
+        null,
+      providerCode:
+        error?.providerCode ||
+        error?.response?.data?.code ||
+        error?.response?.data?.response_code ||
+        error?.response?.code ||
+        null,
+      providerDescription:
+        error?.providerDescription ||
+        error?.response?.data?.response_description ||
+        error?.response?.data?.message ||
+        error?.response?.message ||
+        null,
+    },
+  });
+}
 
   // ==========================================================
   // GET ACTUAL PROVIDER RESPONSE
