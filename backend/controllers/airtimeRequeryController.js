@@ -6,7 +6,7 @@ const {
 
 
 // ============================================================
-// GET USER ID
+// HELPERS
 // ============================================================
 
 const getUserId = (req) => {
@@ -23,34 +23,24 @@ const getUserId = (req) => {
 // PROVIDER STATUS
 // ============================================================
 
-const getProviderStatus = (
-  providerResponse
-) => {
-
+const getProviderStatus = (response) => {
   const code = String(
-    providerResponse?.code ??
-      providerResponse?.response_code ??
-      providerResponse?.responseCode ??
-      providerResponse?.content?.code ??
+    response?.code ??
+      response?.responseCode ??
+      response?.content?.code ??
       ''
   )
     .trim()
     .toLowerCase();
 
+  const content =
+    response?.content || {};
 
-  const transactionStatus = String(
-    providerResponse
-      ?.content
-      ?.transactions
-      ?.status ||
-      providerResponse
-        ?.content
-        ?.transaction
-        ?.status ||
-      providerResponse
-        ?.content
-        ?.status ||
-      providerResponse?.status ||
+  const status = String(
+    content?.transactions?.status ||
+      content?.transaction?.status ||
+      content?.status ||
+      response?.status ||
       ''
   )
     .trim()
@@ -58,17 +48,17 @@ const getProviderStatus = (
 
 
   // ----------------------------------------------------------
-  // SUCCESS
+  // COMPLETED
   // ----------------------------------------------------------
 
   if (
     code === '000' &&
     (
-      transactionStatus === '' ||
-      transactionStatus === 'delivered' ||
-      transactionStatus === 'completed' ||
-      transactionStatus === 'successful' ||
-      transactionStatus === 'success'
+      status === '' ||
+      status === 'delivered' ||
+      status === 'completed' ||
+      status === 'successful' ||
+      status === 'success'
     )
   ) {
     return 'completed';
@@ -76,37 +66,42 @@ const getProviderStatus = (
 
 
   // ----------------------------------------------------------
-  // STILL PROCESSING
+  // PENDING
   // ----------------------------------------------------------
 
   if (
     code === '099' ||
-    transactionStatus === 'pending' ||
-    transactionStatus === 'initiated' ||
-    transactionStatus === 'processing'
+    status === 'pending' ||
+    status === 'initiated' ||
+    status === 'processing'
   ) {
     return 'pending';
   }
 
 
   // ----------------------------------------------------------
-  // EXPLICIT FAILURE
+  // UNKNOWN
+  // ----------------------------------------------------------
+  //
+  // We do NOT automatically treat every unknown provider
+  // response as a failure.
+  //
+  // This prevents an accidental refund when VTpass gives
+  // us an unexpected response.
   // ----------------------------------------------------------
 
+  const knownFailureCodes = [
+    '016',
+    '091',
+    '040',
+  ];
+
   if (
-    code === '016' ||
-    code === '091' ||
-    code === '040'
+    knownFailureCodes.includes(code)
   ) {
     return 'failed';
   }
 
-
-  // ----------------------------------------------------------
-  // UNKNOWN
-  //
-  // Never automatically refund an unclear response.
-  // ----------------------------------------------------------
 
   return 'unknown';
 };
@@ -117,32 +112,18 @@ const getProviderStatus = (
 // ============================================================
 
 const getProviderReference = (
-  providerResponse,
-  requestId
+  response,
+  fallback
 ) => {
-
   return (
-    providerResponse
-      ?.content
-      ?.transactions
+    response?.content?.transactions
       ?.transactionId ||
-
-    providerResponse
-      ?.content
-      ?.transactionId ||
-
-    providerResponse?.transactionId ||
-
-    providerResponse?.requestId ||
-
-    providerResponse
-      ?.content
-      ?.transactions
+    response?.content?.transactionId ||
+    response?.content?.transactions
       ?.requestId ||
-
-    requestId ||
-
-    null
+    response?.requestId ||
+    response?.transactionId ||
+    fallback
   );
 };
 
@@ -152,89 +133,87 @@ const getProviderReference = (
 // ============================================================
 
 const getCommissionDetails = (
-  providerResponse
+  response
 ) => {
+  const content =
+    response?.content || {};
 
   return (
-    providerResponse
-      ?.content
-      ?.transactions
+    content?.transactions
       ?.commissionDetails ||
-
-    providerResponse
-      ?.content
-      ?.transactions
+    content?.transactions
       ?.commission_details ||
-
-    providerResponse
-      ?.content
-      ?.commissionDetails ||
-
-    providerResponse
-      ?.content
-      ?.commission_details ||
-
-    providerResponse?.commissionDetails ||
-
-    providerResponse?.commission_details ||
-
+    content?.commissionDetails ||
+    content?.commission_details ||
+    response?.commissionDetails ||
+    response?.commission_details ||
     null
   );
 };
 
 
 // ============================================================
-// REQUERY PENDING AIRTIME
-//
-// POST /api/airtime/requery/:reference
+// REQUERY AIRTIME
 // ============================================================
 
 const requeryPendingAirtime = async (
   req,
   res
 ) => {
-
   const userId =
     getUserId(req);
 
 
-  if (!userId) {
+  // ==========================================================
+  // AUTHENTICATION
+  // ==========================================================
 
+  if (!userId) {
     return res.status(401).json({
       success: false,
       message:
         'Authentication required.',
     });
-
   }
 
 
-  const reference =
-    String(
-      req.params?.reference ||
-        ''
-    ).trim();
+  // ==========================================================
+  // REFERENCE
+  // ==========================================================
+
+  const reference = String(
+    req.params?.reference ||
+      ''
+  ).trim();
 
 
   if (!reference) {
-
     return res.status(400).json({
       success: false,
       message:
         'Transaction reference is required.',
     });
-
   }
 
 
   // ==========================================================
   // FIND TRANSACTION
   // ==========================================================
+  //
+  // IMPORTANT:
+  //
+  // The existing Airtime transaction records use:
+  //
+  //   user_id
+  //   phone
+  //
+  // We keep those names consistent with the current purchase
+  // controller instead of changing the live purchase structure.
+  // ==========================================================
 
   let transactionResult;
 
   try {
-
     transactionResult =
       await pool.query(
         `
@@ -288,14 +267,16 @@ const requeryPendingAirtime = async (
       message:
         'Unable to look up the airtime transaction.',
     });
-
   }
 
+
+  // ==========================================================
+  // NOT FOUND
+  // ==========================================================
 
   if (
     transactionResult.rows.length === 0
   ) {
-
     return res.status(404).json({
       success: false,
       code:
@@ -303,7 +284,6 @@ const requeryPendingAirtime = async (
       message:
         'Airtime transaction not found.',
     });
-
   }
 
 
@@ -319,7 +299,6 @@ const requeryPendingAirtime = async (
     transaction.status ===
     'completed'
   ) {
-
     return res.status(200).json({
       success: true,
       status:
@@ -328,7 +307,6 @@ const requeryPendingAirtime = async (
       message:
         'This airtime transaction is already completed.',
     });
-
   }
 
 
@@ -340,7 +318,6 @@ const requeryPendingAirtime = async (
     transaction.status ===
     'failed'
   ) {
-
     return res.status(200).json({
       success: true,
       status:
@@ -349,38 +326,34 @@ const requeryPendingAirtime = async (
       message:
         'This airtime transaction has already been resolved as failed.',
     });
-
   }
 
 
   // ==========================================================
-  // ONLY PENDING TRANSACTIONS MAY BE REQUERIED
+  // ONLY PENDING
   // ==========================================================
 
   if (
     transaction.status !==
     'pending'
   ) {
-
     return res.status(400).json({
       success: false,
       code:
         'INVALID_AIRTIME_STATUS',
       message:
-        'Only pending airtime transactions can be requeried.',
+        'Only pending airtime transactions can be checked.',
     });
-
   }
 
 
   // ==========================================================
-  // REQUEST ID REQUIRED
+  // PROVIDER REQUEST ID
   // ==========================================================
 
   if (
     !transaction.provider_request_id
   ) {
-
     return res.status(409).json({
       success: false,
       code:
@@ -391,12 +364,11 @@ const requeryPendingAirtime = async (
       message:
         'This transaction does not have a VTpass request ID and requires manual reconciliation. No refund has been made.',
     });
-
   }
 
 
   // ==========================================================
-  // REQUERY VTPASS
+  // CALL VTPASS REQUERY
   // ==========================================================
 
   let providerResult;
@@ -426,32 +398,18 @@ const requeryPendingAirtime = async (
       message:
         'The provider could not confirm the final status yet. Your wallet has not been refunded automatically.',
     });
-
   }
 
 
-  /*
-   * IMPORTANT:
-   *
-   * airtimeService.requeryAirtimeTransaction()
-   * returns:
-   *
-   * {
-   *   response,
-   *   requestId
-   * }
-   *
-   * We must use the actual provider response.
-   */
+  // ==========================================================
+  // PROVIDER RESPONSE
+  // ==========================================================
 
   const providerResponse =
     providerResult?.response;
 
 
-  if (
-    !providerResponse
-  ) {
-
+  if (!providerResponse) {
     return res.status(202).json({
       success: true,
       status:
@@ -460,22 +418,23 @@ const requeryPendingAirtime = async (
       message:
         'VTpass did not return a usable response. The transaction remains pending and has not been automatically refunded.',
     });
-
   }
 
+
+  // ==========================================================
+  // PROVIDER INFORMATION
+  // ==========================================================
 
   const providerStatus =
     getProviderStatus(
       providerResponse
     );
 
-
   const providerReference =
     getProviderReference(
       providerResponse,
       transaction.provider_request_id
     );
-
 
   const commissionDetails =
     getCommissionDetails(
@@ -533,14 +492,11 @@ const requeryPendingAirtime = async (
       message:
         'VTpass still reports this transaction as pending. No refund has been made.',
     });
-
   }
 
 
   // ==========================================================
   // UNKNOWN RESPONSE
-  //
-  // NEVER AUTO-REFUND AN UNCLEAR RESPONSE.
   // ==========================================================
 
   if (
@@ -588,7 +544,6 @@ const requeryPendingAirtime = async (
       message:
         'VTpass returned an unclear status. The transaction remains pending and has not been automatically refunded.',
     });
-
   }
 
 
@@ -611,10 +566,6 @@ const requeryPendingAirtime = async (
       );
 
 
-      // ------------------------------------------------------
-      // Lock Airtime transaction
-      // ------------------------------------------------------
-
       const lockedResult =
         await client.query(
           `
@@ -636,11 +587,9 @@ const requeryPendingAirtime = async (
       if (
         lockedResult.rows.length === 0
       ) {
-
         throw new Error(
           'Airtime transaction disappeared during reconciliation.'
         );
-
       }
 
 
@@ -669,12 +618,11 @@ const requeryPendingAirtime = async (
           message:
             'This airtime transaction has already been completed.',
         });
-
       }
 
 
       // ------------------------------------------------------
-      // Transaction must still be pending
+      // Must still be pending
       // ------------------------------------------------------
 
       if (
@@ -691,7 +639,6 @@ const requeryPendingAirtime = async (
           message:
             'This transaction is no longer pending.',
         });
-
       }
 
 
@@ -805,14 +752,11 @@ const requeryPendingAirtime = async (
       client.release();
 
     }
-
   }
 
 
   // ==========================================================
-  // EXPLICIT PROVIDER FAILURE
-  //
-  // Refund exactly once.
+  // EXPLICIT FAILURE
   // ==========================================================
 
   if (
@@ -831,7 +775,7 @@ const requeryPendingAirtime = async (
 
 
       // ------------------------------------------------------
-      // Lock Airtime transaction
+      // Lock transaction
       // ------------------------------------------------------
 
       const lockedResult =
@@ -855,11 +799,9 @@ const requeryPendingAirtime = async (
       if (
         lockedResult.rows.length === 0
       ) {
-
         throw new Error(
           'Airtime transaction disappeared during refund reconciliation.'
         );
-
       }
 
 
@@ -885,7 +827,6 @@ const requeryPendingAirtime = async (
           message:
             'This transaction has already been resolved and will not be refunded again.',
         });
-
       }
 
 
@@ -912,11 +853,9 @@ const requeryPendingAirtime = async (
       if (
         accountResult.rows.length === 0
       ) {
-
         throw new Error(
           'Wallet account not found during Airtime refund.'
         );
-
       }
 
 
@@ -925,7 +864,6 @@ const requeryPendingAirtime = async (
           accountResult.rows[0]
             .balance
         );
-
 
       const amount =
         Number(
@@ -941,11 +879,9 @@ const requeryPendingAirtime = async (
           amount
         )
       ) {
-
         throw new Error(
           'Invalid wallet amount during Airtime refund.'
         );
-
       }
 
 
@@ -1043,7 +979,7 @@ const requeryPendingAirtime = async (
 
 
       // ------------------------------------------------------
-      // Create refund ledger transaction
+      // Refund ledger
       // ------------------------------------------------------
 
       const refundReference =
@@ -1141,7 +1077,6 @@ const requeryPendingAirtime = async (
       client.release();
 
     }
-
   }
 
 
@@ -1161,7 +1096,7 @@ const requeryPendingAirtime = async (
 
 
 // ============================================================
-// EXPORTS
+// EXPORT
 // ============================================================
 
 module.exports = {
