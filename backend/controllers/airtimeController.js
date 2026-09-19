@@ -482,18 +482,17 @@ const buyAirtime = async (
 
     await client.query(
       `
-      INSERT INTO airtime_transactions (
-        account_id,
-        user_id,
-        reference,
-        provider_request_id,
-        network,
-        phone_number,
-        amount,
-        currency,
-        status,
-        created_at
-      )
+  INSERT INTO airtime_transactions (
+  account_id,
+  reference,
+  provider_request_id,
+  network,
+  phone_number,
+  amount,
+  currency,
+  status,
+  created_at
+  )
       VALUES (
         $1,
         $2,
@@ -507,15 +506,14 @@ const buyAirtime = async (
         CURRENT_TIMESTAMP
       )
       `,
-      [
-        account.id,
-        userId,
-        reference,
-        providerRequestId,
-        normalizedNetwork,
-        normalizedPhone,
-        numericAmount,
-      ]
+[
+  account.id,
+  reference,
+  providerRequestId,
+  normalizedNetwork,
+  normalizedPhone,
+  numericAmount,
+]
     );
 
 
