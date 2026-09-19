@@ -1152,9 +1152,81 @@ const requeryPendingAirtime = async (
 
 
 // ============================================================
-// EXPORT
+// TEMPORARY AIRTIME RECONCILIATION DIAGNOSTIC
+// Read-only endpoint for checking old pending transactions.
+// REMOVE THIS AFTER RECONCILIATION IS COMPLETE.
 // ============================================================
+
+const getPendingAirtimeForReconciliation = async (req, res) => {
+  try {
+    const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required.',
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        at.id,
+        at.reference,
+        at.network,
+        at.phone_number,
+        at.amount,
+        at.currency,
+        at.status,
+        at.provider_request_id,
+        at.provider_reference,
+        at.provider_response,
+        at.created_at
+      FROM airtime_transactions at
+      INNER JOIN accounts a
+        ON a.id = at.account_id
+      WHERE a.user_id = $1
+        AND at.status = 'pending'
+      ORDER BY at.created_at ASC
+      `,
+      [userId]
+    );
+
+    const transactions = result.rows.map((transaction) => ({
+      id: transaction.id,
+      reference: transaction.reference,
+      network: transaction.network,
+      phone_number: transaction.phone_number
+        ? `******${String(transaction.phone_number).slice(-4)}`
+        : null,
+      amount: Number(transaction.amount),
+      currency: transaction.currency,
+      status: transaction.status,
+      provider_request_id: transaction.provider_request_id || null,
+      provider_reference: transaction.provider_reference || null,
+      provider_response_exists: Boolean(transaction.provider_response),
+      created_at: transaction.created_at,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      count: transactions.length,
+      transactions,
+    });
+  } catch (error) {
+    console.error(
+      'Temporary Airtime reconciliation diagnostic error:',
+      error.message
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to retrieve pending Airtime transactions.',
+    });
+  }
+};
 
 module.exports = {
   requeryPendingAirtime,
+  getPendingAirtimeForReconciliation,
 };
