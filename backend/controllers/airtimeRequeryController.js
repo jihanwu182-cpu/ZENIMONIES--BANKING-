@@ -1256,7 +1256,110 @@ const getPendingAirtimeForReconciliation = async (req, res) => {
   }
 };
 
+// ============================================================
+// TEMPORARY - LATEST AIRTIME PROVIDER DIAGNOSTIC
+// REMOVE AFTER AIRTIME INTEGRATION IS FIXED
+// ============================================================
+
+const getLatestAirtimeProviderDiagnostic = async (req, res) => {
+  try {
+    const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required.',
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        at.reference,
+        at.network,
+        at.amount,
+        at.status,
+        at.provider_request_id,
+        at.provider_reference,
+        at.provider_response,
+        at.created_at
+      FROM airtime_transactions at
+      INNER JOIN accounts a
+        ON a.id = at.account_id
+      WHERE a.user_id = $1
+      ORDER BY at.created_at DESC
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No airtime transaction found.',
+      });
+    }
+
+    const transaction = result.rows[0];
+    const response = transaction.provider_response || {};
+
+    return res.status(200).json({
+      success: true,
+
+      transaction: {
+        reference: transaction.reference,
+        network: transaction.network,
+        amount: Number(transaction.amount),
+        status: transaction.status,
+        provider_request_id:
+          transaction.provider_request_id || null,
+        provider_reference:
+          transaction.provider_reference || null,
+        created_at: transaction.created_at,
+      },
+
+      provider: {
+        code:
+          response?.code ||
+          response?.response_code ||
+          response?.responseCode ||
+          null,
+
+        description:
+          response?.response_description ||
+          response?.message ||
+          null,
+
+        transaction_status:
+          response?.content?.transactions?.status ||
+          response?.content?.transaction?.status ||
+          response?.content?.status ||
+          response?.status ||
+          null,
+
+        transaction_id:
+          response?.content?.transactions?.transactionId ||
+          response?.content?.transactionId ||
+          response?.transactionId ||
+          null,
+      },
+    });
+
+  } catch (error) {
+    console.error(
+      'Latest Airtime provider diagnostic error:',
+      error?.message || error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Unable to retrieve Airtime provider diagnostic.',
+    });
+  }
+};
 module.exports = {
   requeryPendingAirtime,
   getPendingAirtimeForReconciliation,
+  getLatestAirtimeProviderDiagnostic,
 };
