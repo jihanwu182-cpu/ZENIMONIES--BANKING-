@@ -6,7 +6,7 @@ const {
 
 
 // ============================================================
-// HELPERS
+// GET USER ID
 // ============================================================
 
 const getUserId = (req) => {
@@ -24,8 +24,10 @@ const getUserId = (req) => {
 // ============================================================
 
 const getProviderStatus = (response) => {
+
   const code = String(
     response?.code ??
+      response?.response_code ??
       response?.responseCode ??
       response?.content?.code ??
       ''
@@ -33,13 +35,11 @@ const getProviderStatus = (response) => {
     .trim()
     .toLowerCase();
 
-  const content =
-    response?.content || {};
 
   const status = String(
-    content?.transactions?.status ||
-      content?.transaction?.status ||
-      content?.status ||
+    response?.content?.transactions?.status ||
+      response?.content?.transaction?.status ||
+      response?.content?.status ||
       response?.status ||
       ''
   )
@@ -80,28 +80,21 @@ const getProviderStatus = (response) => {
 
 
   // ----------------------------------------------------------
-  // UNKNOWN
+  // EXPLICIT FAILURE
   // ----------------------------------------------------------
-  //
-  // We do NOT automatically treat every unknown provider
-  // response as a failure.
-  //
-  // This prevents an accidental refund when VTpass gives
-  // us an unexpected response.
-  // ----------------------------------------------------------
-
-  const knownFailureCodes = [
-    '016',
-    '091',
-    '040',
-  ];
 
   if (
-    knownFailureCodes.includes(code)
+    code === '016' ||
+    code === '091' ||
+    code === '040'
   ) {
     return 'failed';
   }
 
+
+  // ----------------------------------------------------------
+  // UNKNOWN
+  // ----------------------------------------------------------
 
   return 'unknown';
 };
@@ -115,15 +108,23 @@ const getProviderReference = (
   response,
   fallback
 ) => {
+
   return (
     response?.content?.transactions
       ?.transactionId ||
+
     response?.content?.transactionId ||
+
     response?.content?.transactions
       ?.requestId ||
+
     response?.requestId ||
+
     response?.transactionId ||
-    fallback
+
+    fallback ||
+
+    null
   );
 };
 
@@ -135,31 +136,42 @@ const getProviderReference = (
 const getCommissionDetails = (
   response
 ) => {
+
   const content =
     response?.content || {};
+
 
   return (
     content?.transactions
       ?.commissionDetails ||
+
     content?.transactions
       ?.commission_details ||
+
     content?.commissionDetails ||
+
     content?.commission_details ||
+
     response?.commissionDetails ||
+
     response?.commission_details ||
+
     null
   );
 };
 
 
 // ============================================================
-// REQUERY AIRTIME
+// REQUERY PENDING AIRTIME
+//
+// POST /api/airtime/requery/:reference
 // ============================================================
 
 const requeryPendingAirtime = async (
   req,
   res
 ) => {
+
   const userId =
     getUserId(req);
 
@@ -169,11 +181,13 @@ const requeryPendingAirtime = async (
   // ==========================================================
 
   if (!userId) {
+
     return res.status(401).json({
       success: false,
       message:
         'Authentication required.',
     });
+
   }
 
 
@@ -181,48 +195,51 @@ const requeryPendingAirtime = async (
   // REFERENCE
   // ==========================================================
 
-  const reference = String(
-    req.params?.reference ||
-      ''
-  ).trim();
+  const reference =
+    String(
+      req.params?.reference ||
+        ''
+    ).trim();
 
 
   if (!reference) {
+
     return res.status(400).json({
       success: false,
       message:
         'Transaction reference is required.',
     });
+
   }
 
 
   // ==========================================================
-  // FIND TRANSACTION
-  // ==========================================================
+  // FIND AIRTIME TRANSACTION
   //
   // IMPORTANT:
   //
-  // The existing Airtime transaction records use:
+  // We identify ownership through:
   //
-  //   user_id
-  //   phone
+  // airtime_transactions.account_id
+  //        ↓
+  // accounts.user_id
   //
-  // We keep those names consistent with the current purchase
-  // controller instead of changing the live purchase structure.
+  // This avoids depending on a user_id column inside
+  // airtime_transactions.
   // ==========================================================
 
   let transactionResult;
 
   try {
+
     transactionResult =
       await pool.query(
         `
         SELECT
           at.id,
           at.account_id,
-          at.user_id,
           at.network,
-          at.phone,
+          at.phone_number,
           at.amount,
           at.currency,
           at.reference,
@@ -230,7 +247,7 @@ const requeryPendingAirtime = async (
           at.provider_reference,
           at.provider_request_id,
 
-          a.user_id AS account_user_id,
+          a.user_id,
           a.balance
 
         FROM airtime_transactions at
@@ -239,10 +256,7 @@ const requeryPendingAirtime = async (
           ON a.id = at.account_id
 
         WHERE at.reference = $1
-          AND (
-            at.user_id = $2
-            OR a.user_id = $2
-          )
+          AND a.user_id = $2
 
         LIMIT 1
         `,
@@ -255,10 +269,11 @@ const requeryPendingAirtime = async (
   } catch (error) {
 
     console.error(
-      'Airtime transaction lookup error:',
+      'Airtime requery database lookup failed:',
       error?.message ||
-        'Unknown error'
+        'Unknown database error'
     );
+
 
     return res.status(500).json({
       success: false,
@@ -267,16 +282,18 @@ const requeryPendingAirtime = async (
       message:
         'Unable to look up the airtime transaction.',
     });
+
   }
 
 
   // ==========================================================
-  // NOT FOUND
+  // TRANSACTION NOT FOUND
   // ==========================================================
 
   if (
     transactionResult.rows.length === 0
   ) {
+
     return res.status(404).json({
       success: false,
       code:
@@ -284,6 +301,7 @@ const requeryPendingAirtime = async (
       message:
         'Airtime transaction not found.',
     });
+
   }
 
 
@@ -299,6 +317,7 @@ const requeryPendingAirtime = async (
     transaction.status ===
     'completed'
   ) {
+
     return res.status(200).json({
       success: true,
       status:
@@ -307,6 +326,7 @@ const requeryPendingAirtime = async (
       message:
         'This airtime transaction is already completed.',
     });
+
   }
 
 
@@ -318,6 +338,7 @@ const requeryPendingAirtime = async (
     transaction.status ===
     'failed'
   ) {
+
     return res.status(200).json({
       success: true,
       status:
@@ -326,17 +347,19 @@ const requeryPendingAirtime = async (
       message:
         'This airtime transaction has already been resolved as failed.',
     });
+
   }
 
 
   // ==========================================================
-  // ONLY PENDING
+  // ONLY PENDING TRANSACTIONS CAN BE REQUERIED
   // ==========================================================
 
   if (
     transaction.status !==
     'pending'
   ) {
+
     return res.status(400).json({
       success: false,
       code:
@@ -344,6 +367,7 @@ const requeryPendingAirtime = async (
       message:
         'Only pending airtime transactions can be checked.',
     });
+
   }
 
 
@@ -354,6 +378,7 @@ const requeryPendingAirtime = async (
   if (
     !transaction.provider_request_id
   ) {
+
     return res.status(409).json({
       success: false,
       code:
@@ -364,11 +389,12 @@ const requeryPendingAirtime = async (
       message:
         'This transaction does not have a VTpass request ID and requires manual reconciliation. No refund has been made.',
     });
+
   }
 
 
   // ==========================================================
-  // CALL VTPASS REQUERY
+  // REQUERY VTPASS
   // ==========================================================
 
   let providerResult;
@@ -387,8 +413,9 @@ const requeryPendingAirtime = async (
       'VTpass airtime requery error:',
       error?.code ||
         error?.message ||
-        'Unknown error'
+        'Unknown provider error'
     );
+
 
     return res.status(202).json({
       success: true,
@@ -396,13 +423,14 @@ const requeryPendingAirtime = async (
         'pending',
       reference,
       message:
-        'The provider could not confirm the final status yet. Your wallet has not been refunded automatically.',
+        'VTpass could not confirm the final status yet. Your wallet has not been refunded automatically.',
     });
+
   }
 
 
   // ==========================================================
-  // PROVIDER RESPONSE
+  // GET ACTUAL PROVIDER RESPONSE
   // ==========================================================
 
   const providerResponse =
@@ -410,6 +438,7 @@ const requeryPendingAirtime = async (
 
 
   if (!providerResponse) {
+
     return res.status(202).json({
       success: true,
       status:
@@ -418,6 +447,7 @@ const requeryPendingAirtime = async (
       message:
         'VTpass did not return a usable response. The transaction remains pending and has not been automatically refunded.',
     });
+
   }
 
 
@@ -430,11 +460,13 @@ const requeryPendingAirtime = async (
       providerResponse
     );
 
+
   const providerReference =
     getProviderReference(
       providerResponse,
       transaction.provider_request_id
     );
+
 
   const commissionDetails =
     getCommissionDetails(
@@ -443,7 +475,7 @@ const requeryPendingAirtime = async (
 
 
   // ==========================================================
-  // STILL PENDING
+  // PROVIDER STILL PENDING
   // ==========================================================
 
   if (
@@ -492,11 +524,14 @@ const requeryPendingAirtime = async (
       message:
         'VTpass still reports this transaction as pending. No refund has been made.',
     });
+
   }
 
 
   // ==========================================================
-  // UNKNOWN RESPONSE
+  // UNKNOWN PROVIDER RESPONSE
+  //
+  // NEVER REFUND AN UNCLEAR RESPONSE.
   // ==========================================================
 
   if (
@@ -544,6 +579,7 @@ const requeryPendingAirtime = async (
       message:
         'VTpass returned an unclear status. The transaction remains pending and has not been automatically refunded.',
     });
+
   }
 
 
@@ -559,12 +595,17 @@ const requeryPendingAirtime = async (
     const client =
       await pool.connect();
 
+
     try {
 
       await client.query(
         'BEGIN'
       );
 
+
+      // ------------------------------------------------------
+      // LOCK AIRTIME TRANSACTION
+      // ------------------------------------------------------
 
       const lockedResult =
         await client.query(
@@ -587,9 +628,11 @@ const requeryPendingAirtime = async (
       if (
         lockedResult.rows.length === 0
       ) {
+
         throw new Error(
           'Airtime transaction disappeared during reconciliation.'
         );
+
       }
 
 
@@ -598,7 +641,7 @@ const requeryPendingAirtime = async (
 
 
       // ------------------------------------------------------
-      // Already completed
+      // ALREADY COMPLETED
       // ------------------------------------------------------
 
       if (
@@ -610,6 +653,7 @@ const requeryPendingAirtime = async (
           'COMMIT'
         );
 
+
         return res.status(200).json({
           success: true,
           status:
@@ -618,11 +662,12 @@ const requeryPendingAirtime = async (
           message:
             'This airtime transaction has already been completed.',
         });
+
       }
 
 
       // ------------------------------------------------------
-      // Must still be pending
+      // MUST STILL BE PENDING
       // ------------------------------------------------------
 
       if (
@@ -634,16 +679,18 @@ const requeryPendingAirtime = async (
           'ROLLBACK'
         );
 
+
         return res.status(409).json({
           success: false,
           message:
             'This transaction is no longer pending.',
         });
+
       }
 
 
       // ------------------------------------------------------
-      // Mark Airtime completed
+      // MARK AIRTIME COMPLETED
       // ------------------------------------------------------
 
       await client.query(
@@ -680,7 +727,7 @@ const requeryPendingAirtime = async (
 
 
       // ------------------------------------------------------
-      // Mark central transaction completed
+      // MARK CENTRAL TRANSACTION COMPLETED
       // ------------------------------------------------------
 
       await client.query(
@@ -711,7 +758,7 @@ const requeryPendingAirtime = async (
         network:
           transaction.network,
         phone:
-          transaction.phone,
+          transaction.phone_number,
         amount:
           Number(
             transaction.amount
@@ -719,6 +766,7 @@ const requeryPendingAirtime = async (
         message:
           'Airtime purchase confirmed successfully.',
       });
+
 
     } catch (error) {
 
@@ -747,16 +795,20 @@ const requeryPendingAirtime = async (
           'VTpass confirmed the airtime, but account reconciliation requires attention. No refund was made.',
       });
 
+
     } finally {
 
       client.release();
 
     }
+
   }
 
 
   // ==========================================================
-  // EXPLICIT FAILURE
+  // EXPLICIT PROVIDER FAILURE
+  //
+  // REFUND EXACTLY ONCE
   // ==========================================================
 
   if (
@@ -767,6 +819,7 @@ const requeryPendingAirtime = async (
     const client =
       await pool.connect();
 
+
     try {
 
       await client.query(
@@ -775,7 +828,7 @@ const requeryPendingAirtime = async (
 
 
       // ------------------------------------------------------
-      // Lock transaction
+      // LOCK AIRTIME TRANSACTION
       // ------------------------------------------------------
 
       const lockedResult =
@@ -799,9 +852,11 @@ const requeryPendingAirtime = async (
       if (
         lockedResult.rows.length === 0
       ) {
+
         throw new Error(
           'Airtime transaction disappeared during refund reconciliation.'
         );
+
       }
 
 
@@ -810,7 +865,7 @@ const requeryPendingAirtime = async (
 
 
       // ------------------------------------------------------
-      // Already resolved
+      // ALREADY RESOLVED
       // ------------------------------------------------------
 
       if (
@@ -822,16 +877,18 @@ const requeryPendingAirtime = async (
           'COMMIT'
         );
 
+
         return res.status(409).json({
           success: false,
           message:
             'This transaction has already been resolved and will not be refunded again.',
         });
+
       }
 
 
       // ------------------------------------------------------
-      // Lock wallet
+      // LOCK WALLET
       // ------------------------------------------------------
 
       const accountResult =
@@ -853,9 +910,11 @@ const requeryPendingAirtime = async (
       if (
         accountResult.rows.length === 0
       ) {
+
         throw new Error(
           'Wallet account not found during Airtime refund.'
         );
+
       }
 
 
@@ -864,6 +923,7 @@ const requeryPendingAirtime = async (
           accountResult.rows[0]
             .balance
         );
+
 
       const amount =
         Number(
@@ -879,9 +939,11 @@ const requeryPendingAirtime = async (
           amount
         )
       ) {
+
         throw new Error(
           'Invalid wallet amount during Airtime refund.'
         );
+
       }
 
 
@@ -895,7 +957,7 @@ const requeryPendingAirtime = async (
 
 
       // ------------------------------------------------------
-      // Refund wallet
+      // REFUND WALLET
       // ------------------------------------------------------
 
       await client.query(
@@ -914,7 +976,7 @@ const requeryPendingAirtime = async (
 
 
       // ------------------------------------------------------
-      // Mark Airtime failed
+      // MARK AIRTIME FAILED
       // ------------------------------------------------------
 
       await client.query(
@@ -925,9 +987,8 @@ const requeryPendingAirtime = async (
           provider_request_id = $2,
           commission_details = $3::jsonb,
           provider_response = $4::jsonb,
-          status = 'failed',
-          failure_reason = $5
-        WHERE id = $6
+          status = 'failed'
+        WHERE id = $5
           AND status = 'pending'
         `,
         [
@@ -945,21 +1006,13 @@ const requeryPendingAirtime = async (
             providerResponse
           ),
 
-          providerResponse
-            ?.response_description ||
-            providerResponse?.message ||
-            providerResponse
-              ?.content
-              ?.errors ||
-            'VTpass confirmed that the airtime transaction failed.',
-
           transaction.id,
         ]
       );
 
 
       // ------------------------------------------------------
-      // Mark central transaction failed
+      // MARK CENTRAL TRANSACTION FAILED
       // ------------------------------------------------------
 
       await client.query(
@@ -979,7 +1032,7 @@ const requeryPendingAirtime = async (
 
 
       // ------------------------------------------------------
-      // Refund ledger
+      // CREATE REFUND LEDGER
       // ------------------------------------------------------
 
       const refundReference =
@@ -1045,6 +1098,7 @@ const requeryPendingAirtime = async (
           'VTpass confirmed the airtime failed. Your wallet has been refunded.',
       });
 
+
     } catch (error) {
 
       try {
@@ -1072,11 +1126,13 @@ const requeryPendingAirtime = async (
           'The provider confirmed a failure, but the wallet refund requires reconciliation. No automatic second refund was made.',
       });
 
+
     } finally {
 
       client.release();
 
     }
+
   }
 
 
