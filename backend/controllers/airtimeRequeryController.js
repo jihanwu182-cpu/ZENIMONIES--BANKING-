@@ -454,12 +454,13 @@ const requeryPendingAirtime = async (
   });
 }
 
-  // ==========================================================
-  // GET ACTUAL PROVIDER RESPONSE
-  // ==========================================================
+// ==========================================================
+// GET ACTUAL PROVIDER RESPONSE
+// ==========================================================
 
-  const providerResponse =
-    providerResult?.response;
+const providerResponse =
+  providerResult?.response ||
+  providerResult;
 
 
   if (!providerResponse) {
