@@ -89,6 +89,25 @@ interface Transaction {
 }
 
 
+/*
+ * ============================================================
+ * VTpass diagnostic type
+ * ============================================================
+ */
+
+interface RequeryDiagnostic {
+  requestId?: string | null;
+
+  errorCode?: string | null;
+
+  httpStatus?: number | null;
+
+  providerCode?: string | null;
+
+  providerDescription?: string | null;
+}
+
+
 const API_URL =
   'https://zenimonies-banking.onrender.com';
 
@@ -128,6 +147,12 @@ const Transactions: React.FC = () => {
 
   const [requeryMessage, setRequeryMessage] =
     useState('');
+
+  /*
+   * Temporary VTpass diagnostic state.
+   */
+  const [requeryDiagnostic, setRequeryDiagnostic] =
+    useState<RequeryDiagnostic | null>(null);
 
 
   /*
@@ -231,21 +256,6 @@ const Transactions: React.FC = () => {
    * ============================================================
    * MONEY AMOUNT NORMALIZATION
    * ============================================================
-   *
-   * IMPORTANT:
-   *
-   * The database may contain:
-   *
-   *   1000
-   *
-   * or
-   *
-   *   -1000
-   *
-   * The transaction direction is determined by the
-   * transaction TYPE, not by the sign stored in amount.
-   *
-   * Therefore the UI always uses the ABSOLUTE amount.
    */
 
   const getAbsoluteAmount = (
@@ -407,13 +417,6 @@ const Transactions: React.FC = () => {
    * ============================================================
    * CREDIT / DEBIT
    * ============================================================
-   *
-   * VERY IMPORTANT:
-   *
-   * We determine whether money came IN or went OUT from
-   * the transaction type.
-   *
-   * We DO NOT use the numeric sign of amount.
    */
 
   const isCredit = (
@@ -428,11 +431,6 @@ const Transactions: React.FC = () => {
         ''
       ).toLowerCase();
 
-
-    /*
-     * Explicit incoming transaction types.
-     */
-
     if (
       type ===
         'internal_transfer_received' ||
@@ -440,7 +438,6 @@ const Transactions: React.FC = () => {
     ) {
       return true;
     }
-
 
     if (
       type.includes('deposit') ||
@@ -450,18 +447,12 @@ const Transactions: React.FC = () => {
       return true;
     }
 
-
     if (
       type.includes('refund') ||
       type.includes('reversal')
     ) {
       return true;
     }
-
-
-    /*
-     * Description-based fallback.
-     */
 
     if (
       description.includes('money received') ||
@@ -473,11 +464,6 @@ const Transactions: React.FC = () => {
     ) {
       return true;
     }
-
-
-    /*
-     * Everything else is outgoing.
-     */
 
     return false;
   };
@@ -501,7 +487,6 @@ const Transactions: React.FC = () => {
         ''
       ).toLowerCase();
 
-
     if (
       type.includes('deposit') ||
       type.includes('funding') ||
@@ -510,7 +495,6 @@ const Transactions: React.FC = () => {
     ) {
       return 'deposits';
     }
-
 
     if (
       type.includes('transfer') ||
@@ -521,14 +505,12 @@ const Transactions: React.FC = () => {
       return 'transfers';
     }
 
-
     if (
       type.includes('bill') ||
       description.includes('bill')
     ) {
       return 'bills';
     }
-
 
     if (
       type.includes('airtime') ||
@@ -538,7 +520,6 @@ const Transactions: React.FC = () => {
     ) {
       return 'airtime';
     }
-
 
     return 'other';
   };
@@ -609,7 +590,6 @@ const Transactions: React.FC = () => {
       today.getDate() - 1
     );
 
-
     if (
       parsed.toDateString() ===
       today.toDateString()
@@ -617,14 +597,12 @@ const Transactions: React.FC = () => {
       return 'Today';
     }
 
-
     if (
       parsed.toDateString() ===
       yesterday.toDateString()
     ) {
       return 'Yesterday';
     }
-
 
     return parsed.toLocaleDateString(
       'en-NG',
@@ -651,7 +629,6 @@ const Transactions: React.FC = () => {
         statusValue || ''
       ).toLowerCase();
 
-
     if (
       status === 'completed' ||
       status === 'success' ||
@@ -671,7 +648,6 @@ const Transactions: React.FC = () => {
         ),
       };
     }
-
 
     if (
       status === 'failed' ||
@@ -695,7 +671,6 @@ const Transactions: React.FC = () => {
         ),
       };
     }
-
 
     return {
       background: '#FFF5DF',
@@ -724,7 +699,6 @@ const Transactions: React.FC = () => {
     const category =
       getCategory(transaction);
 
-
     if (
       category === 'deposits'
     ) {
@@ -732,7 +706,6 @@ const Transactions: React.FC = () => {
         <ArrowDownwardRounded />
       );
     }
-
 
     if (
       category === 'transfers'
@@ -746,7 +719,6 @@ const Transactions: React.FC = () => {
       );
     }
 
-
     if (
       category === 'airtime'
     ) {
@@ -755,7 +727,6 @@ const Transactions: React.FC = () => {
       );
     }
 
-
     if (
       category === 'bills'
     ) {
@@ -763,7 +734,6 @@ const Transactions: React.FC = () => {
         <ReceiptLongRounded />
       );
     }
-
 
     return isCredit(
       transaction
@@ -787,7 +757,6 @@ const Transactions: React.FC = () => {
     const category =
       getCategory(transaction);
 
-
     if (
       category === 'deposits'
     ) {
@@ -796,7 +765,6 @@ const Transactions: React.FC = () => {
         color: '#087A4B',
       };
     }
-
 
     if (
       category === 'transfers'
@@ -807,7 +775,6 @@ const Transactions: React.FC = () => {
       };
     }
 
-
     if (
       category === 'airtime'
     ) {
@@ -817,7 +784,6 @@ const Transactions: React.FC = () => {
       };
     }
 
-
     if (
       category === 'bills'
     ) {
@@ -826,7 +792,6 @@ const Transactions: React.FC = () => {
         color: '#F27B21',
       };
     }
-
 
     return {
       background: '#F0EDFF',
@@ -848,7 +813,6 @@ const Transactions: React.FC = () => {
           .trim()
           .toLowerCase();
 
-
       return transactions.filter(
         (transaction) => {
 
@@ -858,13 +822,11 @@ const Transactions: React.FC = () => {
               transaction
             ) === category;
 
-
           const rawStatus =
             String(
               transaction.status ||
               ''
             ).toLowerCase();
-
 
           const normalizedStatus =
             rawStatus === 'success' ||
@@ -873,13 +835,11 @@ const Transactions: React.FC = () => {
               ? 'completed'
               : rawStatus;
 
-
           const matchesStatus =
             statusFilter ===
               'all' ||
             normalizedStatus ===
               statusFilter;
-
 
           const searchableText = [
             getDescription(
@@ -900,13 +860,11 @@ const Transactions: React.FC = () => {
             .join(' ')
             .toLowerCase();
 
-
           const matchesSearch =
             !searchValue ||
             searchableText.includes(
               searchValue
             );
-
 
           return (
             matchesCategory &&
@@ -1014,6 +972,7 @@ const Transactions: React.FC = () => {
     );
 
     setRequeryMessage('');
+    setRequeryDiagnostic(null);
   };
 
 
@@ -1023,6 +982,7 @@ const Transactions: React.FC = () => {
     );
 
     setRequeryMessage('');
+    setRequeryDiagnostic(null);
   };
 
 
@@ -1099,6 +1059,9 @@ const Transactions: React.FC = () => {
       setRequeryMessage(
         'This transaction does not have a reference number for status checking.'
       );
+
+      setRequeryDiagnostic(null);
+
       return;
     }
 
@@ -1116,6 +1079,7 @@ const Transactions: React.FC = () => {
       );
 
       setRequeryMessage('');
+      setRequeryDiagnostic(null);
 
       const response =
         await axios.post(
@@ -1134,11 +1098,18 @@ const Transactions: React.FC = () => {
       const result =
         response.data;
 
+      /*
+       * Capture temporary diagnostic information
+       * returned by the backend.
+       */
+      setRequeryDiagnostic(
+        result?.diagnostic || null
+      );
+
       const returnedStatus =
         String(
           result?.status || ''
         ).toLowerCase();
-
 
       setSelectedTransaction(
         (previous) => {
@@ -1189,12 +1160,10 @@ const Transactions: React.FC = () => {
         }
       );
 
-
       setRequeryMessage(
         result?.message ||
         'Transaction status checked successfully.'
       );
-
 
       await loadTransactions();
 
@@ -1202,6 +1171,14 @@ const Transactions: React.FC = () => {
       console.error(
         'Failed to requery airtime transaction:',
         err
+      );
+
+      /*
+       * Capture diagnostic information if the
+       * backend returned it through an error response.
+       */
+      setRequeryDiagnostic(
+        err?.response?.data?.diagnostic || null
       );
 
       setRequeryMessage(
@@ -2143,8 +2120,6 @@ const Transactions: React.FC = () => {
                         </Box>
 
 
-                        {/* CORRECT AMOUNT DISPLAY */}
-
                         <Box
                           sx={{
                             textAlign:
@@ -2616,7 +2591,7 @@ const Transactions: React.FC = () => {
               </Stack>
 
 
-              {/* REQUERY */}
+              {/* REQUERY MESSAGE */}
 
               {requeryMessage && (
                 <Alert
@@ -2638,6 +2613,99 @@ const Transactions: React.FC = () => {
                   }}
                 >
                   {requeryMessage}
+                </Alert>
+              )}
+
+
+              {/* =================================================
+                  TEMPORARY VTPASS DIAGNOSTIC
+                  ================================================= */}
+
+              {requeryDiagnostic && (
+                <Alert
+                  severity="warning"
+                  sx={{
+                    mt: 1.2,
+                    borderRadius: 2.5,
+                    fontSize: 12,
+
+                    '& .MuiAlert-message': {
+                      width: '100%',
+                    },
+                  }}
+                >
+
+                  <Typography
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 900,
+                      mb: 0.8,
+                    }}
+                  >
+                    VTpass diagnostic
+                  </Typography>
+
+
+                  <Stack
+                    spacing={0.35}
+                  >
+
+                    <Typography
+                      sx={{
+                        fontSize: 11.5,
+                      }}
+                    >
+                      Request ID:{' '}
+                      {requeryDiagnostic.requestId ||
+                        'Not available'}
+                    </Typography>
+
+
+                    <Typography
+                      sx={{
+                        fontSize: 11.5,
+                      }}
+                    >
+                      HTTP status:{' '}
+                      {requeryDiagnostic.httpStatus ??
+                        'Not available'}
+                    </Typography>
+
+
+                    <Typography
+                      sx={{
+                        fontSize: 11.5,
+                      }}
+                    >
+                      Provider code:{' '}
+                      {requeryDiagnostic.providerCode ||
+                        'Not available'}
+                    </Typography>
+
+
+                    <Typography
+                      sx={{
+                        fontSize: 11.5,
+                      }}
+                    >
+                      Error code:{' '}
+                      {requeryDiagnostic.errorCode ||
+                        'None'}
+                    </Typography>
+
+
+                    <Typography
+                      sx={{
+                        fontSize: 11.5,
+                      }}
+                    >
+                      Provider description:{' '}
+                      {requeryDiagnostic.providerDescription ||
+                        'Not available'}
+                    </Typography>
+
+                  </Stack>
+
                 </Alert>
               )}
 
