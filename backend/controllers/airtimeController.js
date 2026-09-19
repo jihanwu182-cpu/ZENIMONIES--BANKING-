@@ -493,18 +493,17 @@ const buyAirtime = async (
   status,
   created_at
   )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        'NGN',
-        'pending',
-        CURRENT_TIMESTAMP
-      )
+VALUES (
+  $1,
+  $2,
+  $3,
+  $4,
+  $5,
+  $6,
+  'NGN',
+  'pending',
+  CURRENT_TIMESTAMP
+)
       `,
 [
   account.id,
