@@ -36,7 +36,7 @@ import PasskeySecurity from './pages/PasskeySecurity.tsx';
 import AccountLocked from './pages/AccountLocked.tsx';
 
 import SessionGuard from './components/SessionGuard.tsx';
-import AirtimeReconciliation from './pages/AirtimeReconciliation';
+import AirtimeReconciliation from './pages/AirtimeReconciliation.tsx';
 
 interface ServicePageProps {
   title: string;
