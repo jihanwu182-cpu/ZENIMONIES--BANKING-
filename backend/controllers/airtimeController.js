@@ -488,7 +488,7 @@ const buyAirtime = async (
         reference,
         provider_request_id,
         network,
-        phone,
+        phone_number,
         amount,
         currency,
         status,
