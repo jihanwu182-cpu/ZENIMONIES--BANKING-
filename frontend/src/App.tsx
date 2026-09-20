@@ -27,6 +27,7 @@ import TVSubscription from './pages/TVSubscription.tsx';
 import Bills from './pages/Bills.tsx';
 import Electricity from './pages/Electricity.tsx';
 import ElectricityVerification from './pages/ElectricityVerification.tsx';
+import ElectricityPaymentConfirmation from './pages/ElectricityPaymentConfirmation.tsx';
 import Betting from './pages/Betting.tsx';
 import VirtualCard from './pages/VirtualCard.tsx';
 import Admin from './pages/AdminDashboard.tsx';
@@ -487,6 +488,11 @@ const App: React.FC = () => {
           <Route
             path="/electricity/verification"
             element={<ElectricityVerification />}
+         />
+
+          <Route
+            path="/electricity/payment-confirmation"
+            element={<ElectricityPaymentConfirmation />}
          />
 
           {/* ================= BETTING ================= */}
