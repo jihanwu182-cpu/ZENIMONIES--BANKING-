@@ -1080,6 +1080,23 @@ ON account_passcodes(user_id);
 CREATE INDEX IF NOT EXISTS idx_account_passcodes_locked_until
 ON account_passcodes(locked_until);
 
+
+-- ============================================================
+-- TV PAYMENT DETAILS
+-- ============================================================
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS provider_request_id VARCHAR(150);
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS commission_details JSONB;
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS provider_response JSONB;
+
+CREATE INDEX IF NOT EXISTS idx_bill_payments_provider_request
+ON bill_payments(provider_request_id);
+
 -- ============================================================
 -- INDEXES
 -- ============================================================
