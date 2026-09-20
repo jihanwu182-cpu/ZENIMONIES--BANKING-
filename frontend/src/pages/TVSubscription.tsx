@@ -63,17 +63,20 @@ const PROVIDERS: {
   {
     value: 'DSTV',
     label: 'DStv',
-    logo: 'https://brandlogos.sgp1.digitaloceanspaces.com/svg/cbi/dstv.svg',
+    logo:
+      'https://res.cloudinary.com/paybeta/image/upload/v1714827633/Provider/Cable/dstv.jpg',
   },
   {
     value: 'GOTV',
     label: 'GOtv',
-    logo: 'https://brandlogos.sgp1.digitaloceanspaces.com/svg/cbi/gotv.svg',
+    logo:
+      'https://res.cloudinary.com/paybeta/image/upload/v1714828100/Provider/Cable/gotv.png',
   },
   {
     value: 'STARTIMES',
     label: 'StarTimes',
-    logo: 'https://brandlogos.sgp1.digitaloceanspaces.com/svg/cbi/startimes.svg',
+    logo:
+      'https://res.cloudinary.com/paybeta/image/upload/v1714827913/Provider/Cable/startimes.jpg',
   },
 ];
 
