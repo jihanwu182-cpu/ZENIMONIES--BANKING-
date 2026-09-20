@@ -162,6 +162,10 @@ const isValidPhone = (
   return /^0\d{10}$/.test(value);
 };
 
+/* ============================================================
+   PLAN CATEGORY
+============================================================ */
+
 const getPlanCategory = (
   plan: DataPlan
 ): string => {
@@ -193,9 +197,10 @@ const getPlanCategory = (
       plan.description || ''
     }`.toLowerCase();
 
-  // ==========================================================
-  // HOT
-  // ==========================================================
+  /* ==========================================================
+     HOT
+  ========================================================== */
+
   if (
     variationCode.includes('hot') ||
     text.includes('hot') ||
@@ -205,9 +210,10 @@ const getPlanCategory = (
     return 'HOT';
   }
 
-  // ==========================================================
-  // ROUTER / MIFI / ODU
-  // ==========================================================
+  /* ==========================================================
+     ROUTER / MIFI / ODU
+  ========================================================== */
+
   if (
     variationCode.includes('router') ||
     variationCode.includes('mifi') ||
@@ -220,9 +226,10 @@ const getPlanCategory = (
     return 'Router';
   }
 
-  // ==========================================================
-  // 3 MONTHS+
-  // ==========================================================
+  /* ==========================================================
+     3 MONTHS+
+  ========================================================== */
+
   if (
     variationCode.includes('3month') ||
     variationCode.includes('90day') ||
@@ -240,13 +247,12 @@ const getPlanCategory = (
     return '3 Months+';
   }
 
-  // ==========================================================
-  // MONTHLY
-  // Check variation code BEFORE checking "night".
-  // Example:
-  // glo-monthly-1000 = Monthly even though its name contains
-  // "Night".
-  // ==========================================================
+  /* ==========================================================
+     MONTHLY
+
+     Check variation code before checking Night.
+  ========================================================== */
+
   if (
     variationCode.includes('monthly') ||
     variationCode.includes('month') ||
@@ -258,9 +264,10 @@ const getPlanCategory = (
     return 'Monthly';
   }
 
-  // ==========================================================
-  // WEEKLY
-  // ==========================================================
+  /* ==========================================================
+     WEEKLY
+  ========================================================== */
+
   if (
     variationCode.includes('weekly') ||
     variationCode.includes('week') ||
@@ -275,9 +282,10 @@ const getPlanCategory = (
     return 'Weekly';
   }
 
-  // ==========================================================
-  // WEEKEND
-  // ==========================================================
+  /* ==========================================================
+     WEEKEND
+  ========================================================== */
+
   if (
     variationCode.includes('weekend') ||
     text.includes('weekend') ||
@@ -287,9 +295,10 @@ const getPlanCategory = (
     return 'Weekend';
   }
 
-  // ==========================================================
-  // SOCIAL
-  // ==========================================================
+  /* ==========================================================
+     SOCIAL
+  ========================================================== */
+
   if (
     variationCode.includes('social') ||
     variationCode.includes('myg') ||
@@ -304,9 +313,10 @@ const getPlanCategory = (
     return 'Social';
   }
 
-  // ==========================================================
-  // BINGE
-  // ==========================================================
+  /* ==========================================================
+     BINGE
+  ========================================================== */
+
   if (
     variationCode.includes('binge') ||
     variationCode.includes('youtube') ||
@@ -316,9 +326,10 @@ const getPlanCategory = (
     return 'Binge';
   }
 
-  // ==========================================================
-  // SPECIAL
-  // ==========================================================
+  /* ==========================================================
+     SPECIAL
+  ========================================================== */
+
   if (
     variationCode.includes('special') ||
     variationCode.includes('combo') ||
@@ -330,19 +341,18 @@ const getPlanCategory = (
     return 'Special';
   }
 
-  // ==========================================================
-  // DAILY
-  //
-  // IMPORTANT:
-  // Check variation_code FIRST.
-  //
-  // This catches:
-  // glo-daily-50
-  // glo-daily-100
-  // glo-2days-200
-  //
-  // even when the plan name contains "Night".
-  // ==========================================================
+  /* ==========================================================
+     DAILY
+
+     Check variation code first.
+
+     This catches examples such as:
+
+     glo-daily-50
+     glo-daily-100
+     glo-2days-200
+  ========================================================== */
+
   if (
     variationCode.includes('daily') ||
     variationCode.includes('1day') ||
@@ -368,11 +378,10 @@ const getPlanCategory = (
     return 'Daily';
   }
 
-  // ==========================================================
-  // NIGHT
-  //
-  // Only classify as Night AFTER checking Daily.
-  // ==========================================================
+  /* ==========================================================
+     NIGHT
+  ========================================================== */
+
   if (
     variationCode.includes('night') ||
     text.includes('night') ||
@@ -387,15 +396,16 @@ const getPlanCategory = (
     return 'Night';
   }
 
-  
-  // ==========================================================
-  // OTHER
-  // ==========================================================
+  /* ==========================================================
+     OTHER
+  ========================================================== */
 
   return 'Other';
 };
 
-  
+/* ============================================================
+   DATA PAGE
+============================================================ */
 
 const Data: React.FC = () => {
   const [network, setNetwork] =
@@ -455,6 +465,10 @@ const Data: React.FC = () => {
       Record<string, boolean>
     >({});
 
+  /* ==========================================================
+     MESSAGE
+  ========================================================== */
+
   const showMessage = (
     message: string,
     severity:
@@ -467,6 +481,10 @@ const Data: React.FC = () => {
       severity,
     });
   };
+
+  /* ==========================================================
+     LOAD PLANS
+  ========================================================== */
 
   const loadPlans = async (
     selectedNetwork: Network
@@ -523,27 +541,34 @@ const Data: React.FC = () => {
               plan.variation_code ||
               plan.variationCode ||
               '',
+
             name:
               plan.name ||
               plan.plan_name ||
               'Data Plan',
+
             amount:
               plan.amount ??
               plan.variation_amount ??
               plan.price ??
               0,
+
             validity:
               plan.validity ||
               plan.duration ||
               '',
+
             fixedPrice:
               plan.fixedPrice,
+
             description:
               plan.description || '',
+
             serviceID:
               plan.serviceID ||
               plan.service_id ||
               '',
+
             category:
               plan.category || '',
           })
@@ -564,6 +589,21 @@ const Data: React.FC = () => {
   useEffect(() => {
     loadPlans(network);
   }, [network]);
+
+  /* ==========================================================
+     GROUP PLANS
+
+     IMPORTANT:
+     HOT FALLBACK
+
+     VTpass does not always return a "HOT" category.
+
+     If no plans are explicitly marked HOT, Zenimonies
+     automatically selects up to 6 accessible plans from
+     the provider catalogue.
+
+     The original variation_code is preserved.
+  ========================================================== */
 
   const groupedPlans =
     useMemo(() => {
@@ -586,11 +626,64 @@ const Data: React.FC = () => {
           groups[category] = [];
         }
 
+        /*
+         * Explicit HOT plans stay in HOT.
+         */
+        if (category === 'HOT') {
+          groups.HOT.push(plan);
+          return;
+        }
+
         groups[category].push(plan);
       });
 
+      /* ========================================================
+         HOT FALLBACK
+
+         When VTpass does not explicitly label any plan as HOT,
+         use selected accessible plans from the catalogue.
+
+         We exclude special device-oriented categories.
+      ======================================================== */
+
+      if (
+        groups.HOT.length === 0 &&
+        plans.length > 0
+      ) {
+        const eligiblePlans =
+          plans
+            .filter((plan) => {
+              const category =
+                getPlanCategory(plan);
+
+              return (
+                category !== 'Router' &&
+                category !== '3 Months+' &&
+                category !== 'Social' &&
+                category !== 'Binge'
+              );
+            })
+            .slice()
+            .sort(
+              (a, b) =>
+                normalizeAmount(
+                  a.amount
+                ) -
+                normalizeAmount(
+                  b.amount
+                )
+            );
+
+        groups.HOT =
+          eligiblePlans.slice(0, 6);
+      }
+
       return groups;
     }, [plans]);
+
+  /* ==========================================================
+     AVAILABLE CATEGORIES
+  ========================================================== */
 
   const availableCategories =
     useMemo(() => {
@@ -601,6 +694,10 @@ const Data: React.FC = () => {
             0
       );
     }, [groupedPlans]);
+
+  /* ==========================================================
+     KEEP ACTIVE CATEGORY VALID
+  ========================================================== */
 
   useEffect(() => {
     if (
@@ -615,9 +712,20 @@ const Data: React.FC = () => {
         activeCategory
       )
     ) {
-      setActiveCategory(
-        availableCategories[0]
-      );
+      /*
+       * Prefer HOT whenever it is available.
+       */
+      if (
+        availableCategories.includes(
+          'HOT'
+        )
+      ) {
+        setActiveCategory('HOT');
+      } else {
+        setActiveCategory(
+          availableCategories[0]
+        );
+      }
     }
   }, [
     availableCategories,
@@ -628,12 +736,24 @@ const Data: React.FC = () => {
     groupedPlans[activeCategory] ||
     [];
 
+  /* ==========================================================
+     NETWORK CHANGE
+  ========================================================== */
+
   const handleNetworkChange = (
     selectedNetwork: Network
   ) => {
     setNetwork(selectedNetwork);
+
+    /*
+     * Always return to HOT after changing network.
+     */
     setActiveCategory('HOT');
   };
+
+  /* ==========================================================
+     BUY PLAN
+  ========================================================== */
 
   const handleBuyClick = (
     plan: DataPlan
@@ -655,6 +775,10 @@ const Data: React.FC = () => {
     setTransactionPinError('');
     setShowTransactionPin(true);
   };
+
+  /* ==========================================================
+     COMPLETE PURCHASE
+  ========================================================== */
 
   const completePurchase =
     async () => {
@@ -794,6 +918,10 @@ const Data: React.FC = () => {
       }
     };
 
+  /* ==========================================================
+     RENDER
+  ========================================================== */
+
   return (
     <>
       <Box
@@ -818,9 +946,9 @@ const Data: React.FC = () => {
             mx: 'auto',
           }}
         >
-          {/* =====================================================
+          {/* ===================================================
               HEADER
-          ===================================================== */}
+          =================================================== */}
 
           <Card
             elevation={0}
@@ -1132,9 +1260,9 @@ const Data: React.FC = () => {
             </Box>
           </Card>
 
-          {/* =====================================================
+          {/* ===================================================
               DATA PLANS
-          ===================================================== */}
+          =================================================== */}
 
           <Card
             elevation={0}
@@ -1213,7 +1341,7 @@ const Data: React.FC = () => {
             </Stack>
 
             {/* =================================================
-                HORIZONTAL CATEGORY NAVIGATION
+                CATEGORY NAVIGATION
             ================================================= */}
 
             <Box
@@ -1313,7 +1441,9 @@ const Data: React.FC = () => {
               }}
             />
 
-            {/* LOADING */}
+            {/* =================================================
+                LOADING
+            ================================================= */}
 
             {loadingPlans ? (
               <Box
@@ -1591,9 +1721,9 @@ const Data: React.FC = () => {
             )}
           </Card>
 
-          {/* =====================================================
+          {/* ===================================================
               SECURITY
-          ===================================================== */}
+          =================================================== */}
 
           <Stack
             direction="row"
