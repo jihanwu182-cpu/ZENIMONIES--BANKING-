@@ -573,6 +573,18 @@ const startServer = async () => {
       ALTER TABLE data_transactions
       ADD COLUMN IF NOT EXISTS
       provider_response JSONB;
+
+      ALTER TABLE bill_payments
+      ADD COLUMN IF NOT EXISTS provider_request_id VARCHAR(150);
+
+      ALTER TABLE bill_payments
+      ADD COLUMN IF NOT EXISTS commission_details JSONB;
+
+      ALTER TABLE bill_payments
+      ADD COLUMN IF NOT EXISTS provider_response JSONB;
+
+      CREATE INDEX IF NOT EXISTS idx_bill_payments_provider_request
+      ON bill_payments(provider_request_id);
      
       ALTER TABLE transactions
       ADD COLUMN IF NOT EXISTS transaction_fee NUMERIC(18,2) NOT NULL DEFAULT 0.00;
