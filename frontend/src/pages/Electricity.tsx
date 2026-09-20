@@ -112,7 +112,8 @@ const formatNaira = (amount: number | string) => {
 const Electricity: React.FC = () => {
   const navigate = useNavigate();
 
-  const [provider, setProvider] = useState<Provider | null>(null);
+  const [provider, setProvider] =
+    useState<Provider | null>(null);
 
   const [meterType, setMeterType] =
     useState<MeterType>('prepaid');
@@ -130,9 +131,6 @@ const Electricity: React.FC = () => {
     useState(false);
 
   const [error, setError] =
-    useState('');
-
-  const [message, setMessage] =
     useState('');
 
   const canContinue = useMemo(() => {
@@ -155,22 +153,23 @@ const Electricity: React.FC = () => {
   const handleQuickAmount = (amount: number) => {
     setPreferredAmount(String(amount));
     setError('');
-    setMessage('');
   };
 
-  const handleMeterTypeChange = (type: MeterType) => {
+  const handleMeterTypeChange = (
+    type: MeterType
+  ) => {
     setMeterType(type);
     setMeterNumber('');
     setError('');
-    setMessage('');
   };
 
   const handleContinue = async () => {
     setError('');
-    setMessage('');
 
     if (!provider) {
-      setError('Please select your electricity service provider.');
+      setError(
+        'Please select your electricity service provider.'
+      );
       return;
     }
 
@@ -185,14 +184,20 @@ const Electricity: React.FC = () => {
 
     const amount = Number(preferredAmount);
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setError('Please enter a valid preferred amount.');
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      setError(
+        'Please enter a valid preferred amount.'
+      );
       return;
     }
 
-    const token = localStorage.getItem(
-      'zenimonies_token'
-    );
+    const token =
+      localStorage.getItem(
+        'zenimonies_token'
+      );
 
     if (!token) {
       setError(
@@ -204,100 +209,120 @@ const Electricity: React.FC = () => {
     try {
       setLoading(true);
 
-      const response = await axios.post(
-        `${API_URL}/api/bills`,
-        {
-          category: 'electricity',
+      // ========================================================
+      // VERIFY ELECTRICITY METER
+      // ========================================================
 
-          biller_name: provider.name,
+      const response =
+        await axios.post(
+          `${API_URL}/api/bills/electricity/verify`,
+          {
+            provider:
+              provider.code,
 
-          provider_code: provider.code,
+            meter_number:
+              meterNumber.trim(),
 
-          customer_reference:
-            meterNumber.trim(),
-
-          meter_number:
-            meterNumber.trim(),
-
-          meter_type:
-            meterType,
-
-          amount,
-
-          currency: 'NGN',
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
+            meter_type:
+              meterType,
           },
-        }
-      );
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
 
-      const payment =
-        response?.data?.payment ||
-        response?.data?.billPayment ||
-        response?.data ||
-        {};
+              'Content-Type':
+                'application/json',
+            },
+          }
+        );
 
-      localStorage.setItem(
-        'zenimonies_electricity_payment',
-        JSON.stringify({
-          ...payment,
+      const verification =
+        response?.data?.data ||
+        response?.data?.verification ||
+        null;
 
-          category: 'electricity',
-
-          provider_code:
-            provider.code,
-
-          provider_name:
-            provider.name,
-
-          provider_logo:
-            provider.logo,
-
-          meter_type:
-            meterType,
-
-          meter_number:
-            meterNumber.trim(),
-
-          amount,
-        })
-      );
-
-      /*
-       * IMPORTANT:
-       * Our current backend is still TEST MODE.
-       * Therefore we do NOT display a successful
-       * payment message unless the backend actually
-       * returns a completed/successful status.
-       */
-
-      const status =
-        String(payment.status || '').toLowerCase();
-
-      const isSuccessful =
-        status === 'successful' ||
-        status === 'completed' ||
-        status === 'success';
-
-      if (isSuccessful) {
-        navigate('/electricity/receipt');
-        return;
+      if (
+        !verification ||
+        response?.data?.success !== true
+      ) {
+        throw new Error(
+          response?.data?.message ||
+            'Unable to verify this electricity account.'
+        );
       }
 
-      setMessage(
-        'Your electricity payment request has been received and is pending verification.'
+      // ========================================================
+      // SAVE VERIFICATION FOR NEXT SCREEN
+      // ========================================================
+
+      const verificationData = {
+        provider_code:
+          provider.code,
+
+        provider_name:
+          provider.name,
+
+        provider_short_name:
+          provider.shortName,
+
+        provider_logo:
+          provider.logo,
+
+        meter_type:
+          verification.meter_type ||
+          meterType,
+
+        meter_number:
+          verification.meter_number ||
+          meterNumber.trim(),
+
+        customer_name:
+          verification.customer_name ||
+          '',
+
+        address:
+          verification.address ||
+          '',
+
+        amount,
+
+        currency: 'NGN',
+
+        verified: true,
+
+        verified_at:
+          new Date().toISOString(),
+      };
+
+      localStorage.setItem(
+        'zenimonies_electricity_verification',
+        JSON.stringify(
+          verificationData
+        )
+      );
+
+      // ========================================================
+      // GO TO VERIFICATION SCREEN
+      // ========================================================
+
+      navigate(
+        '/electricity/verification'
       );
     } catch (err: any) {
+      console.error(
+        'Electricity verification error:',
+        err
+      );
+
       const serverMessage =
         err?.response?.data?.message ||
-        err?.response?.data?.error;
+        err?.response?.data?.error ||
+        err?.message;
 
       setError(
         serverMessage ||
-          'Unable to process your electricity payment request. Please try again.'
+          'Unable to verify this meter. Please check the meter number and try again.'
       );
     } finally {
       setLoading(false);
@@ -336,24 +361,29 @@ const Electricity: React.FC = () => {
             padding: '0 18px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent:
+              'space-between',
           }}
         >
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() =>
+              navigate(-1)
+            }
             style={{
               width: 42,
               height: 42,
               border: 'none',
-              background: 'transparent',
+              background:
+                'transparent',
               borderRadius: 12,
               fontSize: 28,
               cursor: 'pointer',
               color: '#111827',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
+              justifyContent:
+                'center',
             }}
             aria-label="Go back"
           >
@@ -374,16 +404,20 @@ const Electricity: React.FC = () => {
           <button
             type="button"
             onClick={() =>
-              navigate('/bills/history')
+              navigate(
+                '/bills/history'
+              )
             }
             style={{
               border: 'none',
-              background: 'transparent',
+              background:
+                'transparent',
               color: '#159447',
               fontSize: 14,
               fontWeight: 700,
               cursor: 'pointer',
-              padding: '8px 0 8px 8px',
+              padding:
+                '8px 0 8px 8px',
             }}
           >
             History
@@ -392,21 +426,24 @@ const Electricity: React.FC = () => {
       </div>
 
       {/* ======================================================
-          PAGE CONTENT
+          CONTENT
       ====================================================== */}
 
       <div
         style={{
           maxWidth: 620,
           margin: '0 auto',
-          padding: '24px 18px 40px',
+          padding:
+            '24px 18px 40px',
         }}
       >
-        {/* ====================================================
-            SERVICE PROVIDER
-        ==================================================== */}
+        {/* SERVICE PROVIDER */}
 
-        <div style={{ marginBottom: 25 }}>
+        <div
+          style={{
+            marginBottom: 25,
+          }}
+        >
           <div
             style={{
               fontSize: 12,
@@ -422,20 +459,26 @@ const Electricity: React.FC = () => {
           <button
             type="button"
             onClick={() =>
-              setShowProviderSelector(true)
+              setShowProviderSelector(
+                true
+              )
             }
             style={{
               width: '100%',
               minHeight: 70,
-              border: '1px solid #e5e7eb',
+              border:
+                '1px solid #e5e7eb',
               background: '#ffffff',
               borderRadius: 16,
-              padding: '9px 15px',
+              padding:
+                '9px 15px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              justifyContent:
+                'space-between',
               cursor: 'pointer',
-              boxSizing: 'border-box',
+              boxSizing:
+                'border-box',
               boxShadow:
                 '0 2px 8px rgba(0,0,0,0.03)',
             }}
@@ -443,7 +486,8 @@ const Electricity: React.FC = () => {
             <div
               style={{
                 display: 'flex',
-                alignItems: 'center',
+                alignItems:
+                  'center',
                 gap: 13,
                 minWidth: 0,
               }}
@@ -457,7 +501,8 @@ const Electricity: React.FC = () => {
 
                   <div
                     style={{
-                      textAlign: 'left',
+                      textAlign:
+                        'left',
                       minWidth: 0,
                     }}
                   >
@@ -465,10 +510,14 @@ const Electricity: React.FC = () => {
                       style={{
                         fontSize: 15,
                         fontWeight: 700,
-                        color: '#111827',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
+                        color:
+                          '#111827',
+                        whiteSpace:
+                          'nowrap',
+                        overflow:
+                          'hidden',
+                        textOverflow:
+                          'ellipsis',
                       }}
                     >
                       {provider.name}
@@ -478,10 +527,13 @@ const Electricity: React.FC = () => {
                       style={{
                         marginTop: 3,
                         fontSize: 12,
-                        color: '#6b7280',
+                        color:
+                          '#6b7280',
                       }}
                     >
-                      {provider.shortName}
+                      {
+                        provider.shortName
+                      }
                     </div>
                   </div>
                 </>
@@ -492,10 +544,13 @@ const Electricity: React.FC = () => {
                       width: 50,
                       height: 50,
                       borderRadius: 14,
-                      background: '#f0fdf4',
+                      background:
+                        '#f0fdf4',
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      alignItems:
+                        'center',
+                      justifyContent:
+                        'center',
                       fontSize: 24,
                     }}
                   >
@@ -504,27 +559,33 @@ const Electricity: React.FC = () => {
 
                   <div
                     style={{
-                      textAlign: 'left',
+                      textAlign:
+                        'left',
                     }}
                   >
                     <div
                       style={{
                         fontSize: 15,
                         fontWeight: 700,
-                        color: '#111827',
+                        color:
+                          '#111827',
                       }}
                     >
-                      Select Service Provider
+                      Select Service
+                      Provider
                     </div>
 
                     <div
                       style={{
                         marginTop: 3,
                         fontSize: 12,
-                        color: '#6b7280',
+                        color:
+                          '#6b7280',
                       }}
                     >
-                      Choose your electricity provider
+                      Choose your
+                      electricity
+                      provider
                     </div>
                   </div>
                 </>
@@ -544,11 +605,13 @@ const Electricity: React.FC = () => {
           </button>
         </div>
 
-        {/* ====================================================
-            PREPAID / POSTPAID
-        ==================================================== */}
+        {/* METER TYPE */}
 
-        <div style={{ marginBottom: 25 }}>
+        <div
+          style={{
+            marginBottom: 25,
+          }}
+        >
           <div
             style={{
               fontSize: 12,
@@ -569,73 +632,57 @@ const Electricity: React.FC = () => {
               gap: 10,
             }}
           >
-            <button
-              type="button"
-              onClick={() =>
-                handleMeterTypeChange(
-                  'prepaid'
-                )
-              }
-              style={{
-                height: 52,
-                borderRadius: 14,
-                border:
-                  meterType === 'prepaid'
-                    ? '2px solid #159447'
-                    : '1px solid #e5e7eb',
-                background:
-                  meterType === 'prepaid'
-                    ? '#ecfdf3'
-                    : '#ffffff',
-                color:
-                  meterType === 'prepaid'
-                    ? '#11813d'
-                    : '#374151',
-                fontWeight: 700,
-                fontSize: 14,
-                cursor: 'pointer',
-              }}
-            >
-              Prepaid
-            </button>
+            {(
+              ['prepaid', 'postpaid'] as MeterType[]
+            ).map((type) => {
+              const selected =
+                meterType === type;
 
-            <button
-              type="button"
-              onClick={() =>
-                handleMeterTypeChange(
-                  'postpaid'
-                )
-              }
-              style={{
-                height: 52,
-                borderRadius: 14,
-                border:
-                  meterType === 'postpaid'
-                    ? '2px solid #159447'
-                    : '1px solid #e5e7eb',
-                background:
-                  meterType === 'postpaid'
-                    ? '#ecfdf3'
-                    : '#ffffff',
-                color:
-                  meterType === 'postpaid'
-                    ? '#11813d'
-                    : '#374151',
-                fontWeight: 700,
-                fontSize: 14,
-                cursor: 'pointer',
-              }}
-            >
-              Postpaid
-            </button>
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() =>
+                    handleMeterTypeChange(
+                      type
+                    )
+                  }
+                  style={{
+                    height: 52,
+                    border: selected
+                      ? '2px solid #159447'
+                      : '1px solid #e5e7eb',
+                    borderRadius: 14,
+                    background:
+                      selected
+                        ? '#ecfdf3'
+                        : '#ffffff',
+                    color:
+                      selected
+                        ? '#11813d'
+                        : '#374151',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {type ===
+                  'prepaid'
+                    ? 'Prepaid'
+                    : 'Postpaid'}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* ====================================================
-            METER / ACCOUNT NUMBER
-        ==================================================== */}
+        {/* METER NUMBER */}
 
-        <div style={{ marginBottom: 26 }}>
+        <div
+          style={{
+            marginBottom: 26,
+          }}
+        >
           <label
             htmlFor="meter-number"
             style={{
@@ -647,7 +694,8 @@ const Electricity: React.FC = () => {
               marginBottom: 9,
             }}
           >
-            {meterType === 'prepaid'
+            {meterType ===
+            'prepaid'
               ? 'METER NUMBER'
               : 'METER / ACCOUNT NUMBER'}
           </label>
@@ -664,7 +712,8 @@ const Electricity: React.FC = () => {
               )
             }
             placeholder={
-              meterType === 'prepaid'
+              meterType ===
+              'prepaid'
                 ? 'Enter meter number'
                 : 'Enter meter/account number'
             }
@@ -674,21 +723,26 @@ const Electricity: React.FC = () => {
               border:
                 '1px solid #dfe4e1',
               borderRadius: 14,
-              background: '#ffffff',
-              padding: '0 16px',
+              background:
+                '#ffffff',
+              padding:
+                '0 16px',
               fontSize: 15,
               color: '#111827',
               outline: 'none',
-              boxSizing: 'border-box',
+              boxSizing:
+                'border-box',
             }}
           />
         </div>
 
-        {/* ====================================================
-            QUICK AMOUNTS
-        ==================================================== */}
+        {/* QUICK AMOUNT */}
 
-        <div style={{ marginBottom: 22 }}>
+        <div
+          style={{
+            marginBottom: 22,
+          }}
+        >
           <div
             style={{
               fontSize: 12,
@@ -728,18 +782,22 @@ const Electricity: React.FC = () => {
                     style={{
                       height: 48,
                       borderRadius: 13,
-                      border: selected
-                        ? '2px solid #159447'
-                        : '1px solid #e5e7eb',
-                      background: selected
-                        ? '#ecfdf3'
-                        : '#ffffff',
-                      color: selected
-                        ? '#11813d'
-                        : '#374151',
+                      border:
+                        selected
+                          ? '2px solid #159447'
+                          : '1px solid #e5e7eb',
+                      background:
+                        selected
+                          ? '#ecfdf3'
+                          : '#ffffff',
+                      color:
+                        selected
+                          ? '#11813d'
+                          : '#374151',
                       fontSize: 14,
                       fontWeight: 700,
-                      cursor: 'pointer',
+                      cursor:
+                        'pointer',
                     }}
                   >
                     {formatNaira(
@@ -752,11 +810,13 @@ const Electricity: React.FC = () => {
           </div>
         </div>
 
-        {/* ====================================================
-            PREFERRED AMOUNT
-        ==================================================== */}
+        {/* PREFERRED AMOUNT */}
 
-        <div style={{ marginBottom: 22 }}>
+        <div
+          style={{
+            marginBottom: 22,
+          }}
+        >
           <label
             htmlFor="preferred-amount"
             style={{
@@ -773,12 +833,14 @@ const Electricity: React.FC = () => {
 
           <div
             style={{
-              position: 'relative',
+              position:
+                'relative',
             }}
           >
             <span
               style={{
-                position: 'absolute',
+                position:
+                  'absolute',
                 left: 16,
                 top: '50%',
                 transform:
@@ -797,13 +859,14 @@ const Electricity: React.FC = () => {
               inputMode="decimal"
               min="1"
               step="1"
-              value={preferredAmount}
+              value={
+                preferredAmount
+              }
               onChange={(event) => {
                 setPreferredAmount(
                   event.target.value
                 );
                 setError('');
-                setMessage('');
               }}
               placeholder="Enter preferred amount"
               style={{
@@ -812,21 +875,21 @@ const Electricity: React.FC = () => {
                 border:
                   '1px solid #dfe4e1',
                 borderRadius: 14,
-                background: '#ffffff',
+                background:
+                  '#ffffff',
                 padding:
                   '0 16px 0 37px',
                 fontSize: 16,
                 color: '#111827',
                 outline: 'none',
-                boxSizing: 'border-box',
+                boxSizing:
+                  'border-box',
               }}
             />
           </div>
         </div>
 
-        {/* ====================================================
-            ERROR
-        ==================================================== */}
+        {/* ERROR */}
 
         {error && (
           <div
@@ -834,7 +897,8 @@ const Electricity: React.FC = () => {
               marginBottom: 16,
               padding: 14,
               borderRadius: 12,
-              background: '#fef2f2',
+              background:
+                '#fef2f2',
               border:
                 '1px solid #fecaca',
               color: '#b91c1c',
@@ -846,88 +910,73 @@ const Electricity: React.FC = () => {
           </div>
         )}
 
-        {/* ====================================================
-            PENDING / TEST MODE MESSAGE
-        ==================================================== */}
-
-        {message && (
-          <div
-            style={{
-              marginBottom: 16,
-              padding: 14,
-              borderRadius: 12,
-              background: '#effdf5',
-              border:
-                '1px solid #bbf7d0',
-              color: '#166534',
-              fontSize: 13,
-              lineHeight: 1.5,
-            }}
-          >
-            {message}
-          </div>
-        )}
-
-        {/* ====================================================
-            CONTINUE
-        ==================================================== */}
+        {/* CONTINUE */}
 
         <button
           type="button"
-          onClick={handleContinue}
-          disabled={!canContinue}
+          onClick={
+            handleContinue
+          }
+          disabled={
+            !canContinue
+          }
           style={{
             width: '100%',
             height: 56,
             border: 'none',
             borderRadius: 15,
-            background: canContinue
-              ? '#159447'
-              : '#cbd5d1',
+            background:
+              canContinue
+                ? '#159447'
+                : '#cbd5d1',
             color: '#ffffff',
             fontSize: 16,
             fontWeight: 800,
-            cursor: canContinue
-              ? 'pointer'
-              : 'not-allowed',
-            boxShadow: canContinue
-              ? '0 8px 20px rgba(21,148,71,0.20)'
-              : 'none',
+            cursor:
+              canContinue
+                ? 'pointer'
+                : 'not-allowed',
+            boxShadow:
+              canContinue
+                ? '0 8px 20px rgba(21,148,71,0.20)'
+                : 'none',
           }}
         >
           {loading
-            ? 'Processing...'
+            ? 'Verifying...'
             : 'Continue'}
         </button>
 
         <div
           style={{
-            textAlign: 'center',
+            textAlign:
+              'center',
             marginTop: 15,
             color: '#9ca3af',
             fontSize: 11,
             lineHeight: 1.5,
           }}
         >
-          Your meter will be verified before
-          any real electricity payment is made.
+          Your meter will be
+          verified before any
+          electricity payment is
+          made.
         </div>
       </div>
 
-      {/* ======================================================
-          PROVIDER BOTTOM SHEET
-      ====================================================== */}
+      {/* PROVIDER SELECTOR */}
 
       {showProviderSelector && (
         <>
-          {/* Overlay */}
-
           <div
             onClick={() =>
-              setShowProviderSelector(false)
+              setShowProviderSelector(
+                false
+              )
             }
             style={{
-              position: 'fixed',
+              position:
+                'fixed',
               inset: 0,
               background:
                 'rgba(0,0,0,0.45)',
@@ -935,23 +984,25 @@ const Electricity: React.FC = () => {
             }}
           />
 
-          {/* Bottom sheet */}
-
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Select Provider"
             style={{
-              position: 'fixed',
+              position:
+                'fixed',
               left: 0,
               right: 0,
               bottom: 0,
               zIndex: 100,
-              background: '#ffffff',
+              background:
+                '#ffffff',
               borderRadius:
                 '24px 24px 0 0',
-              maxHeight: '88vh',
-              overflow: 'hidden',
+              maxHeight:
+                '88vh',
+              overflow:
+                'hidden',
               boxShadow:
                 '0 -10px 40px rgba(0,0,0,0.18)',
             }}
@@ -959,17 +1010,19 @@ const Electricity: React.FC = () => {
             <div
               style={{
                 maxWidth: 620,
-                margin: '0 auto',
+                margin:
+                  '0 auto',
               }}
             >
-              {/* Sheet header */}
-
               <div
                 style={{
                   height: 68,
-                  padding: '0 18px',
-                  display: 'flex',
-                  alignItems: 'center',
+                  padding:
+                    '0 18px',
+                  display:
+                    'flex',
+                  alignItems:
+                    'center',
                   borderBottom:
                     '1px solid #eeeeee',
                 }}
@@ -984,18 +1037,22 @@ const Electricity: React.FC = () => {
                   style={{
                     width: 42,
                     height: 42,
-                    border: 'none',
+                    border:
+                      'none',
                     background:
                       'transparent',
                     fontSize: 29,
-                    color: '#111827',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
+                    color:
+                      '#111827',
+                    cursor:
+                      'pointer',
+                    display:
+                      'flex',
+                    alignItems:
+                      'center',
                     justifyContent:
                       'center',
                   }}
-                  aria-label="Close provider selector"
                 >
                   ‹
                 </button>
@@ -1003,15 +1060,18 @@ const Electricity: React.FC = () => {
                 <div
                   style={{
                     flex: 1,
-                    textAlign: 'center',
-                    paddingRight: 42,
+                    textAlign:
+                      'center',
+                    paddingRight:
+                      42,
                   }}
                 >
                   <div
                     style={{
                       fontSize: 18,
                       fontWeight: 800,
-                      color: '#111827',
+                      color:
+                        '#111827',
                     }}
                   >
                     Select Provider
@@ -1019,11 +1079,10 @@ const Electricity: React.FC = () => {
                 </div>
               </div>
 
-              {/* Provider list */}
-
               <div
                 style={{
-                  overflowY: 'auto',
+                  overflowY:
+                    'auto',
                   maxHeight:
                     'calc(88vh - 68px)',
                   padding:
@@ -1038,25 +1097,34 @@ const Electricity: React.FC = () => {
 
                     return (
                       <button
-                        key={item.code}
+                        key={
+                          item.code
+                        }
                         type="button"
                         onClick={() => {
-                          setProvider(item);
+                          setProvider(
+                            item
+                          );
                           setShowProviderSelector(
                             false
                           );
-                          setError('');
-                          setMessage('');
+                          setError(
+                            ''
+                          );
                         }}
                         style={{
-                          width: '100%',
-                          minHeight: 76,
-                          border: 'none',
+                          width:
+                            '100%',
+                          minHeight:
+                            76,
+                          border:
+                            'none',
                           borderBottom:
                             '1px solid #f0f0f0',
                           background:
                             '#ffffff',
-                          display: 'flex',
+                          display:
+                            'flex',
                           alignItems:
                             'center',
                           gap: 14,
@@ -1068,14 +1136,12 @@ const Electricity: React.FC = () => {
                             'left',
                         }}
                       >
-                        {/* Logo */}
-
                         <ProviderLogo
-                          provider={item}
+                          provider={
+                            item
+                          }
                           size={54}
                         />
-
-                        {/* Name */}
 
                         <div
                           style={{
@@ -1087,25 +1153,30 @@ const Electricity: React.FC = () => {
                             style={{
                               fontSize: 15,
                               fontWeight: 700,
-                              color: '#1f2937',
-                              lineHeight: 1.3,
+                              color:
+                                '#1f2937',
+                              lineHeight:
+                                1.3,
                             }}
                           >
-                            {item.name}
+                            {
+                              item.name
+                            }
                           </div>
 
                           <div
                             style={{
                               marginTop: 3,
                               fontSize: 11,
-                              color: '#9ca3af',
+                              color:
+                                '#9ca3af',
                             }}
                           >
-                            {item.shortName}
+                            {
+                              item.shortName
+                            }
                           </div>
                         </div>
-
-                        {/* Selection circle */}
 
                         <div
                           style={{
@@ -1113,19 +1184,22 @@ const Electricity: React.FC = () => {
                             height: 25,
                             borderRadius:
                               '50%',
-                            border: selected
-                              ? '2px solid #159447'
-                              : '2px solid #d1d5db',
+                            border:
+                              selected
+                                ? '2px solid #159447'
+                                : '2px solid #d1d5db',
                             background:
                               selected
                                 ? '#159447'
                                 : '#ffffff',
-                            display: 'flex',
+                            display:
+                              'flex',
                             alignItems:
                               'center',
                             justifyContent:
                               'center',
-                            flexShrink: 0,
+                            flexShrink:
+                              0,
                           }}
                         >
                           {selected && (
@@ -1133,10 +1207,10 @@ const Electricity: React.FC = () => {
                               style={{
                                 color:
                                   '#ffffff',
-                                fontSize: 15,
+                                fontSize:
+                                  15,
                                 fontWeight:
                                   900,
-                                lineHeight: 1,
                               }}
                             >
                               ✓
@@ -1157,7 +1231,7 @@ const Electricity: React.FC = () => {
 };
 
 /* ============================================================
-   PROVIDER LOGO COMPONENT
+   PROVIDER LOGO
 ============================================================ */
 
 type ProviderLogoProps = {
@@ -1181,20 +1255,27 @@ const ProviderLogo: React.FC<
           width: size,
           height: size,
           borderRadius: 14,
-          background: '#ecfdf3',
+          background:
+            '#ecfdf3',
           border:
             '1px solid #d1fae5',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          alignItems:
+            'center',
+          justifyContent:
+            'center',
           flexShrink: 0,
           color: '#159447',
           fontSize:
-            size >= 54 ? 12 : 10,
+            size >= 54
+              ? 12
+              : 10,
           fontWeight: 800,
-          textAlign: 'center',
+          textAlign:
+            'center',
           padding: 4,
-          boxSizing: 'border-box',
+          boxSizing:
+            'border-box',
         }}
       >
         {provider.shortName}
@@ -1208,13 +1289,17 @@ const ProviderLogo: React.FC<
         width: size,
         height: size,
         borderRadius: 14,
-        background: '#ffffff',
+        background:
+          '#ffffff',
         border:
           '1px solid #e5e7eb',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
+        alignItems:
+          'center',
+        justifyContent:
+          'center',
+        overflow:
+          'hidden',
         flexShrink: 0,
       }}
     >
@@ -1222,13 +1307,17 @@ const ProviderLogo: React.FC<
         src={provider.logo}
         alt={`${provider.name} logo`}
         onError={() =>
-          setImageError(true)
+          setImageError(
+            true
+          )
         }
         style={{
           width: '100%',
           height: '100%',
-          objectFit: 'contain',
-          display: 'block',
+          objectFit:
+            'contain',
+          display:
+            'block',
         }}
       />
     </div>
