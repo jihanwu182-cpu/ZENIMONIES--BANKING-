@@ -23,6 +23,7 @@ import Withdraw from './pages/Withdraw.tsx';
 import Transactions from './pages/Transactions.tsx';
 import Airtime from './pages/Airtime.tsx';
 import Data from './pages/Data.tsx';
+import TVSubscription from './pages/TVSubscription.tsx';
 import Bills from './pages/Bills.tsx';
 import Betting from './pages/Betting.tsx';
 import VirtualCard from './pages/VirtualCard.tsx';
@@ -455,6 +456,11 @@ const App: React.FC = () => {
           <Route
             path="/data"
             element={<Data />}
+          />
+
+          <Route
+            path="/tv-subscription"
+            element={<TVSubscription />}
           />
 
           {/* ================= TV ================= */}
