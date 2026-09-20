@@ -1,64 +1,155 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 
 const API_URL = 'https://zenimonies-banking.onrender.com';
 
+type Provider = {
+  code: string;
+  name: string;
+  shortName: string;
+};
+
+const ELECTRICITY_PROVIDERS: Provider[] = [
+  {
+    code: 'IBEDC',
+    name: 'Ibadan Electricity',
+    shortName: 'IBEDC',
+  },
+  {
+    code: 'JED',
+    name: 'Jos Electricity',
+    shortName: 'JED',
+  },
+  {
+    code: 'PHEDC',
+    name: 'Port Harcourt Electricity',
+    shortName: 'PHEDC',
+  },
+  {
+    code: 'KAEDCO',
+    name: 'Kaduna Electricity',
+    shortName: 'KAEDCO',
+  },
+  {
+    code: 'IKEDC',
+    name: 'Ikeja Electricity',
+    shortName: 'IKEDC',
+  },
+  {
+    code: 'AEDC',
+    name: 'Abuja Electricity',
+    shortName: 'AEDC',
+  },
+  {
+    code: 'EKEDC',
+    name: 'Eko Electricity',
+    shortName: 'EKEDC',
+  },
+  {
+    code: 'EEDC',
+    name: 'Enugu Electricity',
+    shortName: 'EEDC',
+  },
+  {
+    code: 'KEDCO',
+    name: 'Kano Electricity',
+    shortName: 'KEDCO',
+  },
+  {
+    code: 'BEDC',
+    name: 'Benin Electricity',
+    shortName: 'BEDC',
+  },
+  {
+    code: 'YEDC',
+    name: 'Yola Electricity',
+    shortName: 'YEDC',
+  },
+  {
+    code: 'APLE',
+    name: 'Aba Electricity',
+    shortName: 'APLE',
+  },
+];
+
 const Bills: React.FC = () => {
-  const [billType, setBillType] = useState('');
   const [provider, setProvider] = useState('');
   const [meterType, setMeterType] = useState('');
-  const [customerNumber, setCustomerNumber] = useState('');
+  const [meterNumber, setMeterNumber] = useState('');
   const [amount, setAmount] = useState('');
+
+  const [step, setStep] = useState<
+    'provider' | 'details' | 'payment'
+  >('provider');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
+  const [paymentResult, setPaymentResult] =
+    useState<any>(null);
+
+  const selectedProvider = useMemo(
+    () =>
+      ELECTRICITY_PROVIDERS.find(
+        (item) => item.code === provider
+      ),
+    [provider]
+  );
+
   // ============================================================
-  // BILL TYPE CHANGE
+  // SELECT PROVIDER
   // ============================================================
 
-  const handleBillTypeChange = (
-    event: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    const value = event.target.value;
-
-    setBillType(value);
-    setProvider('');
-    setMeterType('');
-    setCustomerNumber('');
-    setAmount('');
+  const selectProvider = (code: string) => {
+    setProvider(code);
     setError('');
     setMessage('');
+    setPaymentResult(null);
   };
 
   // ============================================================
-  // PROVIDER CHANGE
+  // CONTINUE FROM PROVIDER
   // ============================================================
 
-  const handleProviderChange = (
-    event: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    setProvider(event.target.value);
+  const continueFromProvider = () => {
+    if (!provider) {
+      setError(
+        'Please select an electricity provider.'
+      );
+      return;
+    }
+
     setError('');
-    setMessage('');
+    setStep('details');
   };
 
   // ============================================================
-  // METER TYPE CHANGE
+  // CONTINUE FROM METER DETAILS
   // ============================================================
 
-  const handleMeterTypeChange = (
-    event: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    setMeterType(event.target.value);
+  const continueFromDetails = () => {
+    if (!meterType) {
+      setError(
+        'Please select Prepaid or Postpaid.'
+      );
+      return;
+    }
+
+    if (!meterNumber.trim()) {
+      setError(
+        'Please enter the meter number.'
+      );
+      return;
+    }
+
     setError('');
-    setMessage('');
+    setStep('payment');
   };
 
   // ============================================================
-  // SUBMIT BILL PAYMENT
+  // SUBMIT PAYMENT REQUEST
   // ============================================================
 
   const handleSubmit = async (
@@ -71,117 +162,71 @@ const Bills: React.FC = () => {
 
     const numericAmount = Number(amount);
 
-    // ----------------------------------------------------------
-    // REQUIRED FIELD VALIDATION
-    // ----------------------------------------------------------
-
-    if (!billType) {
-      setError('Please select a bill type.');
-      return;
-    }
-
-    if (!provider) {
-      setError('Please select a provider.');
-      return;
-    }
-
-    if (isElectricity && !meterType) {
-      setError('Please select prepaid or postpaid.');
-      return;
-    }
-
-    if (!customerNumber.trim()) {
-      setError(
-        isElectricity
-          ? 'Please enter the meter number.'
-          : 'Please enter the customer number.'
-      );
-      return;
-    }
-
-    if (!amount) {
-      setError('Please enter an amount.');
-      return;
-    }
-
     if (
       !Number.isFinite(numericAmount) ||
       numericAmount <= 0
     ) {
-      setError('Please enter a valid amount.');
+      setError(
+        'Please enter a valid amount.'
+      );
       return;
     }
-
-    // ----------------------------------------------------------
-    // START REQUEST
-    // ----------------------------------------------------------
 
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('zenimonies_token');
+      const token = localStorage.getItem(
+        'zenimonies_token'
+      );
 
       if (!token) {
-        setError('Your session has expired. Please sign in again.');
-        setLoading(false);
+        setError(
+          'Your session has expired. Please sign in again.'
+        );
         return;
-      }
-
-      const requestData: {
-        bill_type: string;
-        provider: string;
-        customer_number: string;
-        amount: number;
-        meter_type?: string;
-      } = {
-        bill_type: billType,
-        provider,
-        customer_number: customerNumber.trim(),
-        amount: numericAmount
-      };
-
-      // Only electricity payments need meter_type
-      if (isElectricity) {
-        requestData.meter_type = meterType;
       }
 
       const response = await axios.post(
         `${API_URL}/api/bills`,
-        requestData,
+        {
+          bill_type: 'electricity',
+          provider,
+          customer_number:
+            meterNumber.trim(),
+          amount: numericAmount,
+          meter_type: meterType,
+        },
         {
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
-      // --------------------------------------------------------
-      // SUCCESS
-      // --------------------------------------------------------
-
       if (response.data?.success) {
-        setMessage(
-          response.data?.message ||
-            'Bill payment request created successfully.'
+        setPaymentResult(
+          response.data.data
         );
 
-        setBillType('');
-        setProvider('');
-        setMeterType('');
-        setCustomerNumber('');
-        setAmount('');
+        setMessage(
+          response.data?.message ||
+            'Payment request created and is awaiting provider verification.'
+        );
       } else {
         setError(
           response.data?.message ||
-            'Unable to process bill payment.'
+            'Unable to process electricity payment.'
         );
       }
     } catch (err: any) {
-      console.error('Bill payment error:', err);
+      console.error(
+        'Electricity payment error:',
+        err
+      );
 
       setError(
         err?.response?.data?.message ||
-          'Unable to connect to the bill payment service.'
+          'Unable to connect to the electricity payment service.'
       );
     } finally {
       setLoading(false);
@@ -189,436 +234,896 @@ const Bills: React.FC = () => {
   };
 
   // ============================================================
-  // CONDITIONS
+  // PROVIDER BADGE
   // ============================================================
 
-  const isElectricity = billType === 'electricity';
-  const isTv = billType === 'tv';
-
-  // ============================================================
-  // UI
-  // ============================================================
+  const providerBadge = (
+    item: Provider
+  ) => (
+    <div
+      style={{
+        width: 54,
+        height: 54,
+        borderRadius: '50%',
+        background: '#eef8f3',
+        border: '1px solid #dceee5',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        color: '#087b48',
+        fontWeight: 800,
+        fontSize: 11,
+        textAlign: 'center',
+      }}
+    >
+      {item.shortName}
+    </div>
+  );
 
   return (
     <div
       style={{
         minHeight: '100vh',
-        background: '#f5f7fb',
-        padding: '24px'
+        background:
+          'linear-gradient(180deg, #f9fcfa 0%, #f1f8f5 100%)',
+        color: '#102a21',
+        fontFamily:
+          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+        paddingBottom: 40,
       }}
     >
       <div
         style={{
-          maxWidth: '600px',
-          margin: '0 auto'
+          maxWidth: 680,
+          margin: '0 auto',
+          padding: '18px 16px 40px',
         }}
       >
-        {/* BACK TO DASHBOARD */}
+        {/* ======================================================
+            HEADER
+        ====================================================== */}
 
-        <Link
-          to="/"
+        <header
           style={{
-            display: 'inline-block',
-            marginBottom: '20px',
-            color: '#0b5cff',
-            fontWeight: 600,
-            textDecoration: 'none'
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '6px 2px 20px',
           }}
         >
-          ← Back to Dashboard
-        </Link>
+          <Link
+            to="/"
+            aria-label="Back to dashboard"
+            style={{
+              textDecoration: 'none',
+              color: '#102a21',
+              fontSize: 30,
+              lineHeight: 1,
+            }}
+          >
+            ‹
+          </Link>
 
-        {/* CARD */}
+          <div
+            style={{
+              fontWeight: 800,
+              fontSize: 22,
+            }}
+          >
+            Electricity
+          </div>
 
-        <div
+          <Link
+            to="/bills/history"
+            style={{
+              textDecoration: 'none',
+              color: '#087b48',
+              fontWeight: 700,
+              fontSize: 15,
+            }}
+          >
+            History
+          </Link>
+        </header>
+
+        {/* ======================================================
+            ERROR
+        ====================================================== */}
+
+        {error && (
+          <div
+            style={{
+              marginBottom: 14,
+              padding: '13px 15px',
+              borderRadius: 14,
+              background: '#fff0ef',
+              border:
+                '1px solid #ffd6d2',
+              color: '#b42318',
+              fontWeight: 600,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* ======================================================
+            MAIN CARD
+        ====================================================== */}
+
+        <section
           style={{
             background: '#ffffff',
-            borderRadius: '18px',
-            padding: '30px',
+            borderRadius: 22,
+            border:
+              '1px solid #e1ebe7',
             boxShadow:
-              '0 8px 30px rgba(0, 0, 0, 0.08)'
+              '0 8px 28px rgba(16, 42, 33, 0.06)',
+            overflow: 'hidden',
           }}
         >
-          <h1
+          {/* ====================================================
+              CARD HEADER
+          ==================================================== */}
+
+          <div
             style={{
-              marginTop: 0,
-              marginBottom: '8px'
+              padding:
+                '20px 18px 14px',
             }}
           >
-            Pay Bills
-          </h1>
-
-          <p
-            style={{
-              color: '#667085',
-              marginBottom: '28px'
-            }}
-          >
-            Pay electricity, television and other supported
-            bills from your Zenimonies account.
-          </p>
-
-          {/* ERROR */}
-
-          {error && (
             <div
               style={{
-                padding: '12px',
-                marginBottom: '18px',
-                borderRadius: '8px',
-                background: '#fee4e2',
-                color: '#b42318'
+                fontSize: 13,
+                color: '#6b7c75',
+                marginBottom: 5,
               }}
             >
-              {error}
+              SERVICE PROVIDER
+            </div>
+
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 24,
+              }}
+            >
+              {step === 'provider'
+                ? 'Select Electricity Provider'
+                : 'Electricity Payment'}
+            </h1>
+          </div>
+
+          {/* ====================================================
+              PROVIDER LIST
+          ==================================================== */}
+
+          {step === 'provider' && (
+            <>
+              {ELECTRICITY_PROVIDERS.map(
+                (item) => {
+                  const selected =
+                    provider === item.code;
+
+                  return (
+                    <button
+                      key={item.code}
+                      type="button"
+                      onClick={() =>
+                        selectProvider(
+                          item.code
+                        )
+                      }
+                      style={{
+                        width: '100%',
+                        border: 0,
+                        borderTop:
+                          '1px solid #e8eeeb',
+                        background:
+                          selected
+                            ? '#f1faf5'
+                            : '#ffffff',
+                        padding:
+                          '16px 18px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 14,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {providerBadge(item)}
+
+                      <div
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontWeight: 750,
+                            fontSize: 16,
+                          }}
+                        >
+                          {item.name}
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 3,
+                            color: '#71817b',
+                            fontSize: 13,
+                          }}
+                        >
+                          {item.shortName}
+                        </div>
+                      </div>
+
+                      {/* SELECTION CIRCLE */}
+
+                      <div
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius:
+                            '50%',
+                          border: selected
+                            ? '2px solid #087b48'
+                            : '2px solid #d8e1dd',
+                          background:
+                            selected
+                              ? '#087b48'
+                              : '#ffffff',
+                          color: '#ffffff',
+                          display: 'flex',
+                          alignItems:
+                            'center',
+                          justifyContent:
+                            'center',
+                          fontWeight: 900,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {selected
+                          ? '✓'
+                          : ''}
+                      </div>
+                    </button>
+                  );
+                }
+              )}
+
+              {/* CONTINUE */}
+
+              <div
+                style={{
+                  padding: 18,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={
+                    continueFromProvider
+                  }
+                  disabled={!provider}
+                  style={{
+                    width: '100%',
+                    border: 0,
+                    borderRadius: 14,
+                    padding:
+                      '15px 18px',
+                    background: provider
+                      ? '#087b48'
+                      : '#dce8e2',
+                    color: provider
+                      ? '#ffffff'
+                      : '#7c8c85',
+                    fontWeight: 800,
+                    fontSize: 15,
+                    cursor: provider
+                      ? 'pointer'
+                      : 'not-allowed',
+                  }}
+                >
+                  Continue
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ====================================================
+              METER DETAILS
+          ==================================================== */}
+
+          {step === 'details' && (
+            <div
+              style={{
+                padding: 18,
+              }}
+            >
+              {/* SELECTED PROVIDER */}
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: 14,
+                  border:
+                    '1px solid #e1ebe7',
+                  borderRadius: 16,
+                  background:
+                    '#fbfdfc',
+                  marginBottom: 22,
+                }}
+              >
+                {selectedProvider &&
+                  providerBadge(
+                    selectedProvider
+                  )}
+
+                <div
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 800,
+                    }}
+                  >
+                    {
+                      selectedProvider?.name
+                    }
+                  </div>
+
+                  <div
+                    style={{
+                      color: '#71817b',
+                      fontSize: 13,
+                    }}
+                  >
+                    {
+                      selectedProvider?.shortName
+                    }
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setStep(
+                      'provider'
+                    )
+                  }
+                  style={{
+                    border: 0,
+                    background:
+                      'transparent',
+                    color: '#087b48',
+                    fontWeight: 750,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Change
+                </button>
+              </div>
+
+              {/* METER TYPE */}
+
+              <label
+                style={{
+                  display: 'block',
+                  fontWeight: 800,
+                  marginBottom: 10,
+                }}
+              >
+                Select Meter Type
+              </label>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns:
+                    '1fr 1fr',
+                  gap: 10,
+                  marginBottom: 18,
+                }}
+              >
+                {[
+                  {
+                    value: 'prepaid',
+                    label: 'Prepaid',
+                  },
+                  {
+                    value: 'postpaid',
+                    label: 'Postpaid',
+                  },
+                ].map(
+                  (item) => {
+                    const selected =
+                      meterType ===
+                      item.value;
+
+                    return (
+                      <button
+                        key={
+                          item.value
+                        }
+                        type="button"
+                        onClick={() =>
+                          setMeterType(
+                            item.value
+                          )
+                        }
+                        style={{
+                          padding:
+                            '15px 12px',
+                          borderRadius: 14,
+                          border:
+                            selected
+                              ? '2px solid #087b48'
+                              : '1px solid #dce6e1',
+                          background:
+                            selected
+                              ? '#e4f5ed'
+                              : '#ffffff',
+                          color:
+                            '#102a21',
+                          fontWeight: 800,
+                          cursor:
+                            'pointer',
+                        }}
+                      >
+                        <span
+                          style={{
+                            color:
+                              selected
+                                ? '#087b48'
+                                : '#b5c2bd',
+                            marginRight: 7,
+                          }}
+                        >
+                          {selected
+                            ? '✓'
+                            : '○'}
+                        </span>
+
+                        {
+                          item.label
+                        }
+                      </button>
+                    );
+                  }
+                )}
+              </div>
+
+              {/* INFORMATION */}
+
+              <div
+                style={{
+                  padding: 14,
+                  borderRadius: 14,
+                  background:
+                    '#eef8f3',
+                  color: '#176044',
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  marginBottom: 20,
+                }}
+              >
+                {meterType ===
+                'prepaid'
+                  ? 'A token will be shown on the receipt after a successful provider payment.'
+                  : 'Postpaid payments are applied to the customer account after provider confirmation.'}
+              </div>
+
+              {/* METER NUMBER */}
+
+              <label
+                htmlFor="meterNumber"
+                style={{
+                  display: 'block',
+                  fontWeight: 800,
+                  marginBottom: 8,
+                }}
+              >
+                Meter Number
+              </label>
+
+              <input
+                id="meterNumber"
+                value={meterNumber}
+                onChange={(event) =>
+                  setMeterNumber(
+                    event.target.value
+                  )
+                }
+                placeholder="Enter meter number"
+                inputMode="numeric"
+                style={{
+                  width: '100%',
+                  boxSizing:
+                    'border-box',
+                  padding:
+                    '15px 14px',
+                  borderRadius: 14,
+                  border:
+                    '1px solid #dce6e1',
+                  outline: 'none',
+                  fontSize: 16,
+                  marginBottom: 18,
+                }}
+              />
+
+              {/* CONTINUE */}
+
+              <button
+                type="button"
+                onClick={
+                  continueFromDetails
+                }
+                style={{
+                  width: '100%',
+                  border: 0,
+                  borderRadius: 14,
+                  padding:
+                    '15px 18px',
+                  background:
+                    '#087b48',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: 15,
+                  cursor: 'pointer',
+                }}
+              >
+                Continue
+              </button>
             </div>
           )}
 
-          {/* SUCCESS */}
+          {/* ====================================================
+              PAYMENT
+          ==================================================== */}
 
-          {message && (
+          {step === 'payment' && (
+            <form
+              onSubmit={
+                handleSubmit
+              }
+              style={{
+                padding: 18,
+              }}
+            >
+              {/* SUMMARY */}
+
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 16,
+                  background:
+                    '#e4f5ed',
+                  color: '#034d31',
+                  marginBottom: 20,
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 800,
+                  }}
+                >
+                  {
+                    selectedProvider?.name
+                  }
+                </div>
+
+                <div
+                  style={{
+                    fontSize: 13,
+                    marginTop: 5,
+                  }}
+                >
+                  {meterType ===
+                  'prepaid'
+                    ? 'Prepaid'
+                    : 'Postpaid'}{' '}
+                  • Meter{' '}
+                  {meterNumber}
+                </div>
+              </div>
+
+              {/* TEST MODE NOTICE */}
+
+              <div
+                style={{
+                  padding: 14,
+                  borderRadius: 14,
+                  background:
+                    '#fffaf0',
+                  border:
+                    '1px solid #f5e7c2',
+                  color: '#795b12',
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  marginBottom: 20,
+                }}
+              >
+                This screen submits the
+                request to the Zenimonies
+                bill-payment backend. Real
+                meter verification and
+                provider payment will only
+                be marked successful after
+                the connected provider
+                confirms them.
+              </div>
+
+              {/* AMOUNT */}
+
+              <label
+                htmlFor="amount"
+                style={{
+                  display: 'block',
+                  fontWeight: 800,
+                  marginBottom: 8,
+                }}
+              >
+                Amount (NGN)
+              </label>
+
+              <input
+                id="amount"
+                type="number"
+                min="1"
+                step="0.01"
+                value={amount}
+                onChange={(event) =>
+                  setAmount(
+                    event.target.value
+                  )
+                }
+                placeholder="₦0.00"
+                inputMode="decimal"
+                style={{
+                  width: '100%',
+                  boxSizing:
+                    'border-box',
+                  padding:
+                    '15px 14px',
+                  borderRadius: 14,
+                  border:
+                    '1px solid #dce6e1',
+                  fontSize: 18,
+                  marginBottom: 18,
+                }}
+              />
+
+              {/* PAYMENT BUTTON */}
+
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  border: 0,
+                  borderRadius: 14,
+                  padding:
+                    '15px 18px',
+                  background:
+                    '#087b48',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: 15,
+                  cursor: loading
+                    ? 'not-allowed'
+                    : 'pointer',
+                  opacity: loading
+                    ? 0.7
+                    : 1,
+                }}
+              >
+                {loading
+                  ? 'Processing...'
+                  : 'Continue to Payment'}
+              </button>
+            </form>
+          )}
+        </section>
+
+        {/* ======================================================
+            PAYMENT RESULT / RECEIPT PREVIEW
+        ====================================================== */}
+
+        {paymentResult && (
+          <section
+            style={{
+              marginTop: 18,
+              background: '#ffffff',
+              borderRadius: 22,
+              border:
+                '1px solid #e1ebe7',
+              boxShadow:
+                '0 8px 28px rgba(16, 42, 33, 0.06)',
+              padding: 20,
+            }}
+          >
+            {/* SUCCESS ICON */}
+
             <div
               style={{
-                padding: '12px',
-                marginBottom: '18px',
-                borderRadius: '8px',
-                background: '#ecfdf3',
-                color: '#027a48'
+                width: 54,
+                height: 54,
+                borderRadius:
+                  '50%',
+                background:
+                  '#e4f5ed',
+                color: '#087b48',
+                display: 'flex',
+                alignItems:
+                  'center',
+                justifyContent:
+                  'center',
+                fontSize: 25,
+                marginBottom: 12,
+              }}
+            >
+              ✓
+            </div>
+
+            <h2
+              style={{
+                margin:
+                  '0 0 7px',
+                fontSize: 21,
+              }}
+            >
+              Payment Request Created
+            </h2>
+
+            <p
+              style={{
+                marginTop: 0,
+                color: '#71817b',
+                lineHeight: 1.5,
               }}
             >
               {message}
+            </p>
+
+            {/* RECEIPT DETAILS */}
+
+            <div
+              style={{
+                borderTop:
+                  '1px solid #e8eeeb',
+                marginTop: 16,
+                paddingTop: 14,
+              }}
+            >
+              <ReceiptRow
+                label="Provider"
+                value={
+                  selectedProvider?.name ||
+                  provider
+                }
+              />
+
+              <ReceiptRow
+                label="Meter Type"
+                value={
+                  meterType ===
+                  'prepaid'
+                    ? 'Prepaid'
+                    : 'Postpaid'
+                }
+              />
+
+              <ReceiptRow
+                label="Meter Number"
+                value={
+                  paymentResult.meter_number ||
+                  meterNumber
+                }
+              />
+
+              <ReceiptRow
+                label="Amount"
+                value={`₦${Number(
+                  paymentResult.amount ||
+                    amount
+                ).toLocaleString(
+                  'en-NG',
+                  {
+                    minimumFractionDigits: 2,
+                  }
+                )}`}
+              />
+
+              <ReceiptRow
+                label="Reference"
+                value={
+                  paymentResult.reference ||
+                  'Pending'
+                }
+              />
+
+              <ReceiptRow
+                label="Status"
+                value={
+                  paymentResult.status ||
+                  'pending'
+                }
+              />
             </div>
-          )}
 
-          <form onSubmit={handleSubmit}>
-            {/* ==================================================
-                BILL TYPE
-            ================================================== */}
+            {/* RECEIPT NOTICE */}
 
-            <label
-              htmlFor="billType"
+            <div
               style={{
-                display: 'block',
-                marginBottom: '6px',
-                fontWeight: 600
+                marginTop: 16,
+                padding: 13,
+                borderRadius: 13,
+                background:
+                  '#eef8f3',
+                color: '#176044',
+                fontSize: 13,
+                lineHeight: 1.5,
               }}
             >
-              Bill Type
-            </label>
-
-            <select
-              id="billType"
-              value={billType}
-              onChange={handleBillTypeChange}
-              style={{
-                width: '100%',
-                padding: '12px',
-                marginBottom: '18px',
-                border: '1px solid #d0d5dd',
-                borderRadius: '8px',
-                background: '#ffffff'
-              }}
-            >
-              <option value="">
-                Select bill type
-              </option>
-
-              <option value="electricity">
-                Electricity
-              </option>
-
-              <option value="tv">
-                TV Subscription
-              </option>
-
-              <option value="internet">
-                Internet
-              </option>
-
-              <option value="other">
-                Other Bills
-              </option>
-            </select>
-
-            {/* ==================================================
-                PROVIDER
-            ================================================== */}
-
-            <label
-              htmlFor="provider"
-              style={{
-                display: 'block',
-                marginBottom: '6px',
-                fontWeight: 600
-              }}
-            >
-              Provider
-            </label>
-
-            <select
-              id="provider"
-              value={provider}
-              onChange={handleProviderChange}
-              disabled={!billType}
-              style={{
-                width: '100%',
-                padding: '12px',
-                marginBottom: '18px',
-                border: '1px solid #d0d5dd',
-                borderRadius: '8px',
-                background: '#ffffff'
-              }}
-            >
-              <option value="">
-                {billType
-                  ? 'Select provider'
-                  : 'Select bill type first'}
-              </option>
-
-              {/* ELECTRICITY */}
-
-              {isElectricity && (
-                <>
-                  <option value="EKEDC">
-                    EKEDC
-                  </option>
-
-                  <option value="IKEDC">
-                    IKEDC
-                  </option>
-
-                  <option value="AEDC">
-                    AEDC
-                  </option>
-
-                  <option value="EEDC">
-                    EEDC
-                  </option>
-
-                  <option value="IBEDC">
-                    IBEDC
-                  </option>
-
-                  <option value="JED">
-                    JED
-                  </option>
-
-                  <option value="KAEDCO">
-                    KAEDCO
-                  </option>
-
-                  <option value="KEDCO">
-                    KEDCO
-                  </option>
-
-                  <option value="YEDC">
-                    YEDC
-                  </option>
-
-                  <option value="BEDC">
-                    BEDC
-                  </option>
-                </>
-              )}
-
-              {/* TV */}
-
-              {isTv && (
-                <>
-                  <option value="DSTV">
-                    DSTV
-                  </option>
-
-                  <option value="GOTV">
-                    GOtv
-                  </option>
-
-                  <option value="STARTIMES">
-                    Startimes
-                  </option>
-                </>
-              )}
-
-              {/* INTERNET */}
-
-              {billType === 'internet' && (
-                <>
-                  <option value="Spectranet">
-                    Spectranet
-                  </option>
-
-                  <option value="Smile">
-                    Smile
-                  </option>
-
-                  <option value="MTN Internet">
-                    MTN Internet
-                  </option>
-                </>
-              )}
-
-              {/* OTHER */}
-
-              {billType === 'other' && (
-                <option value="Other">
-                  Other Provider
-                </option>
-              )}
-            </select>
-
-            {/* ==================================================
-                ELECTRICITY METER TYPE
-            ================================================== */}
-
-            {isElectricity && (
-              <>
-                <label
-                  htmlFor="meterType"
-                  style={{
-                    display: 'block',
-                    marginBottom: '6px',
-                    fontWeight: 600
-                  }}
-                >
-                  Meter Type
-                </label>
-
-                <select
-                  id="meterType"
-                  value={meterType}
-                  onChange={handleMeterTypeChange}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    marginBottom: '18px',
-                    border: '1px solid #d0d5dd',
-                    borderRadius: '8px',
-                    background: '#ffffff'
-                  }}
-                >
-                  <option value="">
-                    Select meter type
-                  </option>
-
-                  <option value="prepaid">
-                    Prepaid
-                  </option>
-
-                  <option value="postpaid">
-                    Postpaid
-                  </option>
-                </select>
-              </>
-            )}
-
-            {/* ==================================================
-                CUSTOMER / METER NUMBER
-            ================================================== */}
-
-            <label
-              htmlFor="customerNumber"
-              style={{
-                display: 'block',
-                marginBottom: '6px',
-                fontWeight: 600
-              }}
-            >
-              {isElectricity
-                ? 'Meter Number'
-                : isTv
-                ? 'Smartcard / IUC Number'
-                : 'Customer Number'}
-            </label>
-
-            <input
-              id="customerNumber"
-              type="text"
-              value={customerNumber}
-              onChange={(event) =>
-                setCustomerNumber(event.target.value)
-              }
-              placeholder={
-                isElectricity
-                  ? 'Enter meter number'
-                  : isTv
-                  ? 'Enter smartcard / IUC number'
-                  : 'Enter customer number'
-              }
-              style={{
-                width: '100%',
-                padding: '12px',
-                marginBottom: '18px',
-                border: '1px solid #d0d5dd',
-                borderRadius: '8px',
-                boxSizing: 'border-box'
-              }}
-            />
-
-            {/* ==================================================
-                AMOUNT
-            ================================================== */}
-
-            <label
-              htmlFor="amount"
-              style={{
-                display: 'block',
-                marginBottom: '6px',
-                fontWeight: 600
-              }}
-            >
-              Amount (NGN)
-            </label>
-
-            <input
-              id="amount"
-              type="number"
-              min="1"
-              step="0.01"
-              value={amount}
-              onChange={(event) =>
-                setAmount(event.target.value)
-              }
-              placeholder="Enter amount"
-              style={{
-                width: '100%',
-                padding: '12px',
-                marginBottom: '24px',
-                border: '1px solid #d0d5dd',
-                borderRadius: '8px',
-                boxSizing: 'border-box'
-              }}
-            />
-
-            {/* ==================================================
-                SUBMIT
-            ================================================== */}
-
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '14px',
-                border: 'none',
-                borderRadius: '8px',
-                background: '#0b5cff',
-                color: '#ffffff',
-                fontWeight: 600,
-                cursor: loading
-                  ? 'not-allowed'
-                  : 'pointer',
-                opacity: loading ? 0.7 : 1
-              }}
-            >
-              {loading
-                ? 'Processing...'
-                : 'Pay Bill'}
-            </button>
-          </form>
-        </div>
+              A final customer receipt
+              and prepaid token will be
+              issued after the electricity
+              provider confirms a successful
+              payment.
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );
 };
+
+// ============================================================
+// RECEIPT ROW
+// ============================================================
+
+const ReceiptRow: React.FC<{
+  label: string;
+  value: string;
+}> = ({
+  label,
+  value,
+}) => (
+  <div
+    style={{
+      display: 'flex',
+      justifyContent:
+        'space-between',
+      gap: 18,
+      padding: '9px 0',
+      fontSize: 14,
+    }}
+  >
+    <span
+      style={{
+        color: '#71817b',
+      }}
+    >
+      {label}
+    </span>
+
+    <strong
+      style={{
+        textAlign: 'right',
+        wordBreak:
+          'break-word',
+      }}
+    >
+      {value}
+    </strong>
+  </div>
+);
 
 export default Bills;
