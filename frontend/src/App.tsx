@@ -469,8 +469,6 @@ const App: React.FC = () => {
             path="/tv"
              element={<TVSubscription />}
               />
-            }
-          />
 
           {/* ================= BILLS ================= */}
 
