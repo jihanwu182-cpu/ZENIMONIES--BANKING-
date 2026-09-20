@@ -544,6 +544,52 @@ CREATE TABLE IF NOT EXISTS bill_payments (
     completed_at TIMESTAMP
 );
 
+-- ============================================================
+-- ELECTRICITY BILL PAYMENT DETAILS
+-- ============================================================
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS meter_type VARCHAR(20);
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS meter_number VARCHAR(50);
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS verification_status VARCHAR(30)
+NOT NULL DEFAULT 'not_verified';
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS verified_customer_name VARCHAR(150);
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS verified_customer_address TEXT;
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS electricity_token TEXT;
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS units VARCHAR(50);
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS tariff_class VARCHAR(100);
+
+ALTER TABLE bill_payments
+ADD COLUMN IF NOT EXISTS provider_response_message TEXT;
+
+
+-- ============================================================
+-- ELECTRICITY BILL PAYMENT INDEXES
+-- ============================================================
+
+CREATE INDEX IF NOT EXISTS idx_bill_payments_meter_number
+ON bill_payments(meter_number);
+
+CREATE INDEX IF NOT EXISTS idx_bill_payments_verification_status
+ON bill_payments(verification_status);
+
+CREATE INDEX IF NOT EXISTS idx_bill_payments_provider_reference
+ON bill_payments(provider_reference);
+
 
 -- ============================================================
 -- KYC RECORDS
