@@ -14,6 +14,7 @@ const { initializeDatabase } = database;
 
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
+app.use('/api/bills', billsRoutes);
 const transferRoutes = require('./routes/transfer');
 const dataRoutes = require('./routes/data');
 const airtimeRoutes = require('./routes/airtime');
@@ -119,6 +120,14 @@ app.use(
 app.use(
   '/api/account',
   accountRoutes
+);
+// ============================================================
+// BILL PAYMENTS
+// ============================================================
+
+app.use(
+  '/api/bills',
+  billsRoutes
 );
 
 // ------------------------------------------------------------
