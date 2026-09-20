@@ -467,11 +467,7 @@ const App: React.FC = () => {
 
           <Route
             path="/tv"
-            element={
-              <ServicePage
-                title="TV"
-                icon="▶"
-                description="Manage and pay your supported television subscription."
+             element={<TVSubscription />}
               />
             }
           />
