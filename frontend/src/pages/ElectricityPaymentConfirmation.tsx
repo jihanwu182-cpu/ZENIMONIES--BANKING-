@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 type VerificationData = {
   provider_code: string;
   provider_name: string;
-  provider_short_name: string;
-  provider_logo: string;
+  shortName: string;
+  logo: string;
   meter_type: 'prepaid' | 'postpaid';
   meter_number: string;
   customer_name: string;
@@ -15,51 +16,194 @@ type VerificationData = {
   verified: boolean;
 };
 
+type PaymentResponse = {
+  reference?: string;
+  provider_reference?: string;
+  status?: string;
+  type?: string;
+  amount?: number;
+  fee?: number;
+  total?: number;
+  token?: string;
+  electricity_token?: string;
+  units?: string;
+  message?: string;
+  [key: string]: any;
+};
+
+const API_URL =
+  process.env.REACT_APP_API_URL ||
+  'https://zenimonies-banking.onrender.com';
+
 const ElectricityPaymentConfirmation: React.FC = () => {
   const navigate = useNavigate();
 
-  const [verification, setVerification] =
-    useState<VerificationData | null>(null);
+  const [data, setData] = useState<VerificationData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    const saved = localStorage.getItem(
+      'zenimonies_electricity_verification'
+    );
+
+    if (!saved) {
+      navigate('/electricity');
+      return;
+    }
+
     try {
-      const saved = localStorage.getItem(
-        'zenimonies_electricity_verification'
-      );
-
-      if (!saved) {
-        navigate('/electricity', { replace: true });
-        return;
-      }
-
       const parsed: VerificationData = JSON.parse(saved);
 
       if (!parsed.verified) {
-        navigate('/electricity', { replace: true });
+        navigate('/electricity');
         return;
       }
 
-      setVerification(parsed);
-    } catch (error) {
+      setData(parsed);
+    } catch (err) {
       console.error(
-        'Failed to load electricity verification:',
-        error
+        'Unable to read electricity verification:',
+        err
       );
 
-      navigate('/electricity', { replace: true });
+      localStorage.removeItem(
+        'zenimonies_electricity_verification'
+      );
+
+      navigate('/electricity');
     }
   }, [navigate]);
 
-  if (!verification) {
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!data || loading) {
+      return;
+    }
+
+    const token = localStorage.getItem('zenimonies_token');
+
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      /*
+       * IMPORTANT:
+       * The Sogo secret key is NOT used here.
+       *
+       * The frontend talks to our Zenimonies backend.
+       * The backend securely talks to Sogo.
+       */
+
+      const response = await axios.post(
+        `${API_URL}/api/bills/electricity/pay`,
+        {
+          provider: data.provider_code,
+          meter_number: data.meter_number,
+          meter_type: data.meter_type,
+          amount: Number(data.amount),
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 60000,
+        }
+      );
+
+      console.log(
+        'Electricity payment response:',
+        response.data
+      );
+
+      const paymentData: PaymentResponse =
+        response?.data?.data ||
+        response?.data?.payment ||
+        response?.data ||
+        {};
+
+      /*
+       * Save the payment result locally so the next screen
+       * can display the receipt/token.
+       */
+      localStorage.setItem(
+        'zenimonies_electricity_payment',
+        JSON.stringify({
+          ...data,
+          payment: paymentData,
+          paid_at: new Date().toISOString(),
+        })
+      );
+
+      /*
+       * Go to success/receipt page.
+       */
+      navigate('/electricity/success');
+    } catch (err: any) {
+      console.error(
+        'Electricity payment error:',
+        err
+      );
+
+      /*
+       * If the backend says the transaction is processing,
+       * do NOT tell the customer to immediately pay again.
+       *
+       * This protects against duplicate payments.
+       */
+      const backendData = err?.response?.data;
+
+      const backendStatus =
+        backendData?.data?.status ||
+        backendData?.payment?.status ||
+        backendData?.status;
+
+      if (
+        backendStatus === 'processing' ||
+        backendStatus === 'pending'
+      ) {
+        setError(
+          'Your electricity payment is being processed. Please do not submit the payment again.'
+        );
+
+        return;
+      }
+
+      const message =
+        backendData?.message ||
+        backendData?.error ||
+        'Electricity payment could not be completed. Please try again.';
+
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!data) {
     return (
       <div
         style={{
           minHeight: '100vh',
+          background: '#f6f8f7',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#f6f8f7',
-          fontFamily: 'Arial, sans-serif',
+          fontSize: 16,
+          color: '#555',
         }}
       >
         Loading...
@@ -67,65 +211,47 @@ const ElectricityPaymentConfirmation: React.FC = () => {
     );
   }
 
-  const formattedAmount = new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency: 'NGN',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(Number(verification.amount));
-
-  const handleConfirmPayment = () => {
-    /*
-     * IMPORTANT:
-     * Payment is NOT connected yet.
-     *
-     * This button will later call our protected backend endpoint,
-     * which will:
-     * 1. Check the Zenimonies account balance
-     * 2. Create an idempotency key
-     * 3. Call Sogo electricity purchase
-     * 4. Save the transaction
-     * 5. Handle the provider response
-     * 6. Show the receipt/token
-     *
-     * For now we keep this disabled from making a real payment.
-     */
-
-    alert(
-      'Payment integration is the next step. No money has been deducted.'
-    );
-  };
-
   return (
     <div
       style={{
         minHeight: '100vh',
         background: '#f6f8f7',
-        padding: '24px 18px 40px',
-        boxSizing: 'border-box',
-        fontFamily: 'Arial, sans-serif',
-        color: '#111827',
+        paddingBottom: 40,
       }}
     >
-      {/* Header */}
+      {/* =====================================================
+          HEADER
+      ====================================================== */}
       <div
         style={{
+          background: '#ffffff',
+          padding: '18px 16px',
           display: 'flex',
           alignItems: 'center',
-          marginBottom: 24,
+          borderBottom: '1px solid #eeeeee',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
         }}
       >
         <button
-          onClick={() => navigate(-1)}
+          type="button"
+          onClick={() =>
+            navigate('/electricity/verification')
+          }
+          disabled={loading}
           style={{
-            width: 44,
-            height: 44,
-            borderRadius: '50%',
+            width: 42,
+            height: 42,
             border: 'none',
-            background: '#ffffff',
-            fontSize: 24,
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            borderRadius: '50%',
+            background: '#f2f4f3',
+            fontSize: 25,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#111827',
           }}
         >
           ←
@@ -133,305 +259,427 @@ const ElectricityPaymentConfirmation: React.FC = () => {
 
         <h1
           style={{
-            flex: 1,
-            textAlign: 'center',
-            fontSize: 24,
+            margin: '0 0 0 14px',
+            fontSize: 21,
             fontWeight: 800,
-            margin: 0,
+            color: '#111827',
           }}
         >
           Confirm Payment
         </h1>
-
-        <div style={{ width: 44 }} />
       </div>
 
-      {/* Security message */}
       <div
         style={{
-          background: '#eafaf0',
-          border: '1px solid #b8efcd',
-          borderRadius: 18,
-          padding: '18px',
-          marginBottom: 20,
+          padding: 16,
+          maxWidth: 600,
+          margin: '0 auto',
         }}
       >
+        {/* =====================================================
+            SECURITY / REVIEW NOTICE
+        ====================================================== */}
         <div
           style={{
-            color: '#16843d',
-            fontWeight: 800,
-            fontSize: 17,
-            marginBottom: 6,
-          }}
-        >
-          ✓ Account verified
-        </div>
-
-        <div
-          style={{
-            color: '#5f6b78',
-            lineHeight: 1.5,
-            fontSize: 14,
-          }}
-        >
-          Please review the payment details carefully before
-          continuing.
-        </div>
-      </div>
-
-      {/* Provider */}
-      <div
-        style={{
-          background: '#ffffff',
-          borderRadius: 20,
-          padding: 20,
-          marginBottom: 16,
-          border: '1px solid #e1e5e8',
-        }}
-      >
-        <div
-          style={{
-            color: '#697586',
-            fontWeight: 700,
-            fontSize: 14,
-            marginBottom: 14,
-          }}
-        >
-          SERVICE PROVIDER
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
+            background: '#eaf8f2',
+            border: '1px solid #b8e4cf',
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 16,
           }}
         >
           <div
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 16,
-              border: '1px solid #dfe3e6',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              background: '#ffffff',
-              overflow: 'hidden',
-              flexShrink: 0,
+              gap: 10,
             }}
           >
-            {verification.provider_logo ? (
+            <div
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: '50%',
+                background: '#087f5b',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 900,
+                fontSize: 18,
+                flexShrink: 0,
+              }}
+            >
+              ✓
+            </div>
+
+            <div>
+              <div
+                style={{
+                  color: '#075c43',
+                  fontWeight: 800,
+                  fontSize: 15,
+                }}
+              >
+                Account Verified
+              </div>
+
+              <div
+                style={{
+                  color: '#39735f',
+                  fontSize: 13,
+                  marginTop: 3,
+                  lineHeight: 1.4,
+                }}
+              >
+                Review the payment details before confirming.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* =====================================================
+            PROVIDER
+        ====================================================== */}
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: 18,
+            padding: 18,
+            marginBottom: 16,
+            border: '1px solid #e7e9e8',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              color: '#737b78',
+              fontWeight: 800,
+              letterSpacing: 0.5,
+              marginBottom: 13,
+            }}
+          >
+            ELECTRICITY PROVIDER
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+            }}
+          >
+            <div
+              style={{
+                width: 62,
+                height: 62,
+                borderRadius: 14,
+                background: '#f4f6f5',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                flexShrink: 0,
+              }}
+            >
               <img
-                src={verification.provider_logo}
-                alt={verification.provider_name}
+                src={data.logo}
+                alt={data.provider_name}
                 style={{
                   width: '100%',
                   height: '100%',
                   objectFit: 'contain',
+                  padding: 6,
                 }}
                 onError={(event) => {
                   event.currentTarget.style.display = 'none';
                 }}
               />
-            ) : (
-              <strong style={{ fontSize: 14 }}>
-                {verification.provider_short_name}
-              </strong>
-            )}
-          </div>
-
-          <div>
-            <div
-              style={{
-                fontSize: 19,
-                fontWeight: 800,
-                marginBottom: 5,
-              }}
-            >
-              {verification.provider_name}
             </div>
 
-            <div
-              style={{
-                color: '#697586',
-                fontSize: 15,
-                fontWeight: 700,
-              }}
-            >
-              {verification.provider_short_name}
+            <div>
+              <div
+                style={{
+                  fontSize: 19,
+                  fontWeight: 800,
+                  color: '#111827',
+                }}
+              >
+                {data.provider_name}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 5,
+                  fontSize: 14,
+                  color: '#6b7280',
+                  fontWeight: 700,
+                }}
+              >
+                {data.shortName}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Customer details */}
-      <div
-        style={{
-          background: '#ffffff',
-          borderRadius: 20,
-          overflow: 'hidden',
-          border: '1px solid #e1e5e8',
-          marginBottom: 16,
-        }}
-      >
-        <DetailRow
-          label="Customer Name"
-          value={verification.customer_name}
-        />
-
-        <DetailRow
-          label={
-            verification.meter_type === 'prepaid'
-              ? 'Meter Number'
-              : 'Meter / Account Number'
-          }
-          value={verification.meter_number}
-        />
-
-        <DetailRow
-          label="Meter Type"
-          value={
-            verification.meter_type === 'prepaid'
-              ? 'Prepaid'
-              : 'Postpaid'
-          }
-        />
-
-        {verification.address ? (
-          <DetailRow
-            label="Address"
-            value={verification.address}
-          />
-        ) : null}
-      </div>
-
-      {/* Amount */}
-      <div
-        style={{
-          background: '#eafaf0',
-          border: '1px solid #a9edc2',
-          borderRadius: 20,
-          padding: '22px 20px',
-          marginBottom: 18,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 16,
-        }}
-      >
-        <span
+        {/* =====================================================
+            CUSTOMER DETAILS
+        ====================================================== */}
+        <div
           style={{
-            color: '#19783d',
+            background: '#ffffff',
+            borderRadius: 18,
+            overflow: 'hidden',
+            marginBottom: 16,
+            border: '1px solid #e7e9e8',
+          }}
+        >
+          <div
+            style={{
+              padding: '18px 16px',
+              borderBottom: '1px solid #eeeeee',
+            }}
+          >
+            <div
+              style={{
+                color: '#737b78',
+                fontSize: 13,
+                fontWeight: 700,
+                marginBottom: 7,
+              }}
+            >
+              CUSTOMER NAME
+            </div>
+
+            <div
+              style={{
+                fontSize: 21,
+                fontWeight: 800,
+                color: '#111827',
+              }}
+            >
+              {data.customer_name}
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: '18px 16px',
+              borderBottom: '1px solid #eeeeee',
+            }}
+          >
+            <div
+              style={{
+                color: '#737b78',
+                fontSize: 13,
+                fontWeight: 700,
+                marginBottom: 7,
+              }}
+            >
+              {data.meter_type === 'prepaid'
+                ? 'METER NUMBER'
+                : 'METER / ACCOUNT NUMBER'}
+            </div>
+
+            <div
+              style={{
+                fontSize: 20,
+                fontWeight: 800,
+                color: '#111827',
+                letterSpacing: 0.4,
+              }}
+            >
+              {data.meter_number}
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: '18px 16px',
+              borderBottom: data.address
+                ? '1px solid #eeeeee'
+                : 'none',
+            }}
+          >
+            <div
+              style={{
+                color: '#737b78',
+                fontSize: 13,
+                fontWeight: 700,
+                marginBottom: 7,
+              }}
+            >
+              METER TYPE
+            </div>
+
+            <div
+              style={{
+                fontSize: 17,
+                fontWeight: 800,
+                color: '#111827',
+                textTransform: 'capitalize',
+              }}
+            >
+              {data.meter_type}
+            </div>
+          </div>
+
+          {data.address && (
+            <div
+              style={{
+                padding: '18px 16px',
+              }}
+            >
+              <div
+                style={{
+                  color: '#737b78',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  marginBottom: 7,
+                }}
+              >
+                ADDRESS
+              </div>
+
+              <div
+                style={{
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: '#374151',
+                  lineHeight: 1.5,
+                }}
+              >
+                {data.address}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* =====================================================
+            PAYMENT AMOUNT
+        ====================================================== */}
+        <div
+          style={{
+            background: '#ffffff',
+            border: '1px solid #66b991',
+            borderRadius: 18,
+            padding: 20,
+            marginBottom: 16,
+          }}
+        >
+          <div
+            style={{
+              color: '#087f5b',
+              fontSize: 13,
+              fontWeight: 800,
+              letterSpacing: 0.5,
+            }}
+          >
+            PAYMENT AMOUNT
+          </div>
+
+          <div
+            style={{
+              color: '#087f5b',
+              fontSize: 34,
+              fontWeight: 900,
+              marginTop: 6,
+            }}
+          >
+            {formatCurrency(Number(data.amount))}
+          </div>
+        </div>
+
+        {/* =====================================================
+            ERROR
+        ====================================================== */}
+        {error && (
+          <div
+            style={{
+              background: '#fff1f1',
+              border: '1px solid #f2b8b8',
+              color: '#b42318',
+              borderRadius: 14,
+              padding: 15,
+              marginBottom: 16,
+              fontSize: 14,
+              lineHeight: 1.5,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* =====================================================
+            CONFIRM & PAY
+        ====================================================== */}
+        <button
+          type="button"
+          onClick={handleConfirmPayment}
+          disabled={loading}
+          style={{
+            width: '100%',
+            border: 'none',
+            borderRadius: 16,
+            padding: '18px 16px',
+            background: loading
+              ? '#83ad9e'
+              : '#087f5b',
+            color: '#ffffff',
+            fontSize: 17,
             fontWeight: 800,
-            fontSize: 18,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            boxShadow: loading
+              ? 'none'
+              : '0 5px 14px rgba(8,127,91,0.20)',
           }}
         >
-          Payment Amount
-        </span>
+          {loading
+            ? 'Processing Payment...'
+            : 'Confirm & Pay'}
+        </button>
 
-        <span
+        {/* =====================================================
+            CANCEL
+        ====================================================== */}
+        <button
+          type="button"
+          onClick={() =>
+            navigate('/electricity/verification')
+          }
+          disabled={loading}
           style={{
-            color: '#13843d',
-            fontWeight: 900,
-            fontSize: 27,
+            width: '100%',
+            border: 'none',
+            background: 'transparent',
+            padding: '16px',
+            marginTop: 5,
+            color: '#555f5b',
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: loading ? 'not-allowed' : 'pointer',
           }}
         >
-          {formattedAmount}
-        </span>
-      </div>
+          Go Back
+        </button>
 
-      {/* Payment button */}
-      <button
-        onClick={handleConfirmPayment}
-        style={{
-          width: '100%',
-          height: 64,
-          border: 'none',
-          borderRadius: 20,
-          background: '#149447',
-          color: '#ffffff',
-          fontSize: 19,
-          fontWeight: 800,
-          cursor: 'pointer',
-          boxShadow: '0 8px 20px rgba(20,148,71,0.20)',
-        }}
-      >
-        Confirm Payment
-      </button>
-
-      {/* Cancel */}
-      <button
-        onClick={() => navigate('/electricity')}
-        style={{
-          width: '100%',
-          height: 58,
-          marginTop: 12,
-          borderRadius: 18,
-          border: '1px solid #d8dde2',
-          background: '#ffffff',
-          color: '#4b5563',
-          fontSize: 17,
-          fontWeight: 700,
-          cursor: 'pointer',
-        }}
-      >
-        Cancel
-      </button>
-
-      <div
-        style={{
-          textAlign: 'center',
-          color: '#7b8490',
-          fontSize: 13,
-          lineHeight: 1.5,
-          marginTop: 18,
-          padding: '0 12px',
-        }}
-      >
-        Your payment will be processed securely through
-        Zenimonies.
-      </div>
-    </div>
-  );
-};
-
-type DetailRowProps = {
-  label: string;
-  value: string;
-};
-
-const DetailRow: React.FC<DetailRowProps> = ({
-  label,
-  value,
-}) => {
-  return (
-    <div
-      style={{
-        padding: '20px',
-        borderBottom: '1px solid #edf0f2',
-      }}
-    >
-      <div
-        style={{
-          color: '#697586',
-          fontSize: 14,
-          fontWeight: 700,
-          marginBottom: 8,
-        }}
-      >
-        {label}
-      </div>
-
-      <div
-        style={{
-          color: '#111827',
-          fontSize: 18,
-          fontWeight: 800,
-          lineHeight: 1.4,
-        }}
-      >
-        {value}
+        {/* =====================================================
+            SECURITY NOTE
+        ====================================================== */}
+        <div
+          style={{
+            textAlign: 'center',
+            color: '#8a938f',
+            fontSize: 12,
+            lineHeight: 1.5,
+            marginTop: 12,
+            padding: '0 15px',
+          }}
+        >
+          Your payment is processed securely through
+          Zenimonies. Do not close the page while your
+          payment is being processed.
+        </div>
       </div>
     </div>
   );
