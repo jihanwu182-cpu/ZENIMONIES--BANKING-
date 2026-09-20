@@ -1,91 +1,8 @@
-const crypto = require('crypto');
-const pool = require('../config/database');
-
 // ============================================================
-// SUPPORTED BILL PROVIDERS
+// VERIFY ELECTRICITY METER WITH SOGO
 // ============================================================
 
-const ELECTRICITY_PROVIDERS = [
-  'EKEDC',
-  'IKEDC',
-  'AEDC',
-  'EEDC',
-  'IBEDC',
-  'JED',
-  'KAEDCO',
-  'KEDCO',
-  'YEDC',
-  'BEDC',
-  'PHEDC',
-  'APLE',
-];
-
-const TV_PROVIDERS = [
-  'DSTV',
-  'GOTV',
-  'STARTIMES',
-];
-
-const INTERNET_PROVIDERS = [
-  'Spectranet',
-  'Smile',
-  'MTN Internet',
-];
-
-// ============================================================
-// CREATE REFERENCE
-// ============================================================
-
-const createReference = () => {
-  return `ZBILL-${Date.now()}-${crypto
-    .randomBytes(4)
-    .toString('hex')
-    .toUpperCase()}`;
-};
-
-// ============================================================
-// VALIDATE AMOUNT
-// ============================================================
-
-const isValidAmount = (amount) => {
-  const numericAmount = Number(amount);
-
-  return (
-    Number.isFinite(numericAmount) &&
-    numericAmount > 0
-  );
-};
-
-// ============================================================
-// VALIDATE CUSTOMER / METER NUMBER
-// ============================================================
-
-const isValidCustomerNumber = (
-  customerNumber
-) => {
-  if (!customerNumber) {
-    return false;
-  }
-
-  const value =
-    String(customerNumber).trim();
-
-  return /^[A-Za-z0-9\-]{5,50}$/.test(
-    value
-  );
-};
-
-// ============================================================
-// CREATE BILL PAYMENT
-// ============================================================
-
-const createBillPayment = async (
-  req,
-  res
-) => {
-  const client =
-    await pool.connect();
-
+const verifyElectricityMeter = async (req, res) => {
   try {
     // ----------------------------------------------------------
     // AUTHENTICATED USER
@@ -98,8 +15,7 @@ const createBillPayment = async (
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message:
-          'Authentication required.',
+        message: 'Authentication required.',
       });
     }
 
@@ -108,10 +24,8 @@ const createBillPayment = async (
     // ----------------------------------------------------------
 
     const {
-      bill_type,
       provider,
-      customer_number,
-      amount,
+      meter_number,
       meter_type,
     } = req.body;
 
@@ -119,39 +33,24 @@ const createBillPayment = async (
     // REQUIRED FIELDS
     // ----------------------------------------------------------
 
-    if (!bill_type) {
-      return res.status(400).json({
-        success: false,
-        message:
-          'Bill type is required.',
-      });
-    }
-
     if (!provider) {
       return res.status(400).json({
         success: false,
-        message:
-          'Provider is required.',
+        message: 'Electricity provider is required.',
       });
     }
 
-    if (!customer_number) {
+    if (!meter_number) {
       return res.status(400).json({
         success: false,
-        message:
-          'Customer or meter number is required.',
+        message: 'Meter number is required.',
       });
     }
 
-    if (
-      amount === undefined ||
-      amount === null ||
-      amount === ''
-    ) {
+    if (!meter_type) {
       return res.status(400).json({
         success: false,
-        message:
-          'Amount is required.',
+        message: 'Meter type is required.',
       });
     }
 
@@ -159,464 +58,280 @@ const createBillPayment = async (
     // NORMALIZE
     // ----------------------------------------------------------
 
-    const normalizedBillType =
-      String(bill_type)
+    const normalizedProvider =
+      String(provider)
+        .trim()
+        .toUpperCase();
+
+    const normalizedMeterNumber =
+      String(meter_number)
+        .trim();
+
+    const normalizedMeterType =
+      String(meter_type)
         .trim()
         .toLowerCase();
 
-    const normalizedProvider =
-      String(provider).trim();
-
-    const normalizedCustomerNumber =
-      String(customer_number).trim();
-
-    const normalizedMeterType =
-      meter_type
-        ? String(meter_type)
-            .trim()
-            .toLowerCase()
-        : null;
-
     // ----------------------------------------------------------
-    // VALIDATE BILL TYPE
+    // VALIDATE PROVIDER
     // ----------------------------------------------------------
-
-    const supportedBillTypes = [
-      'electricity',
-      'tv',
-      'internet',
-      'other',
-    ];
 
     if (
-      !supportedBillTypes.includes(
-        normalizedBillType
+      !ELECTRICITY_PROVIDERS.includes(
+        normalizedProvider
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unsupported electricity provider.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // VALIDATE METER TYPE
+    // ----------------------------------------------------------
+
+    if (
+      ![
+        'prepaid',
+        'postpaid',
+      ].includes(
+        normalizedMeterType
       )
     ) {
       return res.status(400).json({
         success: false,
         message:
-          'Unsupported bill type.',
+          'Meter type must be prepaid or postpaid.',
       });
     }
 
     // ----------------------------------------------------------
-    // VALIDATE AMOUNT
-    // ----------------------------------------------------------
-
-    if (!isValidAmount(amount)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          'Please enter a valid amount.',
-      });
-    }
-
-    const numericAmount =
-      Number(amount);
-
-    // ----------------------------------------------------------
-    // TRANSACTION LIMIT
-    // ----------------------------------------------------------
-
-    if (
-      numericAmount > 1000000
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          'Amount exceeds the current transaction limit.',
-      });
-    }
-
-    // ----------------------------------------------------------
-    // ELECTRICITY VALIDATION
-    // ----------------------------------------------------------
-
-    if (
-      normalizedBillType ===
-      'electricity'
-    ) {
-      if (
-        !ELECTRICITY_PROVIDERS.includes(
-          normalizedProvider
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Unsupported electricity provider.',
-        });
-      }
-
-      if (
-        !normalizedMeterType ||
-        ![
-          'prepaid',
-          'postpaid',
-        ].includes(
-          normalizedMeterType
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Electricity meter type must be prepaid or postpaid.',
-        });
-      }
-    }
-
-    // ----------------------------------------------------------
-    // TV VALIDATION
-    // ----------------------------------------------------------
-
-    if (
-      normalizedBillType === 'tv'
-    ) {
-      if (
-        !TV_PROVIDERS.includes(
-          normalizedProvider
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Unsupported TV provider.',
-        });
-      }
-    }
-
-    // ----------------------------------------------------------
-    // INTERNET VALIDATION
-    // ----------------------------------------------------------
-
-    if (
-      normalizedBillType ===
-      'internet'
-    ) {
-      if (
-        !INTERNET_PROVIDERS.includes(
-          normalizedProvider
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Unsupported internet provider.',
-        });
-      }
-    }
-
-    // ----------------------------------------------------------
-    // CUSTOMER / METER NUMBER
+    // VALIDATE METER NUMBER
     // ----------------------------------------------------------
 
     if (
       !isValidCustomerNumber(
-        normalizedCustomerNumber
+        normalizedMeterNumber
       )
     ) {
       return res.status(400).json({
         success: false,
         message:
-          'Please enter a valid customer or meter number.',
+          'Please enter a valid meter number.',
       });
     }
 
     // ----------------------------------------------------------
-    // START DATABASE TRANSACTION
+    // SOGO CONFIGURATION
     // ----------------------------------------------------------
 
-    await client.query(
-      'BEGIN'
-    );
+    const sogoApiKey =
+      process.env.SOGO_API_KEY;
 
-    // ----------------------------------------------------------
-    // FIND ACTIVE NGN ACCOUNT
-    // ----------------------------------------------------------
+    const sogoBaseUrl =
+      process.env.SOGO_API_BASE_URL ||
+      'https://sandbox.sogo.africa/v1';
 
-    const accountResult =
-      await client.query(
-        `
-          SELECT
-            id,
-            user_id,
-            account_number,
-            currency,
-            balance,
-            status
-          FROM accounts
-          WHERE user_id = $1
-            AND currency = 'NGN'
-            AND status = 'active'
-          ORDER BY created_at ASC
-          LIMIT 1
-          FOR UPDATE
-        `,
-        [userId]
+    if (!sogoApiKey) {
+      console.error(
+        'SOGO_API_KEY is not configured.'
       );
 
-    if (
-      accountResult.rows
-        .length === 0
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
-
-      return res.status(404).json({
+      return res.status(500).json({
         success: false,
         message:
-          'Active NGN account not found.',
+          'Electricity verification service is not configured.',
       });
     }
 
-    const account =
-      accountResult.rows[0];
-
     // ----------------------------------------------------------
-    // CHECK BALANCE
+    // MAP ZENIMONIES PROVIDER CODE TO SOGO DISCO SLUG
     // ----------------------------------------------------------
 
-    const accountBalance =
-      Number(account.balance);
+    const SOGO_DISCO_SLUGS = {
+      APLE: 'aple',
+      AEDC: 'aedc',
+      BEDC: 'bedc',
+      EKEDC: 'ekedc',
+      EEDC: 'eedc',
+      IBEDC: 'ibedc',
+      IKEDC: 'ikedc',
+      JED: 'jed',
+      KAEDCO: 'kaedco',
+      KEDCO: 'kedco',
+      PHEDC: 'phed',
+      YEDC: 'yedc',
+    };
 
-    if (
-      !Number.isFinite(
-        accountBalance
-      ) ||
-      accountBalance <
-        numericAmount
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
+    const discoSlug =
+      SOGO_DISCO_SLUGS[
+        normalizedProvider
+      ];
 
+    if (!discoSlug) {
       return res.status(400).json({
         success: false,
         message:
-          'Insufficient account balance.',
+          'Electricity provider mapping is not configured.',
       });
     }
 
     // ----------------------------------------------------------
-    // CREATE REFERENCE
+    // CALL SOGO SANDBOX
     // ----------------------------------------------------------
 
-    const reference =
-      createReference();
+    const response =
+      await fetch(
+        `${sogoBaseUrl}/bills/electricity/verify-meter`,
+        {
+          method: 'POST',
 
-    // ----------------------------------------------------------
-    // FIND BILLER
-    // ----------------------------------------------------------
+          headers: {
+            Authorization:
+              `Bearer ${sogoApiKey}`,
 
-    const billerResult =
-      await client.query(
-        `
-          SELECT
-            id,
-            name,
-            category,
-            provider_code,
-            is_active
-          FROM billers
-          WHERE category = $1
-            AND is_active = true
-          ORDER BY created_at ASC
-          LIMIT 1
-        `,
-        [
-          normalizedBillType ===
-          'electricity'
-            ? 'electricity'
-            : normalizedBillType ===
-              'tv'
-            ? 'cable_tv'
-            : normalizedBillType,
-        ]
+            'Content-Type':
+              'application/json',
+          },
+
+          body: JSON.stringify({
+            disco_slug:
+              discoSlug,
+
+            meter_number:
+              normalizedMeterNumber,
+
+            meter_type:
+              normalizedMeterType,
+          }),
+        }
       );
 
-    const biller =
-      billerResult.rows[0] ||
-      null;
-
     // ----------------------------------------------------------
-    // CREATE PENDING PAYMENT
+    // READ SOGO RESPONSE
     // ----------------------------------------------------------
 
-    const insertResult =
-      await client.query(
-        `
-          INSERT INTO bill_payments (
-            account_id,
-            biller_id,
-            category,
-            biller_name,
-            customer_reference,
-            customer_name,
-            amount,
-            currency,
-            reference,
-            status,
-            meter_type,
-            meter_number,
-            verification_status
-          )
-          VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            NULL,
-            $6,
-            'NGN',
-            $7,
-            'pending',
-            $8,
-            $9,
-            'not_verified'
-          )
-          RETURNING
-            id,
-            account_id,
-            biller_id,
-            category,
-            biller_name,
-            customer_reference,
-            amount,
-            currency,
-            reference,
-            status,
-            meter_type,
-            meter_number,
-            verification_status,
-            created_at
-        `,
-        [
-          account.id,
+    let sogoResult = null;
 
-          biller
-            ? biller.id
-            : null,
+    try {
+      sogoResult =
+        await response.json();
+    } catch (jsonError) {
+      sogoResult = null;
+    }
 
-          normalizedBillType,
+    // ----------------------------------------------------------
+    // SOGO ERROR
+    // ----------------------------------------------------------
 
-          normalizedProvider,
+    if (!response.ok) {
+      console.error(
+        'Sogo meter verification failed:',
+        {
+          status:
+            response.status,
 
-          normalizedCustomerNumber,
-
-          numericAmount,
-
-          reference,
-
-          normalizedBillType ===
-          'electricity'
-            ? normalizedMeterType
-            : null,
-
-          normalizedBillType ===
-          'electricity'
-            ? normalizedCustomerNumber
-            : null,
-        ]
+          response:
+            sogoResult,
+        }
       );
 
-    const billPayment =
-      insertResult.rows[0];
+      const sogoMessage =
+        sogoResult?.error?.message ||
+        sogoResult?.message ||
+        'Meter verification failed.';
+      
+      return res.status(
+        response.status >= 400 &&
+        response.status < 500
+          ? response.status
+          : 502
+      ).json({
+        success: false,
 
-    // ----------------------------------------------------------
-    // COMMIT
-    // ----------------------------------------------------------
-
-    await client.query(
-      'COMMIT'
-    );
-
-    // ----------------------------------------------------------
-    // RESPONSE
-    // ----------------------------------------------------------
-
-    return res.status(201).json({
-      success: true,
-
-      test_mode: true,
-
-      message:
-        'Bill payment request created and is awaiting provider verification.',
-
-      data: {
-        id: billPayment.id,
-
-        reference:
-          billPayment.reference,
-
-        bill_type:
-          billPayment.category,
-
-        provider:
-          billPayment.biller_name,
-
-        customer_number:
-          billPayment.customer_reference,
-
-        meter_type:
-          billPayment.meter_type,
-
-        meter_number:
-          billPayment.meter_number,
-
-        amount:
-          Number(
-            billPayment.amount
-          ),
-
-        currency:
-          billPayment.currency,
-
-        status:
-          billPayment.status,
+        message:
+          sogoMessage,
 
         verification_status:
-          billPayment.verification_status,
+          'failed',
+      });
+    }
 
-        created_at:
-          billPayment.created_at,
+    // ----------------------------------------------------------
+    // EXTRACT VERIFICATION
+    // ----------------------------------------------------------
+
+    const verification =
+      sogoResult?.verification ||
+      sogoResult?.data?.verification ||
+      sogoResult?.data;
+
+    if (!verification) {
+      console.error(
+        'Unexpected Sogo verification response:',
+        sogoResult
+      );
+
+      return res.status(502).json({
+        success: false,
+        message:
+          'Electricity provider returned an invalid verification response.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // SUCCESS
+    // ----------------------------------------------------------
+
+    return res.status(200).json({
+      success: true,
+
+      test_mode:
+        sogoBaseUrl.includes(
+          'sandbox'
+        ),
+
+      message:
+        'Electricity meter verified successfully.',
+
+      verification_status:
+        'verified',
+
+      data: {
+        provider:
+          normalizedProvider,
+
+        disco_slug:
+          discoSlug,
+
+        customer_name:
+          verification.customer_name ||
+          null,
+
+        address:
+          verification.address ||
+          null,
+
+        meter_number:
+          verification.meter_number ||
+          normalizedMeterNumber,
+
+        meter_type:
+          verification.meter_type ||
+          normalizedMeterType,
       },
     });
   } catch (error) {
-    // ----------------------------------------------------------
-    // ROLLBACK
-    // ----------------------------------------------------------
-
-    try {
-      await client.query(
-        'ROLLBACK'
-      );
-    } catch (
-      rollbackError
-    ) {
-      console.error(
-        'Bill payment rollback error:',
-        rollbackError
-      );
-    }
-
     console.error(
-      'Create bill payment error:',
+      'Electricity meter verification error:',
       error
     );
 
     return res.status(500).json({
       success: false,
       message:
-        'Unable to create bill payment request.',
+        'Unable to verify electricity meter at this time.',
     });
-  } finally {
-    client.release();
   }
-};
-
-module.exports = {
-  createBillPayment,
 };
