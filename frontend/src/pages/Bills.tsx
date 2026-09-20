@@ -7,6 +7,7 @@ const API_URL = 'https://zenimonies-banking.onrender.com';
 const Bills: React.FC = () => {
   const [billType, setBillType] = useState('');
   const [provider, setProvider] = useState('');
+  const [meterType, setMeterType] = useState('');
   const [customerNumber, setCustomerNumber] = useState('');
   const [amount, setAmount] = useState('');
 
@@ -14,15 +15,51 @@ const Bills: React.FC = () => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
+  // ============================================================
+  // BILL TYPE CHANGE
+  // ============================================================
+
   const handleBillTypeChange = (
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
-    setBillType(event.target.value);
+    const value = event.target.value;
+
+    setBillType(value);
     setProvider('');
+    setMeterType('');
     setCustomerNumber('');
+    setAmount('');
     setError('');
     setMessage('');
   };
+
+  // ============================================================
+  // PROVIDER CHANGE
+  // ============================================================
+
+  const handleProviderChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    setProvider(event.target.value);
+    setError('');
+    setMessage('');
+  };
+
+  // ============================================================
+  // METER TYPE CHANGE
+  // ============================================================
+
+  const handleMeterTypeChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    setMeterType(event.target.value);
+    setError('');
+    setMessage('');
+  };
+
+  // ============================================================
+  // SUBMIT BILL PAYMENT
+  // ============================================================
 
   const handleSubmit = async (
     event: React.FormEvent<HTMLFormElement>
@@ -34,13 +71,36 @@ const Bills: React.FC = () => {
 
     const numericAmount = Number(amount);
 
-    if (
-      !billType ||
-      !provider ||
-      !customerNumber ||
-      !amount
-    ) {
-      setError('Please complete all required fields.');
+    // ----------------------------------------------------------
+    // REQUIRED FIELD VALIDATION
+    // ----------------------------------------------------------
+
+    if (!billType) {
+      setError('Please select a bill type.');
+      return;
+    }
+
+    if (!provider) {
+      setError('Please select a provider.');
+      return;
+    }
+
+    if (isElectricity && !meterType) {
+      setError('Please select prepaid or postpaid.');
+      return;
+    }
+
+    if (!customerNumber.trim()) {
+      setError(
+        isElectricity
+          ? 'Please enter the meter number.'
+          : 'Please enter the customer number.'
+      );
+      return;
+    }
+
+    if (!amount) {
+      setError('Please enter an amount.');
       return;
     }
 
@@ -52,19 +112,42 @@ const Bills: React.FC = () => {
       return;
     }
 
+    // ----------------------------------------------------------
+    // START REQUEST
+    // ----------------------------------------------------------
+
     setLoading(true);
 
     try {
       const token = localStorage.getItem('zenimonies_token');
 
+      if (!token) {
+        setError('Your session has expired. Please sign in again.');
+        setLoading(false);
+        return;
+      }
+
+      const requestData: {
+        bill_type: string;
+        provider: string;
+        customer_number: string;
+        amount: number;
+        meter_type?: string;
+      } = {
+        bill_type: billType,
+        provider,
+        customer_number: customerNumber.trim(),
+        amount: numericAmount
+      };
+
+      // Only electricity payments need meter_type
+      if (isElectricity) {
+        requestData.meter_type = meterType;
+      }
+
       const response = await axios.post(
         `${API_URL}/api/bills`,
-        {
-          bill_type: billType,
-          provider,
-          customer_number: customerNumber.trim(),
-          amount: numericAmount
-        },
+        requestData,
         {
           headers: {
             Authorization: `Bearer ${token}`
@@ -72,14 +155,19 @@ const Bills: React.FC = () => {
         }
       );
 
+      // --------------------------------------------------------
+      // SUCCESS
+      // --------------------------------------------------------
+
       if (response.data?.success) {
         setMessage(
           response.data?.message ||
-            'Bill payment submitted successfully.'
+            'Bill payment request created successfully.'
         );
 
         setBillType('');
         setProvider('');
+        setMeterType('');
         setCustomerNumber('');
         setAmount('');
       } else {
@@ -89,17 +177,27 @@ const Bills: React.FC = () => {
         );
       }
     } catch (err: any) {
+      console.error('Bill payment error:', err);
+
       setError(
         err?.response?.data?.message ||
-          'Bill payment service is not connected yet.'
+          'Unable to connect to the bill payment service.'
       );
     } finally {
       setLoading(false);
     }
   };
 
+  // ============================================================
+  // CONDITIONS
+  // ============================================================
+
   const isElectricity = billType === 'electricity';
   const isTv = billType === 'tv';
+
+  // ============================================================
+  // UI
+  // ============================================================
 
   return (
     <div
@@ -115,6 +213,8 @@ const Bills: React.FC = () => {
           margin: '0 auto'
         }}
       >
+        {/* BACK TO DASHBOARD */}
+
         <Link
           to="/"
           style={{
@@ -128,15 +228,25 @@ const Bills: React.FC = () => {
           ← Back to Dashboard
         </Link>
 
+        {/* CARD */}
+
         <div
           style={{
             background: '#ffffff',
             borderRadius: '18px',
             padding: '30px',
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08)'
+            boxShadow:
+              '0 8px 30px rgba(0, 0, 0, 0.08)'
           }}
         >
-          <h1 style={{ marginTop: 0 }}>Pay Bills</h1>
+          <h1
+            style={{
+              marginTop: 0,
+              marginBottom: '8px'
+            }}
+          >
+            Pay Bills
+          </h1>
 
           <p
             style={{
@@ -144,9 +254,11 @@ const Bills: React.FC = () => {
               marginBottom: '28px'
             }}
           >
-            Pay electricity, television and other supported bills
-            from your Zenimonies account.
+            Pay electricity, television and other supported
+            bills from your Zenimonies account.
           </p>
+
+          {/* ERROR */}
 
           {error && (
             <div
@@ -161,6 +273,8 @@ const Bills: React.FC = () => {
               {error}
             </div>
           )}
+
+          {/* SUCCESS */}
 
           {message && (
             <div
@@ -177,6 +291,10 @@ const Bills: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit}>
+            {/* ==================================================
+                BILL TYPE
+            ================================================== */}
+
             <label
               htmlFor="billType"
               style={{
@@ -201,12 +319,30 @@ const Bills: React.FC = () => {
                 background: '#ffffff'
               }}
             >
-              <option value="">Select bill type</option>
-              <option value="electricity">Electricity</option>
-              <option value="tv">TV Subscription</option>
-              <option value="internet">Internet</option>
-              <option value="other">Other Bills</option>
+              <option value="">
+                Select bill type
+              </option>
+
+              <option value="electricity">
+                Electricity
+              </option>
+
+              <option value="tv">
+                TV Subscription
+              </option>
+
+              <option value="internet">
+                Internet
+              </option>
+
+              <option value="other">
+                Other Bills
+              </option>
             </select>
+
+            {/* ==================================================
+                PROVIDER
+            ================================================== */}
 
             <label
               htmlFor="provider"
@@ -222,9 +358,7 @@ const Bills: React.FC = () => {
             <select
               id="provider"
               value={provider}
-              onChange={(event) =>
-                setProvider(event.target.value)
-              }
+              onChange={handleProviderChange}
               disabled={!billType}
               style={{
                 width: '100%',
@@ -241,45 +375,145 @@ const Bills: React.FC = () => {
                   : 'Select bill type first'}
               </option>
 
+              {/* ELECTRICITY */}
+
               {isElectricity && (
                 <>
-                  <option value="EKEDC">EKEDC</option>
-                  <option value="IKEDC">IKEDC</option>
-                  <option value="AEDC">AEDC</option>
-                  <option value="EEDC">EEDC</option>
-                  <option value="IBEDC">IBEDC</option>
-                  <option value="JED">JED</option>
-                  <option value="KAEDCO">KAEDCO</option>
-                  <option value="KEDCO">KEDCO</option>
-                  <option value="YEDC">YEDC</option>
-                  <option value="BEDC">BEDC</option>
+                  <option value="EKEDC">
+                    EKEDC
+                  </option>
+
+                  <option value="IKEDC">
+                    IKEDC
+                  </option>
+
+                  <option value="AEDC">
+                    AEDC
+                  </option>
+
+                  <option value="EEDC">
+                    EEDC
+                  </option>
+
+                  <option value="IBEDC">
+                    IBEDC
+                  </option>
+
+                  <option value="JED">
+                    JED
+                  </option>
+
+                  <option value="KAEDCO">
+                    KAEDCO
+                  </option>
+
+                  <option value="KEDCO">
+                    KEDCO
+                  </option>
+
+                  <option value="YEDC">
+                    YEDC
+                  </option>
+
+                  <option value="BEDC">
+                    BEDC
+                  </option>
                 </>
               )}
 
+              {/* TV */}
+
               {isTv && (
                 <>
-                  <option value="DSTV">DSTV</option>
-                  <option value="GOTV">GOtv</option>
-                  <option value="STARTIMES">Startimes</option>
+                  <option value="DSTV">
+                    DSTV
+                  </option>
+
+                  <option value="GOTV">
+                    GOtv
+                  </option>
+
+                  <option value="STARTIMES">
+                    Startimes
+                  </option>
                 </>
               )}
+
+              {/* INTERNET */}
 
               {billType === 'internet' && (
                 <>
                   <option value="Spectranet">
                     Spectranet
                   </option>
-                  <option value="Smile">Smile</option>
+
+                  <option value="Smile">
+                    Smile
+                  </option>
+
                   <option value="MTN Internet">
                     MTN Internet
                   </option>
                 </>
               )}
 
+              {/* OTHER */}
+
               {billType === 'other' && (
-                <option value="Other">Other Provider</option>
+                <option value="Other">
+                  Other Provider
+                </option>
               )}
             </select>
+
+            {/* ==================================================
+                ELECTRICITY METER TYPE
+            ================================================== */}
+
+            {isElectricity && (
+              <>
+                <label
+                  htmlFor="meterType"
+                  style={{
+                    display: 'block',
+                    marginBottom: '6px',
+                    fontWeight: 600
+                  }}
+                >
+                  Meter Type
+                </label>
+
+                <select
+                  id="meterType"
+                  value={meterType}
+                  onChange={handleMeterTypeChange}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    marginBottom: '18px',
+                    border: '1px solid #d0d5dd',
+                    borderRadius: '8px',
+                    background: '#ffffff'
+                  }}
+                >
+                  <option value="">
+                    Select meter type
+                  </option>
+
+                  <option value="prepaid">
+                    Prepaid
+                  </option>
+
+                  <option value="postpaid">
+                    Postpaid
+                  </option>
+                </select>
+              </>
+            )}
+
+            {/* ==================================================
+                CUSTOMER / METER NUMBER
+            ================================================== */}
 
             <label
               htmlFor="customerNumber"
@@ -315,9 +549,14 @@ const Bills: React.FC = () => {
                 padding: '12px',
                 marginBottom: '18px',
                 border: '1px solid #d0d5dd',
-                borderRadius: '8px'
+                borderRadius: '8px',
+                boxSizing: 'border-box'
               }}
             />
+
+            {/* ==================================================
+                AMOUNT
+            ================================================== */}
 
             <label
               htmlFor="amount"
@@ -345,9 +584,14 @@ const Bills: React.FC = () => {
                 padding: '12px',
                 marginBottom: '24px',
                 border: '1px solid #d0d5dd',
-                borderRadius: '8px'
+                borderRadius: '8px',
+                boxSizing: 'border-box'
               }}
             />
+
+            {/* ==================================================
+                SUBMIT
+            ================================================== */}
 
             <button
               type="submit"
@@ -360,11 +604,15 @@ const Bills: React.FC = () => {
                 background: '#0b5cff',
                 color: '#ffffff',
                 fontWeight: 600,
-                cursor: loading ? 'not-allowed' : 'pointer',
+                cursor: loading
+                  ? 'not-allowed'
+                  : 'pointer',
                 opacity: loading ? 0.7 : 1
               }}
             >
-              {loading ? 'Processing...' : 'Pay Bill'}
+              {loading
+                ? 'Processing...'
+                : 'Pay Bill'}
             </button>
           </form>
         </div>
