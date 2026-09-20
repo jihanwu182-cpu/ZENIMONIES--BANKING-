@@ -14,7 +14,7 @@ const { initializeDatabase } = database;
 
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
-app.use('/api/bills', billsRoutes);
+const billsRoutes = require('./routes/bills');
 const transferRoutes = require('./routes/transfer');
 const dataRoutes = require('./routes/data');
 const airtimeRoutes = require('./routes/airtime');
