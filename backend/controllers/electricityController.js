@@ -50,9 +50,9 @@ const purchaseElectricity = async (req, res) => {
   let client = null;
 
   try {
-    // ----------------------------------------------------------
+    // ========================================================
     // AUTHENTICATION
-    // ----------------------------------------------------------
+    // ========================================================
 
     const userId =
       req.user?.id ||
@@ -65,9 +65,9 @@ const purchaseElectricity = async (req, res) => {
       });
     }
 
-    // ----------------------------------------------------------
+    // ========================================================
     // REQUEST
-    // ----------------------------------------------------------
+    // ========================================================
 
     const {
       provider,
@@ -108,9 +108,9 @@ const purchaseElectricity = async (req, res) => {
       });
     }
 
-    // ----------------------------------------------------------
+    // ========================================================
     // NORMALIZE
-    // ----------------------------------------------------------
+    // ========================================================
 
     const normalizedProvider =
       String(provider)
@@ -129,9 +129,9 @@ const purchaseElectricity = async (req, res) => {
     const numericAmount =
       Number(amount);
 
-    // ----------------------------------------------------------
+    // ========================================================
     // VALIDATION
-    // ----------------------------------------------------------
+    // ========================================================
 
     if (
       !SOGO_DISCO_SLUGS[
@@ -195,9 +195,9 @@ const purchaseElectricity = async (req, res) => {
       });
     }
 
-    // ----------------------------------------------------------
+    // ========================================================
     // SOGO CONFIGURATION
-    // ----------------------------------------------------------
+    // ========================================================
 
     const sogoApiKey =
       process.env.SOGO_API_KEY;
@@ -219,15 +219,9 @@ const purchaseElectricity = async (req, res) => {
         normalizedProvider
       ];
 
-    // ==========================================================
+    // ========================================================
     // RE-VERIFY METER
-    // ==========================================================
-    //
-    // We do not trust browser localStorage as proof of
-    // verification. The backend verifies the meter again before
-    // sending the payment to Sogo.
-    //
-    // ==========================================================
+    // ========================================================
 
     let verificationResponse;
 
@@ -260,7 +254,7 @@ const purchaseElectricity = async (req, res) => {
         );
     } catch (error) {
       console.error(
-        'Sogo meter verification network error:',
+        'Sogo verification network error:',
         error
       );
 
@@ -284,16 +278,11 @@ const purchaseElectricity = async (req, res) => {
       !verificationResponse.ok
     ) {
       console.error(
-        'Sogo meter verification failed:',
+        'Sogo verification failed:',
         verificationResult
       );
 
-      return res.status(
-        verificationResponse.status >= 400 &&
-        verificationResponse.status < 500
-          ? verificationResponse.status
-          : 502
-      ).json({
+      return res.status(502).json({
         success: false,
         message:
           verificationResult?.error?.message ||
@@ -315,9 +304,9 @@ const purchaseElectricity = async (req, res) => {
       });
     }
 
-    // ==========================================================
-    // CREATE PAYMENT + RESERVE FUNDS
-    // ==========================================================
+    // ========================================================
+    // START DATABASE TRANSACTION
+    // ========================================================
 
     client =
       await pool.connect();
@@ -326,9 +315,9 @@ const purchaseElectricity = async (req, res) => {
       'BEGIN'
     );
 
-    // ----------------------------------------------------------
+    // ========================================================
     // LOCK CUSTOMER ACCOUNT
-    // ----------------------------------------------------------
+    // ========================================================
 
     const accountResult =
       await client.query(
@@ -389,19 +378,23 @@ const purchaseElectricity = async (req, res) => {
       });
     }
 
-    // ----------------------------------------------------------
+    // ========================================================
     // CREATE REFERENCES
-    // ----------------------------------------------------------
+    // ========================================================
 
     const reference =
       createReference();
 
+    /*
+     * One unique idempotency key belongs to this
+     * electricity purchase.
+     */
     const idempotencyKey =
       crypto.randomUUID();
 
-    // ----------------------------------------------------------
+    // ========================================================
     // FIND ELECTRICITY BILLER
-    // ----------------------------------------------------------
+    // ========================================================
 
     const billerResult =
       await client.query(
@@ -419,9 +412,9 @@ const purchaseElectricity = async (req, res) => {
       billerResult.rows[0]?.id ||
       null;
 
-    // ----------------------------------------------------------
+    // ========================================================
     // CREATE BILL PAYMENT
-    // ----------------------------------------------------------
+    // ========================================================
 
     const billResult =
       await client.query(
@@ -484,9 +477,9 @@ const purchaseElectricity = async (req, res) => {
     const billPaymentId =
       billResult.rows[0].id;
 
-    // ----------------------------------------------------------
-    // DEBIT CUSTOMER ACCOUNT
-    // ----------------------------------------------------------
+    // ========================================================
+    // RESERVE / DEBIT CUSTOMER FUNDS
+    // ========================================================
 
     const balanceAfter =
       balanceBefore -
@@ -506,9 +499,9 @@ const purchaseElectricity = async (req, res) => {
       ]
     );
 
-    // ----------------------------------------------------------
+    // ========================================================
     // CREATE TRANSACTION
-    // ----------------------------------------------------------
+    // ========================================================
 
     const transactionResult =
       await client.query(
@@ -556,9 +549,12 @@ const purchaseElectricity = async (req, res) => {
       'COMMIT'
     );
 
-    // ==========================================================
+    client.release();
+    client = null;
+
+    // ========================================================
     // CALL SOGO ELECTRICITY PURCHASE
-    // ==========================================================
+    // ========================================================
 
     let purchaseResponse;
 
@@ -596,18 +592,20 @@ const purchaseElectricity = async (req, res) => {
           }
         );
     } catch (error) {
+      /*
+       * VERY IMPORTANT:
+       *
+       * If the network fails after the request has been
+       * submitted, we do NOT automatically refund or
+       * create another payment.
+       *
+       * The same idempotency key must be reconciled.
+       */
+
       console.error(
         'Sogo electricity purchase network error:',
         error
       );
-
-      // IMPORTANT:
-      // Do NOT automatically refund here.
-      //
-      // Sogo requires reconciliation using the SAME
-      // idempotency key when the response is lost.
-      //
-      // The payment therefore remains processing.
 
       return res.status(202).json({
         success: true,
@@ -622,17 +620,25 @@ const purchaseElectricity = async (req, res) => {
 
         data: {
           reference,
+
           provider_request_id:
             idempotencyKey,
+
           status:
             'processing',
+
           amount:
             numericAmount,
+
           currency:
             'NGN',
         },
       });
     }
+
+    // ========================================================
+    // READ SOGO RESPONSE
+    // ========================================================
 
     let purchaseResult = null;
 
@@ -643,21 +649,45 @@ const purchaseElectricity = async (req, res) => {
       purchaseResult = null;
     }
 
+    console.log(
+      'SOGO ELECTRICITY PURCHASE HTTP STATUS:',
+      purchaseResponse.status
+    );
+
+    console.log(
+      'SOGO ELECTRICITY PURCHASE RESPONSE:',
+      JSON.stringify(
+        purchaseResult
+      )
+    );
+
+    /*
+     * Sogo's documented response is:
+     *
+     * {
+     *   message: "...",
+     *   data: {
+     *     reference: "...",
+     *     status: "completed",
+     *     ...
+     *   }
+     * }
+     *
+     * So we intentionally read the nested data object.
+     */
+
     const purchaseData =
-      purchaseResult?.data ||
-      purchaseResult?.transaction ||
-      purchaseResult;
+      purchaseResult?.data || {};
 
     const providerStatus =
       String(
-        purchaseData?.status ||
-        purchaseResult?.status ||
-        ''
-      ).toLowerCase();
+        purchaseData?.status || ''
+      )
+        .trim()
+        .toLowerCase();
 
     const providerReference =
       purchaseData?.reference ||
-      purchaseData?.id ||
       null;
 
     const providerMessage =
@@ -665,11 +695,16 @@ const purchaseElectricity = async (req, res) => {
       purchaseData?.message ||
       null;
 
-    const token =
+    // ========================================================
+    // ELECTRICITY TOKEN
+    // ========================================================
+
+    const electricityToken =
       purchaseData?.token ||
       purchaseData?.electricity_token ||
       purchaseData?.token_code ||
       purchaseData?.prepaid_token ||
+      purchaseData?.pin ||
       null;
 
     const units =
@@ -678,14 +713,14 @@ const purchaseElectricity = async (req, res) => {
       purchaseData?.kwh ||
       null;
 
-    // ==========================================================
+    // ========================================================
     // COMPLETED
-    // ==========================================================
+    // ========================================================
 
     if (
-      purchaseResponse.ok &&
-      providerStatus ===
-        'completed'
+      purchaseResponse.status >= 200 &&
+      purchaseResponse.status < 300 &&
+      providerStatus === 'completed'
     ) {
       const completeClient =
         await pool.connect();
@@ -705,15 +740,14 @@ const purchaseElectricity = async (req, res) => {
               provider_response_message = $3,
               electricity_token = $4,
               units = $5,
-              completed_at =
-                CURRENT_TIMESTAMP
+              completed_at = CURRENT_TIMESTAMP
             WHERE id = $6
           `,
           [
             providerReference,
             purchaseResult,
             providerMessage,
-            token,
+            electricityToken,
             units,
             billPaymentId,
           ]
@@ -733,30 +767,55 @@ const purchaseElectricity = async (req, res) => {
           'COMMIT'
         );
       } catch (error) {
-        await completeClient.query(
-          'ROLLBACK'
-        );
+        try {
+          await completeClient.query(
+            'ROLLBACK'
+          );
+        } catch (rollbackError) {
+          console.error(
+            'Completion rollback error:',
+            rollbackError
+          );
+        }
 
         console.error(
           'Electricity completion database error:',
           error
         );
 
+        /*
+         * Sogo has already accepted/completed the transaction.
+         * Do not refund it locally just because our database
+         * update failed.
+         */
         return res.status(202).json({
           success: true,
+
           message:
-            'Payment was accepted and is being finalized.',
+            'Electricity payment was completed and is being finalized.',
+
           data: {
             reference,
+
             provider_reference:
               providerReference,
+
             status:
-              'processing',
+              'completed',
+
+            electricity_token:
+              electricityToken,
+
+            units,
           },
         });
       } finally {
         completeClient.release();
       }
+
+      // ======================================================
+      // SUCCESS RESPONSE
+      // ======================================================
 
       return res.status(200).json({
         success: true,
@@ -805,7 +864,7 @@ const purchaseElectricity = async (req, res) => {
             'completed',
 
           electricity_token:
-            token,
+            electricityToken,
 
           units,
 
@@ -815,17 +874,16 @@ const purchaseElectricity = async (req, res) => {
       });
     }
 
-    // ==========================================================
+    // ========================================================
     // PROCESSING
-    // ==========================================================
+    // ========================================================
 
     if (
-      purchaseResponse.ok &&
+      purchaseResponse.status >= 200 &&
+      purchaseResponse.status < 300 &&
       (
-        providerStatus ===
-          'processing' ||
-        providerStatus ===
-          'pending'
+        providerStatus === 'processing' ||
+        providerStatus === 'pending'
       )
     ) {
       await pool.query(
@@ -894,13 +952,13 @@ const purchaseElectricity = async (req, res) => {
       });
     }
 
-    // ==========================================================
-    // PROVIDER FAILED / REFUNDED
-    // ==========================================================
+    // ========================================================
+    // FINAL FAILURE / REFUND
+    // ========================================================
 
     const failureMessage =
-      providerMessage ||
       purchaseResult?.error?.message ||
+      providerMessage ||
       'Electricity payment failed.';
 
     const refundClient =
@@ -938,8 +996,7 @@ const purchaseElectricity = async (req, res) => {
           UPDATE accounts
           SET
             balance = $1,
-            updated_at =
-              CURRENT_TIMESTAMP
+            updated_at = CURRENT_TIMESTAMP
           WHERE id = $2
         `,
         [
@@ -957,8 +1014,7 @@ const purchaseElectricity = async (req, res) => {
             provider_response = $2,
             provider_response_message = $3,
             failure_reason = $3,
-            completed_at =
-              CURRENT_TIMESTAMP
+            completed_at = CURRENT_TIMESTAMP
           WHERE id = $4
         `,
         [
@@ -1026,13 +1082,13 @@ const purchaseElectricity = async (req, res) => {
         );
       } catch (rollbackError) {
         console.error(
-          'Electricity refund rollback error:',
+          'Refund rollback error:',
           rollbackError
         );
       }
 
       console.error(
-        'Electricity refund processing error:',
+        'Electricity refund error:',
         refundError
       );
 
@@ -1094,6 +1150,10 @@ const purchaseElectricity = async (req, res) => {
     }
   }
 };
+
+// ============================================================
+// EXPORT
+// ============================================================
 
 module.exports = {
   purchaseElectricity,
