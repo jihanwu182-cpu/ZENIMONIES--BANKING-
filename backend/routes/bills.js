@@ -4,15 +4,25 @@ const router = express.Router();
 
 const {
   createBillPayment,
+  verifyElectricityMeter,
 } = require('../controllers/billController');
 
 const authMiddleware = require('../middleware/authMiddleware');
 
 // ============================================================
+// ELECTRICITY METER VERIFICATION
+// ============================================================
+
+router.post(
+  '/electricity/verify',
+  authMiddleware,
+  verifyElectricityMeter
+);
+
+// ============================================================
 // BILL PAYMENT
 // ============================================================
 
-// POST /api/bills
 router.post(
   '/',
   authMiddleware,
