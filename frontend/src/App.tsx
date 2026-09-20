@@ -25,6 +25,7 @@ import Airtime from './pages/Airtime.tsx';
 import Data from './pages/Data.tsx';
 import TVSubscription from './pages/TVSubscription.tsx';
 import Bills from './pages/Bills.tsx';
+import Electricity from './pages/Electricity.tsx';
 import Betting from './pages/Betting.tsx';
 import VirtualCard from './pages/VirtualCard.tsx';
 import Admin from './pages/AdminDashboard.tsx';
@@ -475,7 +476,12 @@ const App: React.FC = () => {
           <Route
             path="/bills"
             element={<Bills />}
-          />
+         />
+
+          <Route
+            path="/electricity"
+            element={<Electricity />}
+         />
 
           {/* ================= BETTING ================= */}
 
