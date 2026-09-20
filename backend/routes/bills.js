@@ -7,6 +7,10 @@ const {
   verifyElectricityMeter,
 } = require('../controllers/billController');
 
+const {
+  purchaseElectricity,
+} = require('../controllers/electricityController');
+
 const authMiddleware = require('../middleware/authMiddleware');
 
 // ============================================================
@@ -20,7 +24,17 @@ router.post(
 );
 
 // ============================================================
-// BILL PAYMENT
+// ELECTRICITY PAYMENT
+// ============================================================
+
+router.post(
+  '/electricity/pay',
+  authMiddleware,
+  purchaseElectricity
+);
+
+// ============================================================
+// GENERAL BILL PAYMENT
 // ============================================================
 
 router.post(
