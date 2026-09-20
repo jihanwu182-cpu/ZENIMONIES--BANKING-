@@ -1,4 +1,3 @@
-// TransactionReceipt.tsx
 import React from "react";
 
 interface TransactionReceiptProps {
