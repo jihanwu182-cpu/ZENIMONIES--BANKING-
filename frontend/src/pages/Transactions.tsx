@@ -1,4 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 
 import {
   Alert,
@@ -91,7 +95,7 @@ interface Transaction {
 
 /*
  * ============================================================
- * VTpass diagnostic type
+ * VTPASS DIAGNOSTIC TYPE
  * ============================================================
  */
 
@@ -105,6 +109,10 @@ interface RequeryDiagnostic {
   providerCode?: string | null;
 
   providerDescription?: string | null;
+
+  providerStatus?: string | null;
+
+  transactionId?: string | null;
 }
 
 
@@ -121,38 +129,53 @@ const API_URL =
 const Transactions: React.FC = () => {
   const navigate = useNavigate();
 
+
   const [transactions, setTransactions] =
     useState<Transaction[]>([]);
+
 
   const [loading, setLoading] =
     useState(true);
 
+
   const [error, setError] =
     useState('');
+
 
   const [category, setCategory] =
     useState('all');
 
+
   const [statusFilter, setStatusFilter] =
     useState('all');
+
 
   const [search, setSearch] =
     useState('');
 
+
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null);
+
 
   const [requeryingReference, setRequeryingReference] =
     useState<string | null>(null);
 
+
   const [requeryMessage, setRequeryMessage] =
     useState('');
+
 
   /*
    * Temporary VTpass diagnostic state.
    */
+
   const [requeryDiagnostic, setRequeryDiagnostic] =
     useState<RequeryDiagnostic | null>(null);
+
+
+  const [diagnosticLoading, setDiagnosticLoading] =
+    useState(false);
 
 
   /*
@@ -1102,6 +1125,7 @@ const Transactions: React.FC = () => {
        * Capture temporary diagnostic information
        * returned by the backend.
        */
+
       setRequeryDiagnostic(
         result?.diagnostic || null
       );
@@ -1177,6 +1201,7 @@ const Transactions: React.FC = () => {
        * Capture diagnostic information if the
        * backend returned it through an error response.
        */
+
       setRequeryDiagnostic(
         err?.response?.data?.diagnostic || null
       );
@@ -1189,6 +1214,112 @@ const Transactions: React.FC = () => {
     } finally {
       setRequeryingReference(
         null
+      );
+    }
+  };
+
+
+  /*
+   * ============================================================
+   * LATEST VTPASS PROVIDER DIAGNOSTIC
+   *
+   * TEMPORARY
+   *
+   * This reads the provider response already saved for
+   * the latest Airtime transaction.
+   *
+   * It does NOT make a new purchase.
+   * ============================================================
+   */
+
+  const handleLoadLatestDiagnostic = async () => {
+    const token =
+      getToken();
+
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      setDiagnosticLoading(true);
+
+      setRequeryMessage('');
+
+      setRequeryDiagnostic(null);
+
+      const response =
+        await axios.get(
+          `${API_URL}/api/airtime/reconciliation/latest`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      const result =
+        response.data;
+
+
+      setRequeryDiagnostic({
+        requestId:
+          result?.transaction
+            ?.provider_request_id ||
+          null,
+
+        errorCode:
+          null,
+
+        httpStatus:
+          200,
+
+        providerCode:
+          result?.provider?.code ||
+          null,
+
+        providerDescription:
+          result?.provider
+            ?.description ||
+          null,
+
+        providerStatus:
+          result?.provider
+            ?.transaction_status ||
+          null,
+
+        transactionId:
+          result?.provider
+            ?.transaction_id ||
+          null,
+      });
+
+
+      setRequeryMessage(
+        'VTpass response loaded from the latest Airtime transaction.'
+      );
+
+    } catch (err: any) {
+      console.error(
+        'Failed to load VTpass diagnostic:',
+        err
+      );
+
+
+      setRequeryDiagnostic(
+        null
+      );
+
+
+      setRequeryMessage(
+        err?.response?.data?.message ||
+        'Unable to retrieve the VTpass provider response.'
+      );
+
+    } finally {
+      setDiagnosticLoading(
+        false
       );
     }
   };
@@ -1709,7 +1840,6 @@ const Transactions: React.FC = () => {
             </Select>
 
           </Stack>
-
         </Card>
 
 
@@ -2591,7 +2721,9 @@ const Transactions: React.FC = () => {
               </Stack>
 
 
-              {/* REQUERY MESSAGE */}
+              {/* =================================================
+                  REQUERY MESSAGE
+                  ================================================= */}
 
               {requeryMessage && (
                 <Alert
@@ -2704,6 +2836,28 @@ const Transactions: React.FC = () => {
                         'Not available'}
                     </Typography>
 
+
+                    <Typography
+                      sx={{
+                        fontSize: 11.5,
+                      }}
+                    >
+                      Provider status:{' '}
+                      {requeryDiagnostic.providerStatus ||
+                        'Not available'}
+                    </Typography>
+
+
+                    <Typography
+                      sx={{
+                        fontSize: 11.5,
+                      }}
+                    >
+                      Transaction ID:{' '}
+                      {requeryDiagnostic.transactionId ||
+                        'Not available'}
+                    </Typography>
+
                   </Stack>
 
                 </Alert>
@@ -2717,7 +2871,9 @@ const Transactions: React.FC = () => {
               />
 
 
-              {/* ACTIONS */}
+              {/* =================================================
+                  ACTIONS
+                  ================================================= */}
 
               <Stack
                 direction={{
@@ -2726,6 +2882,62 @@ const Transactions: React.FC = () => {
                 }}
                 spacing={0.8}
               >
+
+                {/* TEMPORARY VTPASS DIAGNOSTIC BUTTON */}
+
+                {getType(
+                  selectedTransaction
+                ).includes('airtime') &&
+                  String(
+                    selectedTransaction.status ||
+                      ''
+                  ).toLowerCase() ===
+                    'failed' && (
+
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={
+                      diagnosticLoading ? (
+                        <CircularProgress
+                          size={17}
+                          sx={{
+                            color:
+                              '#008C68',
+                          }}
+                        />
+                      ) : (
+                        <SearchRounded />
+                      )
+                    }
+                    onClick={
+                      handleLoadLatestDiagnostic
+                    }
+                    disabled={
+                      diagnosticLoading
+                    }
+                    sx={{
+                      height: 46,
+                      borderRadius: 2.7,
+                      borderColor:
+                        '#008C68',
+                      color:
+                        '#008C68',
+                      textTransform:
+                        'none',
+                      fontWeight:
+                        800,
+                    }}
+                  >
+                    {diagnosticLoading
+                      ? 'Loading...'
+                      : 'View VTpass response'}
+                  </Button>
+
+                )}
+
+
+                {/* AIRTIME REQUERY */}
 
                 {getType(
                   selectedTransaction
@@ -2784,6 +2996,8 @@ const Transactions: React.FC = () => {
                 )}
 
 
+                {/* RECEIPT */}
+
                 <Button
                   fullWidth
                   variant="contained"
@@ -2817,6 +3031,8 @@ const Transactions: React.FC = () => {
                   View receipt
                 </Button>
 
+
+                {/* CLOSE */}
 
                 <Button
                   fullWidth
