@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const pool = require('../config/database');
 
 // ============================================================
 // SUPPORTED BILL PROVIDERS
@@ -56,10 +57,7 @@ const isValidCustomerNumber = (customerNumber) => {
 
   const value = String(customerNumber).trim();
 
-  // Basic validation for now.
-  // The real provider API will perform the actual
-  // meter/customer-number validation.
-  return /^[A-Za-z0-9\-]{5,30}$/.test(value);
+  return /^[A-Za-z0-9\-]{5,50}$/.test(value);
 };
 
 // ============================================================
@@ -67,6 +65,8 @@ const isValidCustomerNumber = (customerNumber) => {
 // ============================================================
 
 const createBillPayment = async (req, res) => {
+  const client = await pool.connect();
+
   try {
     // ----------------------------------------------------------
     // AUTHENTICATED USER
@@ -118,7 +118,11 @@ const createBillPayment = async (req, res) => {
       });
     }
 
-    if (amount === undefined || amount === null || amount === '') {
+    if (
+      amount === undefined ||
+      amount === null ||
+      amount === ''
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Amount is required.',
@@ -126,7 +130,7 @@ const createBillPayment = async (req, res) => {
     }
 
     // ----------------------------------------------------------
-    // NORMALIZE VALUES
+    // NORMALIZE
     // ----------------------------------------------------------
 
     const normalizedBillType = String(bill_type)
@@ -135,20 +139,12 @@ const createBillPayment = async (req, res) => {
 
     const normalizedProvider = String(provider).trim();
 
-    const normalizedCustomerNumber = String(customer_number).trim();
+    const normalizedCustomerNumber =
+      String(customer_number).trim();
 
-    // ----------------------------------------------------------
-    // VALIDATE AMOUNT
-    // ----------------------------------------------------------
-
-    if (!isValidAmount(amount)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please enter a valid amount.',
-      });
-    }
-
-    const numericAmount = Number(amount);
+    const normalizedMeterType = meter_type
+      ? String(meter_type).trim().toLowerCase()
+      : null;
 
     // ----------------------------------------------------------
     // VALIDATE BILL TYPE
@@ -169,6 +165,30 @@ const createBillPayment = async (req, res) => {
     }
 
     // ----------------------------------------------------------
+    // VALIDATE AMOUNT
+    // ----------------------------------------------------------
+
+    if (!isValidAmount(amount)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid amount.',
+      });
+    }
+
+    const numericAmount = Number(amount);
+
+    // ----------------------------------------------------------
+    // MAXIMUM REQUEST AMOUNT
+    // ----------------------------------------------------------
+
+    if (numericAmount > 1000000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount exceeds the current transaction limit.',
+      });
+    }
+
+    // ----------------------------------------------------------
     // ELECTRICITY VALIDATION
     // ----------------------------------------------------------
 
@@ -181,14 +201,15 @@ const createBillPayment = async (req, res) => {
       }
 
       if (
-        meter_type &&
+        !normalizedMeterType ||
         !['prepaid', 'postpaid'].includes(
-          String(meter_type).trim().toLowerCase()
+          normalizedMeterType
         )
       ) {
         return res.status(400).json({
           success: false,
-          message: 'Meter type must be prepaid or postpaid.',
+          message:
+            'Electricity meter type must be prepaid or postpaid.',
         });
       }
     }
@@ -226,72 +247,236 @@ const createBillPayment = async (req, res) => {
     if (!isValidCustomerNumber(normalizedCustomerNumber)) {
       return res.status(400).json({
         success: false,
-        message: 'Please enter a valid customer or meter number.',
+        message:
+          'Please enter a valid customer or meter number.',
       });
     }
 
     // ----------------------------------------------------------
-    // AMOUNT LIMIT
+    // START DATABASE TRANSACTION
     // ----------------------------------------------------------
 
-    // Safety limit for the initial test implementation.
-    // This is NOT the final production transaction limit.
-    if (numericAmount > 1000000) {
+    await client.query('BEGIN');
+
+    // ----------------------------------------------------------
+    // FIND USER ACCOUNT
+    // ----------------------------------------------------------
+
+    const accountResult = await client.query(
+      `
+        SELECT
+          id,
+          user_id,
+          account_number,
+          currency,
+          balance,
+          status
+        FROM accounts
+        WHERE user_id = $1
+          AND currency = 'NGN'
+          AND status = 'active'
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [userId]
+    );
+
+    if (accountResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+
+      return res.status(404).json({
+        success: false,
+        message: 'Active NGN account not found.',
+      });
+    }
+
+    const account = accountResult.rows[0];
+
+    // ----------------------------------------------------------
+    // CHECK ACCOUNT BALANCE
+    //
+    // We only check the balance here.
+    // We do NOT deduct anything yet.
+    // ----------------------------------------------------------
+
+    const accountBalance = Number(account.balance);
+
+    if (
+      !Number.isFinite(accountBalance) ||
+      accountBalance < numericAmount
+    ) {
+      await client.query('ROLLBACK');
+
       return res.status(400).json({
         success: false,
-        message: 'Amount exceeds the current test limit.',
+        message: 'Insufficient account balance.',
       });
     }
 
     // ----------------------------------------------------------
-    // CREATE TEST REFERENCE
+    // GENERATE ZENIMONIES REFERENCE
     // ----------------------------------------------------------
 
     const reference = createReference();
 
     // ----------------------------------------------------------
-    // TEST MODE
+    // FIND ELECTRICITY BILLER
     // ----------------------------------------------------------
 
-    /*
-      IMPORTANT:
+    const billerResult = await client.query(
+      `
+        SELECT
+          id,
+          name,
+          category,
+          provider_code,
+          is_active
+        FROM billers
+        WHERE category = $1
+          AND is_active = true
+        ORDER BY created_at ASC
+        LIMIT 1
+      `,
+      [
+        normalizedBillType === 'electricity'
+          ? 'electricity'
+          : normalizedBillType === 'tv'
+          ? 'cable_tv'
+          : normalizedBillType,
+      ]
+    );
 
-      This controller does NOT:
-      - deduct money
-      - contact an electricity company
-      - generate an electricity token
-      - mark a real bill as paid
+    const biller = billerResult.rows[0] || null;
 
-      We will connect a legitimate bill-payment provider later.
-    */
+    // ----------------------------------------------------------
+    // CREATE PENDING BILL PAYMENT
+    // ----------------------------------------------------------
 
-    return res.status(200).json({
+    const insertResult = await client.query(
+      `
+        INSERT INTO bill_payments (
+          account_id,
+          biller_id,
+          category,
+          biller_name,
+          customer_reference,
+          customer_name,
+          amount,
+          currency,
+          reference,
+          status,
+          meter_type,
+          meter_number,
+          verification_status
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          NULL,
+          $6,
+          'NGN',
+          $7,
+          'pending',
+          $8,
+          $9,
+          'not_verified'
+        )
+        RETURNING
+          id,
+          account_id,
+          biller_id,
+          category,
+          biller_name,
+          customer_reference,
+          amount,
+          currency,
+          reference,
+          status,
+          meter_type,
+          meter_number,
+          verification_status,
+          created_at
+      `,
+      [
+        account.id,
+        biller ? biller.id : null,
+        normalizedBillType,
+        normalizedProvider,
+        normalizedCustomerNumber,
+        numericAmount,
+        reference,
+        normalizedBillType === 'electricity'
+          ? normalizedMeterType
+          : null,
+        normalizedBillType === 'electricity'
+          ? normalizedCustomerNumber
+          : null,
+      ]
+    );
+
+    const billPayment = insertResult.rows[0];
+
+    // ----------------------------------------------------------
+    // COMMIT
+    // ----------------------------------------------------------
+
+    await client.query('COMMIT');
+
+    // ----------------------------------------------------------
+    // RESPONSE
+    // ----------------------------------------------------------
+
+    return res.status(201).json({
       success: true,
       test_mode: true,
       message:
-        'Bill request validated successfully. Payment provider integration is not connected yet.',
+        'Bill payment request created and is awaiting provider verification.',
       data: {
-        reference,
-        user_id: userId,
-        bill_type: normalizedBillType,
-        provider: normalizedProvider,
-        customer_number: normalizedCustomerNumber,
-        meter_type:
-          normalizedBillType === 'electricity'
-            ? String(meter_type || '').trim().toLowerCase() || null
-            : null,
-        amount: numericAmount,
-        currency: 'NGN',
-        status: 'pending_provider',
+        id: billPayment.id,
+        reference: billPayment.reference,
+        bill_type: billPayment.category,
+        provider: billPayment.biller_name,
+        customer_number:
+          billPayment.customer_reference,
+        meter_type: billPayment.meter_type,
+        meter_number: billPayment.meter_number,
+        amount: Number(billPayment.amount),
+        currency: billPayment.currency,
+        status: billPayment.status,
+        verification_status:
+          billPayment.verification_status,
+        created_at: billPayment.created_at,
       },
     });
   } catch (error) {
-    console.error('Create bill payment error:', error);
+    // ----------------------------------------------------------
+    // ROLLBACK IF SOMETHING FAILED
+    // ----------------------------------------------------------
+
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error(
+        'Bill payment rollback error:',
+        rollbackError
+      );
+    }
+
+    console.error(
+      'Create bill payment error:',
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: 'Unable to process bill request.',
+      message: 'Unable to create bill payment request.',
     });
+  } finally {
+    client.release();
   }
 };
 
