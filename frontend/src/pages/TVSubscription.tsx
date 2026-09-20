@@ -20,7 +20,6 @@ import {
   ArrowBack,
   CheckCircle,
   Lock,
-  Tv,
   Verified,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -59,20 +58,30 @@ const LIGHT_GREEN = '#eaf7f0';
 const PROVIDERS: {
   value: Provider;
   label: string;
+  logo: string;
 }[] = [
   {
     value: 'DSTV',
     label: 'DStv',
+    logo: 'https://brandlogos.sgp1.digitaloceanspaces.com/svg/cbi/dstv.svg',
   },
   {
     value: 'GOTV',
     label: 'GOtv',
+    logo: 'https://brandlogos.sgp1.digitaloceanspaces.com/svg/cbi/gotv.svg',
   },
   {
     value: 'STARTIMES',
     label: 'StarTimes',
+    logo: 'https://brandlogos.sgp1.digitaloceanspaces.com/svg/cbi/startimes.svg',
   },
 ];
+
+function getProvider(provider: Provider) {
+  return PROVIDERS.find(
+    (item) => item.value === provider
+  );
+}
 
 function getToken(): string {
   return (
@@ -99,39 +108,59 @@ function normalizeAmount(value: unknown): number {
 export default function TVSubscription() {
   const navigate = useNavigate();
 
-  const [provider, setProvider] = useState<Provider>('DSTV');
-  const [customerReference, setCustomerReference] = useState('');
+  const [provider, setProvider] =
+    useState<Provider>('DSTV');
+
+  const [customerReference, setCustomerReference] =
+    useState('');
+
   const [phone, setPhone] = useState('');
 
   const [plans, setPlans] = useState<TVPlan[]>([]);
+
   const [selectedPlan, setSelectedPlan] =
     useState<TVPlan | null>(null);
 
   const [verification, setVerification] =
     useState<VerificationResult | null>(null);
 
-  const [loadingPlans, setLoadingPlans] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [buying, setBuying] = useState(false);
+  const [loadingPlans, setLoadingPlans] =
+    useState(false);
+
+  const [verifying, setVerifying] =
+    useState(false);
+
+  const [buying, setBuying] =
+    useState(false);
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const [pinDialogOpen, setPinDialogOpen] = useState(false);
-  const [transactionPin, setTransactionPin] = useState('');
+  const [pinDialogOpen, setPinDialogOpen] =
+    useState(false);
+
+  const [transactionPin, setTransactionPin] =
+    useState('');
 
   const [subscriptionType, setSubscriptionType] =
     useState<'renew' | 'change'>('renew');
 
   const [quantity, setQuantity] = useState(1);
 
-  const token = useMemo(() => getToken(), []);
+  const token = useMemo(
+    () => getToken(),
+    []
+  );
+
+  const selectedProvider = getProvider(provider);
 
   useEffect(() => {
     loadPlans(provider);
   }, [provider]);
 
-  async function loadPlans(selectedProvider: Provider) {
+  async function loadPlans(
+    selectedProvider: Provider
+  ) {
     setLoadingPlans(true);
     setError('');
     setPlans([]);
@@ -168,7 +197,9 @@ export default function TVSubscription() {
         [];
 
       if (!Array.isArray(receivedPlans)) {
-        throw new Error('No TV plans were returned.');
+        throw new Error(
+          'No TV plans were returned.'
+        );
       }
 
       const normalizedPlans: TVPlan[] =
@@ -178,20 +209,25 @@ export default function TVSubscription() {
               plan?.variation_code ||
               plan?.variationCode ||
               '',
+
             name:
               plan?.name ||
               plan?.variation_name ||
               plan?.description ||
               'TV Subscription',
+
             amount: normalizeAmount(
               plan?.amount ??
                 plan?.variation_amount ??
                 plan?.price
             ),
+
             fixedPrice: plan?.fixedPrice,
+
             serviceID:
               plan?.serviceID ||
               plan?.service_id,
+
             provider: selectedProvider,
           }))
           .filter(
@@ -324,7 +360,9 @@ export default function TVSubscription() {
     }
 
     if (!selectedPlan) {
-      setError('Please select a subscription plan.');
+      setError(
+        'Please select a subscription plan.'
+      );
       return;
     }
 
@@ -345,12 +383,19 @@ export default function TVSubscription() {
             provider,
             billersCode:
               customerReference.trim(),
+
             variationCode:
               selectedPlan.variation_code,
-            amount: selectedPlan.amount,
-            phone: phone.trim(),
+
+            amount:
+              selectedPlan.amount,
+
+            phone:
+              phone.trim(),
+
             subscriptionType,
             quantity,
+
             transaction_pin:
               transactionPin,
           }),
@@ -373,7 +418,8 @@ export default function TVSubscription() {
       if (
         response.status === 202 ||
         data?.status === 'pending' ||
-        data?.transaction?.status === 'pending'
+        data?.transaction?.status ===
+          'pending'
       ) {
         setSuccess(
           data?.message ||
@@ -418,7 +464,9 @@ export default function TVSubscription() {
       >
         <Button
           startIcon={<ArrowBack />}
-          onClick={() => navigate('/dashboard')}
+          onClick={() =>
+            navigate('/dashboard')
+          }
           sx={{
             mb: 2,
             color: GREEN,
@@ -438,9 +486,12 @@ export default function TVSubscription() {
             overflow: 'hidden',
           }}
         >
+          {/* HEADER */}
+
           <Box
             sx={{
-              background: `linear-gradient(135deg, ${DARK_GREEN}, ${GREEN})`,
+              background:
+                `linear-gradient(135deg, ${DARK_GREEN}, ${GREEN})`,
               color: '#fff',
               p: { xs: 3, md: 4 },
             }}
@@ -452,16 +503,36 @@ export default function TVSubscription() {
             >
               <Box
                 sx={{
-                  width: 54,
-                  height: 54,
+                  width: 70,
+                  height: 70,
                   borderRadius: 3,
-                  background: 'rgba(255,255,255,0.15)',
+                  background:
+                    'rgba(255,255,255,0.15)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  p: 1,
                 }}
               >
-                <Tv sx={{ fontSize: 32 }} />
+                {selectedProvider && (
+                  <Box
+                    component="img"
+                    src={selectedProvider.logo}
+                    alt={`${selectedProvider.label} logo`}
+                    sx={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                      background: '#fff',
+                      borderRadius: 2,
+                      p: 0.5,
+                    }}
+                    onError={(event) => {
+                      event.currentTarget.style.display =
+                        'none';
+                    }}
+                  />
+                )}
               </Box>
 
               <Box>
@@ -501,7 +572,9 @@ export default function TVSubscription() {
               {error && (
                 <Alert
                   severity="error"
-                  onClose={() => setError('')}
+                  onClose={() =>
+                    setError('')
+                  }
                   sx={{
                     borderRadius: 2,
                   }}
@@ -513,7 +586,9 @@ export default function TVSubscription() {
               {success && (
                 <Alert
                   severity="success"
-                  onClose={() => setSuccess('')}
+                  onClose={() =>
+                    setSuccess('')
+                  }
                   icon={<CheckCircle />}
                   sx={{
                     borderRadius: 2,
@@ -525,42 +600,119 @@ export default function TVSubscription() {
 
               {/* PROVIDER */}
 
-              <TextField
-                select
-                fullWidth
-                label="TV Provider"
-                value={provider}
-                onChange={(event) => {
-                  setProvider(
-                    event.target.value as Provider
-                  );
-                  setCustomerReference('');
-                  setVerification(null);
-                  setSelectedPlan(null);
-                  setSuccess('');
-                  setError('');
-                }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 3,
-                    '&.Mui-focused fieldset': {
-                      borderColor: GREEN,
+              <Box>
+                <Typography
+                  fontWeight={800}
+                  sx={{
+                    mb: 1.2,
+                    color: '#18352a',
+                  }}
+                >
+                  TV Provider
+                </Typography>
+
+                <TextField
+                  select
+                  fullWidth
+                  value={provider}
+                  onChange={(event) => {
+                    setProvider(
+                      event.target.value as Provider
+                    );
+
+                    setCustomerReference('');
+                    setVerification(null);
+                    setSelectedPlan(null);
+                    setSuccess('');
+                    setError('');
+                  }}
+                  SelectProps={{
+                    renderValue: (
+                      selected
+                    ) => {
+                      const item =
+                        getProvider(
+                          selected as Provider
+                        );
+
+                      if (!item) {
+                        return '';
+                      }
+
+                      return (
+                        <Stack
+                          direction="row"
+                          spacing={1.5}
+                          alignItems="center"
+                        >
+                          <Box
+                            component="img"
+                            src={item.logo}
+                            alt={`${item.label} logo`}
+                            sx={{
+                              width: 46,
+                              height: 30,
+                              objectFit: 'contain',
+                              borderRadius: 1,
+                            }}
+                          />
+
+                          <Typography
+                            fontWeight={700}
+                          >
+                            {item.label}
+                          </Typography>
+                        </Stack>
+                      );
                     },
-                  },
-                  '& .MuiInputLabel-root.Mui-focused': {
-                    color: GREEN,
-                  },
-                }}
-              >
-                {PROVIDERS.map((item) => (
-                  <MenuItem
-                    key={item.value}
-                    value={item.value}
-                  >
-                    {item.label}
-                  </MenuItem>
-                ))}
-              </TextField>
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 3,
+                      '&.Mui-focused fieldset': {
+                        borderColor: GREEN,
+                      },
+                    },
+
+                    '& .MuiInputLabel-root.Mui-focused':
+                      {
+                        color: GREEN,
+                      },
+                  }}
+                >
+                  {PROVIDERS.map(
+                    (item) => (
+                      <MenuItem
+                        key={item.value}
+                        value={item.value}
+                      >
+                        <Stack
+                          direction="row"
+                          spacing={1.5}
+                          alignItems="center"
+                        >
+                          <Box
+                            component="img"
+                            src={item.logo}
+                            alt={`${item.label} logo`}
+                            sx={{
+                              width: 55,
+                              height: 35,
+                              objectFit: 'contain',
+                            }}
+                          />
+
+                          <Typography
+                            fontWeight={700}
+                          >
+                            {item.label}
+                          </Typography>
+                        </Stack>
+                      </MenuItem>
+                    )
+                  )}
+                </TextField>
+              </Box>
 
               {/* CUSTOMER NUMBER */}
 
@@ -580,6 +732,7 @@ export default function TVSubscription() {
                         ''
                       )
                     );
+
                     setVerification(null);
                     setSuccess('');
                   }}
@@ -590,13 +743,16 @@ export default function TVSubscription() {
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       borderRadius: 3,
+
                       '&.Mui-focused fieldset': {
                         borderColor: GREEN,
                       },
                     },
-                    '& .MuiInputLabel-root.Mui-focused': {
-                      color: GREEN,
-                    },
+
+                    '& .MuiInputLabel-root.Mui-focused':
+                      {
+                        color: GREEN,
+                      },
                   }}
                 />
 
@@ -624,9 +780,11 @@ export default function TVSubscription() {
                     borderRadius: 2.5,
                     textTransform: 'none',
                     fontWeight: 700,
+
                     '&:hover': {
                       borderColor: DARK_GREEN,
-                      background: LIGHT_GREEN,
+                      background:
+                        LIGHT_GREEN,
                     },
                   }}
                 >
@@ -643,7 +801,8 @@ export default function TVSubscription() {
                   elevation={0}
                   sx={{
                     background: LIGHT_GREEN,
-                    border: '1px solid #cce8d8',
+                    border:
+                      '1px solid #cce8d8',
                     borderRadius: 3,
                   }}
                 >
@@ -671,7 +830,9 @@ export default function TVSubscription() {
                       <Divider />
 
                       <Typography>
-                        <strong>Customer:</strong>{' '}
+                        <strong>
+                          Customer:
+                        </strong>{' '}
                         {verification.customerName ||
                           verification.customer_name ||
                           'Verified customer'}
@@ -680,7 +841,9 @@ export default function TVSubscription() {
                       {(verification.currentBouquet ||
                         verification.current_bouquet) && (
                         <Typography>
-                          <strong>Current package:</strong>{' '}
+                          <strong>
+                            Current package:
+                          </strong>{' '}
                           {verification.currentBouquet ||
                             verification.current_bouquet}
                         </Typography>
@@ -689,7 +852,9 @@ export default function TVSubscription() {
                       {(verification.dueDate ||
                         verification.due_date) && (
                         <Typography>
-                          <strong>Due date:</strong>{' '}
+                          <strong>
+                            Due date:
+                          </strong>{' '}
                           {verification.dueDate ||
                             verification.due_date}
                         </Typography>
@@ -698,7 +863,9 @@ export default function TVSubscription() {
                       {(verification.renewalAmount ||
                         verification.renewal_amount) && (
                         <Typography>
-                          <strong>Renewal amount:</strong>{' '}
+                          <strong>
+                            Renewal amount:
+                          </strong>{' '}
                           {formatNaira(
                             normalizeAmount(
                               verification.renewalAmount ??
@@ -718,7 +885,9 @@ export default function TVSubscription() {
                 <Typography
                   variant="h6"
                   fontWeight={800}
-                  sx={{ mb: 1.5 }}
+                  sx={{
+                    mb: 1.5,
+                  }}
                 >
                   Subscription Plans
                 </Typography>
@@ -730,24 +899,28 @@ export default function TVSubscription() {
                       borderRadius: 2,
                     }}
                   >
-                    Verify your TV account first to
-                    continue.
+                    Verify your TV account
+                    first to continue.
                   </Alert>
                 )}
 
-                {verification && loadingPlans && (
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'center',
-                      py: 4,
-                    }}
-                  >
-                    <CircularProgress
-                      sx={{ color: GREEN }}
-                    />
-                  </Box>
-                )}
+                {verification &&
+                  loadingPlans && (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent:
+                          'center',
+                        py: 4,
+                      }}
+                    >
+                      <CircularProgress
+                        sx={{
+                          color: GREEN,
+                        }}
+                      />
+                    </Box>
+                  )}
 
                 {verification &&
                   !loadingPlans &&
@@ -758,9 +931,9 @@ export default function TVSubscription() {
                         borderRadius: 2,
                       }}
                     >
-                      No subscription plans are
-                      currently available for this
-                      provider.
+                      No subscription plans
+                      are currently available
+                      for this provider.
                     </Alert>
                   )}
 
@@ -778,240 +951,297 @@ export default function TVSubscription() {
                         gap: 1.5,
                       }}
                     >
-                      {plans.map((plan) => {
-                        const selected =
-                          selectedPlan?.variation_code ===
-                          plan.variation_code;
+                      {plans.map(
+                        (plan) => {
+                          const selected =
+                            selectedPlan?.variation_code ===
+                            plan.variation_code;
 
-                        return (
-                          <Card
-                            key={
-                              plan.variation_code
-                            }
-                            onClick={() =>
-                              setSelectedPlan(plan)
-                            }
-                            elevation={0}
-                            sx={{
-                              cursor: 'pointer',
-                              borderRadius: 3,
-                              border: selected
-                                ? `2px solid ${GREEN}`
-                                : '1px solid #dce7e1',
-                              background: selected
-                                ? LIGHT_GREEN
-                                : '#fff',
-                              transition:
-                                '0.2s ease',
-                              '&:hover': {
-                                borderColor: GREEN,
-                                transform:
-                                  'translateY(-2px)',
-                              },
-                            }}
-                          >
-                            <CardContent>
-                              <Typography
-                                fontWeight={800}
-                                sx={{
-                                  color: DARK_GREEN,
-                                  mb: 1,
-                                }}
-                              >
-                                {plan.name}
-                              </Typography>
+                          return (
+                            <Card
+                              key={
+                                plan.variation_code
+                              }
+                              onClick={() =>
+                                setSelectedPlan(
+                                  plan
+                                )
+                              }
+                              elevation={0}
+                              sx={{
+                                cursor:
+                                  'pointer',
+                                borderRadius: 3,
 
-                              <Typography
-                                variant="h6"
-                                fontWeight={900}
-                                sx={{
-                                  color: GREEN,
-                                }}
-                              >
-                                {formatNaira(
-                                  plan.amount
-                                )}
-                              </Typography>
+                                border:
+                                  selected
+                                    ? `2px solid ${GREEN}`
+                                    : '1px solid #dce7e1',
 
-                              {selected && (
+                                background:
+                                  selected
+                                    ? LIGHT_GREEN
+                                    : '#fff',
+
+                                transition:
+                                  '0.2s ease',
+
+                                '&:hover': {
+                                  borderColor:
+                                    GREEN,
+                                  transform:
+                                    'translateY(-2px)',
+                                },
+                              }}
+                            >
+                              <CardContent>
                                 <Typography
-                                  variant="body2"
+                                  fontWeight={
+                                    800
+                                  }
                                   sx={{
-                                    mt: 1,
-                                    color: GREEN,
-                                    fontWeight: 700,
+                                    color:
+                                      DARK_GREEN,
+                                    mb: 1,
                                   }}
                                 >
-                                  ✓ Selected
+                                  {
+                                    plan.name
+                                  }
                                 </Typography>
-                              )}
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
+
+                                <Typography
+                                  variant="h6"
+                                  fontWeight={
+                                    900
+                                  }
+                                  sx={{
+                                    color:
+                                      GREEN,
+                                  }}
+                                >
+                                  {formatNaira(
+                                    plan.amount
+                                  )}
+                                </Typography>
+
+                                {selected && (
+                                  <Typography
+                                    variant="body2"
+                                    sx={{
+                                      mt: 1,
+                                      color:
+                                        GREEN,
+                                      fontWeight:
+                                        700,
+                                    }}
+                                  >
+                                    ✓ Selected
+                                  </Typography>
+                                )}
+                              </CardContent>
+                            </Card>
+                          );
+                        }
+                      )}
                     </Box>
                   )}
               </Box>
 
               {/* SUBSCRIPTION OPTIONS */}
 
-              {verification && selectedPlan && (
-                <>
-                  <TextField
-                    select
-                    fullWidth
-                    label="Subscription Type"
-                    value={subscriptionType}
-                    onChange={(event) =>
-                      setSubscriptionType(
-                        event.target.value as
-                          | 'renew'
-                          | 'change'
-                      )
-                    }
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: GREEN,
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: GREEN,
-                      },
-                    }}
-                  >
-                    <MenuItem value="renew">
-                      Renew Subscription
-                    </MenuItem>
+              {verification &&
+                selectedPlan && (
+                  <>
+                    <TextField
+                      select
+                      fullWidth
+                      label="Subscription Type"
+                      value={
+                        subscriptionType
+                      }
+                      onChange={(event) =>
+                        setSubscriptionType(
+                          event.target
+                            .value as
+                            | 'renew'
+                            | 'change'
+                        )
+                      }
+                      sx={{
+                        '& .MuiOutlinedInput-root':
+                          {
+                            borderRadius: 3,
 
-                    <MenuItem value="change">
-                      Change Package
-                    </MenuItem>
-                  </TextField>
+                            '&.Mui-focused fieldset':
+                              {
+                                borderColor:
+                                  GREEN,
+                              },
+                          },
 
-                  <TextField
-                    select
-                    fullWidth
-                    label="Quantity"
-                    value={quantity}
-                    onChange={(event) =>
-                      setQuantity(
-                        Number(event.target.value)
-                      )
-                    }
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: GREEN,
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: GREEN,
-                      },
-                    }}
-                  >
-                    {[1, 2, 3, 4, 5].map(
-                      (number) => (
-                        <MenuItem
-                          key={number}
-                          value={number}
-                        >
-                          {number}{' '}
-                          {number === 1
-                            ? 'Month'
-                            : 'Months'}
-                        </MenuItem>
-                      )
-                    )}
-                  </TextField>
-
-                  <TextField
-                    fullWidth
-                    label="Phone Number"
-                    value={phone}
-                    onChange={(event) =>
-                      setPhone(event.target.value)
-                    }
-                    placeholder="08012345678"
-                    inputProps={{
-                      inputMode: 'tel',
-                    }}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 3,
-                        '&.Mui-focused fieldset': {
-                          borderColor: GREEN,
-                        },
-                      },
-                      '& .MuiInputLabel-root.Mui-focused': {
-                        color: GREEN,
-                      },
-                    }}
-                  />
-
-                  {/* TOTAL */}
-
-                  <Card
-                    elevation={0}
-                    sx={{
-                      background: '#f7faf8',
-                      border:
-                        '1px solid #dce7e1',
-                      borderRadius: 3,
-                    }}
-                  >
-                    <CardContent>
-                      <Stack
-                        direction="row"
-                        justifyContent="space-between"
-                        alignItems="center"
-                      >
-                        <Typography
-                          fontWeight={700}
-                        >
-                          Total
-                        </Typography>
-
-                        <Typography
-                          variant="h5"
-                          fontWeight={900}
-                          sx={{
+                        '& .MuiInputLabel-root.Mui-focused':
+                          {
                             color: GREEN,
-                          }}
-                        >
-                          {formatNaira(
-                            totalAmount
-                          )}
-                        </Typography>
-                      </Stack>
-                    </CardContent>
-                  </Card>
+                          },
+                      }}
+                    >
+                      <MenuItem value="renew">
+                        Renew Subscription
+                      </MenuItem>
 
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    size="large"
-                    startIcon={<Lock />}
-                    onClick={openPinDialog}
-                    disabled={buying}
-                    sx={{
-                      py: 1.6,
-                      borderRadius: 3,
-                      background: GREEN,
-                      textTransform: 'none',
-                      fontSize: '1rem',
-                      fontWeight: 800,
-                      '&:hover': {
-                        background: DARK_GREEN,
-                      },
-                    }}
-                  >
-                    Continue to Payment
-                  </Button>
-                </>
-              )}
+                      <MenuItem value="change">
+                        Change Package
+                      </MenuItem>
+                    </TextField>
+
+                    <TextField
+                      select
+                      fullWidth
+                      label="Quantity"
+                      value={quantity}
+                      onChange={(event) =>
+                        setQuantity(
+                          Number(
+                            event.target
+                              .value
+                          )
+                        )
+                      }
+                      sx={{
+                        '& .MuiOutlinedInput-root':
+                          {
+                            borderRadius: 3,
+
+                            '&.Mui-focused fieldset':
+                              {
+                                borderColor:
+                                  GREEN,
+                              },
+                          },
+
+                        '& .MuiInputLabel-root.Mui-focused':
+                          {
+                            color: GREEN,
+                          },
+                      }}
+                    >
+                      {[1, 2, 3, 4, 5].map(
+                        (number) => (
+                          <MenuItem
+                            key={number}
+                            value={number}
+                          >
+                            {number}{' '}
+                            {number === 1
+                              ? 'Month'
+                              : 'Months'}
+                          </MenuItem>
+                        )
+                      )}
+                    </TextField>
+
+                    <TextField
+                      fullWidth
+                      label="Phone Number"
+                      value={phone}
+                      onChange={(event) =>
+                        setPhone(
+                          event.target.value
+                        )
+                      }
+                      placeholder="08012345678"
+                      inputProps={{
+                        inputMode: 'tel',
+                      }}
+                      sx={{
+                        '& .MuiOutlinedInput-root':
+                          {
+                            borderRadius: 3,
+
+                            '&.Mui-focused fieldset':
+                              {
+                                borderColor:
+                                  GREEN,
+                              },
+                          },
+
+                        '& .MuiInputLabel-root.Mui-focused':
+                          {
+                            color: GREEN,
+                          },
+                      }}
+                    />
+
+                    <Card
+                      elevation={0}
+                      sx={{
+                        background:
+                          '#f7faf8',
+                        border:
+                          '1px solid #dce7e1',
+                        borderRadius: 3,
+                      }}
+                    >
+                      <CardContent>
+                        <Stack
+                          direction="row"
+                          justifyContent="space-between"
+                          alignItems="center"
+                        >
+                          <Typography
+                            fontWeight={700}
+                          >
+                            Total
+                          </Typography>
+
+                          <Typography
+                            variant="h5"
+                            fontWeight={900}
+                            sx={{
+                              color: GREEN,
+                            }}
+                          >
+                            {formatNaira(
+                              totalAmount
+                            )}
+                          </Typography>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      size="large"
+                      startIcon={
+                        <Lock />
+                      }
+                      onClick={
+                        openPinDialog
+                      }
+                      disabled={buying}
+                      sx={{
+                        py: 1.6,
+                        borderRadius: 3,
+                        background:
+                          GREEN,
+                        textTransform:
+                          'none',
+                        fontSize:
+                          '1rem',
+                        fontWeight: 800,
+
+                        '&:hover': {
+                          background:
+                            DARK_GREEN,
+                        },
+                      }}
+                    >
+                      Continue to Payment
+                    </Button>
+                  </>
+                )}
             </Stack>
           </CardContent>
         </Card>
@@ -1038,15 +1268,19 @@ export default function TVSubscription() {
         </DialogTitle>
 
         <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
+          <Stack
+            spacing={2}
+            sx={{ pt: 1 }}
+          >
             <Alert
               severity="info"
               sx={{
                 borderRadius: 2,
               }}
             >
-              Enter your 4-digit Transaction PIN
-              to authorize this payment.
+              Enter your 4-digit
+              Transaction PIN to
+              authorize this payment.
             </Alert>
 
             <Typography
@@ -1055,7 +1289,9 @@ export default function TVSubscription() {
             >
               Amount:{' '}
               <strong>
-                {formatNaira(totalAmount)}
+                {formatNaira(
+                  totalAmount
+                )}
               </strong>
             </Typography>
 
@@ -1072,26 +1308,38 @@ export default function TVSubscription() {
                     ''
                   );
 
-                if (value.length <= 4) {
-                  setTransactionPin(value);
+                if (
+                  value.length <= 4
+                ) {
+                  setTransactionPin(
+                    value
+                  );
                 }
               }}
               inputProps={{
-                inputMode: 'numeric',
+                inputMode:
+                  'numeric',
                 maxLength: 4,
-                autoComplete: 'off',
+                autoComplete:
+                  'off',
               }}
               disabled={buying}
               sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 3,
-                  '&.Mui-focused fieldset': {
-                    borderColor: GREEN,
+                '& .MuiOutlinedInput-root':
+                  {
+                    borderRadius: 3,
+
+                    '&.Mui-focused fieldset':
+                      {
+                        borderColor:
+                          GREEN,
+                      },
                   },
-                },
-                '& .MuiInputLabel-root.Mui-focused': {
-                  color: GREEN,
-                },
+
+                '& .MuiInputLabel-root.Mui-focused':
+                  {
+                    color: GREEN,
+                  },
               }}
             />
           </Stack>
@@ -1105,12 +1353,15 @@ export default function TVSubscription() {
         >
           <Button
             onClick={() =>
-              setPinDialogOpen(false)
+              setPinDialogOpen(
+                false
+              )
             }
             disabled={buying}
             sx={{
               color: GREEN,
-              textTransform: 'none',
+              textTransform:
+                'none',
               fontWeight: 700,
             }}
           >
@@ -1119,10 +1370,13 @@ export default function TVSubscription() {
 
           <Button
             variant="contained"
-            onClick={purchaseSubscription}
+            onClick={
+              purchaseSubscription
+            }
             disabled={
               buying ||
-              transactionPin.length !== 4
+              transactionPin.length !==
+                4
             }
             startIcon={
               buying ? (
@@ -1137,10 +1391,13 @@ export default function TVSubscription() {
             sx={{
               background: GREEN,
               borderRadius: 2.5,
-              textTransform: 'none',
+              textTransform:
+                'none',
               fontWeight: 800,
+
               '&:hover': {
-                background: DARK_GREEN,
+                background:
+                  DARK_GREEN,
               },
             }}
           >
