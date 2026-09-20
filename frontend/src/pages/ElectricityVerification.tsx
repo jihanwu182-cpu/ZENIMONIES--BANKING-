@@ -4,268 +4,208 @@ import { useNavigate } from 'react-router-dom';
 type VerificationData = {
   provider_code: string;
   provider_name: string;
-  provider_short_name: string;
-  provider_logo: string;
+  shortName: string;
+  logo: string;
   meter_type: 'prepaid' | 'postpaid';
   meter_number: string;
   customer_name: string;
-  address: string;
+  address?: string;
   amount: number;
   currency: string;
   verified: boolean;
-  verified_at: string;
 };
 
-const formatNaira = (amount: number) => {
-  return `₦${Number(amount).toLocaleString(
-    'en-NG'
-  )}`;
-};
+const ElectricityVerification: React.FC = () => {
+  const navigate = useNavigate();
 
-const ElectricityVerification: React.FC =
-  () => {
-    const navigate = useNavigate();
+  const [data, setData] = useState<VerificationData | null>(null);
 
-    const [data, setData] =
-      useState<VerificationData | null>(
-        null
-      );
+  useEffect(() => {
+    const saved = localStorage.getItem(
+      'zenimonies_electricity_verification'
+    );
 
-    useEffect(() => {
-      const saved =
-        localStorage.getItem(
-          'zenimonies_electricity_verification'
-        );
+    if (!saved) {
+      navigate('/electricity');
+      return;
+    }
 
-      if (!saved) {
-        navigate('/electricity', {
-          replace: true,
-        });
+    try {
+      const parsed = JSON.parse(saved);
+
+      if (!parsed.verified) {
+        navigate('/electricity');
         return;
       }
 
-      try {
-        const parsed =
-          JSON.parse(saved);
-
-        if (!parsed?.verified) {
-          navigate('/electricity', {
-            replace: true,
-          });
-          return;
-        }
-
-        setData(parsed);
-      } catch (error) {
-        console.error(
-          'Unable to read electricity verification:',
-          error
-        );
-
-        navigate('/electricity', {
-          replace: true,
-        });
-      }
-    }, [navigate]);
-
-    if (!data) {
-      return (
-        <div
-          style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#f7f9f8',
-            color: '#374151',
-            fontFamily:
-              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
-          }}
-        >
-          Loading verification...
-        </div>
-      );
+      setData(parsed);
+    } catch (error) {
+      console.error('Invalid verification data:', error);
+      navigate('/electricity');
     }
+  }, [navigate]);
 
+  if (!data) {
     return (
       <div
         style={{
           minHeight: '100vh',
-          background: '#f7f9f8',
-          color: '#111827',
-          fontFamily:
-            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#f6f8f7',
         }}
       >
-        {/* HEADER */}
+        Loading...
+      </div>
+    );
+  }
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: data.currency || 'NGN',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: '#f6f8f7',
+        paddingBottom: 40,
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          background: '#ffffff',
+          padding: '18px',
+          display: 'flex',
+          alignItems: 'center',
+          borderBottom: '1px solid #eeeeee',
+        }}
+      >
+        <button
+          onClick={() => navigate('/electricity')}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            fontSize: 26,
+            cursor: 'pointer',
+            marginRight: 12,
+          }}
+        >
+          ←
+        </button>
+
+        <h2
+          style={{
+            margin: 0,
+            fontSize: 20,
+            fontWeight: 700,
+          }}
+        >
+          Electricity Verification
+        </h2>
+      </div>
+
+      <div style={{ padding: 16 }}>
+        {/* Success message */}
         <div
           style={{
-            background: '#ffffff',
-            borderBottom:
-              '1px solid #e5e7eb',
+            background: '#e9f8f1',
+            border: '1px solid #a8dfc5',
+            borderRadius: 16,
+            padding: 20,
+            textAlign: 'center',
+            marginBottom: 16,
           }}
         >
           <div
             style={{
-              maxWidth: 620,
-              margin: '0 auto',
-              height: 64,
-              padding: '0 18px',
+              width: 60,
+              height: 60,
+              borderRadius: '50%',
+              background: '#087f5b',
+              color: '#ffffff',
               display: 'flex',
               alignItems: 'center',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() =>
-                navigate('/electricity')
-              }
-              style={{
-                width: 42,
-                height: 42,
-                border: 'none',
-                background:
-                  'transparent',
-                fontSize: 28,
-                color: '#111827',
-                cursor: 'pointer',
-              }}
-            >
-              ‹
-            </button>
-
-            <h1
-              style={{
-                flex: 1,
-                margin: 0,
-                textAlign: 'center',
-                paddingRight: 42,
-                fontSize: 19,
-                fontWeight: 800,
-              }}
-            >
-              Verify Account
-            </h1>
-          </div>
-        </div>
-
-        <div
-          style={{
-            maxWidth: 620,
-            margin: '0 auto',
-            padding:
-              '28px 18px 40px',
-          }}
-        >
-          {/* SUCCESS ICON */}
-
-          <div
-            style={{
-              width: 72,
-              height: 72,
-              margin:
-                '0 auto 18px',
-              borderRadius:
-                '50%',
-              background:
-                '#dcfce7',
-              color: '#159447',
-              display: 'flex',
-              alignItems:
-                'center',
-              justifyContent:
-                'center',
-              fontSize: 36,
-              fontWeight: 900,
+              justifyContent: 'center',
+              fontSize: 32,
+              margin: '0 auto 12px',
             }}
           >
             ✓
           </div>
 
-          <h2
+          <div
             style={{
-              margin:
-                '0 0 8px',
-              textAlign: 'center',
-              fontSize: 23,
+              fontSize: 20,
               fontWeight: 800,
+              color: '#087f5b',
             }}
           >
-            Electricity Account
-            Verified
-          </h2>
-
-          <p
-            style={{
-              margin:
-                '0 auto 25px',
-              maxWidth: 440,
-              textAlign: 'center',
-              color: '#6b7280',
-              fontSize: 14,
-              lineHeight: 1.5,
-            }}
-          >
-            Please confirm that
-            the account details
-            below belong to you
-            before continuing.
-          </p>
-
-          {/* PROVIDER */}
+            Electricity Account Verified
+          </div>
 
           <div
             style={{
-              background:
-                '#ffffff',
-              border:
-                '1px solid #e5e7eb',
-              borderRadius: 18,
-              padding: 16,
-              marginBottom: 14,
+              marginTop: 7,
+              color: '#4f635b',
+              fontSize: 14,
+            }}
+          >
+            Please review the details before making payment.
+          </div>
+        </div>
+
+        {/* Provider */}
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            padding: 18,
+            marginBottom: 16,
+          }}
+        >
+          <div
+            style={{
+              color: '#777',
+              fontSize: 12,
+              fontWeight: 700,
+              marginBottom: 12,
+            }}
+          >
+            SERVICE PROVIDER
+          </div>
+
+          <div
+            style={{
               display: 'flex',
-              alignItems:
-                'center',
+              alignItems: 'center',
               gap: 14,
             }}
           >
-            <div
+            <img
+              src={data.logo}
+              alt={data.provider_name}
               style={{
-                width: 56,
-                height: 56,
-                borderRadius: 14,
-                overflow: 'hidden',
-                border:
-                  '1px solid #e5e7eb',
-                background:
-                  '#ffffff',
-                display: 'flex',
-                alignItems:
-                  'center',
-                justifyContent:
-                  'center',
-                flexShrink: 0,
+                width: 58,
+                height: 58,
+                objectFit: 'contain',
+                borderRadius: 10,
               }}
-            >
-              <img
-                src={
-                  data.provider_logo
-                }
-                alt={`${data.provider_name} logo`}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit:
-                    'contain',
-                }}
-              />
-            </div>
+              onError={(event) => {
+                event.currentTarget.style.display = 'none';
+              }}
+            />
 
             <div>
               <div
                 style={{
-                  fontSize: 16,
+                  fontSize: 18,
                   fontWeight: 800,
                 }}
               >
@@ -274,210 +214,210 @@ const ElectricityVerification: React.FC =
 
               <div
                 style={{
-                  marginTop: 3,
+                  marginTop: 4,
                   color: '#6b7280',
-                  fontSize: 13,
+                  fontWeight: 600,
                 }}
               >
-                {data.provider_short_name}
+                {data.shortName}
               </div>
             </div>
           </div>
+        </div>
 
-          {/* ACCOUNT DETAILS */}
-
+        {/* Customer details */}
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: 16,
+            overflow: 'hidden',
+            marginBottom: 16,
+          }}
+        >
           <div
             style={{
-              background:
-                '#ffffff',
-              border:
-                '1px solid #e5e7eb',
-              borderRadius: 18,
-              overflow: 'hidden',
-              marginBottom: 14,
-            }}
-          >
-            <DetailRow
-              label="Customer Name"
-              value={
-                data.customer_name ||
-                'Not provided'
-              }
-            />
-
-            <DetailRow
-              label={
-                data.meter_type ===
-                'prepaid'
-                  ? 'Meter Number'
-                  : 'Meter / Account Number'
-              }
-              value={
-                data.meter_number
-              }
-            />
-
-            <DetailRow
-              label="Meter Type"
-              value={
-                data.meter_type ===
-                'prepaid'
-                  ? 'Prepaid'
-                  : 'Postpaid'
-              }
-            />
-
-            {data.address ? (
-              <DetailRow
-                label="Address"
-                value={
-                  data.address
-                }
-                last
-              />
-            ) : null}
-          </div>
-
-          {/* AMOUNT */}
-
-          <div
-            style={{
-              background:
-                '#ecfdf3',
-              border:
-                '1px solid #bbf7d0',
-              borderRadius: 18,
-              padding: 18,
-              marginBottom: 20,
-              display: 'flex',
-              alignItems:
-                'center',
-              justifyContent:
-                'space-between',
+              padding: '18px 16px',
+              borderBottom: '1px solid #eeeeee',
             }}
           >
             <div
               style={{
-                color: '#166534',
+                color: '#697386',
                 fontSize: 14,
                 fontWeight: 700,
+                marginBottom: 10,
               }}
             >
-              Payment Amount
+              Customer Name
             </div>
 
             <div
               style={{
-                color: '#15803d',
                 fontSize: 22,
-                fontWeight: 900,
+                fontWeight: 800,
               }}
             >
-              {formatNaira(
-                data.amount
-              )}
+              {data.customer_name}
             </div>
           </div>
 
-          {/* CONFIRM */}
-
-          <button
-            type="button"
-            onClick={() => {
-              // We are NOT making a payment yet.
-              // This only moves the verified
-              // account data to the next stage.
-              navigate(
-                '/electricity/payment-confirmation'
-              );
-            }}
+          <div
             style={{
-              width: '100%',
-              height: 56,
-              border: 'none',
-              borderRadius: 15,
-              background: '#159447',
-              color: '#ffffff',
-              fontSize: 16,
-              fontWeight: 800,
-              cursor: 'pointer',
-              boxShadow:
-                '0 8px 20px rgba(21,148,71,0.20)',
+              padding: '18px 16px',
+              borderBottom: '1px solid #eeeeee',
             }}
           >
-            Confirm & Continue
-          </button>
+            <div
+              style={{
+                color: '#697386',
+                fontSize: 14,
+                fontWeight: 700,
+                marginBottom: 10,
+              }}
+            >
+              {data.meter_type === 'prepaid'
+                ? 'Meter Number'
+                : 'Meter / Account Number'}
+            </div>
 
-          <button
-            type="button"
-            onClick={() =>
-              navigate('/electricity')
-            }
+            <div
+              style={{
+                fontSize: 22,
+                fontWeight: 800,
+                letterSpacing: 0.5,
+              }}
+            >
+              {data.meter_number}
+            </div>
+          </div>
+
+          <div
             style={{
-              width: '100%',
-              height: 50,
-              marginTop: 10,
-              border:
-                '1px solid #d1d5db',
-              borderRadius: 14,
-              background:
-                '#ffffff',
-              color: '#374151',
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: 'pointer',
+              padding: '18px 16px',
+              borderBottom: '1px solid #eeeeee',
             }}
           >
-            Cancel
-          </button>
+            <div
+              style={{
+                color: '#697386',
+                fontSize: 14,
+                fontWeight: 700,
+                marginBottom: 10,
+              }}
+            >
+              Meter Type
+            </div>
+
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 800,
+                textTransform: 'capitalize',
+              }}
+            >
+              {data.meter_type}
+            </div>
+          </div>
+
+          {data.address && (
+            <div
+              style={{
+                padding: '18px 16px',
+              }}
+            >
+              <div
+                style={{
+                  color: '#697386',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  marginBottom: 10,
+                }}
+              >
+                Address
+              </div>
+
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 600,
+                  lineHeight: 1.5,
+                }}
+              >
+                {data.address}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-    );
-  };
 
-type DetailRowProps = {
-  label: string;
-  value: string;
-  last?: boolean;
-};
+        {/* Amount */}
+        <div
+          style={{
+            background: '#ffffff',
+            border: '1px solid #63b88f',
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 18,
+          }}
+        >
+          <div
+            style={{
+              color: '#087f5b',
+              fontSize: 15,
+              fontWeight: 700,
+            }}
+          >
+            PAYMENT AMOUNT
+          </div>
 
-const DetailRow: React.FC<
-  DetailRowProps
-> = ({
-  label,
-  value,
-  last = false,
-}) => {
-  return (
-    <div
-      style={{
-        padding: 17,
-        borderBottom: last
-          ? 'none'
-          : '1px solid #f0f0f0',
-      }}
-    >
-      <div
-        style={{
-          color: '#6b7280',
-          fontSize: 12,
-          fontWeight: 700,
-          marginBottom: 5,
-        }}
-      >
-        {label}
-      </div>
+          <div
+            style={{
+              marginTop: 8,
+              color: '#087f5b',
+              fontSize: 32,
+              fontWeight: 900,
+            }}
+          >
+            {formatCurrency(data.amount)}
+          </div>
+        </div>
 
-      <div
-        style={{
-          color: '#111827',
-          fontSize: 15,
-          fontWeight: 700,
-          lineHeight: 1.4,
-          wordBreak: 'break-word',
-        }}
-      >
-        {value}
+        {/* Confirm payment */}
+        <button
+          onClick={() =>
+            navigate('/electricity/payment-confirmation')
+          }
+          style={{
+            width: '100%',
+            border: 'none',
+            borderRadius: 16,
+            padding: '17px',
+            background: '#087f5b',
+            color: '#ffffff',
+            fontSize: 17,
+            fontWeight: 800,
+            cursor: 'pointer',
+          }}
+        >
+          Confirm Payment
+        </button>
+
+        {/* Cancel */}
+        <button
+          onClick={() => navigate('/electricity')}
+          style={{
+            width: '100%',
+            border: 'none',
+            background: 'transparent',
+            padding: '16px',
+            marginTop: 6,
+            color: '#555',
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );
