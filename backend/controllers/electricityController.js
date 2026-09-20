@@ -47,6 +47,20 @@ const isValidMeterNumber = (value) => {
 // ============================================================
 
 const purchaseElectricity = async (req, res) => {
+  console.log(
+    '========== ZENIMONIES ELECTRICITY PAYMENT START =========='
+  );
+
+  console.log(
+    'ELECTRICITY PAYMENT REQUEST:',
+    JSON.stringify({
+      provider: req.body?.provider,
+      meter_type: req.body?.meter_type,
+      amount: req.body?.amount,
+      user_id: req.user?.id || req.user?.user_id || null,
+    })
+  );
+
   let client = null;
 
   try {
