@@ -964,10 +964,9 @@ const purchaseElectricity = async (req, res) => {
             'processing',
         },
       });
-    }
+  // ========================================================
+ // UNEXPECTED PROVIDER RESPONSE
  // ========================================================
-// UNEXPECTED PROVIDER RESPONSE
-// ========================================================
 //
 // IMPORTANT:
 // Do NOT automatically refund an unrecognized provider
