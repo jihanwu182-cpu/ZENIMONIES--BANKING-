@@ -9,9 +9,8 @@ const pool = require('../config/database');
 
 const INACTIVITY_TIMEOUT_MINUTES = 5;
 
-// JWT can remain longer-lived.
-// The database session is what enforces the 5-minute
-// inactivity lock.
+// JWT remains longer-lived.
+// The database session controls the 5-minute inactivity timeout.
 const JWT_EXPIRY = '24h';
 
 
@@ -59,20 +58,18 @@ const createAuthSession = async (user) => {
   const sessionId =
     crypto.randomUUID();
 
-
   const sessionTokenHash =
     hashSessionId(sessionId);
 
 
   // ----------------------------------------------------------
-  // Store session
+  // Create database session
   // ----------------------------------------------------------
   //
-  // IMPORTANT:
+  // PostgreSQL calculates the expiry time.
   //
-  // PostgreSQL calculates the expiry time itself.
-  //
-  // This prevents a Node.js / PostgreSQL timezone mismatch.
+  // This keeps creation and validation on the same database
+  // clock and avoids Node/PostgreSQL timezone differences.
   //
   // ----------------------------------------------------------
 
@@ -92,6 +89,9 @@ const createAuthSession = async (user) => {
         CURRENT_TIMESTAMP + INTERVAL '5 minutes'
       )
       RETURNING
+        id,
+        user_id,
+        last_activity_at,
         expires_at
       `,
       [
@@ -101,8 +101,66 @@ const createAuthSession = async (user) => {
     );
 
 
+  const createdSession =
+    sessionResult.rows[0];
+
+
   const expiresAt =
-    sessionResult.rows[0]?.expires_at;
+    createdSession?.expires_at;
+
+
+  // ==========================================================
+  // SESSION CREATION DIAGNOSTICS
+  // ==========================================================
+
+  console.log(
+    '========== ZENIMONIES SESSION CREATED =========='
+  );
+
+  console.log(
+    'Session created for user:',
+    user.id
+  );
+
+  console.log(
+    'Session database ID:',
+    createdSession?.id
+  );
+
+  console.log(
+    'Session last activity:',
+    createdSession?.last_activity_at
+  );
+
+  console.log(
+    'Session expires at:',
+    expiresAt
+  );
+
+
+  const sessionClock =
+    await pool.query(
+      `
+      SELECT
+        CURRENT_TIMESTAMP AS db_now,
+        CURRENT_SETTING('TIMEZONE') AS db_timezone
+      `
+    );
+
+
+  console.log(
+    'Database current time:',
+    sessionClock.rows[0]?.db_now
+  );
+
+  console.log(
+    'Database timezone:',
+    sessionClock.rows[0]?.db_timezone
+  );
+
+  console.log(
+    '================================================='
+  );
 
 
   // ----------------------------------------------------------
@@ -135,21 +193,8 @@ const createAuthSession = async (user) => {
 // VALIDATE AND REFRESH SESSION
 // ============================================================
 //
-// Called by authentication middleware.
-//
-// Every valid authenticated request updates the session's
-// inactivity timer.
-//
-// Example:
-//
-// Request at 10:00
-// → expires at 10:05
-//
-// Request at 10:03
-// → expires at 10:08
-//
-// No request after 10:03
-// → locked at 10:08
+// Every valid authenticated request refreshes the inactivity
+// timer for another 5 minutes.
 //
 // ============================================================
 
@@ -194,6 +239,10 @@ const validateAndRefreshSession = async ({
   if (
     sessionResult.rows.length === 0
   ) {
+    console.log(
+      'ZENIMONIES SESSION CHECK: session not found'
+    );
+
     return {
       valid: false,
       reason: 'SESSION_NOT_FOUND',
@@ -210,6 +259,11 @@ const validateAndRefreshSession = async ({
   // ----------------------------------------------------------
 
   if (session.revoked_at) {
+
+    console.log(
+      'ZENIMONIES SESSION CHECK: session revoked'
+    );
+
     return {
       valid: false,
       reason: 'SESSION_REVOKED',
@@ -218,25 +272,16 @@ const validateAndRefreshSession = async ({
 
 
   // ----------------------------------------------------------
-  // Inactivity timeout
-  // ----------------------------------------------------------
-  //
-  // IMPORTANT:
-  //
-  // Compare the database timestamp against PostgreSQL's
-  // CURRENT_TIMESTAMP.
-  //
-  // We do NOT compare it against Date.now().
-  //
+  // Check expiration using PostgreSQL
   // ----------------------------------------------------------
 
   const expiryCheck =
     await pool.query(
       `
       SELECT
-        (
-          expires_at <= CURRENT_TIMESTAMP
-        ) AS expired
+        expires_at <= CURRENT_TIMESTAMP AS expired,
+        CURRENT_TIMESTAMP AS db_now,
+        CURRENT_SETTING('TIMEZONE') AS db_timezone
       FROM auth_sessions
       WHERE id = $1
       LIMIT 1
@@ -247,11 +292,66 @@ const validateAndRefreshSession = async ({
     );
 
 
-  const expired =
-    expiryCheck.rows[0]?.expired === true;
+  const expiryData =
+    expiryCheck.rows[0];
 
+
+  const expired =
+    expiryData?.expired === true;
+
+
+  // ==========================================================
+  // SESSION VALIDATION DIAGNOSTICS
+  // ==========================================================
+
+  console.log(
+    '========== ZENIMONIES SESSION CHECK =========='
+  );
+
+  console.log(
+    'User:',
+    userId
+  );
+
+  console.log(
+    'Session last activity:',
+    session.last_activity_at
+  );
+
+  console.log(
+    'Session expires at:',
+    session.expires_at
+  );
+
+  console.log(
+    'Database current time:',
+    expiryData?.db_now
+  );
+
+  console.log(
+    'Database timezone:',
+    expiryData?.db_timezone
+  );
+
+  console.log(
+    'Database says expired:',
+    expired
+  );
+
+  console.log(
+    '==============================================='
+  );
+
+
+  // ----------------------------------------------------------
+  // Session expired
+  // ----------------------------------------------------------
 
   if (expired) {
+
+    console.log(
+      'ZENIMONIES SESSION RESULT: SESSION_EXPIRED'
+    );
 
     return {
       valid: false,
@@ -262,10 +362,6 @@ const validateAndRefreshSession = async ({
 
   // ----------------------------------------------------------
   // Refresh inactivity timer
-  // ----------------------------------------------------------
-  //
-  // PostgreSQL calculates the new expiry time.
-  //
   // ----------------------------------------------------------
 
   const refreshResult =
@@ -279,7 +375,8 @@ const validateAndRefreshSession = async ({
       WHERE id = $1
         AND revoked_at IS NULL
       RETURNING
-        expires_at
+        expires_at,
+        last_activity_at
       `,
       [
         session.id,
@@ -290,6 +387,11 @@ const validateAndRefreshSession = async ({
   if (
     refreshResult.rows.length === 0
   ) {
+
+    console.log(
+      'ZENIMONIES SESSION RESULT: SESSION_INVALID'
+    );
+
     return {
       valid: false,
       reason: 'SESSION_INVALID',
@@ -297,15 +399,30 @@ const validateAndRefreshSession = async ({
   }
 
 
-  const newExpiresAt =
-    refreshResult.rows[0]?.expires_at;
+  const refreshedSession =
+    refreshResult.rows[0];
+
+
+  console.log(
+    'ZENIMONIES SESSION RESULT: SESSION_VALID'
+  );
+
+  console.log(
+    'New session last activity:',
+    refreshedSession.last_activity_at
+  );
+
+  console.log(
+    'New session expiry:',
+    refreshedSession.expires_at
+  );
 
 
   return {
     valid: true,
     sessionId,
     expiresAt:
-      newExpiresAt,
+      refreshedSession.expires_at,
   };
 };
 
