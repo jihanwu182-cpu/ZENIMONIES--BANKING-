@@ -41,6 +41,7 @@ import AccountLocked from './pages/AccountLocked.tsx';
 
 import SessionGuard from './components/SessionGuard.tsx';
 import AirtimeReconciliation from './pages/AirtimeReconciliation.tsx';
+import ElectricityReconciliation from './pages/ElectricityReconciliation.tsx';
 
 interface ServicePageProps {
   title: string;
@@ -359,6 +360,11 @@ const App: React.FC = () => {
            path="/airtime-reconciliation"
            element={<AirtimeReconciliation />}
         />
+
+          <Route
+             path="/electricity/reconciliation"
+             element={<ElectricityReconciliation />}
+          />
 
           <Route
             path="/admin"
