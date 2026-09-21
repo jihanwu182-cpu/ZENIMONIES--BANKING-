@@ -965,205 +965,70 @@ const purchaseElectricity = async (req, res) => {
         },
       });
     }
+ // ========================================================
+// UNEXPECTED PROVIDER RESPONSE
+// ========================================================
+//
+// IMPORTANT:
+// Do NOT automatically refund an unrecognized provider
+// response. We must know the provider's actual transaction
+// status before reversing customer funds.
+//
+// Sogo documents:
+// - completed = final success
+// - processing = do not retry
+// - failed = final failure
+// - refunded = funds returned by provider
+//
+// An unexpected response must therefore be investigated
+// rather than blindly refunded.
 
-    // ========================================================
-    // FINAL FAILURE / REFUND
-    // ========================================================
+console.error(
+  '========== UNEXPECTED SOGO ELECTRICITY RESPONSE =========='
+);
 
-    const failureMessage =
-      purchaseResult?.error?.message ||
-      providerMessage ||
-      'Electricity payment failed.';
+console.error(
+  'SOGO HTTP STATUS:',
+  purchaseResponse.status
+);
 
-    const refundClient =
-      await pool.connect();
+console.error(
+  'SOGO PROVIDER STATUS:',
+  providerStatus
+);
 
-    try {
-      await refundClient.query(
-        'BEGIN'
-      );
+console.error(
+  'SOGO PROVIDER REFERENCE:',
+  providerReference
+);
 
-      const lockedAccount =
-        await refundClient.query(
-          `
-            SELECT
-              balance
-            FROM accounts
-            WHERE id = $1
-            FOR UPDATE
-          `,
-          [account.id]
-        );
+console.error(
+  'SOGO FULL RESPONSE:',
+  JSON.stringify(purchaseResult)
+);
 
-      const currentBalance =
-        Number(
-          lockedAccount.rows[0]?.balance ||
-            0
-        );
+return res.status(502).json({
+  success: false,
 
-      const restoredBalance =
-        currentBalance +
-        numericAmount;
+  message:
+    'The electricity provider returned an unexpected payment status. Your payment has not been completed. Please contact Zenimonies support before trying again.',
 
-      await refundClient.query(
-        `
-          UPDATE accounts
-          SET
-            balance = $1,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2
-        `,
-        [
-          restoredBalance,
-          account.id,
-        ]
-      );
+  data: {
+    reference,
 
-      await refundClient.query(
-        `
-          UPDATE bill_payments
-          SET
-            status = 'refunded',
-            provider_reference = $1,
-            provider_response = $2,
-            provider_response_message = $3,
-            failure_reason = $3,
-            completed_at = CURRENT_TIMESTAMP
-          WHERE id = $4
-        `,
-        [
-          providerReference,
-          purchaseResult,
-          failureMessage,
-          billPaymentId,
-        ]
-      );
+    provider_reference:
+      providerReference,
 
-      await refundClient.query(
-        `
-          UPDATE transactions
-          SET
-            status = 'refunded'
-          WHERE id = $1
-        `,
-        [transactionId]
-      );
+    provider_http_status:
+      purchaseResponse.status,
 
-      await refundClient.query(
-        `
-          INSERT INTO transactions (
-            account_id,
-            type,
-            amount,
-            currency,
-            reference,
-            description,
-            status,
-            balance_before,
-            balance_after,
-            transaction_fee
-          )
-          VALUES (
-            $1,
-            'electricity_refund',
-            $2,
-            'NGN',
-            $3,
-            $4,
-            'completed',
-            $5,
-            $6,
-            0
-          )
-        `,
-        [
-          account.id,
-          numericAmount,
-          `REFUND-${reference}`,
-          `Electricity payment refund - ${normalizedProvider}`,
-          currentBalance,
-          restoredBalance,
-        ]
-      );
+    provider_status:
+      providerStatus || null,
 
-      await refundClient.query(
-        'COMMIT'
-      );
-    } catch (refundError) {
-      try {
-        await refundClient.query(
-          'ROLLBACK'
-        );
-      } catch (rollbackError) {
-        console.error(
-          'Refund rollback error:',
-          rollbackError
-        );
-      }
-
-      console.error(
-        'Electricity refund error:',
-        refundError
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          'Electricity payment failed and the refund is being processed.',
-      });
-    } finally {
-      refundClient.release();
-    }
-
-    return res.status(502).json({
-      success: false,
-
-      message:
-        `${failureMessage} Your funds have been returned.`,
-
-      data: {
-        reference,
-
-        provider_reference:
-          providerReference,
-
-        status:
-          'refunded',
-      },
-    });
-  } catch (error) {
-    console.error(
-      'Electricity purchase error:',
-      error
-    );
-
-    if (client) {
-      try {
-        await client.query(
-          'ROLLBACK'
-        );
-      } catch (rollbackError) {
-        console.error(
-          'Rollback error:',
-          rollbackError
-        );
-      }
-
-      client.release();
-      client = null;
-    }
-
-    return res.status(500).json({
-      success: false,
-      message:
-        'Unable to process electricity payment.',
-    });
-  } finally {
-    if (client) {
-      client.release();
-    }
-  }
-};
+    status:
+      'provider_response_unrecognized',
+  },
+});
 
 // ============================================================
 // EXPORT
