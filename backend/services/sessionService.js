@@ -65,43 +65,44 @@ const createAuthSession = async (user) => {
 
 
   // ----------------------------------------------------------
-  // Session expiry
+  // Store session
+  // ----------------------------------------------------------
+  //
+  // IMPORTANT:
+  //
+  // PostgreSQL calculates the expiry time itself.
+  //
+  // This prevents a Node.js / PostgreSQL timezone mismatch.
+  //
   // ----------------------------------------------------------
 
-  const expiresAt =
-    new Date(
-      Date.now() +
-      INACTIVITY_TIMEOUT_MINUTES *
-      60 *
-      1000
+  const sessionResult =
+    await pool.query(
+      `
+      INSERT INTO auth_sessions (
+        user_id,
+        session_token_hash,
+        last_activity_at,
+        expires_at
+      )
+      VALUES (
+        $1,
+        $2,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP + INTERVAL '5 minutes'
+      )
+      RETURNING
+        expires_at
+      `,
+      [
+        user.id,
+        sessionTokenHash,
+      ]
     );
 
 
-  // ----------------------------------------------------------
-  // Store session
-  // ----------------------------------------------------------
-
-  await pool.query(
-    `
-    INSERT INTO auth_sessions (
-      user_id,
-      session_token_hash,
-      last_activity_at,
-      expires_at
-    )
-    VALUES (
-      $1,
-      $2,
-      CURRENT_TIMESTAMP,
-      $3
-    )
-    `,
-    [
-      user.id,
-      sessionTokenHash,
-      expiresAt,
-    ]
-  );
+  const expiresAt =
+    sessionResult.rows[0]?.expires_at;
 
 
   // ----------------------------------------------------------
@@ -149,6 +150,7 @@ const createAuthSession = async (user) => {
 //
 // No request after 10:03
 // → locked at 10:08
+//
 // ============================================================
 
 const validateAndRefreshSession = async ({
@@ -163,6 +165,10 @@ const validateAndRefreshSession = async ({
     };
   }
 
+
+  // ----------------------------------------------------------
+  // Find session
+  // ----------------------------------------------------------
 
   const sessionResult =
     await pool.query(
@@ -214,51 +220,85 @@ const validateAndRefreshSession = async ({
   // ----------------------------------------------------------
   // Inactivity timeout
   // ----------------------------------------------------------
+  //
+  // IMPORTANT:
+  //
+  // Compare the database timestamp against PostgreSQL's
+  // CURRENT_TIMESTAMP.
+  //
+  // We do NOT compare it against Date.now().
+  //
+  // ----------------------------------------------------------
 
-  const now =
-    Date.now();
+  const expiryCheck =
+    await pool.query(
+      `
+      SELECT
+        (
+          expires_at <= CURRENT_TIMESTAMP
+        ) AS expired
+      FROM auth_sessions
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [
+        session.id,
+      ]
+    );
 
-  const expiresAt =
-    new Date(
-      session.expires_at
-    ).getTime();
 
-if (now >= expiresAt) {
+  const expired =
+    expiryCheck.rows[0]?.expired === true;
 
-  return {
-    valid: false,
-    reason: 'SESSION_EXPIRED',
-  };
-}
-  
+
+  if (expired) {
+
+    return {
+      valid: false,
+      reason: 'SESSION_EXPIRED',
+    };
+  }
+
 
   // ----------------------------------------------------------
   // Refresh inactivity timer
   // ----------------------------------------------------------
+  //
+  // PostgreSQL calculates the new expiry time.
+  //
+  // ----------------------------------------------------------
 
-  const newExpiresAt =
-    new Date(
-      now +
-      INACTIVITY_TIMEOUT_MINUTES *
-      60 *
-      1000
+  const refreshResult =
+    await pool.query(
+      `
+      UPDATE auth_sessions
+      SET
+        last_activity_at = CURRENT_TIMESTAMP,
+        expires_at =
+          CURRENT_TIMESTAMP + INTERVAL '5 minutes'
+      WHERE id = $1
+        AND revoked_at IS NULL
+      RETURNING
+        expires_at
+      `,
+      [
+        session.id,
+      ]
     );
 
 
-  await pool.query(
-    `
-    UPDATE auth_sessions
-    SET
-      last_activity_at = CURRENT_TIMESTAMP,
-      expires_at = $1
-    WHERE id = $2
-      AND revoked_at IS NULL
-    `,
-    [
-      newExpiresAt,
-      session.id,
-    ]
-  );
+  if (
+    refreshResult.rows.length === 0
+  ) {
+    return {
+      valid: false,
+      reason: 'SESSION_INVALID',
+    };
+  }
+
+
+  const newExpiresAt =
+    refreshResult.rows[0]?.expires_at;
 
 
   return {
@@ -319,7 +359,9 @@ const revokeAllUserSessions = async (
     WHERE user_id = $1
       AND revoked_at IS NULL
     `,
-    [userId]
+    [
+      userId,
+    ]
   );
 };
 
