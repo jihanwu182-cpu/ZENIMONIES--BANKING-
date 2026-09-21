@@ -57,7 +57,10 @@ const purchaseElectricity = async (req, res) => {
       provider: req.body?.provider,
       meter_type: req.body?.meter_type,
       amount: req.body?.amount,
-      user_id: req.user?.id || req.user?.user_id || null,
+      user_id:
+        req.user?.id ||
+        req.user?.user_id ||
+        null,
     })
   );
 
@@ -75,7 +78,8 @@ const purchaseElectricity = async (req, res) => {
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required.',
+        message:
+          'Authentication required.',
       });
     }
 
@@ -93,21 +97,24 @@ const purchaseElectricity = async (req, res) => {
     if (!provider) {
       return res.status(400).json({
         success: false,
-        message: 'Electricity provider is required.',
+        message:
+          'Electricity provider is required.',
       });
     }
 
     if (!meter_number) {
       return res.status(400).json({
         success: false,
-        message: 'Meter number is required.',
+        message:
+          'Meter number is required.',
       });
     }
 
     if (!meter_type) {
       return res.status(400).json({
         success: false,
-        message: 'Meter type is required.',
+        message:
+          'Meter type is required.',
       });
     }
 
@@ -118,7 +125,8 @@ const purchaseElectricity = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: 'Amount is required.',
+        message:
+          'Amount is required.',
       });
     }
 
@@ -221,6 +229,10 @@ const purchaseElectricity = async (req, res) => {
       'https://sandbox.sogo.africa/v1';
 
     if (!sogoApiKey) {
+      console.error(
+        'SOGO_API_KEY is missing.'
+      );
+
       return res.status(500).json({
         success: false,
         message:
@@ -234,8 +246,19 @@ const purchaseElectricity = async (req, res) => {
       ];
 
     // ========================================================
-    // RE-VERIFY METER
+    // VERIFY METER WITH SOGO
     // ========================================================
+
+    console.log(
+      'SOGO ELECTRICITY VERIFICATION START:',
+      JSON.stringify({
+        disco_slug: discoSlug,
+        meter_number:
+          normalizedMeterNumber,
+        meter_type:
+          normalizedMeterType,
+      })
+    );
 
     let verificationResponse;
 
@@ -288,12 +311,26 @@ const purchaseElectricity = async (req, res) => {
       verificationResult = null;
     }
 
+    console.log(
+      'SOGO ELECTRICITY VERIFICATION HTTP STATUS:',
+      verificationResponse.status
+    );
+
+    console.log(
+      'SOGO ELECTRICITY VERIFICATION RESPONSE:',
+      JSON.stringify(
+        verificationResult
+      )
+    );
+
     if (
       !verificationResponse.ok
     ) {
       console.error(
         'Sogo verification failed:',
-        verificationResult
+        JSON.stringify(
+          verificationResult
+        )
       );
 
       return res.status(502).json({
@@ -399,12 +436,17 @@ const purchaseElectricity = async (req, res) => {
     const reference =
       createReference();
 
-    /*
-     * One unique idempotency key belongs to this
-     * electricity purchase.
-     */
     const idempotencyKey =
       crypto.randomUUID();
+
+    console.log(
+      'ELECTRICITY PAYMENT REFERENCES:',
+      JSON.stringify({
+        reference,
+        idempotency_key:
+          idempotencyKey,
+      })
+    );
 
     // ========================================================
     // FIND ELECTRICITY BILLER
@@ -492,7 +534,7 @@ const purchaseElectricity = async (req, res) => {
       billResult.rows[0].id;
 
     // ========================================================
-    // RESERVE / DEBIT CUSTOMER FUNDS
+    // DEBIT CUSTOMER ACCOUNT
     // ========================================================
 
     const balanceAfter =
@@ -566,56 +608,102 @@ const purchaseElectricity = async (req, res) => {
     client.release();
     client = null;
 
- // ========================================================
-// CALL SOGO ELECTRICITY PURCHASE
-// ========================================================
+    console.log(
+      'LOCAL ELECTRICITY PAYMENT COMMITTED:',
+      JSON.stringify({
+        reference,
+        bill_payment_id:
+          billPaymentId,
+        transaction_id:
+          transactionId,
+        amount:
+          numericAmount,
+      })
+    );
 
-console.error(
-  '🔥🔥🔥 ZENIMONIES SOGO PURCHASE REACHED 🔥🔥🔥'
-);
+    // ========================================================
+    // CALL SOGO ELECTRICITY PURCHASE
+    // ========================================================
 
-console.error(
-  'SOGO BASE URL:',
-  sogoBaseUrl
-);
+    console.error(
+      '🔥🔥🔥 ZENIMONIES SOGO PURCHASE REACHED 🔥🔥🔥'
+    );
 
-console.error(
-  'SOGO DISCO:',
-  discoSlug
-);
+    console.error(
+      'SOGO BASE URL:',
+      sogoBaseUrl
+    );
 
-console.error(
-  'SOGO METER:',
-  normalizedMeterNumber
-);
+    console.error(
+      'SOGO DISCO:',
+      discoSlug
+    );
 
-console.error(
-  'SOGO AMOUNT:',
-  numericAmount
-);
+    console.error(
+      'SOGO METER:',
+      normalizedMeterNumber
+    );
 
-console.error(
-  'SOGO IDEMPOTENCY KEY:',
-  idempotencyKey
-);
+    console.error(
+      'SOGO AMOUNT:',
+      numericAmount
+    );
 
-   });
-    }
-   } catch (error) {
-      /*
-       * VERY IMPORTANT:
-       *
-       * If the network fails after the request has been
-       * submitted, we do NOT automatically refund or
-       * create another payment.
-       *
-       * The same idempotency key must be reconciled.
-       */
+    console.error(
+      'SOGO IDEMPOTENCY KEY:',
+      idempotencyKey
+    );
 
+    let purchaseResponse;
+
+    try {
+      purchaseResponse =
+        await fetch(
+          `${sogoBaseUrl}/bills/electricity`,
+          {
+            method: 'POST',
+
+            headers: {
+              Authorization:
+                `Bearer ${sogoApiKey}`,
+
+              'Content-Type':
+                'application/json',
+
+              'Idempotency-Key':
+                idempotencyKey,
+            },
+
+            body: JSON.stringify({
+              disco_slug:
+                discoSlug,
+
+              meter_number:
+                normalizedMeterNumber,
+
+              meter_type:
+                normalizedMeterType,
+
+              amount:
+                numericAmount,
+            }),
+          }
+        );
+    } catch (error) {
       console.error(
-        'Sogo electricity purchase network error:',
+        'SOGO ELECTRICITY PURCHASE NETWORK ERROR:',
         error
       );
+
+      /*
+       * We received no HTTP response.
+       *
+       * DO NOT create another transaction.
+       * DO NOT automatically refund.
+       *
+       * The same idempotency key must be reconciled
+       * before any retry.
+       */
 
       return res.status(202).json({
         success: true,
@@ -657,41 +745,50 @@ console.error(
         await purchaseResponse.json();
     } catch (error) {
       purchaseResult = null;
+
+      console.error(
+        'SOGO RESPONSE JSON PARSE ERROR:',
+        error
+      );
     }
 
-    console.log(
+    // ========================================================
+    // SOGO DIAGNOSTICS
+    // ========================================================
+
+    console.error(
+      '========== SOGO ELECTRICITY PURCHASE RESPONSE =========='
+    );
+
+    console.error(
       'SOGO ELECTRICITY PURCHASE HTTP STATUS:',
       purchaseResponse.status
     );
 
-    console.log(
+    console.error(
+      'SOGO ELECTRICITY PURCHASE OK:',
+      purchaseResponse.ok
+    );
+
+    console.error(
       'SOGO ELECTRICITY PURCHASE RESPONSE:',
       JSON.stringify(
         purchaseResult
       )
     );
 
-    /*
-     * Sogo's documented response is:
-     *
-     * {
-     *   message: "...",
-     *   data: {
-     *     reference: "...",
-     *     status: "completed",
-     *     ...
-     *   }
-     * }
-     *
-     * So we intentionally read the nested data object.
-     */
+    // ========================================================
+    // READ PROVIDER DATA
+    // ========================================================
 
     const purchaseData =
-      purchaseResult?.data || {};
+      purchaseResult?.data ||
+      {};
 
     const providerStatus =
       String(
-        purchaseData?.status || ''
+        purchaseData?.status ||
+        ''
       )
         .trim()
         .toLowerCase();
@@ -704,10 +801,6 @@ console.error(
       purchaseResult?.message ||
       purchaseData?.message ||
       null;
-
-    // ========================================================
-    // ELECTRICITY TOKEN
-    // ========================================================
 
     const electricityToken =
       purchaseData?.token ||
@@ -722,6 +815,16 @@ console.error(
       purchaseData?.unit ||
       purchaseData?.kwh ||
       null;
+
+    console.error(
+      'PARSED SOGO PROVIDER STATUS:',
+      providerStatus
+    );
+
+    console.error(
+      'PARSED SOGO PROVIDER REFERENCE:',
+      providerReference
+    );
 
     // ========================================================
     // COMPLETED
@@ -794,10 +897,11 @@ console.error(
         );
 
         /*
-         * Sogo has already accepted/completed the transaction.
-         * Do not refund it locally just because our database
+         * Sogo has already completed the payment.
+         * Do NOT refund locally just because our database
          * update failed.
          */
+
         return res.status(202).json({
           success: true,
 
@@ -822,10 +926,6 @@ console.error(
       } finally {
         completeClient.release();
       }
-
-      // ======================================================
-      // SUCCESS RESPONSE
-      // ======================================================
 
       return res.status(200).json({
         success: true,
@@ -885,7 +985,7 @@ console.error(
     }
 
     // ========================================================
-    // PROCESSING
+    // PROCESSING / PENDING
     // ========================================================
 
     if (
@@ -961,74 +1061,491 @@ console.error(
         },
       });
     }
-  // ========================================================
- // UNEXPECTED PROVIDER RESPONSE
- // ========================================================
-//
-// IMPORTANT:
-// Do NOT automatically refund an unrecognized provider
-// response. We must know the provider's actual transaction
-// status before reversing customer funds.
-//
-// Sogo documents:
-// - completed = final success
-// - processing = do not retry
-// - failed = final failure
-// - refunded = funds returned by provider
-//
-// An unexpected response must therefore be investigated
-// rather than blindly refunded.
 
-console.error(
-  '========== UNEXPECTED SOGO ELECTRICITY RESPONSE =========='
-);
+    // ========================================================
+    // PROVIDER FAILED
+    // ========================================================
 
-console.error(
-  'SOGO HTTP STATUS:',
-  purchaseResponse.status
-);
+    if (
+      providerStatus === 'failed'
+    ) {
+      console.error(
+        'SOGO ELECTRICITY PAYMENT FAILED:',
+        JSON.stringify(
+          purchaseResult
+        )
+      );
 
-console.error(
-  'SOGO PROVIDER STATUS:',
-  providerStatus
-);
+      const refundClient =
+        await pool.connect();
 
-console.error(
-  'SOGO PROVIDER REFERENCE:',
-  providerReference
-);
+      try {
+        await refundClient.query(
+          'BEGIN'
+        );
 
-console.error(
-  'SOGO FULL RESPONSE:',
-  JSON.stringify(purchaseResult)
-);
-return res.status(502).json({
-  success: false,
+        const refundAccountResult =
+          await refundClient.query(
+            `
+              SELECT
+                id,
+                balance
+              FROM accounts
+              WHERE id = $1
+              FOR UPDATE
+            `,
+            [account.id]
+          );
 
-  message:
-    'The electricity provider returned an unexpected payment status. Your payment has not been completed. Please contact Zenimonies support before trying again.',
+        if (
+          refundAccountResult.rows.length === 0
+        ) {
+          throw new Error(
+            'Customer account not found during electricity refund.'
+          );
+        }
 
-  data: {
-    reference,
+        const currentBalance =
+          Number(
+            refundAccountResult.rows[0]
+              .balance
+          );
 
-    provider_reference:
-      providerReference,
+        const refundedBalance =
+          currentBalance +
+          numericAmount;
 
-    provider_http_status:
-      purchaseResponse.status,
+        await refundClient.query(
+          `
+            UPDATE accounts
+            SET
+              balance = $1,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+          `,
+          [
+            refundedBalance,
+            account.id,
+          ]
+        );
 
-    provider_status:
-      providerStatus || null,
+        await refundClient.query(
+          `
+            UPDATE bill_payments
+            SET
+              status = 'failed',
+              provider_reference = $1,
+              provider_response = $2,
+              provider_response_message = $3,
+              failure_reason = $3
+            WHERE id = $4
+          `,
+          [
+            providerReference,
+            purchaseResult,
+            providerMessage ||
+              'Electricity provider rejected the payment.',
+            billPaymentId,
+          ]
+        );
 
-    status:
-      'provider_response_unrecognized',
-  },
-});
+        await refundClient.query(
+          `
+            UPDATE transactions
+            SET
+              status = 'failed'
+            WHERE id = $1
+          `,
+          [transactionId]
+        );
 
+        await refundClient.query(
+          `
+            INSERT INTO transactions (
+              account_id,
+              type,
+              amount,
+              currency,
+              reference,
+              description,
+              status,
+              balance_before,
+              balance_after,
+              transaction_fee
+            )
+            VALUES (
+              $1,
+              'electricity_payment_refund',
+              $2,
+              'NGN',
+              $3,
+              $4,
+              'completed',
+              $5,
+              $6,
+              0
+            )
+          `,
+          [
+            account.id,
+            numericAmount,
+            `${reference}-REFUND`,
+            `Refund for failed electricity payment ${reference}`,
+            currentBalance,
+            refundedBalance,
+          ]
+        );
+
+        await refundClient.query(
+          'COMMIT'
+        );
+      } catch (error) {
+        try {
+          await refundClient.query(
+            'ROLLBACK'
+          );
+        } catch (rollbackError) {
+          console.error(
+            'Electricity failure refund rollback error:',
+            rollbackError
+          );
+        }
+
+        console.error(
+          'Electricity failure refund database error:',
+          error
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'The electricity provider rejected the payment, but the local refund could not be completed automatically. Please contact Zenimonies support.',
+          data: {
+            reference,
+            provider_reference:
+              providerReference,
+            status:
+              'refund_pending',
+          },
+        });
+      } finally {
+        refundClient.release();
+      }
+
+      return res.status(502).json({
+        success: false,
+
+        message:
+          providerMessage ||
+          'Electricity payment failed. Your funds have been returned.',
+
+        data: {
+          reference,
+
+          provider_reference:
+            providerReference,
+
+          status:
+            'failed',
+        },
+      });
+    }
+
+    // ========================================================
+    // PROVIDER REFUNDED
+    // ========================================================
+
+    if (
+      providerStatus === 'refunded'
+    ) {
+      console.error(
+        'SOGO ELECTRICITY PAYMENT REFUNDED:',
+        JSON.stringify(
+          purchaseResult
+        )
+      );
+
+      const refundClient =
+        await pool.connect();
+
+      try {
+        await refundClient.query(
+          'BEGIN'
+        );
+
+        const refundAccountResult =
+          await refundClient.query(
+            `
+              SELECT
+                id,
+                balance
+              FROM accounts
+              WHERE id = $1
+              FOR UPDATE
+            `,
+            [account.id]
+          );
+
+        if (
+          refundAccountResult.rows.length === 0
+        ) {
+          throw new Error(
+            'Customer account not found during provider refund.'
+          );
+        }
+
+        const currentBalance =
+          Number(
+            refundAccountResult.rows[0]
+              .balance
+          );
+
+        const refundedBalance =
+          currentBalance +
+          numericAmount;
+
+        await refundClient.query(
+          `
+            UPDATE accounts
+            SET
+              balance = $1,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+          `,
+          [
+            refundedBalance,
+            account.id,
+          ]
+        );
+
+        await refundClient.query(
+          `
+            UPDATE bill_payments
+            SET
+              status = 'refunded',
+              provider_reference = $1,
+              provider_response = $2,
+              provider_response_message = $3,
+              completed_at = CURRENT_TIMESTAMP
+            WHERE id = $4
+          `,
+          [
+            providerReference,
+            purchaseResult,
+            providerMessage,
+            billPaymentId,
+          ]
+        );
+
+        await refundClient.query(
+          `
+            UPDATE transactions
+            SET
+              status = 'refunded'
+            WHERE id = $1
+          `,
+          [transactionId]
+        );
+
+        await refundClient.query(
+          `
+            INSERT INTO transactions (
+              account_id,
+              type,
+              amount,
+              currency,
+              reference,
+              description,
+              status,
+              balance_before,
+              balance_after,
+              transaction_fee
+            )
+            VALUES (
+              $1,
+              'electricity_payment_refund',
+              $2,
+              'NGN',
+              $3,
+              $4,
+              'completed',
+              $5,
+              $6,
+              0
+            )
+          `,
+          [
+            account.id,
+            numericAmount,
+            `${reference}-REFUND`,
+            `Refund for electricity payment ${reference}`,
+            currentBalance,
+            refundedBalance,
+          ]
+        );
+
+        await refundClient.query(
+          'COMMIT'
+        );
+      } catch (error) {
+        try {
+          await refundClient.query(
+            'ROLLBACK'
+          );
+        } catch (rollbackError) {
+          console.error(
+            'Provider refund rollback error:',
+            rollbackError
+          );
+        }
+
+        console.error(
+          'Provider refund database error:',
+          error
+        );
+
+        return res.status(500).json({
+          success: false,
+
+          message:
+            'The electricity provider refunded the payment, but the local refund could not be completed automatically. Please contact Zenimonies support.',
+
+          data: {
+            reference,
+
+            provider_reference:
+              providerReference,
+
+            status:
+              'refund_pending',
+          },
+        });
+      } finally {
+        refundClient.release();
+      }
+
+      return res.status(502).json({
+        success: false,
+
+        message:
+          'The electricity provider refunded this payment. Your funds have been returned.',
+
+        data: {
+          reference,
+
+          provider_reference:
+            providerReference,
+
+          status:
+            'refunded',
+        },
+      });
+    }
+
+    // ========================================================
+    // UNEXPECTED PROVIDER RESPONSE
+    // ========================================================
+
+    console.error(
+      '========== UNEXPECTED SOGO ELECTRICITY RESPONSE =========='
+    );
+
+    console.error(
+      'SOGO HTTP STATUS:',
+      purchaseResponse.status
+    );
+
+    console.error(
+      'SOGO PROVIDER STATUS:',
+      providerStatus
+    );
+
+    console.error(
+      'SOGO PROVIDER REFERENCE:',
+      providerReference
+    );
+
+    console.error(
+      'SOGO FULL RESPONSE:',
+      JSON.stringify(
+        purchaseResult
+      )
+    );
+
+    /*
+     * IMPORTANT:
+     *
+     * We do NOT automatically refund an unknown response.
+     *
+     * The provider may have accepted the payment even though
+     * the response format was unexpected.
+     *
+     * The payment must be reconciled before any local refund.
+     */
+
+    await pool.query(
+      `
+        UPDATE bill_payments
+        SET
+          status = 'provider_response_unrecognized',
+          provider_reference = $1,
+          provider_response = $2,
+          provider_response_message = $3
+        WHERE id = $4
+      `,
+      [
+        providerReference,
+        purchaseResult,
+        providerMessage,
+        billPaymentId,
+      ]
+    );
+
+    await pool.query(
+      `
+        UPDATE transactions
+        SET
+          status = 'provider_response_unrecognized'
+        WHERE id = $1
+      `,
+      [transactionId]
+    );
+
+    return res.status(502).json({
+      success: false,
+
+      message:
+        'The electricity provider returned an unexpected payment status. Your payment has not been confirmed. Please contact Zenimonies support before trying again.',
+
+      data: {
+        reference,
+
+        provider_reference:
+          providerReference,
+
+        provider_http_status:
+          purchaseResponse.status,
+
+        provider_status:
+          providerStatus ||
+          null,
+
+        status:
+          'provider_response_unrecognized',
+      },
+    });
   } catch (error) {
     console.error(
-      'Electricity purchase error:',
+      '============================================================'
+    );
+
+    console.error(
+      'ELECTRICITY PURCHASE ERROR:',
       error
+    );
+
+    console.error(
+      '============================================================'
     );
 
     if (client) {
@@ -1049,6 +1566,7 @@ return res.status(502).json({
 
     return res.status(500).json({
       success: false,
+
       message:
         'Unable to process electricity payment.',
     });
