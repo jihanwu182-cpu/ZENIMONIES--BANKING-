@@ -600,6 +600,7 @@ console.error(
 );
   }
     );
+    } catch (error) {
       /*
        * VERY IMPORTANT:
        *
