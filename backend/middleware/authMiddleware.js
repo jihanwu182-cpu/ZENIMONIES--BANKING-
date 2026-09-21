@@ -108,12 +108,36 @@ const authMiddleware = async (
 
     } catch (error) {
 
-      return res.status(401).json({
-        success: false,
-        message:
-          'Invalid or expired authentication token',
-      });
-    }
+  console.error(
+    '🔥 JWT VERIFICATION FAILED 🔥'
+  );
+
+  console.error(
+    'JWT error name:',
+    error?.name
+  );
+
+  console.error(
+    'JWT error message:',
+    error?.message
+  );
+
+  console.error(
+    'JWT secret configured:',
+    Boolean(process.env.JWT_SECRET)
+  );
+
+  console.error(
+    'JWT token length:',
+    token?.length || 0
+  );
+
+  return res.status(401).json({
+    success: false,
+    message:
+      'Invalid or expired authentication token',
+  });
+}
 
 
     // ========================================================
