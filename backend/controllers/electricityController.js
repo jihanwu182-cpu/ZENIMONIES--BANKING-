@@ -599,6 +599,7 @@ console.error(
   idempotencyKey
 );
   }
+   } catch (error) {
       /*
        * VERY IMPORTANT:
        *
