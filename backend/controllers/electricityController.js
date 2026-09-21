@@ -964,6 +964,7 @@ const purchaseElectricity = async (req, res) => {
             'processing',
         },
       });
+    }
   // ========================================================
  // UNEXPECTED PROVIDER RESPONSE
  // ========================================================
@@ -1005,7 +1006,6 @@ console.error(
   'SOGO FULL RESPONSE:',
   JSON.stringify(purchaseResult)
 );
-
 return res.status(502).json({
   success: false,
 
@@ -1028,6 +1028,40 @@ return res.status(502).json({
       'provider_response_unrecognized',
   },
 });
+
+  } catch (error) {
+    console.error(
+      'Electricity purchase error:',
+      error
+    );
+
+    if (client) {
+      try {
+        await client.query(
+          'ROLLBACK'
+        );
+      } catch (rollbackError) {
+        console.error(
+          'Rollback error:',
+          rollbackError
+        );
+      }
+
+      client.release();
+      client = null;
+    }
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Unable to process electricity payment.',
+    });
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+};
 
 // ============================================================
 // EXPORT
