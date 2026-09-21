@@ -11,6 +11,10 @@ const {
   purchaseElectricity,
 } = require('../controllers/electricityController');
 
+const {
+  getElectricityReconciliation,
+} = require('../controllers/electricityReconciliationController');
+
 const authMiddleware = require('../middleware/authMiddleware');
 
 // ============================================================
@@ -31,6 +35,19 @@ router.post(
   '/electricity/pay',
   authMiddleware,
   purchaseElectricity
+);
+
+// ============================================================
+// ELECTRICITY RECONCILIATION
+// ============================================================
+// READ ONLY
+// Does not debit, refund, create, or change payments.
+// ============================================================
+
+router.get(
+  '/electricity/reconciliation',
+  authMiddleware,
+  getElectricityReconciliation
 );
 
 // ============================================================
