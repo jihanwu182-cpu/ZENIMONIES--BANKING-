@@ -566,43 +566,38 @@ const purchaseElectricity = async (req, res) => {
     client.release();
     client = null;
 
-    // ========================================================
-    // CALL SOGO ELECTRICITY PURCHASE
-    // ========================================================
+ // ========================================================
+// CALL SOGO ELECTRICITY PURCHASE
+// ========================================================
 
-    let purchaseResponse;
+console.error(
+  '🔥🔥🔥 ZENIMONIES SOGO PURCHASE REACHED 🔥🔥🔥'
+);
 
-    try {
-      purchaseResponse =
-        await fetch(
-          `${sogoBaseUrl}/bills/electricity`,
-          {
-            method: 'POST',
+console.error(
+  'SOGO BASE URL:',
+  sogoBaseUrl
+);
 
-            headers: {
-              Authorization:
-                `Bearer ${sogoApiKey}`,
+console.error(
+  'SOGO DISCO:',
+  discoSlug
+);
 
-              'Content-Type':
-                'application/json',
+console.error(
+  'SOGO METER:',
+  normalizedMeterNumber
+);
 
-              'Idempotency-Key':
-                idempotencyKey,
-            },
+console.error(
+  'SOGO AMOUNT:',
+  numericAmount
+);
 
-            body: JSON.stringify({
-              disco_slug:
-                discoSlug,
-
-              meter_number:
-                normalizedMeterNumber,
-
-              meter_type:
-                normalizedMeterType,
-
-              amount:
-                numericAmount,
-            }),
+console.error(
+  'SOGO IDEMPOTENCY KEY:',
+  idempotencyKey
+);
           }
         );
     } catch (error) {
