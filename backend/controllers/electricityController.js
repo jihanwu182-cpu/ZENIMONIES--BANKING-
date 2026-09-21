@@ -598,7 +598,7 @@ console.error(
   'SOGO IDEMPOTENCY KEY:',
   idempotencyKey
 );
-    } catch (error) {
+    
       /*
        * VERY IMPORTANT:
        *
