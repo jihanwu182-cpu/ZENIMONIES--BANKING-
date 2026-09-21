@@ -47,6 +47,16 @@ const isValidMeterNumber = (value) => {
 // ============================================================
 
 const purchaseElectricity = async (req, res) => {
+
+  res.setHeader(
+    'X-Zenimonies-Electricity-Version',
+    'electricity-controller-2026-09-21-v4'
+  );
+
+  console.log(
+    '🔥 ZENIMONIES ELECTRICITY CONTROLLER V4 REACHED 🔥'
+  );
+
   console.log(
     '========== ZENIMONIES ELECTRICITY PAYMENT START =========='
   );
