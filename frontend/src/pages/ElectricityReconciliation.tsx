@@ -36,6 +36,7 @@ interface ElectricityPayment {
   units?: string;
   tariff_class?: string;
   provider_response_message?: string;
+  provider_response?: unknown;
   created_at?: string;
   completed_at?: string;
 }
@@ -117,6 +118,28 @@ const formatStatus = (status?: string) => {
     .replace(/\b\w/g, letter =>
       letter.toUpperCase()
     );
+};
+
+const formatProviderResponse = (
+  response: unknown
+) => {
+  if (response === null || response === undefined) {
+    return '';
+  }
+
+  if (typeof response === 'string') {
+    return response;
+  }
+
+  try {
+    return JSON.stringify(
+      response,
+      null,
+      2
+    );
+  } catch {
+    return String(response);
+  }
 };
 
 const ElectricityReconciliation: React.FC = () => {
@@ -251,7 +274,6 @@ const ElectricityReconciliation: React.FC = () => {
           margin: '0 auto',
         }}
       >
-
         {/* HEADER */}
 
         <h1
@@ -512,7 +534,6 @@ const ElectricityReconciliation: React.FC = () => {
                         '#ffffff',
                     }}
                   >
-
                     <div
                       style={{
                         display: 'flex',
@@ -565,7 +586,6 @@ const ElectricityReconciliation: React.FC = () => {
                         lineHeight: 1.5,
                       }}
                     >
-
                       <div>
                         <strong>
                           Amount:
@@ -664,33 +684,62 @@ const ElectricityReconciliation: React.FC = () => {
                           <strong>
                             Provider message:
                           </strong>{' '}
-                          {payment.provider_response && (
-  <Box sx={{ mt: 2 }}>
-    <Typography
-      variant="subtitle2"
-      sx={{ fontWeight: 700, mb: 1 }}
-    >
-      Provider response
-    </Typography>
+                          {payment.provider_response_message}
+                        </div>
+                      )}
 
-    <Box
-      component="pre"
-      sx={{
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-        fontSize: '12px',
-        backgroundColor: '#f5f5f5',
-        padding: 2,
-        borderRadius: 2,
-        overflowX: 'auto',
-      }}
-    >
-      {JSON.stringify(payment.provider_response, null, 2)}
-    </Box>
-  </Box>
-)}
-                      
+                      {payment.provider_response !==
+                        undefined &&
+                        payment.provider_response !==
+                          null && (
+                          <div
+                            style={{
+                              marginTop: 8,
+                              padding: 12,
+                              borderRadius: 10,
+                              background:
+                                '#f8fafc',
+                              border:
+                                '1px solid #e2e8f0',
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontWeight: 800,
+                                color:
+                                  '#172033',
+                                marginBottom:
+                                  8,
+                              }}
+                            >
+                              Provider response
+                            </div>
 
+                            <pre
+                              style={{
+                                margin: 0,
+                                whiteSpace:
+                                  'pre-wrap',
+                                wordBreak:
+                                  'break-word',
+                                overflowX:
+                                  'auto',
+                                fontSize:
+                                  12,
+                                lineHeight:
+                                  1.5,
+                                color:
+                                  '#344054',
+                                fontFamily:
+                                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                              }}
+                            >
+                              {formatProviderResponse(
+                                payment.provider_response
+                              )}
+                            </pre>
+                          </div>
+                        )}
                     </div>
                   </div>
                 )
@@ -751,7 +800,6 @@ const ElectricityReconciliation: React.FC = () => {
           safe transaction details. The actual
           authentication token is never displayed.
         </div>
-
       </div>
     </div>
   );
