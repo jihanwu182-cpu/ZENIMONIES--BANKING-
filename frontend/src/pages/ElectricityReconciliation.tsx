@@ -53,15 +53,27 @@ const ElectricityReconciliation: React.FC = () => {
   // ============================================================
 
   const getToken = (): string | null => {
-    return (
-      localStorage.getItem(
-        'zenimonies_token'
-      ) ||
-      localStorage.getItem(
-        'token'
-      )
-    );
-  };
+  return (
+    localStorage.getItem(
+      'zenimonies_token'
+    ) ||
+    localStorage.getItem(
+      'token'
+    ) ||
+    localStorage.getItem(
+      'access_token'
+    ) ||
+    sessionStorage.getItem(
+      'zenimonies_token'
+    ) ||
+    sessionStorage.getItem(
+      'token'
+    ) ||
+    sessionStorage.getItem(
+      'access_token'
+    )
+  );
+};
 
   // ============================================================
   // LOAD RECONCILIATION DATA
