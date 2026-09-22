@@ -962,29 +962,99 @@ const Login: React.FC = () => {
         // ======================================================
 
         const responseData =
-          verifyData.data ||
-          verifyData;
+  verifyData.data ||
+  verifyData;
 
-        const token =
-          responseData.token;
+const token =
+  responseData.token;
 
-        if (!token) {
-          throw new Error(
-            'Passkey login succeeded but no authentication token was returned.'
-          );
-        }
+if (!token) {
+  throw new Error(
+    'Passkey login succeeded but no authentication token was returned.'
+  );
+}
 
-        saveAuthenticatedSession({
-          token,
-          user:
-            responseData.user,
-          accounts:
-            responseData.accounts,
-        });
+/*
+ * ==========================================================
+ * SAVE PASSKEY AUTHENTICATION SESSION
+ * ==========================================================
+ */
 
-        setPasskeyFailures(
-          0
-        );
+saveAuthenticatedSession({
+  token,
+  user:
+    responseData.user,
+  accounts:
+    responseData.accounts,
+});
+
+/*
+ * ==========================================================
+ * VERIFY AUTHENTICATION STORAGE
+ * ==========================================================
+ *
+ * We only check whether a token exists.
+ * The actual token is NEVER displayed or logged.
+ */
+
+const localZenimoniesToken =
+  localStorage.getItem(
+    'zenimonies_token'
+  );
+
+const localToken =
+  localStorage.getItem(
+    'token'
+  );
+
+const sessionZenimoniesToken =
+  sessionStorage.getItem(
+    'zenimonies_token'
+  );
+
+const sessionToken =
+  sessionStorage.getItem(
+    'token'
+  );
+
+console.log(
+  '========== ZENIMONIES PASSKEY STORAGE CHECK =========='
+);
+
+console.log(
+  'localStorage zenimonies_token:',
+  Boolean(localZenimoniesToken)
+);
+
+console.log(
+  'localStorage token:',
+  Boolean(localToken)
+);
+
+console.log(
+  'sessionStorage zenimonies_token:',
+  Boolean(sessionZenimoniesToken)
+);
+
+console.log(
+  'sessionStorage token:',
+  Boolean(sessionToken)
+);
+
+if (
+  !localZenimoniesToken &&
+  !localToken &&
+  !sessionZenimoniesToken &&
+  !sessionToken
+) {
+  throw new Error(
+    'Passkey login succeeded, but the secure authentication session could not be stored on this device. Please use password login.'
+  );
+}
+
+setPasskeyFailures(
+  0
+);
 
         setPasskeyFallback(
           false
