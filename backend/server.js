@@ -48,6 +48,13 @@ const {
 const {
   handleDojahWebhook,
 } = require('./controllers/dojahWebhookController');
+// ============================================================
+// SOGO
+// ============================================================
+
+const {
+  handleSogoWebhook,
+} = require('./controllers/sogoWebhookController');
 
 // ============================================================
 // APP
@@ -88,6 +95,22 @@ app.post(
   handlePaystackWebhook
 );
 
+// ============================================================
+// SOGO WEBHOOK
+// ============================================================
+//
+// IMPORTANT:
+// This must remain BEFORE express.json() because Sogo
+// signature verification requires the original raw body.
+// ============================================================
+
+app.post(
+  '/api/webhooks/sogo',
+  express.raw({
+    type: 'application/json',
+  }),
+  handleSogoWebhook
+);
 // ============================================================
 // NORMAL BODY PARSING
 // ============================================================
