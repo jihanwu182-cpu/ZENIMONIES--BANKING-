@@ -689,8 +689,7 @@ const ElectricityReconciliation: React.FC = () => {
     </Box>
   </Box>
 )}
-                        </div>
-                      )}
+                      
 
                     </div>
                   </div>
