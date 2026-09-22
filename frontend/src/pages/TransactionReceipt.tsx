@@ -40,10 +40,7 @@ interface Transaction {
   amount?: number | string;
   currency?: string;
 
-  // ----------------------------------------------------------
   // TRANSFER
-  // ----------------------------------------------------------
-
   sender_name?: string;
   sender_phone?: string;
   sender_account?: string;
@@ -58,10 +55,7 @@ interface Transaction {
   bank_name?: string;
   account_number?: string;
 
-  // ----------------------------------------------------------
   // AIRTIME / DATA
-  // ----------------------------------------------------------
-
   provider?: string;
   network?: string;
   phone?: string;
@@ -70,10 +64,7 @@ interface Transaction {
   plan_name?: string;
   variation_name?: string;
 
-  // ----------------------------------------------------------
   // BILLS
-  // ----------------------------------------------------------
-
   customer_number?: string;
   meter_number?: string;
   meter_type?: string;
@@ -83,7 +74,7 @@ interface Transaction {
 
   customer_name?: string;
 
-  // Electricity
+  // ELECTRICITY
   electricity_token?: string;
   token?: string;
   units?: string | number;
@@ -91,38 +82,23 @@ interface Transaction {
   verified_customer_name?: string;
   verified_customer_address?: string;
 
-  // ----------------------------------------------------------
   // PROVIDER
-  // ----------------------------------------------------------
-
   provider_reference?: string;
   provider_request_id?: string;
 
-  // ----------------------------------------------------------
   // REFERENCES
-  // ----------------------------------------------------------
-
   reference?: string;
   transaction_reference?: string;
 
-  // ----------------------------------------------------------
   // STATUS
-  // ----------------------------------------------------------
-
   status?: string;
 
-  // ----------------------------------------------------------
   // TRANSFER FEE ONLY
-  // ----------------------------------------------------------
-
   transaction_fee?: number | string;
   fee?: number | string;
   total_debit?: number | string;
 
-  // ----------------------------------------------------------
   // DATE
-  // ----------------------------------------------------------
-
   created_at?: string;
   date?: string;
   timestamp?: string;
@@ -141,6 +117,7 @@ interface LocalUser {
 
   full_name?: string;
   name?: string;
+
   first_name?: string;
   last_name?: string;
 
@@ -158,11 +135,33 @@ interface LocalUser {
 
 interface LocalAccount {
   id?: string;
+
   account_number?: string;
   accountNumber?: string;
+
   account_type?: string;
   currency?: string;
 }
+
+
+// ============================================================
+// COLORS
+// ============================================================
+
+const COLORS = {
+  primary: '#087F5B',
+  darkGreen: '#075B42',
+  lightGreen: '#15966D',
+  labelGreen: '#0B9A6B',
+  text: '#173A31',
+  secondaryText: '#64736D',
+  border: '#D9E1DD',
+  background: '#F5F8F6',
+  white: '#FFFFFF',
+  success: '#087F5B',
+  danger: '#C62828',
+  warning: '#A76500',
+};
 
 
 // ============================================================
@@ -201,7 +200,7 @@ const TransactionReceipt: React.FC = () => {
       <Box
         sx={{
           minHeight: '100vh',
-          bgcolor: '#f5f7f6',
+          bgcolor: COLORS.background,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -212,8 +211,8 @@ const TransactionReceipt: React.FC = () => {
           sx={{
             width: '100%',
             maxWidth: 390,
-            bgcolor: '#ffffff',
-            border: '1px solid #dfe5e2',
+            bgcolor: COLORS.white,
+            border: `1px solid ${COLORS.border}`,
             p: 3,
             textAlign: 'center',
           }}
@@ -222,7 +221,7 @@ const TransactionReceipt: React.FC = () => {
             sx={{
               fontSize: 20,
               fontWeight: 800,
-              color: '#17231f',
+              color: COLORS.text,
               mb: 1,
             }}
           >
@@ -232,7 +231,7 @@ const TransactionReceipt: React.FC = () => {
           <Typography
             sx={{
               fontSize: 13,
-              color: '#6c7772',
+              color: COLORS.secondaryText,
               mb: 2.5,
             }}
           >
@@ -247,11 +246,11 @@ const TransactionReceipt: React.FC = () => {
               navigate('/transactions')
             }
             sx={{
-              bgcolor: '#087f5b',
+              bgcolor: COLORS.primary,
               borderRadius: 1,
               fontWeight: 800,
               '&:hover': {
-                bgcolor: '#066b4c',
+                bgcolor: COLORS.darkGreen,
               },
             }}
           >
@@ -264,64 +263,66 @@ const TransactionReceipt: React.FC = () => {
 
 
   // ==========================================================
-  // LOCAL USER / ACCOUNT FALLBACK
+  // LOCAL USER
   // ==========================================================
 
-  const getLocalUser =
-    (): LocalUser => {
-      try {
-        const raw =
-          localStorage.getItem(
-            'zenimonies_user'
-          );
+  const getLocalUser = (): LocalUser => {
+    try {
+      const raw =
+        localStorage.getItem(
+          'zenimonies_user'
+        );
 
-        if (!raw) {
-          return {};
-        }
-
-        const parsed =
-          JSON.parse(raw);
-
-        return parsed || {};
-      } catch {
+      if (!raw) {
         return {};
       }
-    };
+
+      const parsed =
+        JSON.parse(raw);
+
+      return parsed || {};
+    } catch {
+      return {};
+    }
+  };
 
 
-  const getLocalAccount =
-    (): LocalAccount => {
-      try {
-        const raw =
-          localStorage.getItem(
-            'zenimonies_accounts'
-          );
+  // ==========================================================
+  // LOCAL ACCOUNT
+  // ==========================================================
 
-        if (!raw) {
-          return {};
-        }
+  const getLocalAccount = (): LocalAccount => {
+    try {
+      const raw =
+        localStorage.getItem(
+          'zenimonies_accounts'
+        );
 
-        const parsed =
-          JSON.parse(raw);
-
-        if (Array.isArray(parsed)) {
-          return (
-            parsed.find(
-              (account: LocalAccount) =>
-                String(
-                  account.currency || ''
-                ).toUpperCase() === 'NGN'
-            ) ||
-            parsed[0] ||
-            {}
-          );
-        }
-
-        return parsed || {};
-      } catch {
+      if (!raw) {
         return {};
       }
-    };
+
+      const parsed =
+        JSON.parse(raw);
+
+      if (Array.isArray(parsed)) {
+        return (
+          parsed.find(
+            (account: LocalAccount) =>
+              String(
+                account.currency || ''
+              ).toUpperCase() === 'NGN'
+          ) ||
+          parsed[0] ||
+          {}
+        );
+      }
+
+      return parsed || {};
+    } catch {
+      return {};
+    }
+  };
 
 
   const localUser =
@@ -390,7 +391,7 @@ const TransactionReceipt: React.FC = () => {
 
 
   // ==========================================================
-  // REFERENCE
+  // REFERENCES
   // ==========================================================
 
   const reference =
@@ -510,36 +511,18 @@ const TransactionReceipt: React.FC = () => {
 
 
   // ==========================================================
-  // PEOPLE
+  // LOCAL USER DETAILS
   // ==========================================================
 
   const localUserFullName =
     localUser.full_name ||
     localUser.name ||
-    (
-      [
-        localUser.first_name,
-        localUser.last_name,
-      ]
-        .filter(Boolean)
-        .join(' ')
-    );
-
-
-  const senderName =
-    transaction.sender_name ||
-    (
-      isTransfer || isBill || isAirtime || isData
-        ? localUserFullName
-        : ''
-    ) ||
-    '';
-
-
-  const senderPhone =
-    transaction.sender_phone ||
-    localUser.phone ||
-    '';
+    [
+      localUser.first_name,
+      localUser.last_name,
+    ]
+      .filter(Boolean)
+      .join(' ');
 
 
   const localAccountNumber =
@@ -550,11 +533,31 @@ const TransactionReceipt: React.FC = () => {
     '';
 
 
+  // ==========================================================
+  // SENDER
+  // ==========================================================
+
+  const senderName =
+    transaction.sender_name ||
+    localUserFullName ||
+    '';
+
+
+  const senderPhone =
+    transaction.sender_phone ||
+    localUser.phone ||
+    '';
+
+
   const senderAccount =
     transaction.sender_account ||
     localAccountNumber ||
     '';
 
+
+  // ==========================================================
+  // RECEIVER
+  // ==========================================================
 
   const receiverName =
     transaction.recipient_name ||
@@ -574,35 +577,41 @@ const TransactionReceipt: React.FC = () => {
 
 
   // ==========================================================
-  // BANK DETAILS
+  // RECEIVER BANK
+  //
+  // IMPORTANT:
+  // We deliberately use Receiver Bank.
+  // Sender Bank is NOT displayed.
   // ==========================================================
 
-  const recipientBank =
+  const receiverBank =
     transaction.recipient_bank ||
     transaction.bank_name ||
-    '';
-
-
-  const senderBank =
-    transaction.sender_bank ||
     (
-      isTransfer &&
-      recipientBank
-        .toLowerCase()
-        .includes('zenimonies')
+      isZenimoniesTransferCandidate(
+        rawType,
+        transaction
+      )
         ? 'Zenimonies'
         : ''
     );
 
 
+  // ==========================================================
+  // ZENIMONIES TRANSFER
+  // ==========================================================
+
   const isZenimoniesTransfer =
     isTransfer &&
     (
-      recipientBank
+      receiverBank
         .toLowerCase()
         .includes('zenimonies') ||
       rawType.includes(
         'internal_transfer'
+      ) ||
+      rawType.includes(
+        'zenimonies_transfer'
       )
     );
 
@@ -629,6 +638,10 @@ const TransactionReceipt: React.FC = () => {
     transaction.variation_name ||
     '';
 
+
+  // ==========================================================
+  // BILL DETAILS
+  // ==========================================================
 
   const customerNumber =
     transaction.customer_number ||
@@ -685,8 +698,7 @@ const TransactionReceipt: React.FC = () => {
   // ==========================================================
   // TOTAL DEBIT
   //
-  // IMPORTANT:
-  // ONLY TRANSFERS USE TRANSACTION FEE.
+  // ONLY BANK TRANSFERS USE THE TRANSACTION FEE.
   // ==========================================================
 
   let totalDebited =
@@ -727,10 +739,7 @@ const TransactionReceipt: React.FC = () => {
     'Transaction Receipt';
 
 
-  if (isTransfer) {
-    receiptTitle =
-      'Transaction Receipt';
-  } else if (isElectricity) {
+  if (isElectricity) {
     receiptTitle =
       'Electricity Payment Receipt';
   } else if (isAirtime) {
@@ -831,6 +840,14 @@ const TransactionReceipt: React.FC = () => {
         : isPending
           ? 'Transaction Pending'
           : 'Transaction Unconfirmed';
+
+
+  const statusColor =
+    isSuccessful
+      ? COLORS.success
+      : isFailed
+        ? COLORS.danger
+        : COLORS.warning;
 
 
   // ==========================================================
@@ -1085,7 +1102,7 @@ const TransactionReceipt: React.FC = () => {
         borderBottom:
           last
             ? 'none'
-            : '1px solid #e1e4e3',
+            : `1px solid ${COLORS.border}`,
       }}
     >
       <Box
@@ -1096,9 +1113,9 @@ const TransactionReceipt: React.FC = () => {
       >
         <Typography
           sx={{
-            color: '#e07b25',
+            color: COLORS.labelGreen,
             fontSize: 11.5,
-            fontWeight: 800,
+            fontWeight: 750,
             lineHeight: 1.2,
           }}
         >
@@ -1116,9 +1133,9 @@ const TransactionReceipt: React.FC = () => {
         {children || (
           <Typography
             sx={{
-              color: '#244d86',
+              color: COLORS.text,
               fontSize: 11.5,
-              fontWeight: 600,
+              fontWeight: 650,
               lineHeight: 1.35,
               wordBreak: 'break-word',
             }}
@@ -1138,27 +1155,23 @@ const TransactionReceipt: React.FC = () => {
   const ReferenceRow = ({
     label,
     value,
-    last = false,
   }: {
     label: string;
     value: string;
-    last?: boolean;
   }) => (
     <ReceiptRow
       label={label}
-      last={last}
       children={
         <Stack
           direction="row"
           spacing={0.5}
           alignItems="center"
-          justifyContent="flex-start"
         >
           <Typography
             sx={{
-              color: '#244d86',
+              color: COLORS.text,
               fontSize: 10.5,
-              fontWeight: 600,
+              fontWeight: 650,
               wordBreak: 'break-all',
               lineHeight: 1.3,
             }}
@@ -1174,7 +1187,7 @@ const TransactionReceipt: React.FC = () => {
               width: 24,
               height: 24,
               p: 0,
-              color: '#087f5b',
+              color: COLORS.primary,
               flexShrink: 0,
             }}
           >
@@ -1191,21 +1204,21 @@ const TransactionReceipt: React.FC = () => {
 
 
   // ==========================================================
-  // HEADER LABEL
+  // MESSAGE
   // ==========================================================
 
-  const HeaderLabel =
+  const successMessage =
     isElectricity
-      ? 'Electricity Payment'
+      ? 'Your electricity payment has been completed successfully.'
       : isAirtime
-        ? 'Airtime Purchase'
+        ? 'Your airtime purchase has been completed successfully.'
         : isData
-          ? 'Data Purchase'
+          ? 'Your data purchase has been completed successfully.'
           : isTV
-            ? 'TV Subscription'
+            ? 'Your TV subscription payment has been completed successfully.'
             : isTransfer
-              ? 'Bank Transfer'
-              : 'Bill Payment';
+              ? 'Your bank transfer has been completed successfully.'
+              : 'Your transaction has been completed successfully.';
 
 
   // ==========================================================
@@ -1217,7 +1230,7 @@ const TransactionReceipt: React.FC = () => {
       className="receipt-page"
       sx={{
         minHeight: '100vh',
-        bgcolor: '#f5f7f6',
+        bgcolor: COLORS.background,
         py: 2,
         px: 1,
       }}
@@ -1240,11 +1253,11 @@ const TransactionReceipt: React.FC = () => {
           className="receipt-document"
           sx={{
             width: '100%',
-            bgcolor: '#ffffff',
+            bgcolor: COLORS.white,
             border:
-              '1px solid #e0e4e2',
+              '1px solid #DCE3E0',
             px: {
-              xs: 2.3,
+              xs: 2.2,
               sm: 4,
             },
             pt: 3,
@@ -1273,14 +1286,15 @@ const TransactionReceipt: React.FC = () => {
                   width: 42,
                   height: 42,
                   border:
-                    '3px solid #087f5b',
+                    `3px solid ${COLORS.primary}`,
                   borderRadius: 1,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#087f5b',
+                  color: COLORS.primary,
                   fontSize: 27,
                   fontWeight: 900,
+                  flexShrink: 0,
                 }}
               >
                 Z
@@ -1293,7 +1307,7 @@ const TransactionReceipt: React.FC = () => {
               >
                 <Typography
                   sx={{
-                    color: '#087f5b',
+                    color: COLORS.primary,
                     fontSize: 25,
                     fontWeight: 900,
                     letterSpacing: 0.5,
@@ -1305,7 +1319,7 @@ const TransactionReceipt: React.FC = () => {
 
                 <Typography
                   sx={{
-                    color: '#087f5b',
+                    color: COLORS.primary,
                     fontSize: 7,
                     fontWeight: 800,
                     letterSpacing: 3,
@@ -1326,7 +1340,7 @@ const TransactionReceipt: React.FC = () => {
           <Typography
             sx={{
               textAlign: 'center',
-              color: '#174a88',
+              color: COLORS.primary,
               fontSize: 21,
               fontWeight: 800,
               mb: 0.8,
@@ -1337,13 +1351,13 @@ const TransactionReceipt: React.FC = () => {
 
 
           {/* ==================================================
-              GENERATED LINE
+              GENERATED
           =================================================== */}
 
           <Typography
             sx={{
               textAlign: 'center',
-              color: '#9a9f9d',
+              color: '#8C9691',
               fontSize: 10,
               fontWeight: 500,
               mb: 2.2,
@@ -1363,13 +1377,11 @@ const TransactionReceipt: React.FC = () => {
           <Box
             sx={{
               borderTop:
-                '1px solid #d9dddb',
+                `1px solid ${COLORS.border}`,
             }}
           >
 
-            {/* ------------------------------------------------
-                AMOUNT
-            ------------------------------------------------- */}
+            {/* AMOUNT */}
 
             <ReceiptRow
               label="Transaction Amount"
@@ -1381,9 +1393,7 @@ const TransactionReceipt: React.FC = () => {
             />
 
 
-            {/* ------------------------------------------------
-                TYPE
-            ------------------------------------------------- */}
+            {/* TYPE */}
 
             <ReceiptRow
               label="Transaction Type"
@@ -1393,9 +1403,7 @@ const TransactionReceipt: React.FC = () => {
             />
 
 
-            {/* ------------------------------------------------
-                DATE
-            ------------------------------------------------- */}
+            {/* DATE */}
 
             <ReceiptRow
               label="Transaction Date"
@@ -1432,25 +1440,16 @@ const TransactionReceipt: React.FC = () => {
                 )}
 
 
-                {senderBank && (
-                  <ReceiptRow
-                    label="Sender Bank"
-                    value={
-                      senderBank
-                    }
-                  />
-                )}
-
-
                 <ReceiptRow
                   label="Beneficiary"
                   children={
                     <Box>
                       <Typography
                         sx={{
-                          color: '#244d86',
+                          color: COLORS.text,
                           fontSize: 11.5,
-                          fontWeight: 600,
+                          fontWeight: 650,
+                          lineHeight: 1.35,
                         }}
                       >
                         {receiverName || '—'}
@@ -1459,26 +1458,13 @@ const TransactionReceipt: React.FC = () => {
                       {receiverAccount && (
                         <Typography
                           sx={{
-                            color: '#244d86',
+                            color: COLORS.text,
                             fontSize: 11.5,
-                            fontWeight: 600,
+                            fontWeight: 650,
                             mt: 0.35,
                           }}
                         >
                           {receiverAccount}
-                        </Typography>
-                      )}
-
-                      {recipientBank && (
-                        <Typography
-                          sx={{
-                            color: '#244d86',
-                            fontSize: 11.5,
-                            fontWeight: 600,
-                            mt: 0.35,
-                          }}
-                        >
-                          {recipientBank}
                         </Typography>
                       )}
                     </Box>
@@ -1486,9 +1472,19 @@ const TransactionReceipt: React.FC = () => {
                 />
 
 
-                {/* =================================================
-                    TRANSACTION FEE — TRANSFERS ONLY
-                ================================================== */}
+                {/* RECEIVER BANK */}
+
+                <ReceiptRow
+                  label="Receiver Bank"
+                  value={
+                    receiverBank ||
+                    '—'
+                  }
+                />
+
+
+                {/* TRANSACTION FEE
+                    TRANSFERS ONLY */}
 
                 <ReceiptRow
                   label="Transaction Fee"
@@ -1585,20 +1581,16 @@ const TransactionReceipt: React.FC = () => {
                 )}
 
 
-                {/* ---------------------------------------------
-                    PREPAID TOKEN
-                ---------------------------------------------- */}
-
                 {electricityToken && (
                   <ReceiptRow
                     label="Electricity Token"
                     children={
                       <Typography
                         sx={{
-                          color: '#244d86',
+                          color: COLORS.text,
                           fontSize: 12,
                           fontWeight: 800,
-                          letterSpacing: 0.6,
+                          letterSpacing: 0.5,
                           wordBreak: 'break-all',
                         }}
                       >
@@ -1619,11 +1611,6 @@ const TransactionReceipt: React.FC = () => {
                 )}
 
 
-                {/* ---------------------------------------------
-                    NO FEE LINE HERE
-                ---------------------------------------------- */}
-
-
                 {providerReference && (
                   <ReceiptRow
                     label="Provider Reference"
@@ -1632,6 +1619,12 @@ const TransactionReceipt: React.FC = () => {
                     }
                   />
                 )}
+
+                {/* IMPORTANT:
+                    NO TRANSACTION FEE
+                    NO SERVICE FEE
+                    NO RECEIVER
+                */}
 
               </>
             )}
@@ -1679,8 +1672,6 @@ const TransactionReceipt: React.FC = () => {
                   }
                 />
 
-                {/* NO FEE LINE */}
-
 
                 {providerReference && (
                   <ReceiptRow
@@ -1690,6 +1681,8 @@ const TransactionReceipt: React.FC = () => {
                     }
                   />
                 )}
+
+                {/* NO FEE */}
 
               </>
             )}
@@ -1747,8 +1740,6 @@ const TransactionReceipt: React.FC = () => {
                   />
                 )}
 
-                {/* NO FEE LINE */}
-
 
                 {providerReference && (
                   <ReceiptRow
@@ -1758,6 +1749,8 @@ const TransactionReceipt: React.FC = () => {
                     }
                   />
                 )}
+
+                {/* NO FEE */}
 
               </>
             )}
@@ -1820,9 +1813,6 @@ const TransactionReceipt: React.FC = () => {
                   )}
 
 
-                  {/* NO FEE LINE */}
-
-
                   {providerReference && (
                     <ReceiptRow
                       label="Provider Reference"
@@ -1831,6 +1821,8 @@ const TransactionReceipt: React.FC = () => {
                       }
                     />
                   )}
+
+                  {/* NO FEE */}
 
                 </>
               )}
@@ -1860,11 +1852,7 @@ const TransactionReceipt: React.FC = () => {
                 <Typography
                   sx={{
                     color:
-                      isSuccessful
-                        ? '#087f5b'
-                        : isFailed
-                          ? '#c62828'
-                          : '#a76500',
+                      statusColor,
                     fontSize: 11.5,
                     fontWeight: 800,
                   }}
@@ -1879,63 +1867,59 @@ const TransactionReceipt: React.FC = () => {
 
 
           {/* ==================================================
-              SUCCESS / FAILURE MESSAGE
-          =================================================== */}
+              MESSAGE
+          ================================================== */}
 
           <Box
             sx={{
               borderTop:
-                '1px solid #d9dddb',
+                `1px solid ${COLORS.border}`,
               mt: 1.5,
               pt: 1.3,
             }}
           >
             <Typography
               sx={{
-                color: '#5e6965',
+                color: COLORS.secondaryText,
                 fontSize: 10,
                 lineHeight: 1.45,
                 textAlign: 'center',
               }}
             >
-              {isSuccessful
-                ? `Your ${HeaderLabel.toLowerCase()} has been completed successfully.`
-                : isFailed
-                  ? `Your ${HeaderLabel.toLowerCase()} was not completed.`
-                  : `Your ${HeaderLabel.toLowerCase()} is being processed.`}
+              {successMessage}
             </Typography>
           </Box>
 
 
           {/* ==================================================
-              QR
-          =================================================== */}
+              QR CODE
+          ================================================== */}
 
           {reference && (
             <Box
               className="no-print"
               sx={{
                 textAlign: 'center',
-                mt: 1.8,
-                pt: 1.2,
+                mt: 1.5,
+                pt: 1.1,
                 borderTop:
-                  '1px solid #e5e7e6',
+                  `1px solid ${COLORS.border}`,
               }}
             >
               <Box
                 sx={{
                   display: 'inline-flex',
-                  p: 0.5,
+                  p: 0.4,
                   border:
-                    '1px solid #d7dedb',
-                  bgcolor: '#ffffff',
+                    '1px solid #D8E1DD',
+                  bgcolor: COLORS.white,
                 }}
               >
                 <QRCodeSVG
                   value={
                     reference
                   }
-                  size={86}
+                  size={58}
                   level="M"
                   includeMargin={false}
                 />
@@ -1943,9 +1927,9 @@ const TransactionReceipt: React.FC = () => {
 
               <Typography
                 sx={{
-                  mt: 0.6,
-                  color: '#7b8480',
-                  fontSize: 8.5,
+                  mt: 0.45,
+                  color: COLORS.secondaryText,
+                  fontSize: 8,
                   fontWeight: 500,
                 }}
               >
@@ -1957,20 +1941,20 @@ const TransactionReceipt: React.FC = () => {
 
           {/* ==================================================
               FOOTER
-          =================================================== */}
+          ================================================== */}
 
           <Box
             sx={{
-              mt: 2,
-              pt: 1.5,
+              mt: 1.8,
+              pt: 1.4,
               borderTop:
-                '1px solid #e1e4e3',
+                `1px solid ${COLORS.border}`,
               textAlign: 'center',
             }}
           >
             <Typography
               sx={{
-                color: '#8a918e',
+                color: COLORS.secondaryText,
                 fontSize: 9,
                 lineHeight: 1.45,
               }}
@@ -1980,9 +1964,10 @@ const TransactionReceipt: React.FC = () => {
 
             <Typography
               sx={{
-                color: '#087f5b',
+                color: COLORS.primary,
                 fontSize: 9,
-                fontWeight: 700,
+                fontWeight: 800,
+                letterSpacing: 2,
                 mt: 0.4,
               }}
             >
@@ -2026,12 +2011,12 @@ const TransactionReceipt: React.FC = () => {
                 pdfLoading
               }
               sx={{
-                bgcolor: '#087f5b',
+                bgcolor: COLORS.primary,
                 borderRadius: 1,
                 minHeight: 44,
                 fontWeight: 800,
                 '&:hover': {
-                  bgcolor: '#066b4c',
+                  bgcolor: COLORS.darkGreen,
                 },
               }}
             >
@@ -2054,14 +2039,18 @@ const TransactionReceipt: React.FC = () => {
                 pdfLoading
               }
               sx={{
-                borderColor: '#087f5b',
-                color: '#087f5b',
+                borderColor:
+                  COLORS.primary,
+                color:
+                  COLORS.primary,
                 borderRadius: 1,
                 minHeight: 44,
                 fontWeight: 800,
                 '&:hover': {
-                  borderColor: '#066b4c',
-                  bgcolor: '#eef8f4',
+                  borderColor:
+                    COLORS.darkGreen,
+                  bgcolor:
+                    '#EEF8F4',
                 },
               }}
             >
@@ -2086,8 +2075,10 @@ const TransactionReceipt: React.FC = () => {
               pdfLoading
             }
             sx={{
-              borderColor: '#d0d8d4',
-              color: '#46544e',
+              borderColor:
+                '#CDD8D3',
+              color:
+                '#46544E',
               borderRadius: 1,
               minHeight: 44,
               fontWeight: 750,
@@ -2158,6 +2149,33 @@ const TransactionReceipt: React.FC = () => {
     </Box>
   );
 };
+
+
+// ============================================================
+// HELPER
+// ============================================================
+
+function isZenimoniesTransferCandidate(
+  rawType: string,
+  transaction: Transaction
+): boolean {
+  const bank =
+    String(
+      transaction.recipient_bank ||
+      transaction.bank_name ||
+      ''
+    ).toLowerCase();
+
+  return (
+    bank.includes('zenimonies') ||
+    rawType.includes(
+      'internal_transfer'
+    ) ||
+    rawType.includes(
+      'zenimonies_transfer'
+    )
+  );
+}
 
 
 export default TransactionReceipt;
