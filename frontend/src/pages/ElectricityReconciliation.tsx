@@ -51,6 +51,15 @@ const getToken = (): string | null => {
     ) ||
     localStorage.getItem(
       'access_token'
+    ) ||
+    sessionStorage.getItem(
+      'zenimonies_token'
+    ) ||
+    sessionStorage.getItem(
+      'token'
+    ) ||
+    sessionStorage.getItem(
+      'access_token'
     )
   );
 };
