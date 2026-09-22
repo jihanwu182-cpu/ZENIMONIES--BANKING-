@@ -1,644 +1,453 @@
-import React, {
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
-
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
 const API_URL =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com';
 
-interface ElectricityPayment {
-  id: string;
-  reference: string;
-  biller_name: string;
-  category: string;
-  customer_reference: string;
-  customer_name?: string;
-  amount: string | number;
-  currency: string;
-  status: string;
-  provider_reference?: string;
-  provider_request_id?: string;
-  failure_reason?: string;
-  meter_type?: string;
-  meter_number?: string;
-  verification_status?: string;
-  verified_customer_name?: string;
-  verified_customer_address?: string;
-  electricity_token?: string;
-  units?: string;
-  tariff_class?: string;
-  provider_response_message?: string;
-  provider_response?: unknown;
-  created_at?: string;
-  completed_at?: string;
+interface StorageStatus {
+  localZenimonies: boolean;
+  localToken: boolean;
+  localAccessToken: boolean;
+  sessionZenimonies: boolean;
+  sessionToken: boolean;
+  sessionAccessToken: boolean;
 }
 
-/* ============================================================
-   TOKEN
-   ============================================================ */
+const getStorageStatus = (): StorageStatus => {
+  return {
+    localZenimonies: Boolean(
+      localStorage.getItem('zenimonies_token')
+    ),
+
+    localToken: Boolean(
+      localStorage.getItem('token')
+    ),
+
+    localAccessToken: Boolean(
+      localStorage.getItem('access_token')
+    ),
+
+    sessionZenimonies: Boolean(
+      sessionStorage.getItem('zenimonies_token')
+    ),
+
+    sessionToken: Boolean(
+      sessionStorage.getItem('token')
+    ),
+
+    sessionAccessToken: Boolean(
+      sessionStorage.getItem('access_token')
+    ),
+  };
+};
 
 const getToken = (): string | null => {
   return (
-    localStorage.getItem(
-      'zenimonies_token'
-    ) ||
-    localStorage.getItem(
-      'token'
-    ) ||
-    localStorage.getItem(
-      'access_token'
-    ) ||
-    sessionStorage.getItem(
-      'zenimonies_token'
-    ) ||
-    sessionStorage.getItem(
-      'token'
-    ) ||
-    sessionStorage.getItem(
-      'access_token'
-    )
+    localStorage.getItem('zenimonies_token') ||
+    localStorage.getItem('token') ||
+    localStorage.getItem('access_token') ||
+    sessionStorage.getItem('zenimonies_token') ||
+    sessionStorage.getItem('token') ||
+    sessionStorage.getItem('access_token')
   );
 };
 
-/* ============================================================
-   ELECTRICITY RECONCILIATION
-   ============================================================ */
+const ElectricityReconciliation: React.FC = () => {
+  const [storage, setStorage] =
+    useState<StorageStatus | null>(null);
 
-const ElectricityReconciliation: React.FC =
-  () => {
-    const [
-      payments,
-      setPayments,
-    ] = useState<ElectricityPayment[]>(
-      []
+  const [checking, setChecking] =
+    useState(false);
+
+  const [result, setResult] =
+    useState('');
+
+  const runDiagnostic = async () => {
+    setChecking(true);
+    setResult('');
+
+    const currentStorage =
+      getStorageStatus();
+
+    setStorage(currentStorage);
+
+    const token = getToken();
+
+    console.log(
+      '========== ZENIMONIES AUTH DIAGNOSTIC =========='
     );
 
-    const [
-      loading,
-      setLoading,
-    ] = useState(true);
+    console.log(
+      'localStorage zenimonies_token:',
+      currentStorage.localZenimonies
+    );
 
-    const [
-      error,
-      setError,
-    ] = useState('');
+    console.log(
+      'localStorage token:',
+      currentStorage.localToken
+    );
 
-    /* ========================================================
-       LOAD PAYMENTS
-    ======================================================== */
+    console.log(
+      'localStorage access_token:',
+      currentStorage.localAccessToken
+    );
 
-    const loadPayments =
-      useCallback(async () => {
-        setLoading(true);
-        setError('');
+    console.log(
+      'sessionStorage zenimonies_token:',
+      currentStorage.sessionZenimonies
+    );
 
-        try {
-          /*
-           * Use EXACTLY the same token
-           * storage order as Dashboard.
-           */
-          const token =
-            getToken();
+    console.log(
+      'sessionStorage token:',
+      currentStorage.sessionToken
+    );
 
-          if (!token) {
-            console.error(
-              'ZENIMONIES RECONCILIATION: token not found'
-            );
+    console.log(
+      'sessionStorage access_token:',
+      currentStorage.sessionAccessToken
+    );
 
-            setError(
-              'Your secure login session could not be found. Please sign in again.'
-            );
+    console.log(
+      'Token found:',
+      Boolean(token)
+    );
 
-            return;
+    /*
+     * NEVER print the actual token.
+     */
+
+    if (!token) {
+      setResult(
+        'NO TOKEN FOUND IN BROWSER STORAGE'
+      );
+
+      setChecking(false);
+      return;
+    }
+
+    try {
+      const response =
+        await axios.get(
+          `${API_URL}/api/bills/electricity/reconciliation`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+
+            timeout: 30000,
           }
-
-          console.log(
-            'ZENIMONIES RECONCILIATION: token found'
-          );
-
-          const response =
-            await axios.get(
-              `${API_URL}/api/bills/electricity/reconciliation`,
-              {
-                headers: {
-                  Authorization:
-                    `Bearer ${token}`,
-                },
-
-                timeout: 30000,
-              }
-            );
-
-          /*
-           * Successful response.
-           */
-          if (
-            response.data?.success ===
-            true
-          ) {
-            setPayments(
-              response.data.payments ||
-                []
-            );
-
-            return;
-          }
-
-          setError(
-            response.data?.message ||
-              'Unable to load electricity reconciliation data.'
-          );
-        } catch (err: any) {
-          console.error(
-            'ZENIMONIES RECONCILIATION ERROR:',
-            err
-          );
-
-          /*
-           * Authentication error.
-           */
-          if (
-            err?.response?.status ===
-            401
-          ) {
-            const code =
-              err?.response?.data?.code;
-
-            if (
-              code ===
-              'SESSION_EXPIRED'
-            ) {
-              setError(
-                'Your account session has expired. Please unlock your account to continue.'
-              );
-
-              return;
-            }
-
-            setError(
-              err?.response?.data?.message ||
-                'Your secure login session is no longer valid. Please sign in again.'
-            );
-
-            return;
-          }
-
-          /*
-           * Server error.
-           */
-          if (
-            err?.response
-          ) {
-            setError(
-              err?.response?.data?.message ||
-                `Server error: HTTP ${err.response.status}`
-            );
-
-            return;
-          }
-
-          /*
-           * Network error.
-           */
-          setError(
-            'Unable to reach the Zenimonies server. Please try again.'
-          );
-        } finally {
-          setLoading(false);
-        }
-      }, []);
-
-    /* ========================================================
-       INITIAL LOAD
-    ======================================================== */
-
-    useEffect(() => {
-      loadPayments();
-    }, [
-      loadPayments,
-    ]);
-
-    /* ========================================================
-       FORMAT AMOUNT
-    ======================================================== */
-
-    const formatAmount =
-      (
-        amount: string | number,
-        currency: string
-      ) => {
-        try {
-          return new Intl.NumberFormat(
-            'en-NG',
-            {
-              style:
-                'currency',
-              currency:
-                currency ||
-                'NGN',
-            }
-          ).format(
-            Number(amount)
-          );
-        } catch {
-          return `₦${Number(
-            amount
-          ).toLocaleString(
-            'en-NG'
-          )}`;
-        }
-      };
-
-    /* ========================================================
-       FORMAT DATE
-    ======================================================== */
-
-    const formatDate =
-      (
-        value?: string
-      ) => {
-        if (!value) {
-          return '—';
-        }
-
-        const date =
-          new Date(value);
-
-        if (
-          Number.isNaN(
-            date.getTime()
-          )
-        ) {
-          return '—';
-        }
-
-        return date.toLocaleString(
-          'en-NG'
         );
-      };
 
-    /* ========================================================
-       FORMAT PROVIDER RESPONSE
-    ======================================================== */
+      console.log(
+        'Reconciliation API status:',
+        response.status
+      );
 
-    const formatJson =
-      (
-        value: unknown
-      ) => {
-        if (
-          value ===
-            null ||
-          value ===
-            undefined
-        ) {
-          return 'No provider response stored.';
-        }
+      console.log(
+        'Reconciliation API success:',
+        response.data?.success
+      );
 
-        try {
-          return JSON.stringify(
-            value,
-            null,
-            2
-          );
-        } catch {
-          return String(value);
-        }
-      };
+      setResult(
+        `TOKEN FOUND — API RESPONSE HTTP ${response.status}`
+      );
+    } catch (error: any) {
+      console.error(
+        'Reconciliation diagnostic API error:',
+        error
+      );
 
-    /* ========================================================
-       RENDER
-    ======================================================== */
+      const status =
+        error?.response?.status;
 
-    return (
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Unknown error';
+
+      if (status) {
+        setResult(
+          `TOKEN FOUND — API RETURNED HTTP ${status}: ${message}`
+        );
+      } else {
+        setResult(
+          `TOKEN FOUND — API REQUEST FAILED: ${message}`
+        );
+      }
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    runDiagnostic();
+  }, []);
+
+  const statusLabel = (
+    value: boolean
+  ) => value ? 'YES' : 'NO';
+
+  const statusStyle = (
+    value: boolean
+  ): React.CSSProperties => ({
+    fontWeight: 800,
+    color:
+      value
+        ? '#087443'
+        : '#b42318',
+  });
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: '#f5f7f6',
+        padding: '24px 16px 40px',
+        boxSizing: 'border-box',
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+      }}
+    >
       <div
         style={{
-          minHeight:
-            '100vh',
-          background:
-            '#f5f5f5',
-          padding:
-            '20px',
-          boxSizing:
-            'border-box',
+          maxWidth: 620,
+          margin: '0 auto',
         }}
       >
-        <div
+        <h1
           style={{
-            maxWidth:
-              '900px',
-            margin:
-              '0 auto',
+            marginTop: 0,
+            color: '#172033',
           }}
         >
-          <h1>
-            Electricity Reconciliation
-          </h1>
+          Authentication Diagnostic
+        </h1>
 
-          <p>
-            Read-only diagnostic
-            screen. No payment,
-            debit, refund, or
-            status change is
-            performed here.
-          </p>
+        <p
+          style={{
+            color: '#667085',
+            lineHeight: 1.6,
+          }}
+        >
+          This is a temporary read-only diagnostic.
+          It does not make an electricity payment,
+          debit your account, issue a refund, or
+          change any transaction status.
+        </p>
 
-          <button
-            type="button"
-            onClick={
-              loadPayments
-            }
-            disabled={
-              loading
-            }
+        {/* RESULT */}
+
+        {result && (
+          <div
             style={{
-              padding:
-                '10px 16px',
-              marginBottom:
-                '20px',
-              cursor:
-                loading
-                  ? 'not-allowed'
-                  : 'pointer',
+              marginTop: 20,
+              padding: 16,
+              borderRadius: 12,
+              background: '#ffffff',
+              border:
+                '1px solid #d0d5dd',
+              fontWeight: 700,
+              color: '#172033',
+              wordBreak: 'break-word',
             }}
           >
-            {loading
-              ? 'Loading...'
-              : 'Refresh'}
-          </button>
+            {result}
+          </div>
+        )}
 
-          {error && (
-            <div
-              style={{
-                background:
-                  '#ffebee',
-                border:
-                  '1px solid #ef9a9a',
-                padding:
-                  '15px',
-                marginBottom:
-                  '20px',
-                borderRadius:
-                  '8px',
-                color:
-                  '#b71c1c',
-              }}
+        {/* LOCAL STORAGE */}
+
+        <div
+          style={{
+            marginTop: 20,
+            background: '#ffffff',
+            borderRadius: 14,
+            padding: 20,
+            boxShadow:
+              '0 2px 8px rgba(0,0,0,0.06)',
+          }}
+        >
+          <h2
+            style={{
+              marginTop: 0,
+              color: '#172033',
+            }}
+          >
+            localStorage
+          </h2>
+
+          <p>
+            zenimonies_token:{' '}
+            <span
+              style={statusStyle(
+                storage?.localZenimonies ||
+                  false
+              )}
             >
-              {error}
-            </div>
-          )}
+              {storage
+                ? statusLabel(
+                    storage.localZenimonies
+                  )
+                : 'CHECKING...'}
+            </span>
+          </p>
 
-          {!loading &&
-            !error &&
-            payments.length ===
-              0 && (
-              <div
-                style={{
-                  background:
-                    '#fff',
-                  padding:
-                    '20px',
-                  borderRadius:
-                    '8px',
-                }}
-              >
-                No electricity
-                payments were
-                found.
-              </div>
-            )}
+          <p>
+            token:{' '}
+            <span
+              style={statusStyle(
+                storage?.localToken ||
+                  false
+              )}
+            >
+              {storage
+                ? statusLabel(
+                    storage.localToken
+                  )
+                : 'CHECKING...'}
+            </span>
+          </p>
 
-          {payments.map(
-            (
-              payment
-            ) => (
-              <div
-                key={
-                  payment.id
-                }
-                style={{
-                  background:
-                    '#fff',
-                  borderRadius:
-                    '10px',
-                  padding:
-                    '20px',
-                  marginBottom:
-                    '20px',
-                  boxShadow:
-                    '0 2px 8px rgba(0,0,0,0.08)',
-                }}
-              >
-                <h2>
-                  {
-                    payment.biller_name
-                  }
-                </h2>
+          <p>
+            access_token:{' '}
+            <span
+              style={statusStyle(
+                storage?.localAccessToken ||
+                  false
+              )}
+            >
+              {storage
+                ? statusLabel(
+                    storage.localAccessToken
+                  )
+                : 'CHECKING...'}
+            </span>
+          </p>
+        </div>
 
-                <p>
-                  <strong>
-                    Reference:
-                  </strong>{' '}
-                  {
-                    payment.reference
-                  }
-                </p>
+        {/* SESSION STORAGE */}
 
-                <p>
-                  <strong>
-                    Amount:
-                  </strong>{' '}
-                  {formatAmount(
-                    payment.amount,
-                    payment.currency
-                  )}
-                </p>
+        <div
+          style={{
+            marginTop: 20,
+            background: '#ffffff',
+            borderRadius: 14,
+            padding: 20,
+            boxShadow:
+              '0 2px 8px rgba(0,0,0,0.06)',
+          }}
+        >
+          <h2
+            style={{
+              marginTop: 0,
+              color: '#172033',
+            }}
+          >
+            sessionStorage
+          </h2>
 
-                <p>
-                  <strong>
-                    Status:
-                  </strong>{' '}
-                  {
-                    payment.status
-                  }
-                </p>
+          <p>
+            zenimonies_token:{' '}
+            <span
+              style={statusStyle(
+                storage?.sessionZenimonies ||
+                  false
+              )}
+            >
+              {storage
+                ? statusLabel(
+                    storage.sessionZenimonies
+                  )
+                : 'CHECKING...'}
+            </span>
+          </p>
 
-                <p>
-                  <strong>
-                    Meter type:
-                  </strong>{' '}
-                  {
-                    payment.meter_type ||
-                    '—'
-                  }
-                </p>
+          <p>
+            token:{' '}
+            <span
+              style={statusStyle(
+                storage?.sessionToken ||
+                  false
+              )}
+            >
+              {storage
+                ? statusLabel(
+                    storage.sessionToken
+                  )
+                : 'CHECKING...'}
+            </span>
+          </p>
 
-                <p>
-                  <strong>
-                    Meter number:
-                  </strong>{' '}
-                  {
-                    payment.meter_number ||
-                    '—'
-                  }
-                </p>
+          <p>
+            access_token:{' '}
+            <span
+              style={statusStyle(
+                storage?.sessionAccessToken ||
+                  false
+              )}
+            >
+              {storage
+                ? statusLabel(
+                    storage.sessionAccessToken
+                  )
+                : 'CHECKING...'}
+            </span>
+          </p>
+        </div>
 
-                <p>
-                  <strong>
-                    Provider reference:
-                  </strong>{' '}
-                  {
-                    payment.provider_reference ||
-                    '—'
-                  }
-                </p>
+        {/* REFRESH */}
 
-                <p>
-                  <strong>
-                    Sogo request ID:
-                  </strong>{' '}
-                  {
-                    payment.provider_request_id ||
-                    '—'
-                  }
-                </p>
+        <button
+          type="button"
+          onClick={runDiagnostic}
+          disabled={checking}
+          style={{
+            width: '100%',
+            marginTop: 24,
+            height: 54,
+            border: 'none',
+            borderRadius: 12,
+            background:
+              checking
+                ? '#98a2b3'
+                : '#159447',
+            color: '#ffffff',
+            fontSize: 16,
+            fontWeight: 800,
+            cursor:
+              checking
+                ? 'not-allowed'
+                : 'pointer',
+          }}
+        >
+          {checking
+            ? 'Checking...'
+            : 'Run Diagnostic Again'}
+        </button>
 
-                <p>
-                  <strong>
-                    Verification
-                    status:
-                  </strong>{' '}
-                  {
-                    payment.verification_status ||
-                    '—'
-                  }
-                </p>
-
-                <p>
-                  <strong>
-                    Customer:
-                  </strong>{' '}
-                  {
-                    payment.verified_customer_name ||
-                    payment.customer_name ||
-                    '—'
-                  }
-                </p>
-
-                <p>
-                  <strong>
-                    Address:
-                  </strong>{' '}
-                  {
-                    payment.verified_customer_address ||
-                    '—'
-                  }
-                </p>
-
-                <p>
-                  <strong>
-                    Units:
-                  </strong>{' '}
-                  {
-                    payment.units ||
-                    '—'
-                  }
-                </p>
-
-                <p>
-                  <strong>
-                    Tariff class:
-                  </strong>{' '}
-                  {
-                    payment.tariff_class ||
-                    '—'
-                  }
-                </p>
-
-                <p>
-                  <strong>
-                    Electricity token:
-                  </strong>{' '}
-                  {
-                    payment.electricity_token ||
-                    '—'
-                  }
-                </p>
-
-                <p>
-                  <strong>
-                    Provider message:
-                  </strong>{' '}
-                  {
-                    payment.provider_response_message ||
-                    '—'
-                  }
-                </p>
-
-                <p>
-                  <strong>
-                    Failure reason:
-                  </strong>{' '}
-                  {
-                    payment.failure_reason ||
-                    '—'
-                  }
-                </p>
-
-                <p>
-                  <strong>
-                    Created:
-                  </strong>{' '}
-                  {formatDate(
-                    payment.created_at
-                  )}
-                </p>
-
-                <p>
-                  <strong>
-                    Completed:
-                  </strong>{' '}
-                  {formatDate(
-                    payment.completed_at
-                  )}
-                </p>
-
-                <h3>
-                  Stored Sogo
-                  Response
-                </h3>
-
-                <pre
-                  style={{
-                    background:
-                      '#111',
-                    color:
-                      '#fff',
-                    padding:
-                      '15px',
-                    borderRadius:
-                      '8px',
-                    overflowX:
-                      'auto',
-                    whiteSpace:
-                      'pre-wrap',
-                    wordBreak:
-                      'break-word',
-                  }}
-                >
-                  {formatJson(
-                    payment.provider_response
-                  )}
-                </pre>
-              </div>
-            )
-          )}
+        <div
+          style={{
+            marginTop: 20,
+            padding: 14,
+            borderRadius: 10,
+            background: '#fff7ed',
+            border:
+              '1px solid #fed7aa',
+            color: '#9a3412',
+            fontSize: 13,
+            lineHeight: 1.5,
+          }}
+        >
+          Security note: this page intentionally
+          shows only whether a token exists.
+          The actual authentication token is never
+          displayed.
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
 export default ElectricityReconciliation;
