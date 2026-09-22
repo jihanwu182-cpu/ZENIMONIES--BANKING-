@@ -76,16 +76,47 @@ const ElectricityReconciliation: React.FC = () => {
         getToken();
 
       if (!token) {
-        setError(
-          'Your session has expired. Please sign in again.'
-        );
+  console.error(
+    'ZENIMONIES RECONCILIATION: NO TOKEN FOUND'
+  );
 
-        return;
-      }
+  console.error(
+    'zenimonies_token exists:',
+    Boolean(
+      localStorage.getItem(
+        'zenimonies_token'
+      )
+    )
+  );
 
-      console.log(
-        'ZENIMONIES RECONCILIATION: authentication token found'
-      );
+  console.error(
+    'token exists:',
+    Boolean(
+      localStorage.getItem(
+        'token'
+      )
+    )
+  );
+
+  setError(
+    'Authentication token was not found on this page. Please sign in again.'
+  );
+
+  return;
+}
+
+console.log(
+  'ZENIMONIES RECONCILIATION: authentication token FOUND'
+);
+
+console.log(
+  'Token source:',
+  localStorage.getItem(
+    'zenimonies_token'
+  )
+    ? 'zenimonies_token'
+    : 'token'
+);
 
       const response =
         await axios.get(
