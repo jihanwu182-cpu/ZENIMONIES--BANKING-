@@ -788,53 +788,94 @@ const purchaseElectricity = async (req, res) => {
     );
 
     // ========================================================
-    // READ PROVIDER DATA
-    // ========================================================
+// READ AND NORMALIZE SOGO PROVIDER DATA
+// ========================================================
 
-    const purchaseData =
-      purchaseResult?.data ||
-      {};
+const rawProviderData =
+  purchaseResult?.data ||
+  {};
 
-    const providerStatus =
-      String(
-        purchaseData?.status ||
-        ''
-      )
-        .trim()
-        .toLowerCase();
+const purchaseData =
+  rawProviderData?.transaction ||
+  rawProviderData;
 
-    const providerReference =
-      purchaseData?.reference ||
-      null;
+const providerStatus =
+  String(
+    purchaseData?.status ||
+    rawProviderData?.status ||
+    purchaseResult?.status ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
 
-    const providerMessage =
-      purchaseResult?.message ||
-      purchaseData?.message ||
-      null;
+const providerReference =
+  purchaseData?.reference ||
+  rawProviderData?.reference ||
+  purchaseResult?.reference ||
+  null;
 
-    const electricityToken =
-      purchaseData?.token ||
-      purchaseData?.electricity_token ||
-      purchaseData?.token_code ||
-      purchaseData?.prepaid_token ||
-      purchaseData?.pin ||
-      null;
+const providerMessage =
+  purchaseResult?.message ||
+  purchaseData?.message ||
+  rawProviderData?.message ||
+  null;
 
-    const units =
-      purchaseData?.units ||
-      purchaseData?.unit ||
-      purchaseData?.kwh ||
-      null;
+const electricityToken =
+  purchaseData?.token ||
+  purchaseData?.electricity_token ||
+  purchaseData?.token_code ||
+  purchaseData?.prepaid_token ||
+  purchaseData?.token_code ||
+  purchaseData?.pin ||
+  rawProviderData?.token ||
+  rawProviderData?.electricity_token ||
+  rawProviderData?.token_code ||
+  rawProviderData?.prepaid_token ||
+  null;
 
-    console.error(
-      'PARSED SOGO PROVIDER STATUS:',
-      providerStatus
-    );
+const units =
+  purchaseData?.units ||
+  purchaseData?.unit ||
+  purchaseData?.kwh ||
+  rawProviderData?.units ||
+  rawProviderData?.unit ||
+  rawProviderData?.kwh ||
+  null;
 
-    console.error(
-      'PARSED SOGO PROVIDER REFERENCE:',
-      providerReference
-    );
+console.error(
+  '========== NORMALIZED SOGO ELECTRICITY RESPONSE =========='
+);
+
+console.error(
+  'RAW PROVIDER DATA:',
+  JSON.stringify(rawProviderData)
+);
+
+console.error(
+  'NORMALIZED PROVIDER DATA:',
+  JSON.stringify(purchaseData)
+);
+
+console.error(
+  'NORMALIZED PROVIDER STATUS:',
+  providerStatus
+);
+
+console.error(
+  'NORMALIZED PROVIDER REFERENCE:',
+  providerReference
+);
+
+console.error(
+  'ELECTRICITY TOKEN PRESENT:',
+  Boolean(electricityToken)
+);
+
+console.error(
+  'ELECTRICITY UNITS:',
+  units
+);
 
     // ========================================================
     // COMPLETED
