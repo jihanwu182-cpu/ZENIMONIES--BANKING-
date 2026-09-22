@@ -664,7 +664,31 @@ const ElectricityReconciliation: React.FC = () => {
                           <strong>
                             Provider message:
                           </strong>{' '}
-                          {payment.provider_response_message}
+                          {payment.provider_response && (
+  <Box sx={{ mt: 2 }}>
+    <Typography
+      variant="subtitle2"
+      sx={{ fontWeight: 700, mb: 1 }}
+    >
+      Provider response
+    </Typography>
+
+    <Box
+      component="pre"
+      sx={{
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        fontSize: '12px',
+        backgroundColor: '#f5f5f5',
+        padding: 2,
+        borderRadius: 2,
+        overflowX: 'auto',
+      }}
+    >
+      {JSON.stringify(payment.provider_response, null, 2)}
+    </Box>
+  </Box>
+)}
                         </div>
                       )}
 
