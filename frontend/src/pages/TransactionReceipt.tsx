@@ -3,24 +3,15 @@ import React, { useRef, useState } from 'react';
 import {
   Box,
   Button,
-  Card,
-  Chip,
   Stack,
   Typography,
 } from '@mui/material';
 
 import {
   ArrowBackRounded,
-  ArrowUpwardRounded,
-  CalendarMonthRounded,
-  CheckCircleRounded,
-  ContentCopyRounded,
   DownloadRounded,
-  ErrorRounded,
-  PhoneRounded,
-  ScheduleRounded,
   ShareRounded,
-  TagRounded,
+  ContentCopyRounded,
 } from '@mui/icons-material';
 
 import {
@@ -49,7 +40,10 @@ interface Transaction {
   amount?: number | string;
   currency?: string;
 
-  // Transfer
+  // ----------------------------------------------------------
+  // TRANSFER
+  // ----------------------------------------------------------
+
   sender_name?: string;
   sender_phone?: string;
   sender_account?: string;
@@ -64,36 +58,110 @@ interface Transaction {
   bank_name?: string;
   account_number?: string;
 
-  // Airtime / Data
+  // ----------------------------------------------------------
+  // AIRTIME / DATA
+  // ----------------------------------------------------------
+
   provider?: string;
   network?: string;
   phone?: string;
+
   data_plan?: string;
   plan_name?: string;
   variation_name?: string;
 
-  // Bills
+  // ----------------------------------------------------------
+  // BILLS
+  // ----------------------------------------------------------
+
   customer_number?: string;
   meter_number?: string;
+  meter_type?: string;
+
   smartcard_number?: string;
   decoder_number?: string;
+
   customer_name?: string;
 
-  // Provider
+  // Electricity
+  electricity_token?: string;
+  token?: string;
+  units?: string | number;
+  tariff_class?: string;
+  verified_customer_name?: string;
+  verified_customer_address?: string;
+
+  // ----------------------------------------------------------
+  // PROVIDER
+  // ----------------------------------------------------------
+
   provider_reference?: string;
+  provider_request_id?: string;
+
+  // ----------------------------------------------------------
+  // REFERENCES
+  // ----------------------------------------------------------
 
   reference?: string;
   transaction_reference?: string;
 
+  // ----------------------------------------------------------
+  // STATUS
+  // ----------------------------------------------------------
+
   status?: string;
+
+  // ----------------------------------------------------------
+  // TRANSFER FEE ONLY
+  // ----------------------------------------------------------
 
   transaction_fee?: number | string;
   fee?: number | string;
   total_debit?: number | string;
 
+  // ----------------------------------------------------------
+  // DATE
+  // ----------------------------------------------------------
+
   created_at?: string;
   date?: string;
   timestamp?: string;
+
+  [key: string]: any;
+}
+
+
+// ============================================================
+// LOCAL USER
+// ============================================================
+
+interface LocalUser {
+  id?: string;
+  user_id?: string;
+
+  full_name?: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+
+  email?: string;
+  phone?: string;
+
+  account_number?: string;
+  accountNumber?: string;
+}
+
+
+// ============================================================
+// LOCAL ACCOUNT
+// ============================================================
+
+interface LocalAccount {
+  id?: string;
+  account_number?: string;
+  accountNumber?: string;
+  account_type?: string;
+  currency?: string;
 }
 
 
@@ -115,7 +183,7 @@ const TransactionReceipt: React.FC = () => {
 
 
   // ==========================================================
-  // REAL TRANSACTION
+  // TRANSACTION
   // ==========================================================
 
   const transaction =
@@ -133,28 +201,29 @@ const TransactionReceipt: React.FC = () => {
       <Box
         sx={{
           minHeight: '100vh',
-          bgcolor: '#f3faf7',
+          bgcolor: '#f5f7f6',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          p: 2,
+          px: 2,
         }}
       >
-        <Card
+        <Box
           sx={{
             width: '100%',
-            maxWidth: 360,
-            p: 2.5,
-            borderRadius: 3,
+            maxWidth: 390,
+            bgcolor: '#ffffff',
+            border: '1px solid #dfe5e2',
+            p: 3,
             textAlign: 'center',
           }}
         >
           <Typography
             sx={{
               fontSize: 20,
-              fontWeight: 850,
-              color: '#063b2b',
-              mb: 0.7,
+              fontWeight: 800,
+              color: '#17231f',
+              mb: 1,
             }}
           >
             Receipt unavailable
@@ -163,8 +232,8 @@ const TransactionReceipt: React.FC = () => {
           <Typography
             sx={{
               fontSize: 13,
-              color: '#718079',
-              mb: 2,
+              color: '#6c7772',
+              mb: 2.5,
             }}
           >
             Transaction details could not be found.
@@ -173,15 +242,13 @@ const TransactionReceipt: React.FC = () => {
           <Button
             fullWidth
             variant="contained"
-            startIcon={
-              <ArrowBackRounded />
-            }
+            startIcon={<ArrowBackRounded />}
             onClick={() =>
               navigate('/transactions')
             }
             sx={{
               bgcolor: '#087f5b',
-              borderRadius: 2,
+              borderRadius: 1,
               fontWeight: 800,
               '&:hover': {
                 bgcolor: '#066b4c',
@@ -190,10 +257,78 @@ const TransactionReceipt: React.FC = () => {
           >
             Back to Transactions
           </Button>
-        </Card>
+        </Box>
       </Box>
     );
   }
+
+
+  // ==========================================================
+  // LOCAL USER / ACCOUNT FALLBACK
+  // ==========================================================
+
+  const getLocalUser =
+    (): LocalUser => {
+      try {
+        const raw =
+          localStorage.getItem(
+            'zenimonies_user'
+          );
+
+        if (!raw) {
+          return {};
+        }
+
+        const parsed =
+          JSON.parse(raw);
+
+        return parsed || {};
+      } catch {
+        return {};
+      }
+    };
+
+
+  const getLocalAccount =
+    (): LocalAccount => {
+      try {
+        const raw =
+          localStorage.getItem(
+            'zenimonies_accounts'
+          );
+
+        if (!raw) {
+          return {};
+        }
+
+        const parsed =
+          JSON.parse(raw);
+
+        if (Array.isArray(parsed)) {
+          return (
+            parsed.find(
+              (account: LocalAccount) =>
+                String(
+                  account.currency || ''
+                ).toUpperCase() === 'NGN'
+            ) ||
+            parsed[0] ||
+            {}
+          );
+        }
+
+        return parsed || {};
+      } catch {
+        return {};
+      }
+    };
+
+
+  const localUser =
+    getLocalUser();
+
+  const localAccount =
+    getLocalAccount();
 
 
   // ==========================================================
@@ -205,6 +340,7 @@ const TransactionReceipt: React.FC = () => {
       transaction.amount ?? 0
     );
 
+
   const numericFee =
     Number(
       transaction.transaction_fee ??
@@ -212,10 +348,12 @@ const TransactionReceipt: React.FC = () => {
       0
     );
 
+
   const numericTotalDebit =
     Number(
       transaction.total_debit ?? 0
     );
+
 
   const currency =
     (
@@ -261,6 +399,11 @@ const TransactionReceipt: React.FC = () => {
     '';
 
 
+  const providerReference =
+    transaction.provider_reference ||
+    '';
+
+
   // ==========================================================
   // DATE
   // ==========================================================
@@ -269,6 +412,7 @@ const TransactionReceipt: React.FC = () => {
     transaction.created_at ||
     transaction.date ||
     transaction.timestamp;
+
 
   const formatDate =
     (value?: string) => {
@@ -291,7 +435,7 @@ const TransactionReceipt: React.FC = () => {
         'en-NG',
         {
           day: '2-digit',
-          month: 'short',
+          month: '2-digit',
           year: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
@@ -313,6 +457,7 @@ const TransactionReceipt: React.FC = () => {
       ''
     ).toLowerCase();
 
+
   const rawDescription =
     String(
       transaction.description ||
@@ -330,11 +475,25 @@ const TransactionReceipt: React.FC = () => {
     rawDescription.includes('data');
 
 
+  const isElectricity =
+    rawType.includes('electricity') ||
+    rawDescription.includes('electricity');
+
+
+  const isTV =
+    rawType.includes('tv') ||
+    rawType.includes('cable') ||
+    rawDescription.includes('dstv') ||
+    rawDescription.includes('gotv') ||
+    rawDescription.includes('startimes') ||
+    rawDescription.includes('cable');
+
+
   const isBill =
     rawType.includes('bill') ||
-    rawDescription.includes('electricity') ||
-    rawDescription.includes('tv') ||
-    rawDescription.includes('betting');
+    isElectricity ||
+    isTV ||
+    rawDescription.includes('bill');
 
 
   const isTransfer =
@@ -348,6 +507,70 @@ const TransactionReceipt: React.FC = () => {
     rawDescription.includes('money received') ||
     transaction.category === 'credit' ||
     transaction.category === 'incoming';
+
+
+  // ==========================================================
+  // PEOPLE
+  // ==========================================================
+
+  const localUserFullName =
+    localUser.full_name ||
+    localUser.name ||
+    (
+      [
+        localUser.first_name,
+        localUser.last_name,
+      ]
+        .filter(Boolean)
+        .join(' ')
+    );
+
+
+  const senderName =
+    transaction.sender_name ||
+    (
+      isTransfer || isBill || isAirtime || isData
+        ? localUserFullName
+        : ''
+    ) ||
+    '';
+
+
+  const senderPhone =
+    transaction.sender_phone ||
+    localUser.phone ||
+    '';
+
+
+  const localAccountNumber =
+    localUser.account_number ||
+    localUser.accountNumber ||
+    localAccount.account_number ||
+    localAccount.accountNumber ||
+    '';
+
+
+  const senderAccount =
+    transaction.sender_account ||
+    localAccountNumber ||
+    '';
+
+
+  const receiverName =
+    transaction.recipient_name ||
+    '';
+
+
+  const receiverPhone =
+    transaction.recipient_phone ||
+    transaction.phone ||
+    '';
+
+
+  const receiverAccount =
+    transaction.recipient_account ||
+    transaction.account_number ||
+    '';
 
 
   // ==========================================================
@@ -372,10 +595,6 @@ const TransactionReceipt: React.FC = () => {
     );
 
 
-  // ==========================================================
-  // INTERNAL ZENIMONIES TRANSFER
-  // ==========================================================
-
   const isZenimoniesTransfer =
     isTransfer &&
     (
@@ -389,38 +608,6 @@ const TransactionReceipt: React.FC = () => {
 
 
   // ==========================================================
-  // PEOPLE
-  // ==========================================================
-
-  const senderName =
-    transaction.sender_name ||
-    '';
-
-  const senderPhone =
-    transaction.sender_phone ||
-    '';
-
-  const senderAccount =
-    transaction.sender_account ||
-    '';
-
-
-  const receiverName =
-    transaction.recipient_name ||
-    '';
-
-  const receiverPhone =
-    transaction.recipient_phone ||
-    transaction.phone ||
-    '';
-
-  const receiverAccount =
-    transaction.recipient_account ||
-    transaction.account_number ||
-    '';
-
-
-  // ==========================================================
   // PROVIDER DETAILS
   // ==========================================================
 
@@ -429,16 +616,19 @@ const TransactionReceipt: React.FC = () => {
     transaction.network ||
     '';
 
+
   const servicePhone =
     transaction.phone ||
     transaction.recipient_phone ||
     '';
+
 
   const dataPlan =
     transaction.data_plan ||
     transaction.plan_name ||
     transaction.variation_name ||
     '';
+
 
   const customerNumber =
     transaction.customer_number ||
@@ -447,13 +637,56 @@ const TransactionReceipt: React.FC = () => {
     transaction.decoder_number ||
     '';
 
+
   const customerName =
     transaction.customer_name ||
+    transaction.verified_customer_name ||
+    '';
+
+
+  // ==========================================================
+  // ELECTRICITY DETAILS
+  // ==========================================================
+
+  const electricityMeterNumber =
+    transaction.meter_number ||
+    transaction.customer_number ||
+    '';
+
+
+  const electricityMeterType =
+    transaction.meter_type
+      ? String(
+          transaction.meter_type
+        ).toUpperCase()
+      : '';
+
+
+  const electricityToken =
+    transaction.electricity_token ||
+    transaction.token ||
+    '';
+
+
+  const electricityUnits =
+    transaction.units !== undefined &&
+    transaction.units !== null
+      ? String(
+          transaction.units
+        )
+      : '';
+
+
+  const electricityAddress =
+    transaction.verified_customer_address ||
     '';
 
 
   // ==========================================================
   // TOTAL DEBIT
+  //
+  // IMPORTANT:
+  // ONLY TRANSFERS USE TRANSACTION FEE.
   // ==========================================================
 
   let totalDebited =
@@ -487,47 +720,60 @@ const TransactionReceipt: React.FC = () => {
 
 
   // ==========================================================
-  // TOP AMOUNT
-  // ==========================================================
-
-  const topAmount =
-    isIncoming
-      ? `+${formatMoney(
-          numericAmount
-        )}`
-      : `−${formatMoney(
-          isTransfer
-            ? totalDebited
-            : numericAmount
-        )}`;
-
-
-  const topAmountLabel =
-    isTransfer &&
-    !isIncoming
-      ? 'Total Amount Debited'
-      : 'Amount';
-
-
-  // ==========================================================
   // RECEIPT TITLE
   // ==========================================================
 
   let receiptTitle =
     'Transaction Receipt';
 
+
   if (isTransfer) {
     receiptTitle =
-      'Transfer Receipt';
+      'Transaction Receipt';
+  } else if (isElectricity) {
+    receiptTitle =
+      'Electricity Payment Receipt';
   } else if (isAirtime) {
     receiptTitle =
       'Airtime Purchase Receipt';
   } else if (isData) {
     receiptTitle =
       'Data Purchase Receipt';
+  } else if (isTV) {
+    receiptTitle =
+      'TV Subscription Receipt';
   } else if (isBill) {
     receiptTitle =
       'Bill Payment Receipt';
+  }
+
+
+  // ==========================================================
+  // TRANSACTION TYPE
+  // ==========================================================
+
+  let transactionType =
+    'TRANSACTION';
+
+
+  if (isTransfer) {
+    transactionType =
+      'TRANSFER';
+  } else if (isElectricity) {
+    transactionType =
+      'ELECTRICITY';
+  } else if (isAirtime) {
+    transactionType =
+      'AIRTIME';
+  } else if (isData) {
+    transactionType =
+      'DATA';
+  } else if (isTV) {
+    transactionType =
+      'TV SUBSCRIPTION';
+  } else if (isBill) {
+    transactionType =
+      'BILL PAYMENT';
   }
 
 
@@ -579,36 +825,12 @@ const TransactionReceipt: React.FC = () => {
 
   const statusText =
     isSuccessful
-      ? 'Successful'
+      ? 'Transaction Successful'
       : isFailed
-        ? 'Failed'
+        ? 'Transaction Failed'
         : isPending
-          ? 'Pending'
-          : 'Unconfirmed';
-
-
-  const statusColor =
-    isSuccessful
-      ? '#087f5b'
-      : isFailed
-        ? '#c62828'
-        : '#a76500';
-
-
-  const statusBackground =
-    isSuccessful
-      ? '#dff7ec'
-      : isFailed
-        ? '#fde8e8'
-        : '#fff3d6';
-
-
-  const StatusIcon =
-    isSuccessful
-      ? CheckCircleRounded
-      : isFailed
-        ? ErrorRounded
-        : ScheduleRounded;
+          ? 'Transaction Pending'
+          : 'Transaction Unconfirmed';
 
 
   // ==========================================================
@@ -839,218 +1061,151 @@ const TransactionReceipt: React.FC = () => {
 
 
   // ==========================================================
-  // COMPACT ROW
+  // RECEIPT ROW
   // ==========================================================
 
-  const Row = ({
+  const ReceiptRow = ({
     label,
     value,
-    icon,
-    valueNode,
+    children,
+    last = false,
   }: {
     label: string;
     value?: React.ReactNode;
-    icon?: React.ReactNode;
-    valueNode?: React.ReactNode;
+    children?: React.ReactNode;
+    last?: boolean;
   }) => (
     <Box
       sx={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 1,
-        minHeight: 30,
-        py: 0.2,
+        display: 'grid',
+        gridTemplateColumns:
+          '42% 58%',
+        alignItems: 'start',
+        minHeight: 39,
         borderBottom:
-          '1px solid #dfe8e3',
-      }}
-    >
-      <Stack
-        direction="row"
-        spacing={0.45}
-        alignItems="center"
-        sx={{
-          minWidth: 0,
-          flexShrink: 0,
-        }}
-      >
-        {icon && (
-          <Box
-            sx={{
-              color: '#71817b',
-              display: 'flex',
-              '& svg': {
-                fontSize: 14,
-              },
-            }}
-          >
-            {icon}
-          </Box>
-        )}
-
-        <Typography
-          sx={{
-            color: '#65736e',
-            fontSize: 10.5,
-            fontWeight: 650,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {label}
-        </Typography>
-      </Stack>
-
-      {valueNode || (
-        <Typography
-          sx={{
-            color: '#10221c',
-            fontSize: 10.8,
-            fontWeight: 750,
-            textAlign: 'right',
-            wordBreak: 'break-word',
-            minWidth: 0,
-          }}
-        >
-          {value}
-        </Typography>
-      )}
-    </Box>
-  );
-
-
-  // ==========================================================
-  // PERSON BLOCK
-  // ==========================================================
-
-  const PersonBlock = ({
-    title,
-    name,
-    phone,
-    account,
-    bank,
-    showPhone,
-    showAccount,
-  }: {
-    title: string;
-    name?: string;
-    phone?: string;
-    account?: string;
-    bank?: string;
-    showPhone: boolean;
-    showAccount: boolean;
-  }) => (
-    <Box
-      sx={{
-        py: 0.55,
-        borderBottom:
-          '1px solid #dfe8e3',
+          last
+            ? 'none'
+            : '1px solid #e1e4e3',
       }}
     >
       <Box
         sx={{
-          display: 'grid',
-          gridTemplateColumns:
-            'minmax(0, 1fr) auto',
-          columnGap: 1.5,
-          alignItems: 'start',
+          py: 1.05,
+          pr: 1,
         }}
       >
-        <Box
+        <Typography
           sx={{
-            minWidth: 0,
+            color: '#e07b25',
+            fontSize: 11.5,
+            fontWeight: 800,
+            lineHeight: 1.2,
           }}
         >
+          {label}
+        </Typography>
+      </Box>
+
+      <Box
+        sx={{
+          py: 1.05,
+          pl: 1,
+          minWidth: 0,
+        }}
+      >
+        {children || (
           <Typography
             sx={{
-              color: '#087f5b',
+              color: '#244d86',
               fontSize: 11.5,
-              fontWeight: 850,
-              mb: 0.15,
+              fontWeight: 600,
+              lineHeight: 1.35,
+              wordBreak: 'break-word',
             }}
           >
-            {title}
+            {value || '—'}
           </Typography>
-
-          {name && (
-            <Typography
-              sx={{
-                color: '#10221c',
-                fontSize: 12,
-                fontWeight: 800,
-                lineHeight: 1.25,
-                wordBreak: 'break-word',
-              }}
-            >
-              {name}
-            </Typography>
-          )}
-
-          {showPhone &&
-            phone && (
-              <Typography
-                sx={{
-                  color: '#65736e',
-                  fontSize: 10,
-                  fontWeight: 650,
-                  mt: 0.12,
-                }}
-              >
-                {phone}
-              </Typography>
-            )}
-
-          {showAccount &&
-            account && (
-              <Typography
-                sx={{
-                  color: '#65736e',
-                  fontSize: 10,
-                  fontWeight: 650,
-                  mt: 0.12,
-                  wordBreak: 'break-all',
-                }}
-              >
-                {account}
-              </Typography>
-            )}
-        </Box>
-
-        {bank && (
-          <Box
-            sx={{
-              minWidth: 70,
-              textAlign: 'left',
-              pt: 1.2,
-            }}
-          >
-            <Typography
-              sx={{
-                color: '#65736e',
-                fontSize: 9.5,
-                fontWeight: 650,
-                lineHeight: 1.1,
-              }}
-            >
-              Bank
-            </Typography>
-
-            <Typography
-              sx={{
-                color: '#10221c',
-                fontSize: 10.8,
-                fontWeight: 800,
-                lineHeight: 1.2,
-                mt: 0.15,
-                wordBreak: 'break-word',
-              }}
-            >
-              {bank}
-            </Typography>
-          </Box>
         )}
       </Box>
     </Box>
   );
+
+
+  // ==========================================================
+  // REFERENCE ROW
+  // ==========================================================
+
+  const ReferenceRow = ({
+    label,
+    value,
+    last = false,
+  }: {
+    label: string;
+    value: string;
+    last?: boolean;
+  }) => (
+    <ReceiptRow
+      label={label}
+      last={last}
+      children={
+        <Stack
+          direction="row"
+          spacing={0.5}
+          alignItems="center"
+          justifyContent="flex-start"
+        >
+          <Typography
+            sx={{
+              color: '#244d86',
+              fontSize: 10.5,
+              fontWeight: 600,
+              wordBreak: 'break-all',
+              lineHeight: 1.3,
+            }}
+          >
+            {value}
+          </Typography>
+
+          <Button
+            className="no-print"
+            onClick={copyReference}
+            sx={{
+              minWidth: 24,
+              width: 24,
+              height: 24,
+              p: 0,
+              color: '#087f5b',
+              flexShrink: 0,
+            }}
+          >
+            <ContentCopyRounded
+              sx={{
+                fontSize: 14,
+              }}
+            />
+          </Button>
+        </Stack>
+      }
+    />
+  );
+
+
+  // ==========================================================
+  // HEADER LABEL
+  // ==========================================================
+
+  const HeaderLabel =
+    isElectricity
+      ? 'Electricity Payment'
+      : isAirtime
+        ? 'Airtime Purchase'
+        : isData
+          ? 'Data Purchase'
+          : isTV
+            ? 'TV Subscription'
+            : isTransfer
+              ? 'Bank Transfer'
+              : 'Bill Payment';
 
 
   // ==========================================================
@@ -1062,123 +1217,102 @@ const TransactionReceipt: React.FC = () => {
       className="receipt-page"
       sx={{
         minHeight: '100vh',
-        bgcolor: '#f3faf7',
-        py: 0.6,
-        px: 0.5,
+        bgcolor: '#f5f7f6',
+        py: 2,
+        px: 1,
       }}
     >
       <Box
         className="receipt-container"
         sx={{
           width: '100%',
-          maxWidth: 360,
+          maxWidth: 680,
           mx: 'auto',
         }}
       >
 
         {/* ==================================================
-            RECEIPT CARD
+            RECEIPT DOCUMENT
         =================================================== */}
 
-        <Card
+        <Box
           ref={receiptRef}
-          className="receipt-card"
-          elevation={0}
+          className="receipt-document"
           sx={{
-            overflow: 'hidden',
-            borderRadius: 2.2,
-            border:
-              '1px solid #dcebe4',
+            width: '100%',
             bgcolor: '#ffffff',
-            boxShadow:
-              '0 5px 18px rgba(7,94,66,0.07)',
+            border:
+              '1px solid #e0e4e2',
+            px: {
+              xs: 2.3,
+              sm: 4,
+            },
+            pt: 3,
+            pb: 3,
           }}
         >
 
           {/* ==================================================
-              HEADER
+              BRAND
           =================================================== */}
 
           <Box
-            className="receipt-header"
             sx={{
-              bgcolor: '#087f5b',
-              color: '#ffffff',
-              px: 1.25,
-              py: 0.9,
+              textAlign: 'center',
+              pb: 1.2,
             }}
           >
             <Stack
               direction="row"
               alignItems="center"
-              justifyContent="space-between"
+              justifyContent="center"
               spacing={1}
             >
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={0.7}
+              <Box
+                sx={{
+                  width: 42,
+                  height: 42,
+                  border:
+                    '3px solid #087f5b',
+                  borderRadius: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#087f5b',
+                  fontSize: 27,
+                  fontWeight: 900,
+                }}
               >
-                <Box
-                  sx={{
-                    width: 31,
-                    height: 31,
-                    border:
-                      '2px solid #ffffff',
-                    borderRadius: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 19,
-                    fontWeight: 900,
-                    flexShrink: 0,
-                  }}
-                >
-                  Z
-                </Box>
-
-                <Box>
-                  <Typography
-                    sx={{
-                      fontSize: 15.5,
-                      fontWeight: 900,
-                      letterSpacing: 0.4,
-                      lineHeight: 1,
-                    }}
-                  >
-                    ZENIMONIES
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      mt: 0.2,
-                      fontSize: 5.5,
-                      letterSpacing: 1.7,
-                      fontWeight: 650,
-                      opacity: 0.9,
-                    }}
-                  >
-                    DIGITAL BANKING
-                  </Typography>
-                </Box>
-              </Stack>
+                Z
+              </Box>
 
               <Box
                 sx={{
-                  borderLeft:
-                    '1px solid rgba(255,255,255,0.75)',
-                  pl: 1,
-                  textAlign: 'right',
+                  textAlign: 'left',
                 }}
               >
                 <Typography
                   sx={{
-                    fontSize: 9.5,
-                    fontWeight: 800,
-                    lineHeight: 1.15,
+                    color: '#087f5b',
+                    fontSize: 25,
+                    fontWeight: 900,
+                    letterSpacing: 0.5,
+                    lineHeight: 1,
                   }}
                 >
-                  {receiptTitle}
+                  ZENIMONIES
+                </Typography>
+
+                <Typography
+                  sx={{
+                    color: '#087f5b',
+                    fontSize: 7,
+                    fontWeight: 800,
+                    letterSpacing: 3,
+                    mt: 0.5,
+                  }}
+                >
+                  DIGITAL BANKING
                 </Typography>
               </Box>
             </Stack>
@@ -1186,94 +1320,91 @@ const TransactionReceipt: React.FC = () => {
 
 
           {/* ==================================================
-              SUCCESS + TOTAL
+              TITLE
+          =================================================== */}
+
+          <Typography
+            sx={{
+              textAlign: 'center',
+              color: '#174a88',
+              fontSize: 21,
+              fontWeight: 800,
+              mb: 0.8,
+            }}
+          >
+            {receiptTitle}
+          </Typography>
+
+
+          {/* ==================================================
+              GENERATED LINE
+          =================================================== */}
+
+          <Typography
+            sx={{
+              textAlign: 'center',
+              color: '#9a9f9d',
+              fontSize: 10,
+              fontWeight: 500,
+              mb: 2.2,
+            }}
+          >
+            Generated from Zenimonies on{' '}
+            {formatDate(
+              new Date().toISOString()
+            )}
+          </Typography>
+
+
+          {/* ==================================================
+              RECEIPT TABLE
           =================================================== */}
 
           <Box
             sx={{
-              px: 1.35,
-              pt: 1,
-              pb: 0.6,
+              borderTop:
+                '1px solid #d9dddb',
             }}
           >
 
-            <Box
-              sx={{
-                bgcolor: '#eaf8f2',
-                borderRadius: 1.6,
-                px: 1,
-                py: 0.65,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.9,
-              }}
-            >
-              <CheckCircleRounded
-                sx={{
-                  fontSize: 38,
-                  color: '#0a9b4f',
-                  flexShrink: 0,
-                }}
-              />
+            {/* ------------------------------------------------
+                AMOUNT
+            ------------------------------------------------- */}
 
-              <Box>
-                <Typography
-                  sx={{
-                    color: '#075c43',
-                    fontSize: 15,
-                    fontWeight: 900,
-                    lineHeight: 1.1,
-                  }}
-                >
-                  Transaction Successful
-                </Typography>
-
-                <Typography
-                  sx={{
-                    color: '#65736e',
-                    fontSize: 10.5,
-                    fontWeight: 550,
-                    mt: 0.2,
-                  }}
-                >
-                  Your transfer has been completed.
-                </Typography>
-              </Box>
-            </Box>
+            <ReceiptRow
+              label="Transaction Amount"
+              value={
+                formatMoney(
+                  numericAmount
+                )
+              }
+            />
 
 
-            <Box
-              sx={{
-                textAlign: 'center',
-                pt: 0.75,
-                pb: 0.55,
-                borderBottom:
-                  '1px solid #d5dfdb',
-              }}
-            >
-              <Typography
-                sx={{
-                  color: '#0b382b',
-                  fontSize: 28,
-                  fontWeight: 900,
-                  letterSpacing: -0.7,
-                  lineHeight: 1,
-                }}
-              >
-                {topAmount}
-              </Typography>
+            {/* ------------------------------------------------
+                TYPE
+            ------------------------------------------------- */}
 
-              <Typography
-                sx={{
-                  color: '#65736e',
-                  fontSize: 11,
-                  fontWeight: 750,
-                  mt: 0.3,
-                }}
-              >
-                {topAmountLabel}
-              </Typography>
-            </Box>
+            <ReceiptRow
+              label="Transaction Type"
+              value={
+                transactionType
+              }
+            />
+
+
+            {/* ------------------------------------------------
+                DATE
+            ------------------------------------------------- */}
+
+            <ReceiptRow
+              label="Transaction Date"
+              value={
+                formatDate(
+                  transactionDate
+                )
+              }
+            />
 
 
             {/* =================================================
@@ -1283,92 +1414,83 @@ const TransactionReceipt: React.FC = () => {
             {isTransfer && (
               <>
 
-                <PersonBlock
-                  title="From (Sender)"
-                  name={senderName}
-                  phone={senderPhone}
-                  account={senderAccount}
-                  bank={
-                    isZenimoniesTransfer
-                      ? 'Zenimonies'
-                      : senderBank
-                  }
-
-                  /*
-                   * INTERNAL:
-                   * Show sender phone.
-                   *
-                   * OTHER BANK:
-                   * Hide sender phone.
-                   */
-                  showPhone={
-                    isZenimoniesTransfer
-                  }
-
-                  /*
-                   * Never show sender account
-                   * on the customer receipt.
-                   */
-                  showAccount={false}
-                />
-
-
-                <PersonBlock
-                  title="To (Receiver)"
-                  name={receiverName}
-                  phone={receiverPhone}
-                  account={receiverAccount}
-                  bank={
-                    recipientBank ||
-                    (
-                      isZenimoniesTransfer
-                        ? 'Zenimonies'
-                        : ''
-                    )
-                  }
-
-                  /*
-                   * INTERNAL:
-                   * Show receiver phone.
-                   *
-                   * OTHER BANK:
-                   * Receiver phone is not required
-                   * on the receipt.
-                   */
-                  showPhone={
-                    isZenimoniesTransfer
-                  }
-
-                  /*
-                   * INTERNAL:
-                   * Hide account number.
-                   *
-                   * OTHER BANK:
-                   * Show real recipient account.
-                   */
-                  showAccount={
-                    !isZenimoniesTransfer
-                  }
-                />
-
-
-                <Row
-                  icon={
-                    <ArrowUpwardRounded />
-                  }
-                  label="Amount Transferred"
+                <ReceiptRow
+                  label="Sender"
                   value={
-                    formatMoney(
-                      numericAmount
-                    )
+                    senderName
                   }
                 />
 
 
-                <Row
-                  icon={
-                    <TagRounded />
+                {senderAccount && (
+                  <ReceiptRow
+                    label="Sender Account"
+                    value={
+                      senderAccount
+                    }
+                  />
+                )}
+
+
+                {senderBank && (
+                  <ReceiptRow
+                    label="Sender Bank"
+                    value={
+                      senderBank
+                    }
+                  />
+                )}
+
+
+                <ReceiptRow
+                  label="Beneficiary"
+                  children={
+                    <Box>
+                      <Typography
+                        sx={{
+                          color: '#244d86',
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {receiverName || '—'}
+                      </Typography>
+
+                      {receiverAccount && (
+                        <Typography
+                          sx={{
+                            color: '#244d86',
+                            fontSize: 11.5,
+                            fontWeight: 600,
+                            mt: 0.35,
+                          }}
+                        >
+                          {receiverAccount}
+                        </Typography>
+                      )}
+
+                      {recipientBank && (
+                        <Typography
+                          sx={{
+                            color: '#244d86',
+                            fontSize: 11.5,
+                            fontWeight: 600,
+                            mt: 0.35,
+                          }}
+                        >
+                          {recipientBank}
+                        </Typography>
+                      )}
+                    </Box>
                   }
+                />
+
+
+                {/* =================================================
+                    TRANSACTION FEE — TRANSFERS ONLY
+                ================================================== */}
+
+                <ReceiptRow
                   label="Transaction Fee"
                   value={
                     formatMoney(
@@ -1378,98 +1500,138 @@ const TransactionReceipt: React.FC = () => {
                 />
 
 
-                {/* Total debit is already shown
-                    prominently at the top.
-                    We intentionally do NOT add
-                    another Total Amount Debited
-                    row here. */}
+                <ReceiptRow
+                  label="Total Amount Debited"
+                  value={
+                    formatMoney(
+                      totalDebited
+                    )
+                  }
+                />
+
+              </>
+            )}
 
 
-                {reference && (
-                  <Row
-                    icon={
-                      <TagRounded />
-                    }
-                    label="Reference"
-                    valueNode={
-                      <Stack
-                        direction="row"
-                        spacing={0.3}
-                        alignItems="center"
-                      >
-                        <Typography
-                          sx={{
-                            fontSize: 9,
-                            fontWeight: 750,
-                            wordBreak:
-                              'break-all',
-                            textAlign: 'right',
-                          }}
-                        >
-                          {reference}
-                        </Typography>
+            {/* =================================================
+                ELECTRICITY
+            ================================================== */}
 
-                        <Button
-                          className="no-print"
-                          onClick={
-                            copyReference
-                          }
-                          sx={{
-                            minWidth: 21,
-                            width: 21,
-                            height: 21,
-                            p: 0,
-                            color: '#087f5b',
-                          }}
-                        >
-                          <ContentCopyRounded
-                            sx={{
-                              fontSize: 13,
-                            }}
-                          />
-                        </Button>
-                      </Stack>
+            {isElectricity && (
+              <>
+
+                <ReceiptRow
+                  label="Sender"
+                  value={
+                    senderName
+                  }
+                />
+
+
+                {senderAccount && (
+                  <ReceiptRow
+                    label="Account Number"
+                    value={
+                      senderAccount
                     }
                   />
                 )}
 
 
-                <Row
-                  icon={
-                    <CalendarMonthRounded />
-                  }
-                  label="Date & Time"
+                <ReceiptRow
+                  label="Electricity Provider"
                   value={
-                    formatDate(
-                      transactionDate
-                    )
+                    provider ||
+                    '—'
                   }
                 />
 
 
-                <Row
-                  icon={
-                    <StatusIcon />
-                  }
-                  label="Status"
-                  valueNode={
-                    <Chip
-                      label={
-                        statusText
-                      }
-                      size="small"
-                      sx={{
-                        height: 20,
-                        bgcolor:
-                          statusBackground,
-                        color:
-                          statusColor,
-                        fontSize: 9,
-                        fontWeight: 850,
-                      }}
-                    />
+                <ReceiptRow
+                  label="Meter Number"
+                  value={
+                    electricityMeterNumber ||
+                    '—'
                   }
                 />
+
+
+                <ReceiptRow
+                  label="Meter Type"
+                  value={
+                    electricityMeterType ||
+                    '—'
+                  }
+                />
+
+
+                {customerName && (
+                  <ReceiptRow
+                    label="Customer Name"
+                    value={
+                      customerName
+                    }
+                  />
+                )}
+
+
+                {electricityAddress && (
+                  <ReceiptRow
+                    label="Address"
+                    value={
+                      electricityAddress
+                    }
+                  />
+                )}
+
+
+                {/* ---------------------------------------------
+                    PREPAID TOKEN
+                ---------------------------------------------- */}
+
+                {electricityToken && (
+                  <ReceiptRow
+                    label="Electricity Token"
+                    children={
+                      <Typography
+                        sx={{
+                          color: '#244d86',
+                          fontSize: 12,
+                          fontWeight: 800,
+                          letterSpacing: 0.6,
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        {electricityToken}
+                      </Typography>
+                    }
+                  />
+                )}
+
+
+                {electricityUnits && (
+                  <ReceiptRow
+                    label="Units"
+                    value={
+                      electricityUnits
+                    }
+                  />
+                )}
+
+
+                {/* ---------------------------------------------
+                    NO FEE LINE HERE
+                ---------------------------------------------- */}
+
+
+                {providerReference && (
+                  <ReceiptRow
+                    label="Provider Reference"
+                    value={
+                      providerReference
+                    }
+                  />
+                )}
 
               </>
             )}
@@ -1482,87 +1644,52 @@ const TransactionReceipt: React.FC = () => {
             {isAirtime && (
               <>
 
-                <Row
-                  icon={
-                    <TagRounded />
-                  }
-                  label="Provider"
+                <ReceiptRow
+                  label="Sender"
                   value={
-                    provider ||
-                    'Provider unavailable'
+                    senderName
                   }
                 />
 
-                <Row
-                  icon={
-                    <PhoneRounded />
-                  }
-                  label="Phone Number"
-                  value={
-                    servicePhone ||
-                    'Phone unavailable'
-                  }
-                />
 
-                <Row
-                  icon={
-                    <ArrowUpwardRounded />
-                  }
-                  label="Amount"
-                  value={
-                    formatMoney(
-                      numericAmount
-                    )
-                  }
-                />
-
-                {reference && (
-                  <Row
-                    icon={
-                      <TagRounded />
-                    }
-                    label="Reference"
+                {senderAccount && (
+                  <ReceiptRow
+                    label="Account Number"
                     value={
-                      reference
+                      senderAccount
                     }
                   />
                 )}
 
-                <Row
-                  icon={
-                    <CalendarMonthRounded />
-                  }
-                  label="Date & Time"
+
+                <ReceiptRow
+                  label="Network"
                   value={
-                    formatDate(
-                      transactionDate
-                    )
+                    provider ||
+                    '—'
                   }
                 />
 
-                <Row
-                  icon={
-                    <StatusIcon />
-                  }
-                  label="Status"
-                  valueNode={
-                    <Chip
-                      label={
-                        statusText
-                      }
-                      size="small"
-                      sx={{
-                        height: 20,
-                        bgcolor:
-                          statusBackground,
-                        color:
-                          statusColor,
-                        fontSize: 9,
-                        fontWeight: 850,
-                      }}
-                    />
+
+                <ReceiptRow
+                  label="Phone Number"
+                  value={
+                    servicePhone ||
+                    '—'
                   }
                 />
+
+                {/* NO FEE LINE */}
+
+
+                {providerReference && (
+                  <ReceiptRow
+                    label="Provider Reference"
+                    value={
+                      providerReference
+                    }
+                  />
+                )}
 
               </>
             )}
@@ -1575,33 +1702,44 @@ const TransactionReceipt: React.FC = () => {
             {isData && (
               <>
 
-                <Row
-                  icon={
-                    <TagRounded />
-                  }
-                  label="Provider"
+                <ReceiptRow
+                  label="Sender"
                   value={
-                    provider ||
-                    'Provider unavailable'
+                    senderName
                   }
                 />
 
-                <Row
-                  icon={
-                    <PhoneRounded />
+
+                {senderAccount && (
+                  <ReceiptRow
+                    label="Account Number"
+                    value={
+                      senderAccount
+                    }
+                  />
+                )}
+
+
+                <ReceiptRow
+                  label="Network"
+                  value={
+                    provider ||
+                    '—'
                   }
+                />
+
+
+                <ReceiptRow
                   label="Phone Number"
                   value={
                     servicePhone ||
-                    'Phone unavailable'
+                    '—'
                   }
                 />
 
+
                 {dataPlan && (
-                  <Row
-                    icon={
-                      <TagRounded />
-                    }
+                  <ReceiptRow
                     label="Data Plan"
                     value={
                       dataPlan
@@ -1609,288 +1747,209 @@ const TransactionReceipt: React.FC = () => {
                   />
                 )}
 
-                <Row
-                  icon={
-                    <ArrowUpwardRounded />
-                  }
-                  label="Amount"
-                  value={
-                    formatMoney(
-                      numericAmount
-                    )
-                  }
-                />
+                {/* NO FEE LINE */}
 
-                {reference && (
-                  <Row
-                    icon={
-                      <TagRounded />
-                    }
-                    label="Reference"
+
+                {providerReference && (
+                  <ReceiptRow
+                    label="Provider Reference"
                     value={
-                      reference
+                      providerReference
                     }
                   />
                 )}
-
-                <Row
-                  icon={
-                    <CalendarMonthRounded />
-                  }
-                  label="Date & Time"
-                  value={
-                    formatDate(
-                      transactionDate
-                    )
-                  }
-                />
-
-                <Row
-                  icon={
-                    <StatusIcon />
-                  }
-                  label="Status"
-                  valueNode={
-                    <Chip
-                      label={
-                        statusText
-                      }
-                      size="small"
-                      sx={{
-                        height: 20,
-                        bgcolor:
-                          statusBackground,
-                        color:
-                          statusColor,
-                        fontSize: 9,
-                        fontWeight: 850,
-                      }}
-                    />
-                  }
-                />
 
               </>
             )}
 
 
             {/* =================================================
-                BILLS
+                TV / OTHER BILLS
             ================================================== */}
 
-            {isBill && (
-              <>
-
-                <Row
-                  label="Provider"
-                  value={
-                    provider ||
-                    'Provider unavailable'
-                  }
-                />
-
-                {customerName && (
-                  <Row
-                    label="Customer"
-                    value={
-                      customerName
-                    }
-                  />
-                )}
-
-                {customerNumber && (
-                  <Row
-                    label="Customer Number"
-                    value={
-                      customerNumber
-                    }
-                  />
-                )}
-
-                <Row
-                  label="Amount"
-                  value={
-                    formatMoney(
-                      numericAmount
-                    )
-                  }
-                />
-
-                {reference && (
-                  <Row
-                    label="Reference"
-                    value={
-                      reference
-                    }
-                  />
-                )}
-
-                <Row
-                  label="Date & Time"
-                  value={
-                    formatDate(
-                      transactionDate
-                    )
-                  }
-                />
-
-                <Row
-                  label="Status"
-                  valueNode={
-                    <Chip
-                      label={
-                        statusText
-                      }
-                      size="small"
-                      sx={{
-                        height: 20,
-                        bgcolor:
-                          statusBackground,
-                        color:
-                          statusColor,
-                        fontSize: 9,
-                        fontWeight: 850,
-                      }}
-                    />
-                  }
-                />
-
-              </>
-            )}
-
-
-            {/* =================================================
-                OTHER TRANSACTIONS
-            ================================================== */}
-
-            {!isTransfer &&
+            {isBill &&
+              !isElectricity &&
               !isAirtime &&
-              !isData &&
-              !isBill && (
+              !isData && (
                 <>
 
-                  <Row
-                    label="Type"
+                  <ReceiptRow
+                    label="Sender"
                     value={
-                      receiptTitle.replace(
-                        ' Receipt',
-                        ''
-                      )
+                      senderName
                     }
                   />
 
-                  <Row
-                    label="Amount"
-                    value={
-                      formatMoney(
-                        numericAmount
-                      )
-                    }
-                  />
 
-                  {reference && (
-                    <Row
-                      label="Reference"
+                  {senderAccount && (
+                    <ReceiptRow
+                      label="Account Number"
                       value={
-                        reference
+                        senderAccount
                       }
                     />
                   )}
 
-                  <Row
-                    label="Date & Time"
+
+                  <ReceiptRow
+                    label="Provider"
                     value={
-                      formatDate(
-                        transactionDate
-                      )
+                      provider ||
+                      '—'
                     }
                   />
 
-                  <Row
-                    label="Status"
-                    valueNode={
-                      <Chip
-                        label={
-                          statusText
-                        }
-                        size="small"
-                        sx={{
-                          height: 20,
-                          bgcolor:
-                            statusBackground,
-                          color:
-                            statusColor,
-                          fontSize: 9,
-                          fontWeight: 850,
-                        }}
-                      />
-                    }
-                  />
+
+                  {customerName && (
+                    <ReceiptRow
+                      label="Customer Name"
+                      value={
+                        customerName
+                      }
+                    />
+                  )}
+
+
+                  {customerNumber && (
+                    <ReceiptRow
+                      label="Customer Number"
+                      value={
+                        customerNumber
+                      }
+                    />
+                  )}
+
+
+                  {/* NO FEE LINE */}
+
+
+                  {providerReference && (
+                    <ReceiptRow
+                      label="Provider Reference"
+                      value={
+                        providerReference
+                      }
+                    />
+                  )}
 
                 </>
               )}
+
+
+            {/* =================================================
+                REFERENCE
+            ================================================== */}
+
+            {reference && (
+              <ReferenceRow
+                label="Transaction Reference"
+                value={
+                  reference
+                }
+              />
+            )}
+
+
+            {/* =================================================
+                STATUS
+            ================================================== */}
+
+            <ReceiptRow
+              label="Transaction Status"
+              children={
+                <Typography
+                  sx={{
+                    color:
+                      isSuccessful
+                        ? '#087f5b'
+                        : isFailed
+                          ? '#c62828'
+                          : '#a76500',
+                    fontSize: 11.5,
+                    fontWeight: 800,
+                  }}
+                >
+                  {statusText}
+                </Typography>
+              }
+              last
+            />
 
           </Box>
 
 
           {/* ==================================================
-              QR CODE
+              SUCCESS / FAILURE MESSAGE
+          =================================================== */}
+
+          <Box
+            sx={{
+              borderTop:
+                '1px solid #d9dddb',
+              mt: 1.5,
+              pt: 1.3,
+            }}
+          >
+            <Typography
+              sx={{
+                color: '#5e6965',
+                fontSize: 10,
+                lineHeight: 1.45,
+                textAlign: 'center',
+              }}
+            >
+              {isSuccessful
+                ? `Your ${HeaderLabel.toLowerCase()} has been completed successfully.`
+                : isFailed
+                  ? `Your ${HeaderLabel.toLowerCase()} was not completed.`
+                  : `Your ${HeaderLabel.toLowerCase()} is being processed.`}
+            </Typography>
+          </Box>
+
+
+          {/* ==================================================
+              QR
           =================================================== */}
 
           {reference && (
             <Box
+              className="no-print"
               sx={{
                 textAlign: 'center',
-                pt: 0.15,
-                pb: 0.65,
+                mt: 1.8,
+                pt: 1.2,
+                borderTop:
+                  '1px solid #e5e7e6',
               }}
             >
               <Box
                 sx={{
-                  display:
-                    'inline-flex',
-                  p: 0.45,
+                  display: 'inline-flex',
+                  p: 0.5,
                   border:
-                    '1px solid #d5e5de',
-                  borderRadius: 1.2,
-                  bgcolor:
-                    '#ffffff',
+                    '1px solid #d7dedb',
+                  bgcolor: '#ffffff',
                 }}
               >
                 <QRCodeSVG
                   value={
                     reference
                   }
-                  size={82}
+                  size={86}
                   level="M"
-                  includeMargin={
-                    false
-                  }
+                  includeMargin={false}
                 />
               </Box>
 
               <Typography
                 sx={{
-                  mt: 0.25,
-                  color: '#687871',
+                  mt: 0.6,
+                  color: '#7b8480',
                   fontSize: 8.5,
-                  fontWeight: 650,
+                  fontWeight: 500,
                 }}
               >
                 Scan to verify this transaction
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 0.05,
-                  color: '#087f5b',
-                  fontSize: 8.2,
-                  fontWeight: 800,
-                  wordBreak:
-                    'break-all',
-                  px: 2,
-                }}
-              >
-                {reference}
               </Typography>
             </Box>
           )}
@@ -1901,27 +1960,37 @@ const TransactionReceipt: React.FC = () => {
           =================================================== */}
 
           <Box
-            className="receipt-footer"
             sx={{
-              bgcolor: '#075b42',
-              color: '#ffffff',
+              mt: 2,
+              pt: 1.5,
+              borderTop:
+                '1px solid #e1e4e3',
               textAlign: 'center',
-              py: 0.7,
-              px: 1,
             }}
           >
             <Typography
               sx={{
-                fontSize: 10.5,
-                fontWeight: 800,
-                lineHeight: 1.1,
+                color: '#8a918e',
+                fontSize: 9,
+                lineHeight: 1.45,
               }}
             >
-              Thanks for banking with us ♡
+              Thank you for choosing Zenimonies.
+            </Typography>
+
+            <Typography
+              sx={{
+                color: '#087f5b',
+                fontSize: 9,
+                fontWeight: 700,
+                mt: 0.4,
+              }}
+            >
+              ZENIMONIES DIGITAL BANKING
             </Typography>
           </Box>
 
-        </Card>
+        </Box>
 
 
         {/* ==================================================
@@ -1930,26 +1999,25 @@ const TransactionReceipt: React.FC = () => {
 
         <Stack
           className="no-print"
-          spacing={0.55}
+          spacing={1}
           sx={{
-            mt: 0.7,
+            mt: 1.2,
           }}
         >
 
           <Stack
-            direction="row"
-            spacing={0.55}
+            direction={{
+              xs: 'column',
+              sm: 'row',
+            }}
+            spacing={1}
           >
 
             <Button
               fullWidth
               variant="contained"
               startIcon={
-                <DownloadRounded
-                  sx={{
-                    fontSize: 17,
-                  }}
-                />
+                <DownloadRounded />
               }
               onClick={
                 handleDownloadPDF
@@ -1959,11 +2027,9 @@ const TransactionReceipt: React.FC = () => {
               }
               sx={{
                 bgcolor: '#087f5b',
-                borderRadius: 1.6,
-                py: 0.7,
-                fontSize: 10.5,
-                fontWeight: 850,
-                minHeight: 38,
+                borderRadius: 1,
+                minHeight: 44,
+                fontWeight: 800,
                 '&:hover': {
                   bgcolor: '#066b4c',
                 },
@@ -1979,11 +2045,7 @@ const TransactionReceipt: React.FC = () => {
               fullWidth
               variant="outlined"
               startIcon={
-                <ShareRounded
-                  sx={{
-                    fontSize: 17,
-                  }}
-                />
+                <ShareRounded />
               }
               onClick={
                 handleSharePDF
@@ -1994,14 +2056,12 @@ const TransactionReceipt: React.FC = () => {
               sx={{
                 borderColor: '#087f5b',
                 color: '#087f5b',
-                borderRadius: 1.6,
-                py: 0.7,
-                fontSize: 10.5,
-                fontWeight: 850,
-                minHeight: 38,
+                borderRadius: 1,
+                minHeight: 44,
+                fontWeight: 800,
                 '&:hover': {
                   borderColor: '#066b4c',
-                  bgcolor: '#eaf8f2',
+                  bgcolor: '#eef8f4',
                 },
               }}
             >
@@ -2015,11 +2075,7 @@ const TransactionReceipt: React.FC = () => {
             fullWidth
             variant="outlined"
             startIcon={
-              <ArrowBackRounded
-                sx={{
-                  fontSize: 18,
-                }}
-              />
+              <ArrowBackRounded />
             }
             onClick={() =>
               navigate(
@@ -2030,13 +2086,11 @@ const TransactionReceipt: React.FC = () => {
               pdfLoading
             }
             sx={{
-              borderColor: '#d2ded9',
-              color: '#42534c',
-              borderRadius: 1.6,
-              py: 0.65,
-              fontSize: 10.5,
+              borderColor: '#d0d8d4',
+              color: '#46544e',
+              borderRadius: 1,
+              minHeight: 44,
               fontWeight: 750,
-              minHeight: 36,
             }}
           >
             Back to Transactions
@@ -2056,8 +2110,8 @@ const TransactionReceipt: React.FC = () => {
           @media print {
 
             @page {
-              size: 80mm auto;
-              margin: 0;
+              size: A4;
+              margin: 12mm;
             }
 
             html,
@@ -2079,20 +2133,14 @@ const TransactionReceipt: React.FC = () => {
             }
 
             .receipt-container {
-              width: 80mm !important;
-              max-width: 80mm !important;
+              width: 100% !important;
+              max-width: 100% !important;
             }
 
-            .receipt-card {
+            .receipt-document {
+              width: 100% !important;
               border: none !important;
-              box-shadow: none !important;
-              border-radius: 0 !important;
-            }
-
-            .receipt-header,
-            .receipt-footer {
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
+              padding: 0 !important;
             }
 
             .no-print {
