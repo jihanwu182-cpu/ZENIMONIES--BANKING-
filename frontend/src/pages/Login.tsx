@@ -176,6 +176,16 @@ function saveAuthenticatedSession(
     token
   );
 
+  sessionStorage.setItem(
+  'zenimonies_token',
+  token
+);
+
+sessionStorage.setItem(
+  'token',
+  token
+);
+
   if (data.user) {
     localStorage.setItem(
       'zenimonies_user',
