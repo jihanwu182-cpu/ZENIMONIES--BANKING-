@@ -897,38 +897,52 @@ const unlock = async (req, res) => {
           'This secure session has already been ended. Please sign in again.',
       });
     }
+   
+// ========================================================
+// SESSION EXPIRY CHECK
+// ========================================================
+//
+// IMPORTANT:
+//
+// sessionService.js uses PostgreSQL's clock when creating
+// and refreshing authentication sessions.
+//
+// This unlock endpoint must use the SAME clock.
+//
+// Do NOT use Date.now() here because the application
+// server clock and PostgreSQL clock can differ.
+//
+// ========================================================
 
-    // ========================================================
-    // SESSION EXPIRY
-    // ========================================================
-    //
-    // The session MUST actually be expired because of
-    // inactivity before we allow Account Unlock Passcode
-    // recovery.
-    //
-    // If the session is still active, we do not need the
-    // Account Locked recovery flow.
-    // ========================================================
+const expiryCheckResult =
+  await pool.query(
+    `
+    SELECT
+      expires_at <= CURRENT_TIMESTAMP AS expired
+    FROM auth_sessions
+    WHERE id = $1
+    LIMIT 1
+    `,
+    [
+      session.id,
+    ]
+  );
 
-    const expiresAt =
-      new Date(
-        session.expires_at
-      ).getTime();
+const sessionExpired =
+  expiryCheckResult.rows[0]?.expired === true;
 
-    const now =
-      Date.now();
+// ========================================================
+// SESSION IS STILL ACTIVE
+// ========================================================
 
-    if (
-      now < expiresAt
-    ) {
-      return res.status(400).json({
-        success: false,
-        code: 'SESSION_NOT_LOCKED',
-        message:
-          'Your secure session is still active.',
-      });
-    }
-
+if (!sessionExpired) {
+  return res.status(400).json({
+    success: false,
+    code: 'SESSION_NOT_LOCKED',
+    message:
+      'Your secure session is still active.',
+  });
+}
     // ========================================================
     // PASSCODE
     // ========================================================
