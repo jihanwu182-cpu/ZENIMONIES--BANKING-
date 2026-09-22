@@ -801,8 +801,11 @@ const purchaseData =
 
 const providerStatus =
   String(
+    purchaseData?.status?.value ||
     purchaseData?.status ||
+    rawProviderData?.status?.value ||
     rawProviderData?.status ||
+    purchaseResult?.status?.value ||
     purchaseResult?.status ||
     ''
   )
