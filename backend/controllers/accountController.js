@@ -440,16 +440,40 @@ const getTransactions = async (
             AS bill_provider,
 
           bill.category
-            AS bill_category,
+           AS bill_category,
 
-          bill.customer_reference
-            AS bill_customer_reference,
+         bill.customer_reference
+          AS bill_customer_reference,
 
-          bill.customer_name
-            AS bill_customer_name,
+         bill.customer_name
+          AS bill_customer_name,
 
-          bill.provider_reference
-            AS bill_provider_reference
+         bill.provider_reference
+          AS bill_provider_reference,
+
+        bill.meter_type
+         AS bill_meter_type,
+
+        bill.meter_number
+          AS bill_meter_number,
+
+       bill.verification_status
+         AS bill_verification_status,
+
+       bill.verified_customer_name
+         AS bill_verified_customer_name,
+
+       bill.verified_customer_address
+         AS bill_verified_customer_address,
+
+       bill.electricity_token
+         AS bill_electricity_token,
+
+      bill.units
+       AS bill_units,
+
+       bill.tariff_class
+        AS bill_tariff_class
 
 
         FROM transactions t
@@ -784,21 +808,63 @@ const getTransactions = async (
 
 
             // ------------------------------------------------
-            // AIRTIME / DATA / BILL RECEIPT FIELDS
-            // ------------------------------------------------
+// AIRTIME / DATA / BILL RECEIPT FIELDS
+// ------------------------------------------------
 
-            provider,
+provider,
 
-            network:
-              transaction.airtime_provider ||
-              transaction.data_provider ||
-              '',
+network:
+  transaction.airtime_provider ||
+  transaction.data_provider ||
+  '',
 
-            phone:
-              servicePhone,
+phone:
+  servicePhone,
 
-            customer_number:
-              customerReference,
+customer_number:
+  customerReference,
+
+// ------------------------------------------------
+// ELECTRICITY / BILL DETAILS
+// ------------------------------------------------
+
+meter_type:
+  transaction.bill_meter_type ||
+  '',
+
+meter_number:
+  transaction.bill_meter_number ||
+  transaction.bill_customer_reference ||
+  '',
+
+customer_name:
+  transaction.bill_customer_name ||
+  transaction.bill_verified_customer_name ||
+  '',
+
+verified_customer_name:
+  transaction.bill_verified_customer_name ||
+  '',
+
+verified_customer_address:
+  transaction.bill_verified_customer_address ||
+  '',
+
+electricity_token:
+  transaction.bill_electricity_token ||
+  '',
+
+token:
+  transaction.bill_electricity_token ||
+  '',
+
+units:
+  transaction.bill_units ||
+  '',
+
+tariff_class:
+  transaction.bill_tariff_class ||
+  '',
 
 
             // ------------------------------------------------
