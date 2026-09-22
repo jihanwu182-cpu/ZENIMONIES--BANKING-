@@ -13,15 +13,18 @@ import AccountLocked from '../pages/AccountLocked.tsx';
    SESSION SECURITY SETTINGS
 ============================================================ */
 
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
+const INACTIVITY_TIMEOUT =
+  5 * 60 * 1000;
 
-const ACTIVITY_THROTTLE = 1000;
+const ACTIVITY_THROTTLE =
+  1000;
 
 const LOCK_STORAGE_KEY =
   'zenimonies_account_locked';
 
 const LAST_ACTIVITY_STORAGE_KEY =
   'zenimonies_last_activity';
+
 
 /* ============================================================
    PUBLIC ROUTES
@@ -34,6 +37,7 @@ const PUBLIC_PATHS = [
   '/reset-password',
 ];
 
+
 /* ============================================================
    PROPS
 ============================================================ */
@@ -42,45 +46,80 @@ interface SessionGuardProps {
   children: React.ReactNode;
 }
 
+
 /* ============================================================
    SESSION GUARD
 ============================================================ */
 
-const SessionGuard: React.FC<SessionGuardProps> = ({
+const SessionGuard: React.FC<
+  SessionGuardProps
+> = ({
   children,
 }) => {
-  const location = useLocation();
+  const location =
+    useLocation();
 
-  const [locked, setLocked] =
-    useState(false);
+  const [
+    locked,
+    setLocked,
+  ] = useState(false);
 
   const timerRef =
-    useRef<ReturnType<typeof setTimeout> | null>(
-      null
-    );
+    useRef<
+      ReturnType<
+        typeof setTimeout
+      > | null
+    >(null);
 
   const activityThrottleRef =
-    useRef<ReturnType<typeof setTimeout> | null>(
-      null
-    );
+    useRef<
+      ReturnType<
+        typeof setTimeout
+      > | null
+    >(null);
+
+  /*
+   * This ref is important.
+   *
+   * It prevents an old timer callback from
+   * locking the account after a successful
+   * unlock.
+   */
+  const sessionGenerationRef =
+    useRef(0);
+
 
   /* ==========================================================
-     GET AUTHENTICATION TOKEN
+     GET TOKEN
   ========================================================== */
 
-  const getToken = useCallback(() => {
-    return (
-      localStorage.getItem(
-        'zenimonies_token'
-      ) ||
-      localStorage.getItem(
-        'token'
-      )
-    );
-  }, []);
+  const getToken =
+    useCallback(() => {
+      return (
+        localStorage.getItem(
+          'zenimonies_token'
+        ) ||
+        localStorage.getItem(
+          'token'
+        ) ||
+        localStorage.getItem(
+          'access_token'
+        ) ||
+        sessionStorage.getItem(
+          'zenimonies_token'
+        ) ||
+        sessionStorage.getItem(
+          'token'
+        ) ||
+        sessionStorage.getItem(
+          'access_token'
+        )
+      );
+    }, []);
+
 
   /* ==========================================================
-     CHECK PUBLIC ROUTE
+     PUBLIC ROUTE
   ========================================================== */
 
   const isPublicPath =
@@ -88,22 +127,44 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
       location.pathname
     );
 
+
   /* ==========================================================
-     CLEAR INACTIVITY TIMER
+     CLEAR TIMER
   ========================================================== */
 
-  const clearTimer = useCallback(() => {
-    if (
-      timerRef.current
-    ) {
-      clearTimeout(
+  const clearTimer =
+    useCallback(() => {
+      if (
         timerRef.current
-      );
+      ) {
+        clearTimeout(
+          timerRef.current
+        );
 
-      timerRef.current =
-        null;
-    }
-  }, []);
+        timerRef.current =
+          null;
+      }
+    }, []);
+
+
+  /* ==========================================================
+     CLEAR ACTIVITY THROTTLE
+  ========================================================== */
+
+  const clearActivityThrottle =
+    useCallback(() => {
+      if (
+        activityThrottleRef.current
+      ) {
+        clearTimeout(
+          activityThrottleRef.current
+        );
+
+        activityThrottleRef.current =
+          null;
+      }
+    }, []);
+
 
   /* ==========================================================
      SAVE LAST ACTIVITY
@@ -114,16 +175,15 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
       try {
         sessionStorage.setItem(
           LAST_ACTIVITY_STORAGE_KEY,
-          String(Date.now())
+          String(
+            Date.now()
+          )
         );
       } catch {
-        /*
-         * Session storage is only used
-         * as a convenience for inactivity
-         * tracking.
-         */
+        // Ignore storage errors.
       }
     }, []);
+
 
   /* ==========================================================
      LOCK SESSION
@@ -131,7 +191,15 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
 
   const lockSession =
     useCallback(() => {
+      /*
+       * Invalidate all previously scheduled
+       * timer callbacks.
+       */
+      sessionGenerationRef.current += 1;
+
       clearTimer();
+
+      clearActivityThrottle();
 
       try {
         sessionStorage.setItem(
@@ -139,16 +207,88 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
           'true'
         );
       } catch {
-        // Continue even if sessionStorage is unavailable.
+        // Ignore storage errors.
       }
 
       setLocked(true);
     }, [
       clearTimer,
+      clearActivityThrottle,
     ]);
 
+
   /* ==========================================================
-     START / RESET INACTIVITY TIMER
+     START INACTIVITY TIMER
+  ========================================================== */
+
+  const startTimer =
+    useCallback(
+      (
+        duration = INACTIVITY_TIMEOUT
+      ) => {
+        const token =
+          getToken();
+
+        if (
+          !token ||
+          isPublicPath ||
+          locked
+        ) {
+          return;
+        }
+
+        clearTimer();
+
+        /*
+         * Capture the current generation.
+         *
+         * If the account is unlocked later,
+         * the generation changes and this old
+         * callback becomes harmless.
+         */
+        const generation =
+          sessionGenerationRef.current;
+
+        timerRef.current =
+          setTimeout(() => {
+            /*
+             * Ignore stale timer callbacks.
+             */
+            if (
+              generation !==
+              sessionGenerationRef.current
+            ) {
+              return;
+            }
+
+            /*
+             * Check again before locking.
+             */
+            const currentToken =
+              getToken();
+
+            if (
+              !currentToken ||
+              isPublicPath
+            ) {
+              return;
+            }
+
+            lockSession();
+          }, duration);
+      },
+      [
+        getToken,
+        isPublicPath,
+        locked,
+        clearTimer,
+        lockSession,
+      ]
+    );
+
+
+  /* ==========================================================
+     RESET ACTIVITY TIMER
   ========================================================== */
 
   const resetTimer =
@@ -156,10 +296,6 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
       const token =
         getToken();
 
-      /*
-       * Never run the protected-session
-       * inactivity timer on public pages.
-       */
       if (
         !token ||
         isPublicPath ||
@@ -168,25 +304,22 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
         return;
       }
 
-      clearTimer();
-
       saveLastActivity();
 
-      timerRef.current =
-        setTimeout(() => {
-          lockSession();
-        }, INACTIVITY_TIMEOUT);
+      startTimer(
+        INACTIVITY_TIMEOUT
+      );
     }, [
       getToken,
       isPublicPath,
       locked,
-      clearTimer,
       saveLastActivity,
-      lockSession,
+      startTimer,
     ]);
 
+
   /* ==========================================================
-     INITIALIZE SESSION STATE
+     INITIALIZE SESSION
   ========================================================== */
 
   useEffect(() => {
@@ -194,7 +327,7 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
       getToken();
 
     /*
-     * No authenticated session.
+     * No authentication token.
      */
     if (!token) {
       clearTimer();
@@ -217,22 +350,21 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
     }
 
     /*
-     * Public authentication pages
-     * should never display AccountLocked.
+     * Public pages don't use the
+     * protected-session timer.
      */
     if (isPublicPath) {
       clearTimer();
-
-      setLocked(false);
 
       return;
     }
 
     /*
-     * Check whether this session was
-     * already locked.
+     * Read the current lock state.
      */
-    let storedLock = null;
+    let storedLock:
+      | string
+      | null = null;
 
     try {
       storedLock =
@@ -254,11 +386,7 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
     }
 
     /*
-     * Check real elapsed inactivity.
-     *
-     * This protects against mobile browsers
-     * pausing JavaScript while the application
-     * is in the background.
+     * Read previous activity.
      */
     let lastActivity = 0;
 
@@ -268,7 +396,9 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
           LAST_ACTIVITY_STORAGE_KEY
         );
 
-      if (storedActivity) {
+      if (
+        storedActivity
+      ) {
         lastActivity =
           Number(
             storedActivity
@@ -279,15 +409,38 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
     }
 
     /*
-     * If we have a valid previous activity
-     * timestamp and the inactivity period
-     * has already passed, lock immediately.
+     * Fresh session with no activity
+     * timestamp.
      */
     if (
-      lastActivity > 0 &&
-      Date.now() -
-        lastActivity >=
+      lastActivity === 0
+    ) {
+      saveLastActivity();
+
+      setLocked(false);
+
+      startTimer(
         INACTIVITY_TIMEOUT
+      );
+
+      return () => {
+        clearTimer();
+      };
+    }
+
+    /*
+     * Calculate elapsed inactivity.
+     */
+    const elapsed =
+      Date.now() -
+      lastActivity;
+
+    /*
+     * Already inactive for 5 minutes.
+     */
+    if (
+      elapsed >=
+      INACTIVITY_TIMEOUT
     ) {
       lockSession();
 
@@ -295,67 +448,43 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
     }
 
     /*
-     * Fresh authenticated session.
+     * Session is still active.
      */
     setLocked(false);
 
-    /*
-     * If there is no activity timestamp,
-     * establish one now.
-     */
-    if (
-      lastActivity === 0
-    ) {
-      saveLastActivity();
-    }
-
-    /*
-     * Start the remaining timer.
-     */
-    clearTimer();
-
-    const elapsed =
-      lastActivity > 0
-        ? Date.now() -
-          lastActivity
-        : 0;
-
-    const remainingTime =
+    const remaining =
       Math.max(
         INACTIVITY_TIMEOUT -
           elapsed,
-        0
+        1000
       );
 
-    timerRef.current =
-      setTimeout(() => {
-        lockSession();
-      }, remainingTime);
+    startTimer(
+      remaining
+    );
 
     return () => {
       clearTimer();
     };
   }, [
     location.pathname,
-    isPublicPath,
     getToken,
+    isPublicPath,
     clearTimer,
-    lockSession,
     saveLastActivity,
+    startTimer,
+    lockSession,
   ]);
 
+
   /* ==========================================================
-     REAL USER ACTIVITY
+     USER ACTIVITY
   ========================================================== */
 
   useEffect(() => {
     const token =
       getToken();
 
-    /*
-     * Do not monitor activity on public
-     * authentication pages or while locked.
-     */
     if (
       !token ||
       isPublicPath ||
@@ -377,10 +506,6 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
 
     const handleActivity =
       () => {
-        /*
-         * Prevent excessive timer resets
-         * from mouse/touch events.
-         */
         if (
           activityThrottleRef.current
         ) {
@@ -392,10 +517,6 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
             activityThrottleRef.current =
               null;
 
-            /*
-             * Only reset the session while
-             * the user is actually unlocked.
-             */
             if (!locked) {
               resetTimer();
             }
@@ -403,7 +524,9 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
       };
 
     activityEvents.forEach(
-      (eventName) => {
+      (
+        eventName
+      ) => {
         window.addEventListener(
           eventName,
           handleActivity
@@ -413,7 +536,9 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
 
     return () => {
       activityEvents.forEach(
-        (eventName) => {
+        (
+          eventName
+        ) => {
           window.removeEventListener(
             eventName,
             handleActivity
@@ -421,26 +546,19 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
         }
       );
 
-      if (
-        activityThrottleRef.current
-      ) {
-        clearTimeout(
-          activityThrottleRef.current
-        );
-
-        activityThrottleRef.current =
-          null;
-      }
+      clearActivityThrottle();
     };
   }, [
     getToken,
     isPublicPath,
     locked,
     resetTimer,
+    clearActivityThrottle,
   ]);
 
+
   /* ==========================================================
-     MOBILE / BROWSER VISIBILITY SECURITY
+     VISIBILITY CHANGE
   ========================================================== */
 
   useEffect(() => {
@@ -457,46 +575,45 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
           return;
         }
 
-        /*
-         * When the user returns to the app,
-         * calculate actual elapsed inactivity
-         * rather than trusting a paused timer.
-         */
         if (
-          document.visibilityState ===
+          document.visibilityState !==
           'visible'
         ) {
-          let lastActivity = 0;
+          return;
+        }
 
-          try {
-            const storedActivity =
-              sessionStorage.getItem(
-                LAST_ACTIVITY_STORAGE_KEY
-              );
+        let lastActivity = 0;
 
-            if (storedActivity) {
-              lastActivity =
-                Number(
-                  storedActivity
-                );
-            }
-          } catch {
-            lastActivity = 0;
-          }
+        try {
+          const storedActivity =
+            sessionStorage.getItem(
+              LAST_ACTIVITY_STORAGE_KEY
+            );
 
           if (
-            lastActivity > 0 &&
-            Date.now() -
-              lastActivity >=
-              INACTIVITY_TIMEOUT
+            storedActivity
           ) {
-            lockSession();
-
-            return;
+            lastActivity =
+              Number(
+                storedActivity
+              );
           }
-
-          resetTimer();
+        } catch {
+          lastActivity = 0;
         }
+
+        if (
+          lastActivity > 0 &&
+          Date.now() -
+            lastActivity >=
+            INACTIVITY_TIMEOUT
+        ) {
+          lockSession();
+
+          return;
+        }
+
+        resetTimer();
       };
 
     document.addEventListener(
@@ -518,8 +635,9 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
     lockSession,
   ]);
 
+
   /* ==========================================================
-     WINDOW FOCUS SECURITY
+     WINDOW FOCUS
   ========================================================== */
 
   useEffect(() => {
@@ -544,7 +662,9 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
               LAST_ACTIVITY_STORAGE_KEY
             );
 
-          if (storedActivity) {
+          if (
+            storedActivity
+          ) {
             lastActivity =
               Number(
                 storedActivity
@@ -587,6 +707,7 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
     lockSession,
   ]);
 
+
   /* ==========================================================
      SUCCESSFUL ACCOUNT UNLOCK
   ========================================================== */
@@ -595,7 +716,19 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
     const handleUnlock =
       () => {
         /*
-         * Remove the lock.
+         * IMPORTANT:
+         *
+         * Invalidate every timer that existed
+         * before the account was unlocked.
+         */
+        sessionGenerationRef.current += 1;
+
+        clearTimer();
+
+        clearActivityThrottle();
+
+        /*
+         * Remove the previous lock.
          */
         try {
           sessionStorage.removeItem(
@@ -606,19 +739,33 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
         }
 
         /*
-         * Start a completely new
-         * inactivity period.
+         * Create a completely new activity
+         * timestamp.
          */
         saveLastActivity();
 
+        /*
+         * Unlock React state.
+         */
         setLocked(false);
 
-        clearTimer();
+        /*
+         * Start a fresh five-minute period.
+         *
+         * Use a small delay so the new authentication
+         * token has already been written to storage.
+         */
+        setTimeout(() => {
+          sessionGenerationRef.current += 1;
 
-        timerRef.current =
-          setTimeout(() => {
-            lockSession();
-          }, INACTIVITY_TIMEOUT);
+          setLocked(false);
+
+          saveLastActivity();
+
+          startTimer(
+            INACTIVITY_TIMEOUT
+          );
+        }, 100);
       };
 
     window.addEventListener(
@@ -634,12 +781,14 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
     };
   }, [
     clearTimer,
-    lockSession,
+    clearActivityThrottle,
     saveLastActivity,
+    startTimer,
   ]);
 
+
   /* ==========================================================
-     LOCKED SESSION
+     LOCKED SCREEN
   ========================================================== */
 
   if (
@@ -651,8 +800,9 @@ const SessionGuard: React.FC<SessionGuardProps> = ({
     );
   }
 
+
   /* ==========================================================
-     NORMAL APPLICATION
+     APPLICATION
   ========================================================== */
 
   return (
