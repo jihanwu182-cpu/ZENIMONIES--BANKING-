@@ -47,7 +47,25 @@ const getElectricityReconciliation = async (req, res) => {
         bp.units,
         bp.tariff_class,
         bp.provider_response_message,
-        bp.provider_response,
+
+bp.provider_response,
+
+/*
+ * Extract the useful Sogo message from the original
+ * provider response.
+ */
+CASE
+  WHEN bp.provider_response IS NOT NULL
+  THEN
+    COALESCE(
+      bp.provider_response ->> 'message',
+      bp.provider_response -> 'data' ->> 'message',
+      bp.provider_response -> 'transaction' ->> 'message',
+      bp.provider_response_message
+    )
+  ELSE
+    bp.provider_response_message
+END AS provider_message,
         bp.created_at,
         bp.completed_at
       FROM bill_payments bp
