@@ -54,7 +54,7 @@ const Bills: React.FC = () => {
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'center',
           padding: '22px 20px 18px',
           background: '#ffffff',
           borderBottom: '1px solid #e3eee9',
@@ -63,10 +63,13 @@ const Bills: React.FC = () => {
           zIndex: 10,
         }}
       >
+        {/* Back button */}
         <button
           type="button"
           onClick={() => navigate(-1)}
           style={{
+            position: 'absolute',
+            left: 20,
             border: 'none',
             background: 'transparent',
             color: '#073b2a',
@@ -80,6 +83,7 @@ const Bills: React.FC = () => {
           ‹
         </button>
 
+        {/* Title */}
         <h1
           style={{
             margin: 0,
@@ -90,22 +94,6 @@ const Bills: React.FC = () => {
         >
           Bills
         </h1>
-
-        <button
-          type="button"
-          onClick={() => navigate('/electricity/reconciliation')}
-          style={{
-            border: 'none',
-            background: 'transparent',
-            color: '#087b48',
-            fontSize: 17,
-            fontWeight: 800,
-            cursor: 'pointer',
-            padding: 0,
-          }}
-        >
-          History
-        </button>
       </div>
 
       {/* Main content */}
