@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 
 interface Bank {
   name: string;
@@ -18,6 +21,9 @@ interface TransferState {
   amount?: number;
   narration?: string;
   accountVerified?: boolean;
+
+  // Beneficiary option passed from ToBank.tsx
+  saveAsBeneficiary?: boolean;
 }
 
 interface TransferResponse {
@@ -80,122 +86,232 @@ const TransferConfirmation: React.FC = () => {
 
   const getToken = () => {
     return (
-      localStorage.getItem('zenimonies_token') ||
+      localStorage.getItem(
+        'zenimonies_token'
+      ) ||
       localStorage.getItem('token') ||
-      localStorage.getItem('access_token') ||
+      localStorage.getItem(
+        'access_token'
+      ) ||
       ''
     );
   };
 
-  const handleConfirmTransfer = async () => {
-    setError('');
-
-    if (!transfer.accountVerified) {
-      setError(
-        'Please go back and verify the recipient account first.'
-      );
-      return;
-    }
-
-    if (!bankCode) {
-      setError(
-        'Bank information is missing. Please go back and select the bank again.'
-      );
-      return;
-    }
-
-    if (!accountNumber) {
-      setError(
-        'Recipient account number is missing.'
-      );
-      return;
-    }
-
-    if (!accountName) {
-      setError(
-        'Recipient account name is missing.'
-      );
-      return;
-    }
-
-    if (!amount || amount <= 0) {
-      setError(
-        'Please enter a valid transfer amount.'
-      );
-      return;
-    }
-
-    const token = getToken();
-
-    if (!token) {
-      setError(
-        'Your session has expired. Please log in again.'
-      );
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const response = await fetch(
-        `${API_URL}/api/transfers`,
-        {
-          method: 'POST',
-
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-
-          body: JSON.stringify({
-            recipient_name: accountName,
-            recipient_account_number:
-              accountNumber,
-            recipient_bank_name: bankName,
-            recipient_bank_code: bankCode,
-            amount,
-            narration:
-              narration.trim() ||
-              undefined,
-          }),
-        }
-      );
-
-      const data: TransferResponse =
-        await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.message ||
-            'Unable to process this bank transfer.'
-        );
+  /**
+   * Save the bank recipient only AFTER
+   * the bank transfer has successfully
+   * been accepted.
+   *
+   * If beneficiary saving fails, we do
+   * NOT mark the successful transfer
+   * as failed.
+   */
+  const saveSuccessfulBankBeneficiary =
+    async () => {
+      if (
+        !transfer.saveAsBeneficiary
+      ) {
+        return;
       }
 
-      setReference(
-        data.transfer?.reference || ''
-      );
+      const token = getToken();
 
-      setStatus(
-        data.transfer?.status ||
-          'processing'
-      );
+      if (!token) {
+        console.warn(
+          'No token available to save beneficiary.'
+        );
+        return;
+      }
 
-      setSuccess(true);
+      try {
+        const response = await fetch(
+          `${API_URL}/api/beneficiaries`,
+          {
+            method: 'POST',
 
-    } catch (err: any) {
-      console.error(
-        'Bank transfer confirmation error:',
-        err
-      );
+            headers: {
+              'Content-Type':
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
 
-      setError(
-        err?.message ||
-          'Unable to process the transfer. Please try again.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+            body: JSON.stringify({
+              recipient_type:
+                'bank',
+
+              name:
+                accountName,
+
+              bank_name:
+                bankName,
+
+              bank_code:
+                bankCode,
+
+              account_number:
+                accountNumber,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const data =
+            await response
+              .json()
+              .catch(() => null);
+
+          console.warn(
+            'Beneficiary was not saved:',
+            data?.message ||
+              'Unknown beneficiary error.'
+          );
+        }
+      } catch (error) {
+        console.error(
+          'Unable to save bank beneficiary:',
+          error
+        );
+      }
+    };
+
+  const handleConfirmTransfer =
+    async () => {
+      setError('');
+
+      if (!transfer.accountVerified) {
+        setError(
+          'Please go back and verify the recipient account first.'
+        );
+        return;
+      }
+
+      if (!bankCode) {
+        setError(
+          'Bank information is missing. Please go back and select the bank again.'
+        );
+        return;
+      }
+
+      if (!accountNumber) {
+        setError(
+          'Recipient account number is missing.'
+        );
+        return;
+      }
+
+      if (!accountName) {
+        setError(
+          'Recipient account name is missing.'
+        );
+        return;
+      }
+
+      if (!amount || amount <= 0) {
+        setError(
+          'Please enter a valid transfer amount.'
+        );
+        return;
+      }
+
+      const token = getToken();
+
+      if (!token) {
+        setError(
+          'Your session has expired. Please log in again.'
+        );
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        const response = await fetch(
+          `${API_URL}/api/transfers`,
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+              Authorization:
+                `Bearer ${token}`,
+            },
+
+            body: JSON.stringify({
+              recipient_name:
+                accountName,
+
+              recipient_account_number:
+                accountNumber,
+
+              recipient_bank_name:
+                bankName,
+
+              recipient_bank_code:
+                bankCode,
+
+              amount,
+
+              narration:
+                narration.trim() ||
+                undefined,
+            }),
+          }
+        );
+
+        const data: TransferResponse =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !data.success
+        ) {
+          throw new Error(
+            data.message ||
+              'Unable to process this bank transfer.'
+          );
+        }
+
+        setReference(
+          data.transfer?.reference ||
+            ''
+        );
+
+        setStatus(
+          data.transfer?.status ||
+            'processing'
+        );
+
+        /*
+         * IMPORTANT:
+         * The transfer has already succeeded.
+         *
+         * We now save the recipient if the
+         * customer selected "Save as beneficiary".
+         *
+         * A beneficiary-saving problem will
+         * NEVER turn the successful transfer
+         * into a failed transfer.
+         */
+        await saveSuccessfulBankBeneficiary();
+
+        setSuccess(true);
+
+      } catch (err: any) {
+        console.error(
+          'Bank transfer confirmation error:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to process the transfer. Please try again.'
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
   if (success) {
     return (
@@ -245,7 +361,11 @@ const TransferConfirmation: React.FC = () => {
 
             <div style={styles.processingNotice}>
               <strong>
-                Status: Processing
+                Status:{' '}
+                {status
+                  ? status.charAt(0).toUpperCase() +
+                    status.slice(1)
+                  : 'Processing'}
               </strong>
 
               <span>
@@ -459,7 +579,9 @@ const TransferConfirmation: React.FC = () => {
 
           <button
             type="button"
-            onClick={handleConfirmTransfer}
+            onClick={
+              handleConfirmTransfer
+            }
             disabled={loading}
             style={{
               ...styles.primaryButton,
