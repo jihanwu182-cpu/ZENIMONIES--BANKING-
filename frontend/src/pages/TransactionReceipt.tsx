@@ -1128,13 +1128,13 @@ const TransactionReceipt: React.FC = () => {
                   />
 
                   <ReceiptRow
-                    label="Total Debited"
-                    value={
-                      formatMoney(
-                        totalDebited
-                      )
-                  />
-
+                   label="Total Debited"
+                     value={
+                     formatMoney(
+                       totalDebited
+                   )
+                 }
+               />
                   {transactionDate && (
                     <ReceiptRow
                       label="Date & Time"
