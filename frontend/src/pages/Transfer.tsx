@@ -3,7 +3,7 @@ import React, {
   useState,
 } from 'react';
 
-import BeneficiaryTabs from '../components/BeneficiaryTabs';
+import BeneficiaryTabs from '../components/BeneficiaryTabs.tsx';
 
 import {
   Link,
