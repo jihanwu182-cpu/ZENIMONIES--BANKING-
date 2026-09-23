@@ -1,89 +1,15 @@
 const crypto = require('crypto');
 const pool = require('../config/database');
 
-// ============================================================
-// SOGO WEBHOOK CONTROLLER
-// ============================================================
-//
-// Receives Sogo webhook events and updates Zenimonies
-// electricity bill payments.
-//
-// IMPORTANT:
-// The route must use express.raw() BEFORE express.json()
-// so that Sogo's signature can be verified against the
-// original request body.
-// ============================================================
-
-
-// ============================================================
-// VERIFY SOGO SIGNATURE
-// ============================================================
-
-const verifySogoSignature = (req) => {
-  const webhookSecret =
-    process.env.SOGO_WEBHOOK_SECRET;
-
-  if (!webhookSecret) {
-    console.error(
-      'SOGO_WEBHOOK_SECRET is not configured.'
-    );
-
-    return false;
-  }
-
-  const signature =
-    req.headers['x-sogo-signature-256'];
-
-  if (!signature) {
-    console.error(
-      'Missing X-Sogo-Signature-256 header.'
-    );
-
-    return false;
-  }
-
-  const rawBody = req.body;
-
-  if (!Buffer.isBuffer(rawBody)) {
-    console.error(
-      'Sogo webhook body is not a raw Buffer.'
-    );
-
-    return false;
-  }
-
-  const expectedSignature =
-    `sha256=${crypto
-      .createHmac(
-        'sha256',
-        webhookSecret
-      )
-      .update(rawBody)
-      .digest('hex')}`;
-
-  const receivedBuffer =
-    Buffer.from(signature);
-
-  const expectedBuffer =
-    Buffer.from(expectedSignature);
-
-  if (
-    receivedBuffer.length !==
-    expectedBuffer.length
-  ) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(
-    receivedBuffer,
-    expectedBuffer
-  );
-};
-
-
-// ============================================================
-// SAFE VALUE HELPER
-// ============================================================
+/**
+ * ============================================================
+ * ZENIMONIES — SOGO WEBHOOK CONTROLLER
+ * Version: 2026-09-23-v2
+ *
+ * Uses the existing bill_payments table.
+ * Does NOT require provider_webhook_response.
+ * ============================================================
+ */
 
 const firstValue = (...values) => {
   for (const value of values) {
@@ -99,814 +25,825 @@ const firstValue = (...values) => {
   return null;
 };
 
+/**
+ * Extract electricity token from different possible
+ * Sogo response/webhook structures.
+ */
+const extractElectricityToken = (payload) => {
+  return firstValue(
+    payload?.token,
+    payload?.electricity_token,
+    payload?.token_code,
+    payload?.prepaid_token,
+    payload?.pin,
 
-// ============================================================
-// SOGO WEBHOOK HANDLER
-// ============================================================
+    payload?.data?.token,
+    payload?.data?.electricity_token,
+    payload?.data?.token_code,
+    payload?.data?.prepaid_token,
+    payload?.data?.pin,
 
-const handleSogoWebhook = async (
-  req,
-  res
-) => {
+    payload?.data?.details?.token,
+    payload?.data?.details?.electricity_token,
+    payload?.data?.details?.token_code,
+    payload?.data?.details?.prepaid_token,
+
+    payload?.data?.receipt?.token,
+    payload?.data?.receipt?.electricity_token,
+
+    payload?.transaction?.token,
+    payload?.transaction?.electricity_token,
+    payload?.transaction?.token_code,
+    payload?.transaction?.prepaid_token,
+
+    payload?.transaction?.details?.token,
+    payload?.transaction?.details?.electricity_token,
+
+    payload?.object?.token,
+    payload?.object?.electricity_token,
+
+    payload?.metadata?.token,
+    payload?.metadata?.electricity_token,
+
+    payload?.data?.metadata?.token,
+    payload?.data?.metadata?.electricity_token
+  );
+};
+
+/**
+ * Extract electricity units / kWh.
+ */
+const extractUnits = (payload) => {
+  return firstValue(
+    payload?.units,
+    payload?.unit,
+    payload?.kwh,
+
+    payload?.data?.units,
+    payload?.data?.unit,
+    payload?.data?.kwh,
+
+    payload?.data?.details?.units,
+    payload?.data?.details?.unit,
+    payload?.data?.details?.kwh,
+
+    payload?.transaction?.units,
+    payload?.transaction?.unit,
+    payload?.transaction?.kwh,
+
+    payload?.transaction?.details?.units,
+    payload?.transaction?.details?.unit,
+    payload?.transaction?.details?.kwh
+  );
+};
+
+/**
+ * Verify Sogo webhook signature.
+ *
+ * Signature format:
+ * sha256=<HMAC-SHA256>
+ */
+const verifySignature = (rawBody, signature, secret) => {
+  if (!rawBody || !signature || !secret) {
+    return false;
+  }
+
+  const expectedSignature =
+    'sha256=' +
+    crypto
+      .createHmac('sha256', secret)
+      .update(rawBody)
+      .digest('hex');
+
+  const expectedBuffer = Buffer.from(expectedSignature);
+  const receivedBuffer = Buffer.from(String(signature));
+
+  if (expectedBuffer.length !== receivedBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(
+    expectedBuffer,
+    receivedBuffer
+  );
+};
+
+/**
+ * Main Sogo webhook handler.
+ */
+const handleSogoWebhook = async (req, res) => {
+  const webhookSecret = process.env.SOGO_WEBHOOK_SECRET;
+
   try {
-    // ========================================================
-    // VERIFY SIGNATURE
-    // ========================================================
+    console.log(
+      '============================================================'
+    );
+    console.log(
+      '🔥 ZENIMONIES SOGO WEBHOOK RECEIVED'
+    );
+    console.log(
+      '============================================================'
+    );
 
-    const signatureValid =
-      verifySogoSignature(req);
-
-    if (!signatureValid) {
+    /**
+     * --------------------------------------------------------
+     * 1. CHECK WEBHOOK SECRET
+     * --------------------------------------------------------
+     */
+    if (!webhookSecret) {
       console.error(
-        'Invalid Sogo webhook signature.'
+        '❌ SOGO_WEBHOOK_SECRET is not configured'
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: 'Webhook secret is not configured',
+      });
+    }
+
+    /**
+     * --------------------------------------------------------
+     * 2. GET RAW REQUEST BODY
+     * --------------------------------------------------------
+     *
+     * server.js must use:
+     *
+     * express.raw({ type: 'application/json' })
+     *
+     * BEFORE express.json().
+     */
+    const rawBody = Buffer.isBuffer(req.body)
+      ? req.body
+      : Buffer.from(
+          typeof req.body === 'string'
+            ? req.body
+            : JSON.stringify(req.body || {})
+        );
+
+    /**
+     * --------------------------------------------------------
+     * 3. VERIFY SIGNATURE
+     * --------------------------------------------------------
+     */
+    const signature =
+      req.headers['x-sogo-signature-256'];
+
+    const isValidSignature = verifySignature(
+      rawBody,
+      signature,
+      webhookSecret
+    );
+
+    if (!isValidSignature) {
+      console.error(
+        '❌ INVALID SOGO WEBHOOK SIGNATURE'
       );
 
       return res.status(401).json({
         success: false,
-        message:
-          'Invalid webhook signature.',
+        message: 'Invalid webhook signature',
       });
     }
 
+    console.log(
+      '✅ Sogo webhook signature verified'
+    );
 
-    // ========================================================
-    // PARSE RAW BODY
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 4. PARSE PAYLOAD
+     * --------------------------------------------------------
+     */
     let payload;
 
     try {
-      payload = JSON.parse(
-        req.body.toString('utf8')
-      );
-    } catch (error) {
+      payload = JSON.parse(rawBody.toString('utf8'));
+    } catch (parseError) {
       console.error(
-        'Unable to parse Sogo webhook body:',
-        error
+        '❌ Could not parse Sogo webhook JSON:',
+        parseError.message
       );
 
       return res.status(400).json({
         success: false,
-        message:
-          'Invalid webhook payload.',
+        message: 'Invalid webhook JSON',
       });
     }
 
-
-    // ========================================================
-    // WEBHOOK HEADERS
-    // ========================================================
-
-    const eventHeader =
-      req.headers['x-sogo-event'];
+    /**
+     * --------------------------------------------------------
+     * 5. WEBHOOK INFORMATION
+     * --------------------------------------------------------
+     */
+    const event =
+      payload?.event ||
+      req.headers['x-sogo-event'] ||
+      '';
 
     const deliveryId =
-      req.headers['x-sogo-delivery'];
+      req.headers['x-sogo-delivery'] ||
+      '';
 
     const timestamp =
-      req.headers['x-sogo-timestamp'];
+      req.headers['x-sogo-timestamp'] ||
+      '';
 
+    console.log('📩 Sogo event:', event);
+    console.log('📦 Delivery:', deliveryId);
+    console.log('🕐 Timestamp:', timestamp);
 
-    console.log(
-      '============================================================'
-    );
-
-    console.log(
-      'SOGO WEBHOOK RECEIVED'
-    );
-
-    console.log(
-      'Event:',
-      eventHeader || payload.event || 'unknown'
-    );
-
-    console.log(
-      'Delivery:',
-      deliveryId || 'unknown'
-    );
-
-    console.log(
-      'Timestamp:',
-      timestamp || 'unknown'
-    );
-
-    console.log(
-      '============================================================'
-    );
-
-
-    // ========================================================
-    // EVENT
-    // ========================================================
-
-    const event =
-      payload.event ||
-      eventHeader ||
-      null;
-
-
-    // ========================================================
-    // EVENT DATA
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 6. FIND TRANSACTION DATA
+     * --------------------------------------------------------
+     */
     const eventData =
-      payload.data ||
-      payload.payload ||
+      payload?.data ||
+      payload?.payload ||
       {};
 
-
-    // ========================================================
-    // TRANSACTION OBJECT
-    // ========================================================
-
     const transaction =
-      eventData.transaction ||
-      eventData.data ||
-      eventData.object ||
+      eventData?.transaction ||
+      eventData?.data ||
+      eventData?.object ||
       eventData;
 
-
-    // ========================================================
-    // STATUS
-    // ========================================================
-
-    const statusValue =
-      transaction?.status?.value ||
+    /**
+     * --------------------------------------------------------
+     * 7. EXTRACT STATUS
+     * --------------------------------------------------------
+     */
+    const rawStatus =
       transaction?.status ||
-      eventData?.status?.value ||
       eventData?.status ||
-      payload?.status?.value ||
       payload?.status ||
-      null;
+      '';
 
+    const providerStatus =
+      typeof rawStatus === 'object'
+        ? rawStatus?.value ||
+          rawStatus?.status ||
+          ''
+        : rawStatus;
 
     const normalizedStatus =
-      String(
-        statusValue || ''
-      )
+      String(providerStatus || '')
         .trim()
         .toLowerCase();
 
-
-    // ========================================================
-    // PROVIDER REFERENCE
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 8. PROVIDER REFERENCE
+     * --------------------------------------------------------
+     */
     const providerReference =
       firstValue(
         transaction?.reference,
         transaction?.provider_reference,
+        transaction?.providerReference,
+
         eventData?.reference,
         eventData?.provider_reference,
+
         payload?.reference,
-        payload?.provider_reference,
-        transaction?.id
+        payload?.provider_reference
       );
 
-
-    // ========================================================
-    // PROVIDER MESSAGE
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 9. PROVIDER MESSAGE
+     * --------------------------------------------------------
+     */
     const providerMessage =
       firstValue(
         transaction?.message,
+        transaction?.description,
+
         eventData?.message,
-        payload?.message
+        eventData?.description,
+
+        payload?.message,
+        payload?.description
       );
 
-
-    // ========================================================
-    // ELECTRICITY TOKEN
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 10. TOKEN + UNITS
+     * --------------------------------------------------------
+     */
     const electricityToken =
-      firstValue(
-
-        // Direct transaction fields
-        transaction?.token,
-        transaction?.electricity_token,
-        transaction?.token_code,
-        transaction?.prepaid_token,
-        transaction?.prepaid_token_code,
-        transaction?.pin,
-
-        // Nested electricity object
-        transaction?.electricity?.token,
-        transaction?.electricity?.electricity_token,
-        transaction?.electricity?.token_code,
-        transaction?.electricity?.prepaid_token,
-        transaction?.electricity?.prepaid_token_code,
-        transaction?.electricity?.pin,
-
-        // Event data
-        eventData?.token,
-        eventData?.electricity_token,
-        eventData?.token_code,
-        eventData?.prepaid_token,
-        eventData?.prepaid_token_code,
-        eventData?.pin,
-
-        // Payload
-        payload?.token,
-        payload?.electricity_token,
-        payload?.token_code,
-        payload?.prepaid_token,
-        payload?.prepaid_token_code,
-        payload?.pin
-      );
-
-
-    // ========================================================
-    // ELECTRICITY UNITS
-    // ========================================================
+      extractElectricityToken(payload);
 
     const units =
-      firstValue(
-
-        transaction?.units,
-        transaction?.unit,
-        transaction?.kwh,
-
-        transaction?.electricity?.units,
-        transaction?.electricity?.unit,
-        transaction?.electricity?.kwh,
-
-        eventData?.units,
-        eventData?.unit,
-        eventData?.kwh,
-
-        payload?.units,
-        payload?.unit,
-        payload?.kwh
-      );
-
-
-    // ========================================================
-    // LOG IMPORTANT DATA
-    // ========================================================
+      extractUnits(payload);
 
     console.log(
-      'Sogo event:',
-      event
-    );
-
-    console.log(
-      'Sogo provider reference:',
+      '📌 Provider reference:',
       providerReference
     );
 
     console.log(
-      'Sogo status:',
+      '📌 Provider status:',
       normalizedStatus
     );
 
     console.log(
-      'Electricity token present:',
-      Boolean(electricityToken)
+      '📌 Electricity token:',
+      electricityToken
+        ? '[PRESENT]'
+        : '[NOT PRESENT]'
     );
 
     console.log(
-      'Electricity units:',
-      units
+      '📌 Electricity units:',
+      units || '[NOT PRESENT]'
     );
 
-
-    // ========================================================
-    // BASIC VALIDATION
-    // ========================================================
-
-    if (!event) {
-      console.error(
-        'Sogo webhook event is missing.'
-      );
-
-      return res.status(400).json({
-        success: false,
-        message:
-          'Webhook event is missing.',
-      });
-    }
-
-
-    // ========================================================
-    // WE ONLY PROCESS BILL PAYMENTS
-    // ========================================================
-
-    const transactionType =
-      firstValue(
-        transaction?.type,
-        eventData?.type,
-        payload?.type
-      );
+    /**
+     * --------------------------------------------------------
+     * 11. IGNORE EVENTS WE DON'T HANDLE
+     * --------------------------------------------------------
+     */
+    const supportedEvents = [
+      'transaction.completed',
+      'transaction.processing',
+      'transaction.failed',
+      'transaction.cancelled',
+      'transaction.refunded',
+    ];
 
     if (
-      transactionType &&
-      transactionType !== 'bill_payment'
+      event &&
+      !supportedEvents.includes(event)
     ) {
       console.log(
-        'Ignoring non-bill-payment Sogo webhook:',
-        transactionType
+        'ℹ️ Unsupported Sogo event:',
+        event
       );
 
       return res.status(200).json({
         success: true,
-        message:
-          'Webhook received and ignored.',
+        message: 'Event received',
       });
     }
 
-
-    // ========================================================
-    // PROVIDER REFERENCE REQUIRED
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 12. PROVIDER REFERENCE IS REQUIRED
+     * --------------------------------------------------------
+     */
     if (!providerReference) {
-      console.error(
-        'Sogo webhook does not contain a provider reference.'
+      console.warn(
+        '⚠️ Sogo webhook has no provider reference'
       );
 
       return res.status(200).json({
         success: true,
-        message:
-          'Webhook received but no transaction reference was available.',
+        message: 'Webhook received without reference',
       });
     }
 
+    /**
+     * --------------------------------------------------------
+     * 13. FIND LOCAL BILL PAYMENT
+     * --------------------------------------------------------
+     */
+    const billResult = await pool.query(
+      `
+      SELECT
+        id,
+        account_id,
+        status,
+        provider_reference,
+        provider_response,
+        electricity_token,
+        units
+      FROM bill_payments
+      WHERE provider_reference = $1
+      LIMIT 1
+      `,
+      [providerReference]
+    );
 
-    // ========================================================
-    // FIND LOCAL BILL PAYMENT
-    // ========================================================
-
-    const billResult =
-      await pool.query(
-        `
-          SELECT
-            id,
-            account_id,
-            reference,
-            provider_reference,
-            status,
-            category
-          FROM bill_payments
-          WHERE
-            provider_reference = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        `,
-        [
-          providerReference,
-        ]
-      );
-
-
-    if (
-      billResult.rows.length === 0
-    ) {
+    if (billResult.rows.length === 0) {
       console.warn(
-        'No local bill payment found for Sogo provider reference:',
+        '⚠️ No local bill payment found for provider reference:',
         providerReference
       );
 
-      // Return 200 so Sogo does not repeatedly retry
-      // a webhook for a transaction that Zenimonies
-      // does not currently know about.
-
+      /**
+       * We return 200 so Sogo does not repeatedly retry
+       * the webhook forever.
+       */
       return res.status(200).json({
         success: true,
-        message:
-          'Webhook received. No matching local transaction found.',
+        message: 'Webhook received; local transaction not found',
       });
     }
 
+    const bill = billResult.rows[0];
 
-    const billPayment =
-      billResult.rows[0];
+    console.log(
+      '✅ Local bill payment found:',
+      bill.id
+    );
 
-
-    // ========================================================
-    // UPDATE COMPLETED PAYMENT
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 14. COMPLETED
+     * --------------------------------------------------------
+     */
     if (
       event === 'transaction.completed' ||
       normalizedStatus === 'completed'
     ) {
-
       console.log(
-        'Processing completed Sogo bill payment:',
-        billPayment.reference
+        '🎉 SOGO ELECTRICITY PAYMENT COMPLETED'
       );
 
-
-      await pool.query(
+      const updateResult = await pool.query(
         `
-          UPDATE bill_payments
-          SET
-            status = 'completed',
+        UPDATE bill_payments
+        SET
+          status = 'completed',
 
-            provider_reference = COALESCE(
-              provider_reference,
+          provider_response =
+            COALESCE(
+              provider_response,
               $1
             ),
 
-            provider_response = $2,
+          provider_response_message =
+            COALESCE(
+              provider_response_message,
+              $2
+            ),
 
-            provider_response_message =
-              COALESCE(
-                $3,
-                provider_response_message
-              ),
+          electricity_token =
+            COALESCE(
+              electricity_token,
+              $3
+            ),
 
-            electricity_token =
-              COALESCE(
-                $4,
-                electricity_token
-              ),
+          units =
+            COALESCE(
+              units,
+              $4
+            ),
 
-            units =
-              COALESCE(
-                $5,
-                units
-              ),
+          completed_at =
+            COALESCE(
+              completed_at,
+              CURRENT_TIMESTAMP
+            )
 
-            completed_at =
-              COALESCE(
-                completed_at,
-                CURRENT_TIMESTAMP
-              )
+        WHERE id = $5
 
-          WHERE id = $6
+        RETURNING
+          id,
+          status,
+          electricity_token,
+          units
         `,
         [
-          providerReference,
-          payload,
+          JSON.stringify(payload),
           providerMessage,
           electricityToken,
           units,
-          billPayment.id,
+          bill.id,
         ]
       );
 
-
-      // ======================================================
-      // UPDATE TRANSACTION HISTORY
-      // ======================================================
-
+      /**
+       * Update the corresponding transaction.
+       */
       await pool.query(
         `
-          UPDATE transactions
-          SET
-            status = 'completed'
-          WHERE
-            reference = $1
-            AND status IN (
-              'processing',
-              'pending',
-              'provider_response_unrecognized'
-            )
+        UPDATE transactions
+        SET
+          status = 'completed'
+        WHERE reference = (
+          SELECT reference
+          FROM bill_payments
+          WHERE id = $1
+        )
         `,
-        [
-          billPayment.reference,
-        ]
-      );
-
-
-      console.log(
-        '✅ Sogo completed payment updated successfully.'
+        [bill.id]
       );
 
       console.log(
-        'Zenimonies reference:',
-        billPayment.reference
+        '✅ Local bill payment marked completed'
       );
 
       console.log(
-        'Electricity token saved:',
-        Boolean(electricityToken)
+        '🎟️ Token saved:',
+        updateResult.rows[0]?.electricity_token
+          ? 'YES'
+          : 'NO'
       );
 
       console.log(
-        'Electricity units saved:',
-        units
+        '⚡ Units saved:',
+        updateResult.rows[0]?.units || 'NO'
       );
-
 
       return res.status(200).json({
         success: true,
-        message:
-          'Sogo completed webhook processed.',
+        message: 'Webhook processed successfully',
       });
     }
 
-
-    // ========================================================
-    // PROCESSING
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 15. PROCESSING
+     * --------------------------------------------------------
+     */
     if (
       event === 'transaction.processing' ||
       normalizedStatus === 'processing' ||
       normalizedStatus === 'pending'
     ) {
-
-      await pool.query(
-        `
-          UPDATE bill_payments
-          SET
-            status = 'processing',
-            provider_response = $1,
-            provider_response_message =
-              COALESCE(
-                $2,
-                provider_response_message
-              )
-          WHERE id = $3
-        `,
-        [
-          payload,
-          providerMessage,
-          billPayment.id,
-        ]
-      );
-
-
-      await pool.query(
-        `
-          UPDATE transactions
-          SET
-            status = 'processing'
-          WHERE
-            reference = $1
-        `,
-        [
-          billPayment.reference,
-        ]
-      );
-
-
       console.log(
-        'Sogo electricity payment remains processing:',
-        billPayment.reference
+        '⏳ Sogo transaction still processing'
       );
 
+      await pool.query(
+        `
+        UPDATE bill_payments
+        SET
+          status = 'processing',
+
+          provider_response =
+            COALESCE(
+              provider_response,
+              $1
+            ),
+
+          provider_response_message =
+            COALESCE(
+              provider_response_message,
+              $2
+            )
+
+        WHERE id = $3
+        `,
+        [
+          JSON.stringify(payload),
+          providerMessage,
+          bill.id,
+        ]
+      );
 
       return res.status(200).json({
         success: true,
-        message:
-          'Sogo processing webhook received.',
+        message: 'Transaction still processing',
       });
     }
 
-
-    // ========================================================
-    // FAILED
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 16. FAILED
+     * --------------------------------------------------------
+     */
     if (
       event === 'transaction.failed' ||
       normalizedStatus === 'failed'
     ) {
-
-      await pool.query(
-        `
-          UPDATE bill_payments
-          SET
-            status = 'failed',
-            provider_response = $1,
-            provider_response_message =
-              COALESCE(
-                $2,
-                provider_response_message
-              ),
-            failure_reason =
-              COALESCE(
-                $2,
-                failure_reason
-              )
-          WHERE id = $3
-        `,
-        [
-          payload,
-          providerMessage,
-          billPayment.id,
-        ]
-      );
-
-
-      await pool.query(
-        `
-          UPDATE transactions
-          SET
-            status = 'failed'
-          WHERE
-            reference = $1
-            AND status IN (
-              'processing',
-              'pending'
-            )
-        `,
-        [
-          billPayment.reference,
-        ]
-      );
-
-
       console.log(
-        'Sogo failed transaction recorded:',
-        billPayment.reference
+        '❌ Sogo transaction failed'
       );
 
+      await pool.query(
+        `
+        UPDATE bill_payments
+        SET
+          status = 'failed',
+
+          provider_response =
+            COALESCE(
+              provider_response,
+              $1
+            ),
+
+          provider_response_message =
+            COALESCE(
+              provider_response_message,
+              $2
+            )
+
+        WHERE id = $3
+        `,
+        [
+          JSON.stringify(payload),
+          providerMessage,
+          bill.id,
+        ]
+      );
+
+      await pool.query(
+        `
+        UPDATE transactions
+        SET
+          status = 'failed'
+        WHERE reference = (
+          SELECT reference
+          FROM bill_payments
+          WHERE id = $1
+        )
+        `,
+        [bill.id]
+      );
 
       return res.status(200).json({
         success: true,
-        message:
-          'Sogo failed webhook processed.',
+        message: 'Failed transaction recorded',
       });
     }
 
-
-    // ========================================================
-    // CANCELLED
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 17. CANCELLED
+     * --------------------------------------------------------
+     */
     if (
       event === 'transaction.cancelled' ||
       normalizedStatus === 'cancelled'
     ) {
-
-      await pool.query(
-        `
-          UPDATE bill_payments
-          SET
-            status = 'cancelled',
-            provider_response = $1,
-            provider_response_message =
-              COALESCE(
-                $2,
-                provider_response_message
-              )
-          WHERE id = $3
-        `,
-        [
-          payload,
-          providerMessage,
-          billPayment.id,
-        ]
-      );
-
-
-      await pool.query(
-        `
-          UPDATE transactions
-          SET
-            status = 'cancelled'
-          WHERE
-            reference = $1
-            AND status IN (
-              'processing',
-              'pending'
-            )
-        `,
-        [
-          billPayment.reference,
-        ]
-      );
-
-
       console.log(
-        'Sogo cancelled transaction recorded:',
-        billPayment.reference
+        '🚫 Sogo transaction cancelled'
       );
 
+      await pool.query(
+        `
+        UPDATE bill_payments
+        SET
+          status = 'cancelled',
+
+          provider_response =
+            COALESCE(
+              provider_response,
+              $1
+            ),
+
+          provider_response_message =
+            COALESCE(
+              provider_response_message,
+              $2
+            )
+
+        WHERE id = $3
+        `,
+        [
+          JSON.stringify(payload),
+          providerMessage,
+          bill.id,
+        ]
+      );
+
+      await pool.query(
+        `
+        UPDATE transactions
+        SET
+          status = 'cancelled'
+        WHERE reference = (
+          SELECT reference
+          FROM bill_payments
+          WHERE id = $1
+        )
+        `,
+        [bill.id]
+      );
 
       return res.status(200).json({
         success: true,
-        message:
-          'Sogo cancelled webhook processed.',
+        message: 'Cancelled transaction recorded',
       });
     }
 
-
-    // ========================================================
-    // REFUNDED
-    // ========================================================
-    //
-    // IMPORTANT:
-    // We only update the status here.
-    //
-    // We do NOT add money back to the customer's account
-    // from the webhook because the existing electricity
-    // controller already handles refunds for synchronous
-    // failed/refunded responses.
-    //
-    // This prevents duplicate refunds if Sogo sends both
-    // the purchase response and a refund webhook.
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 18. REFUNDED
+     * --------------------------------------------------------
+     *
+     * We only update the status here.
+     *
+     * The electricity controller already handles local
+     * balance refunds when Sogo immediately reports a
+     * refunded result.
+     *
+     * This prevents double-refunding the customer.
+     */
     if (
       event === 'transaction.refunded' ||
       normalizedStatus === 'refunded'
     ) {
-
-      await pool.query(
-        `
-          UPDATE bill_payments
-          SET
-            status = 'refunded',
-            provider_response = $1,
-            provider_response_message =
-              COALESCE(
-                $2,
-                provider_response_message
-              ),
-            completed_at =
-              COALESCE(
-                completed_at,
-                CURRENT_TIMESTAMP
-              )
-          WHERE id = $3
-        `,
-        [
-          payload,
-          providerMessage,
-          billPayment.id,
-        ]
-      );
-
-
-      await pool.query(
-        `
-          UPDATE transactions
-          SET
-            status = 'refunded'
-          WHERE
-            reference = $1
-        `,
-        [
-          billPayment.reference,
-        ]
-      );
-
-
       console.log(
-        'Sogo refunded transaction recorded:',
-        billPayment.reference
+        '↩️ Sogo transaction refunded'
       );
 
+      await pool.query(
+        `
+        UPDATE bill_payments
+        SET
+          status = 'refunded',
+
+          provider_response =
+            COALESCE(
+              provider_response,
+              $1
+            ),
+
+          provider_response_message =
+            COALESCE(
+              provider_response_message,
+              $2
+            )
+
+        WHERE id = $3
+        `,
+        [
+          JSON.stringify(payload),
+          providerMessage,
+          bill.id,
+        ]
+      );
+
+      await pool.query(
+        `
+        UPDATE transactions
+        SET
+          status = 'refunded'
+        WHERE reference = (
+          SELECT reference
+          FROM bill_payments
+          WHERE id = $1
+        )
+        `,
+        [bill.id]
+      );
 
       return res.status(200).json({
         success: true,
-        message:
-          'Sogo refunded webhook processed.',
+        message: 'Refunded transaction recorded',
       });
     }
 
-
-    // ========================================================
-    // UNKNOWN EVENT
-    // ========================================================
-
+    /**
+     * --------------------------------------------------------
+     * 19. UNKNOWN STATUS
+     * --------------------------------------------------------
+     */
     console.log(
-      'Sogo webhook received with an unhandled event:',
-      event
+      'ℹ️ Sogo webhook received with unhandled status:',
+      normalizedStatus
     );
 
+    await pool.query(
+      `
+      UPDATE bill_payments
+      SET
+        provider_response =
+          COALESCE(
+            provider_response,
+            $1
+          ),
+
+        provider_response_message =
+          COALESCE(
+            provider_response_message,
+            $2
+          )
+
+      WHERE id = $3
+      `,
+      [
+        JSON.stringify(payload),
+        providerMessage,
+        bill.id,
+      ]
+    );
 
     return res.status(200).json({
       success: true,
-      message:
-        'Sogo webhook received.',
+      message: 'Webhook received',
     });
 
   } catch (error) {
-
     console.error(
-      '============================================================'
-    );
-
-    console.error(
-      'SOGO WEBHOOK ERROR:',
+      '❌ SOGO WEBHOOK ERROR:',
       error
     );
 
-    console.error(
-      '============================================================'
-    );
-
-
+    /**
+     * Returning 500 allows Sogo to retry when the error
+     * is genuinely server-side.
+     */
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to process Sogo webhook.',
+      message: 'Webhook processing failed',
     });
   }
 };
-
-
-// ============================================================
-// EXPORT
-// ============================================================
 
 module.exports = {
   handleSogoWebhook,
