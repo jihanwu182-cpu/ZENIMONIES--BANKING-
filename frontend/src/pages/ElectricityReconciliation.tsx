@@ -679,14 +679,16 @@ const ElectricityReconciliation: React.FC = () => {
                         </div>
                       )}
 
-                      {payment.provider_response_message && (
-                        <div>
-                          <strong>
-                            Provider message:
-                          </strong>{' '}
-                          {payment.provider_response_message}
-                        </div>
-                      )}
+                      {(payment.provider_message ||
+                     payment.provider_response_message) && (
+                      <div>
+                        <strong>
+                           Provider message:
+                        </strong>{' '}
+                    {payment.provider_message ||
+                      payment.provider_response_message}
+                 </div>
+                )}
 
                       {payment.provider_response !==
                         undefined &&
