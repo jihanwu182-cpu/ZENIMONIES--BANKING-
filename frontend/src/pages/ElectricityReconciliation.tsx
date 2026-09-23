@@ -36,6 +36,7 @@ interface ElectricityPayment {
   units?: string;
   tariff_class?: string;
   provider_response_message?: string;
+  provider_message?: string;
   provider_response?: unknown;
   created_at?: string;
   completed_at?: string;
