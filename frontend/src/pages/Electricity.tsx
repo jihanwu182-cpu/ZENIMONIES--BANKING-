@@ -361,16 +361,19 @@ const Electricity: React.FC = () => {
             padding: '0 18px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent:
-              'space-between',
+            justifyContent: 'center',
+            position: 'relative',
           }}
         >
+          {/* Back button */}
           <button
             type="button"
             onClick={() =>
               navigate(-1)
             }
             style={{
+              position: 'absolute',
+              left: 18,
               width: 42,
               height: 42,
               border: 'none',
@@ -390,6 +393,7 @@ const Electricity: React.FC = () => {
             ‹
           </button>
 
+          {/* Page title */}
           <h1
             style={{
               margin: 0,
@@ -400,28 +404,6 @@ const Electricity: React.FC = () => {
           >
             Electricity
           </h1>
-
-          <button
-            type="button"
-            onClick={() =>
-              navigate(
-                '/electricity/reconciliation'
-              )
-            }
-            style={{
-              border: 'none',
-              background:
-                'transparent',
-              color: '#159447',
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: 'pointer',
-              padding:
-                '8px 0 8px 8px',
-            }}
-          >
-            History
-          </button>
         </div>
       </div>
 
