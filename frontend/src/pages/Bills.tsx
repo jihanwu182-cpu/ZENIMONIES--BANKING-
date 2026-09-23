@@ -93,7 +93,7 @@ const Bills: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => navigate('/bills/history')}
+          onClick={() => navigate(onClick={() => navigate('/electricity/reconciliation')}
           style={{
             border: 'none',
             background: 'transparent',
