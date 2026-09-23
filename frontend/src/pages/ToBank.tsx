@@ -104,19 +104,11 @@ const ToBank: React.FC = () => {
       return;
     }
 
-    /*
-     * Select the saved bank.
-     */
-
     if (beneficiary.bank_code) {
       setSelectedBank(
         beneficiary.bank_code
       );
     }
-
-    /*
-     * Fill the saved account details.
-     */
 
     setAccountNumber(
       beneficiary.account_number
@@ -127,10 +119,9 @@ const ToBank: React.FC = () => {
     );
 
     /*
-     * The beneficiary was previously
-     * verified before it was saved.
+     * A saved beneficiary has already
+     * passed verification.
      */
-
     setAccountVerified(true);
 
     setError('');
@@ -139,7 +130,7 @@ const ToBank: React.FC = () => {
 
   /*
    * ==========================================================
-   * LOAD FULL BANK LIST
+   * LOAD BANKS
    * ==========================================================
    */
 
@@ -239,6 +230,11 @@ const ToBank: React.FC = () => {
       event.target.value
     );
 
+    /*
+     * Selecting a different bank
+     * invalidates the previous account
+     * verification.
+     */
     setAccountVerified(false);
     setAccountName('');
     setError('');
@@ -267,7 +263,6 @@ const ToBank: React.FC = () => {
      * Changing the account number
      * invalidates the previous verification.
      */
-
     setAccountVerified(false);
     setAccountName('');
     setError('');
@@ -275,7 +270,7 @@ const ToBank: React.FC = () => {
 
   /*
    * ==========================================================
-   * VERIFY BANK ACCOUNT
+   * VERIFY ACCOUNT
    * ==========================================================
    */
 
@@ -383,10 +378,6 @@ const ToBank: React.FC = () => {
         ''
       );
 
-    /*
-     * Allow only one decimal point.
-     */
-
     const firstDot =
       value.indexOf('.');
 
@@ -475,19 +466,13 @@ const ToBank: React.FC = () => {
       {
         state: {
           bank,
-
           accountNumber,
-
           accountName,
-
           amount:
             numericAmount,
-
           narration,
-
           accountVerified:
             true,
-
           saveAsBeneficiary,
         },
       }
@@ -509,6 +494,30 @@ const ToBank: React.FC = () => {
 
   /*
    * ==========================================================
+   * BENEFICIARY SECTION
+   *
+   * BEFORE ACCOUNT VERIFICATION:
+   * Recent/Saved appears immediately below
+   * the account-number field.
+   *
+   * AFTER ACCOUNT VERIFICATION:
+   * Recent/Saved moves to the bottom.
+   * ==========================================================
+   */
+
+  const beneficiarySection = (
+    <div style={styles.beneficiarySection}>
+      <BeneficiaryTabs
+        recipientType="bank"
+        onSelect={
+          handleBeneficiarySelect
+        }
+      />
+    </div>
+  );
+
+  /*
+   * ==========================================================
    * RENDER
    * ==========================================================
    */
@@ -520,41 +529,25 @@ const ToBank: React.FC = () => {
           HEADER
           ==================================================== */}
 
-      <header
-        style={styles.header}
-      >
-        <div
-          style={
-            styles.headerInner
-          }
-        >
+      <header style={styles.header}>
+        <div style={styles.headerInner}>
           <button
             type="button"
             onClick={() =>
               navigate('/')
             }
-            style={
-              styles.backButton
-            }
+            style={styles.backButton}
             aria-label="Back"
           >
             ←
           </button>
 
           <div>
-            <div
-              style={
-                styles.headerTitle
-              }
-            >
+            <div style={styles.headerTitle}>
               Send to Bank
             </div>
 
-            <div
-              style={
-                styles.headerSubtitle
-              }
-            >
+            <div style={styles.headerSubtitle}>
               Send money to another
               bank account
             </div>
@@ -566,34 +559,18 @@ const ToBank: React.FC = () => {
           MAIN
           ==================================================== */}
 
-      <main
-        style={styles.main}
-      >
+      <main style={styles.main}>
 
-        <div
-          style={
-            styles.intro
-          }
-        >
-          <div
-            style={
-              styles.eyebrow
-            }
-          >
+        <div style={styles.intro}>
+          <div style={styles.eyebrow}>
             BANK TRANSFER
           </div>
 
-          <h1
-            style={styles.title}
-          >
+          <h1 style={styles.title}>
             Send money
           </h1>
 
-          <p
-            style={
-              styles.subtitle
-            }
-          >
+          <p style={styles.subtitle}>
             Enter the bank account
             details and verify the
             recipient before sending.
@@ -601,23 +578,10 @@ const ToBank: React.FC = () => {
         </div>
 
         {/* ==================================================
-            BENEFICIARIES
+            TRANSFER CARD
             ================================================== */}
 
-        <BeneficiaryTabs
-          recipientType="bank"
-          onSelect={
-            handleBeneficiarySelect
-          }
-        />
-
-        {/* ==================================================
-            CARD
-            ================================================== */}
-
-        <section
-          style={styles.card}
-        >
+        <section style={styles.card}>
 
           {/* BANK */}
 
@@ -629,11 +593,7 @@ const ToBank: React.FC = () => {
           </label>
 
           {banksLoading ? (
-            <div
-              style={
-                styles.loadingBox
-              }
-            >
+            <div style={styles.loadingBox}>
               Loading Nigerian
               banks...
             </div>
@@ -648,9 +608,7 @@ const ToBank: React.FC = () => {
                   )
                 }
                 placeholder="Search bank..."
-                style={
-                  styles.searchInput
-                }
+                style={styles.searchInput}
                 aria-label="Search bank"
               />
 
@@ -660,9 +618,7 @@ const ToBank: React.FC = () => {
                 onChange={
                   handleBankChange
                 }
-                style={
-                  styles.select
-                }
+                style={styles.select}
               >
                 <option value="">
                   Select bank
@@ -681,11 +637,7 @@ const ToBank: React.FC = () => {
               </select>
 
               {!banks.length && (
-                <div
-                  style={
-                    styles.smallError
-                  }
-                >
+                <div style={styles.smallError}>
                   No banks are currently
                   available.
                 </div>
@@ -731,11 +683,7 @@ const ToBank: React.FC = () => {
 
           {/* ACCOUNT NUMBER */}
 
-          <div
-            style={
-              styles.fieldSpacing
-            }
-          >
+          <div style={styles.fieldSpacing}>
             <label
               htmlFor="account-number"
               style={styles.label}
@@ -743,27 +691,19 @@ const ToBank: React.FC = () => {
               Account number
             </label>
 
-            <div
-              style={
-                styles.verifyRow
-              }
-            >
+            <div style={styles.verifyRow}>
               <input
                 id="account-number"
                 type="tel"
                 inputMode="numeric"
                 autoComplete="off"
                 maxLength={10}
-                value={
-                  accountNumber
-                }
+                value={accountNumber}
                 onChange={
                   handleAccountNumberChange
                 }
                 placeholder="Enter 10-digit account number"
-                style={
-                  styles.accountInput
-                }
+                style={styles.accountInput}
               />
 
               <button
@@ -780,7 +720,6 @@ const ToBank: React.FC = () => {
                 }
                 style={{
                   ...styles.verifyButton,
-
                   opacity:
                     verifying ||
                     banksLoading ||
@@ -797,51 +736,37 @@ const ToBank: React.FC = () => {
               </button>
             </div>
 
-            <div
-              style={
-                styles.helperText
-              }
-            >
+            <div style={styles.helperText}>
               Enter the recipient's
               10-digit bank account
               number.
             </div>
           </div>
 
-          {/* VERIFIED ACCOUNT */}
+          {/* ==================================================
+              BEFORE VERIFICATION:
+              BENEFICIARIES APPEAR HERE
+              ================================================== */}
+
+          {!accountVerified &&
+            beneficiarySection}
+
+          {/* ==================================================
+              VERIFIED ACCOUNT
+              ================================================== */}
 
           {accountVerified && (
-            <div
-              style={
-                styles.verifiedCard
-              }
-            >
-              <div
-                style={
-                  styles.verifiedIcon
-                }
-              >
+            <div style={styles.verifiedCard}>
+              <div style={styles.verifiedIcon}>
                 ✓
               </div>
 
-              <div
-                style={
-                  styles.verifiedInfo
-                }
-              >
-                <div
-                  style={
-                    styles.verifiedLabel
-                  }
-                >
+              <div style={styles.verifiedInfo}>
+                <div style={styles.verifiedLabel}>
                   Account Verified
                 </div>
 
-                <div
-                  style={
-                    styles.accountName
-                  }
-                >
+                <div style={styles.accountName}>
                   {accountName}
                 </div>
 
@@ -854,190 +779,215 @@ const ToBank: React.FC = () => {
                 </div>
               </div>
 
-              <div
-                style={
-                  styles.verifiedPill
-                }
-              >
+              <div style={styles.verifiedPill}>
                 Verified
               </div>
             </div>
           )}
 
-          {/* AMOUNT */}
+          {/* ==================================================
+              AFTER VERIFICATION:
+              SHOW REMAINING TRANSFER FIELDS
+              ================================================== */}
 
-          <div
-            style={
-              styles.fieldSpacing
-            }
-          >
-            <label
-              htmlFor="amount"
-              style={styles.label}
-            >
-              Amount
-            </label>
+          {accountVerified && (
+            <>
+              {/* AMOUNT */}
 
-            <div
-              style={
-                styles.amountWrap
-              }
-            >
-              <span
+              <div
                 style={
-                  styles.currency
+                  styles.fieldSpacing
                 }
               >
-                ₦
-              </span>
+                <label
+                  htmlFor="amount"
+                  style={styles.label}
+                >
+                  Amount
+                </label>
 
-              <input
-                id="amount"
-                type="text"
-                inputMode="decimal"
-                value={amount}
-                onChange={
-                  handleAmountChange
-                }
-                placeholder="0.00"
+                <div
+                  style={
+                    styles.amountWrap
+                  }
+                >
+                  <span
+                    style={
+                      styles.currency
+                    }
+                  >
+                    ₦
+                  </span>
+
+                  <input
+                    id="amount"
+                    type="text"
+                    inputMode="decimal"
+                    value={amount}
+                    onChange={
+                      handleAmountChange
+                    }
+                    placeholder="0.00"
+                    style={
+                      styles.amountInput
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* NARRATION */}
+
+              <div
                 style={
-                  styles.amountInput
-                }
-              />
-            </div>
-          </div>
-
-          {/* NARRATION */}
-
-          <div
-            style={
-              styles.fieldSpacing
-            }
-          >
-            <label
-              htmlFor="narration"
-              style={styles.label}
-            >
-              Narration
-              <span
-                style={
-                  styles.optional
+                  styles.fieldSpacing
                 }
               >
-                {' '}
-                (optional)
-              </span>
-            </label>
+                <label
+                  htmlFor="narration"
+                  style={styles.label}
+                >
+                  Narration
+                  <span
+                    style={
+                      styles.optional
+                    }
+                  >
+                    {' '}
+                    (optional)
+                  </span>
+                </label>
 
-            <input
-              id="narration"
-              type="text"
-              maxLength={100}
-              value={narration}
-              onChange={(event) =>
-                setNarration(
-                  event.target.value
-                )
-              }
-              placeholder="What is this payment for?"
-              style={
-                styles.fullInput
-              }
-            />
-          </div>
+                <input
+                  id="narration"
+                  type="text"
+                  maxLength={100}
+                  value={narration}
+                  onChange={(event) =>
+                    setNarration(
+                      event.target.value
+                    )
+                  }
+                  placeholder="What is this payment for?"
+                  style={
+                    styles.fullInput
+                  }
+                />
+              </div>
 
-          {/* SAVE BENEFICIARY */}
+              {/* SAVE BENEFICIARY */}
 
-          <label
-            style={
-              styles.beneficiaryCheckbox
-            }
-          >
-            <input
-              type="checkbox"
-              checked={
-                saveAsBeneficiary
-              }
-              onChange={(event) =>
-                setSaveAsBeneficiary(
-                  event.target.checked
-                )
-              }
-            />
+              <label
+                style={
+                  styles.beneficiaryCheckbox
+                }
+              >
+                <input
+                  type="checkbox"
+                  checked={
+                    saveAsBeneficiary
+                  }
+                  onChange={(event) =>
+                    setSaveAsBeneficiary(
+                      event.target.checked
+                    )
+                  }
+                />
 
-            <span>
-              Save as beneficiary
-            </span>
-          </label>
+                <span>
+                  Save as beneficiary
+                </span>
+              </label>
 
-          {/* ERROR */}
+              {/* ERROR */}
 
-          {error && (
-            <div
-              style={
-                styles.errorBox
-              }
-              role="alert"
-            >
-              <span>
-                !
-              </span>
+              {error && (
+                <div
+                  style={
+                    styles.errorBox
+                  }
+                  role="alert"
+                >
+                  <span>!</span>
 
-              <span>
-                {error}
-              </span>
-            </div>
+                  <span>
+                    {error}
+                  </span>
+                </div>
+              )}
+
+              {/* CONTINUE */}
+
+              <button
+                type="button"
+                onClick={
+                  handleContinue
+                }
+                disabled={
+                  !accountVerified ||
+                  !amount ||
+                  banksLoading
+                }
+                style={{
+                  ...styles.continueButton,
+                  opacity:
+                    !accountVerified ||
+                    !amount ||
+                    banksLoading
+                      ? 0.55
+                      : 1,
+                }}
+              >
+                Continue
+
+                <span>
+                  →
+                </span>
+              </button>
+
+              <div
+                style={
+                  styles.securityText
+                }
+              >
+                🔒 Your recipient will
+                be verified before the
+                transfer continues.
+              </div>
+
+              {/* ==================================================
+                  AFTER VERIFICATION:
+                  BENEFICIARIES MOVE TO THE BOTTOM
+                  ================================================== */}
+
+              {beneficiarySection}
+            </>
           )}
 
-          {/* CONTINUE */}
+          {/* ==================================================
+              ERROR BEFORE VERIFICATION
+              ================================================== */}
 
-          <button
-            type="button"
-            onClick={
-              handleContinue
-            }
-            disabled={
-              !accountVerified ||
-              !amount ||
-              banksLoading
-            }
-            style={{
-              ...styles.continueButton,
+          {!accountVerified &&
+            error && (
+              <div
+                style={
+                  styles.errorBox
+                }
+                role="alert"
+              >
+                <span>!</span>
 
-              opacity:
-                !accountVerified ||
-                !amount ||
-                banksLoading
-                  ? 0.55
-                  : 1,
-            }}
-          >
-            Continue
-
-            <span>
-              →
-            </span>
-          </button>
-
-          <div
-            style={
-              styles.securityText
-            }
-          >
-            🔒 Your recipient will
-            be verified before the
-            transfer continues.
-          </div>
+                <span>
+                  {error}
+                </span>
+              </div>
+            )}
 
         </section>
 
         {/* BACK */}
 
-        <div
-          style={
-            styles.bottomBack
-          }
-        >
+        <div style={styles.bottomBack}>
           <Link
             to="/"
             style={
@@ -1063,7 +1013,6 @@ const styles: Record<
   string,
   React.CSSProperties
 > = {
-
   page: {
     minHeight: '100vh',
     background: '#f5f9f7',
@@ -1293,6 +1242,15 @@ const styles: Record<
     marginTop: 7,
   },
 
+  /*
+   * Keeps the Recent/Saved section visually
+   * separated from the main transfer fields.
+   */
+  beneficiarySection: {
+    marginTop: 22,
+    paddingTop: 4,
+  },
+
   verifiedCard: {
     marginTop: 14,
     padding: 14,
@@ -1383,7 +1341,8 @@ const styles: Record<
     height: '100%',
     border: 'none',
     outline: 'none',
-    padding: '0 14px 0 9px',
+    padding:
+      '0 14px 0 9px',
     fontSize: 18,
     fontWeight: 800,
     color: '#102a25',
