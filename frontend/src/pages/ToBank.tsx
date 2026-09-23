@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import BeneficiaryTabs from '../components/BeneficiaryTabs';
 import { Link, useNavigate } from 'react-router-dom';
 
 interface Bank {
@@ -63,6 +64,58 @@ const ToBank: React.FC = () => {
 
   const [bankSearch, setBankSearch] =
     useState('');
+
+  /*
+ * ==========================================================
+ * SELECT SAVED BANK BENEFICIARY
+ * ==========================================================
+ */
+
+const handleBeneficiarySelect = (
+  beneficiary: any
+) => {
+  if (
+    beneficiary.recipient_type !==
+    'bank'
+  ) {
+    return;
+  }
+
+  if (
+    !beneficiary.account_number
+  ) {
+    return;
+  }
+
+  /*
+   * Select the saved bank.
+   */
+  if (beneficiary.bank_code) {
+    setSelectedBank(
+      beneficiary.bank_code
+    );
+  }
+
+  /*
+   * Fill the saved account details.
+   */
+  setAccountNumber(
+    beneficiary.account_number
+  );
+
+  setAccountName(
+    beneficiary.name || ''
+  );
+
+  /*
+   * The beneficiary was previously
+   * verified before it could be saved.
+   */
+  setAccountVerified(true);
+
+  setError('');
+  setBankSearch('');
+};
 
   /*
    * ==========================================================
@@ -519,7 +572,13 @@ const ToBank: React.FC = () => {
             recipient before sending.
           </p>
         </div>
-
+        
+        <BeneficiaryTabs
+          recipientType="bank"
+          onSelect={
+           handleBeneficiarySelect
+        }
+      />
         {/* ==================================================
             CARD
         ================================================== */}
