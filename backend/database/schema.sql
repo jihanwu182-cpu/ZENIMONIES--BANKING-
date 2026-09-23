@@ -948,6 +948,26 @@ ADD COLUMN IF NOT EXISTS recipient_phone VARCHAR(30);
 ALTER TABLE bank_transfers
 ALTER COLUMN recipient_account_number DROP NOT NULL;
 
+-- ============================================================
+-- BENEFICIARIES COMPATIBILITY
+-- Supports both ZENIMONIES and external bank recipients
+-- ============================================================
+
+ALTER TABLE beneficiaries
+ADD COLUMN IF NOT EXISTS recipient_type VARCHAR(20)
+NOT NULL DEFAULT 'bank';
+
+ALTER TABLE beneficiaries
+ADD COLUMN IF NOT EXISTS recipient_phone VARCHAR(30);
+
+ALTER TABLE beneficiaries
+ALTER COLUMN account_number DROP NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_beneficiaries_user_type
+ON beneficiaries(user_id, recipient_type);
+
+CREATE INDEX IF NOT EXISTS idx_beneficiaries_phone
+ON beneficiaries(user_id, recipient_phone);
 
 -- ============================================================
 -- NOTIFICATIONS COMPATIBILITY
