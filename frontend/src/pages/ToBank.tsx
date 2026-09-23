@@ -1,6 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
 import BeneficiaryTabs from '../components/BeneficiaryTabs';
-import { Link, useNavigate } from 'react-router-dom';
+
+import {
+  Link,
+  useNavigate,
+} from 'react-router-dom';
 
 interface Bank {
   name: string;
@@ -35,8 +44,11 @@ const API_URL =
 const ToBank: React.FC = () => {
   const navigate = useNavigate();
 
-  const [banks, setBanks] = useState<Bank[]>([]);
-  const [banksLoading, setBanksLoading] = useState(true);
+  const [banks, setBanks] =
+    useState<Bank[]>([]);
+
+  const [banksLoading, setBanksLoading] =
+    useState(true);
 
   const [selectedBank, setSelectedBank] =
     useState('');
@@ -59,6 +71,11 @@ const ToBank: React.FC = () => {
   const [narration, setNarration] =
     useState('');
 
+  const [
+    saveAsBeneficiary,
+    setSaveAsBeneficiary,
+  ] = useState(false);
+
   const [error, setError] =
     useState('');
 
@@ -66,56 +83,59 @@ const ToBank: React.FC = () => {
     useState('');
 
   /*
- * ==========================================================
- * SELECT SAVED BANK BENEFICIARY
- * ==========================================================
- */
-
-const handleBeneficiarySelect = (
-  beneficiary: any
-) => {
-  if (
-    beneficiary.recipient_type !==
-    'bank'
-  ) {
-    return;
-  }
-
-  if (
-    !beneficiary.account_number
-  ) {
-    return;
-  }
-
-  /*
-   * Select the saved bank.
+   * ==========================================================
+   * SELECT SAVED BANK BENEFICIARY
+   * ==========================================================
    */
-  if (beneficiary.bank_code) {
-    setSelectedBank(
-      beneficiary.bank_code
+
+  const handleBeneficiarySelect = (
+    beneficiary: any
+  ) => {
+    if (
+      beneficiary.recipient_type !==
+      'bank'
+    ) {
+      return;
+    }
+
+    if (
+      !beneficiary.account_number
+    ) {
+      return;
+    }
+
+    /*
+     * Select the saved bank.
+     */
+
+    if (beneficiary.bank_code) {
+      setSelectedBank(
+        beneficiary.bank_code
+      );
+    }
+
+    /*
+     * Fill the saved account details.
+     */
+
+    setAccountNumber(
+      beneficiary.account_number
     );
-  }
 
-  /*
-   * Fill the saved account details.
-   */
-  setAccountNumber(
-    beneficiary.account_number
-  );
+    setAccountName(
+      beneficiary.name || ''
+    );
 
-  setAccountName(
-    beneficiary.name || ''
-  );
+    /*
+     * The beneficiary was previously
+     * verified before it was saved.
+     */
 
-  /*
-   * The beneficiary was previously
-   * verified before it could be saved.
-   */
-  setAccountVerified(true);
+    setAccountVerified(true);
 
-  setError('');
-  setBankSearch('');
-};
+    setError('');
+    setBankSearch('');
+  };
 
   /*
    * ==========================================================
@@ -247,6 +267,7 @@ const handleBeneficiarySelect = (
      * Changing the account number
      * invalidates the previous verification.
      */
+
     setAccountVerified(false);
     setAccountName('');
     setError('');
@@ -365,6 +386,7 @@ const handleBeneficiarySelect = (
     /*
      * Allow only one decimal point.
      */
+
     const firstDot =
       value.indexOf('.');
 
@@ -453,13 +475,20 @@ const handleBeneficiarySelect = (
       {
         state: {
           bank,
+
           accountNumber,
+
           accountName,
+
           amount:
             numericAmount,
+
           narration,
+
           accountVerified:
             true,
+
+          saveAsBeneficiary,
         },
       }
     );
@@ -489,7 +518,7 @@ const handleBeneficiarySelect = (
 
       {/* ====================================================
           HEADER
-      ==================================================== */}
+          ==================================================== */}
 
       <header
         style={styles.header}
@@ -499,7 +528,6 @@ const handleBeneficiarySelect = (
             styles.headerInner
           }
         >
-
           <button
             type="button"
             onClick={() =>
@@ -531,13 +559,12 @@ const handleBeneficiarySelect = (
               bank account
             </div>
           </div>
-
         </div>
       </header>
 
       {/* ====================================================
           MAIN
-      ==================================================== */}
+          ==================================================== */}
 
       <main
         style={styles.main}
@@ -572,16 +599,21 @@ const handleBeneficiarySelect = (
             recipient before sending.
           </p>
         </div>
-        
+
+        {/* ==================================================
+            BENEFICIARIES
+            ================================================== */}
+
         <BeneficiaryTabs
           recipientType="bank"
           onSelect={
-           handleBeneficiarySelect
-        }
-      />
+            handleBeneficiarySelect
+          }
+        />
+
         {/* ==================================================
             CARD
-        ================================================== */}
+            ================================================== */}
 
         <section
           style={styles.card}
@@ -704,7 +736,6 @@ const handleBeneficiarySelect = (
               styles.fieldSpacing
             }
           >
-
             <label
               htmlFor="account-number"
               style={styles.label}
@@ -717,7 +748,6 @@ const handleBeneficiarySelect = (
                 styles.verifyRow
               }
             >
-
               <input
                 id="account-number"
                 type="tel"
@@ -750,6 +780,7 @@ const handleBeneficiarySelect = (
                 }
                 style={{
                   ...styles.verifyButton,
+
                   opacity:
                     verifying ||
                     banksLoading ||
@@ -764,7 +795,6 @@ const handleBeneficiarySelect = (
                   ? 'Verifying...'
                   : 'Verify'}
               </button>
-
             </div>
 
             <div
@@ -776,7 +806,6 @@ const handleBeneficiarySelect = (
               10-digit bank account
               number.
             </div>
-
           </div>
 
           {/* VERIFIED ACCOUNT */}
@@ -787,7 +816,6 @@ const handleBeneficiarySelect = (
                 styles.verifiedCard
               }
             >
-
               <div
                 style={
                   styles.verifiedIcon
@@ -833,7 +861,6 @@ const handleBeneficiarySelect = (
               >
                 Verified
               </div>
-
             </div>
           )}
 
@@ -844,7 +871,6 @@ const handleBeneficiarySelect = (
               styles.fieldSpacing
             }
           >
-
             <label
               htmlFor="amount"
               style={styles.label}
@@ -857,7 +883,6 @@ const handleBeneficiarySelect = (
                 styles.amountWrap
               }
             >
-
               <span
                 style={
                   styles.currency
@@ -879,9 +904,7 @@ const handleBeneficiarySelect = (
                   styles.amountInput
                 }
               />
-
             </div>
-
           </div>
 
           {/* NARRATION */}
@@ -891,7 +914,6 @@ const handleBeneficiarySelect = (
               styles.fieldSpacing
             }
           >
-
             <label
               htmlFor="narration"
               style={styles.label}
@@ -922,8 +944,31 @@ const handleBeneficiarySelect = (
                 styles.fullInput
               }
             />
-
           </div>
+
+          {/* SAVE BENEFICIARY */}
+
+          <label
+            style={
+              styles.beneficiaryCheckbox
+            }
+          >
+            <input
+              type="checkbox"
+              checked={
+                saveAsBeneficiary
+              }
+              onChange={(event) =>
+                setSaveAsBeneficiary(
+                  event.target.checked
+                )
+              }
+            />
+
+            <span>
+              Save as beneficiary
+            </span>
+          </label>
 
           {/* ERROR */}
 
@@ -958,6 +1003,7 @@ const handleBeneficiarySelect = (
             }
             style={{
               ...styles.continueButton,
+
               opacity:
                 !accountVerified ||
                 !amount ||
@@ -967,6 +1013,7 @@ const handleBeneficiarySelect = (
             }}
           >
             Continue
+
             <span>
               →
             </span>
@@ -1359,6 +1406,18 @@ const styles: Record<
     fontSize: 14,
     color: '#102a25',
     outline: 'none',
+  },
+
+  beneficiaryCheckbox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+    marginBottom: 18,
+    color: '#344c46',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
   },
 
   errorBox: {
