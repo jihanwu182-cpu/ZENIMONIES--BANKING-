@@ -5,15 +5,6 @@ const API_URL =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com';
 
-interface StorageStatus {
-  localZenimonies: boolean;
-  localToken: boolean;
-  localAccessToken: boolean;
-  sessionZenimonies: boolean;
-  sessionToken: boolean;
-  sessionAccessToken: boolean;
-}
-
 interface ElectricityPayment {
   id?: string;
   reference?: string;
@@ -41,27 +32,6 @@ interface ElectricityPayment {
   created_at?: string;
   completed_at?: string;
 }
-
-const getStorageStatus = (): StorageStatus => ({
-  localZenimonies: Boolean(
-    localStorage.getItem('zenimonies_token')
-  ),
-  localToken: Boolean(
-    localStorage.getItem('token')
-  ),
-  localAccessToken: Boolean(
-    localStorage.getItem('access_token')
-  ),
-  sessionZenimonies: Boolean(
-    sessionStorage.getItem('zenimonies_token')
-  ),
-  sessionToken: Boolean(
-    sessionStorage.getItem('token')
-  ),
-  sessionAccessToken: Boolean(
-    sessionStorage.getItem('access_token')
-  ),
-});
 
 const getToken = (): string | null => {
   return (
@@ -121,36 +91,80 @@ const formatStatus = (status?: string) => {
     );
 };
 
-const formatProviderResponse = (
-  response: unknown
+const getStatusColor = (status?: string) => {
+  const normalized = String(status || '').toLowerCase();
+
+  if (normalized === 'completed') {
+    return {
+      background: '#e8f7ef',
+      color: '#087443',
+    };
+  }
+
+  if (
+    normalized === 'processing' ||
+    normalized === 'pending'
+  ) {
+    return {
+      background: '#fff7e6',
+      color: '#9a6700',
+    };
+  }
+
+  if (
+    normalized === 'failed' ||
+    normalized === 'cancelled' ||
+    normalized === 'refunded'
+  ) {
+    return {
+      background: '#fef0ef',
+      color: '#b42318',
+    };
+  }
+
+  return {
+    background: '#f2f4f7',
+    color: '#344054',
+  };
+};
+
+const getVerificationColor = (
+  status?: string
 ) => {
-  if (response === null || response === undefined) {
-    return '';
+  const normalized = String(status || '').toLowerCase();
+
+  if (
+    normalized === 'verified' ||
+    normalized === 'successful' ||
+    normalized === 'completed'
+  ) {
+    return {
+      background: '#e8f7ef',
+      color: '#087443',
+    };
   }
 
-  if (typeof response === 'string') {
-    return response;
+  if (
+    normalized === 'pending' ||
+    normalized === 'not_verified'
+  ) {
+    return {
+      background: '#fff7e6',
+      color: '#9a6700',
+    };
   }
 
-  try {
-    return JSON.stringify(
-      response,
-      null,
-      2
-    );
-  } catch {
-    return String(response);
-  }
+  return {
+    background: '#f2f4f7',
+    color: '#475467',
+  };
 };
 
 const ElectricityReconciliation: React.FC = () => {
-  const [storage, setStorage] =
-    useState<StorageStatus | null>(null);
-
   const [checking, setChecking] =
     useState(false);
 
-  const [result, setResult] =
+  const [error, setError] =
     useState('');
 
   const [payments, setPayments] =
@@ -159,40 +173,34 @@ const ElectricityReconciliation: React.FC = () => {
   const [apiCount, setApiCount] =
     useState<number | null>(null);
 
-  const runDiagnostic = async () => {
+  const loadPayments = async () => {
     setChecking(true);
-    setResult('');
-    setPayments([]);
-    setApiCount(null);
-
-    const currentStorage =
-      getStorageStatus();
-
-    setStorage(currentStorage);
+    setError('');
 
     const token = getToken();
 
     if (!token) {
-      setResult(
-        'NO TOKEN FOUND IN BROWSER STORAGE'
+      setError(
+        'Your session has expired. Please sign in again.'
       );
 
+      setPayments([]);
+      setApiCount(null);
       setChecking(false);
       return;
     }
 
     try {
-      const response =
-        await axios.get(
-          `${API_URL}/api/bills/electricity/reconciliation`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-            timeout: 30000,
-          }
-        );
+      const response = await axios.get(
+        `${API_URL}/api/bills/electricity/reconciliation`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
+        }
+      );
 
       const returnedPayments =
         Array.isArray(
@@ -201,69 +209,54 @@ const ElectricityReconciliation: React.FC = () => {
           ? response.data.payments
           : [];
 
-      const returnedCount =
-        Number(
-          response.data?.count ??
+      const returnedCount = Number(
+        response.data?.count ??
           returnedPayments.length
-        );
-
-      setApiCount(returnedCount);
-      setPayments(returnedPayments);
-
-      setResult(
-        `TOKEN FOUND — API RESPONSE HTTP ${response.status}`
       );
-    } catch (error: any) {
+
+      setPayments(returnedPayments);
+      setApiCount(returnedCount);
+    } catch (requestError: any) {
       console.error(
-        'Reconciliation diagnostic API error:',
-        error
+        'Electricity history error:',
+        requestError
       );
 
       const status =
-        error?.response?.status;
+        requestError?.response?.status;
 
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        'Unknown error';
-
-      if (status) {
-        setResult(
-          `TOKEN FOUND — API RETURNED HTTP ${status}: ${message}`
+      if (status === 401) {
+        setError(
+          'Your session has expired. Please sign in again.'
+        );
+      } else if (status === 403) {
+        setError(
+          'You are not authorized to view this history.'
         );
       } else {
-        setResult(
-          `TOKEN FOUND — API REQUEST FAILED: ${message}`
+        setError(
+          requestError?.response?.data?.message ||
+            'Unable to load electricity payment history. Please try again.'
         );
       }
+
+      setPayments([]);
+      setApiCount(null);
     } finally {
       setChecking(false);
     }
   };
 
   useEffect(() => {
-    runDiagnostic();
+    loadPayments();
   }, []);
-
-  const storageStatus = (
-    value: boolean
-  ) => value ? 'YES' : 'NO';
-
-  const storageStyle = (
-    value: boolean
-  ): React.CSSProperties => ({
-    fontWeight: 800,
-    color: value
-      ? '#087443'
-      : '#b42318',
-  });
 
   return (
     <div
       style={{
         minHeight: '100vh',
         background: '#f5f7f6',
-        padding: '24px 16px 40px',
+        padding: '20px 16px 40px',
         boxSizing: 'border-box',
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
@@ -277,272 +270,585 @@ const ElectricityReconciliation: React.FC = () => {
       >
         {/* HEADER */}
 
-        <h1
+        <div
           style={{
-            marginTop: 0,
-            color: '#172033',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 24,
           }}
         >
-          Authentication Diagnostic
-        </h1>
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 12,
+              border: '1px solid #d0d5dd',
+              background: '#ffffff',
+              color: '#172033',
+              fontSize: 22,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            aria-label="Go back"
+          >
+            ‹
+          </button>
 
-        <p
+          <div>
+            <h1
+              style={{
+                margin: 0,
+                color: '#172033',
+                fontSize: 25,
+                fontWeight: 800,
+              }}
+            >
+              Electricity Payment History
+            </h1>
+
+            <p
+              style={{
+                margin:
+                  '5px 0 0',
+                color: '#667085',
+                fontSize: 14,
+              }}
+            >
+              View your electricity payment
+              transactions
+            </p>
+          </div>
+        </div>
+
+        {/* SUMMARY */}
+
+        <div
           style={{
-            color: '#667085',
-            lineHeight: 1.6,
+            background: '#159447',
+            borderRadius: 18,
+            padding: 20,
+            color: '#ffffff',
+            marginBottom: 18,
+            boxShadow:
+              '0 5px 16px rgba(21,148,71,0.18)',
           }}
         >
-          This is a temporary read-only diagnostic.
-          It does not make an electricity payment,
-          debit your account, issue a refund, or
-          change any transaction status.
-        </p>
-
-        {/* API RESULT */}
-
-        {result && (
           <div
             style={{
-              marginTop: 20,
-              padding: 16,
-              borderRadius: 12,
-              background: '#ffffff',
-              border:
-                '1px solid #d0d5dd',
-              fontWeight: 700,
-              color: '#172033',
-              wordBreak: 'break-word',
+              fontSize: 13,
+              opacity: 0.9,
+              marginBottom: 6,
             }}
           >
-            {result}
+            ELECTRICITY PAYMENTS
+          </div>
+
+          <div
+            style={{
+              fontSize: 30,
+              fontWeight: 800,
+            }}
+          >
+            {apiCount === null
+              ? '—'
+              : apiCount}
+          </div>
+
+          <div
+            style={{
+              marginTop: 4,
+              fontSize: 14,
+              opacity: 0.9,
+            }}
+          >
+            Total records
+          </div>
+        </div>
+
+        {/* ERROR */}
+
+        {error && (
+          <div
+            style={{
+              marginBottom: 18,
+              padding: 16,
+              borderRadius: 14,
+              background: '#fef0ef',
+              border:
+                '1px solid #fecdca',
+              color: '#b42318',
+              lineHeight: 1.5,
+              fontSize: 14,
+            }}
+          >
+            {error}
           </div>
         )}
 
-        {/* LOCAL STORAGE */}
+        {/* EMPTY STATE */}
 
-        <div
-          style={{
-            marginTop: 20,
-            background: '#ffffff',
-            borderRadius: 14,
-            padding: 20,
-            boxShadow:
-              '0 2px 8px rgba(0,0,0,0.06)',
-          }}
-        >
-          <h2
-            style={{
-              marginTop: 0,
-              color: '#172033',
-            }}
-          >
-            localStorage
-          </h2>
-
-          <p>
-            zenimonies_token:{' '}
-            <span
-              style={storageStyle(
-                storage?.localZenimonies ||
-                  false
-              )}
-            >
-              {storage
-                ? storageStatus(
-                    storage.localZenimonies
-                  )
-                : 'CHECKING...'}
-            </span>
-          </p>
-
-          <p>
-            token:{' '}
-            <span
-              style={storageStyle(
-                storage?.localToken ||
-                  false
-              )}
-            >
-              {storage
-                ? storageStatus(
-                    storage.localToken
-                  )
-                : 'CHECKING...'}
-            </span>
-          </p>
-
-          <p>
-            access_token:{' '}
-            <span
-              style={storageStyle(
-                storage?.localAccessToken ||
-                  false
-              )}
-            >
-              {storage
-                ? storageStatus(
-                    storage.localAccessToken
-                  )
-                : 'CHECKING...'}
-            </span>
-          </p>
-        </div>
-
-        {/* SESSION STORAGE */}
-
-        <div
-          style={{
-            marginTop: 20,
-            background: '#ffffff',
-            borderRadius: 14,
-            padding: 20,
-            boxShadow:
-              '0 2px 8px rgba(0,0,0,0.06)',
-          }}
-        >
-          <h2
-            style={{
-              marginTop: 0,
-              color: '#172033',
-            }}
-          >
-            sessionStorage
-          </h2>
-
-          <p>
-            zenimonies_token:{' '}
-            <span
-              style={storageStyle(
-                storage?.sessionZenimonies ||
-                  false
-              )}
-            >
-              {storage
-                ? storageStatus(
-                    storage.sessionZenimonies
-                  )
-                : 'CHECKING...'}
-            </span>
-          </p>
-
-          <p>
-            token:{' '}
-            <span
-              style={storageStyle(
-                storage?.sessionToken ||
-                  false
-              )}
-            >
-              {storage
-                ? storageStatus(
-                    storage.sessionToken
-                  )
-                : 'CHECKING...'}
-            </span>
-          </p>
-
-          <p>
-            access_token:{' '}
-            <span
-              style={storageStyle(
-                storage?.sessionAccessToken ||
-                  false
-              )}
-            >
-              {storage
-                ? storageStatus(
-                    storage.sessionAccessToken
-                  )
-                : 'CHECKING...'}
-            </span>
-          </p>
-        </div>
-
-        {/* ELECTRICITY RECONCILIATION */}
-
-        <div
-          style={{
-            marginTop: 20,
-            background: '#ffffff',
-            borderRadius: 14,
-            padding: 20,
-            boxShadow:
-              '0 2px 8px rgba(0,0,0,0.06)',
-          }}
-        >
-          <h2
-            style={{
-              marginTop: 0,
-              color: '#172033',
-            }}
-          >
-            Electricity reconciliation
-          </h2>
-
-          <p
-            style={{
-              margin: '0 0 6px',
-              color: '#667085',
-            }}
-          >
-            API records returned:{' '}
-            <strong>
-              {apiCount === null
-                ? '—'
-                : apiCount}
-            </strong>
-          </p>
-
-          {payments.length === 0 ? (
+        {!checking &&
+          !error &&
+          payments.length === 0 && (
             <div
               style={{
-                marginTop: 16,
-                padding: 16,
-                borderRadius: 12,
-                background: '#f8fafc',
-                border:
-                  '1px solid #e2e8f0',
-                color: '#475467',
-                lineHeight: 1.6,
+                background: '#ffffff',
+                borderRadius: 16,
+                padding: 30,
+                textAlign: 'center',
+                boxShadow:
+                  '0 2px 8px rgba(0,0,0,0.05)',
               }}
             >
-              The authenticated API returned no
-              electricity payment records for this
-              account.
+              <div
+                style={{
+                  width: 58,
+                  height: 58,
+                  margin: '0 auto 14px',
+                  borderRadius: '50%',
+                  background: '#e8f7ef',
+                  color: '#159447',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 27,
+                  fontWeight: 800,
+                }}
+              >
+                ₦
+              </div>
+
+              <h2
+                style={{
+                  margin:
+                    '0 0 8px',
+                  color: '#172033',
+                  fontSize: 20,
+                }}
+              >
+                No electricity payments yet
+              </h2>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: '#667085',
+                  lineHeight: 1.6,
+                  fontSize: 14,
+                }}
+              >
+                Your electricity payment
+                transactions will appear here
+                after you make a payment.
+              </p>
             </div>
-          ) : (
-            <div
-              style={{
-                marginTop: 16,
-                display: 'grid',
-                gap: 14,
-              }}
-            >
-              {payments.map(
-                (payment, index) => (
+          )}
+
+        {/* PAYMENT LIST */}
+
+        <div
+          style={{
+            display: 'grid',
+            gap: 16,
+          }}
+        >
+          {payments.map(
+            (payment, index) => {
+              const statusStyle =
+                getStatusColor(
+                  payment.status
+                );
+
+              const verificationStyle =
+                getVerificationColor(
+                  payment.verification_status
+                );
+
+              const provider =
+                payment.biller_name ||
+                'Electricity';
+
+              const customerName =
+                payment.verified_customer_name ||
+                payment.customer_name ||
+                '—';
+
+              const customerAddress =
+                payment.verified_customer_address ||
+                '—';
+
+              const providerMessage =
+                payment.provider_message ||
+                payment.provider_response_message ||
+                '';
+
+              return (
+                <div
+                  key={
+                    payment.id ||
+                    payment.reference ||
+                    index
+                  }
+                  style={{
+                    background: '#ffffff',
+                    borderRadius: 18,
+                    padding: 18,
+                    boxShadow:
+                      '0 2px 10px rgba(0,0,0,0.05)',
+                    border:
+                      '1px solid #eaecf0',
+                  }}
+                >
+                  {/* CARD HEADER */}
+
                   <div
-                    key={
-                      payment.id ||
-                      payment.reference ||
-                      index
-                    }
                     style={{
-                      border:
-                        '1px solid #e4e7ec',
-                      borderRadius: 14,
+                      display: 'flex',
+                      justifyContent:
+                        'space-between',
+                      alignItems:
+                        'flex-start',
+                      gap: 12,
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          color:
+                            '#172033',
+                          fontSize: 17,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {provider}
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 4,
+                          color:
+                            '#667085',
+                          fontSize: 13,
+                        }}
+                      >
+                        {formatDate(
+                          payment.created_at
+                        )}
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        padding:
+                          '6px 10px',
+                        borderRadius:
+                          999,
+                        background:
+                          statusStyle.background,
+                        color:
+                          statusStyle.color,
+                        fontSize: 12,
+                        fontWeight: 800,
+                        whiteSpace:
+                          'nowrap',
+                      }}
+                    >
+                      {formatStatus(
+                        payment.status
+                      )}
+                    </span>
+                  </div>
+
+                  {/* AMOUNT */}
+
+                  <div
+                    style={{
+                      marginTop: 18,
                       padding: 16,
+                      borderRadius: 14,
                       background:
-                        '#ffffff',
+                        '#f5fbf7',
+                      border:
+                        '1px solid #d9f0e1',
                     }}
                   >
                     <div
                       style={{
-                        display: 'flex',
-                        justifyContent:
-                          'space-between',
-                        alignItems:
-                          'flex-start',
-                        gap: 12,
+                        color:
+                          '#667085',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        marginBottom: 5,
+                      }}
+                    >
+                      AMOUNT
+                    </div>
+
+                    <div
+                      style={{
+                        color:
+                          '#087443',
+                        fontSize: 25,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {formatAmount(
+                        payment.amount,
+                        payment.currency
+                      )}
+                    </div>
+                  </div>
+
+                  {/* DETAILS */}
+
+                  <div
+                    style={{
+                      marginTop: 18,
+                      display: 'grid',
+                      gap: 12,
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          color:
+                            '#98a2b3',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          textTransform:
+                            'uppercase',
+                        }}
+                      >
+                        Meter number
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 3,
+                          color:
+                            '#172033',
+                          fontSize: 14,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {payment.meter_number ||
+                          payment.customer_reference ||
+                          '—'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div
+                        style={{
+                          color:
+                            '#98a2b3',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          textTransform:
+                            'uppercase',
+                        }}
+                      >
+                        Meter type
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 3,
+                          color:
+                            '#172033',
+                          fontSize: 14,
+                          fontWeight: 700,
+                          textTransform:
+                            'capitalize',
+                        }}
+                      >
+                        {payment.meter_type ||
+                          '—'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div
+                        style={{
+                          color:
+                            '#98a2b3',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          textTransform:
+                            'uppercase',
+                        }}
+                      >
+                        Customer name
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 3,
+                          color:
+                            '#172033',
+                          fontSize: 14,
+                        }}
+                      >
+                        {customerName}
+                      </div>
+                    </div>
+
+                    {customerAddress !==
+                      '—' && (
+                      <div>
+                        <div
+                          style={{
+                            color:
+                              '#98a2b3',
+                            fontSize: 11,
+                            fontWeight: 800,
+                            textTransform:
+                              'uppercase',
+                          }}
+                        >
+                          Address
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 3,
+                            color:
+                              '#172033',
+                            fontSize: 14,
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {customerAddress}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <div
+                        style={{
+                          color:
+                            '#98a2b3',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          textTransform:
+                            'uppercase',
+                        }}
+                      >
+                        Verification
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 5,
+                        }}
+                      >
+                        <span
+                          style={{
+                            display:
+                              'inline-block',
+                            padding:
+                              '5px 9px',
+                            borderRadius:
+                              999,
+                            background:
+                              verificationStyle.background,
+                            color:
+                              verificationStyle.color,
+                            fontSize: 12,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {formatStatus(
+                            payment.verification_status
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* TOKEN */}
+
+                  {payment.electricity_token && (
+                    <div
+                      style={{
+                        marginTop: 18,
+                        padding: 16,
+                        borderRadius: 14,
+                        background:
+                          '#e8f7ef',
+                        border:
+                          '1px solid #b7e4c7',
+                      }}
+                    >
+                      <div
+                        style={{
+                          color:
+                            '#087443',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          textTransform:
+                            'uppercase',
+                          marginBottom: 6,
+                        }}
+                      >
+                        Electricity token
+                      </div>
+
+                      <div
+                        style={{
+                          color:
+                            '#172033',
+                          fontSize: 20,
+                          fontWeight: 900,
+                          letterSpacing:
+                            1.2,
+                          wordBreak:
+                            'break-word',
+                        }}
+                      >
+                        {
+                          payment.electricity_token
+                        }
+                      </div>
+
+                      {payment.units && (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            color:
+                              '#087443',
+                            fontSize: 14,
+                            fontWeight: 700,
+                          }}
+                        >
+                          Units:{' '}
+                          {payment.units}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* PROVIDER MESSAGE */}
+
+                  {providerMessage && (
+                    <div
+                      style={{
+                        marginTop: 18,
+                        padding: 14,
+                        borderRadius: 12,
+                        background:
+                          '#f8fafc',
+                        border:
+                          '1px solid #e4e7ec',
+                        color:
+                          '#475467',
+                        fontSize: 13,
+                        lineHeight: 1.55,
                       }}
                     >
                       <strong
@@ -551,203 +857,173 @@ const ElectricityReconciliation: React.FC = () => {
                             '#172033',
                         }}
                       >
-                        {payment.biller_name ||
-                          payment.category ||
-                          'Electricity'}
-                      </strong>
-
-                      <span
-                        style={{
-                          padding:
-                            '5px 9px',
-                          borderRadius:
-                            999,
-                          background:
-                            '#f2f4f7',
-                          color:
-                            '#344054',
-                          fontSize: 12,
-                          fontWeight: 800,
-                        }}
-                      >
-                        {formatStatus(
-                          payment.status
-                        )}
-                      </span>
+                        Provider message:
+                      </strong>{' '}
+                      {providerMessage}
                     </div>
+                  )}
 
+                  {/* FAILURE */}
+
+                  {payment.failure_reason && (
                     <div
                       style={{
-                        marginTop: 12,
-                        display: 'grid',
-                        gap: 7,
+                        marginTop: 18,
+                        padding: 14,
+                        borderRadius: 12,
+                        background:
+                          '#fef0ef',
+                        border:
+                          '1px solid #fecdca',
                         color:
-                          '#475467',
+                          '#b42318',
                         fontSize: 13,
                         lineHeight: 1.5,
                       }}
                     >
-                      <div>
-                        <strong>
-                          Amount:
-                        </strong>{' '}
-                        {formatAmount(
-                          payment.amount,
-                          payment.currency
-                        )}
+                      <strong>
+                        Failure reason:
+                      </strong>{' '}
+                      {
+                        payment.failure_reason
+                      }
+                    </div>
+                  )}
+
+                  {/* PROCESSING MESSAGE */}
+
+                  {String(
+                    payment.status || ''
+                  ).toLowerCase() ===
+                    'processing' && (
+                    <div
+                      style={{
+                        marginTop: 18,
+                        padding: 14,
+                        borderRadius: 12,
+                        background:
+                          '#fff7e6',
+                        border:
+                          '1px solid #f5d78e',
+                        color:
+                          '#7a5200',
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <strong>
+                        Payment processing:
+                      </strong>{' '}
+                      Please do not make another
+                      payment. Your transaction will
+                      be updated when the provider
+                      finishes processing it.
+                    </div>
+                  )}
+
+                  {/* REFERENCES */}
+
+                  <div
+                    style={{
+                      marginTop: 18,
+                      paddingTop: 16,
+                      borderTop:
+                        '1px solid #eaecf0',
+                      display: 'grid',
+                      gap: 10,
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          color:
+                            '#98a2b3',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          textTransform:
+                            'uppercase',
+                        }}
+                      >
+                        Transaction reference
                       </div>
 
-                      <div>
-                        <strong>
-                          Meter:
-                        </strong>{' '}
-                        {payment.meter_number ||
-                          payment.customer_reference ||
-                          '—'}
-                      </div>
-
-                      <div>
-                        <strong>
-                          Meter type:
-                        </strong>{' '}
-                        {payment.meter_type ||
-                          '—'}
-                      </div>
-
-                      <div>
-                        <strong>
-                          Reference:
-                        </strong>{' '}
+                      <div
+                        style={{
+                          marginTop: 3,
+                          color:
+                            '#344054',
+                          fontSize: 12,
+                          wordBreak:
+                            'break-all',
+                        }}
+                      >
                         {payment.reference ||
                           '—'}
                       </div>
+                    </div>
 
-                      <div>
-                        <strong>
-                          Provider reference:
-                        </strong>{' '}
+                    <div>
+                      <div
+                        style={{
+                          color:
+                            '#98a2b3',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          textTransform:
+                            'uppercase',
+                        }}
+                      >
+                        Provider reference
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 3,
+                          color:
+                            '#344054',
+                          fontSize: 12,
+                          wordBreak:
+                            'break-all',
+                        }}
+                      >
                         {payment.provider_reference ||
                           '—'}
                       </div>
+                    </div>
 
+                    {payment.completed_at && (
                       <div>
-                        <strong>
-                          Verification:
-                        </strong>{' '}
-                        {formatStatus(
-                          payment.verification_status
-                        )}
-                      </div>
-
-                      <div>
-                        <strong>
-                          Created:
-                        </strong>{' '}
-                        {formatDate(
-                          payment.created_at
-                        )}
-                      </div>
-
-                      {payment.electricity_token && (
-                        <div>
-                          <strong>
-                            Electricity token:
-                          </strong>{' '}
-                          {payment.electricity_token}
-                        </div>
-                      )}
-
-                      {payment.units && (
-                        <div>
-                          <strong>
-                            Units:
-                          </strong>{' '}
-                          {payment.units}
-                        </div>
-                      )}
-
-                      {payment.failure_reason && (
                         <div
                           style={{
                             color:
-                              '#b42318',
+                              '#98a2b3',
+                            fontSize: 11,
+                            fontWeight: 800,
+                            textTransform:
+                              'uppercase',
                           }}
                         >
-                          <strong>
-                            Failure reason:
-                          </strong>{' '}
-                          {payment.failure_reason}
+                          Completed
                         </div>
-                      )}
 
-                      {(payment.provider_message ||
-                     payment.provider_response_message) && (
-                      <div>
-                        <strong>
-                           Provider message:
-                        </strong>{' '}
-                    {payment.provider_message ||
-                      payment.provider_response_message}
-                 </div>
-                )}
-
-                      {payment.provider_response !==
-                        undefined &&
-                        payment.provider_response !==
-                          null && (
-                          <div
-                            style={{
-                              marginTop: 8,
-                              padding: 12,
-                              borderRadius: 10,
-                              background:
-                                '#f8fafc',
-                              border:
-                                '1px solid #e2e8f0',
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontWeight: 800,
-                                color:
-                                  '#172033',
-                                marginBottom:
-                                  8,
-                              }}
-                            >
-                              Provider response
-                            </div>
-
-                            <pre
-                              style={{
-                                margin: 0,
-                                whiteSpace:
-                                  'pre-wrap',
-                                wordBreak:
-                                  'break-word',
-                                overflowX:
-                                  'auto',
-                                fontSize:
-                                  12,
-                                lineHeight:
-                                  1.5,
-                                color:
-                                  '#344054',
-                                fontFamily:
-                                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                              }}
-                            >
-                              {formatProviderResponse(
-                                payment.provider_response
-                              )}
-                            </pre>
-                          </div>
-                        )}
-                    </div>
+                        <div
+                          style={{
+                            marginTop: 3,
+                            color:
+                              '#344054',
+                            fontSize: 13,
+                          }}
+                        >
+                          {formatDate(
+                            payment.completed_at
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )
-              )}
-            </div>
+                </div>
+              );
+            }
           )}
         </div>
 
@@ -755,14 +1031,14 @@ const ElectricityReconciliation: React.FC = () => {
 
         <button
           type="button"
-          onClick={runDiagnostic}
+          onClick={loadPayments}
           disabled={checking}
           style={{
             width: '100%',
-            marginTop: 24,
+            marginTop: 22,
             height: 54,
             border: 'none',
-            borderRadius: 12,
+            borderRadius: 14,
             background:
               checking
                 ? '#98a2b3'
@@ -777,32 +1053,9 @@ const ElectricityReconciliation: React.FC = () => {
           }}
         >
           {checking
-            ? 'Checking...'
-            : 'Run Diagnostic Again'}
+            ? 'Refreshing...'
+            : 'Refresh History'}
         </button>
-
-        {/* SECURITY NOTE */}
-
-        <div
-          style={{
-            marginTop: 20,
-            padding: 14,
-            borderRadius: 10,
-            background:
-              '#fff7ed',
-            border:
-              '1px solid #fed7aa',
-            color:
-              '#9a3412',
-            fontSize: 13,
-            lineHeight: 1.5,
-          }}
-        >
-          Security note: this page intentionally
-          shows only whether a token exists and
-          safe transaction details. The actual
-          authentication token is never displayed.
-        </div>
       </div>
     </div>
   );
