@@ -16,7 +16,6 @@ const API_URL =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com';
 
-
 /*
  * ============================================================
  * TYPES
@@ -32,13 +31,11 @@ interface Recipient {
   is_verified?: boolean;
 }
 
-
 interface LookupResponse {
   success?: boolean;
   message?: string;
   user?: Recipient;
 }
-
 
 interface TransferRecord {
   id?: string;
@@ -66,14 +63,12 @@ interface TransferRecord {
   description?: string;
 }
 
-
 interface TransferResponse {
   success?: boolean;
   message?: string;
 
   transfer?: TransferRecord;
 }
-
 
 /*
  * ============================================================
@@ -92,10 +87,11 @@ const Transfer: React.FC = () => {
 
   const [narration, setNarration] =
     useState('');
+
   const [
-  saveAsBeneficiary,
-  setSaveAsBeneficiary,
-] = useState(false);
+    saveAsBeneficiary,
+    setSaveAsBeneficiary,
+  ] = useState(false);
 
   const [recipient, setRecipient] =
     useState<Recipient | null>(null);
@@ -105,7 +101,6 @@ const Transfer: React.FC = () => {
 
   const [sending, setSending] =
     useState(false);
-
 
   /*
    * ==========================================================
@@ -133,7 +128,6 @@ const Transfer: React.FC = () => {
     setTransactionPinError,
   ] = useState('');
 
-
   const [error, setError] =
     useState('');
 
@@ -146,20 +140,15 @@ const Transfer: React.FC = () => {
   const [balanceAfter, setBalanceAfter] =
     useState<number | null>(null);
 
-
   /*
    * REAL ACCOUNT NUMBER FROM
    * THE COMPLETED TRANSFER.
-   *
-   * This is only populated when the
-   * backend actually provides one.
    */
 
   const [
     recipientAccountNumber,
     setRecipientAccountNumber,
   ] = useState('');
-
 
   /*
    * ==========================================================
@@ -176,7 +165,6 @@ const Transfer: React.FC = () => {
       'access_token'
     );
 
-
   /*
    * ==========================================================
    * CLEAN PHONE
@@ -191,7 +179,6 @@ const Transfer: React.FC = () => {
     [phone]
   );
 
-
   /*
    * ==========================================================
    * TRANSFER AMOUNT
@@ -201,30 +188,10 @@ const Transfer: React.FC = () => {
   const transferAmount =
     Number(amount);
 
-
   /*
    * ==========================================================
    * TRANSFER FEE PREVIEW
    * ==========================================================
-   *
-   * ₦20 - ₦999
-   * = ₦0
-   *
-   * ₦1,000 - ₦9,999
-   * = ₦20
-   *
-   * ₦10,000 - ₦99,999
-   * = ₦56
-   *
-   * ₦100,000+
-   * = ₦75
-   *
-   * IMPORTANT:
-   *
-   * This is only a customer-facing preview.
-   *
-   * The backend independently calculates
-   * the authoritative fee.
    */
 
   const transactionFee =
@@ -259,7 +226,6 @@ const Transfer: React.FC = () => {
       return 75;
     }, [transferAmount]);
 
-
   /*
    * ==========================================================
    * TOTAL AMOUNT TO BE DEDUCTED
@@ -274,7 +240,6 @@ const Transfer: React.FC = () => {
       ? transferAmount +
         transactionFee
       : 0;
-
 
   /*
    * ==========================================================
@@ -295,33 +260,49 @@ const Transfer: React.FC = () => {
       }
     )}`;
 
-     const handleBeneficiarySelect = (
-  beneficiary: any
-) => {
-  if (
-    beneficiary.recipient_type !==
-    'zenimonies'
-  ) {
-    return;
-  }
+  /*
+   * ==========================================================
+   * SELECT BENEFICIARY
+   * ==========================================================
+   */
 
-  if (
-    !beneficiary.recipient_phone
-  ) {
-    return;
-  }
+  const handleBeneficiarySelect = (
+    beneficiary: any
+  ) => {
+    if (
+      beneficiary.recipient_type !==
+      'zenimonies'
+    ) {
+      return;
+    }
 
-  setPhone(
-    beneficiary.recipient_phone
-  );
+    if (
+      !beneficiary.recipient_phone
+    ) {
+      return;
+    }
 
-  setRecipient(null);
-  setError('');
-  setSuccess('');
-  setReference('');
-  setBalanceAfter(null);
-  setRecipientAccountNumber('');
-};
+    setPhone(
+      beneficiary.recipient_phone
+    );
+
+    /*
+     * We still verify the recipient
+     * through the backend before money
+     * can be sent.
+     */
+
+    setRecipient(null);
+
+    setError('');
+    setSuccess('');
+    setReference('');
+    setBalanceAfter(null);
+
+    setRecipientAccountNumber('');
+
+    setSaveAsBeneficiary(false);
+  };
 
   /*
    * ==========================================================
@@ -388,13 +369,6 @@ const Transfer: React.FC = () => {
             verifiedRecipient
           );
 
-          /*
-           * Only use an account number when
-           * the backend actually supplies one.
-           *
-           * We never invent one.
-           */
-
           setRecipientAccountNumber(
             verifiedRecipient.account_number ||
               ''
@@ -437,7 +411,6 @@ const Transfer: React.FC = () => {
         setChecking(false);
       }
     };
-
 
   /*
    * ==========================================================
@@ -504,84 +477,76 @@ const Transfer: React.FC = () => {
     /*
      * Do not send money yet.
      *
-     * First show the customer:
-     *
-     * Amount
-     * Fee
-     * Total deduction
-     *
-     * The backend will independently
-     * recalculate the fee.
+     * Show the Transaction PIN prompt.
      */
 
     setTransactionPin('');
     setTransactionPinError('');
     setShowTransactionPin(true);
   };
-  
+
   /*
- * ==========================================================
- * SAVE SUCCESSFUL RECIPIENT AS BENEFICIARY
- * ==========================================================
- */
+   * ==========================================================
+   * SAVE SUCCESSFUL RECIPIENT AS BENEFICIARY
+   * ==========================================================
+   */
 
-const saveSuccessfulBeneficiary =
-  async () => {
-    if (
-      !saveAsBeneficiary ||
-      !recipient ||
-      !token
-    ) {
-      return;
-    }
+  const saveSuccessfulBeneficiary =
+    async () => {
+      if (
+        !saveAsBeneficiary ||
+        !recipient ||
+        !token
+      ) {
+        return;
+      }
 
-    try {
-      await axios.post(
-        `${API_URL}/api/beneficiaries`,
-        {
-          recipient_type:
-            'zenimonies',
+      try {
+        await axios.post(
+          `${API_URL}/api/beneficiaries`,
+          {
+            recipient_type:
+              'zenimonies',
 
-          name:
-            recipient.full_name,
+            name:
+              recipient.full_name,
 
-          recipient_phone:
-            recipient.phone ||
-            cleanPhone,
-        },
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-
-            'Content-Type':
-              'application/json',
+            recipient_phone:
+              recipient.phone ||
+              cleanPhone,
           },
-        }
-      );
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
 
-      /*
-       * Reset the checkbox after
-       * the beneficiary has been saved.
-       */
-      setSaveAsBeneficiary(false);
+              'Content-Type':
+                'application/json',
+            },
+          }
+        );
 
-    } catch (error: any) {
-      /*
-       * The transfer has already succeeded.
-       *
-       * A beneficiary-saving problem
-       * must NOT make a successful
-       * transfer appear failed.
-       */
-      console.error(
-        'Unable to save beneficiary:',
-        error
-      );
+        setSaveAsBeneficiary(
+          false
+        );
+      } catch (error: any) {
+        /*
+         * The transfer already succeeded.
+         * A beneficiary error must not
+         * make the transfer appear failed.
+         */
 
-      setSaveAsBeneficiary(false);
-    }
-  };
+        console.error(
+          'Unable to save beneficiary:',
+          error
+        );
+
+        setSaveAsBeneficiary(
+          false
+        );
+      }
+    };
+
   /*
    * ==========================================================
    * VERIFY TRANSACTION PIN + SEND MONEY
@@ -653,16 +618,11 @@ const saveSuccessfulBeneficiary =
           );
 
         /*
-         * Clear the PIN immediately after
-         * the request has completed.
-         *
-         * The PIN is never placed in
-         * the receipt.
+         * Clear PIN immediately.
          */
 
         setTransactionPin('');
         setShowTransactionPin(false);
-
 
         /*
          * ======================================================
@@ -677,38 +637,9 @@ const saveSuccessfulBeneficiary =
           const transfer =
             response.data.transfer;
 
-
-          /*
-           * IMPORTANT:
-           *
-           * Everything below comes from
-           * the backend response.
-           *
-           * We do NOT recalculate:
-           *
-           * - fee
-           * - total
-           * - status
-           * - reference
-           * - timestamp
-           *
-           * The backend/database is the
-           * source of truth.
-           */
-
           const receiptTransaction = {
-
-            /*
-             * REAL PostgreSQL transaction ID
-             */
-
             id:
               transfer.id || '',
-
-
-            /*
-             * REAL transaction reference
-             */
 
             reference:
               transfer.reference || '',
@@ -717,11 +648,6 @@ const saveSuccessfulBeneficiary =
               transfer.transaction_reference ||
               transfer.reference ||
               '',
-
-
-            /*
-             * REAL transaction type
-             */
 
             type:
               'internal_transfer',
@@ -732,58 +658,28 @@ const saveSuccessfulBeneficiary =
             category:
               'debit',
 
-
-            /*
-             * REAL backend status
-             */
-
             status:
               transfer.status ||
               'pending',
-
-
-            /*
-             * REAL TRANSFER AMOUNT
-             */
 
             amount:
               Number(
                 transfer.amount ?? 0
               ),
 
-
-            /*
-             * REAL TRANSACTION FEE
-             */
-
             transaction_fee:
               Number(
                 transfer.transaction_fee ?? 0
               ),
-
-
-            /*
-             * REAL TOTAL DEBIT
-             */
 
             total_debit:
               Number(
                 transfer.total_debit ?? 0
               ),
 
-
-            /*
-             * REAL CURRENCY
-             */
-
             currency:
               transfer.currency ||
               'NGN',
-
-
-            /*
-             * REAL RECIPIENT
-             */
 
             recipient_name:
               transfer.recipient_name ||
@@ -793,52 +689,22 @@ const saveSuccessfulBeneficiary =
               transfer.recipient_phone ||
               recipient.phone,
 
-
-            /*
-             * Only use a real account number
-             * when one was returned.
-             */
-
             recipient_account:
               transfer.recipient_account ||
               '',
 
-
-            /*
-             * REAL recipient bank/type
-             */
-
             recipient_bank:
               transfer.recipient_bank ||
               'Zenimonies',
-
-
-            /*
-             * REAL BALANCE AFTER TRANSFER
-             */
 
             balance_after:
               Number(
                 transfer.balance_after ?? 0
               ),
 
-
-            /*
-             * REAL PostgreSQL timestamp
-             */
-
             created_at:
               transfer.created_at ||
               '',
-
-
-            /*
-             * REAL description when supplied.
-             *
-             * If the backend doesn't return one,
-             * the narration is only used as the
-             * display description.
-             */
 
             description:
               transfer.description ||
@@ -849,16 +715,13 @@ const saveSuccessfulBeneficiary =
               }`,
           };
 
-
           /*
-           * ====================================================
-           * OPEN PROFESSIONAL RECEIPT
-           * ====================================================
-           *
-           * The receipt receives the actual
-           * backend transaction record.
+           * Save beneficiary only AFTER
+           * the transfer has succeeded.
            */
+
           await saveSuccessfulBeneficiary();
+
           navigate(
             '/transaction-receipt',
             {
@@ -872,10 +735,9 @@ const saveSuccessfulBeneficiary =
           return;
         }
 
-
         /*
          * ======================================================
-         * BACKEND RETURNED FAILURE
+         * BACKEND FAILURE
          * ======================================================
          */
 
@@ -890,7 +752,6 @@ const saveSuccessfulBeneficiary =
 
         const code =
           err?.response?.data?.code;
-
 
         /*
          * ====================================================
@@ -918,7 +779,6 @@ const saveSuccessfulBeneficiary =
 
           return;
         }
-
 
         /*
          * ====================================================
@@ -951,7 +811,6 @@ const saveSuccessfulBeneficiary =
           return;
         }
 
-
         /*
          * ====================================================
          * GENERAL TRANSFER ERROR
@@ -971,7 +830,6 @@ const saveSuccessfulBeneficiary =
         setSending(false);
       }
     };
-
 
   /*
    * ==========================================================
@@ -1024,7 +882,6 @@ const saveSuccessfulBeneficiary =
         </Link>
       </header>
 
-
       {/* ======================================================
           MAIN
           ====================================================== */}
@@ -1065,12 +922,7 @@ const saveSuccessfulBeneficiary =
             another active Zenimonies
             account.
           </p>
-            <BeneficiaryTabs
-             recipientType="zenimonies"
-              onSelect={
-            handleBeneficiarySelect
-          }
-        />
+
           {/* ==================================================
               ERROR
               ================================================== */}
@@ -1085,7 +937,6 @@ const saveSuccessfulBeneficiary =
               {error}
             </div>
           )}
-
 
           {/* ==================================================
               SUCCESS
@@ -1148,7 +999,6 @@ const saveSuccessfulBeneficiary =
             </div>
           )}
 
-
           {/* ==================================================
               FORM
               ================================================== */}
@@ -1160,7 +1010,7 @@ const saveSuccessfulBeneficiary =
           >
 
             {/* ==================================================
-                PHONE
+                PHONE NUMBER
                 ================================================== */}
 
             <label
@@ -1201,6 +1051,10 @@ const saveSuccessfulBeneficiary =
                   setRecipientAccountNumber(
                     ''
                   );
+
+                  setSaveAsBeneficiary(
+                    false
+                  );
                 }}
                 placeholder="e.g. 08012345678"
                 disabled={
@@ -1221,9 +1075,14 @@ const saveSuccessfulBeneficiary =
                   checking ||
                   sending
                 }
-                style={
-                  styles.verifyButton
-                }
+                style={{
+                  ...styles.verifyButton,
+                  opacity:
+                    checking ||
+                    sending
+                      ? 0.6
+                      : 1,
+                }}
               >
                 {checking
                   ? 'Checking...'
@@ -1231,9 +1090,27 @@ const saveSuccessfulBeneficiary =
               </button>
             </div>
 
+            {/* ==================================================
+                BENEFICIARIES — BEFORE VERIFICATION
+                ================================================== */}
+
+            {!recipient && (
+              <div
+                style={
+                  styles.beneficiarySectionTop
+                }
+              >
+                <BeneficiaryTabs
+                  recipientType="zenimonies"
+                  onSelect={
+                    handleBeneficiarySelect
+                  }
+                />
+              </div>
+            )}
 
             {/* ==================================================
-                RECIPIENT
+                VERIFIED RECIPIENT
                 ================================================== */}
 
             {recipient && (
@@ -1259,6 +1136,14 @@ const saveSuccessfulBeneficiary =
                     styles.recipientInfo
                   }
                 >
+                  <div
+                    style={
+                      styles.recipientVerifiedLabel
+                    }
+                  >
+                    ACCOUNT VERIFIED
+                  </div>
+
                   <div
                     style={
                       styles.recipientName
@@ -1303,7 +1188,6 @@ const saveSuccessfulBeneficiary =
               </div>
             )}
 
-
             {/* ==================================================
                 AMOUNT
                 ================================================== */}
@@ -1344,13 +1228,15 @@ const saveSuccessfulBeneficiary =
                   setError('');
                 }}
                 placeholder="20.00"
-                disabled={sending}
+                disabled={
+                  sending ||
+                  !recipient
+                }
                 style={
                   styles.amountInput
                 }
               />
             </div>
-
 
             {/* ==================================================
                 TRANSFER FEE PREVIEW
@@ -1359,7 +1245,8 @@ const saveSuccessfulBeneficiary =
             {Number.isFinite(
               transferAmount
             ) &&
-              transferAmount >= 20 && (
+              transferAmount >= 20 &&
+              recipient && (
                 <div
                   style={
                     styles.feeCard
@@ -1439,7 +1326,6 @@ const saveSuccessfulBeneficiary =
                 </div>
               )}
 
-
             {/* ==================================================
                 NARRATION
                 ================================================== */}
@@ -1462,33 +1348,46 @@ const saveSuccessfulBeneficiary =
                 )
               }
               placeholder="What is this transfer for?"
-              disabled={sending}
+              disabled={
+                sending ||
+                !recipient
+              }
               style={
                 styles.inputFull
               }
             />
-            <label
-  style={styles.beneficiaryCheckbox}
->
-  <input
-    type="checkbox"
-    checked={saveAsBeneficiary}
-    onChange={(event) =>
-      setSaveAsBeneficiary(
-        event.target.checked
-      )
-    }
-    disabled={sending}
-  />
-
-  <span>
-    Save as beneficiary
-  </span>
-</label>
-
 
             {/* ==================================================
-                SEND
+                SAVE BENEFICIARY
+                ================================================== */}
+
+            {recipient && (
+              <label
+                style={
+                  styles.beneficiaryCheckbox
+                }
+              >
+                <input
+                  type="checkbox"
+                  checked={
+                    saveAsBeneficiary
+                  }
+                  onChange={(event) =>
+                    setSaveAsBeneficiary(
+                      event.target.checked
+                    )
+                  }
+                  disabled={sending}
+                />
+
+                <span>
+                  Save as beneficiary
+                </span>
+              </label>
+            )}
+
+            {/* ==================================================
+                CONTINUE
                 ================================================== */}
 
             <button
@@ -1526,8 +1425,26 @@ const saveSuccessfulBeneficiary =
               <span>›</span>
             </button>
 
-          </form>
+            {/* ==================================================
+                BENEFICIARIES — AFTER VERIFICATION
+                ================================================== */}
 
+            {recipient && (
+              <div
+                style={
+                  styles.beneficiarySectionBottom
+                }
+              >
+                <BeneficiaryTabs
+                  recipientType="zenimonies"
+                  onSelect={
+                    handleBeneficiarySelect
+                  }
+                />
+              </div>
+            )}
+
+          </form>
 
           {/* ==================================================
               TRANSACTION PIN DIALOG
@@ -1576,10 +1493,7 @@ const saveSuccessfulBeneficiary =
                   to authorize it.
                 </p>
 
-
-                {/* ==================================================
-                    TRANSFER SUMMARY
-                    ================================================== */}
+                {/* TRANSFER SUMMARY */}
 
                 <div
                   style={
@@ -1671,10 +1585,7 @@ const saveSuccessfulBeneficiary =
 
                 </div>
 
-
-                {/* ==================================================
-                    PIN ERROR
-                    ================================================== */}
+                {/* PIN ERROR */}
 
                 {transactionPinError && (
                   <div
@@ -1687,10 +1598,7 @@ const saveSuccessfulBeneficiary =
                   </div>
                 )}
 
-
-                {/* ==================================================
-                    PIN INPUT
-                    ================================================== */}
+                {/* PIN INPUT */}
 
                 <label
                   htmlFor="transaction-pin"
@@ -1737,10 +1645,7 @@ const saveSuccessfulBeneficiary =
                   autoFocus
                 />
 
-
-                {/* ==================================================
-                    PIN ACTIONS
-                    ================================================== */}
+                {/* PIN ACTIONS */}
 
                 <div
                   style={
@@ -1801,7 +1706,6 @@ const saveSuccessfulBeneficiary =
 
                 </div>
 
-
                 <div
                   style={
                     styles.pinSecurity
@@ -1816,7 +1720,6 @@ const saveSuccessfulBeneficiary =
               </div>
             </div>
           )}
-
 
           {/* ======================================================
               SECURITY
@@ -1846,7 +1749,6 @@ const saveSuccessfulBeneficiary =
     </div>
   );
 };
-
 
 /*
  * ============================================================
@@ -2011,6 +1913,7 @@ const styles: Record<
     fontSize: 13,
     fontWeight: 800,
     marginBottom: 7,
+    marginTop: 18,
   },
 
   verifyRow: {
@@ -2045,29 +1948,49 @@ const styles: Record<
     whiteSpace: 'nowrap',
   },
 
+  /*
+   * Beneficiary section shown before
+   * recipient verification.
+   */
+
+  beneficiarySectionTop: {
+    marginTop: 4,
+    marginBottom: 18,
+  },
+
+  /*
+   * Beneficiary section shown after
+   * recipient verification.
+   */
+
+  beneficiarySectionBottom: {
+    marginTop: 24,
+    paddingTop: 4,
+  },
+
   recipientCard: {
     display: 'flex',
     alignItems: 'center',
     gap: 11,
-    background: '#f1fbf6',
+    background: '#eaf9f1',
     border:
-      '1px solid #d4eee0',
-    borderRadius: 15,
-    padding: 12,
-    marginBottom: 18,
+      '1px solid #bfe7d1',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 20,
   },
 
   recipientAvatar: {
-    width: 42,
-    height: 42,
+    width: 46,
+    height: 46,
     borderRadius: '50%',
-    background: '#d8f3e5',
-    color: '#087c43',
+    background: '#079447',
+    color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontWeight: 800,
-    fontSize: 16,
+    fontSize: 17,
     flexShrink: 0,
   },
 
@@ -2076,31 +1999,42 @@ const styles: Record<
     minWidth: 0,
   },
 
+  recipientVerifiedLabel: {
+    color: '#087c43',
+    fontSize: 10,
+    fontWeight: 850,
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+
   recipientName: {
     color: '#17362a',
-    fontSize: 14,
-    fontWeight: 800,
+    fontSize: 15,
+    fontWeight: 850,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
 
   recipientPhone: {
-    color: '#728078',
+    color: '#60756b',
     fontSize: 12,
     marginTop: 2,
   },
 
   recipientAccount: {
     color: '#087c43',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 700,
     marginTop: 3,
   },
 
   verifiedPill: {
-    background: '#dff5e9',
+    background: '#d9f4e5',
     color: '#087c43',
     borderRadius: 999,
     padding:
-      '6px 9px',
+      '7px 10px',
     fontSize: 10,
     fontWeight: 800,
     whiteSpace: 'nowrap',
@@ -2206,21 +2140,23 @@ const styles: Record<
     fontSize: 14,
     outline: 'none',
     boxSizing: 'border-box',
-    marginBottom: 20,
+    marginBottom: 8,
     background: '#ffffff',
     color: '#10251d',
   },
- beneficiaryCheckbox: {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  marginBottom: 18,
-  color: '#344c46',
-  fontSize: 13,
-  fontWeight: 700,
-  cursor: 'pointer',
-},
-  
+
+  beneficiaryCheckbox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 18,
+    color: '#344c46',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+
   sendButton: {
     width: '100%',
     border: 'none',
@@ -2237,6 +2173,12 @@ const styles: Record<
     justifyContent: 'center',
     gap: 8,
   },
+
+  /*
+   * ==========================================================
+   * TRANSACTION PIN
+   * ==========================================================
+   */
 
   pinOverlay: {
     position: 'fixed',
