@@ -405,7 +405,7 @@ const Electricity: React.FC = () => {
             type="button"
             onClick={() =>
               navigate(
-                '/bills/history'
+                '/electricity/reconciliation'
               )
             }
             style={{
