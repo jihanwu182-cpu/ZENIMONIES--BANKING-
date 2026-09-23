@@ -63,6 +63,7 @@ interface Transaction {
 
   customer_number?: string;
   customer_name?: string;
+  verified_customer_name?: string;
 
   meter_number?: string;
   meter_type?: string;
@@ -111,8 +112,7 @@ const TransactionReceipt: React.FC = () => {
 
   const receiptRef = useRef<HTMLDivElement>(null);
 
-  const [pdfLoading, setPdfLoading] =
-    useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const transaction =
     location.state?.transaction as
@@ -172,9 +172,7 @@ const TransactionReceipt: React.FC = () => {
             fullWidth
             variant="contained"
             startIcon={<ArrowBackRounded />}
-            onClick={() =>
-              navigate('/transactions')
-            }
+            onClick={() => navigate('/transactions')}
             sx={{
               bgcolor: COLORS.primary,
               borderRadius: 2,
@@ -195,21 +193,14 @@ const TransactionReceipt: React.FC = () => {
   /*
    * ============================================================
    * LOCAL USER
-   *
-   * IMPORTANT:
-   * Used ONLY to identify the receiver's own account.
-   *
-   * We NEVER use the sender's local account information
-   * on the receiver receipt.
    * ============================================================
    */
 
   const getLocalUser = () => {
     try {
-      const raw =
-        localStorage.getItem(
-          'zenimonies_user'
-        );
+      const raw = localStorage.getItem(
+        'zenimonies_user'
+      );
 
       if (!raw) {
         return {};
@@ -225,16 +216,15 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * LOCAL ACCOUNT
+   * LOCAL ACCOUNTS
    * ============================================================
    */
 
   const getLocalAccounts = () => {
     try {
-      const raw =
-        localStorage.getItem(
-          'zenimonies_accounts'
-        );
+      const raw = localStorage.getItem(
+        'zenimonies_accounts'
+      );
 
       if (!raw) {
         return [];
@@ -250,8 +240,7 @@ const TransactionReceipt: React.FC = () => {
     }
   };
 
-  const localAccounts =
-    getLocalAccounts();
+  const localAccounts = getLocalAccounts();
 
   /*
    * ============================================================
@@ -276,8 +265,7 @@ const TransactionReceipt: React.FC = () => {
 
   const currency =
     String(
-      transaction.currency ||
-        'NGN'
+      transaction.currency || 'NGN'
     ).toUpperCase();
 
   /*
@@ -380,8 +368,7 @@ const TransactionReceipt: React.FC = () => {
 
   const rawDescription =
     String(
-      transaction.description ||
-        ''
+      transaction.description || ''
     ).toLowerCase();
 
   const isTransfer =
@@ -399,13 +386,9 @@ const TransactionReceipt: React.FC = () => {
     rawDescription.includes(
       'money received'
     ) ||
-    rawDescription.includes(
-      'received'
-    ) ||
-    transaction.category ===
-      'credit' ||
-    transaction.category ===
-      'incoming';
+    rawDescription.includes('received') ||
+    transaction.category === 'credit' ||
+    transaction.category === 'incoming';
 
   const isAirtime =
     rawType.includes('airtime') ||
@@ -436,28 +419,36 @@ const TransactionReceipt: React.FC = () => {
   /*
    * ============================================================
    * RECEIVER INFORMATION
-   *
-   * This is the receiver's OWN information.
    * ============================================================
    */
 
   const receiverName =
     transaction.receiver_name ||
-    transaction.recipient_name ||
-    localUser.full_name ||
-    localUser.name ||
-    [
-      localUser.first_name,
-      localUser.last_name,
-    ]
-      .filter(Boolean)
-      .join(' ');
+    (
+      isIncoming
+        ? localUser.full_name
+        : ''
+    ) ||
+    (
+      isIncoming
+        ? localUser.name
+        : ''
+    ) ||
+    (
+      isIncoming
+        ? [
+            localUser.first_name,
+            localUser.last_name,
+          ]
+            .filter(Boolean)
+            .join(' ')
+        : ''
+    );
 
   /*
-   * Find receiver's own account.
+   * Receiver's real account information.
    *
-   * IMPORTANT:
-   * We intentionally do NOT use sender_account here.
+   * sender_account is NEVER used here.
    */
 
   const firstLocalAccount =
@@ -470,29 +461,49 @@ const TransactionReceipt: React.FC = () => {
         ? transaction.account_number
         : ''
     ) ||
-    firstLocalAccount.account_number ||
-    localUser.account_number ||
+    (
+      isIncoming
+        ? firstLocalAccount.account_number
+        : ''
+    ) ||
+    (
+      isIncoming
+        ? localUser.account_number
+        : ''
+    ) ||
     '';
 
   /*
+   * Receiver bank.
+   *
+   * Internal received transfers use ZENIMONIES.
+   */
+
+  const receiverBank =
+    transaction.receiver_bank ||
+    (
+      isIncoming
+        ? 'ZENIMONIES'
+        : ''
+    );
+
+  /*
    * ============================================================
-   * SENDER INFORMATION
+   * SENDER
    *
-   * Only sender NAME is used for receiver receipts.
-   *
-   * sender_account is intentionally NEVER used.
+   * Receiver receipt shows sender NAME only.
+   * Sender account number is never displayed.
    * ============================================================
    */
 
   const senderName =
-    transaction.sender_name ||
-    '';
+    transaction.sender_name || '';
 
   /*
    * ============================================================
    * BENEFICIARY
    *
-   * Used only for sender receipts.
+   * Used for sender receipt.
    * ============================================================
    */
 
@@ -851,8 +862,7 @@ const TransactionReceipt: React.FC = () => {
       className="receipt-page"
       sx={{
         minHeight: '100vh',
-        bgcolor:
-          COLORS.background,
+        bgcolor: COLORS.background,
         px: 1.5,
         py: 2,
       }}
@@ -864,30 +874,24 @@ const TransactionReceipt: React.FC = () => {
           mx: 'auto',
         }}
       >
-
-        {/* ======================================================
-            RECEIPT
-        ====================================================== */}
+        {/* RECEIPT */}
 
         <Box
           ref={receiptRef}
           className="receipt-document"
           sx={{
-            bgcolor:
-              COLORS.white,
+            bgcolor: COLORS.white,
             borderRadius: 2.5,
             overflow: 'hidden',
             border:
               `1px solid ${COLORS.border}`,
           }}
         >
-
           {/* BRAND */}
 
           <Box
             sx={{
-              textAlign:
-                'center',
+              textAlign: 'center',
               px: 2,
               pt: 2,
               pb: 1.5,
@@ -895,8 +899,7 @@ const TransactionReceipt: React.FC = () => {
           >
             <Typography
               sx={{
-                color:
-                  COLORS.primary,
+                color: COLORS.primary,
                 fontSize: 22,
                 fontWeight: 900,
                 letterSpacing: 1.5,
@@ -908,8 +911,7 @@ const TransactionReceipt: React.FC = () => {
             <Typography
               sx={{
                 mt: 0.4,
-                color:
-                  COLORS.muted,
+                color: COLORS.muted,
                 fontSize: 9.5,
                 fontWeight: 800,
                 letterSpacing: 0.8,
@@ -923,12 +925,10 @@ const TransactionReceipt: React.FC = () => {
 
           <Box
             sx={{
-              textAlign:
-                'center',
+              textAlign: 'center',
               px: 2,
               py: 1.6,
-              bgcolor:
-                '#F4FAF7',
+              bgcolor: '#F4FAF7',
               borderTop:
                 `1px solid ${COLORS.border}`,
               borderBottom:
@@ -937,8 +937,7 @@ const TransactionReceipt: React.FC = () => {
           >
             <CheckCircleRounded
               sx={{
-                color:
-                  statusColor,
+                color: statusColor,
                 fontSize: 28,
               }}
             />
@@ -946,8 +945,7 @@ const TransactionReceipt: React.FC = () => {
             <Typography
               sx={{
                 mt: 0.25,
-                color:
-                  statusColor,
+                color: statusColor,
                 fontSize: 13,
                 fontWeight: 900,
               }}
@@ -958,8 +956,7 @@ const TransactionReceipt: React.FC = () => {
             <Typography
               sx={{
                 mt: 0.8,
-                color:
-                  COLORS.muted,
+                color: COLORS.muted,
                 fontSize: 9.5,
                 fontWeight: 800,
                 letterSpacing: 0.7,
@@ -971,43 +968,38 @@ const TransactionReceipt: React.FC = () => {
             <Typography
               sx={{
                 mt: 0.5,
-                color:
-                  COLORS.text,
+                color: COLORS.text,
                 fontSize: 25,
                 lineHeight: 1.1,
                 fontWeight: 900,
               }}
             >
-              {formatMoney(
-                numericAmount
-              )}
+              {isIncoming
+                ? `+${formatMoney(numericAmount)}`
+                : formatMoney(numericAmount)}
             </Typography>
 
             <Typography
               sx={{
                 mt: 0.25,
-                color:
-                  COLORS.muted,
+                color: COLORS.muted,
                 fontSize: 9,
                 fontWeight: 700,
               }}
             >
               {isIncoming
-                ? 'AMOUNT RECEIVED'
-                : 'TRANSACTION AMOUNT'}
+                ? 'Amount Received'
+                : 'Transaction Amount'}
             </Typography>
           </Box>
 
-          {/* ====================================================
-              RECEIPT DETAILS
-          ==================================================== */}
+          {/* RECEIPT DETAILS */}
 
           <Box
             sx={{
               px: 2,
             }}
           >
-
             {/* ==================================================
                 RECEIVER TRANSFER
             ================================================== */}
@@ -1015,69 +1007,69 @@ const TransactionReceipt: React.FC = () => {
             {isTransfer &&
               isIncoming && (
                 <>
-
                   {/* SENDER NAME ONLY */}
 
                   {senderName && (
                     <ReceiptRow
                       label="Sender"
-                      value={
-                        senderName
-                      }
+                      value={senderName}
                     />
                   )}
 
-                  {/* RECEIVER'S OWN INFORMATION */}
+                  {/* RECEIVER */}
 
                   {receiverName && (
                     <ReceiptRow
-                      label="Your Name"
-                      value={
-                        receiverName
-                      }
+                      label="Receiver Name"
+                      value={receiverName}
                     />
                   )}
 
+                  {/* RECEIVER ACCOUNT */}
+
                   {receiverOwnAccount && (
                     <ReceiptRow
-                      label="Your Account Number"
-                      value={
-                        receiverOwnAccount
-                      }
+                      label="Receiver Account Number"
+                      value={receiverOwnAccount}
                     />
                   )}
+
+                  {/* RECEIVER BANK */}
+
+                  {receiverBank && (
+                    <ReceiptRow
+                      label="Bank"
+                      value={receiverBank}
+                    />
+                  )}
+
+                  {/* DATE */}
 
                   {transactionDate && (
                     <ReceiptRow
                       label="Date & Time"
-                      value={
-                        formatDate(
-                          transactionDate
-                        )
-                      }
+                      value={formatDate(
+                        transactionDate
+                      )}
                     />
                   )}
+
+                  {/* REFERENCE */}
 
                   {reference && (
                     <ReferenceRow
                       label="Reference"
-                      value={
-                        reference
-                      }
-                      onCopy={
-                        copyReference
-                      }
+                      value={reference}
+                      onCopy={copyReference}
                     />
                   )}
 
+                  {/* STATUS */}
+
                   <ReceiptRow
                     label="Status"
-                    value={
-                      statusText
-                    }
-                    valueColor={
-                      statusColor
-                    }
+                    value={statusText}
+                    valueColor={statusColor}
                     last
                   />
                 </>
@@ -1090,82 +1082,62 @@ const TransactionReceipt: React.FC = () => {
             {isTransfer &&
               !isIncoming && (
                 <>
-
                   {beneficiaryName && (
                     <ReceiptRow
                       label="Beneficiary"
-                      value={
-                        beneficiaryName
-                      }
+                      value={beneficiaryName}
                     />
                   )}
 
                   {beneficiaryAccount && (
                     <ReceiptRow
                       label="Account Number"
-                      value={
-                        beneficiaryAccount
-                      }
+                      value={beneficiaryAccount}
                     />
                   )}
 
                   {beneficiaryBank && (
                     <ReceiptRow
                       label="Bank"
-                      value={
-                        beneficiaryBank
-                      }
+                      value={beneficiaryBank}
                     />
                   )}
 
                   <ReceiptRow
                     label="Transaction Fee"
-                    value={
-                      formatMoney(
-                        numericFee
-                      )
-                    }
+                    value={formatMoney(
+                      numericFee
+                    )}
                   />
 
                   <ReceiptRow
-                   label="Total Debited"
-                     value={
-                     formatMoney(
-                       totalDebited
-                   )
-                 }
-               />
+                    label="Total Debited"
+                    value={formatMoney(
+                      totalDebited
+                    )}
+                  />
+
                   {transactionDate && (
                     <ReceiptRow
                       label="Date & Time"
-                      value={
-                        formatDate(
-                          transactionDate
-                        )
-                      }
+                      value={formatDate(
+                        transactionDate
+                      )}
                     />
                   )}
 
                   {reference && (
                     <ReferenceRow
                       label="Reference"
-                      value={
-                        reference
-                      }
-                      onCopy={
-                        copyReference
-                      }
+                      value={reference}
+                      onCopy={copyReference}
                     />
                   )}
 
                   <ReceiptRow
                     label="Status"
-                    value={
-                      statusText
-                    }
-                    valueColor={
-                      statusColor
-                    }
+                    value={statusText}
+                    valueColor={statusColor}
                     last
                   />
                 </>
@@ -1177,83 +1149,62 @@ const TransactionReceipt: React.FC = () => {
 
             {isElectricity && (
               <>
-
                 {customerName && (
                   <ReceiptRow
                     label="Customer"
-                    value={
-                      customerName
-                    }
+                    value={customerName}
                   />
                 )}
 
                 {provider && (
                   <ReceiptRow
                     label="Provider"
-                    value={
-                      provider
-                    }
+                    value={provider}
                   />
                 )}
 
                 {customerNumber && (
                   <ReceiptRow
                     label="Meter Number"
-                    value={
-                      customerNumber
-                    }
+                    value={customerNumber}
                   />
                 )}
 
                 {electricityUnits && (
                   <ReceiptRow
                     label="Units"
-                    value={
-                      electricityUnits
-                    }
+                    value={electricityUnits}
                   />
                 )}
 
                 {electricityToken && (
                   <ReceiptRow
                     label="Token"
-                    value={
-                      electricityToken
-                    }
+                    value={electricityToken}
                   />
                 )}
 
                 {transactionDate && (
                   <ReceiptRow
                     label="Date & Time"
-                    value={
-                      formatDate(
-                        transactionDate
-                      )
-                    }
+                    value={formatDate(
+                      transactionDate
+                    )}
                   />
                 )}
 
                 {reference && (
                   <ReferenceRow
                     label="Reference"
-                    value={
-                      reference
-                    }
-                    onCopy={
-                      copyReference
-                    }
+                    value={reference}
+                    onCopy={copyReference}
                   />
                 )}
 
                 <ReceiptRow
                   label="Status"
-                  value={
-                    statusText
-                  }
-                  valueColor={
-                    statusColor
-                  }
+                  value={statusText}
+                  valueColor={statusColor}
                   last
                 />
               </>
@@ -1265,56 +1216,41 @@ const TransactionReceipt: React.FC = () => {
 
             {isAirtime && (
               <>
-
                 {provider && (
                   <ReceiptRow
                     label="Network"
-                    value={
-                      provider
-                    }
+                    value={provider}
                   />
                 )}
 
                 {servicePhone && (
                   <ReceiptRow
                     label="Phone Number"
-                    value={
-                      servicePhone
-                    }
+                    value={servicePhone}
                   />
                 )}
 
                 {transactionDate && (
                   <ReceiptRow
                     label="Date & Time"
-                    value={
-                      formatDate(
-                        transactionDate
-                      )
-                    }
+                    value={formatDate(
+                      transactionDate
+                    )}
                   />
                 )}
 
                 {reference && (
                   <ReferenceRow
                     label="Reference"
-                    value={
-                      reference
-                    }
-                    onCopy={
-                      copyReference
-                    }
+                    value={reference}
+                    onCopy={copyReference}
                   />
                 )}
 
                 <ReceiptRow
                   label="Status"
-                  value={
-                    statusText
-                  }
-                  valueColor={
-                    statusColor
-                  }
+                  value={statusText}
+                  valueColor={statusColor}
                   last
                 />
               </>
@@ -1326,65 +1262,48 @@ const TransactionReceipt: React.FC = () => {
 
             {isData && (
               <>
-
                 {provider && (
                   <ReceiptRow
                     label="Network"
-                    value={
-                      provider
-                    }
+                    value={provider}
                   />
                 )}
 
                 {servicePhone && (
                   <ReceiptRow
                     label="Phone Number"
-                    value={
-                      servicePhone
-                    }
+                    value={servicePhone}
                   />
                 )}
 
                 {dataPlan && (
                   <ReceiptRow
                     label="Data Plan"
-                    value={
-                      dataPlan
-                    }
+                    value={dataPlan}
                   />
                 )}
 
                 {transactionDate && (
                   <ReceiptRow
                     label="Date & Time"
-                    value={
-                      formatDate(
-                        transactionDate
-                      )
-                    }
+                    value={formatDate(
+                      transactionDate
+                    )}
                   />
                 )}
 
                 {reference && (
                   <ReferenceRow
                     label="Reference"
-                    value={
-                      reference
-                    }
-                    onCopy={
-                      copyReference
-                    }
+                    value={reference}
+                    onCopy={copyReference}
                   />
                 )}
 
                 <ReceiptRow
                   label="Status"
-                  value={
-                    statusText
-                  }
-                  valueColor={
-                    statusColor
-                  }
+                  value={statusText}
+                  valueColor={statusColor}
                   last
                 />
               </>
@@ -1400,65 +1319,48 @@ const TransactionReceipt: React.FC = () => {
               !isData &&
               !isTransfer && (
                 <>
-
                   {provider && (
                     <ReceiptRow
                       label="Provider"
-                      value={
-                        provider
-                      }
+                      value={provider}
                     />
                   )}
 
                   {customerName && (
                     <ReceiptRow
                       label="Customer"
-                      value={
-                        customerName
-                      }
+                      value={customerName}
                     />
                   )}
 
                   {customerNumber && (
                     <ReceiptRow
                       label="Customer Number"
-                      value={
-                        customerNumber
-                      }
+                      value={customerNumber}
                     />
                   )}
 
                   {transactionDate && (
                     <ReceiptRow
                       label="Date & Time"
-                      value={
-                        formatDate(
-                          transactionDate
-                        )
-                      }
+                      value={formatDate(
+                        transactionDate
+                      )}
                     />
                   )}
 
                   {reference && (
                     <ReferenceRow
                       label="Reference"
-                      value={
-                        reference
-                      }
-                      onCopy={
-                        copyReference
-                      }
+                      value={reference}
+                      onCopy={copyReference}
                     />
                   )}
 
                   <ReceiptRow
                     label="Status"
-                    value={
-                      statusText
-                    }
-                    valueColor={
-                      statusColor
-                    }
+                    value={statusText}
+                    valueColor={statusColor}
                     last
                   />
                 </>
@@ -1474,7 +1376,6 @@ const TransactionReceipt: React.FC = () => {
               !isData &&
               !isBill && (
                 <>
-
                   {transaction.description && (
                     <ReceiptRow
                       label="Description"
@@ -1487,42 +1388,31 @@ const TransactionReceipt: React.FC = () => {
                   {transactionDate && (
                     <ReceiptRow
                       label="Date & Time"
-                      value={
-                        formatDate(
-                          transactionDate
-                        )
-                      }
+                      value={formatDate(
+                        transactionDate
+                      )}
                     />
                   )}
 
                   {reference && (
                     <ReferenceRow
                       label="Reference"
-                      value={
-                        reference
-                      }
-                      onCopy={
-                        copyReference
-                      }
+                      value={reference}
+                      onCopy={copyReference}
                     />
                   )}
 
                   <ReceiptRow
                     label="Status"
-                    value={
-                      statusText
-                    }
-                    valueColor={
-                      statusColor
-                    }
+                    value={statusText}
+                    valueColor={statusColor}
                     last
                   />
                 </>
               )}
-
           </Box>
 
-          {/* SMALL BRAND FOOTER */}
+          {/* FOOTER */}
 
           <Box
             sx={{
@@ -1535,8 +1425,7 @@ const TransactionReceipt: React.FC = () => {
           >
             <Typography
               sx={{
-                color:
-                  COLORS.primary,
+                color: COLORS.primary,
                 fontSize: 8.5,
                 fontWeight: 900,
                 letterSpacing: 1,
@@ -1545,12 +1434,9 @@ const TransactionReceipt: React.FC = () => {
               ZENIMONIES
             </Typography>
           </Box>
-
         </Box>
 
-        {/* ======================================================
-            ACTION BUTTONS
-        ====================================================== */}
+        {/* ACTION BUTTONS */}
 
         <Stack
           className="no-print"
@@ -1559,7 +1445,6 @@ const TransactionReceipt: React.FC = () => {
             mt: 1.5,
           }}
         >
-
           <Button
             fullWidth
             variant="contained"
@@ -1569,20 +1454,15 @@ const TransactionReceipt: React.FC = () => {
             onClick={
               handleDownloadPDF
             }
-            disabled={
-              pdfLoading
-            }
+            disabled={pdfLoading}
             sx={{
               minHeight: 46,
-              bgcolor:
-                COLORS.primary,
+              bgcolor: COLORS.primary,
               borderRadius: 2,
               fontWeight: 800,
-              textTransform:
-                'none',
+              textTransform: 'none',
               '&:hover': {
-                bgcolor:
-                  COLORS.dark,
+                bgcolor: COLORS.dark,
               },
             }}
           >
@@ -1597,22 +1477,15 @@ const TransactionReceipt: React.FC = () => {
             startIcon={
               <ShareRounded />
             }
-            onClick={
-              handleSharePDF
-            }
-            disabled={
-              pdfLoading
-            }
+            onClick={handleSharePDF}
+            disabled={pdfLoading}
             sx={{
               minHeight: 46,
-              borderColor:
-                COLORS.primary,
-              color:
-                COLORS.primary,
+              borderColor: COLORS.primary,
+              color: COLORS.primary,
               borderRadius: 2,
               fontWeight: 800,
-              textTransform:
-                'none',
+              textTransform: 'none',
             }}
           >
             Share PDF
@@ -1625,40 +1498,28 @@ const TransactionReceipt: React.FC = () => {
               <ArrowBackRounded />
             }
             onClick={() =>
-              navigate(
-                '/transactions'
-              )
+              navigate('/transactions')
             }
-            disabled={
-              pdfLoading
-            }
+            disabled={pdfLoading}
             sx={{
               minHeight: 44,
-              borderColor:
-                COLORS.border,
-              color:
-                COLORS.text,
+              borderColor: COLORS.border,
+              color: COLORS.text,
               borderRadius: 2,
               fontWeight: 700,
-              textTransform:
-                'none',
+              textTransform: 'none',
             }}
           >
             Back to Transactions
           </Button>
-
         </Stack>
-
       </Box>
 
-      {/* ========================================================
-          PRINT
-      ======================================================== */}
+      {/* PRINT */}
 
       <style>
         {`
           @media print {
-
             @page {
               size: A4;
               margin: 10mm;
@@ -1695,7 +1556,6 @@ const TransactionReceipt: React.FC = () => {
           }
         `}
       </style>
-
     </Box>
   );
 };
@@ -1739,8 +1599,7 @@ const ReceiptRow: React.FC<
       >
         <Typography
           sx={{
-            color:
-              COLORS.muted,
+            color: COLORS.muted,
             fontSize: 10.5,
             fontWeight: 700,
             flexShrink: 0,
@@ -1758,8 +1617,7 @@ const ReceiptRow: React.FC<
             fontWeight: 750,
             textAlign: 'right',
             maxWidth: '65%',
-            wordBreak:
-              'break-word',
+            wordBreak: 'break-word',
           }}
         >
           {value}
@@ -1804,8 +1662,7 @@ const ReferenceRow: React.FC<
       >
         <Typography
           sx={{
-            color:
-              COLORS.muted,
+            color: COLORS.muted,
             fontSize: 10.5,
             fontWeight: 700,
             flexShrink: 0,
@@ -1822,13 +1679,11 @@ const ReferenceRow: React.FC<
         >
           <Typography
             sx={{
-              color:
-                COLORS.text,
+              color: COLORS.text,
               fontSize: 9.5,
               fontWeight: 750,
               lineHeight: 1.3,
-              wordBreak:
-                'break-all',
+              wordBreak: 'break-all',
             }}
           >
             {value}
@@ -1842,12 +1697,10 @@ const ReferenceRow: React.FC<
               minWidth: 0,
               p: 0,
               mt: 0.15,
-              color:
-                COLORS.primary,
+              color: COLORS.primary,
               fontSize: 8.5,
               fontWeight: 800,
-              textTransform:
-                'none',
+              textTransform: 'none',
             }}
           >
             Copy
