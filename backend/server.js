@@ -30,6 +30,7 @@ const notificationRoutes = require('./routes/notifications');
 const passkeyRoutes = require('./routes/passkey');
 const passcodeRoutes = require('./routes/passcode');
 const transactionPinRoutes = require('./routes/transactionPin');
+const beneficiaryRoutes = require('./routes/beneficiaryRoutes');
 
 // ============================================================
 // PAYSTACK
@@ -153,6 +154,14 @@ app.use(
   billsRoutes
 );
 
+// ============================================================
+// BENEFICIARIES
+// ============================================================
+
+app.use(
+  '/api/beneficiaries',
+  beneficiaryRoutes
+);
 // ------------------------------------------------------------
 // EXTERNAL BANK TRANSFERS
 // ------------------------------------------------------------
