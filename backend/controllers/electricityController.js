@@ -198,14 +198,18 @@ const extractProviderMessage = (
   rawResponse
 ) => {
   return firstValue(
-    providerData?.message,
-    providerData?.description,
-
+    // Prefer Sogo's actual message first
     rawResponse?.message,
-    rawResponse?.description,
 
     rawResponse?.data?.message,
-    rawResponse?.data?.description
+
+    // Then transaction-level message
+    providerData?.message,
+
+    // Description is only a fallback
+    rawResponse?.description,
+    rawResponse?.data?.description,
+    providerData?.description
   );
 };
 
