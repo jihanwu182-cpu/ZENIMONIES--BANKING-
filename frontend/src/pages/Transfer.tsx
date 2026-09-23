@@ -92,6 +92,10 @@ const Transfer: React.FC = () => {
 
   const [narration, setNarration] =
     useState('');
+  const [
+  saveAsBeneficiary,
+  setSaveAsBeneficiary,
+] = useState(false);
 
   const [recipient, setRecipient] =
     useState<Recipient | null>(null);
@@ -514,8 +518,70 @@ const Transfer: React.FC = () => {
     setTransactionPinError('');
     setShowTransactionPin(true);
   };
+  
+  /*
+ * ==========================================================
+ * SAVE SUCCESSFUL RECIPIENT AS BENEFICIARY
+ * ==========================================================
+ */
 
+const saveSuccessfulBeneficiary =
+  async () => {
+    if (
+      !saveAsBeneficiary ||
+      !recipient ||
+      !token
+    ) {
+      return;
+    }
 
+    try {
+      await axios.post(
+        `${API_URL}/api/beneficiaries`,
+        {
+          recipient_type:
+            'zenimonies',
+
+          name:
+            recipient.full_name,
+
+          recipient_phone:
+            recipient.phone ||
+            cleanPhone,
+        },
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+
+            'Content-Type':
+              'application/json',
+          },
+        }
+      );
+
+      /*
+       * Reset the checkbox after
+       * the beneficiary has been saved.
+       */
+      setSaveAsBeneficiary(false);
+
+    } catch (error: any) {
+      /*
+       * The transfer has already succeeded.
+       *
+       * A beneficiary-saving problem
+       * must NOT make a successful
+       * transfer appear failed.
+       */
+      console.error(
+        'Unable to save beneficiary:',
+        error
+      );
+
+      setSaveAsBeneficiary(false);
+    }
+  };
   /*
    * ==========================================================
    * VERIFY TRANSACTION PIN + SEND MONEY
@@ -792,7 +858,7 @@ const Transfer: React.FC = () => {
            * The receipt receives the actual
            * backend transaction record.
            */
-
+          await saveSuccessfulBeneficiary();
           navigate(
             '/transaction-receipt',
             {
@@ -1401,6 +1467,24 @@ const Transfer: React.FC = () => {
                 styles.inputFull
               }
             />
+            <label
+  style={styles.beneficiaryCheckbox}
+>
+  <input
+    type="checkbox"
+    checked={saveAsBeneficiary}
+    onChange={(event) =>
+      setSaveAsBeneficiary(
+        event.target.checked
+      )
+    }
+    disabled={sending}
+  />
+
+  <span>
+    Save as beneficiary
+  </span>
+</label>
 
 
             {/* ==================================================
@@ -2126,7 +2210,17 @@ const styles: Record<
     background: '#ffffff',
     color: '#10251d',
   },
-
+ beneficiaryCheckbox: {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  marginBottom: 18,
+  color: '#344c46',
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: 'pointer',
+},
+  
   sendButton: {
     width: '100%',
     border: 'none',
