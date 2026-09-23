@@ -474,7 +474,8 @@ const getTransactions = async (
 
        bill.tariff_class
         AS bill_tariff_class
-
+      bill.provider_response AS bill_provider_response,
+      bill.provider_response_message AS bill_provider_response_message,
 
         FROM transactions t
 
