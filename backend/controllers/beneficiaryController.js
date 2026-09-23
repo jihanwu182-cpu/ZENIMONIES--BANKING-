@@ -2,10 +2,23 @@ const pool = require('../config/database');
 
 /*
  * ============================================================
- * GET SAVED BENEFICIARIES
+ * NORMALIZE PHONE NUMBER
  * ============================================================
  */
+const normalizePhone = (value) => {
+  if (!value) return '';
 
+  return String(value)
+    .trim()
+    .replace(/\s+/g, '');
+};
+
+/*
+ * ============================================================
+ * GET BENEFICIARIES
+ * GET /api/beneficiaries
+ * ============================================================
+ */
 const getBeneficiaries = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -18,6 +31,8 @@ const getBeneficiaries = async (req, res) => {
         bank_name,
         bank_code,
         account_number,
+        recipient_type,
+        recipient_phone,
         created_at
       FROM beneficiaries
       WHERE user_id = $1
@@ -44,35 +59,219 @@ const getBeneficiaries = async (req, res) => {
   }
 };
 
-
 /*
  * ============================================================
  * ADD BENEFICIARY
+ * POST /api/beneficiaries
+ *
+ * Supports:
+ *
+ * 1. ZENIMONIES
+ *    recipient_type: "zenimonies"
+ *    recipient_phone: customer's phone
+ *
+ * 2. OTHER BANK
+ *    recipient_type: "bank"
+ *    bank_name
+ *    bank_code
+ *    account_number
  * ============================================================
  */
-
 const addBeneficiary = async (req, res) => {
   try {
     const userId = req.user.id;
 
     const {
+      recipient_type,
       name,
       bank_name,
       bank_code,
       account_number,
+      recipient_phone,
     } = req.body;
 
+    const type =
+      String(
+        recipient_type || 'bank'
+      )
+        .trim()
+        .toLowerCase();
+
     /*
-     * Validate required fields.
+     * ========================================================
+     * VALID RECIPIENT TYPE
+     * ========================================================
      */
 
-    if (!name || !String(name).trim()) {
+    if (
+      type !== 'bank' &&
+      type !== 'zenimonies'
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Invalid beneficiary type.',
+      });
+    }
+
+    /*
+     * ========================================================
+     * NAME
+     * ========================================================
+     */
+
+    if (
+      !name ||
+      !String(name).trim()
+    ) {
       return res.status(400).json({
         success: false,
         message:
           'Beneficiary name is required.',
       });
     }
+
+    const cleanName =
+      String(name).trim();
+
+    /*
+     * ========================================================
+     * ZENIMONIES BENEFICIARY
+     * ========================================================
+     */
+
+    if (type === 'zenimonies') {
+      const cleanPhone =
+        normalizePhone(
+          recipient_phone
+        );
+
+      if (!cleanPhone) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Zenimonies recipient phone number is required.',
+        });
+      }
+
+      /*
+       * Accept Nigerian phone formats
+       * while keeping the stored value consistent.
+       */
+      let normalizedPhone =
+        cleanPhone;
+
+      if (
+        normalizedPhone.startsWith(
+          '+234'
+        )
+      ) {
+        normalizedPhone =
+          '0' +
+          normalizedPhone.slice(4);
+      }
+
+      if (
+        !/^0\d{10}$/.test(
+          normalizedPhone
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Please enter a valid Nigerian phone number.',
+        });
+      }
+
+      /*
+       * Prevent saving the same Zenimonies
+       * recipient more than once.
+       */
+      const existing =
+        await pool.query(
+          `
+          SELECT id
+          FROM beneficiaries
+          WHERE user_id = $1
+            AND recipient_type = 'zenimonies'
+            AND recipient_phone = $2
+          LIMIT 1
+          `,
+          [
+            userId,
+            normalizedPhone,
+          ]
+        );
+
+      if (
+        existing.rows.length > 0
+      ) {
+        return res.status(409).json({
+          success: false,
+          message:
+            'This Zenimonies beneficiary is already saved.',
+          beneficiary_id:
+            existing.rows[0].id,
+        });
+      }
+
+      /*
+       * bank_name is kept as "Zenimonies"
+       * because the existing database column
+       * is required.
+       */
+      const result =
+        await pool.query(
+          `
+          INSERT INTO beneficiaries (
+            user_id,
+            name,
+            bank_name,
+            bank_code,
+            account_number,
+            recipient_type,
+            recipient_phone
+          )
+          VALUES (
+            $1,
+            $2,
+            'Zenimonies',
+            'ZENIMONIES',
+            NULL,
+            'zenimonies',
+            $3
+          )
+          RETURNING
+            id,
+            name,
+            bank_name,
+            bank_code,
+            account_number,
+            recipient_type,
+            recipient_phone,
+            created_at
+          `,
+          [
+            userId,
+            cleanName,
+            normalizedPhone,
+          ]
+        );
+
+      return res.status(201).json({
+        success: true,
+        message:
+          'Zenimonies beneficiary saved successfully.',
+        beneficiary:
+          result.rows[0],
+      });
+    }
+
+    /*
+     * ========================================================
+     * OTHER BANK BENEFICIARY
+     * ========================================================
+     */
 
     if (
       !bank_name ||
@@ -96,9 +295,6 @@ const addBeneficiary = async (req, res) => {
       });
     }
 
-    const cleanName =
-      String(name).trim();
-
     const cleanBankName =
       String(bank_name).trim();
 
@@ -111,15 +307,6 @@ const addBeneficiary = async (req, res) => {
       String(account_number)
         .replace(/\s+/g, '')
         .trim();
-
-    /*
-     * Basic Nigerian bank account
-     * number validation.
-     *
-     * We allow up to 30 characters because
-     * the database supports other account
-     * formats as well.
-     */
 
     if (
       !/^\d{10}$/.test(
@@ -134,20 +321,15 @@ const addBeneficiary = async (req, res) => {
     }
 
     /*
-     * Prevent the same beneficiary from
-     * being saved repeatedly.
-     *
-     * Duplicate checking is limited to
-     * the logged-in customer.
+     * Prevent duplicate bank beneficiary.
      */
-
     const existing =
       await pool.query(
         `
-        SELECT
-          id
+        SELECT id
         FROM beneficiaries
         WHERE user_id = $1
+          AND recipient_type = 'bank'
           AND account_number = $2
           AND COALESCE(bank_code, '') =
               COALESCE($3, '')
@@ -166,15 +348,11 @@ const addBeneficiary = async (req, res) => {
       return res.status(409).json({
         success: false,
         message:
-          'This beneficiary is already saved.',
+          'This bank beneficiary is already saved.',
         beneficiary_id:
           existing.rows[0].id,
       });
     }
-
-    /*
-     * Save beneficiary.
-     */
 
     const result =
       await pool.query(
@@ -184,14 +362,18 @@ const addBeneficiary = async (req, res) => {
           name,
           bank_name,
           bank_code,
-          account_number
+          account_number,
+          recipient_type,
+          recipient_phone
         )
         VALUES (
           $1,
           $2,
           $3,
           $4,
-          $5
+          $5,
+          'bank',
+          NULL
         )
         RETURNING
           id,
@@ -199,6 +381,8 @@ const addBeneficiary = async (req, res) => {
           bank_name,
           bank_code,
           account_number,
+          recipient_type,
+          recipient_phone,
           created_at
         `,
         [
@@ -213,7 +397,7 @@ const addBeneficiary = async (req, res) => {
     return res.status(201).json({
       success: true,
       message:
-        'Beneficiary saved successfully.',
+        'Bank beneficiary saved successfully.',
       beneficiary:
         result.rows[0],
     });
@@ -231,13 +415,12 @@ const addBeneficiary = async (req, res) => {
   }
 };
 
-
 /*
  * ============================================================
  * DELETE BENEFICIARY
+ * DELETE /api/beneficiaries/:id
  * ============================================================
  */
-
 const deleteBeneficiary = async (
   req,
   res
@@ -257,14 +440,6 @@ const deleteBeneficiary = async (
           'Beneficiary ID is required.',
       });
     }
-
-    /*
-     * The user_id condition is extremely
-     * important.
-     *
-     * A customer can only delete their
-     * own beneficiary.
-     */
 
     const result =
       await pool.query(
@@ -308,7 +483,6 @@ const deleteBeneficiary = async (
     });
   }
 };
-
 
 module.exports = {
   getBeneficiaries,
