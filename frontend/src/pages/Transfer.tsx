@@ -3,6 +3,8 @@ import React, {
   useState,
 } from 'react';
 
+import BeneficiaryTabs from '../components/BeneficiaryTabs';
+
 import {
   Link,
   useNavigate,
@@ -289,6 +291,33 @@ const Transfer: React.FC = () => {
       }
     )}`;
 
+     const handleBeneficiarySelect = (
+  beneficiary: any
+) => {
+  if (
+    beneficiary.recipient_type !==
+    'zenimonies'
+  ) {
+    return;
+  }
+
+  if (
+    !beneficiary.recipient_phone
+  ) {
+    return;
+  }
+
+  setPhone(
+    beneficiary.recipient_phone
+  );
+
+  setRecipient(null);
+  setError('');
+  setSuccess('');
+  setReference('');
+  setBalanceAfter(null);
+  setRecipientAccountNumber('');
+};
 
   /*
    * ==========================================================
@@ -970,8 +999,12 @@ const Transfer: React.FC = () => {
             another active Zenimonies
             account.
           </p>
-
-
+            <BeneficiaryTabs
+             recipientType="zenimonies"
+              onSelect={
+            handleBeneficiarySelect
+          }
+        />
           {/* ==================================================
               ERROR
               ================================================== */}
