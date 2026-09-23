@@ -806,8 +806,7 @@ const getTransactions = async (
             recipient_bank:
               recipientBank,
 
-
-            // ------------------------------------------------
+ // ------------------------------------------------
 // AIRTIME / DATA / BILL RECEIPT FIELDS
 // ------------------------------------------------
 
@@ -866,6 +865,26 @@ tariff_class:
   transaction.bill_tariff_class ||
   '',
 
+            provider_message:
+  (() => {
+    let providerResponse = transaction.bill_provider_response;
+
+    try {
+      if (typeof providerResponse === 'string') {
+        providerResponse = JSON.parse(providerResponse);
+      }
+    } catch (error) {
+      providerResponse = null;
+    }
+
+    return (
+      providerResponse?.message ||
+      providerResponse?.data?.message ||
+      providerResponse?.transaction?.message ||
+      transaction.bill_provider_response_message ||
+      ''
+    );
+  })(),
 
             // ------------------------------------------------
             // DATA PLAN
