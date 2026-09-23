@@ -26,7 +26,6 @@ import {
 } from '@mui/material';
 
 import {
-  AccountBalanceRounded,
   AccountBalanceWalletRounded,
   ArrowDownwardRounded,
   ArrowUpwardRounded,
@@ -117,24 +116,6 @@ interface Transaction {
   provider_reference?: string;
 
   provider_message?: string;
-
-  meter_type?: string;
-
-  meter_number?: string;
-
-  customer_name?: string;
-
-  verified_customer_name?: string;
-
-  verified_customer_address?: string;
-
-  electricity_token?: string;
-
-  token?: string;
-
-  units?: string | number;
-
-  tariff_class?: string;
 
   data_plan?: string;
 }
@@ -488,13 +469,6 @@ const Transactions: React.FC = () => {
 
 
     if (
-      type.includes('electricity')
-    ) {
-      return 'Electricity Payment';
-    }
-
-
-    if (
       type.includes('bill')
     ) {
       return 'Bill Payment';
@@ -652,7 +626,6 @@ const Transactions: React.FC = () => {
 
 
     if (
-      type.includes('electricity') ||
       type.includes('bill') ||
       description.includes('bill')
     ) {
@@ -1212,10 +1185,6 @@ const Transactions: React.FC = () => {
 
               transaction.data_plan,
 
-              transaction.meter_number,
-
-              transaction.customer_name,
-
               transaction.status,
             ]
               .filter(Boolean)
@@ -1747,23 +1716,16 @@ const Transactions: React.FC = () => {
               }}
             >
 
-              {/* MONEY IN */}
-
               <Box
                 sx={{
                   flex: 1,
-
                   p: {
                     xs: 1.15,
                     sm: 1.4,
                   },
-
-                  borderRadius:
-                    2.5,
-
+                  borderRadius: 2.5,
                   background:
                     'rgba(255,255,255,0.10)',
-
                   border:
                     '1px solid rgba(255,255,255,0.08)',
                 }}
@@ -1811,23 +1773,16 @@ const Transactions: React.FC = () => {
               </Box>
 
 
-              {/* MONEY OUT */}
-
               <Box
                 sx={{
                   flex: 1,
-
                   p: {
                     xs: 1.15,
                     sm: 1.4,
                   },
-
-                  borderRadius:
-                    2.5,
-
+                  borderRadius: 2.5,
                   background:
                     'rgba(255,255,255,0.10)',
-
                   border:
                     '1px solid rgba(255,255,255,0.08)',
                 }}
@@ -1897,16 +1852,13 @@ const Transactions: React.FC = () => {
           variant="outlined"
           sx={{
             mb: 1.2,
-
             background:
               '#FFFFFF',
-
             borderRadius: 3,
 
             '& .MuiOutlinedInput-root':
               {
                 borderRadius: 3,
-
                 minHeight: 52,
 
                 '& fieldset': {
@@ -2157,10 +2109,6 @@ const Transactions: React.FC = () => {
 
         ) : filteredTransactions.length === 0 ? (
 
-          /* ==================================================
-             EMPTY STATE
-          =================================================== */
-
           <Card
             sx={{
               borderRadius: 3.5,
@@ -2253,10 +2201,6 @@ const Transactions: React.FC = () => {
           </Card>
 
         ) : (
-
-          /* ==================================================
-             TRANSACTION TIMELINE
-          =================================================== */
 
           <Box>
 
@@ -2393,8 +2337,6 @@ const Transactions: React.FC = () => {
                               alignItems="center"
                             >
 
-                              {/* ICON */}
-
                               <Box
                                 sx={{
                                   width: 46,
@@ -2427,8 +2369,6 @@ const Transactions: React.FC = () => {
                                 }
                               </Box>
 
-
-                              {/* MAIN */}
 
                               <Box
                                 sx={{
@@ -2549,8 +2489,6 @@ const Transactions: React.FC = () => {
                               </Box>
 
 
-                              {/* AMOUNT */}
-
                               <Box
                                 sx={{
                                   textAlign:
@@ -2639,10 +2577,6 @@ const Transactions: React.FC = () => {
         )}
 
 
-        {/* ====================================================
-            REFRESH
-        ===================================================== */}
-
         {!loading && (
           <Button
             fullWidth
@@ -2722,10 +2656,6 @@ const Transactions: React.FC = () => {
         {selectedTransaction && (
           <>
 
-            {/* ==================================================
-                DETAILS HEADER
-            =================================================== */}
-
             <Box
               sx={{
                 background:
@@ -2790,8 +2720,6 @@ const Transactions: React.FC = () => {
 
               </Stack>
 
-
-              {/* AMOUNT */}
 
               <Box
                 sx={{
@@ -2903,10 +2831,6 @@ const Transactions: React.FC = () => {
             </Box>
 
 
-            {/* ==================================================
-                DETAILS BODY
-            =================================================== */}
-
             <DialogContent
               sx={{
                 p: 2,
@@ -2922,8 +2846,6 @@ const Transactions: React.FC = () => {
                   )}
                 />
 
-
-                {/* REFERENCE */}
 
                 {selectedTransaction.reference && (
                   <DetailRow
@@ -2966,8 +2888,6 @@ const Transactions: React.FC = () => {
                 )}
 
 
-                {/* CATEGORY */}
-
                 <DetailRow
                   label="Category"
                   value={
@@ -2977,8 +2897,6 @@ const Transactions: React.FC = () => {
                   }
                 />
 
-
-                {/* SENDER */}
 
                 {selectedTransaction.sender_name && (
                   <DetailRow
@@ -3013,8 +2931,6 @@ const Transactions: React.FC = () => {
                   />
                 )}
 
-
-                {/* RECIPIENT */}
 
                 {selectedTransaction.recipient_name && (
                   <DetailRow
@@ -3060,8 +2976,6 @@ const Transactions: React.FC = () => {
                 )}
 
 
-                {/* PROVIDER */}
-
                 {selectedTransaction.provider && (
                   <DetailRow
                     label="Provider"
@@ -3094,8 +3008,6 @@ const Transactions: React.FC = () => {
                 )}
 
 
-                {/* DATA */}
-
                 {selectedTransaction.data_plan && (
                   <DetailRow
                     label="Data plan"
@@ -3106,8 +3018,6 @@ const Transactions: React.FC = () => {
                 )}
 
 
-                {/* BILL */}
-
                 {selectedTransaction.customer_number && (
                   <DetailRow
                     label="Customer number"
@@ -3115,112 +3025,6 @@ const Transactions: React.FC = () => {
                       selectedTransaction.customer_number
                     }
                   />
-                )}
-
-
-                {selectedTransaction.customer_name && (
-                  <DetailRow
-                    label="Customer name"
-                    value={
-                      selectedTransaction.customer_name
-                    }
-                  />
-                )}
-
-
-                {selectedTransaction.meter_type && (
-                  <DetailRow
-                    label="Meter type"
-                    value={
-                      selectedTransaction.meter_type
-                    }
-                  />
-                )}
-
-
-                {selectedTransaction.meter_number && (
-                  <DetailRow
-                    label="Meter number"
-                    value={
-                      selectedTransaction.meter_number
-                    }
-                  />
-                )}
-
-
-                {selectedTransaction.units !==
-                  undefined &&
-                  selectedTransaction.units !==
-                    '' && (
-                    <DetailRow
-                      label="Units"
-                      value={
-                        String(
-                          selectedTransaction.units
-                        )
-                      }
-                    />
-                  )}
-
-
-                {selectedTransaction.tariff_class && (
-                  <DetailRow
-                    label="Tariff class"
-                    value={
-                      selectedTransaction.tariff_class
-                    }
-                  />
-                )}
-
-
-                {/* ELECTRICITY TOKEN */}
-
-                {selectedTransaction.electricity_token && (
-                  <Box
-                    sx={{
-                      mt: 1.4,
-                      p: 1.5,
-                      borderRadius: 3,
-                      background:
-                        '#EAF7F3',
-                      border:
-                        '1px solid #CFE9DE',
-                    }}
-                  >
-
-                    <Typography
-                      sx={{
-                        fontSize: 11,
-                        color:
-                          '#087A4B',
-                        fontWeight:
-                          800,
-                        mb: 0.5,
-                      }}
-                    >
-                      Electricity token
-                    </Typography>
-
-
-                    <Typography
-                      sx={{
-                        fontSize: 17,
-                        fontWeight:
-                          900,
-                        letterSpacing:
-                          '1px',
-                        color:
-                          '#063F31',
-                        wordBreak:
-                          'break-word',
-                      }}
-                    >
-                      {
-                        selectedTransaction.electricity_token
-                      }
-                    </Typography>
-
-                  </Box>
                 )}
 
 
@@ -3286,8 +3090,6 @@ const Transactions: React.FC = () => {
                   )}
 
 
-                {/* CURRENCY */}
-
                 <DetailRow
                   label="Currency"
                   value={
@@ -3298,10 +3100,6 @@ const Transactions: React.FC = () => {
 
               </Stack>
 
-
-              {/* =================================================
-                  PROVIDER MESSAGE
-              ================================================== */}
 
               {selectedTransaction.provider_message && (
                 <Alert
@@ -3332,10 +3130,6 @@ const Transactions: React.FC = () => {
                 }}
               />
 
-
-              {/* =================================================
-                  ACTIONS
-              ================================================== */}
 
               <Stack
                 direction={{
@@ -3449,10 +3243,6 @@ const Transactions: React.FC = () => {
 
       </Dialog>
 
-
-      {/* ======================================================
-          PRINT STYLES
-      ======================================================= */}
 
       <style>
         {`
