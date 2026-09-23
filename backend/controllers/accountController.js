@@ -467,15 +467,19 @@ const getTransactions = async (
          AS bill_verified_customer_address,
 
        bill.electricity_token
-         AS bill_electricity_token,
+ AS bill_electricity_token,
 
-      bill.units
-       AS bill_units,
+bill.units
+ AS bill_units,
 
-       bill.tariff_class
-        AS bill_tariff_class
-      bill.provider_response AS bill_provider_response,
-      bill.provider_response_message AS bill_provider_response_message,
+bill.tariff_class
+ AS bill_tariff_class,
+
+bill.provider_response
+ AS bill_provider_response,
+
+bill.provider_response_message
+ AS bill_provider_response_message,
 
         FROM transactions t
 
