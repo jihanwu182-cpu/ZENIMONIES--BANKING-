@@ -519,6 +519,7 @@ exports.createSavings = async (req, res) => {
     // CREATE SAVINGS PLAN
     // --------------------------------------------------------
 
+    
     const savingsResult = await client.query(
       `INSERT INTO savings_plans (
           user_id,
@@ -535,9 +536,9 @@ exports.createSavings = async (req, res) => {
           $2,
           $3,
           'NGN',
-          $4,
+          $4::integer,
           NOW(),
-          NOW() + ($4 * INTERVAL '1 day'),
+          NOW() + make_interval(days => $4::integer),
           'active'
        )
        RETURNING
@@ -555,6 +556,7 @@ exports.createSavings = async (req, res) => {
         durationDays,
       ]
     );
+
 
     const savings = savingsResult.rows[0];
 
