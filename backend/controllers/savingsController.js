@@ -25,26 +25,65 @@ const generateReference = (type) => {
 };
 
 // ============================================================
+// LOG DATABASE ERRORS
+// Detailed information is for backend logs only.
+// Never expose database details to customers.
+// ============================================================
+
+const logSavingsError = (label, error) => {
+  console.error(label, {
+    message: error?.message,
+    code: error?.code,
+    detail: error?.detail,
+    constraint: error?.constraint,
+    table: error?.table,
+    column: error?.column,
+    stack: error?.stack,
+  });
+};
+
+// ============================================================
 // GET CUSTOMER SAVINGS
 // GET /api/savings
 //
-// Releases matured savings automatically.
-// The wallet credit, transaction record, and savings status
-// change are committed together.
+// Releases matured savings automatically when the customer
+// loads their Savings page.
+//
+// Wallet credit, transaction record, savings status change,
+// and notification are committed together.
 // ============================================================
 
 exports.getSavings = async (req, res) => {
-  const client = await pool.connect();
-
+  let client;
   let transactionStarted = false;
 
   try {
-    const userId = req.user.id;
+    // --------------------------------------------------------
+    // DATABASE CONNECTION
+    // --------------------------------------------------------
+
+    client = await pool.connect();
+
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required.',
+      });
+    }
+
+    // --------------------------------------------------------
+    // BEGIN TRANSACTION
+    // --------------------------------------------------------
 
     await client.query('BEGIN');
     transactionStarted = true;
 
-    // Lock matured plans belonging to this customer.
+    // --------------------------------------------------------
+    // FIND AND LOCK MATURED SAVINGS PLANS
+    // --------------------------------------------------------
+
     const maturedPlans = await client.query(
       `SELECT
           id,
@@ -60,8 +99,28 @@ exports.getSavings = async (req, res) => {
       [userId]
     );
 
-    // Process each matured plan exactly once.
+    // --------------------------------------------------------
+    // PROCESS MATURED PLANS
+    // --------------------------------------------------------
+
     for (const plan of maturedPlans.rows) {
+      const savingsAmount = Number(plan.amount);
+
+      if (
+        !Number.isFinite(savingsAmount) ||
+        savingsAmount <= 0
+      ) {
+        throw new Error(
+          'Invalid savings amount for maturity release.'
+        );
+      }
+
+      if (plan.currency !== 'NGN') {
+        throw new Error(
+          'Unsupported savings currency for maturity release.'
+        );
+      }
+
       // Lock the original wallet account.
       const accountResult = await client.query(
         `SELECT
@@ -97,14 +156,17 @@ exports.getSavings = async (req, res) => {
       }
 
       const balanceBefore = Number(account.balance);
-      const savingsAmount = Number(plan.amount);
+
       const balanceAfter =
         balanceBefore + savingsAmount;
 
-      // Create the unique maturity transaction reference.
+      // Generate a unique maturity reference.
       const reference = generateReference('MATURITY');
 
-      // Credit the principal to the original wallet.
+      // ------------------------------------------------------
+      // CREDIT ORIGINAL WALLET
+      // ------------------------------------------------------
+
       const creditResult = await client.query(
         `UPDATE accounts
          SET
@@ -128,7 +190,10 @@ exports.getSavings = async (req, res) => {
         );
       }
 
-      // Record the maturity credit in transaction history.
+      // ------------------------------------------------------
+      // RECORD MATURITY TRANSACTION
+      // ------------------------------------------------------
+
       await client.query(
         `INSERT INTO transactions (
           account_id,
@@ -164,7 +229,10 @@ exports.getSavings = async (req, res) => {
         ]
       );
 
-      // Mark the plan completed and store its release reference.
+      // ------------------------------------------------------
+      // MARK SAVINGS PLAN COMPLETED
+      // ------------------------------------------------------
+
       const completedResult = await client.query(
         `UPDATE savings_plans
          SET
@@ -189,7 +257,10 @@ exports.getSavings = async (req, res) => {
         );
       }
 
-      // Notify the customer.
+      // ------------------------------------------------------
+      // CUSTOMER NOTIFICATION
+      // ------------------------------------------------------
+
       await client.query(
         `INSERT INTO notifications (
           user_id,
@@ -214,7 +285,10 @@ exports.getSavings = async (req, res) => {
       );
     }
 
-    // Return all savings plans.
+    // --------------------------------------------------------
+    // FETCH CUSTOMER SAVINGS PLANS
+    // --------------------------------------------------------
+
     const result = await client.query(
       `SELECT
           id,
@@ -232,6 +306,10 @@ exports.getSavings = async (req, res) => {
       [userId]
     );
 
+    // --------------------------------------------------------
+    // COMMIT
+    // --------------------------------------------------------
+
     await client.query('COMMIT');
     transactionStarted = false;
 
@@ -241,29 +319,37 @@ exports.getSavings = async (req, res) => {
     });
 
   } catch (error) {
-    if (transactionStarted) {
+    // --------------------------------------------------------
+    // ROLLBACK ON ERROR
+    // --------------------------------------------------------
+
+    if (transactionStarted && client) {
       try {
         await client.query('ROLLBACK');
       } catch (rollbackError) {
-        console.error(
-          'Savings rollback error:',
-          rollbackError.message
+        logSavingsError(
+          'Savings loading rollback error:',
+          rollbackError
         );
       }
     }
 
-    console.error(
+    // Detailed error is logged privately on the backend.
+    logSavingsError(
       'Get Savings Error:',
-      error.message
+      error
     );
 
     return res.status(500).json({
       success: false,
       message: 'Unable to load your Savings.',
+      error_code: error?.code || 'UNKNOWN_ERROR',
     });
 
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
 
@@ -272,27 +358,39 @@ exports.getSavings = async (req, res) => {
 // CREATE SAVINGS PLAN
 // POST /api/savings
 //
-// Debits the wallet and records the savings transaction
-// in the same database transaction.
+// Wallet debit, savings plan creation, and transaction
+// history record are committed atomically.
 // ============================================================
 
 exports.createSavings = async (req, res) => {
-  const client = await pool.connect();
-
+  let client;
   let transactionStarted = false;
 
   try {
-    const userId = req.user.id;
+    // --------------------------------------------------------
+    // DATABASE CONNECTION
+    // --------------------------------------------------------
 
-    const amountInput = req.body.amount;
+    client = await pool.connect();
 
-    const durationDays = Number(
-      req.body.duration_days
-    );
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required.',
+      });
+    }
 
     // --------------------------------------------------------
     // VALIDATE AMOUNT
     // --------------------------------------------------------
+
+    const amountInput = req.body?.amount;
+
+    const durationDays = Number(
+      req.body?.duration_days
+    );
 
     if (
       amountInput === undefined ||
@@ -333,13 +431,16 @@ exports.createSavings = async (req, res) => {
     }
 
     // --------------------------------------------------------
-    // BEGIN ATOMIC DATABASE TRANSACTION
+    // BEGIN DATABASE TRANSACTION
     // --------------------------------------------------------
 
     await client.query('BEGIN');
     transactionStarted = true;
 
-    // Lock the customer's wallet.
+    // --------------------------------------------------------
+    // LOCK CUSTOMER WALLET
+    // --------------------------------------------------------
+
     const accountResult = await client.query(
       `SELECT
           id,
@@ -370,7 +471,10 @@ exports.createSavings = async (req, res) => {
 
     const balanceBefore = Number(account.balance);
 
-    if (balanceBefore < amount) {
+    if (
+      !Number.isFinite(balanceBefore) ||
+      balanceBefore < amount
+    ) {
       await client.query('ROLLBACK');
       transactionStarted = false;
 
@@ -380,7 +484,8 @@ exports.createSavings = async (req, res) => {
       });
     }
 
-    const balanceAfter = balanceBefore - amount;
+    const balanceAfter =
+      balanceBefore - amount;
 
     // --------------------------------------------------------
     // DEBIT WALLET
@@ -453,6 +558,12 @@ exports.createSavings = async (req, res) => {
 
     const savings = savingsResult.rows[0];
 
+    if (!savings) {
+      throw new Error(
+        'Savings plan was not returned after creation.'
+      );
+    }
+
     // --------------------------------------------------------
     // RECORD SAVINGS TRANSACTION
     // --------------------------------------------------------
@@ -510,29 +621,37 @@ exports.createSavings = async (req, res) => {
     });
 
   } catch (error) {
-    if (transactionStarted) {
+    // --------------------------------------------------------
+    // ROLLBACK ON ERROR
+    // --------------------------------------------------------
+
+    if (transactionStarted && client) {
       try {
         await client.query('ROLLBACK');
       } catch (rollbackError) {
-        console.error(
+        logSavingsError(
           'Savings creation rollback error:',
-          rollbackError.message
+          rollbackError
         );
       }
     }
 
-    console.error(
+    // Detailed error is logged privately on the backend.
+    logSavingsError(
       'Create Savings Error:',
-      error.message
+      error
     );
 
     return res.status(500).json({
       success: false,
       message:
         'Unable to create your Savings plan.',
+      error_code: error?.code || 'UNKNOWN_ERROR',
     });
 
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
