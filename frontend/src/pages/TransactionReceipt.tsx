@@ -12,7 +12,6 @@ import {
 
 import {
   ArrowBackRounded,
-  CheckCircleRounded,
   DownloadRounded,
   ShareRounded,
 } from '@mui/icons-material';
@@ -41,6 +40,10 @@ interface Transaction {
   sender_account?: string;
   sender_bank?: string;
 
+  transfer_sender_name?: string;
+  transfer_sender_phone?: string;
+  transfer_sender_account?: string;
+
   recipient_name?: string;
   recipient_phone?: string;
   recipient_account?: string;
@@ -52,30 +55,6 @@ interface Transaction {
 
   account_number?: string;
   bank_name?: string;
-
-  provider?: string;
-  network?: string;
-  phone?: string;
-
-  data_plan?: string;
-  plan_name?: string;
-  variation_name?: string;
-
-  customer_number?: string;
-  customer_name?: string;
-  verified_customer_name?: string;
-
-  meter_number?: string;
-  meter_type?: string;
-
-  smartcard_number?: string;
-  decoder_number?: string;
-
-  electricity_token?: string;
-  token?: string;
-  units?: string | number;
-
-  provider_reference?: string;
 
   reference?: string;
   transaction_reference?: string;
@@ -198,70 +177,12 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * LOCAL USER
-   * ============================================================
-   */
-
-  const getLocalUser = () => {
-    try {
-      const raw =
-        localStorage.getItem(
-          'zenimonies_user'
-        );
-
-      if (!raw) {
-        return {};
-      }
-
-      return JSON.parse(raw) || {};
-    } catch {
-      return {};
-    }
-  };
-
-  const localUser = getLocalUser();
-
-  /*
-   * ============================================================
-   * LOCAL ACCOUNTS
-   * ============================================================
-   */
-
-  const getLocalAccounts = () => {
-    try {
-      const raw =
-        localStorage.getItem(
-          'zenimonies_accounts'
-        );
-
-      if (!raw) {
-        return [];
-      }
-
-      const parsed =
-        JSON.parse(raw);
-
-      return Array.isArray(parsed)
-        ? parsed
-        : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const localAccounts =
-    getLocalAccounts();
-
-  /*
-   * ============================================================
    * BASIC VALUES
    * ============================================================
    */
 
   const numericAmount =
-    Number(
-      transaction.amount ?? 0
-    );
+    Number(transaction.amount ?? 0);
 
   const numericFee =
     Number(
@@ -271,14 +192,11 @@ const TransactionReceipt: React.FC = () => {
     );
 
   const numericTotalDebit =
-    Number(
-      transaction.total_debit ?? 0
-    );
+    Number(transaction.total_debit ?? 0);
 
   const currency =
     String(
-      transaction.currency ||
-        'NGN'
+      transaction.currency || 'NGN'
     ).toUpperCase();
 
   /*
@@ -325,7 +243,7 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * DATE
+   * DATE / TIME
    * ============================================================
    */
 
@@ -334,30 +252,52 @@ const TransactionReceipt: React.FC = () => {
     transaction.date ||
     transaction.timestamp;
 
-  const formatDate = (
+  const getDateObject = (
     value?: string
   ) => {
     if (!value) {
-      return '';
+      return null;
     }
 
-    const parsed =
-      new Date(value);
+    const parsed = new Date(value);
 
     if (
       Number.isNaN(
         parsed.getTime()
       )
     ) {
-      return value;
+      return null;
     }
 
-    return parsed.toLocaleString(
-      'en-NG',
+    return parsed;
+  };
+
+  const parsedDate =
+    getDateObject(transactionDate);
+
+  const formatDate = () => {
+    if (!parsedDate) {
+      return transactionDate || '';
+    }
+
+    return parsedDate.toLocaleDateString(
+      'en-GB',
       {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
+      }
+    );
+  };
+
+  const formatTime = () => {
+    if (!parsedDate) {
+      return '';
+    }
+
+    return parsedDate.toLocaleTimeString(
+      'en-NG',
+      {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
@@ -388,6 +328,12 @@ const TransactionReceipt: React.FC = () => {
     rawType.includes('transfer') ||
     rawDescription.includes('transfer');
 
+  /*
+   * IMPORTANT:
+   * Incoming transfers are determined from the backend
+   * transaction type/category/description.
+   */
+
   const isIncoming =
     rawType.includes(
       'internal_transfer_received'
@@ -395,54 +341,22 @@ const TransactionReceipt: React.FC = () => {
     rawType.includes(
       'transfer_received'
     ) ||
-    rawType.includes('received') ||
+    rawType.includes(
+      'incoming'
+    ) ||
+    rawType.includes(
+      'received'
+    ) ||
+    transaction.category === 'credit' ||
+    transaction.category === 'incoming' ||
     rawDescription.includes(
       'money received'
     ) ||
     rawDescription.includes(
+      'transfer received'
+    ) ||
+    rawDescription.includes(
       'received'
-    ) ||
-    transaction.category ===
-      'credit' ||
-    transaction.category ===
-      'incoming';
-
-  const isAirtime =
-    rawType.includes('airtime') ||
-    rawDescription.includes('airtime');
-
-  const isData =
-    rawType.includes('data') ||
-    rawDescription.includes('data');
-
-  const isElectricity =
-    rawType.includes('electricity') ||
-    rawDescription.includes(
-      'electricity'
-    );
-
-  const isTV =
-    rawType.includes('tv') ||
-    rawType.includes('cable') ||
-    rawDescription.includes(
-      'dstv'
-    ) ||
-    rawDescription.includes(
-      'gotv'
-    ) ||
-    rawDescription.includes(
-      'startimes'
-    ) ||
-    rawDescription.includes(
-      'cable'
-    );
-
-  const isBill =
-    rawType.includes('bill') ||
-    isElectricity ||
-    isTV ||
-    rawDescription.includes(
-      'bill'
     );
 
   /*
@@ -473,13 +387,6 @@ const TransactionReceipt: React.FC = () => {
     'canceled',
   ].includes(rawStatus);
 
-  const statusText =
-    isSuccessful
-      ? 'Transaction Successful'
-      : isFailed
-        ? 'Transaction Failed'
-        : 'Transaction Pending';
-
   const shortStatus =
     isSuccessful
       ? 'Successful'
@@ -496,76 +403,22 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * RECEIVER INFORMATION
-   *
-   * The receiver's own real details are used.
+   * SENDER NAME
    * ============================================================
-   */
-
-  const receiverName =
-    transaction.receiver_name ||
-    (
-      isIncoming
-        ? localUser.full_name
-        : ''
-    ) ||
-    (
-      isIncoming
-        ? localUser.name
-        : ''
-    ) ||
-    (
-      isIncoming
-        ? [
-            localUser.first_name,
-            localUser.last_name,
-          ]
-            .filter(Boolean)
-            .join(' ')
-        : ''
-    );
-
-  const firstLocalAccount =
-    localAccounts[0] || {};
-
-  const receiverOwnAccount =
-    transaction.receiver_account ||
-    (
-      isIncoming
-        ? transaction.account_number
-        : ''
-    ) ||
-    (
-      isIncoming
-        ? firstLocalAccount.account_number
-        : ''
-    ) ||
-    (
-      isIncoming
-        ? localUser.account_number
-        : ''
-    ) ||
-    '';
-
-  /*
-   * ============================================================
-   * SENDER INFORMATION
    *
-   * The receiver sees the sender NAME.
-   *
-   * Sender account number is intentionally NOT displayed.
-   * ============================================================
+   * For received transfers, prefer the backend's real sender.
    */
 
   const senderName =
     transaction.sender_name ||
+    transaction.transfer_sender_name ||
+    transaction.sender_full_name ||
+    transaction.sender ||
     '';
 
   /*
    * ============================================================
    * BENEFICIARY
-   *
-   * Sender receipt.
    * ============================================================
    */
 
@@ -573,88 +426,6 @@ const TransactionReceipt: React.FC = () => {
     transaction.recipient_name ||
     transaction.receiver_name ||
     '';
-
-  const beneficiaryBank =
-    transaction.recipient_bank ||
-    transaction.receiver_bank ||
-    transaction.bank_name ||
-    '';
-
-  /*
-   * ============================================================
-   * SERVICE INFORMATION
-   * ============================================================
-   */
-
-  const provider =
-    transaction.provider ||
-    transaction.network ||
-    '';
-
-  const servicePhone =
-    transaction.phone ||
-    transaction.recipient_phone ||
-    '';
-
-  const dataPlan =
-    transaction.data_plan ||
-    transaction.plan_name ||
-    transaction.variation_name ||
-    '';
-
-  const customerName =
-    transaction.customer_name ||
-    transaction.verified_customer_name ||
-    '';
-
-  const customerNumber =
-    transaction.customer_number ||
-    transaction.meter_number ||
-    transaction.smartcard_number ||
-    transaction.decoder_number ||
-    '';
-
-  const electricityToken =
-    transaction.electricity_token ||
-    transaction.token ||
-    '';
-
-  const electricityUnits =
-    transaction.units !== undefined &&
-    transaction.units !== null
-      ? String(transaction.units)
-      : '';
-
-  /*
-   * ============================================================
-   * RECEIPT TYPE
-   * ============================================================
-   */
-
-  let receiptType =
-    'TRANSACTION';
-
-  if (isTransfer) {
-    receiptType =
-      isIncoming
-        ? 'TRANSFER RECEIVED'
-        : 'TRANSFER';
-  } else if (isElectricity) {
-    receiptType =
-      'ELECTRICITY PAYMENT';
-  } else if (isAirtime) {
-    receiptType =
-      'AIRTIME PURCHASE';
-  } else if (isData) {
-    receiptType =
-      'DATA PURCHASE';
-  } else if (isTV) {
-    receiptType =
-      'TV SUBSCRIPTION';
-  } else if (isBill) {
-    receiptType =
-      'BILL PAYMENT';
-  }
 
   /*
    * ============================================================
@@ -793,8 +564,20 @@ const TransactionReceipt: React.FC = () => {
       return pdf;
     };
 
+  /*
+   * ============================================================
+   * DOWNLOAD
+   *
+   * ONLY THE SENDER CAN DOWNLOAD.
+   * ============================================================
+   */
+
   const handleDownloadPDF =
     async () => {
+      if (isIncoming) {
+        return;
+      }
+
       try {
         setPdfLoading(true);
 
@@ -817,6 +600,14 @@ const TransactionReceipt: React.FC = () => {
         setPdfLoading(false);
       }
     };
+
+  /*
+   * ============================================================
+   * SHARE
+   *
+   * BOTH SENDER AND RECEIVER CAN SHARE.
+   * ============================================================
+   */
 
   const handleSharePDF =
     async () => {
@@ -851,9 +642,29 @@ const TransactionReceipt: React.FC = () => {
             files: [file],
           });
         } else {
-          pdf.save(
-            getFileName()
-          );
+          /*
+           * Receiver should not receive a
+           * download option in the UI.
+           *
+           * If native sharing is unavailable,
+           * use the browser share API if available.
+           */
+          if (
+            navigator.share
+          ) {
+            await navigator.share({
+              title:
+                'ZENIMONIES Transaction Receipt',
+              text:
+                reference
+                  ? `ZENIMONIES transaction receipt: ${reference}`
+                  : 'ZENIMONIES transaction receipt',
+            });
+          } else {
+            alert(
+              'Sharing is not available on this device.'
+            );
+          }
         }
       } catch (error) {
         console.error(
@@ -888,8 +699,9 @@ const TransactionReceipt: React.FC = () => {
           mx: 'auto',
         }}
       >
+
         {/* ======================================================
-            RECEIPT
+            RECEIPT DOCUMENT
         ====================================================== */}
 
         <Box
@@ -903,8 +715,9 @@ const TransactionReceipt: React.FC = () => {
               `1px solid ${COLORS.border}`,
           }}
         >
+
           {/* ====================================================
-              HEADER
+              ZENIMONIES LOGO AREA
           ==================================================== */}
 
           <Box
@@ -912,15 +725,23 @@ const TransactionReceipt: React.FC = () => {
               textAlign: 'center',
               px: 2,
               pt: 2.5,
-              pb: 1.5,
+              pb: 1.8,
             }}
           >
+            {/*
+             * Logo image can be inserted here once the
+             * official ZENIMONIES logo asset is available.
+             *
+             * For now the official brand wordmark is used.
+             */}
+
             <Typography
               sx={{
                 color: COLORS.primary,
-                fontSize: 22,
+                fontSize: 23,
                 fontWeight: 900,
-                letterSpacing: 1.5,
+                letterSpacing: 2,
+                lineHeight: 1,
               }}
             >
               ZENIMONIES
@@ -928,60 +749,23 @@ const TransactionReceipt: React.FC = () => {
 
             <Typography
               sx={{
-                mt: 0.5,
-                color: COLORS.primary,
-                fontSize: 18,
+                mt: 1,
+                color: COLORS.text,
+                fontSize: 17,
                 fontWeight: 800,
               }}
             >
               Transaction Receipt
             </Typography>
-
-            {transactionDate && (
-              <Typography
-                sx={{
-                  mt: 0.5,
-                  color: COLORS.muted,
-                  fontSize: 10,
-                  fontWeight: 500,
-                }}
-              >
-                Generated from ZENIMONIES on{' '}
-                {formatDate(
-                  transactionDate
-                )}
-              </Typography>
-            )}
           </Box>
 
           {/* ====================================================
-              RECEIVER TRANSFER
+              RECEIVER RECEIPT
           ==================================================== */}
 
           {isTransfer &&
             isIncoming && (
               <>
-                <ReceiptRow
-                  label="Amount Received"
-                  value={`+${formatMoney(
-                    numericAmount
-                  )}`}
-                />
-
-                <ReceiptRow
-                  label="Transaction Type"
-                  value="TRANSFER"
-                />
-
-                {transactionDate && (
-                  <ReceiptRow
-                    label="Transaction Date"
-                    value={formatDate(
-                      transactionDate
-                    )}
-                  />
-                )}
-
                 {senderName && (
                   <ReceiptRow
                     label="Sender"
@@ -989,30 +773,23 @@ const TransactionReceipt: React.FC = () => {
                   />
                 )}
 
-                {receiverName && (
+                {transactionDate && (
                   <ReceiptRow
-                    label="Receiver Name"
-                    value={receiverName}
+                    label="Date"
+                    value={formatDate()}
                   />
                 )}
 
-                {receiverOwnAccount && (
+                {formatTime() && (
                   <ReceiptRow
-                    label="Receiver Account Number"
-                    value={
-                      receiverOwnAccount
-                    }
+                    label="Time"
+                    value={formatTime()}
                   />
                 )}
-
-                <ReceiptRow
-                  label="Receiver Bank"
-                  value="ZENIMONIES"
-                />
 
                 {reference && (
                   <ReferenceRow
-                    label="Transaction Reference"
+                    label="Reference"
                     value={reference}
                     onCopy={
                       copyReference
@@ -1021,18 +798,46 @@ const TransactionReceipt: React.FC = () => {
                 )}
 
                 <ReceiptRow
-                  label="Transaction Status"
-                  value={statusText}
+                  label="Amount"
+                  value={`+${formatMoney(
+                    numericAmount
+                  )}`}
+                />
+
+                <ReceiptRow
+                  label="Status"
+                  value={shortStatus}
                   valueColor={
                     statusColor
                   }
-                  last
                 />
+
+                <ReceiptRow
+                  label="Type"
+                  value="Credit"
+                  last={
+                    !Boolean(
+                      transaction.description &&
+                      transaction.description.trim()
+                    )
+                  }
+                />
+
+                {transaction.description &&
+                  transaction.description.trim() && (
+                    <ReceiptRow
+                      label="Narration"
+                      value={
+                        transaction.description.trim()
+                      }
+                      last
+                    />
+                  )}
               </>
             )}
 
           {/* ====================================================
-              SENDER TRANSFER
+              SENDER RECEIPT
           ==================================================== */}
 
           {isTransfer &&
@@ -1053,9 +858,7 @@ const TransactionReceipt: React.FC = () => {
                 {transactionDate && (
                   <ReceiptRow
                     label="Transaction Date"
-                    value={formatDate(
-                      transactionDate
-                    )}
+                    value={`${formatDate()} ${formatTime()}`}
                   />
                 )}
 
@@ -1077,10 +880,7 @@ const TransactionReceipt: React.FC = () => {
 
                 <ReceiptRow
                   label="Receiver Bank"
-                  value={
-                    beneficiaryBank ||
-                    'ZENIMONIES'
-                  }
+                  value="ZENIMONIES"
                 />
 
                 <ReceiptRow
@@ -1109,7 +909,13 @@ const TransactionReceipt: React.FC = () => {
 
                 <ReceiptRow
                   label="Transaction Status"
-                  value={statusText}
+                  value={
+                    isSuccessful
+                      ? 'Transaction Successful'
+                      : isFailed
+                        ? 'Transaction Failed'
+                        : 'Transaction Pending'
+                  }
                   valueColor={
                     statusColor
                   }
@@ -1119,10 +925,10 @@ const TransactionReceipt: React.FC = () => {
             )}
 
           {/* ====================================================
-              ELECTRICITY
+              NON-TRANSFER TRANSACTIONS
           ==================================================== */}
 
-          {isElectricity && (
+          {!isTransfer && (
             <>
               <ReceiptRow
                 label="Transaction Amount"
@@ -1133,58 +939,31 @@ const TransactionReceipt: React.FC = () => {
 
               <ReceiptRow
                 label="Transaction Type"
-                value="ELECTRICITY"
+                value={
+                  String(
+                    transaction.transaction_type ||
+                      transaction.type ||
+                      'TRANSACTION'
+                  ).toUpperCase()
+                }
               />
 
               {transactionDate && (
                 <ReceiptRow
                   label="Transaction Date"
-                  value={formatDate(
-                    transactionDate
-                  )}
+                  value={`${formatDate()} ${formatTime()}`}
                 />
               )}
 
-              {customerName && (
-                <ReceiptRow
-                  label="Customer"
-                  value={customerName}
-                />
-              )}
-
-              {provider && (
-                <ReceiptRow
-                  label="Provider"
-                  value={provider}
-                />
-              )}
-
-              {customerNumber && (
-                <ReceiptRow
-                  label="Meter Number"
-                  value={
-                    customerNumber
-                  }
-                />
-              )}
-
-              {electricityUnits && (
-                <ReceiptRow
-                  label="Units"
-                  value={
-                    electricityUnits
-                  }
-                />
-              )}
-
-              {electricityToken && (
-                <ReceiptRow
-                  label="Token"
-                  value={
-                    electricityToken
-                  }
-                />
-              )}
+              {transaction.description &&
+                transaction.description.trim() && (
+                  <ReceiptRow
+                    label="Narration"
+                    value={
+                      transaction.description.trim()
+                    }
+                  />
+                )}
 
               {reference && (
                 <ReferenceRow
@@ -1198,7 +977,13 @@ const TransactionReceipt: React.FC = () => {
 
               <ReceiptRow
                 label="Transaction Status"
-                value={statusText}
+                value={
+                  isSuccessful
+                    ? 'Transaction Successful'
+                    : isFailed
+                      ? 'Transaction Failed'
+                      : 'Transaction Pending'
+                }
                 valueColor={
                   statusColor
                 }
@@ -1206,279 +991,6 @@ const TransactionReceipt: React.FC = () => {
               />
             </>
           )}
-
-          {/* ====================================================
-              AIRTIME
-          ==================================================== */}
-
-          {isAirtime && (
-            <>
-              <ReceiptRow
-                label="Transaction Amount"
-                value={formatMoney(
-                  numericAmount
-                )}
-              />
-
-              <ReceiptRow
-                label="Transaction Type"
-                value="AIRTIME"
-              />
-
-              {transactionDate && (
-                <ReceiptRow
-                  label="Transaction Date"
-                  value={formatDate(
-                    transactionDate
-                  )}
-                />
-              )}
-
-              {provider && (
-                <ReceiptRow
-                  label="Network"
-                  value={provider}
-                />
-              )}
-
-              {servicePhone && (
-                <ReceiptRow
-                  label="Phone Number"
-                  value={
-                    servicePhone
-                  }
-                />
-              )}
-
-              {reference && (
-                <ReferenceRow
-                  label="Transaction Reference"
-                  value={reference}
-                  onCopy={
-                    copyReference
-                  }
-                />
-              )}
-
-              <ReceiptRow
-                label="Transaction Status"
-                value={statusText}
-                valueColor={
-                  statusColor
-                }
-                last
-              />
-            </>
-          )}
-
-          {/* ====================================================
-              DATA
-          ==================================================== */}
-
-          {isData && (
-            <>
-              <ReceiptRow
-                label="Transaction Amount"
-                value={formatMoney(
-                  numericAmount
-                )}
-              />
-
-              <ReceiptRow
-                label="Transaction Type"
-                value="DATA"
-              />
-
-              {transactionDate && (
-                <ReceiptRow
-                  label="Transaction Date"
-                  value={formatDate(
-                    transactionDate
-                  )}
-                />
-              )}
-
-              {provider && (
-                <ReceiptRow
-                  label="Network"
-                  value={provider}
-                />
-              )}
-
-              {servicePhone && (
-                <ReceiptRow
-                  label="Phone Number"
-                  value={
-                    servicePhone
-                  }
-                />
-              )}
-
-              {dataPlan && (
-                <ReceiptRow
-                  label="Data Plan"
-                  value={dataPlan}
-                />
-              )}
-
-              {reference && (
-                <ReferenceRow
-                  label="Transaction Reference"
-                  value={reference}
-                  onCopy={
-                    copyReference
-                  }
-                />
-              )}
-
-              <ReceiptRow
-                label="Transaction Status"
-                value={statusText}
-                valueColor={
-                  statusColor
-                }
-                last
-              />
-            </>
-          )}
-
-          {/* ====================================================
-              OTHER BILLS
-          ==================================================== */}
-
-          {isBill &&
-            !isTransfer &&
-            !isElectricity &&
-            !isAirtime &&
-            !isData && (
-              <>
-                <ReceiptRow
-                  label="Transaction Amount"
-                  value={formatMoney(
-                    numericAmount
-                  )}
-                />
-
-                <ReceiptRow
-                  label="Transaction Type"
-                  value="BILL PAYMENT"
-                />
-
-                {transactionDate && (
-                  <ReceiptRow
-                    label="Transaction Date"
-                    value={formatDate(
-                      transactionDate
-                    )}
-                  />
-                )}
-
-                {provider && (
-                  <ReceiptRow
-                    label="Provider"
-                    value={provider}
-                  />
-                )}
-
-                {customerName && (
-                  <ReceiptRow
-                    label="Customer"
-                    value={
-                      customerName
-                    }
-                  />
-                )}
-
-                {customerNumber && (
-                  <ReceiptRow
-                    label="Customer Number"
-                    value={
-                      customerNumber
-                    }
-                  />
-                )}
-
-                {reference && (
-                  <ReferenceRow
-                    label="Transaction Reference"
-                    value={reference}
-                    onCopy={
-                      copyReference
-                    }
-                  />
-                )}
-
-                <ReceiptRow
-                  label="Transaction Status"
-                  value={statusText}
-                  valueColor={
-                    statusColor
-                  }
-                  last
-                />
-              </>
-            )}
-
-          {/* ====================================================
-              GENERIC TRANSACTION
-          ==================================================== */}
-
-          {!isTransfer &&
-            !isElectricity &&
-            !isAirtime &&
-            !isData &&
-            !isBill && (
-              <>
-                <ReceiptRow
-                  label="Transaction Amount"
-                  value={formatMoney(
-                    numericAmount
-                  )}
-                />
-
-                <ReceiptRow
-                  label="Transaction Type"
-                  value="TRANSACTION"
-                />
-
-                {transactionDate && (
-                  <ReceiptRow
-                    label="Transaction Date"
-                    value={formatDate(
-                      transactionDate
-                    )}
-                  />
-                )}
-
-                {transaction.description && (
-                  <ReceiptRow
-                    label="Description"
-                    value={
-                      transaction.description
-                    }
-                  />
-                )}
-
-                {reference && (
-                  <ReferenceRow
-                    label="Transaction Reference"
-                    value={reference}
-                    onCopy={
-                      copyReference
-                    }
-                  />
-                )}
-
-                <ReceiptRow
-                  label="Transaction Status"
-                  value={statusText}
-                  valueColor={
-                    statusColor
-                  }
-                  last
-                />
-              </>
-            )}
 
           {/* ====================================================
               FOOTER
@@ -1508,7 +1020,7 @@ const TransactionReceipt: React.FC = () => {
         </Box>
 
         {/* ======================================================
-            ACTION BUTTONS
+            ACTIONS
         ====================================================== */}
 
         <Stack
@@ -1518,38 +1030,53 @@ const TransactionReceipt: React.FC = () => {
             mt: 1.5,
           }}
         >
-          <Button
-            fullWidth
-            variant="contained"
-            startIcon={
-              <DownloadRounded />
-            }
-            onClick={
-              handleDownloadPDF
-            }
-            disabled={pdfLoading}
-            sx={{
-              minHeight: 46,
-              bgcolor:
-                COLORS.primary,
-              borderRadius: 2,
-              fontWeight: 800,
-              textTransform:
-                'none',
-              '&:hover': {
+
+          {/* ----------------------------------------------------
+              SENDER ONLY — DOWNLOAD
+          ---------------------------------------------------- */}
+
+          {!isIncoming && (
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={
+                <DownloadRounded />
+              }
+              onClick={
+                handleDownloadPDF
+              }
+              disabled={pdfLoading}
+              sx={{
+                minHeight: 46,
                 bgcolor:
-                  COLORS.dark,
-              },
-            }}
-          >
-            {pdfLoading
-              ? 'Preparing...'
-              : 'Download PDF'}
-          </Button>
+                  COLORS.primary,
+                borderRadius: 2,
+                fontWeight: 800,
+                textTransform:
+                  'none',
+                '&:hover': {
+                  bgcolor:
+                    COLORS.dark,
+                },
+              }}
+            >
+              {pdfLoading
+                ? 'Preparing...'
+                : 'Download PDF'}
+            </Button>
+          )}
+
+          {/* ----------------------------------------------------
+              BOTH — SHARE
+          ---------------------------------------------------- */}
 
           <Button
             fullWidth
-            variant="outlined"
+            variant={
+              isIncoming
+                ? 'contained'
+                : 'outlined'
+            }
             startIcon={
               <ShareRounded />
             }
@@ -1559,18 +1086,36 @@ const TransactionReceipt: React.FC = () => {
             disabled={pdfLoading}
             sx={{
               minHeight: 46,
+              bgcolor:
+                isIncoming
+                  ? COLORS.primary
+                  : 'transparent',
               borderColor:
                 COLORS.primary,
               color:
-                COLORS.primary,
+                isIncoming
+                  ? COLORS.white
+                  : COLORS.primary,
               borderRadius: 2,
               fontWeight: 800,
               textTransform:
                 'none',
+              '&:hover': {
+                bgcolor:
+                  isIncoming
+                    ? COLORS.dark
+                    : 'rgba(8,127,91,0.06)',
+              },
             }}
           >
-            Share PDF
+            {pdfLoading
+              ? 'Preparing...'
+              : 'Share Receipt'}
           </Button>
+
+          {/* ----------------------------------------------------
+              BOTH — BACK
+          ---------------------------------------------------- */}
 
           <Button
             fullWidth
