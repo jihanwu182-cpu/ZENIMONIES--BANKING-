@@ -38,6 +38,7 @@ import ResetPassword from './pages/ResetPassword.tsx';
 import Notifications from './pages/Notifications.tsx';
 import PasskeySecurity from './pages/PasskeySecurity.tsx';
 import AccountLocked from './pages/AccountLocked.tsx';
+import Savings from './pages/Savings.tsx';
 
 import SessionGuard from './components/SessionGuard.tsx';
 import AirtimeReconciliation from './pages/AirtimeReconciliation.tsx';
@@ -512,6 +513,10 @@ const App: React.FC = () => {
                 description="Manage funds you want to keep separately from your available balance."
               />
             }
+          />
+          <Route
+            path="/savings"
+            element={<Savings />}
           />
 
           {/* ================= MORE ================= */}
