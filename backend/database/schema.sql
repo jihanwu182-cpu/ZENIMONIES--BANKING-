@@ -970,9 +970,9 @@ CREATE INDEX IF NOT EXISTS idx_beneficiaries_phone
 ON beneficiaries(user_id, recipient_phone);
 
 
-    // ========================================================
-    // ZENIMONIES SAVINGS DATABASE
-    // ========================================================
+  -- ========================================================
+  -- ZENIMONIES SAVINGS DATABASE
+  -- ========================================================
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS savings_plans (
