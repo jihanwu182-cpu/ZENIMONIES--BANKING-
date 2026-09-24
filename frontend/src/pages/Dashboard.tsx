@@ -1575,7 +1575,7 @@ const Dashboard: React.FC = () => {
                 }
                 onClick={() =>
                   navigate(
-                    '/Savings
+                    '/savings'
                   )
                 }
               >
