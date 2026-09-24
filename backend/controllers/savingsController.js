@@ -1,4 +1,5 @@
 
+const crypto = require('crypto');
 const pool = require('../config/database');
 
 // ============================================================
@@ -13,46 +14,109 @@ const ALLOWED_PERIODS = [30, 60, 90, 180, 365];
 const MINIMUM_AMOUNT = 5000;
 
 // ============================================================
+// GENERATE UNIQUE SAVINGS TRANSACTION REFERENCE
+// ============================================================
+
+const generateReference = (type) => {
+  return `ZEN-SAV-${type}-${Date.now()}-${crypto
+    .randomBytes(6)
+    .toString('hex')
+    .toUpperCase()}`;
+};
+
+// ============================================================
 // GET CUSTOMER SAVINGS
 // GET /api/savings
+//
+// Releases matured savings automatically.
+// The wallet credit, transaction record, and savings status
+// change are committed together.
 // ============================================================
 
 exports.getSavings = async (req, res) => {
   const client = await pool.connect();
 
+  let transactionStarted = false;
+
   try {
     const userId = req.user.id;
 
     await client.query('BEGIN');
+    transactionStarted = true;
 
-    // Find matured savings plans and lock their records.
+    // Lock matured plans belonging to this customer.
     const maturedPlans = await client.query(
       `SELECT
           id,
           account_id,
-          amount
+          amount,
+          currency
        FROM savings_plans
        WHERE user_id = $1
          AND status = 'active'
          AND maturity_date <= NOW()
-       ORDER BY maturity_date
+       ORDER BY maturity_date ASC
        FOR UPDATE`,
       [userId]
     );
 
-    // Release matured principal to the customer's
-    // original NGN account.
+    // Process each matured plan exactly once.
     for (const plan of maturedPlans.rows) {
+      // Lock the original wallet account.
+      const accountResult = await client.query(
+        `SELECT
+            id,
+            balance,
+            currency,
+            status
+         FROM accounts
+         WHERE id = $1
+           AND user_id = $2
+         FOR UPDATE`,
+        [
+          plan.account_id,
+          userId,
+        ]
+      );
+
+      if (accountResult.rowCount !== 1) {
+        throw new Error(
+          'Savings wallet account could not be found.'
+        );
+      }
+
+      const account = accountResult.rows[0];
+
+      if (
+        account.currency !== 'NGN' ||
+        account.status !== 'active'
+      ) {
+        throw new Error(
+          'Savings wallet is not eligible for maturity release.'
+        );
+      }
+
+      const balanceBefore = Number(account.balance);
+      const savingsAmount = Number(plan.amount);
+      const balanceAfter =
+        balanceBefore + savingsAmount;
+
+      // Create the unique maturity transaction reference.
+      const reference = generateReference('MATURITY');
+
+      // Credit the principal to the original wallet.
       const creditResult = await client.query(
         `UPDATE accounts
-         SET balance = balance + $1
+         SET
+           balance = balance + $1,
+           updated_at = CURRENT_TIMESTAMP
          WHERE id = $2
            AND user_id = $3
            AND currency = 'NGN'
            AND status = 'active'
-         RETURNING id`,
+         RETURNING balance`,
         [
-          plan.amount,
+          savingsAmount,
           plan.account_id,
           userId,
         ]
@@ -64,14 +128,56 @@ exports.getSavings = async (req, res) => {
         );
       }
 
+      // Record the maturity credit in transaction history.
+      await client.query(
+        `INSERT INTO transactions (
+          account_id,
+          type,
+          amount,
+          currency,
+          reference,
+          description,
+          status,
+          balance_before,
+          balance_after,
+          transaction_fee
+        )
+        VALUES (
+          $1,
+          'savings_maturity_release',
+          $2,
+          'NGN',
+          $3,
+          $4,
+          'completed',
+          $5,
+          $6,
+          0
+        )`,
+        [
+          plan.account_id,
+          savingsAmount,
+          reference,
+          'Matured Savings principal released to wallet',
+          balanceBefore,
+          balanceAfter,
+        ]
+      );
+
+      // Mark the plan completed and store its release reference.
       const completedResult = await client.query(
         `UPDATE savings_plans
-         SET status = 'completed',
-             updated_at = NOW()
-         WHERE id = $1
-           AND user_id = $2
-           AND status = 'active'`,
+         SET
+           status = 'completed',
+           maturity_transaction_reference = $1,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2
+           AND user_id = $3
+           AND status = 'active'
+           AND maturity_date <= NOW()
+         RETURNING id`,
         [
+          reference,
           plan.id,
           userId,
         ]
@@ -82,9 +188,33 @@ exports.getSavings = async (req, res) => {
           'Unable to complete matured savings.'
         );
       }
+
+      // Notify the customer.
+      await client.query(
+        `INSERT INTO notifications (
+          user_id,
+          title,
+          message,
+          type,
+          is_read
+        )
+        VALUES ($1, $2, $3, $4, false)`,
+        [
+          userId,
+          'Savings matured',
+          `Your matured savings of ₦${savingsAmount.toLocaleString(
+            'en-NG',
+            {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }
+          )} has been returned to your wallet.`,
+          'savings',
+        ]
+      );
     }
 
-    // Retrieve all savings plans for this customer.
+    // Return all savings plans.
     const result = await client.query(
       `SELECT
           id,
@@ -94,6 +224,7 @@ exports.getSavings = async (req, res) => {
           start_date,
           maturity_date,
           status,
+          maturity_transaction_reference,
           created_at
        FROM savings_plans
        WHERE user_id = $1
@@ -102,6 +233,7 @@ exports.getSavings = async (req, res) => {
     );
 
     await client.query('COMMIT');
+    transactionStarted = false;
 
     return res.status(200).json({
       success: true,
@@ -109,7 +241,16 @@ exports.getSavings = async (req, res) => {
     });
 
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (transactionStarted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error(
+          'Savings rollback error:',
+          rollbackError.message
+        );
+      }
+    }
 
     console.error(
       'Get Savings Error:',
@@ -130,20 +271,29 @@ exports.getSavings = async (req, res) => {
 // ============================================================
 // CREATE SAVINGS PLAN
 // POST /api/savings
+//
+// Debits the wallet and records the savings transaction
+// in the same database transaction.
 // ============================================================
 
 exports.createSavings = async (req, res) => {
   const client = await pool.connect();
 
+  let transactionStarted = false;
+
   try {
     const userId = req.user.id;
 
     const amountInput = req.body.amount;
+
     const durationDays = Number(
       req.body.duration_days
     );
 
-    // Validate amount input.
+    // --------------------------------------------------------
+    // VALIDATE AMOUNT
+    // --------------------------------------------------------
+
     if (
       amountInput === undefined ||
       amountInput === null ||
@@ -160,28 +310,36 @@ exports.createSavings = async (req, res) => {
     if (
       !Number.isFinite(amount) ||
       amount < MINIMUM_AMOUNT ||
-      Math.round(amount * 100) !==
-        amount * 100
+      Math.round(amount * 100) !== amount * 100 ||
+      amount > 100000000
     ) {
       return res.status(400).json({
         success: false,
-        message: 'Minimum Savings amount is ₦5,000. Please enter a valid amount.',
+        message:
+          'Minimum Savings is ₦5,000. Enter a valid amount with no more than two decimal places.',
       });
     }
 
-    // Validate the selected lock period.
+    // --------------------------------------------------------
+    // VALIDATE LOCK PERIOD
+    // --------------------------------------------------------
+
     if (!ALLOWED_PERIODS.includes(durationDays)) {
       return res.status(400).json({
         success: false,
-        message: 'Please select a valid Savings lock period.',
+        message:
+          'Please select a valid Savings lock period.',
       });
     }
 
-    await client.query('BEGIN');
+    // --------------------------------------------------------
+    // BEGIN ATOMIC DATABASE TRANSACTION
+    // --------------------------------------------------------
 
-    // Lock the customer's NGN account.
-    // This prevents simultaneous Savings requests
-    // from spending the same available balance.
+    await client.query('BEGIN');
+    transactionStarted = true;
+
+    // Lock the customer's wallet.
     const accountResult = await client.query(
       `SELECT
           id,
@@ -192,14 +350,15 @@ exports.createSavings = async (req, res) => {
        WHERE user_id = $1
          AND currency = 'NGN'
          AND status = 'active'
-       ORDER BY created_at
+       ORDER BY created_at ASC
        LIMIT 1
        FOR UPDATE`,
       [userId]
     );
 
-    if (accountResult.rowCount === 0) {
+    if (accountResult.rowCount !== 1) {
       await client.query('ROLLBACK');
+      transactionStarted = false;
 
       return res.status(404).json({
         success: false,
@@ -209,9 +368,11 @@ exports.createSavings = async (req, res) => {
 
     const account = accountResult.rows[0];
 
-    // Check available balance.
-    if (Number(account.balance) < amount) {
+    const balanceBefore = Number(account.balance);
+
+    if (balanceBefore < amount) {
       await client.query('ROLLBACK');
+      transactionStarted = false;
 
       return res.status(400).json({
         success: false,
@@ -219,10 +380,17 @@ exports.createSavings = async (req, res) => {
       });
     }
 
-    // Deduct the Savings amount from the wallet.
+    const balanceAfter = balanceBefore - amount;
+
+    // --------------------------------------------------------
+    // DEBIT WALLET
+    // --------------------------------------------------------
+
     const debitResult = await client.query(
       `UPDATE accounts
-       SET balance = balance - $1
+       SET
+         balance = balance - $1,
+         updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
          AND user_id = $3
          AND currency = 'NGN'
@@ -242,8 +410,10 @@ exports.createSavings = async (req, res) => {
       );
     }
 
-    // Create the Savings plan.
-    // Dates are calculated using the database clock.
+    // --------------------------------------------------------
+    // CREATE SAVINGS PLAN
+    // --------------------------------------------------------
+
     const savingsResult = await client.query(
       `INSERT INTO savings_plans (
           user_id,
@@ -281,21 +451,75 @@ exports.createSavings = async (req, res) => {
       ]
     );
 
-    // Both the wallet debit and Savings record
-    // are committed together.
+    const savings = savingsResult.rows[0];
+
+    // --------------------------------------------------------
+    // RECORD SAVINGS TRANSACTION
+    // --------------------------------------------------------
+
+    const reference = generateReference('LOCK');
+
+    await client.query(
+      `INSERT INTO transactions (
+          account_id,
+          type,
+          amount,
+          currency,
+          reference,
+          description,
+          status,
+          balance_before,
+          balance_after,
+          transaction_fee
+       )
+       VALUES (
+          $1,
+          'savings_lock',
+          $2,
+          'NGN',
+          $3,
+          $4,
+          'completed',
+          $5,
+          $6,
+          0
+       )`,
+      [
+        account.id,
+        amount,
+        reference,
+        `Savings locked for ${durationDays} days`,
+        balanceBefore,
+        balanceAfter,
+      ]
+    );
+
+    // --------------------------------------------------------
+    // COMMIT
+    // --------------------------------------------------------
+
     await client.query('COMMIT');
+    transactionStarted = false;
 
     return res.status(201).json({
       success: true,
       message: 'Savings plan created successfully.',
-      savings: savingsResult.rows[0],
-      available_balance: Number(
-        debitResult.rows[0].balance
-      ),
+      savings,
+      available_balance: balanceAfter,
+      transaction_reference: reference,
     });
 
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (transactionStarted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error(
+          'Savings creation rollback error:',
+          rollbackError.message
+        );
+      }
+    }
 
     console.error(
       'Create Savings Error:',
@@ -304,7 +528,8 @@ exports.createSavings = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: 'Unable to create your Savings plan.',
+      message:
+        'Unable to create your Savings plan.',
     });
 
   } finally {
