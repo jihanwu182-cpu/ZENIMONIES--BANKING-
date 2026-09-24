@@ -1,3 +1,4 @@
+
 {
   "name": "zenimonies-banking-backend",
   "version": "1.0.0",
@@ -17,6 +18,7 @@
     "jsonwebtoken": "^9.0.2",
     "resend": "^6.0.0",
     "multer": "^2.0.2",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "node-cron": "^4.2.1"
   }
 }
