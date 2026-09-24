@@ -31,6 +31,7 @@ const passkeyRoutes = require('./routes/passkey');
 const passcodeRoutes = require('./routes/passcode');
 const transactionPinRoutes = require('./routes/transactionPin');
 const beneficiaryRoutes = require('./routes/beneficiaryRoutes');
+const savingsRoutes = require('./routes/savingsRoutes');
 
 // ============================================================
 // PAYSTACK
@@ -145,6 +146,7 @@ app.use(
   '/api/account',
   accountRoutes
 );
+app.use('/api/savings', savingsRoutes);
 // ============================================================
 // BILL PAYMENTS
 // ============================================================
