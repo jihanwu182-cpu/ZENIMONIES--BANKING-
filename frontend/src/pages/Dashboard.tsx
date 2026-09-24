@@ -1575,11 +1575,11 @@ const Dashboard: React.FC = () => {
                 }
                 onClick={() =>
                   navigate(
-                    '/safebox'
+                    '/savings
                   )
                 }
               >
-                SafeBox
+                Savings
               </button>
 
             </div>
