@@ -1569,18 +1569,19 @@ const Dashboard: React.FC = () => {
               </button>
 
               <button
-                type="button"
-                style={
-                  styles.panelItem
-                }
-                onClick={() =>
-                  navigate(
-                    '/savings'
-                  )
-                }
-              >
-                Savings
-              </button>
+              type="button"
+            onClick={(event) => {
+             event.preventDefault();
+           event.stopPropagation();
+              navigate('/savings');
+          }}
+               style={{
+              cursor: 'pointer',
+             pointerEvents: 'auto',
+           }}
+         >
+           Savings
+          </button>
 
             </div>
 
