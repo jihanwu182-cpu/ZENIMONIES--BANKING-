@@ -777,7 +777,9 @@ const transferToZenimoniesUser = async (
 
         recipientReference,
 
-        `Money received from Zenimonies user`,
+        narration
+  ? String(narration).trim()
+  : '',
 
         recipientOldBalance,
 
