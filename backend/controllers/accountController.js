@@ -513,10 +513,18 @@ bill.provider_response_message
         -- the original sender's bank transfer record.
         --
 
-        LEFT JOIN bank_transfers bt
-          ON bt.reference =
-             t.reference
-
+        
+LEFT JOIN bank_transfers bt
+  ON bt.reference =
+     CASE
+       WHEN t.type = 'internal_transfer_received'
+         AND t.reference LIKE '%-R'
+       THEN LEFT(
+         t.reference,
+         LENGTH(t.reference) - 2
+       )
+       ELSE t.reference
+     END
 
         -- ====================================================
         -- SENDER ACCOUNT
