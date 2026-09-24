@@ -670,8 +670,8 @@ const Dashboard: React.FC = () => {
           navigate('/bills');
           break;
 
-        case 'SafeBox':
-          navigate('/safebox');
+        case 'Savings':
+          navigate('/savings');
           break;
 
         case 'More':
