@@ -969,6 +969,84 @@ ON beneficiaries(user_id, recipient_type);
 CREATE INDEX IF NOT EXISTS idx_beneficiaries_phone
 ON beneficiaries(user_id, recipient_phone);
 
+
+    // ========================================================
+    // ZENIMONIES SAVINGS DATABASE
+    // ========================================================
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS savings_plans (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+        user_id UUID NOT NULL
+          REFERENCES users(id)
+          ON DELETE RESTRICT,
+
+        account_id UUID NOT NULL
+          REFERENCES accounts(id)
+          ON DELETE RESTRICT,
+
+        amount NUMERIC(18, 2) NOT NULL
+          CHECK (amount >= 5000),
+
+        currency VARCHAR(10) NOT NULL DEFAULT 'NGN'
+          CHECK (currency = 'NGN'),
+
+        duration_days INTEGER NOT NULL
+          CHECK (duration_days IN (30, 60, 90, 180, 365)),
+
+        start_date TIMESTAMPTZ NOT NULL
+          DEFAULT CURRENT_TIMESTAMP,
+
+        maturity_date TIMESTAMPTZ NOT NULL,
+
+        status VARCHAR(20) NOT NULL DEFAULT 'active'
+          CHECK (
+            status IN (
+              'active',
+              'matured',
+              'completed'
+            )
+          ),
+
+        created_at TIMESTAMPTZ NOT NULL
+          DEFAULT CURRENT_TIMESTAMP,
+
+        updated_at TIMESTAMPTZ NOT NULL
+          DEFAULT CURRENT_TIMESTAMP,
+
+        CONSTRAINT valid_savings_maturity
+          CHECK (
+            maturity_date =
+            start_date + (duration_days * INTERVAL '1 day')
+          )
+      );
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS
+      idx_savings_plans_user
+      ON savings_plans(user_id);
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS
+      idx_savings_plans_account
+      ON savings_plans(account_id);
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS
+      idx_savings_plans_maturity
+      ON savings_plans(maturity_date)
+      WHERE status = 'active';
+    `);
+
+    console.log(
+      'Database migration completed: savings_plans table is available'
+    );
+
+
 -- ============================================================
 -- NOTIFICATIONS COMPATIBILITY
 -- ============================================================
