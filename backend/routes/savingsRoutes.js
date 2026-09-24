@@ -7,23 +7,21 @@ const savingsController = require(
   '../controllers/savingsController'
 );
 
-// IMPORTANT:
-// Replace this import with the exact authentication
-// middleware path already used by your other routes.
+const {
+  authenticateToken,
+} = require('../utils/authMiddleware');
 
-const authMiddleware = require(
-  '../middleware/authMiddleware'
-);
-
+// Get the authenticated user's savings plans
 router.get(
   '/',
-  authMiddleware,
+  authenticateToken,
   savingsController.getSavings
 );
 
+// Create a savings plan
 router.post(
   '/',
-  authMiddleware,
+  authenticateToken,
   savingsController.createSavings
 );
 
