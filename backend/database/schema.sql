@@ -1031,7 +1031,9 @@ CREATE INDEX IF NOT EXISTS idx_savings_plans_maturity
 ON savings_plans(maturity_date)
 WHERE status = 'active';
 
-
+ALTER TABLE savings_plans
+ADD COLUMN IF NOT EXISTS
+maturity_transaction_reference VARCHAR(100) UNIQUE;
 -- ============================================================
 -- NOTIFICATIONS COMPATIBILITY
 -- ============================================================
