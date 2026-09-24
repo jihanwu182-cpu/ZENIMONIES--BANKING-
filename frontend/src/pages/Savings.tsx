@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -55,6 +56,60 @@ const formatNaira = (amount: number) =>
     minimumFractionDigits: 2,
   }).format(amount);
 
+const getErrorMessage = (
+  data: any,
+  fallback: string,
+  status?: number
+): string => {
+  if (typeof data === 'string' && data.trim()) {
+    return data;
+  }
+
+  if (data && typeof data === 'object') {
+    const message =
+      data.message ||
+      data.error ||
+      data.details ||
+      data.msg;
+
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+
+    if (Array.isArray(data.errors) && data.errors.length > 0) {
+      return data.errors
+        .map((item: any) =>
+          typeof item === 'string'
+            ? item
+            : item.message || JSON.stringify(item)
+        )
+        .join(', ');
+    }
+  }
+
+  if (status) {
+    return `${fallback} (HTTP ${status})`;
+  }
+
+  return fallback;
+};
+
+const readResponse = async (response: Response) => {
+  const responseText = await response.text();
+
+  if (!responseText) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    return {
+      message: responseText,
+    };
+  }
+};
+
 const Savings: React.FC = () => {
   const navigate = useNavigate();
 
@@ -68,38 +123,63 @@ const Savings: React.FC = () => {
 
   const token = localStorage.getItem('zenimonies_token');
 
-  const fetchSavings = async () => {
-    if (!token) {
+  const fetchSavings = async (): Promise<boolean> => {
+    const currentToken = localStorage.getItem(
+      'zenimonies_token'
+    );
+
+    if (!currentToken) {
       setError('Please sign in to view your Savings.');
       setLoading(false);
-      return;
+      return false;
     }
 
     try {
       const response = await fetch(`${API_URL}/savings`, {
+        method: 'GET',
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${currentToken}`,
+          Accept: 'application/json',
         },
       });
 
-      const data = await response.json();
+      const data = await readResponse(response);
 
       if (!response.ok) {
-        throw new Error(
-          data.message || 'Unable to load your Savings.'
+        const message = getErrorMessage(
+          data,
+          'Unable to load your Savings.',
+          response.status
         );
+
+        console.error('Savings loading failed:', {
+          status: response.status,
+          response: data,
+        });
+
+        setError(message);
+        return false;
       }
 
       const savings = Array.isArray(data)
         ? data
-        : data.savings || data.plans || [];
+        : Array.isArray(data.savings)
+        ? data.savings
+        : Array.isArray(data.plans)
+        ? data.plans
+        : [];
 
       setPlans(savings);
+      return true;
     } catch (err: any) {
+      console.error('Savings loading network error:', err);
+
       setError(
         err.message ||
           'Unable to connect to the Savings service.'
       );
+
+      return false;
     } finally {
       setLoading(false);
     }
@@ -107,6 +187,7 @@ const Savings: React.FC = () => {
 
   useEffect(() => {
     fetchSavings();
+
     // Load plans when the page opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -117,17 +198,29 @@ const Savings: React.FC = () => {
 
     const numericAmount = Number(amount);
 
-    if (!Number.isFinite(numericAmount) || numericAmount < 5000) {
+    if (
+      !Number.isFinite(numericAmount) ||
+      numericAmount < 5000
+    ) {
       setError('The minimum amount to lock is ₦5,000.');
       return;
     }
 
-    if (!duration) {
-      setError('Please select a lock period.');
+    if (
+      !Number.isInteger(duration) ||
+      !LOCK_PERIODS.some(
+        (period) => period.days === duration
+      )
+    ) {
+      setError('Please select a valid lock period.');
       return;
     }
 
-    if (!token) {
+    const currentToken = localStorage.getItem(
+      'zenimonies_token'
+    );
+
+    if (!currentToken) {
       setError('Please sign in again.');
       navigate('/login');
       return;
@@ -140,7 +233,8 @@ const Savings: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${currentToken}`,
+          Accept: 'application/json',
         },
         body: JSON.stringify({
           amount: numericAmount,
@@ -148,22 +242,36 @@ const Savings: React.FC = () => {
         }),
       });
 
-      const data = await response.json();
+      const data = await readResponse(response);
 
       if (!response.ok) {
+        console.error('Savings creation failed:', {
+          status: response.status,
+          response: data,
+        });
+
         throw new Error(
-          data.message || 'Unable to create your Savings plan.'
+          getErrorMessage(
+            data,
+            'Unable to create your Savings plan.',
+            response.status
+          )
         );
       }
+
+      console.log('Savings creation response:', data);
 
       setSuccess(
         'Your Savings plan has been created successfully.'
       );
+
       setAmount('');
       setDuration(null);
 
       await fetchSavings();
     } catch (err: any) {
+      console.error('Savings creation error:', err);
+
       setError(
         err.message ||
           'Something went wrong. Please try again.'
@@ -191,6 +299,7 @@ const Savings: React.FC = () => {
         pb: 5,
       }}
     >
+      {/* Header */}
       <Box
         sx={{
           background:
@@ -212,7 +321,11 @@ const Savings: React.FC = () => {
             Back to Dashboard
           </Button>
 
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={2}
+            alignItems="center"
+          >
             <Box
               sx={{
                 width: 55,
@@ -231,6 +344,7 @@ const Savings: React.FC = () => {
               <Typography variant="h4" fontWeight={800}>
                 Savings
               </Typography>
+
               <Typography sx={{ opacity: 0.9 }}>
                 Lock your money and plan for the future.
               </Typography>
@@ -240,16 +354,22 @@ const Savings: React.FC = () => {
       </Box>
 
       <Container maxWidth="md" sx={{ mt: 3 }}>
+        {/* Error message */}
         {error && (
           <Alert
             severity="error"
-            sx={{ mb: 2 }}
+            sx={{
+              mb: 2,
+              whiteSpace: 'pre-wrap',
+              overflowWrap: 'anywhere',
+            }}
             onClose={() => setError('')}
           >
             {error}
           </Alert>
         )}
 
+        {/* Success message */}
         {success && (
           <Alert
             severity="success"
@@ -260,12 +380,14 @@ const Savings: React.FC = () => {
           </Alert>
         )}
 
+        {/* Summary cards */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={6}>
             <Card
               sx={{
                 borderRadius: 3,
-                boxShadow: '0 4px 18px rgba(0,0,0,0.04)',
+                boxShadow:
+                  '0 4px 18px rgba(0,0,0,0.04)',
               }}
             >
               <CardContent>
@@ -275,6 +397,7 @@ const Savings: React.FC = () => {
                   alignItems="center"
                 >
                   <Lock color="success" />
+
                   <Typography color="text.secondary">
                     Total Currently Locked
                   </Typography>
@@ -296,7 +419,8 @@ const Savings: React.FC = () => {
             <Card
               sx={{
                 borderRadius: 3,
-                boxShadow: '0 4px 18px rgba(0,0,0,0.04)',
+                boxShadow:
+                  '0 4px 18px rgba(0,0,0,0.04)',
               }}
             >
               <CardContent>
@@ -306,6 +430,7 @@ const Savings: React.FC = () => {
                   alignItems="center"
                 >
                   <Security color="success" />
+
                   <Typography color="text.secondary">
                     Minimum Lock Amount
                   </Typography>
@@ -323,14 +448,18 @@ const Savings: React.FC = () => {
           </Grid>
         </Grid>
 
+        {/* Create Savings Plan */}
         <Card
           sx={{
             borderRadius: 3,
             mb: 3,
-            boxShadow: '0 4px 18px rgba(0,0,0,0.04)',
+            boxShadow:
+              '0 4px 18px rgba(0,0,0,0.04)',
           }}
         >
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <CardContent
+            sx={{ p: { xs: 2, sm: 3 } }}
+          >
             <Typography variant="h6" fontWeight={800}>
               Create a Savings Plan
             </Typography>
@@ -339,8 +468,8 @@ const Savings: React.FC = () => {
               color="text.secondary"
               sx={{ mt: 0.5, mb: 3 }}
             >
-              Choose an amount and how long you want to lock
-              your funds.
+              Choose an amount and how long you want to
+              lock your funds.
             </Typography>
 
             <TextField
@@ -349,22 +478,39 @@ const Savings: React.FC = () => {
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              inputProps={{ min: 5000, step: 100 }}
+              inputProps={{
+                min: 5000,
+                step: 100,
+              }}
               helperText="Minimum amount is ₦5,000."
               sx={{ mb: 3 }}
             />
 
-            <Typography fontWeight={700} sx={{ mb: 1.5 }}>
+            <Typography
+              fontWeight={700}
+              sx={{ mb: 1.5 }}
+            >
               Select Lock Period
             </Typography>
 
             <Grid container spacing={1.5}>
               {LOCK_PERIODS.map((period) => (
-                <Grid item xs={6} sm={4} key={period.days}>
+                <Grid
+                  item
+                  xs={6}
+                  sm={4}
+                  key={period.days}
+                >
                   <Card
-                    onClick={() => setDuration(period.days)}
+                    onClick={() => {
+                      if (!creating) {
+                        setDuration(period.days);
+                      }
+                    }}
                     sx={{
-                      cursor: 'pointer',
+                      cursor: creating
+                        ? 'default'
+                        : 'pointer',
                       textAlign: 'center',
                       borderRadius: 2.5,
                       border: '2px solid',
@@ -387,9 +533,11 @@ const Savings: React.FC = () => {
                         color="success"
                         sx={{ mb: 0.5 }}
                       />
+
                       <Typography fontWeight={800}>
                         {period.label}
                       </Typography>
+
                       <Typography
                         variant="body2"
                         color="text.secondary"
@@ -403,10 +551,11 @@ const Savings: React.FC = () => {
             </Grid>
 
             <Alert severity="info" sx={{ mt: 3 }}>
-              Funds remain locked until the selected maturity
-              date. Early withdrawals are not permitted.
-              No interest is paid at launch. Your original
-              principal becomes available at maturity.
+              Funds remain locked until the selected
+              maturity date. Early withdrawals are not
+              permitted. No interest is paid at launch.
+              Your original principal becomes available
+              at maturity.
             </Alert>
 
             <Button
@@ -423,7 +572,12 @@ const Savings: React.FC = () => {
                   <Lock />
                 )
               }
-              disabled={creating || !amount || !duration}
+              disabled={
+                creating ||
+                !amount ||
+                !duration ||
+                Number(amount) < 5000
+              }
               onClick={handleCreateSavings}
               sx={{
                 mt: 3,
@@ -435,20 +589,30 @@ const Savings: React.FC = () => {
                 '&:hover': {
                   bgcolor: '#065c35',
                 },
+                '&.Mui-disabled': {
+                  bgcolor: '#a5c7b5',
+                  color: '#fff',
+                },
               }}
             >
-              {creating ? 'Creating Plan...' : 'Lock My Funds'}
+              {creating
+                ? 'Creating Plan...'
+                : 'Lock My Funds'}
             </Button>
           </CardContent>
         </Card>
 
+        {/* Savings Plans History */}
         <Card
           sx={{
             borderRadius: 3,
-            boxShadow: '0 4px 18px rgba(0,0,0,0.04)',
+            boxShadow:
+              '0 4px 18px rgba(0,0,0,0.04)',
           }}
         >
-          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <CardContent
+            sx={{ p: { xs: 2, sm: 3 } }}
+          >
             <Stack
               direction="row"
               alignItems="center"
@@ -456,22 +620,32 @@ const Savings: React.FC = () => {
               sx={{ mb: 2 }}
             >
               <CalendarMonth color="success" />
-              <Typography variant="h6" fontWeight={800}>
+
+              <Typography
+                variant="h6"
+                fontWeight={800}
+              >
                 My Savings Plans
               </Typography>
             </Stack>
 
             {loading ? (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Box
+                sx={{
+                  textAlign: 'center',
+                  py: 4,
+                }}
+              >
                 <CircularProgress color="success" />
+
                 <Typography sx={{ mt: 1 }}>
                   Loading your Savings...
                 </Typography>
               </Box>
             ) : plans.length === 0 ? (
               <Alert severity="info">
-                You have no Savings plans yet. Create your
-                first plan above.
+                You have no Savings plans yet. Create
+                your first plan above.
               </Alert>
             ) : (
               <Stack spacing={2}>
@@ -495,7 +669,9 @@ const Savings: React.FC = () => {
                           fontWeight={800}
                           variant="h6"
                         >
-                          {formatNaira(Number(plan.amount))}
+                          {formatNaira(
+                            Number(plan.amount)
+                          )}
                         </Typography>
 
                         <Typography
@@ -529,7 +705,10 @@ const Savings: React.FC = () => {
                         : '—'}
                     </Typography>
 
-                    <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{ mt: 0.5 }}
+                    >
                       Maturity:{' '}
                       {plan.maturity_date
                         ? new Date(
