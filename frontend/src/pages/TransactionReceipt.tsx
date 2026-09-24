@@ -824,15 +824,22 @@ const TransactionReceipt: React.FC = () => {
                 />
 
                 {transaction.description &&
-                  transaction.description.trim() && (
-                    <ReceiptRow
-                      label="Narration"
-                      value={
-                        transaction.description.trim()
-                      }
-                      last
-                    />
-                  )}
+               transaction.description.trim() &&
+              transaction.description.trim() !==
+             'Money received from Zenimonies user' &&
+               !transaction.description
+                 .trim()
+               .startsWith(
+               'You received ₦'
+                 ) && (
+               <ReceiptRow
+                label="Narration"
+                  value={
+                 transaction.description.trim()
+              }
+              last
+            />
+            )}
               </>
             )}
 
