@@ -1,4 +1,4 @@
-import React, {
+ import React, {
   useEffect,
   useMemo,
   useState,
@@ -618,7 +618,7 @@ const Dashboard: React.FC = () => {
         'Pay your bills',
     },
     {
-      name: 'SafeBox',
+      name: 'Savings',
       icon: 'lock',
       description:
         'Save securely',
