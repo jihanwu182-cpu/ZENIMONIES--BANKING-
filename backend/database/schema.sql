@@ -1463,6 +1463,20 @@ SET DEFAULT 'not_verified';
 ALTER TABLE kyc_records
 ALTER COLUMN verification_status
 SET DEFAULT 'not_verified';
+
+-- ============================================================
+-- ZENIMONIES SAVINGS MATURITY MIGRATION
+-- ============================================================
+
+ALTER TABLE savings_plans
+ADD COLUMN IF NOT EXISTS
+maturity_transaction_reference VARCHAR(100);
+
+-- Prevent duplicate maturity transaction references.
+CREATE UNIQUE INDEX IF NOT EXISTS
+idx_savings_maturity_transaction_reference
+ON savings_plans (maturity_transaction_reference)
+WHERE maturity_transaction_reference IS NOT NULL;
 -- ============================================================
 -- END OF ZENIMONIES DATABASE SCHEMA
 -- ============================================================
