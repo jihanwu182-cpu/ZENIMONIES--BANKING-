@@ -4,9 +4,26 @@ const pool = require('../config/database');
 // ============================================================
 // ZENIMONIES BANKING
 // ACCOUNT STATEMENT SERVICE
+//
+// Includes completed, pending and processing transactions.
+//
+// Pending transactions are displayed but are not treated as
+// posted ledger entries for statement balance calculations.
 // ============================================================
 
 const MAX_STATEMENT_DAYS = 365;
+
+// ============================================================
+// TRANSACTION STATUSES
+// ============================================================
+
+const VISIBLE_STATUSES = new Set([
+  'completed',
+  'pending',
+  'processing',
+]);
+
+const POSTED_STATUS = 'completed';
 
 // ============================================================
 // TRANSACTION TYPES
@@ -60,6 +77,16 @@ function toKobo(value) {
 
 function fromKobo(value) {
   return Number((value / 100).toFixed(2));
+}
+
+// ============================================================
+// NORMALIZATION HELPERS
+// ============================================================
+
+function normalizeStatus(status) {
+  return String(status || '')
+    .trim()
+    .toLowerCase();
 }
 
 function formatAddress(customer) {
@@ -207,8 +234,6 @@ async function getCustomerAccount(userId) {
     accountNumber: row.account_number,
     currency: row.currency,
 
-    // Preserve a missing database balance as null.
-    // Do not convert a missing balance into zero.
     currentAccountBalance:
       row.current_account_balance === null ||
       row.current_account_balance === undefined
@@ -232,8 +257,6 @@ function classifyTransaction(type) {
     return 'debit';
   }
 
-  // Fail safely rather than silently classifying
-  // an unknown transaction as a debit or credit.
   throw new Error(
     `Unsupported statement transaction type: ${type}`
   );
@@ -242,12 +265,14 @@ function classifyTransaction(type) {
 // ============================================================
 // FETCH STATEMENT TRANSACTIONS
 //
-// The central transactions table is the source of truth.
+// Central transactions table is the source of truth.
 //
-// Supplemental tables provide transaction details only.
-// They must not create duplicate statement entries.
+// Completed, pending and processing transactions are
+// displayed in the statement.
 //
-// Only completed central ledger transactions are included.
+// Only completed transactions are used for posted balances.
+//
+// Supplemental tables provide details only.
 // ============================================================
 
 async function getStatementTransactions(
@@ -372,7 +397,11 @@ async function getStatementTransactions(
       WHERE
         t.account_id = $1
 
-        AND t.status = 'completed'
+        AND LOWER(TRIM(t.status)) IN (
+          'completed',
+          'pending',
+          'processing'
+        )
 
         AND t.created_at >= $2::date
 
@@ -396,11 +425,10 @@ async function getStatementTransactions(
 // ============================================================
 // OPENING BALANCE
 //
-// Uses the latest completed transaction balance snapshot
-// before the requested statement period.
+// Only completed ledger entries can establish the opening
+// balance.
 //
-// If no previous snapshot exists, the opening balance
-// remains null. It is not assumed to be zero.
+// Pending and processing transactions are excluded.
 // ============================================================
 
 async function getOpeningBalance(
@@ -417,7 +445,7 @@ async function getOpeningBalance(
       WHERE
         account_id = $1
 
-        AND status = 'completed'
+        AND LOWER(TRIM(status)) = 'completed'
 
         AND created_at < $2::date
 
@@ -555,10 +583,7 @@ function buildTransactionDetails(transaction) {
   }
 
   // ----------------------------------------------------------
-  // TV SUBSCRIPTIONS AND TV REFUNDS
-  //
-  // Uses existing bill-payment metadata when available.
-  // The original ledger description is preserved.
+  // TV SUBSCRIPTIONS AND REFUNDS
   // ----------------------------------------------------------
 
   if (
@@ -579,7 +604,7 @@ function buildTransactionDetails(transaction) {
   // ----------------------------------------------------------
   // ELECTRICITY AND OTHER BILLS
   //
-  // Never expose electricity_token in a statement.
+  // Electricity tokens are never returned.
   // Electricity units may be shown when available.
   // ----------------------------------------------------------
 
@@ -637,13 +662,12 @@ function buildTransactionDetails(transaction) {
 // ============================================================
 // CALCULATE STATEMENT TOTALS
 //
-// Credits and debits show transaction principal amounts.
-// Fees are shown separately for each transaction.
+// Pending and processing transactions appear in the history.
 //
-// No Total Fees summary is generated.
+// Only completed transactions affect posted credit and
+// debit totals.
 //
-// Missing balance snapshots remain null.
-// Negative account balances are preserved.
+// Transaction fees remain separately displayed.
 // ============================================================
 
 function calculateStatementBalances(
@@ -659,6 +683,16 @@ function calculateStatementBalances(
         transaction.type
       );
 
+      const status = normalizeStatus(
+        transaction.status
+      );
+
+      if (!VISIBLE_STATUSES.has(status)) {
+        throw new Error(
+          `Unsupported statement transaction status: ${status}`
+        );
+      }
+
       const amountKobo = toKobo(
         transaction.amount
       );
@@ -667,12 +701,21 @@ function calculateStatementBalances(
         transaction.transaction_fee ?? 0
       );
 
-      if (type === 'credit') {
-        totalCreditsKobo += amountKobo;
-     } else {
-       // Include transaction fees in total debits.
-       totalDebitsKobo += amountKobo + feeKobo;
-     }
+      // ------------------------------------------------------
+      // POSTED TOTALS
+      //
+      // Pending and processing transactions do not change
+      // the posted statement totals.
+      // ------------------------------------------------------
+
+      if (status === POSTED_STATUS) {
+        if (type === 'credit') {
+          totalCreditsKobo += amountKobo;
+        } else {
+          totalDebitsKobo +=
+            amountKobo + feeKobo;
+        }
+      }
 
       const details =
         buildTransactionDetails(transaction);
@@ -686,11 +729,19 @@ function calculateStatementBalances(
 
         type: transaction.type,
 
+        status,
+
         description: details.description,
 
         beneficiary: details.beneficiary,
 
         institution: details.institution,
+
+        // Show the transaction amount in the history,
+        // including pending and processing transactions.
+        //
+        // These displayed amounts do not automatically
+        // mean the funds have been posted to the ledger.
 
         debit:
           type === 'debit'
@@ -705,6 +756,7 @@ function calculateStatementBalances(
         fee: fromKobo(feeKobo),
 
         balance:
+          status !== POSTED_STATUS ||
           transaction.balance_after === null ||
           transaction.balance_after === undefined
             ? null
@@ -769,15 +821,31 @@ async function buildAccountStatement({
       transactions
     );
 
-  // The final completed transaction's recorded snapshot
-  // is used as the closing balance.
+  // ----------------------------------------------------------
+  // CLOSING BALANCE
   //
-  // If that snapshot is missing, closing balance remains
-  // null instead of presenting an unverified amount.
+  // Pending and processing transactions must not overwrite
+  // the last completed transaction balance.
+  //
+  // The closing balance is the latest completed ledger
+  // snapshot within the statement period.
+  //
+  // If there is no completed transaction during the period,
+  // retain the opening balance.
+  // ----------------------------------------------------------
+
+  const completedTransactions =
+    transactions.filter(
+      (transaction) =>
+        normalizeStatus(transaction.status) ===
+        POSTED_STATUS
+    );
 
   const lastTransaction =
-    transactions.length > 0
-      ? transactions[transactions.length - 1]
+    completedTransactions.length > 0
+      ? completedTransactions[
+          completedTransactions.length - 1
+        ]
       : null;
 
   let closingBalance = openingBalance;
@@ -790,22 +858,32 @@ async function buildAccountStatement({
         : Number(lastTransaction.balance_after);
   }
 
+  // ----------------------------------------------------------
+  // RETURN STATEMENT
+  // ----------------------------------------------------------
+
   return {
     customer: {
       userId: customer.userId,
+
       fullName: customer.fullName,
+
       email: customer.email,
+
       address: customer.address,
     },
 
     account: {
       id: customer.accountId,
+
       accountNumber: customer.accountNumber,
+
       currency: customer.currency,
     },
 
     statement: {
       startDate,
+
       endDate,
 
       openingBalance:
