@@ -984,6 +984,14 @@ export default function Business() {
 
                 const approved =
                   isBusinessApproved(business);
+               
+                  console.log('Business approval details:', {
+                id: business.id,
+               business_name: business.business_name,
+               verification_status: business.verification_status,
+              status: business.status,
+              account_status: business.account_status,
+            });
 
                 return (
                   <section
