@@ -24,6 +24,9 @@ const CREDIT_TYPES = new Set([
   'data_refund',
   'bill_refund',
   'electricity_refund',
+  'tv_refund',
+
+
 
   'savings_maturity_release',
 ]);
