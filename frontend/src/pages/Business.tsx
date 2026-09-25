@@ -1,11 +1,26 @@
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
+
+import { useNavigate } from 'react-router-dom';
+
+// ============================================================
+// ZENIMONIES BANKING
+// BUSINESS ACCOUNT MANAGEMENT
+// ============================================================
 
 const API_BASE =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com/api';
 
-type Business = {
+// ============================================================
+// TYPES
+// ============================================================
+
+type BusinessAccount = {
   id: string;
   business_name: string;
   registration_number?: string | null;
@@ -13,9 +28,12 @@ type Business = {
   country: string;
   currency: string;
   business_address?: string | null;
+
   verification_status: string;
   status: string;
+
   created_at?: string;
+
   account_id?: string;
   business_account_id?: string;
   account_number?: string;
@@ -23,6 +41,19 @@ type Business = {
   balance?: string | number;
   account_status?: string;
 };
+
+type BusinessForm = {
+  businessName: string;
+  registrationNumber: string;
+  businessType: string;
+  country: string;
+  currency: string;
+  businessAddress: string;
+};
+
+// ============================================================
+// STYLES
+// ============================================================
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
@@ -33,10 +64,12 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#172033',
     fontFamily: 'Arial, sans-serif',
   },
+
   container: {
     maxWidth: 1150,
     margin: '0 auto',
   },
+
   header: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -45,18 +78,21 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 16,
     marginBottom: 24,
   },
+
   heading: {
     margin: 0,
     fontSize: 28,
     fontWeight: 800,
     color: '#14213d',
   },
+
   subtitle: {
     color: '#68758a',
     marginTop: 8,
     fontSize: 14,
     lineHeight: 1.6,
   },
+
   button: {
     border: 'none',
     borderRadius: 10,
@@ -67,6 +103,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#155eef',
     color: '#fff',
   },
+
   secondaryButton: {
     border: '1px solid #d5dce8',
     borderRadius: 10,
@@ -77,6 +114,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#fff',
     color: '#24334d',
   },
+
   card: {
     background: '#fff',
     border: '1px solid #e3e9f2',
@@ -85,12 +123,14 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 5px 20px rgba(20, 33, 61, 0.04)',
     minWidth: 0,
   },
+
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
     gap: 18,
     marginBottom: 22,
   },
+
   label: {
     display: 'block',
     color: '#69758a',
@@ -98,6 +138,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     marginBottom: 8,
   },
+
   input: {
     width: '100%',
     boxSizing: 'border-box',
@@ -109,9 +150,11 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#fff',
     color: '#172033',
   },
+
   field: {
     marginBottom: 18,
   },
+
   alert: {
     borderRadius: 12,
     padding: 15,
@@ -119,8 +162,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     lineHeight: 1.6,
   },
+
   businessCard: {
-    background: 'linear-gradient(135deg, #102a56 0%, #155eef 100%)',
+    background:
+      'linear-gradient(135deg, #102a56 0%, #155eef 100%)',
     color: '#fff',
     borderRadius: 18,
     padding: 24,
@@ -130,12 +175,55 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     boxSizing: 'border-box',
   },
+
+  dashboardButton: {
+    width: '100%',
+    marginTop: 22,
+    padding: '14px 18px',
+    border: '1px solid rgba(255,255,255,0.35)',
+    borderRadius: 12,
+    background: '#fff',
+    color: '#102a56',
+    fontSize: 15,
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+
+  disabledDashboardButton: {
+    width: '100%',
+    marginTop: 22,
+    padding: '13px 15px',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: 12,
+    background: 'rgba(255,255,255,0.12)',
+    color: '#fff',
+    fontSize: 13,
+    lineHeight: 1.6,
+    boxSizing: 'border-box',
+  },
 };
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+function getToken(): string {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  return (
+    localStorage.getItem('zenimonies_token') ||
+    localStorage.getItem('token') ||
+    localStorage.getItem('access_token') ||
+    ''
+  );
+}
 
 function formatMoney(
   amount: string | number | undefined,
   currency: string
-) {
+): string {
   const numericAmount = Number(amount || 0);
 
   try {
@@ -150,10 +238,31 @@ function formatMoney(
   }
 }
 
-function statusColor(status: string) {
-  const normalized = String(status || '').toLowerCase();
+function normalizeStatus(status?: string | null): string {
+  return String(status || '')
+    .trim()
+    .toLowerCase();
+}
 
-  if (['active', 'verified'].includes(normalized)) {
+function isBusinessApproved(
+  business: BusinessAccount
+): boolean {
+  return (
+    normalizeStatus(business.verification_status) ===
+      'verified' &&
+    normalizeStatus(business.status) === 'active' &&
+    normalizeStatus(business.account_status) === 'active'
+  );
+}
+
+function statusColor(status?: string | null) {
+  const normalized = normalizeStatus(status);
+
+  if (
+    ['active', 'verified', 'approved', 'successful'].includes(
+      normalized
+    )
+  ) {
     return {
       background: '#dcfce7',
       color: '#166534',
@@ -161,9 +270,14 @@ function statusColor(status: string) {
   }
 
   if (
-    ['rejected', 'suspended', 'closed', 'disabled'].includes(
-      normalized
-    )
+    [
+      'rejected',
+      'suspended',
+      'closed',
+      'disabled',
+      'blocked',
+      'failed',
+    ].includes(normalized)
   ) {
     return {
       background: '#fee2e2',
@@ -171,7 +285,9 @@ function statusColor(status: string) {
     };
   }
 
-  if (normalized === 'under_review') {
+  if (
+    ['under_review', 'processing'].includes(normalized)
+  ) {
     return {
       background: '#dbeafe',
       color: '#1d4ed8',
@@ -184,7 +300,15 @@ function statusColor(status: string) {
   };
 }
 
-function StatusBadge({ status }: { status: string }) {
+// ============================================================
+// STATUS BADGE
+// ============================================================
+
+function StatusBadge({
+  status,
+}: {
+  status?: string | null;
+}) {
   const colors = statusColor(status);
 
   return (
@@ -205,15 +329,27 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ============================================================
+// COMPONENT
+// ============================================================
+
 export default function Business() {
-  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const navigate = useNavigate();
+
+  const [businesses, setBusinesses] =
+    useState<BusinessAccount[]>([]);
+
   const [loading, setLoading] = useState(true);
+
   const [submitting, setSubmitting] = useState(false);
+
   const [showForm, setShowForm] = useState(false);
+
   const [error, setError] = useState('');
+
   const [success, setSuccess] = useState('');
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<BusinessForm>({
     businessName: '',
     registrationNumber: '',
     businessType: '',
@@ -222,14 +358,20 @@ export default function Business() {
     businessAddress: '',
   });
 
-  const token =
-    typeof window !== 'undefined'
-      ? localStorage.getItem('zenimonies_token')
-      : null;
+  const token = getToken();
+
+  // ==========================================================
+  // LOAD BUSINESSES
+  // ==========================================================
 
   const loadBusinesses = useCallback(async () => {
-    if (!token) {
-      setError('Please sign in to view your business accounts.');
+    const currentToken = getToken();
+
+    if (!currentToken) {
+      setError(
+        'Please sign in to view your business accounts.'
+      );
+
       setLoading(false);
       return;
     }
@@ -238,26 +380,34 @@ export default function Business() {
     setError('');
 
     try {
-      const response = await fetch(`${API_BASE}/businesses`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
+      const response = await fetch(
+        `${API_BASE}/businesses`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${currentToken}`,
+            Accept: 'application/json',
+          },
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.message || 'Unable to load your businesses.'
+          data.message ||
+            data.error ||
+            'Unable to load your businesses.'
         );
       }
 
+      const list =
+        data.businesses ||
+        data.data?.businesses ||
+        [];
+
       setBusinesses(
-        Array.isArray(data.businesses)
-          ? data.businesses
-          : []
+        Array.isArray(list) ? list : []
       );
     } catch (err) {
       setError(
@@ -268,15 +418,21 @@ export default function Business() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     loadBusinesses();
   }, [loadBusinesses]);
 
+  // ==========================================================
+  // UPDATE FORM
+  // ==========================================================
+
   function updateField(
     event: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      HTMLInputElement |
+      HTMLSelectElement |
+      HTMLTextAreaElement
     >
   ) {
     const { name, value } = event.target;
@@ -297,6 +453,10 @@ export default function Business() {
     });
   }
 
+  // ==========================================================
+  // REGISTER BUSINESS
+  // ==========================================================
+
   async function handleCreateBusiness(
     event: React.FormEvent<HTMLFormElement>
   ) {
@@ -305,8 +465,12 @@ export default function Business() {
     setError('');
     setSuccess('');
 
-    if (!token) {
-      setError('Please sign in before registering a business.');
+    const currentToken = getToken();
+
+    if (!currentToken) {
+      setError(
+        'Please sign in before registering a business.'
+      );
       return;
     }
 
@@ -318,29 +482,41 @@ export default function Business() {
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE}/businesses`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          businessName: form.businessName.trim(),
-          registrationNumber:
-            form.registrationNumber.trim(),
-          businessType: form.businessType.trim(),
-          country: form.country,
-          currency: form.currency,
-          businessAddress: form.businessAddress.trim(),
-        }),
-      });
+      const response = await fetch(
+        `${API_BASE}/businesses`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${currentToken}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            businessName: form.businessName.trim(),
+
+            registrationNumber:
+              form.registrationNumber.trim(),
+
+            businessType:
+              form.businessType.trim(),
+
+            country: form.country,
+
+            currency: form.currency,
+
+            businessAddress:
+              form.businessAddress.trim(),
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.message || 'Business registration failed.'
+          data.message ||
+            data.error ||
+            'Business registration failed.'
         );
       }
 
@@ -372,14 +548,28 @@ export default function Business() {
     }
   }
 
-  async function copyAccountNumber(accountNumber?: string) {
+  // ==========================================================
+  // COPY ACCOUNT NUMBER
+  // ==========================================================
+
+  async function copyAccountNumber(
+    accountNumber?: string
+  ) {
     if (!accountNumber) {
       return;
     }
 
+    setError('');
+    setSuccess('');
+
     try {
-      await navigator.clipboard.writeText(accountNumber);
-      setSuccess('Business account number copied.');
+      await navigator.clipboard.writeText(
+        accountNumber
+      );
+
+      setSuccess(
+        'Business account number copied.'
+      );
     } catch {
       setError(
         'Unable to copy automatically. Please select the account number and copy it.'
@@ -387,16 +577,55 @@ export default function Business() {
     }
   }
 
+  // ==========================================================
+  // OPEN BUSINESS DASHBOARD
+  // ==========================================================
+
+  function openBusinessDashboard(
+    business: BusinessAccount
+  ) {
+    if (!isBusinessApproved(business)) {
+      setError(
+        'This business account is not yet verified, approved, and active.'
+      );
+
+      return;
+    }
+
+    if (!business.id) {
+      setError(
+        'The business account ID is missing.'
+      );
+
+      return;
+    }
+
+    navigate(
+      `/business/dashboard/${encodeURIComponent(
+        business.id
+      )}`
+    );
+  }
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
+
   return (
     <div style={styles.page}>
       <div style={styles.container}>
+
         {/* PAGE HEADER */}
+
         <header style={styles.header}>
           <div>
-            <h1 style={styles.heading}>Business Banking</h1>
+            <h1 style={styles.heading}>
+              Business Banking
+            </h1>
+
             <p style={styles.subtitle}>
-              Manage your business profile and business accounts
-              separately from your personal banking.
+              Manage your business profile and business
+              accounts separately from your personal banking.
             </p>
           </div>
 
@@ -415,7 +644,8 @@ export default function Business() {
           )}
         </header>
 
-        {/* NOTICES */}
+        {/* ERROR NOTICE */}
+
         {error && (
           <div
             role="alert"
@@ -429,6 +659,8 @@ export default function Business() {
             <strong>Notice:</strong> {error}
           </div>
         )}
+
+        {/* SUCCESS NOTICE */}
 
         {success && (
           <div
@@ -445,8 +677,14 @@ export default function Business() {
         )}
 
         {/* REGISTRATION FORM */}
+
         {showForm && (
-          <section style={{ ...styles.card, marginBottom: 24 }}>
+          <section
+            style={{
+              ...styles.card,
+              marginBottom: 24,
+            }}
+          >
             <div
               style={{
                 display: 'flex',
@@ -457,12 +695,18 @@ export default function Business() {
               }}
             >
               <div>
-                <h2 style={{ margin: 0, fontSize: 21 }}>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: 21,
+                  }}
+                >
                   Register a Business
                 </h2>
+
                 <p style={styles.subtitle}>
-                  Your application will be reviewed before the
-                  business account can be activated.
+                  Your application will be reviewed before
+                  the business account can be activated.
                 </p>
               </div>
 
@@ -477,10 +721,12 @@ export default function Business() {
 
             <form onSubmit={handleCreateBusiness}>
               <div style={styles.grid}>
+
                 <div style={styles.field}>
                   <label style={styles.label}>
                     Business Name *
                   </label>
+
                   <input
                     style={styles.input}
                     name="businessName"
@@ -496,6 +742,7 @@ export default function Business() {
                   <label style={styles.label}>
                     Registration Number
                   </label>
+
                   <input
                     style={styles.input}
                     name="registrationNumber"
@@ -510,29 +757,40 @@ export default function Business() {
                   <label style={styles.label}>
                     Business Type
                   </label>
+
                   <select
                     style={styles.input}
                     name="businessType"
                     value={form.businessType}
                     onChange={updateField}
                   >
-                    <option value="">Select business type</option>
+                    <option value="">
+                      Select business type
+                    </option>
+
                     <option value="Sole Proprietorship">
                       Sole Proprietorship
                     </option>
+
                     <option value="Partnership">
                       Partnership
                     </option>
+
                     <option value="Limited Liability Company">
                       Limited Liability Company
                     </option>
+
                     <option value="Private Company">
                       Private Company
                     </option>
+
                     <option value="Public Company">
                       Public Company
                     </option>
-                    <option value="Other">Other</option>
+
+                    <option value="Other">
+                      Other
+                    </option>
                   </select>
                 </div>
 
@@ -540,6 +798,7 @@ export default function Business() {
                   <label style={styles.label}>
                     Country *
                   </label>
+
                   <select
                     style={styles.input}
                     name="country"
@@ -547,8 +806,13 @@ export default function Business() {
                     onChange={updateField}
                     required
                   >
-                    <option value="NG">Nigeria</option>
-                    <option value="ZA">South Africa</option>
+                    <option value="NG">
+                      Nigeria
+                    </option>
+
+                    <option value="ZA">
+                      South Africa
+                    </option>
                   </select>
                 </div>
 
@@ -556,6 +820,7 @@ export default function Business() {
                   <label style={styles.label}>
                     Account Currency
                   </label>
+
                   <input
                     style={{
                       ...styles.input,
@@ -570,6 +835,7 @@ export default function Business() {
                   <label style={styles.label}>
                     Business Address
                   </label>
+
                   <textarea
                     style={{
                       ...styles.input,
@@ -583,6 +849,7 @@ export default function Business() {
                     maxLength={2000}
                   />
                 </div>
+
               </div>
 
               <div
@@ -596,11 +863,12 @@ export default function Business() {
                   marginBottom: 20,
                 }}
               >
-                <strong>Important:</strong> Submitting this form
-                creates a pending business application. It does
-                not complete identity verification or activate
-                payment services. Do not enter passwords, card
-                PINs, or banking secrets here.
+                <strong>Important:</strong> Submitting
+                this form creates a pending business
+                application. It does not complete identity
+                verification or activate payment services.
+                Do not enter passwords, card PINs, or
+                banking secrets here.
               </div>
 
               <button
@@ -608,7 +876,9 @@ export default function Business() {
                 style={{
                   ...styles.button,
                   opacity: submitting ? 0.65 : 1,
-                  cursor: submitting ? 'not-allowed' : 'pointer',
+                  cursor: submitting
+                    ? 'not-allowed'
+                    : 'pointer',
                 }}
                 disabled={submitting}
               >
@@ -621,67 +891,85 @@ export default function Business() {
         )}
 
         {/* LOADING */}
+
         {loading && (
           <section style={styles.card}>
-            <p style={{ margin: 0, color: '#68758a' }}>
+            <p
+              style={{
+                margin: 0,
+                color: '#68758a',
+              }}
+            >
               Loading your business accounts...
             </p>
           </section>
         )}
 
         {/* EMPTY STATE */}
-        {!loading && businesses.length === 0 && !showForm && (
-          <section
-            style={{
-              ...styles.card,
-              textAlign: 'center',
-              padding: '48px 24px',
-            }}
-          >
-            <div
+
+        {!loading &&
+          businesses.length === 0 &&
+          !showForm && (
+            <section
               style={{
-                width: 72,
-                height: 72,
-                margin: '0 auto 20px',
-                borderRadius: 20,
-                background: '#eff6ff',
-                color: '#155eef',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 32,
+                ...styles.card,
+                textAlign: 'center',
+                padding: '48px 24px',
               }}
             >
-              🏢
-            </div>
+              <div
+                style={{
+                  width: 72,
+                  height: 72,
+                  margin: '0 auto 20px',
+                  borderRadius: 20,
+                  background: '#eff6ff',
+                  color: '#155eef',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 32,
+                }}
+              >
+                🏢
+              </div>
 
-            <h2 style={{ margin: '0 0 10px', fontSize: 22 }}>
-              Open a Business Account
-            </h2>
+              <h2
+                style={{
+                  margin: '0 0 10px',
+                  fontSize: 22,
+                }}
+              >
+                Open a Business Account
+              </h2>
 
-            <p
-              style={{
-                color: '#68758a',
-                maxWidth: 450,
-                margin: '0 auto 24px',
-                lineHeight: 1.7,
-              }}
-            >
-              Create a separate business profile and account
-              for your company's banking needs.
-            </p>
+              <p
+                style={{
+                  color: '#68758a',
+                  maxWidth: 450,
+                  margin: '0 auto 24px',
+                  lineHeight: 1.7,
+                }}
+              >
+                Create a separate business profile
+                and account for your company's banking needs.
+              </p>
 
-            <button
-              type="button"
-              style={styles.button}
-              onClick={() => setShowForm(true)}
-            >
-              Get Started
-            </button>
-          </section>
-        )}
+              <button
+                type="button"
+                style={styles.button}
+                onClick={() => {
+                  setError('');
+                  setShowForm(true);
+                }}
+              >
+                Get Started
+              </button>
+            </section>
+          )}
 
         {/* BUSINESS ACCOUNT CARDS */}
+
         {!loading && businesses.length > 0 && (
           <>
             <div style={styles.grid}>
@@ -694,11 +982,17 @@ export default function Business() {
                   business.currency ||
                   'NGN';
 
+                const approved =
+                  isBusinessApproved(business);
+
                 return (
                   <section
                     key={business.id}
                     style={styles.businessCard}
                   >
+
+                    {/* BUSINESS NAME */}
+
                     <div>
                       <div
                         style={{
@@ -733,7 +1027,8 @@ export default function Business() {
 
                         <span
                           style={{
-                            background: 'rgba(255,255,255,0.15)',
+                            background:
+                              'rgba(255,255,255,0.15)',
                             padding: '7px 10px',
                             borderRadius: 9,
                             fontSize: 12,
@@ -744,6 +1039,8 @@ export default function Business() {
                           {currency}
                         </span>
                       </div>
+
+                      {/* ACCOUNT NUMBER */}
 
                       <div
                         style={{
@@ -770,17 +1067,21 @@ export default function Business() {
                             letterSpacing: 1.5,
                           }}
                         >
-                          {accountNumber || 'Not available'}
+                          {accountNumber ||
+                            'Not available'}
                         </strong>
 
                         {accountNumber && (
                           <button
                             type="button"
                             onClick={() =>
-                              copyAccountNumber(accountNumber)
+                              copyAccountNumber(
+                                accountNumber
+                              )
                             }
                             style={{
-                              border: '1px solid rgba(255,255,255,0.4)',
+                              border:
+                                '1px solid rgba(255,255,255,0.4)',
                               background: 'transparent',
                               color: '#fff',
                               borderRadius: 8,
@@ -794,6 +1095,8 @@ export default function Business() {
                         )}
                       </div>
                     </div>
+
+                    {/* BALANCE AND ACCOUNT STATUS */}
 
                     <div
                       style={{
@@ -815,7 +1118,11 @@ export default function Business() {
                           Available Account Balance
                         </div>
 
-                        <strong style={{ fontSize: 24 }}>
+                        <strong
+                          style={{
+                            fontSize: 24,
+                          }}
+                        >
                           {formatMoney(
                             business.balance,
                             currency
@@ -825,22 +1132,51 @@ export default function Business() {
 
                       <span
                         style={{
-                          background: 'rgba(255,255,255,0.15)',
+                          background:
+                            'rgba(255,255,255,0.15)',
                           padding: '7px 10px',
                           borderRadius: 9,
                           fontSize: 12,
                           textTransform: 'capitalize',
                         }}
                       >
-                        {business.account_status || 'pending'}
+                        {business.account_status ||
+                          'pending'}
                       </span>
                     </div>
+
+                    {/* BUSINESS DASHBOARD BUTTON */}
+
+                    {approved ? (
+                      <button
+                        type="button"
+                        style={styles.dashboardButton}
+                        onClick={() =>
+                          openBusinessDashboard(business)
+                        }
+                      >
+                        Open Business Dashboard →
+                      </button>
+                    ) : (
+                      <div
+                        style={
+                          styles.disabledDashboardButton
+                        }
+                      >
+                        Your Business Dashboard will become
+                        available once your business is
+                        verified, approved, and the business
+                        account is active.
+                      </div>
+                    )}
+
                   </section>
                 );
               })}
             </div>
 
-            {/* BUSINESS DETAILS */}
+            {/* BUSINESS APPLICATIONS */}
+
             <section style={styles.card}>
               <div
                 style={{
@@ -853,9 +1189,15 @@ export default function Business() {
                 }}
               >
                 <div>
-                  <h2 style={{ margin: 0, fontSize: 21 }}>
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: 21,
+                    }}
+                  >
                     Business Applications
                   </h2>
+
                   <p style={styles.subtitle}>
                     Track verification and account approval.
                   </p>
@@ -913,7 +1255,8 @@ export default function Business() {
                           }}
                         >
                           Business type:{' '}
-                          {business.business_type || 'Not provided'}
+                          {business.business_type ||
+                            'Not provided'}
                         </p>
 
                         <p
@@ -946,8 +1289,11 @@ export default function Business() {
                           >
                             VERIFICATION
                           </span>
+
                           <StatusBadge
-                            status={business.verification_status}
+                            status={
+                              business.verification_status
+                            }
                           />
                         </div>
 
@@ -962,10 +1308,34 @@ export default function Business() {
                           >
                             ACCOUNT APPROVAL
                           </span>
-                          <StatusBadge status={business.status} />
+
+                          <StatusBadge
+                            status={business.status}
+                          />
+                        </div>
+
+                        <div>
+                          <span
+                            style={{
+                              display: 'block',
+                              color: '#68758a',
+                              fontSize: 11,
+                              marginBottom: 5,
+                            }}
+                          >
+                            BUSINESS ACCOUNT
+                          </span>
+
+                          <StatusBadge
+                            status={
+                              business.account_status
+                            }
+                          />
                         </div>
                       </div>
                     </div>
+
+                    {/* APPLICATION STATUS MESSAGE */}
 
                     <div
                       style={{
@@ -978,23 +1348,49 @@ export default function Business() {
                         lineHeight: 1.7,
                       }}
                     >
-                      {business.verification_status ===
-                      'verified' &&
-                      business.status === 'active'
-                        ? 'Your business has been verified and approved. Services remain subject to applicable account and payment-service availability.'
-                        : business.verification_status === 'rejected'
-                        ? 'Your business verification was rejected. Please contact support for the next steps.'
-                        : business.verification_status ===
-                          'under_review'
-                        ? 'Your business verification is under review.'
-                        : 'Your business application is pending verification and administrator approval.'}
+                      {approved
+                        ? 'Your business has been verified, approved, and activated. You can open your Business Dashboard to access the business banking interface.'
+                        : normalizeStatus(
+                            business.verification_status
+                          ) === 'rejected' ||
+                          normalizeStatus(
+                            business.status
+                          ) === 'rejected'
+                        ? 'Your business application was rejected. Please contact Zenimonies support for further information.'
+                        : normalizeStatus(
+                            business.verification_status
+                          ) === 'under_review'
+                        ? 'Your business verification is under review. You will be able to access the Business Dashboard after approval and account activation.'
+                        : 'Your business application is pending verification and administrator approval. The Business Dashboard is unavailable until all required approvals and account activation are complete.'}
                     </div>
+
+                    {/* APPLICATION DASHBOARD LINK */}
+
+                    {approved && (
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.secondaryButton,
+                          marginTop: 15,
+                          width: '100%',
+                          color: '#155eef',
+                          borderColor: '#c7d7fe',
+                        }}
+                        onClick={() =>
+                          openBusinessDashboard(business)
+                        }
+                      >
+                        Manage This Business →
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
             </section>
           </>
         )}
+
+        {/* FOOTER */}
 
         <p
           style={{
