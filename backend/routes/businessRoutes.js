@@ -13,43 +13,38 @@ const {
   adminReviewBusiness,
 } = require('../controllers/businessController');
 
-// ============================================================
-// ZENIMONIES BUSINESS ACCOUNT ROUTES
-// ============================================================
-
-// Register a new business and create its separate account.
+// Register a business.
 router.post(
   '/',
   authMiddleware,
   createBusiness
 );
 
-// List businesses belonging to the logged-in user.
+// List the logged-in user's businesses.
 router.get(
   '/',
   authMiddleware,
   getMyBusinesses
 );
 
-// View a specific business (owner or admin).
-router.get(
-  '/:id',
-  authMiddleware,
-  getBusinessById
-);
-
-// Admin: list all business applications.
+// Admin routes must be before /:id.
 router.get(
   '/admin/all',
   authMiddleware,
   adminListBusinesses
 );
 
-// Admin: approve or reject a business application.
 router.post(
   '/admin/:id/review',
   authMiddleware,
   adminReviewBusiness
+);
+
+// Get one business by ID.
+router.get(
+  '/:id',
+  authMiddleware,
+  getBusinessById
 );
 
 module.exports = router;
