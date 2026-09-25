@@ -11,6 +11,7 @@ import {
 import Login from './pages/Login.tsx';
 import Register from './pages/Register.tsx';
 import Dashboard from './pages/Dashboard.tsx';
+import BusinessDashboard from './pages/BusinessDashboard.tsx';
 import Profile from './pages/Profile.tsx';
 import Settings from './pages/Settings.tsx';
 import KYC from './pages/KYC.tsx';
@@ -341,6 +342,11 @@ const App: React.FC = () => {
             path="/"
             element={<Dashboard />}
           />
+
+          <Route
+            path="/business/dashboard/:id"
+            element={<BusinessDashboard />}
+         />
 
           <Route
             path="/notifications"
