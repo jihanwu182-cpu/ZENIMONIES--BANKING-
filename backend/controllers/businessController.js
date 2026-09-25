@@ -1,9 +1,14 @@
+
 const crypto = require('crypto');
 const pool = require('../config/database');
 
 // ============================================================
 // ZENIMONIES BANKING
 // BUSINESS ACCOUNTS CONTROLLER
+// ============================================================
+
+// ============================================================
+// HELPERS
 // ============================================================
 
 function getUserId(req) {
@@ -32,13 +37,17 @@ function cleanString(value, maxLength = 200) {
 }
 
 function generateBusinessAccountNumber() {
-  return String(crypto.randomInt(1000000000, 9999999999));
+  return String(
+    crypto.randomInt(1000000000, 9999999999)
+  );
 }
 
 function validUuid(value) {
   return (
     typeof value === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value
+    )
   );
 }
 
@@ -47,9 +56,8 @@ function validUuid(value) {
 //
 // POST /api/businesses
 //
-// Requires authenticated user.
 // Creates a separate business account.
-// New businesses require administrator review.
+// Business and account remain pending until approved.
 // ============================================================
 
 async function createBusiness(req, res) {
@@ -95,7 +103,9 @@ async function createBusiness(req, res) {
 
   if (
     !allowedCurrencies[selectedCountry] ||
-    !allowedCurrencies[selectedCountry].includes(selectedCurrency)
+    !allowedCurrencies[selectedCountry].includes(
+      selectedCurrency
+    )
   ) {
     return res.status(400).json({
       success: false,
@@ -104,12 +114,16 @@ async function createBusiness(req, res) {
     });
   }
 
-  const client = await pool.connect();
+  let client;
+  let transactionStarted = false;
 
   try {
-    await client.query('BEGIN');
+    client = await pool.connect();
 
-    // Confirm that the user exists and is active.
+    await client.query('BEGIN');
+    transactionStarted = true;
+
+    // Confirm the user exists and is active.
     const userResult = await client.query(
       `
         SELECT id, status
@@ -122,6 +136,7 @@ async function createBusiness(req, res) {
 
     if (!userResult.rows.length) {
       await client.query('ROLLBACK');
+      transactionStarted = false;
 
       return res.status(404).json({
         success: false,
@@ -130,10 +145,12 @@ async function createBusiness(req, res) {
     }
 
     if (
-      String(userResult.rows[0].status || '').toLowerCase() !==
-      'active'
+      String(
+        userResult.rows[0].status || ''
+      ).toLowerCase() !== 'active'
     ) {
       await client.query('ROLLBACK');
+      transactionStarted = false;
 
       return res.status(403).json({
         success: false,
@@ -141,11 +158,10 @@ async function createBusiness(req, res) {
       });
     }
 
-    
-    
-    // Create a separate business account.
-    // The account remains pending until business approval.
-
+    // Generate one account number.
+    // The database UNIQUE constraint prevents duplicates.
+    // If a collision occurs, the transaction is rolled back
+    // safely and the request can be retried by the user.
     const accountNumber =
       generateBusinessAccountNumber();
 
@@ -185,51 +201,6 @@ async function createBusiness(req, res) {
 
     const account = accountResult.rows[0];
 
-
-        await client.query(
-          'RELEASE SAVEPOINT business_account_attempt'
-        );
-      } catch (error) {
-        if (error.code === '23505') {
-          // Recover from the duplicate-number error.
-          await client.query(
-            'ROLLBACK TO SAVEPOINT business_account_attempt'
-          );
-
-          await client.query(
-            'RELEASE SAVEPOINT business_account_attempt'
-          );
-
-          continue;
-        }
-
-        throw error;
-      }
-    }
-
-    if (!account) {
-      throw new Error(
-        'Unable to generate a unique business account number.'
-      );
-    }
-
-
-        account = accountResult.rows[0];
-      } catch (error) {
-        if (error.code === '23505') {
-          continue;
-        }
-
-        throw error;
-      }
-    }
-
-    if (!account) {
-      throw new Error(
-        'Unable to generate a unique business account number.'
-      );
-    }
-
     // Create the business profile.
     const businessResult = await client.query(
       `
@@ -246,8 +217,16 @@ async function createBusiness(req, res) {
           status
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8,
-          'pending', 'pending'
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          'pending',
+          'pending'
         )
         RETURNING
           id,
@@ -278,6 +257,7 @@ async function createBusiness(req, res) {
     const business = businessResult.rows[0];
 
     await client.query('COMMIT');
+    transactionStarted = false;
 
     return res.status(201).json({
       success: true,
@@ -287,19 +267,40 @@ async function createBusiness(req, res) {
       account,
     });
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (client && transactionStarted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error(
+          'Business registration rollback error:',
+          rollbackError.message
+        );
+      }
+
+      transactionStarted = false;
+    }
 
     console.error(
       'Business registration error:',
       error.message
     );
 
+    if (error.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message:
+          'A duplicate account number or business record was detected. Please try again.',
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: 'Unable to create business account.',
     });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 
@@ -308,7 +309,7 @@ async function createBusiness(req, res) {
 //
 // GET /api/businesses
 //
-// Returns only businesses owned by the authenticated user.
+// Returns businesses belonging to the signed-in user.
 // ============================================================
 
 async function getMyBusinesses(req, res) {
@@ -378,7 +379,7 @@ async function getMyBusinesses(req, res) {
 //
 // GET /api/businesses/:id
 //
-// Owner or administrator.
+// Only the owner or an administrator may view the business.
 // ============================================================
 
 async function getBusinessById(req, res) {
@@ -442,12 +443,14 @@ async function getBusinessById(req, res) {
     const business = result.rows[0];
 
     if (
-      business.owner_user_id !== userId &&
+      String(business.owner_user_id) !==
+        String(userId) &&
       !isAdmin(req)
     ) {
       return res.status(403).json({
         success: false,
-        message: 'You are not authorized to view this business.',
+        message:
+          'You are not authorized to view this business.',
       });
     }
 
@@ -478,7 +481,8 @@ async function adminListBusinesses(req, res) {
   if (!getUserId(req) || !isAdmin(req)) {
     return res.status(403).json({
       success: false,
-      message: 'Administrator access is required.',
+      message:
+        'Administrator access is required.',
     });
   }
 
@@ -531,7 +535,8 @@ async function adminListBusinesses(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: 'Unable to retrieve businesses.',
+      message:
+        'Unable to retrieve businesses.',
     });
   }
 }
@@ -545,8 +550,9 @@ async function adminListBusinesses(req, res) {
 // {
 //   "decision": "approve" | "reject",
 //   "reason": "..."
-//
 // }
+//
+// Approval requires completed business verification.
 // ============================================================
 
 async function adminReviewBusiness(req, res) {
@@ -555,11 +561,13 @@ async function adminReviewBusiness(req, res) {
   if (!adminId || !isAdmin(req)) {
     return res.status(403).json({
       success: false,
-      message: 'Administrator access is required.',
+      message:
+        'Administrator access is required.',
     });
   }
 
   const { id } = req.params;
+
   const decision = cleanString(
     req.body?.decision,
     20
@@ -577,24 +585,32 @@ async function adminReviewBusiness(req, res) {
     });
   }
 
-  if (!['approve', 'reject'].includes(decision)) {
+  if (
+    !['approve', 'reject'].includes(decision)
+  ) {
     return res.status(400).json({
       success: false,
-      message: 'Decision must be approve or reject.',
+      message:
+        'Decision must be approve or reject.',
     });
   }
 
   if (decision === 'reject' && !reason) {
     return res.status(400).json({
       success: false,
-      message: 'A reason is required when rejecting a business.',
+      message:
+        'A reason is required when rejecting a business.',
     });
   }
 
-  const client = await pool.connect();
+  let client;
+  let transactionStarted = false;
 
   try {
+    client = await pool.connect();
+
     await client.query('BEGIN');
+    transactionStarted = true;
 
     const result = await client.query(
       `
@@ -619,6 +635,7 @@ async function adminReviewBusiness(req, res) {
 
     if (!result.rows.length) {
       await client.query('ROLLBACK');
+      transactionStarted = false;
 
       return res.status(404).json({
         success: false,
@@ -629,10 +646,14 @@ async function adminReviewBusiness(req, res) {
     const business = result.rows[0];
 
     if (
-      business.business_status === 'closed' ||
-      business.business_status === 'suspended'
+      ['closed', 'suspended'].includes(
+        String(
+          business.business_status
+        ).toLowerCase()
+      )
     ) {
       await client.query('ROLLBACK');
+      transactionStarted = false;
 
       return res.status(403).json({
         success: false,
@@ -642,11 +663,12 @@ async function adminReviewBusiness(req, res) {
     }
 
     if (decision === 'approve') {
-      // Approval is allowed only after the business
-      // verification status has been independently set
-      // to verified by an authorized verification process.
-      if (business.verification_status !== 'verified') {
+      if (
+        business.verification_status !==
+        'verified'
+      ) {
         await client.query('ROLLBACK');
+        transactionStarted = false;
 
         return res.status(403).json({
           success: false,
@@ -702,6 +724,7 @@ async function adminReviewBusiness(req, res) {
     }
 
     await client.query('COMMIT');
+    transactionStarted = false;
 
     return res.json({
       success: true,
@@ -711,10 +734,24 @@ async function adminReviewBusiness(req, res) {
           : 'Business application rejected.',
       businessId: id,
       decision,
-      reason: decision === 'reject' ? reason : null,
+      reason:
+        decision === 'reject'
+          ? reason
+          : null,
     });
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (client && transactionStarted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error(
+          'Business review rollback error:',
+          rollbackError.message
+        );
+      }
+
+      transactionStarted = false;
+    }
 
     console.error(
       'Business review error:',
@@ -726,7 +763,9 @@ async function adminReviewBusiness(req, res) {
       message: 'Unable to review business.',
     });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 
