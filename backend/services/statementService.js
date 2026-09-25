@@ -26,8 +26,6 @@ const CREDIT_TYPES = new Set([
   'electricity_refund',
   'tv_refund',
 
-
-
   'savings_maturity_release',
 ]);
 
@@ -54,7 +52,9 @@ function toKobo(value) {
   const amount = Number(value);
 
   if (!Number.isFinite(amount)) {
-    throw new Error('Invalid monetary amount in statement.');
+    throw new Error(
+      'Invalid monetary amount in statement.'
+    );
   }
 
   return Math.round(amount * 100);
@@ -96,7 +96,9 @@ function isValidDateString(value) {
     return false;
   }
 
-  const date = new Date(`${value}T00:00:00.000Z`);
+  const date = new Date(
+    `${value}T00:00:00.000Z`
+  );
 
   return (
     !Number.isNaN(date.getTime()) &&
@@ -104,7 +106,10 @@ function isValidDateString(value) {
   );
 }
 
-function validateStatementDates(startDate, endDate) {
+function validateStatementDates(
+  startDate,
+  endDate
+) {
   if (
     !isValidDateString(startDate) ||
     !isValidDateString(endDate)
@@ -120,11 +125,18 @@ function validateStatementDates(startDate, endDate) {
     );
   }
 
-  const start = new Date(`${startDate}T00:00:00.000Z`);
-  const end = new Date(`${endDate}T00:00:00.000Z`);
+  const start = new Date(
+    `${startDate}T00:00:00.000Z`
+  );
+
+  const end = new Date(
+    `${endDate}T00:00:00.000Z`
+  );
 
   const days =
-    Math.floor((end - start) / 86400000) + 1;
+    Math.floor(
+      (end - start) / 86400000
+    ) + 1;
 
   if (days > MAX_STATEMENT_DAYS) {
     throw new Error(
@@ -197,9 +209,13 @@ async function getCustomerAccount(userId) {
     accountNumber: row.account_number,
     currency: row.currency,
 
-    currentAccountBalance: Number(
-      row.current_account_balance
-    ),
+    // Preserve a missing database balance as null.
+    // Do not convert a missing balance into zero.
+    currentAccountBalance:
+      row.current_account_balance === null ||
+      row.current_account_balance === undefined
+        ? null
+        : Number(row.current_account_balance),
 
     accountStatus: row.account_status,
   };
@@ -218,6 +234,8 @@ function classifyTransaction(type) {
     return 'debit';
   }
 
+  // Fail safely rather than silently classifying
+  // an unknown transaction as a debit or credit.
   throw new Error(
     `Unsupported statement transaction type: ${type}`
   );
@@ -227,8 +245,11 @@ function classifyTransaction(type) {
 // FETCH STATEMENT TRANSACTIONS
 //
 // The central transactions table is the source of truth.
-// Supplemental tables provide beneficiary and institution
-// details only. They are not used to create duplicate entries.
+//
+// Supplemental tables provide transaction details only.
+// They must not create duplicate statement entries.
+//
+// Only completed central ledger transactions are included.
 // ============================================================
 
 async function getStatementTransactions(
@@ -253,35 +274,64 @@ async function getStatementTransactions(
         t.created_at,
 
         -- Bank transfer details
-        bt.recipient_name AS transfer_recipient_name,
-        bt.recipient_bank_name AS transfer_bank_name,
-        bt.recipient_account_number AS transfer_account_number,
+        bt.recipient_name
+          AS transfer_recipient_name,
+
+        bt.recipient_bank_name
+          AS transfer_bank_name,
+
+        bt.recipient_account_number
+          AS transfer_account_number,
 
         -- Deposit details
-        d.payment_method AS deposit_payment_method,
+        d.payment_method
+          AS deposit_payment_method,
 
         -- Withdrawal details
-        w.destination_bank_name AS withdrawal_bank_name,
-        w.destination_account_name AS withdrawal_account_name,
-        w.destination_account_number AS withdrawal_account_number,
+        w.destination_bank_name
+          AS withdrawal_bank_name,
+
+        w.destination_account_name
+          AS withdrawal_account_name,
+
+        w.destination_account_number
+          AS withdrawal_account_number,
 
         -- Airtime details
-        airtime.network AS airtime_network,
-        airtime.phone_number AS airtime_phone,
+        airtime.network
+          AS airtime_network,
+
+        airtime.phone_number
+          AS airtime_phone,
 
         -- Data details
-        data.network AS data_network,
-        data.phone_number AS data_phone,
-        data.plan_name AS data_plan_name,
+        data.network
+          AS data_network,
+
+        data.phone_number
+          AS data_phone,
+
+        data.plan_name
+          AS data_plan_name,
 
         -- Bill and electricity details
-        bill.category AS bill_category,
-        bill.biller_name AS biller_name,
-        bill.customer_reference AS bill_customer_reference,
-        bill.customer_name AS bill_customer_name,
-        bill.meter_number AS bill_meter_number,
-        bill.electricity_token AS electricity_token,
-        bill.units AS electricity_units
+        bill.category
+          AS bill_category,
+
+        bill.biller_name
+          AS biller_name,
+
+        bill.customer_reference
+          AS bill_customer_reference,
+
+        bill.customer_name
+          AS bill_customer_name,
+
+        bill.meter_number
+          AS bill_meter_number,
+
+        bill.units
+          AS electricity_units
 
       FROM transactions t
 
@@ -348,11 +398,11 @@ async function getStatementTransactions(
 // ============================================================
 // OPENING BALANCE
 //
-// Uses the latest completed transaction snapshot before
-// the requested statement period.
+// Uses the latest completed transaction balance snapshot
+// before the requested statement period.
 //
-// If no previous transaction exists, the opening balance
-// cannot automatically be assumed to be zero.
+// If no previous snapshot exists, the opening balance
+// remains null. It is not assumed to be zero.
 // ============================================================
 
 async function getOpeningBalance(
@@ -391,19 +441,21 @@ async function getOpeningBalance(
     return null;
   }
 
-  return Number(result.rows[0].balance_after);
+  return Number(
+    result.rows[0].balance_after
+  );
 }
 
 // ============================================================
-// TRANSACTION DESCRIPTION
+// TRANSACTION DESCRIPTION AND DETAILS
 // ============================================================
-
 
 function buildTransactionDetails(transaction) {
   const type = transaction.type;
 
   let description =
-    transaction.description || 'Account transaction';
+    transaction.description ||
+    'Account transaction';
 
   let beneficiary = '';
   let institution = '';
@@ -422,9 +474,30 @@ function buildTransactionDetails(transaction) {
     institution =
       transaction.transfer_bank_name || '';
 
-    if (!institution && type === 'internal_transfer') {
+    if (
+      !institution &&
+      type === 'internal_transfer'
+    ) {
       institution = 'Zenimonies';
     }
+  }
+
+  // ----------------------------------------------------------
+  // INTERNAL TRANSFER RECEIVED
+  // ----------------------------------------------------------
+
+  if (type === 'internal_transfer_received') {
+    institution = 'Zenimonies';
+  }
+
+  // ----------------------------------------------------------
+  // TRANSFER REFUNDS
+  // ----------------------------------------------------------
+
+  if (type === 'transfer_refund') {
+    institution =
+      transaction.transfer_bank_name ||
+      'Bank transfer';
   }
 
   // ----------------------------------------------------------
@@ -484,8 +557,32 @@ function buildTransactionDetails(transaction) {
   }
 
   // ----------------------------------------------------------
+  // TV SUBSCRIPTIONS AND TV REFUNDS
+  //
+  // Uses existing bill-payment metadata when available.
+  // The original ledger description is preserved.
+  // ----------------------------------------------------------
+
+  if (
+    type === 'tv_subscription' ||
+    type === 'tv_refund'
+  ) {
+    institution =
+      transaction.biller_name ||
+      transaction.bill_category ||
+      'TV subscription';
+
+    beneficiary =
+      transaction.bill_customer_name ||
+      transaction.bill_customer_reference ||
+      '';
+  }
+
+  // ----------------------------------------------------------
   // ELECTRICITY AND OTHER BILLS
-  // Never include the full electricity token.
+  //
+  // Never expose electricity_token in a statement.
+  // Electricity units may be shown when available.
   // ----------------------------------------------------------
 
   if (
@@ -495,7 +592,9 @@ function buildTransactionDetails(transaction) {
     type === 'bill_refund'
   ) {
     institution =
-      transaction.biller_name || '';
+      transaction.biller_name ||
+      transaction.bill_category ||
+      '';
 
     beneficiary =
       transaction.bill_customer_name ||
@@ -503,11 +602,12 @@ function buildTransactionDetails(transaction) {
       transaction.bill_meter_number ||
       '';
 
-    // Electricity units may be shown.
-    // Redeemable electricity tokens must never be exposed.
     if (
       transaction.electricity_units &&
-      type === 'electricity_payment'
+      (
+        type === 'electricity_payment' ||
+        type === 'electricity_refund'
+      )
     ) {
       description =
         `${description} | Units: ${transaction.electricity_units}`;
@@ -518,11 +618,10 @@ function buildTransactionDetails(transaction) {
   // SAVINGS
   // ----------------------------------------------------------
 
-  if (type === 'savings_lock') {
-    institution = 'Zenimonies Savings';
-  }
-
-  if (type === 'savings_maturity_release') {
+  if (
+    type === 'savings_lock' ||
+    type === 'savings_maturity_release'
+  ) {
     institution = 'Zenimonies Savings';
   }
 
@@ -537,17 +636,16 @@ function buildTransactionDetails(transaction) {
   };
 }
 
-    
-
 // ============================================================
 // CALCULATE STATEMENT TOTALS
 //
-// Transaction fees are displayed per transaction.
-// They are not added as a separate statement summary.
+// Credits and debits show transaction principal amounts.
+// Fees are shown separately for each transaction.
 //
-// IMPORTANT:
-// A missing balance snapshot remains null.
-// This service does not fabricate transaction balances.
+// No Total Fees summary is generated.
+//
+// Missing balance snapshots remain null.
+// Negative account balances are preserved.
 // ============================================================
 
 function calculateStatementBalances(
@@ -557,8 +655,8 @@ function calculateStatementBalances(
   let totalCreditsKobo = 0;
   let totalDebitsKobo = 0;
 
-  const formattedTransactions = transactions.map(
-    (transaction) => {
+  const formattedTransactions =
+    transactions.map((transaction) => {
       const type = classifyTransaction(
         transaction.type
       );
@@ -568,7 +666,7 @@ function calculateStatementBalances(
       );
 
       const feeKobo = toKobo(
-        transaction.transaction_fee || 0
+        transaction.transaction_fee ?? 0
       );
 
       if (type === 'credit') {
@@ -615,15 +713,16 @@ function calculateStatementBalances(
 
         currency: transaction.currency,
       };
-    }
-  );
+    });
 
   return {
     openingBalance,
 
-    totalCredits: fromKobo(totalCreditsKobo),
+    totalCredits:
+      fromKobo(totalCreditsKobo),
 
-    totalDebits: fromKobo(totalDebitsKobo),
+    totalDebits:
+      fromKobo(totalDebitsKobo),
 
     transactions: formattedTransactions,
   };
@@ -671,14 +770,14 @@ async function buildAccountStatement({
       transactions
     );
 
-  // Do not generate a misleading closing balance.
+  // The final completed transaction's recorded snapshot
+  // is used as the closing balance.
   //
-  // The current ledger has some transaction writers that
-  // do not populate balance_after. The final balance must
-  // be reconciled before it can be represented as verified.
+  // If that snapshot is missing, closing balance remains
+  // null instead of presenting an unverified amount.
 
   const lastTransaction =
-    transactions.length
+    transactions.length > 0
       ? transactions[transactions.length - 1]
       : null;
 
@@ -715,13 +814,16 @@ async function buildAccountStatement({
           ? null
           : Number(openingBalance),
 
-      totalCredits: balances.totalCredits,
+      totalCredits:
+        balances.totalCredits,
 
-      totalDebits: balances.totalDebits,
+      totalDebits:
+        balances.totalDebits,
 
       closingBalance,
 
-      transactions: balances.transactions,
+      transactions:
+        balances.transactions,
     },
   };
 }
