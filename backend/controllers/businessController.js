@@ -141,6 +141,7 @@ async function createBusiness(req, res) {
       });
     }
 
+    
     // Create a separate business account.
     // The account remains pending until business approval.
     let account;
@@ -151,6 +152,13 @@ async function createBusiness(req, res) {
 
       const accountNumber =
         generateBusinessAccountNumber();
+
+      // A savepoint lets PostgreSQL recover from a
+      // duplicate account number without aborting the
+      // entire registration transaction.
+      await client.query(
+        'SAVEPOINT business_account_attempt'
+      );
 
       try {
         const accountResult = await client.query(
@@ -163,7 +171,14 @@ async function createBusiness(req, res) {
               balance,
               status
             )
-            VALUES ($1, $2, 'business', $3, 0.00, 'pending')
+            VALUES (
+              $1,
+              $2,
+              'business',
+              $3,
+              0.00,
+              'pending'
+            )
             RETURNING
               id,
               account_number,
@@ -179,6 +194,36 @@ async function createBusiness(req, res) {
             selectedCurrency,
           ]
         );
+
+        account = accountResult.rows[0];
+
+        await client.query(
+          'RELEASE SAVEPOINT business_account_attempt'
+        );
+      } catch (error) {
+        if (error.code === '23505') {
+          // Recover from the duplicate-number error.
+          await client.query(
+            'ROLLBACK TO SAVEPOINT business_account_attempt'
+          );
+
+          await client.query(
+            'RELEASE SAVEPOINT business_account_attempt'
+          );
+
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    if (!account) {
+      throw new Error(
+        'Unable to generate a unique business account number.'
+      );
+    }
+
 
         account = accountResult.rows[0];
       } catch (error) {
