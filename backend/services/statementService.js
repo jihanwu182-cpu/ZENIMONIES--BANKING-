@@ -2,346 +2,14 @@
 const pool = require('../config/database');
 
 // ============================================================
-// ZENIMONIES ACCOUNT STATEMENT SERVICE
+// ZENIMONIES BANKING
+// ACCOUNT STATEMENT SERVICE
 // ============================================================
 
 const MAX_STATEMENT_DAYS = 365;
 
 // ============================================================
-// MONEY HELPERS
-// ============================================================
-
-const toKobo = (value) => {
-  const amount = Number(value);
-
-  if (!Number.isFinite(amount) || amount < 0) {
-    throw new Error('Invalid monetary amount found.');
-  }
-
-  return Math.round((amount + Number.EPSILON) * 100);
-};
-
-const fromKobo = (value) => {
-  return Number((value / 100).toFixed(2));
-};
-
-const toNullableMoney = (value) => {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  return fromKobo(toKobo(value));
-};
-
-// ============================================================
-// DATE VALIDATION
-// ============================================================
-
-const validateStatementDates = (startDate, endDate) => {
-  if (
-    typeof startDate !== 'string' ||
-    typeof endDate !== 'string'
-  ) {
-    throw new Error(
-      'Start date and end date are required.'
-    );
-  }
-
-  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-
-  if (
-    !datePattern.test(startDate) ||
-    !datePattern.test(endDate)
-  ) {
-    throw new Error(
-      'Dates must use YYYY-MM-DD format.'
-    );
-  }
-
-  const start = new Date(`${startDate}T00:00:00.000Z`);
-  const end = new Date(`${endDate}T00:00:00.000Z`);
-
-  if (
-    Number.isNaN(start.getTime()) ||
-    Number.isNaN(end.getTime()) ||
-    start.toISOString().slice(0, 10) !== startDate ||
-    end.toISOString().slice(0, 10) !== endDate
-  ) {
-    throw new Error('Invalid statement dates.');
-  }
-
-  if (start > end) {
-    throw new Error(
-      'Start date cannot be after end date.'
-    );
-  }
-
-  const days =
-    Math.floor(
-      (end.getTime() - start.getTime()) /
-        (1000 * 60 * 60 * 24)
-    ) + 1;
-
-  if (days > MAX_STATEMENT_DAYS) {
-    throw new Error(
-      'Statement period cannot exceed 365 days.'
-    );
-  }
-
-  return {
-    startDate,
-    endDate,
-  };
-};
-
-// ============================================================
-// LOAD CUSTOMER ACCOUNT AND REGISTERED ADDRESS
-// ============================================================
-
-const getCustomerAccount = async (
-  userId,
-  client = pool
-) => {
-  if (!userId) {
-    throw new Error(
-      'Authenticated customer is required.'
-    );
-  }
-
-  const result = await client.query(
-    `
-    SELECT
-      u.id AS user_id,
-      u.full_name,
-      u.email,
-
-      u.address,
-      u.city,
-      u.state,
-      u.lga,
-      u.country,
-
-      a.id AS account_id,
-      a.account_number,
-      a.currency,
-      a.balance,
-      a.status AS account_status
-
-    FROM users u
-
-    INNER JOIN accounts a
-      ON a.user_id = u.id
-
-    WHERE u.id = $1
-      AND a.status = 'active'
-
-    ORDER BY
-      a.created_at ASC,
-      a.id ASC
-
-    LIMIT 1
-    `,
-    [userId]
-  );
-
-  if (result.rows.length === 0) {
-    throw new Error(
-      'No active customer account was found.'
-    );
-  }
-
-  const account = result.rows[0];
-
-  const addressParts = [
-    account.address,
-    account.city,
-    account.lga,
-    account.state,
-    account.country,
-  ]
-    .map((part) => String(part || '').trim())
-    .filter(Boolean);
-
-  return {
-    ...account,
-    registered_address:
-      addressParts.length > 0
-        ? [...new Set(addressParts)].join(', ')
-        : 'Address not provided',
-  };
-};
-
-// ============================================================
-// GET COMPLETED TRANSACTIONS WITH METADATA
-//
-// The central transactions table is the authoritative
-// statement ledger.
-//
-// Operational tables are only used to enrich the ledger.
-// They are not independently counted as transactions.
-// ============================================================
-
-const getStatementTransactions = async (
-  accountId,
-  startDate,
-  endDate,
-  client = pool
-) => {
-  const result = await client.query(
-    `
-    SELECT
-      t.id,
-      t.account_id,
-      t.type,
-      t.amount,
-      t.currency,
-      t.reference,
-      t.description,
-      t.status,
-      t.balance_before,
-      t.balance_after,
-      t.transaction_fee,
-      t.created_at,
-
-      -- BANK TRANSFERS
-      bt.recipient_name AS transfer_beneficiary,
-      bt.recipient_bank_name AS transfer_bank,
-      bt.recipient_account_number AS transfer_account_number,
-
-      -- AIRTIME
-      airt.network AS airtime_network,
-      airt.phone_number AS airtime_phone,
-
-      -- DATA
-      data_tx.network AS data_network,
-      data_tx.phone_number AS data_phone,
-      data_tx.plan_name AS data_plan_name,
-
-      -- ELECTRICITY AND OTHER BILLS
-      bill.category AS bill_category,
-      bill.biller_name AS biller_name,
-      bill.customer_reference AS bill_customer_reference,
-      bill.customer_name AS bill_customer_name,
-      bill.meter_number AS bill_meter_number,
-      bill.electricity_token AS electricity_token,
-      bill.units AS electricity_units,
-
-      -- WITHDRAWALS
-      w.destination_bank_name AS withdrawal_bank,
-      w.destination_account_name AS withdrawal_beneficiary,
-      w.destination_account_number AS withdrawal_account_number
-
-    FROM transactions t
-
-    LEFT JOIN bank_transfers bt
-      ON bt.reference = t.reference
-      AND bt.account_id = t.account_id
-      AND t.type IN (
-        'transfer',
-        'internal_transfer',
-        'internal_transfer_received'
-      )
-
-    LEFT JOIN airtime_transactions airt
-      ON airt.reference = t.reference
-      AND t.type = 'airtime_purchase'
-
-    LEFT JOIN data_transactions data_tx
-      ON data_tx.reference = t.reference
-      AND t.type = 'data_purchase'
-
-    LEFT JOIN bill_payments bill
-      ON (
-        bill.reference = t.reference
-        OR (
-          t.type = 'electricity_refund'
-          AND bill.reference =
-            REGEXP_REPLACE(t.reference, '^REF-', '')
-        )
-      )
-      AND bill.account_id = t.account_id
-
-    LEFT JOIN withdrawals w
-      ON w.reference = t.reference
-      AND w.account_id = t.account_id
-      AND t.type = 'withdrawal'
-
-    WHERE t.account_id = $1
-      AND t.status = 'completed'
-
-      AND t.created_at >=
-        ($2::date)::timestamp
-
-      AND t.created_at <
-        (
-          ($3::date + INTERVAL '1 day')
-          ::timestamp
-        )
-
-    ORDER BY
-      t.created_at ASC,
-      t.id ASC
-    `,
-    [
-      accountId,
-      startDate,
-      endDate,
-    ]
-  );
-
-  return result.rows;
-};
-
-// ============================================================
-// GET OPENING BALANCE
-// ============================================================
-
-const getOpeningBalance = async (
-  accountId,
-  startDate,
-  client = pool
-) => {
-  const result = await client.query(
-    `
-    SELECT
-      balance_after
-
-    FROM transactions
-
-    WHERE account_id = $1
-      AND status = 'completed'
-      AND created_at <
-        ($2::date)::timestamp
-
-    ORDER BY
-      created_at DESC,
-      id DESC
-
-    LIMIT 1
-    `,
-    [
-      accountId,
-      startDate,
-    ]
-  );
-
-  if (result.rows.length === 0) {
-    return 0;
-  }
-
-  if (result.rows[0].balance_after === null) {
-    throw new Error(
-      'The opening balance cannot be verified because the latest prior ledger entry has no balance snapshot.'
-    );
-  }
-
-  return toKobo(
-    result.rows[0].balance_after
-  );
-};
-
-// ============================================================
-// TRANSACTION CLASSIFICATION
+// TRANSACTION TYPES
 // ============================================================
 
 const CREDIT_TYPES = new Set([
@@ -352,8 +20,8 @@ const CREDIT_TYPES = new Set([
 
   'internal_transfer_received',
 
-  'data_refund',
   'airtime_refund',
+  'data_refund',
   'bill_refund',
   'electricity_refund',
 
@@ -363,7 +31,6 @@ const CREDIT_TYPES = new Set([
 const DEBIT_TYPES = new Set([
   'transfer',
   'withdrawal',
-
   'internal_transfer',
 
   'airtime_purchase',
@@ -375,11 +42,170 @@ const DEBIT_TYPES = new Set([
   'savings_lock',
 ]);
 
-const classifyTransaction = (transactionType) => {
-  const type = String(
-    transactionType || ''
-  ).toLowerCase();
+// ============================================================
+// MONEY HELPERS
+// ============================================================
 
+function toKobo(value) {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) {
+    throw new Error('Invalid monetary amount in statement.');
+  }
+
+  return Math.round(amount * 100);
+}
+
+function fromKobo(value) {
+  return Number((value / 100).toFixed(2));
+}
+
+function formatAddress(customer) {
+  const parts = [
+    customer.address,
+    customer.city,
+    customer.lga,
+    customer.state,
+    customer.country,
+  ];
+
+  const cleaned = parts
+    .filter((part) => typeof part === 'string')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return cleaned.length
+    ? [...new Set(cleaned)].join(', ')
+    : 'Address not provided';
+}
+
+// ============================================================
+// DATE VALIDATION
+// ============================================================
+
+function isValidDateString(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.toISOString().slice(0, 10) === value
+  );
+}
+
+function validateStatementDates(startDate, endDate) {
+  if (
+    !isValidDateString(startDate) ||
+    !isValidDateString(endDate)
+  ) {
+    throw new Error(
+      'Please provide valid statement start and end dates.'
+    );
+  }
+
+  if (startDate > endDate) {
+    throw new Error(
+      'Statement start date cannot be after the end date.'
+    );
+  }
+
+  const start = new Date(`${startDate}T00:00:00.000Z`);
+  const end = new Date(`${endDate}T00:00:00.000Z`);
+
+  const days =
+    Math.floor((end - start) / 86400000) + 1;
+
+  if (days > MAX_STATEMENT_DAYS) {
+    throw new Error(
+      'Statements cannot exceed 365 days.'
+    );
+  }
+
+  return {
+    startDate,
+    endDate,
+  };
+}
+
+// ============================================================
+// CUSTOMER AND ACCOUNT
+// ============================================================
+
+async function getCustomerAccount(userId) {
+  const result = await pool.query(
+    `
+      SELECT
+        u.id AS user_id,
+        u.full_name,
+        u.email,
+        u.address,
+        u.city,
+        u.lga,
+        u.state,
+        u.country,
+
+        a.id AS account_id,
+        a.account_number,
+        a.currency,
+        a.balance AS current_account_balance,
+        a.status AS account_status
+
+      FROM users u
+
+      INNER JOIN accounts a
+        ON a.user_id = u.id
+
+      WHERE
+        u.id = $1
+        AND a.status = 'active'
+
+      ORDER BY a.created_at ASC
+
+      LIMIT 1
+    `,
+    [userId]
+  );
+
+  if (!result.rows.length) {
+    throw new Error(
+      'No active account was found for this customer.'
+    );
+  }
+
+  const row = result.rows[0];
+
+  return {
+    userId: row.user_id,
+
+    fullName: row.full_name,
+    email: row.email,
+
+    address: formatAddress(row),
+
+    accountId: row.account_id,
+    accountNumber: row.account_number,
+    currency: row.currency,
+
+    currentAccountBalance: Number(
+      row.current_account_balance
+    ),
+
+    accountStatus: row.account_status,
+  };
+}
+
+// ============================================================
+// TRANSACTION CLASSIFICATION
+// ============================================================
+
+function classifyTransaction(type) {
   if (CREDIT_TYPES.has(type)) {
     return 'credit';
   }
@@ -389,388 +215,482 @@ const classifyTransaction = (transactionType) => {
   }
 
   throw new Error(
-    `Unreviewed transaction type "${type}" found. Statement generation stopped to prevent incorrect debit or credit reporting.`
+    `Unsupported statement transaction type: ${type}`
   );
-};
+}
+
+// ============================================================
+// FETCH STATEMENT TRANSACTIONS
+//
+// The central transactions table is the source of truth.
+// Supplemental tables provide beneficiary and institution
+// details only. They are not used to create duplicate entries.
+// ============================================================
+
+async function getStatementTransactions(
+  accountId,
+  startDate,
+  endDate
+) {
+  const result = await pool.query(
+    `
+      SELECT
+        t.id,
+        t.account_id,
+        t.type,
+        t.amount,
+        t.currency,
+        t.reference,
+        t.description,
+        t.status,
+        t.balance_before,
+        t.balance_after,
+        t.transaction_fee,
+        t.created_at,
+
+        -- Bank transfer details
+        bt.recipient_name AS transfer_recipient_name,
+        bt.recipient_bank_name AS transfer_bank_name,
+        bt.recipient_account_number AS transfer_account_number,
+
+        -- Deposit details
+        d.payment_method AS deposit_payment_method,
+
+        -- Withdrawal details
+        w.destination_bank_name AS withdrawal_bank_name,
+        w.destination_account_name AS withdrawal_account_name,
+        w.destination_account_number AS withdrawal_account_number,
+
+        -- Airtime details
+        airtime.network AS airtime_network,
+        airtime.phone_number AS airtime_phone,
+
+        -- Data details
+        data.network AS data_network,
+        data.phone_number AS data_phone,
+        data.plan_name AS data_plan_name,
+
+        -- Bill and electricity details
+        bill.category AS bill_category,
+        bill.biller_name AS biller_name,
+        bill.customer_reference AS bill_customer_reference,
+        bill.customer_name AS bill_customer_name,
+        bill.meter_number AS bill_meter_number,
+        bill.electricity_token AS electricity_token,
+        bill.units AS electricity_units
+
+      FROM transactions t
+
+      LEFT JOIN bank_transfers bt
+        ON bt.reference = t.reference
+        AND bt.account_id = t.account_id
+
+      LEFT JOIN deposits d
+        ON d.reference = t.reference
+        AND d.account_id = t.account_id
+
+      LEFT JOIN withdrawals w
+        ON w.reference = t.reference
+        AND w.account_id = t.account_id
+
+      LEFT JOIN airtime_transactions airtime
+        ON airtime.reference = t.reference
+        AND airtime.account_id = t.account_id
+
+      LEFT JOIN data_transactions data
+        ON data.reference = t.reference
+        AND data.account_id = t.account_id
+
+      LEFT JOIN bill_payments bill
+        ON bill.account_id = t.account_id
+        AND (
+          bill.reference = t.reference
+
+          OR (
+            t.type = 'electricity_refund'
+            AND bill.reference =
+              regexp_replace(
+                t.reference,
+                '^REF-',
+                ''
+              )
+          )
+        )
+
+      WHERE
+        t.account_id = $1
+
+        AND t.status = 'completed'
+
+        AND t.created_at >= $2::date
+
+        AND t.created_at <
+          ($3::date + INTERVAL '1 day')
+
+      ORDER BY
+        t.created_at ASC,
+        t.id ASC
+    `,
+    [
+      accountId,
+      startDate,
+      endDate,
+    ]
+  );
+
+  return result.rows;
+}
+
+// ============================================================
+// OPENING BALANCE
+//
+// Uses the latest completed transaction snapshot before
+// the requested statement period.
+//
+// If no previous transaction exists, the opening balance
+// cannot automatically be assumed to be zero.
+// ============================================================
+
+async function getOpeningBalance(
+  accountId,
+  startDate
+) {
+  const result = await pool.query(
+    `
+      SELECT
+        balance_after
+
+      FROM transactions
+
+      WHERE
+        account_id = $1
+
+        AND status = 'completed'
+
+        AND created_at < $2::date
+
+        AND balance_after IS NOT NULL
+
+      ORDER BY
+        created_at DESC,
+        id DESC
+
+      LIMIT 1
+    `,
+    [
+      accountId,
+      startDate,
+    ]
+  );
+
+  if (!result.rows.length) {
+    return null;
+  }
+
+  return Number(result.rows[0].balance_after);
+}
 
 // ============================================================
 // TRANSACTION DESCRIPTION
 // ============================================================
 
-const getTransactionDescription = (transaction) => {
-  const type = String(
-    transaction.type || ''
-  ).toLowerCase();
+function buildTransactionDetails(transaction) {
+  const type = transaction.type;
 
-  if (
-    type === 'airtime_purchase' &&
-    transaction.airtime_network
-  ) {
-    return `Airtime purchase - ${transaction.airtime_network}`;
-  }
+  let description =
+    transaction.description || 'Account transaction';
 
-  if (
-    type === 'data_purchase' &&
-    transaction.data_network
-  ) {
-    return [
-      'Data purchase',
-      transaction.data_network,
-      transaction.data_plan_name,
-    ]
-      .filter(Boolean)
-      .join(' - ');
-  }
-
-  if (
-    type === 'electricity_payment' &&
-    transaction.biller_name
-  ) {
-    return `Electricity payment - ${transaction.biller_name}`;
-  }
-
-  if (
-    type === 'savings_lock'
-  ) {
-    return transaction.description ||
-      'Savings locked';
-  }
-
-  if (
-    type === 'savings_maturity_release'
-  ) {
-    return 'Matured savings principal released';
-  }
-
-  return transaction.description ||
-    transaction.type ||
-    'Account transaction';
-};
-
-// ============================================================
-// BENEFICIARY AND INSTITUTION
-// ============================================================
-
-const getBeneficiary = (transaction) => {
-  const type = String(
-    transaction.type || ''
-  ).toLowerCase();
+  let beneficiary = '';
+  let institution = '';
 
   if (
     type === 'transfer' ||
     type === 'internal_transfer'
   ) {
-    return transaction.transfer_beneficiary || '';
-  }
+    beneficiary =
+      transaction.transfer_recipient_name || '';
 
-  if (type === 'internal_transfer_received') {
-    return transaction.transfer_beneficiary || '';
+    institution =
+      transaction.transfer_bank_name || '';
+
+    if (!institution && type === 'internal_transfer') {
+      institution = 'Zenimonies';
+    }
   }
 
   if (type === 'withdrawal') {
-    return transaction.withdrawal_beneficiary || '';
+    beneficiary =
+      transaction.withdrawal_account_name || '';
+
+    institution =
+      transaction.withdrawal_bank_name || '';
   }
 
-  if (type === 'airtime_purchase') {
-    return transaction.airtime_phone || '';
+  if (type === 'deposit') {
+    institution =
+      transaction.deposit_payment_method || '';
   }
 
-  if (type === 'data_purchase') {
-    return transaction.data_phone || '';
+  if (
+    type === 'airtime_purchase' ||
+    type === 'airtime_refund'
+  ) {
+    institution =
+      transaction.airtime_network || '';
+
+    beneficiary =
+      transaction.airtime_phone || '';
+  }
+
+  if (
+    type === 'data_purchase' ||
+    type === 'data_refund'
+  ) {
+    institution =
+      transaction.data_network || '';
+
+    beneficiary =
+      transaction.data_phone || '';
+
+    if (transaction.data_plan_name) {
+      description =
+        `${description} - ${transaction.data_plan_name}`;
+    }
   }
 
   if (
     type === 'electricity_payment' ||
-    type === 'bill_payment'
+    type === 'electricity_refund' ||
+    type === 'bill_payment' ||
+    type === 'bill_refund'
   ) {
-    return (
+    institution =
+      transaction.biller_name || '';
+
+    beneficiary =
       transaction.bill_customer_name ||
       transaction.bill_customer_reference ||
       transaction.bill_meter_number ||
-      ''
-    );
+      '';
+
+    if (
+      transaction.electricity_token &&
+      type === 'electricity_payment'
+    ) {
+      description =
+        `${description} | Token: ${transaction.electricity_token}`;
+    }
+
+    if (
+      transaction.electricity_units &&
+      type === 'electricity_payment'
+    ) {
+      description =
+        `${description} | Units: ${transaction.electricity_units}`;
+    }
   }
 
-  return '';
-};
-
-const getInstitution = (transaction) => {
-  const type = String(
-    transaction.type || ''
-  ).toLowerCase();
-
-  if (
-    type === 'transfer' ||
-    type === 'internal_transfer' ||
-    type === 'internal_transfer_received'
-  ) {
-    return transaction.transfer_bank || '';
+  if (type === 'savings_lock') {
+    institution = 'Zenimonies Savings';
   }
 
-  if (type === 'withdrawal') {
-    return transaction.withdrawal_bank || '';
+  if (type === 'savings_maturity_release') {
+    institution = 'Zenimonies Savings';
   }
 
-  if (
-    type === 'airtime_purchase'
-  ) {
-    return transaction.airtime_network || '';
-  }
-
-  if (
-    type === 'data_purchase'
-  ) {
-    return transaction.data_network || '';
-  }
-
-  if (
-    type === 'electricity_payment' ||
-    type === 'bill_payment'
-  ) {
-    return transaction.biller_name || '';
-  }
-
-  return '';
-};
+  return {
+    description,
+    beneficiary,
+    institution,
+  };
+}
 
 // ============================================================
 // CALCULATE STATEMENT TOTALS
+//
+// Transaction fees are displayed per transaction.
+// They are not added as a separate statement summary.
+//
+// IMPORTANT:
+// A missing balance snapshot remains null.
+// This service does not fabricate transaction balances.
 // ============================================================
 
-const calculateStatementBalances = (
-  transactions,
-  openingBalanceKobo = 0
-) => {
-  if (!Array.isArray(transactions)) {
-    throw new Error(
-      'Invalid statement transactions.'
-    );
-  }
-
+function calculateStatementBalances(
+  openingBalance,
+  transactions
+) {
   let totalCreditsKobo = 0;
   let totalDebitsKobo = 0;
 
-  const formattedTransactions =
-    transactions.map((transaction) => {
-      const amountKobo =
-        toKobo(transaction.amount);
+  const formattedTransactions = transactions.map(
+    (transaction) => {
+      const type = classifyTransaction(
+        transaction.type
+      );
 
-      const feeKobo =
-        toKobo(
-          transaction.transaction_fee || 0
-        );
+      const amountKobo = toKobo(
+        transaction.amount
+      );
 
-      const classification =
-        classifyTransaction(
-          transaction.type
-        );
+      const feeKobo = toKobo(
+        transaction.transaction_fee || 0
+      );
 
-      const isCredit =
-        classification === 'credit';
+      if (type === 'credit') {
+        totalCreditsKobo += amountKobo;
+      } else {
+        totalDebitsKobo += amountKobo;
+      }
 
-      const creditKobo =
-        isCredit ? amountKobo : 0;
-
-      const debitKobo =
-        isCredit ? 0 : amountKobo;
-
-      totalCreditsKobo += creditKobo;
-      totalDebitsKobo += debitKobo;
-
-      const hasBalanceSnapshot =
-        transaction.balance_after !== null &&
-        transaction.balance_after !== undefined;
+      const details =
+        buildTransactionDetails(transaction);
 
       return {
         id: transaction.id,
 
-        date:
-          transaction.created_at,
+        date: transaction.created_at,
 
-        type:
-          transaction.type,
+        reference: transaction.reference,
 
-        reference:
-          transaction.reference,
+        type: transaction.type,
 
-        description:
-          getTransactionDescription(
-            transaction
-          ),
+        description: details.description,
 
-        counterparty:
-          getBeneficiary(transaction),
+        beneficiary: details.beneficiary,
 
-        institution:
-          getInstitution(transaction),
-
-        currency:
-          transaction.currency || 'NGN',
+        institution: details.institution,
 
         debit:
-          fromKobo(debitKobo),
+          type === 'debit'
+            ? fromKobo(amountKobo)
+            : 0,
 
         credit:
-          fromKobo(creditKobo),
+          type === 'credit'
+            ? fromKobo(amountKobo)
+            : 0,
 
-        fee:
-          fromKobo(feeKobo),
+        fee: fromKobo(feeKobo),
 
-        // Never fabricate a zero balance when
-        // the transaction has no recorded snapshot.
         balance:
-          hasBalanceSnapshot
-            ? toNullableMoney(
-                transaction.balance_after
-              )
-            : null,
+          transaction.balance_after === null ||
+          transaction.balance_after === undefined
+            ? null
+            : Number(transaction.balance_after),
 
-        balanceBefore:
-          toNullableMoney(
-            transaction.balance_before
-          ),
-
-        status:
-          transaction.status,
+        currency: transaction.currency,
       };
-    });
-
-  // ----------------------------------------------------------
-  // CLOSING BALANCE
-  // ----------------------------------------------------------
-
-  let closingBalanceKobo =
-    openingBalanceKobo;
-
-  if (transactions.length > 0) {
-    const lastTransaction =
-      transactions[transactions.length - 1];
-
-    if (
-      lastTransaction.balance_after === null ||
-      lastTransaction.balance_after === undefined
-    ) {
-      throw new Error(
-        'The closing balance cannot be verified because the latest statement transaction has no recorded balance snapshot.'
-      );
     }
-
-    closingBalanceKobo =
-      toKobo(
-        lastTransaction.balance_after
-      );
-  }
+  );
 
   return {
-    openingBalance:
-      fromKobo(openingBalanceKobo),
+    openingBalance,
 
-    totalCredits:
-      fromKobo(totalCreditsKobo),
+    totalCredits: fromKobo(totalCreditsKobo),
 
-    totalDebits:
-      fromKobo(totalDebitsKobo),
+    totalDebits: fromKobo(totalDebitsKobo),
 
-    closingBalance:
-      fromKobo(closingBalanceKobo),
-
-    transactions:
-      formattedTransactions,
+    transactions: formattedTransactions,
   };
-};
+}
 
 // ============================================================
 // BUILD ACCOUNT STATEMENT
 // ============================================================
 
-const buildAccountStatement = async ({
+async function buildAccountStatement({
   userId,
   startDate,
   endDate,
-}) => {
-  const dates =
-    validateStatementDates(
-      startDate,
-      endDate
-    );
+}) {
+  validateStatementDates(
+    startDate,
+    endDate
+  );
 
-  const account =
-    await getCustomerAccount(
-      userId
+  if (!userId) {
+    throw new Error(
+      'Authenticated customer ID is required.'
     );
+  }
 
-  const openingBalanceKobo =
+  const customer =
+    await getCustomerAccount(userId);
+
+  const openingBalance =
     await getOpeningBalance(
-      account.account_id,
-      dates.startDate
+      customer.accountId,
+      startDate
     );
 
   const transactions =
     await getStatementTransactions(
-      account.account_id,
-      dates.startDate,
-      dates.endDate
+      customer.accountId,
+      startDate,
+      endDate
     );
 
   const balances =
     calculateStatementBalances(
-      transactions,
-      openingBalanceKobo
+      openingBalance,
+      transactions
     );
+
+  // Do not generate a misleading closing balance.
+  //
+  // The current ledger has some transaction writers that
+  // do not populate balance_after. The final balance must
+  // be reconciled before it can be represented as verified.
+
+  const lastTransaction =
+    transactions.length
+      ? transactions[transactions.length - 1]
+      : null;
+
+  let closingBalance = openingBalance;
+
+  if (lastTransaction) {
+    closingBalance =
+      lastTransaction.balance_after === null ||
+      lastTransaction.balance_after === undefined
+        ? null
+        : Number(lastTransaction.balance_after);
+  }
 
   return {
     customer: {
-      userId:
-        account.user_id,
-
-      fullName:
-        account.full_name,
-
-      email:
-        account.email,
-
-      address:
-        account.registered_address,
+      userId: customer.userId,
+      fullName: customer.fullName,
+      email: customer.email,
+      address: customer.address,
     },
 
     account: {
-      accountId:
-        account.account_id,
-
-      accountNumber:
-        account.account_number,
-
-      currency:
-        account.currency || 'NGN',
+      id: customer.accountId,
+      accountNumber: customer.accountNumber,
+      currency: customer.currency,
     },
 
     statement: {
-      startDate:
-        dates.startDate,
-
-      endDate:
-        dates.endDate,
-
-      generatedAt:
-        new Date().toISOString(),
+      startDate,
+      endDate,
 
       openingBalance:
-        balances.openingBalance,
+        openingBalance === null
+          ? null
+          : Number(openingBalance),
 
-      totalCredits:
-        balances.totalCredits,
+      totalCredits: balances.totalCredits,
 
-      totalDebits:
-        balances.totalDebits,
+      totalDebits: balances.totalDebits,
 
-      closingBalance:
-        balances.closingBalance,
+      closingBalance,
 
-      transactions:
-        balances.transactions,
+      transactions: balances.transactions,
     },
   };
-};
+}
 
 // ============================================================
 // EXPORTS
@@ -778,10 +698,16 @@ const buildAccountStatement = async ({
 
 module.exports = {
   validateStatementDates,
+
   getCustomerAccount,
+
   getStatementTransactions,
+
   getOpeningBalance,
+
   classifyTransaction,
+
   calculateStatementBalances,
+
   buildAccountStatement,
 };
