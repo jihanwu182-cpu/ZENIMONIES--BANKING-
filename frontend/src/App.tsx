@@ -39,6 +39,7 @@ import Notifications from './pages/Notifications.tsx';
 import PasskeySecurity from './pages/PasskeySecurity.tsx';
 import AccountLocked from './pages/AccountLocked.tsx';
 import Savings from './pages/Savings.tsx';
+import Statement from './pages/Statement.tsx';
 
 import SessionGuard from './components/SessionGuard.tsx';
 import AirtimeReconciliation from './pages/AirtimeReconciliation.tsx';
@@ -358,6 +359,11 @@ const App: React.FC = () => {
           <Route
            path="/airtime-reconciliation"
            element={<AirtimeReconciliation />}
+        />
+
+          <Route
+           path="/statement"
+           element={<Statement />}
         />
 
           <Route
