@@ -69,9 +69,10 @@ const safeText = (value) => {
     .trim();
 };
 
-// ============================================================
-// MONEY VALIDATION
-// ============================================================
+
+ // ============================================================
+ // MONEY VALIDATION
+ // ============================================================
 
 const moneyNumber = (value) => {
   if (
@@ -84,10 +85,8 @@ const moneyNumber = (value) => {
 
   const amount = Number(value);
 
-  if (
-    !Number.isFinite(amount) ||
-    amount < 0
-  ) {
+  // Reject invalid numbers but allow negative balances.
+  if (!Number.isFinite(amount)) {
     throw new Error(
       'Invalid statement amount.'
     );
@@ -103,6 +102,7 @@ const formatAmountCell = (value) => {
     ? 'Not reconciled'
     : amount.toFixed(2);
 };
+
 
 // ============================================================
 // CSV ESCAPING
