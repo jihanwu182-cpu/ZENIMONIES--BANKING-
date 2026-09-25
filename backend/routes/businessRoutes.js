@@ -40,6 +40,13 @@ router.post(
   adminReviewBusiness
 );
 
+// Get business transaction history.
+router.get(
+  '/:id/transactions',
+  authMiddleware,
+  getBusinessTransactions
+);
+
 // Get one business by ID.
 router.get(
   '/:id',
