@@ -1,4 +1,3 @@
-
 import React, {
   useCallback,
   useEffect,
@@ -9,7 +8,8 @@ import { useNavigate } from 'react-router-dom';
 
 // ============================================================
 // ZENIMONIES BANKING
-// BUSINESS ACCOUNT MANAGEMENT
+// BUSINESS BANKING
+// GREEN & WHITE BRANDING
 // ============================================================
 
 const API_BASE =
@@ -23,33 +23,54 @@ const API_BASE =
 type BusinessAccount = {
   id: string;
   business_name: string;
+
   registration_number?: string | null;
   business_type?: string | null;
+
   country: string;
   currency: string;
+
   business_address?: string | null;
 
   verification_status: string;
   status: string;
 
+  verification_level?: number | string;
+  business_level?: number | string;
+  account_level?: number | string;
+
   created_at?: string;
 
   account_id?: string;
   business_account_id?: string;
+
   account_number?: string;
   account_currency?: string;
+
   balance?: string | number;
   account_status?: string;
 };
 
 type BusinessForm = {
   businessName: string;
-  registrationNumber: string;
   businessType: string;
   country: string;
   currency: string;
   businessAddress: string;
 };
+
+// ============================================================
+// BRAND COLORS
+// ============================================================
+
+const GREEN = '#006341';
+const GREEN_LIGHT = '#008746';
+const GREEN_DARK = '#004D38';
+const WHITE = '#FFFFFF';
+const PAGE_BG = '#F3F8F5';
+const TEXT = '#123B2B';
+const MUTED = '#64756B';
+const BORDER = '#DCE9E0';
 
 // ============================================================
 // STYLES
@@ -58,16 +79,17 @@ type BusinessForm = {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
-    background: '#f4f7fb',
-    padding: '24px',
+    background: PAGE_BG,
+    padding: '24px 16px',
     boxSizing: 'border-box',
-    color: '#172033',
+    color: TEXT,
     fontFamily: 'Arial, sans-serif',
   },
 
   container: {
     maxWidth: 1150,
     margin: '0 auto',
+    width: '100%',
   },
 
   header: {
@@ -76,66 +98,88 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 16,
-    marginBottom: 24,
+    marginBottom: 26,
+  },
+
+  brand: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+
+  logo: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    background: GREEN,
+    color: WHITE,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 27,
+    fontWeight: 900,
   },
 
   heading: {
     margin: 0,
     fontSize: 28,
     fontWeight: 800,
-    color: '#14213d',
+    color: GREEN,
   },
 
   subtitle: {
-    color: '#68758a',
+    color: MUTED,
     marginTop: 8,
     fontSize: 14,
-    lineHeight: 1.6,
+    lineHeight: 1.7,
   },
 
   button: {
     border: 'none',
     borderRadius: 10,
-    padding: '12px 18px',
+    padding: '13px 20px',
     fontSize: 14,
-    fontWeight: 700,
+    fontWeight: 800,
     cursor: 'pointer',
-    background: '#155eef',
-    color: '#fff',
+    background: GREEN,
+    color: WHITE,
   },
 
   secondaryButton: {
-    border: '1px solid #d5dce8',
+    border: `1px solid ${BORDER}`,
     borderRadius: 10,
     padding: '11px 16px',
     fontSize: 14,
     fontWeight: 700,
     cursor: 'pointer',
-    background: '#fff',
-    color: '#24334d',
+    background: WHITE,
+    color: GREEN,
   },
 
   card: {
-    background: '#fff',
-    border: '1px solid #e3e9f2',
+    background: WHITE,
+    border: `1px solid ${BORDER}`,
     borderRadius: 18,
     padding: 22,
-    boxShadow: '0 5px 20px rgba(20, 33, 61, 0.04)',
+    boxShadow: '0 5px 20px rgba(0, 99, 65, 0.05)',
     minWidth: 0,
+    boxSizing: 'border-box',
   },
 
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+    gridTemplateColumns:
+      'repeat(auto-fit, minmax(min(100%, 290px), 1fr))',
     gap: 18,
-    marginBottom: 22,
+    marginBottom: 24,
   },
 
   label: {
     display: 'block',
-    color: '#69758a',
+    color: MUTED,
     fontSize: 13,
-    fontWeight: 600,
+    fontWeight: 700,
     marginBottom: 8,
   },
 
@@ -143,16 +187,17 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     boxSizing: 'border-box',
     padding: '13px 14px',
-    border: '1px solid #d5dce8',
+    border: `1px solid ${BORDER}`,
     borderRadius: 10,
     fontSize: 15,
-    outline: 'none',
-    background: '#fff',
-    color: '#172033',
+    outlineColor: GREEN,
+    background: WHITE,
+    color: TEXT,
   },
 
   field: {
     marginBottom: 18,
+    minWidth: 0,
   },
 
   alert: {
@@ -160,13 +205,13 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 15,
     marginBottom: 20,
     fontSize: 14,
-    lineHeight: 1.6,
+    lineHeight: 1.7,
   },
 
   businessCard: {
     background:
-      'linear-gradient(135deg, #102a56 0%, #155eef 100%)',
-    color: '#fff',
+      'linear-gradient(135deg, #006341 0%, #008746 65%, #004D38 100%)',
+    color: WHITE,
     borderRadius: 18,
     padding: 24,
     minHeight: 190,
@@ -174,16 +219,18 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     justifyContent: 'space-between',
     boxSizing: 'border-box',
+    minWidth: 0,
+    overflowWrap: 'anywhere',
   },
 
   dashboardButton: {
     width: '100%',
     marginTop: 22,
     padding: '14px 18px',
-    border: '1px solid rgba(255,255,255,0.35)',
+    border: '1px solid #ffffff',
     borderRadius: 12,
-    background: '#fff',
-    color: '#102a56',
+    background: WHITE,
+    color: GREEN,
     fontSize: 15,
     fontWeight: 800,
     cursor: 'pointer',
@@ -193,18 +240,18 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     marginTop: 22,
     padding: '13px 15px',
-    border: '1px solid rgba(255,255,255,0.15)',
+    border: '1px solid rgba(255,255,255,0.25)',
     borderRadius: 12,
-    background: 'rgba(255,255,255,0.12)',
-    color: '#fff',
+    background: 'rgba(0,0,0,0.12)',
+    color: WHITE,
     fontSize: 13,
-    lineHeight: 1.6,
+    lineHeight: 1.7,
     boxSizing: 'border-box',
   },
 };
 
 // ============================================================
-// HELPERS
+// AUTHENTICATION
 // ============================================================
 
 function getToken(): string {
@@ -219,6 +266,10 @@ function getToken(): string {
     ''
   );
 }
+
+// ============================================================
+// FORMAT MONEY
+// ============================================================
 
 function formatMoney(
   amount: string | number | undefined,
@@ -238,33 +289,83 @@ function formatMoney(
   }
 }
 
-function normalizeStatus(status?: string | null): string {
+// ============================================================
+// NORMALIZE STATUS
+// ============================================================
+
+function normalizeStatus(
+  status?: string | null
+): string {
   return String(status || '')
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
 }
+
+// ============================================================
+// BUSINESS VERIFICATION LEVEL
+// ============================================================
+
+function getBusinessLevel(
+  business: BusinessAccount
+): number {
+  const rawLevel =
+    business.verification_level ??
+    business.business_level ??
+    business.account_level ??
+    1;
+
+  const level = Number(rawLevel);
+
+  if (
+    !Number.isInteger(level) ||
+    level < 1 ||
+    level > 5
+  ) {
+    return 1;
+  }
+
+  return level;
+}
+
+// ============================================================
+// BUSINESS APPROVAL
+// ============================================================
 
 function isBusinessApproved(
   business: BusinessAccount
 ): boolean {
   return (
-    normalizeStatus(business.verification_status) ===
-      'verified' &&
-    normalizeStatus(business.status) === 'active' &&
-    normalizeStatus(business.account_status) === 'active'
+    normalizeStatus(
+      business.verification_status
+    ) === 'verified' &&
+    normalizeStatus(
+      business.status
+    ) === 'active' &&
+    normalizeStatus(
+      business.account_status
+    ) === 'active'
   );
 }
+
+// ============================================================
+// STATUS COLORS
+// ============================================================
 
 function statusColor(status?: string | null) {
   const normalized = normalizeStatus(status);
 
   if (
-    ['active', 'verified', 'approved', 'successful'].includes(
-      normalized
-    )
+    [
+      'active',
+      'verified',
+      'approved',
+      'successful',
+      'completed',
+    ].includes(normalized)
   ) {
     return {
-      background: '#dcfce7',
+      background: '#DCFCE7',
       color: '#166534',
     };
   }
@@ -280,23 +381,27 @@ function statusColor(status?: string | null) {
     ].includes(normalized)
   ) {
     return {
-      background: '#fee2e2',
-      color: '#991b1b',
+      background: '#FEE2E2',
+      color: '#991B1B',
     };
   }
 
   if (
-    ['under_review', 'processing'].includes(normalized)
+    [
+      'under_review',
+      'processing',
+      'in_review',
+    ].includes(normalized)
   ) {
     return {
-      background: '#dbeafe',
-      color: '#1d4ed8',
+      background: '#D1FAE5',
+      color: '#065F46',
     };
   }
 
   return {
-    background: '#fef3c7',
-    color: '#92400e',
+    background: '#FEF3C7',
+    color: '#92400E',
   };
 }
 
@@ -330,6 +435,94 @@ function StatusBadge({
 }
 
 // ============================================================
+// VERIFICATION LEVEL DISPLAY
+// ============================================================
+
+function VerificationProgress({
+  level,
+}: {
+  level: number;
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 22,
+        padding: 16,
+        borderRadius: 12,
+        background: 'rgba(255,255,255,0.10)',
+        border: '1px solid rgba(255,255,255,0.18)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 10,
+          flexWrap: 'wrap',
+          marginBottom: 12,
+        }}
+      >
+        <strong style={{ fontSize: 14 }}>
+          Business Verification
+        </strong>
+
+        <span
+          style={{
+            background: WHITE,
+            color: GREEN,
+            padding: '6px 10px',
+            borderRadius: 20,
+            fontSize: 12,
+            fontWeight: 800,
+          }}
+        >
+          Level {level} of 5
+        </span>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns:
+            'repeat(5, minmax(0, 1fr))',
+          gap: 6,
+          marginBottom: 14,
+        }}
+      >
+        {[1, 2, 3, 4, 5].map((item) => (
+          <div
+            key={item}
+            style={{
+              height: 7,
+              borderRadius: 10,
+              background:
+                item <= level
+                  ? WHITE
+                  : 'rgba(255,255,255,0.25)',
+            }}
+          />
+        ))}
+      </div>
+
+      <p
+        style={{
+          margin: 0,
+          fontSize: 12,
+          lineHeight: 1.7,
+          color: WHITE,
+        }}
+      >
+        Levels 1–3 follow the standard verification
+        process. CAC documentation is required when
+        upgrading to Level 4. Level 5 requires
+        additional enhanced business verification.
+      </p>
+    </div>
+  );
+}
+
+// ============================================================
 // COMPONENT
 // ============================================================
 
@@ -341,84 +534,93 @@ export default function Business() {
 
   const [loading, setLoading] = useState(true);
 
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] =
+    useState(false);
 
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] =
+    useState(false);
 
   const [error, setError] = useState('');
 
   const [success, setSuccess] = useState('');
 
-  const [form, setForm] = useState<BusinessForm>({
-    businessName: '',
-    registrationNumber: '',
-    businessType: '',
-    country: 'NG',
-    currency: 'NGN',
-    businessAddress: '',
-  });
-
-  const token = getToken();
+  const [form, setForm] =
+    useState<BusinessForm>({
+      businessName: '',
+      businessType: '',
+      country: 'NG',
+      currency: 'NGN',
+      businessAddress: '',
+    });
 
   // ==========================================================
   // LOAD BUSINESSES
   // ==========================================================
 
-  const loadBusinesses = useCallback(async () => {
-    const currentToken = getToken();
+  const loadBusinesses = useCallback(
+    async () => {
+      const currentToken = getToken();
 
-    if (!currentToken) {
-      setError(
-        'Please sign in to view your business accounts.'
-      );
-
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch(
-        `${API_BASE}/businesses`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${currentToken}`,
-            Accept: 'application/json',
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            data.error ||
-            'Unable to load your businesses.'
+      if (!currentToken) {
+        setError(
+          'Your session is missing or expired. Please sign in again.'
         );
+
+        setLoading(false);
+        return;
       }
 
-      const list =
-        data.businesses ||
-        data.data?.businesses ||
-        [];
+      setLoading(true);
+      setError('');
 
-      setBusinesses(
-        Array.isArray(list) ? list : []
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to load your businesses.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      try {
+        const response = await fetch(
+          `${API_BASE}/businesses`,
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${currentToken}`,
+              Accept: 'application/json',
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error(
+              'Your session has expired. Please sign out and sign in again.'
+            );
+          }
+
+          throw new Error(
+            data.message ||
+              data.error ||
+              'Unable to load your businesses.'
+          );
+        }
+
+        const list =
+          data.businesses ||
+          data.data?.businesses ||
+          [];
+
+        setBusinesses(
+          Array.isArray(list) ? list : []
+        );
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Unable to load your businesses.'
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     loadBusinesses();
@@ -442,7 +644,8 @@ export default function Business() {
         return {
           ...previous,
           country: value,
-          currency: value === 'ZA' ? 'ZAR' : 'NGN',
+          currency:
+            value === 'ZA' ? 'ZAR' : 'NGN',
         };
       }
 
@@ -455,6 +658,7 @@ export default function Business() {
 
   // ==========================================================
   // REGISTER BUSINESS
+  // CAC IS NOT REQUIRED AT INITIAL REGISTRATION
   // ==========================================================
 
   async function handleCreateBusiness(
@@ -475,7 +679,16 @@ export default function Business() {
     }
 
     if (!form.businessName.trim()) {
-      setError('Please enter your business name.');
+      setError(
+        'Please enter your business name.'
+      );
+      return;
+    }
+
+    if (!form.businessType) {
+      setError(
+        'Please select your business type.'
+      );
       return;
     }
 
@@ -492,10 +705,8 @@ export default function Business() {
             Accept: 'application/json',
           },
           body: JSON.stringify({
-            businessName: form.businessName.trim(),
-
-            registrationNumber:
-              form.registrationNumber.trim(),
+            businessName:
+              form.businessName.trim(),
 
             businessType:
               form.businessType.trim(),
@@ -513,6 +724,12 @@ export default function Business() {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(
+            'Your session has expired. Please sign in again.'
+          );
+        }
+
         throw new Error(
           data.message ||
             data.error ||
@@ -522,12 +739,11 @@ export default function Business() {
 
       setSuccess(
         data.message ||
-          'Your business application was submitted.'
+          'Your business application was submitted successfully.'
       );
 
       setForm({
         businessName: '',
-        registrationNumber: '',
         businessType: '',
         country: 'NG',
         currency: 'NGN',
@@ -615,7 +831,38 @@ export default function Business() {
     <div style={styles.page}>
       <div style={styles.container}>
 
-        {/* PAGE HEADER */}
+        {/* BRAND */}
+
+        <div style={styles.brand}>
+          <div style={styles.logo}>
+            Z
+          </div>
+
+          <div>
+            <div
+              style={{
+                color: GREEN,
+                fontSize: 21,
+                fontWeight: 900,
+              }}
+            >
+              Zenimonies
+            </div>
+
+            <div
+              style={{
+                color: MUTED,
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: 1.3,
+              }}
+            >
+              BUSINESS BANKING
+            </div>
+          </div>
+        </div>
+
+        {/* HEADER */}
 
         <header style={styles.header}>
           <div>
@@ -625,7 +872,8 @@ export default function Business() {
 
             <p style={styles.subtitle}>
               Manage your business profile and business
-              accounts separately from your personal banking.
+              accounts separately from your personal
+              banking.
             </p>
           </div>
 
@@ -644,32 +892,32 @@ export default function Business() {
           )}
         </header>
 
-        {/* ERROR NOTICE */}
+        {/* ERROR */}
 
         {error && (
           <div
             role="alert"
             style={{
               ...styles.alert,
-              background: '#fee2e2',
-              color: '#991b1b',
-              border: '1px solid #fecaca',
+              background: '#FEE2E2',
+              color: '#991B1B',
+              border: '1px solid #FECACA',
             }}
           >
             <strong>Notice:</strong> {error}
           </div>
         )}
 
-        {/* SUCCESS NOTICE */}
+        {/* SUCCESS */}
 
         {success && (
           <div
             role="status"
             style={{
               ...styles.alert,
-              background: '#dcfce7',
+              background: '#DCFCE7',
               color: '#166534',
-              border: '1px solid #bbf7d0',
+              border: '1px solid #BBF7D0',
             }}
           >
             {success}
@@ -690,6 +938,7 @@ export default function Business() {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                flexWrap: 'wrap',
                 gap: 12,
                 marginBottom: 22,
               }}
@@ -699,21 +948,25 @@ export default function Business() {
                   style={{
                     margin: 0,
                     fontSize: 21,
+                    color: GREEN,
                   }}
                 >
                   Register a Business
                 </h2>
 
                 <p style={styles.subtitle}>
-                  Your application will be reviewed before
-                  the business account can be activated.
+                  Start your business verification
+                  journey with Level 1.
                 </p>
               </div>
 
               <button
                 type="button"
                 style={styles.secondaryButton}
-                onClick={() => setShowForm(false)}
+                onClick={() => {
+                  setShowForm(false);
+                  setError('');
+                }}
               >
                 Cancel
               </button>
@@ -721,6 +974,8 @@ export default function Business() {
 
             <form onSubmit={handleCreateBusiness}>
               <div style={styles.grid}>
+
+                {/* BUSINESS NAME */}
 
                 <div style={styles.field}>
                   <label style={styles.label}>
@@ -732,30 +987,17 @@ export default function Business() {
                     name="businessName"
                     value={form.businessName}
                     onChange={updateField}
-                    placeholder="Enter registered business name"
+                    placeholder="Enter your business name"
                     maxLength={200}
                     required
                   />
                 </div>
 
-                <div style={styles.field}>
-                  <label style={styles.label}>
-                    Registration Number
-                  </label>
-
-                  <input
-                    style={styles.input}
-                    name="registrationNumber"
-                    value={form.registrationNumber}
-                    onChange={updateField}
-                    placeholder="CAC or company registration number"
-                    maxLength={100}
-                  />
-                </div>
+                {/* BUSINESS TYPE */}
 
                 <div style={styles.field}>
                   <label style={styles.label}>
-                    Business Type
+                    Business Type *
                   </label>
 
                   <select
@@ -763,6 +1005,7 @@ export default function Business() {
                     name="businessType"
                     value={form.businessType}
                     onChange={updateField}
+                    required
                   >
                     <option value="">
                       Select business type
@@ -770,6 +1013,10 @@ export default function Business() {
 
                     <option value="Sole Proprietorship">
                       Sole Proprietorship
+                    </option>
+
+                    <option value="Small Trader">
+                      Small Trader
                     </option>
 
                     <option value="Partnership">
@@ -794,6 +1041,8 @@ export default function Business() {
                   </select>
                 </div>
 
+                {/* COUNTRY */}
+
                 <div style={styles.field}>
                   <label style={styles.label}>
                     Country *
@@ -816,6 +1065,8 @@ export default function Business() {
                   </select>
                 </div>
 
+                {/* CURRENCY */}
+
                 <div style={styles.field}>
                   <label style={styles.label}>
                     Account Currency
@@ -824,14 +1075,23 @@ export default function Business() {
                   <input
                     style={{
                       ...styles.input,
-                      background: '#f4f7fb',
+                      background: PAGE_BG,
+                      fontWeight: 800,
+                      color: GREEN,
                     }}
                     value={form.currency}
                     readOnly
                   />
                 </div>
 
-                <div style={styles.field}>
+                {/* ADDRESS */}
+
+                <div
+                  style={{
+                    ...styles.field,
+                    gridColumn: '1 / -1',
+                  }}
+                >
                   <label style={styles.label}>
                     Business Address
                   </label>
@@ -849,32 +1109,66 @@ export default function Business() {
                     maxLength={2000}
                   />
                 </div>
-
               </div>
+
+              {/* VERIFICATION INFORMATION */}
 
               <div
                 style={{
-                  background: '#eff6ff',
-                  color: '#1e40af',
-                  padding: 15,
+                  background: '#E8F5EC',
+                  color: '#14532D',
+                  padding: 16,
                   borderRadius: 12,
                   fontSize: 13,
-                  lineHeight: 1.6,
+                  lineHeight: 1.8,
                   marginBottom: 20,
+                  border: '1px solid #C5E7D0',
                 }}
               >
-                <strong>Important:</strong> Submitting
-                this form creates a pending business
-                application. It does not complete identity
-                verification or activate payment services.
-                Do not enter passwords, card PINs, or
-                banking secrets here.
+                <strong>
+                  Business Verification Levels
+                </strong>
+
+                <p style={{ margin: '8px 0' }}>
+                  Start with Level 1 and progress
+                  through Levels 1–5 as your business
+                  completes the required verification.
+                </p>
+
+                <p style={{ margin: '8px 0' }}>
+                  <strong>Levels 1–3:</strong> Follow
+                  the standard customer verification
+                  process.
+                </p>
+
+                <p style={{ margin: '8px 0' }}>
+                  <strong>Level 4:</strong> CAC
+                  documentation is required when
+                  upgrading to this level.
+                </p>
+
+                <p style={{ margin: '8px 0 0' }}>
+                  <strong>Level 5:</strong> Additional
+                  enhanced business verification
+                  requirements apply.
+                </p>
+
+                <p
+                  style={{
+                    margin: '10px 0 0',
+                    fontWeight: 700,
+                  }}
+                >
+                  CAC is not required for initial
+                  registration in this form.
+                </p>
               </div>
 
               <button
                 type="submit"
                 style={{
                   ...styles.button,
+                  width: '100%',
                   opacity: submitting ? 0.65 : 1,
                   cursor: submitting
                     ? 'not-allowed'
@@ -897,7 +1191,7 @@ export default function Business() {
             <p
               style={{
                 margin: 0,
-                color: '#68758a',
+                color: MUTED,
               }}
             >
               Loading your business accounts...
@@ -923,8 +1217,8 @@ export default function Business() {
                   height: 72,
                   margin: '0 auto 20px',
                   borderRadius: 20,
-                  background: '#eff6ff',
-                  color: '#155eef',
+                  background: '#E8F5EC',
+                  color: GREEN,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -938,6 +1232,7 @@ export default function Business() {
                 style={{
                   margin: '0 0 10px',
                   fontSize: 22,
+                  color: GREEN,
                 }}
               >
                 Open a Business Account
@@ -945,14 +1240,15 @@ export default function Business() {
 
               <p
                 style={{
-                  color: '#68758a',
+                  color: MUTED,
                   maxWidth: 450,
                   margin: '0 auto 24px',
-                  lineHeight: 1.7,
+                  lineHeight: 1.8,
                 }}
               >
                 Create a separate business profile
-                and account for your company's banking needs.
+                and start your business verification
+                journey with Zenimonies.
               </p>
 
               <button
@@ -984,21 +1280,15 @@ export default function Business() {
 
                 const approved =
                   isBusinessApproved(business);
-               
-                  console.log('Business approval details:', {
-                id: business.id,
-               business_name: business.business_name,
-               verification_status: business.verification_status,
-              status: business.status,
-              account_status: business.account_status,
-            });
+
+                const currentLevel =
+                  getBusinessLevel(business);
 
                 return (
                   <section
                     key={business.id}
                     style={styles.businessCard}
                   >
-
                     {/* BUSINESS NAME */}
 
                     <div>
@@ -1014,8 +1304,9 @@ export default function Business() {
                           <div
                             style={{
                               fontSize: 12,
-                              opacity: 0.8,
+                              opacity: 0.85,
                               marginBottom: 7,
+                              fontWeight: 700,
                             }}
                           >
                             BUSINESS ACCOUNT
@@ -1040,7 +1331,7 @@ export default function Business() {
                             padding: '7px 10px',
                             borderRadius: 9,
                             fontSize: 12,
-                            fontWeight: 700,
+                            fontWeight: 800,
                             whiteSpace: 'nowrap',
                           }}
                         >
@@ -1054,7 +1345,7 @@ export default function Business() {
                         style={{
                           marginTop: 24,
                           fontSize: 12,
-                          opacity: 0.8,
+                          opacity: 0.85,
                         }}
                       >
                         Business Account Number
@@ -1091,7 +1382,7 @@ export default function Business() {
                               border:
                                 '1px solid rgba(255,255,255,0.4)',
                               background: 'transparent',
-                              color: '#fff',
+                              color: WHITE,
                               borderRadius: 8,
                               padding: '7px 10px',
                               cursor: 'pointer',
@@ -1104,7 +1395,7 @@ export default function Business() {
                       </div>
                     </div>
 
-                    {/* BALANCE AND ACCOUNT STATUS */}
+                    {/* BALANCE */}
 
                     <div
                       style={{
@@ -1119,7 +1410,7 @@ export default function Business() {
                         <div
                           style={{
                             fontSize: 12,
-                            opacity: 0.8,
+                            opacity: 0.85,
                             marginBottom: 5,
                           }}
                         >
@@ -1153,14 +1444,22 @@ export default function Business() {
                       </span>
                     </div>
 
-                    {/* BUSINESS DASHBOARD BUTTON */}
+                    {/* VERIFICATION LEVELS */}
+
+                    <VerificationProgress
+                      level={currentLevel}
+                    />
+
+                    {/* DASHBOARD */}
 
                     {approved ? (
                       <button
                         type="button"
                         style={styles.dashboardButton}
                         onClick={() =>
-                          openBusinessDashboard(business)
+                          openBusinessDashboard(
+                            business
+                          )
                         }
                       >
                         Open Business Dashboard →
@@ -1171,13 +1470,12 @@ export default function Business() {
                           styles.disabledDashboardButton
                         }
                       >
-                        Your Business Dashboard will become
-                        available once your business is
-                        verified, approved, and the business
-                        account is active.
+                        Your Business Dashboard will
+                        become available once your
+                        business has been verified,
+                        approved, and activated.
                       </div>
                     )}
-
                   </section>
                 );
               })}
@@ -1201,13 +1499,15 @@ export default function Business() {
                     style={{
                       margin: 0,
                       fontSize: 21,
+                      color: GREEN,
                     }}
                   >
                     Business Applications
                   </h2>
 
                   <p style={styles.subtitle}>
-                    Track verification and account approval.
+                    Track verification and account
+                    approval.
                   </p>
                 </div>
 
@@ -1227,172 +1527,208 @@ export default function Business() {
                   gap: 16,
                 }}
               >
-                {businesses.map((business) => (
-                  <div
-                    key={business.id}
-                    style={{
-                      border: '1px solid #e3e9f2',
-                      borderRadius: 14,
-                      padding: 18,
-                    }}
-                  >
+                {businesses.map((business) => {
+                  const approved =
+                    isBusinessApproved(business);
+
+                  const currentLevel =
+                    getBusinessLevel(business);
+
+                  const verificationStatus =
+                    normalizeStatus(
+                      business.verification_status
+                    );
+
+                  const businessStatus =
+                    normalizeStatus(
+                      business.status
+                    );
+
+                  return (
                     <div
+                      key={business.id}
                       style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        flexWrap: 'wrap',
-                        gap: 14,
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 14,
+                        padding: 18,
+                        background: WHITE,
                       }}
                     >
-                      <div>
-                        <h3
-                          style={{
-                            margin: '0 0 8px',
-                            fontSize: 17,
-                          }}
-                        >
-                          {business.business_name}
-                        </h3>
-
-                        <p
-                          style={{
-                            margin: '0 0 6px',
-                            color: '#68758a',
-                            fontSize: 13,
-                          }}
-                        >
-                          Business type:{' '}
-                          {business.business_type ||
-                            'Not provided'}
-                        </p>
-
-                        <p
-                          style={{
-                            margin: 0,
-                            color: '#68758a',
-                            fontSize: 13,
-                          }}
-                        >
-                          Country: {business.country}
-                        </p>
-                      </div>
-
                       <div
                         style={{
                           display: 'flex',
-                          flexDirection: 'column',
-                          gap: 8,
+                          justifyContent:
+                            'space-between',
                           alignItems: 'flex-start',
+                          flexWrap: 'wrap',
+                          gap: 14,
                         }}
                       >
                         <div>
-                          <span
+                          <h3
                             style={{
-                              display: 'block',
-                              color: '#68758a',
-                              fontSize: 11,
-                              marginBottom: 5,
+                              margin: '0 0 8px',
+                              fontSize: 17,
+                              color: GREEN,
                             }}
                           >
-                            VERIFICATION
-                          </span>
+                            {business.business_name}
+                          </h3>
 
-                          <StatusBadge
-                            status={
-                              business.verification_status
-                            }
-                          />
+                          <p
+                            style={{
+                              margin: '0 0 6px',
+                              color: MUTED,
+                              fontSize: 13,
+                            }}
+                          >
+                            Business type:{' '}
+                            {business.business_type ||
+                              'Not provided'}
+                          </p>
+
+                          <p
+                            style={{
+                              margin: '0 0 6px',
+                              color: MUTED,
+                              fontSize: 13,
+                            }}
+                          >
+                            Country: {business.country}
+                          </p>
+
+                          <p
+                            style={{
+                              margin: 0,
+                              color: GREEN,
+                              fontSize: 13,
+                              fontWeight: 800,
+                            }}
+                          >
+                            Verification Level:{' '}
+                            {currentLevel} of 5
+                          </p>
                         </div>
 
-                        <div>
-                          <span
-                            style={{
-                              display: 'block',
-                              color: '#68758a',
-                              fontSize: 11,
-                              marginBottom: 5,
-                            }}
-                          >
-                            ACCOUNT APPROVAL
-                          </span>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 12,
+                            alignItems:
+                              'flex-start',
+                          }}
+                        >
+                          <div>
+                            <span
+                              style={{
+                                display: 'block',
+                                color: MUTED,
+                                fontSize: 11,
+                                marginBottom: 5,
+                                fontWeight: 700,
+                              }}
+                            >
+                              VERIFICATION
+                            </span>
 
-                          <StatusBadge
-                            status={business.status}
-                          />
-                        </div>
+                            <StatusBadge
+                              status={
+                                business.verification_status
+                              }
+                            />
+                          </div>
 
-                        <div>
-                          <span
-                            style={{
-                              display: 'block',
-                              color: '#68758a',
-                              fontSize: 11,
-                              marginBottom: 5,
-                            }}
-                          >
-                            BUSINESS ACCOUNT
-                          </span>
+                          <div>
+                            <span
+                              style={{
+                                display: 'block',
+                                color: MUTED,
+                                fontSize: 11,
+                                marginBottom: 5,
+                                fontWeight: 700,
+                              }}
+                            >
+                              ACCOUNT APPROVAL
+                            </span>
 
-                          <StatusBadge
-                            status={
-                              business.account_status
-                            }
-                          />
+                            <StatusBadge
+                              status={business.status}
+                            />
+                          </div>
+
+                          <div>
+                            <span
+                              style={{
+                                display: 'block',
+                                color: MUTED,
+                                fontSize: 11,
+                                marginBottom: 5,
+                                fontWeight: 700,
+                              }}
+                            >
+                              BUSINESS ACCOUNT
+                            </span>
+
+                            <StatusBadge
+                              status={
+                                business.account_status
+                              }
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* APPLICATION STATUS MESSAGE */}
+                      {/* APPLICATION MESSAGE */}
 
-                    <div
-                      style={{
-                        marginTop: 18,
-                        padding: 13,
-                        borderRadius: 10,
-                        background: '#f4f7fb',
-                        color: '#58667c',
-                        fontSize: 13,
-                        lineHeight: 1.7,
-                      }}
-                    >
-                      {approved
-                        ? 'Your business has been verified, approved, and activated. You can open your Business Dashboard to access the business banking interface.'
-                        : normalizeStatus(
-                            business.verification_status
-                          ) === 'rejected' ||
-                          normalizeStatus(
-                            business.status
-                          ) === 'rejected'
-                        ? 'Your business application was rejected. Please contact Zenimonies support for further information.'
-                        : normalizeStatus(
-                            business.verification_status
-                          ) === 'under_review'
-                        ? 'Your business verification is under review. You will be able to access the Business Dashboard after approval and account activation.'
-                        : 'Your business application is pending verification and administrator approval. The Business Dashboard is unavailable until all required approvals and account activation are complete.'}
-                    </div>
-
-                    {/* APPLICATION DASHBOARD LINK */}
-
-                    {approved && (
-                      <button
-                        type="button"
+                      <div
                         style={{
-                          ...styles.secondaryButton,
-                          marginTop: 15,
-                          width: '100%',
-                          color: '#155eef',
-                          borderColor: '#c7d7fe',
+                          marginTop: 18,
+                          padding: 14,
+                          borderRadius: 10,
+                          background: PAGE_BG,
+                          color: MUTED,
+                          fontSize: 13,
+                          lineHeight: 1.8,
                         }}
-                        onClick={() =>
-                          openBusinessDashboard(business)
-                        }
                       >
-                        Manage This Business →
-                      </button>
-                    )}
-                  </div>
-                ))}
+                        {approved
+                          ? 'Your business has been verified, approved, and activated. You can open your Business Dashboard.'
+                          : verificationStatus ===
+                                'rejected' ||
+                              businessStatus ===
+                                'rejected'
+                          ? 'Your business application was rejected. Please contact Zenimonies support for further information.'
+                          : verificationStatus ===
+                              'under_review'
+                          ? 'Your business verification is under review. Dashboard access becomes available after approval and activation.'
+                          : 'Your business application is pending verification and administrator approval. The dashboard remains unavailable until the required approvals and activation are complete.'}
+                      </div>
+
+                      {/* MANAGE BUSINESS */}
+
+                      {approved && (
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.secondaryButton,
+                            marginTop: 15,
+                            width: '100%',
+                            color: GREEN,
+                            borderColor: '#A7D9B9',
+                          }}
+                          onClick={() =>
+                            openBusinessDashboard(
+                              business
+                            )
+                          }
+                        >
+                          Manage This Business →
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </section>
           </>
@@ -1403,7 +1739,7 @@ export default function Business() {
         <p
           style={{
             textAlign: 'center',
-            color: '#8a95a8',
+            color: '#819187',
             fontSize: 12,
             marginTop: 30,
           }}
