@@ -1,5 +1,7 @@
 
-import React, { useEffect, useState } from 'react';
+
+import React, { useCallback, useEffect, useState } from 'react';
+
 import {
   Alert,
   Box,
@@ -36,11 +38,17 @@ import {
 // ============================================================
 // ZENIMONIES BUSINESS BANKING
 // BUSINESS DASHBOARD
+// BRAND: GREEN AND WHITE
 // ============================================================
 
 const API_BASE =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com/api';
+
+const GREEN = '#087A43';
+const DARK_GREEN = '#065F36';
+const LIGHT_GREEN = '#E8F5EC';
+const PAGE_BG = '#F6FAF7';
 
 // ============================================================
 // TYPES
@@ -68,7 +76,17 @@ type Transaction = {
   amount?: number | string;
   currency?: string;
   status?: string;
+  reference?: string;
   created_at?: string;
+};
+
+type Pagination = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
 };
 
 // ============================================================
@@ -87,11 +105,14 @@ const formatMoney = (
 ) => {
   const value = Number(amount || 0);
 
+  const safeCurrency =
+    currency === 'ZAR' ? 'ZAR' : 'NGN';
+
   return new Intl.NumberFormat(
-    currency === 'ZAR' ? 'en-ZA' : 'en-NG',
+    safeCurrency === 'ZAR' ? 'en-ZA' : 'en-NG',
     {
       style: 'currency',
-      currency,
+      currency: safeCurrency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }
@@ -119,7 +140,8 @@ const getStatusColor = (
     value === 'active' ||
     value === 'approved' ||
     value === 'verified' ||
-    value === 'successful'
+    value === 'successful' ||
+    value === 'completed'
   ) {
     return 'success';
   }
@@ -158,108 +180,149 @@ const BusinessDashboard: React.FC = () => {
   const [transactions, setTransactions] =
     useState<Transaction[]>([]);
 
+  const [pagination, setPagination] =
+    useState<Pagination | null>(null);
+
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [transactionError, setTransactionError] =
+    useState('');
 
   // ==========================================================
-  // LOAD BUSINESS ACCOUNT
+  // LOAD BUSINESS AND BUSINESS TRANSACTIONS
   // ==========================================================
 
-  const loadBusiness = async () => {
-    try {
-      setLoading(true);
+  const loadBusiness = useCallback(
+    async (showLoader = true) => {
+      if (showLoader) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+
       setError('');
+      setTransactionError('');
 
-      const token = getToken();
+      try {
+        const token = getToken();
 
-      if (!token) {
-        navigate('/login');
-        return;
-      }
-
-      if (!id) {
-        setError('Business account ID is missing.');
-        return;
-      }
-
-      const response = await fetch(
-        `${API_BASE}/businesses/${encodeURIComponent(id)}`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+        if (!token) {
+          navigate('/login');
+          return;
         }
-      );
 
-      const result = await response.json();
+        if (!id) {
+          setError('Business account ID is missing.');
+          return;
+        }
 
-      if (!response.ok) {
-        throw new Error(
-          result.message ||
-          result.error ||
-          'Unable to load business account.'
+        // ----------------------------------------------------
+        // Load business details
+        // ----------------------------------------------------
+
+        const response = await fetch(
+          `${API_BASE}/businesses/${encodeURIComponent(id)}`,
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          }
         );
-      }
 
-      const businessData =
-        result.business ||
-        result.data?.business ||
-        result.data ||
-        result;
+        const result = await response.json();
 
-      if (!businessData?.id) {
-        throw new Error(
-          'The business account could not be found.'
+        if (!response.ok) {
+          throw new Error(
+            result.message ||
+              result.error ||
+              'Unable to load business account.'
+          );
+        }
+
+        const businessData =
+          result.business ||
+          result.data?.business ||
+          result.data ||
+          result;
+
+        if (!businessData?.id) {
+          throw new Error(
+            'The business account could not be found.'
+          );
+        }
+
+        setBusiness(businessData);
+
+        // ----------------------------------------------------
+        // Load business-specific transaction history
+        // ----------------------------------------------------
+
+        try {
+          const transactionResponse = await fetch(
+            `${API_BASE}/businesses/${encodeURIComponent(
+              id
+            )}/transactions?page=1&limit=20`,
+            {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+
+          const transactionResult =
+            await transactionResponse.json();
+
+          if (!transactionResponse.ok) {
+            throw new Error(
+              transactionResult.message ||
+                'Unable to load business transactions.'
+            );
+          }
+
+          const transactionData =
+            transactionResult.transactions ||
+            transactionResult.data?.transactions ||
+            [];
+
+          if (Array.isArray(transactionData)) {
+            setTransactions(transactionData);
+          } else {
+            setTransactions([]);
+          }
+
+          setPagination(
+            transactionResult.pagination || null
+          );
+        } catch (transactionErr: any) {
+          setTransactions([]);
+          setPagination(null);
+
+          setTransactionError(
+            transactionErr.message ||
+              'Unable to load transaction history.'
+          );
+        }
+      } catch (err: any) {
+        setError(
+          err.message ||
+            'Something went wrong while loading your business.'
         );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      setBusiness(businessData);
-
-      // Transaction history is loaded only if the
-      // backend provides a business-specific endpoint.
-      // This avoids displaying personal transactions.
-
-      const transactionResponse = await fetch(
-        `${API_BASE}/businesses/${encodeURIComponent(id)}/transactions`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (transactionResponse.ok) {
-        const transactionResult =
-          await transactionResponse.json();
-
-        const transactionData =
-          transactionResult.transactions ||
-          transactionResult.data?.transactions ||
-          transactionResult.data ||
-          [];
-
-        if (Array.isArray(transactionData)) {
-          setTransactions(transactionData);
-        }
-      }
-    } catch (err: any) {
-      setError(
-        err.message ||
-        'Something went wrong while loading your business.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [id, navigate]
+  );
 
   useEffect(() => {
     loadBusiness();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [loadBusiness]);
 
   // ==========================================================
   // LOADING
@@ -275,9 +338,10 @@ const BusinessDashboard: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           gap: 2,
+          bgcolor: PAGE_BG,
         }}
       >
-        <CircularProgress />
+        <CircularProgress sx={{ color: GREEN }} />
 
         <Typography color="text.secondary">
           Loading your business dashboard...
@@ -292,11 +356,23 @@ const BusinessDashboard: React.FC = () => {
 
   if (error || !business) {
     return (
-      <Box sx={{ p: 3, maxWidth: 700, mx: 'auto' }}>
+      <Box
+        sx={{
+          p: 3,
+          maxWidth: 700,
+          mx: 'auto',
+          bgcolor: PAGE_BG,
+          minHeight: '70vh',
+        }}
+      >
         <Button
           startIcon={<ArrowBack />}
           onClick={() => navigate('/business')}
-          sx={{ mb: 3 }}
+          sx={{
+            mb: 3,
+            color: GREEN,
+            fontWeight: 700,
+          }}
         >
           Back to Business Accounts
         </Button>
@@ -307,7 +383,7 @@ const BusinessDashboard: React.FC = () => {
             <Button
               color="inherit"
               size="small"
-              onClick={loadBusiness}
+              onClick={() => loadBusiness()}
             >
               Retry
             </Button>
@@ -348,7 +424,7 @@ const BusinessDashboard: React.FC = () => {
     <Box
       sx={{
         minHeight: '100vh',
-        bgcolor: '#f4f7fb',
+        bgcolor: PAGE_BG,
         pb: 5,
       }}
     >
@@ -356,7 +432,7 @@ const BusinessDashboard: React.FC = () => {
 
       <Box
         sx={{
-          bgcolor: '#082c4c',
+          bgcolor: GREEN,
           color: '#fff',
           px: { xs: 2, md: 5 },
           py: 3,
@@ -388,7 +464,7 @@ const BusinessDashboard: React.FC = () => {
               <Typography
                 sx={{
                   mt: 1,
-                  color: '#c4d5e4',
+                  color: '#D9F3E4',
                 }}
               >
                 Business Banking Dashboard
@@ -401,9 +477,10 @@ const BusinessDashboard: React.FC = () => {
               onClick={() => navigate('/business')}
               sx={{
                 color: '#fff',
-                borderColor: '#8ba9c1',
+                borderColor: '#B8E2C9',
                 '&:hover': {
                   borderColor: '#fff',
+                  bgcolor: 'rgba(255,255,255,0.1)',
                 },
               }}
             >
@@ -428,6 +505,7 @@ const BusinessDashboard: React.FC = () => {
             borderRadius: 4,
             mb: 3,
             boxShadow: '0 5px 25px rgba(0,0,0,0.05)',
+            border: '1px solid #E1EEE5',
           }}
         >
           <CardContent sx={{ p: { xs: 2, md: 4 } }}>
@@ -447,7 +525,10 @@ const BusinessDashboard: React.FC = () => {
                 <Typography
                   variant="h5"
                   fontWeight={800}
-                  sx={{ mt: 1 }}
+                  sx={{
+                    mt: 1,
+                    color: DARK_GREEN,
+                  }}
                 >
                   {businessName}
                 </Typography>
@@ -506,9 +587,9 @@ const BusinessDashboard: React.FC = () => {
                 borderRadius: 4,
                 color: '#fff',
                 background:
-                  'linear-gradient(135deg, #075985 0%, #082c4c 100%)',
+                  'linear-gradient(135deg, #087A43 0%, #065F36 100%)',
                 boxShadow:
-                  '0 8px 30px rgba(8,44,76,0.18)',
+                  '0 8px 30px rgba(8,122,67,0.18)',
               }}
             >
               <CardContent sx={{ p: 4 }}>
@@ -519,7 +600,7 @@ const BusinessDashboard: React.FC = () => {
                 >
                   <Box>
                     <Typography
-                      sx={{ color: '#c4d5e4' }}
+                      sx={{ color: '#D9F3E4' }}
                     >
                       Business account balance
                     </Typography>
@@ -544,7 +625,7 @@ const BusinessDashboard: React.FC = () => {
                     <Typography
                       sx={{
                         mt: 1,
-                        color: '#c4d5e4',
+                        color: '#D9F3E4',
                       }}
                     >
                       {currency} Business Account
@@ -568,7 +649,11 @@ const BusinessDashboard: React.FC = () => {
         <Typography
           variant="h6"
           fontWeight={800}
-          sx={{ mt: 4, mb: 2 }}
+          sx={{
+            mt: 4,
+            mb: 2,
+            color: DARK_GREEN,
+          }}
         >
           Business Services
         </Typography>
@@ -638,12 +723,13 @@ const BusinessDashboard: React.FC = () => {
                     ? 'pointer'
                     : 'not-allowed',
                   opacity: isActive ? 1 : 0.55,
+                  border: '1px solid #E1EEE5',
                   transition: '0.2s',
                   '&:hover': isActive
                     ? {
                         transform: 'translateY(-4px)',
                         boxShadow:
-                          '0 8px 24px rgba(0,0,0,0.1)',
+                          '0 8px 24px rgba(8,122,67,0.12)',
                       }
                     : {},
                 }}
@@ -659,8 +745,8 @@ const BusinessDashboard: React.FC = () => {
                       width: 52,
                       height: 52,
                       borderRadius: 3,
-                      bgcolor: '#e5f1fa',
-                      color: '#075985',
+                      bgcolor: LIGHT_GREEN,
+                      color: GREEN,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -696,6 +782,7 @@ const BusinessDashboard: React.FC = () => {
           sx={{
             mt: 4,
             borderRadius: 4,
+            border: '1px solid #E1EEE5',
           }}
         >
           <CardContent sx={{ p: 3 }}>
@@ -709,6 +796,7 @@ const BusinessDashboard: React.FC = () => {
                 <Typography
                   variant="h6"
                   fontWeight={800}
+                  sx={{ color: DARK_GREEN }}
                 >
                   Recent Business Transactions
                 </Typography>
@@ -722,14 +810,46 @@ const BusinessDashboard: React.FC = () => {
               </Box>
 
               <Button
-                startIcon={<Refresh />}
-                onClick={loadBusiness}
+                startIcon={
+                  refreshing ? (
+                    <CircularProgress
+                      size={16}
+                      sx={{ color: GREEN }}
+                    />
+                  ) : (
+                    <Refresh />
+                  )
+                }
+                onClick={() => loadBusiness(false)}
+                disabled={refreshing}
+                sx={{
+                  color: GREEN,
+                  fontWeight: 700,
+                }}
               >
                 Refresh
               </Button>
             </Stack>
 
             <Divider sx={{ my: 2 }} />
+
+            {transactionError && (
+              <Alert
+                severity="warning"
+                sx={{ mb: 2 }}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => loadBusiness(false)}
+                  >
+                    Retry
+                  </Button>
+                }
+              >
+                {transactionError}
+              </Alert>
+            )}
 
             {transactions.length === 0 ? (
               <Box
@@ -741,7 +861,7 @@ const BusinessDashboard: React.FC = () => {
                 <TrendingUp
                   sx={{
                     fontSize: 45,
-                    color: '#9ca3af',
+                    color: GREEN,
                     mb: 1,
                   }}
                 />
@@ -786,14 +906,22 @@ const BusinessDashboard: React.FC = () => {
                           {formatDate(tx.created_at)}
                         </Typography>
 
+                        {tx.reference && (
+                          <Typography
+                            variant="caption"
+                            display="block"
+                            color="text.secondary"
+                          >
+                            Ref: {tx.reference}
+                          </Typography>
+                        )}
+
                         {tx.status && (
                           <Box sx={{ mt: 0.5 }}>
                             <Chip
                               size="small"
-                              label={tx.status}
-                              color={getStatusColor(
-                                tx.status
-                              )}
+                              label={tx.status.replace(/_/g, ' ')}
+                              color={getStatusColor(tx.status)}
                             />
                           </Box>
                         )}
@@ -801,7 +929,10 @@ const BusinessDashboard: React.FC = () => {
 
                       <Typography
                         fontWeight={800}
-                        sx={{ whiteSpace: 'nowrap' }}
+                        sx={{
+                          whiteSpace: 'nowrap',
+                          color: GREEN,
+                        }}
                       >
                         {formatMoney(
                           tx.amount,
@@ -814,6 +945,19 @@ const BusinessDashboard: React.FC = () => {
                   </Box>
                 ))}
               </Stack>
+            )}
+
+            {pagination && pagination.total > 20 && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                display="block"
+                textAlign="center"
+                sx={{ mt: 2 }}
+              >
+                Showing the latest 20 of {pagination.total}{' '}
+                business transactions.
+              </Typography>
             )}
           </CardContent>
         </Card>
