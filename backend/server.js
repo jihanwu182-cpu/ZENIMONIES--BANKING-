@@ -32,6 +32,9 @@ const passcodeRoutes = require('./routes/passcode');
 const transactionPinRoutes = require('./routes/transactionPin');
 const beneficiaryRoutes = require('./routes/beneficiaryRoutes');
 const savingsRoutes = require('./routes/savingsRoutes');
+const {
+  startSavingsMaturityJob,
+} = require('./jobs/savingsMaturityJob');
 
 // ============================================================
 // PAYSTACK
@@ -948,7 +951,15 @@ console.log(
     process.exit(1);
   }
 };
+// ========================================================
+// START AUTOMATIC SAVINGS MATURITY SCHEDULER
+// ========================================================
 
+startSavingsMaturityJob();
+
+console.log(
+  'Automatic Savings Maturity Scheduler is active.'
+);
 // ============================================================
 // START
 // ============================================================
