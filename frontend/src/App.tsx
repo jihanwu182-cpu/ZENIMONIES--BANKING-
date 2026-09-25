@@ -367,13 +367,9 @@ const App: React.FC = () => {
            element={<Statement />}
         />
           <Route
-            path="/business"
-            element={
-              <ProtectedRoute>
-                <Business />
-             </ProtectedRoute>
-           }
-         />
+           path="/business"
+           element={<Business />}
+        />
 
           <Route
             path="/admin"
