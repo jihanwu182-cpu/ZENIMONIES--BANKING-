@@ -142,60 +142,49 @@ async function createBusiness(req, res) {
     }
 
     
+    
     // Create a separate business account.
     // The account remains pending until business approval.
-    let account;
-    let attempts = 0;
 
-    while (!account && attempts < 5) {
-      attempts += 1;
+    const accountNumber =
+      generateBusinessAccountNumber();
 
-      const accountNumber =
-        generateBusinessAccountNumber();
+    const accountResult = await client.query(
+      `
+        INSERT INTO accounts (
+          user_id,
+          account_number,
+          account_type,
+          currency,
+          balance,
+          status
+        )
+        VALUES (
+          $1,
+          $2,
+          'business',
+          $3,
+          0.00,
+          'pending'
+        )
+        RETURNING
+          id,
+          account_number,
+          account_type,
+          currency,
+          balance,
+          status,
+          created_at
+      `,
+      [
+        userId,
+        accountNumber,
+        selectedCurrency,
+      ]
+    );
 
-      // A savepoint lets PostgreSQL recover from a
-      // duplicate account number without aborting the
-      // entire registration transaction.
-      await client.query(
-        'SAVEPOINT business_account_attempt'
-      );
+    const account = accountResult.rows[0];
 
-      try {
-        const accountResult = await client.query(
-          `
-            INSERT INTO accounts (
-              user_id,
-              account_number,
-              account_type,
-              currency,
-              balance,
-              status
-            )
-            VALUES (
-              $1,
-              $2,
-              'business',
-              $3,
-              0.00,
-              'pending'
-            )
-            RETURNING
-              id,
-              account_number,
-              account_type,
-              currency,
-              balance,
-              status,
-              created_at
-          `,
-          [
-            userId,
-            accountNumber,
-            selectedCurrency,
-          ]
-        );
-
-        account = accountResult.rows[0];
 
         await client.query(
           'RELEASE SAVEPOINT business_account_attempt'
