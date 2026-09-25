@@ -3,10 +3,13 @@ const express = require('express');
 
 const router = express.Router();
 
-const { authenticateToken } = require('../utils/authMiddleware');
+const {
+  authenticateToken,
+} = require('../utils/authMiddleware');
 
 const {
   buildAccountStatement,
+  validateStatementDates,
 } = require('../services/statementService');
 
 const {
@@ -24,125 +27,33 @@ const {
 
 // POST /api/statements/email
 //
-// Authenticated customers can email their own account
-// statement to the email address registered on their account.
+// Authenticated customers can request their own
+// account statement.
 //
-// Supported formats: pdf, csv
+// Supported formats: PDF and CSV.
 //
-// The recipient email is retrieved from the database.
-// A client-supplied email address is never accepted.
+// The destination email is always obtained from
+// the authenticated customer's database record.
+//
+// Never accept a recipient email from the client.
+
+// ============================================================
+// EMAIL ACCOUNT STATEMENT
+// ============================================================
 
 router.post(
   '/email',
   authenticateToken,
   async (req, res) => {
     try {
-      const { startDate, endDate, format } = req.body || {};
-
-      // ======================================================
-      // 1. VALIDATE DATES
-      // ======================================================
-
-      if (!startDate || !endDate) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Please provide both start and end dates.',
-        });
-      }
-
-      const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+      // ------------------------------------------------------
+      // 1. AUTHENTICATION
+      // ------------------------------------------------------
 
       if (
-        typeof startDate !== 'string' ||
-        typeof endDate !== 'string' ||
-        !datePattern.test(startDate) ||
-        !datePattern.test(endDate)
+        !req.user ||
+        !req.user.id
       ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Dates must use YYYY-MM-DD format.',
-        });
-      }
-
-      const isValidDate = (dateString) => {
-        const date = new Date(
-          `${dateString}T00:00:00.000Z`
-        );
-
-        return (
-          !Number.isNaN(date.getTime()) &&
-          date.toISOString().slice(0, 10) === dateString
-        );
-      };
-
-      if (
-        !isValidDate(startDate) ||
-        !isValidDate(endDate)
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Please provide valid calendar dates.',
-        });
-      }
-
-      if (startDate > endDate) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Start date cannot be after end date.',
-        });
-      }
-
-      // ======================================================
-      // 2. VALIDATE STATEMENT PERIOD
-      // Maximum 365 calendar days, inclusive.
-      // ======================================================
-
-      const start = new Date(
-        `${startDate}T00:00:00.000Z`
-      );
-
-      const end = new Date(
-        `${endDate}T00:00:00.000Z`
-      );
-
-      const days =
-        (end.getTime() - start.getTime()) /
-          (1000 * 60 * 60 * 24) +
-        1;
-
-      if (days > 365) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Statement period cannot exceed 365 calendar days.',
-        });
-      }
-
-      // ======================================================
-      // 3. VALIDATE FORMAT
-      // ======================================================
-
-      const selectedFormat = String(
-        format || ''
-      ).toLowerCase();
-
-      if (!['pdf', 'csv'].includes(selectedFormat)) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Format must be PDF or CSV.',
-        });
-      }
-
-      // ======================================================
-      // 4. GET AUTHENTICATED CUSTOMER STATEMENT
-      // ======================================================
-
-      if (!req.user || !req.user.id) {
         return res.status(401).json({
           success: false,
           message:
@@ -150,119 +61,250 @@ router.post(
         });
       }
 
-      const statement = await buildAccountStatement({
-        userId: req.user.id,
+      // ------------------------------------------------------
+      // 2. VALIDATE REQUEST BODY
+      // ------------------------------------------------------
+
+      const body = req.body;
+
+      if (
+        !body ||
+        typeof body !== 'object' ||
+        Array.isArray(body)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Invalid statement request.',
+        });
+      }
+
+      const {
         startDate,
         endDate,
-      });
+        format,
+      } = body;
+
+      if (
+        !startDate ||
+        !endDate
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Please provide both start and end dates.',
+        });
+      }
+
+      // ------------------------------------------------------
+      // 3. VALIDATE STATEMENT DATES
+      // ------------------------------------------------------
+
+      let dates;
+
+      try {
+        dates = validateStatementDates(
+          startDate,
+          endDate
+        );
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message:
+            error.message ||
+            'Please provide valid statement dates.',
+        });
+      }
+
+      // ------------------------------------------------------
+      // 4. VALIDATE FILE FORMAT
+      // ------------------------------------------------------
+
+      const selectedFormat =
+        typeof format === 'string'
+          ? format.toLowerCase().trim()
+          : '';
+
+      if (
+        !['pdf', 'csv'].includes(
+          selectedFormat
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Format must be PDF or CSV.',
+        });
+      }
+
+      // ------------------------------------------------------
+      // 5. BUILD AUTHENTICATED CUSTOMER STATEMENT
+      // ------------------------------------------------------
+
+      const statement =
+        await buildAccountStatement({
+          userId: req.user.id,
+          startDate: dates.startDate,
+          endDate: dates.endDate,
+        });
 
       if (
         !statement ||
         !statement.customer ||
-        !statement.customer.email
+        !statement.account ||
+        !statement.statement
       ) {
-        return res.status(404).json({
+        throw new Error(
+          'Statement generation returned incomplete data.'
+        );
+      }
+
+      const registeredEmail =
+        statement.customer.email;
+
+      if (
+        typeof registeredEmail !== 'string' ||
+        !registeredEmail.trim()
+      ) {
+        return res.status(400).json({
           success: false,
           message:
             'A registered email address could not be found for your account.',
         });
       }
 
-      // ======================================================
-      // 5. GENERATE STATEMENT FILE
-      // ======================================================
+      // ------------------------------------------------------
+      // 6. GENERATE PDF OR CSV
+      // ------------------------------------------------------
 
       let attachmentBuffer;
       let contentType;
+      let filename;
 
       if (selectedFormat === 'pdf') {
-        const pdfResult =
-          await generatePDFStatement(statement);
+        attachmentBuffer =
+          await generatePDFStatement(
+            statement
+          );
 
-        attachmentBuffer = Buffer.isBuffer(pdfResult)
-          ? pdfResult
-          : Buffer.from(pdfResult);
+        contentType =
+          'application/pdf';
 
-        contentType = 'application/pdf';
+        filename =
+          `ZENIMONIES-Statement-${dates.startDate}-to-${dates.endDate}.pdf`;
+
+        if (
+          !Buffer.isBuffer(
+            attachmentBuffer
+          ) ||
+          attachmentBuffer.length === 0
+        ) {
+          throw new Error(
+            'PDF statement generation failed.'
+          );
+        }
+
+        // Verify the PDF file signature.
+        const pdfHeader =
+          attachmentBuffer
+            .subarray(0, 5)
+            .toString('ascii');
+
+        if (pdfHeader !== '%PDF-') {
+          throw new Error(
+            'Generated statement is not a valid PDF.'
+          );
+        }
+
       } else {
-        const csvResult =
-          await generateCSVStatement(statement);
+        const csv =
+          generateCSVStatement(
+            statement
+          );
 
-        attachmentBuffer = Buffer.isBuffer(csvResult)
-          ? csvResult
-          : Buffer.from(
-              String(csvResult),
-              'utf8'
-            );
+        if (
+          typeof csv !== 'string' ||
+          !csv.trim()
+        ) {
+          throw new Error(
+            'CSV statement generation failed.'
+          );
+        }
 
-        contentType = 'text/csv';
+        attachmentBuffer =
+          Buffer.from(
+            '\uFEFF' + csv,
+            'utf8'
+          );
+
+        contentType =
+          'text/csv';
+
+        filename =
+          `ZENIMONIES-Statement-${dates.startDate}-to-${dates.endDate}.csv`;
       }
 
-      if (
-        !Buffer.isBuffer(attachmentBuffer) ||
-        attachmentBuffer.length === 0
-      ) {
-        throw new Error(
-          'Statement file generation failed.'
-        );
-      }
-
-      // ======================================================
-      // 6. SEND TO REGISTERED EMAIL
-      // ======================================================
+      // ------------------------------------------------------
+      // 7. SEND TO REGISTERED EMAIL
+      // ------------------------------------------------------
 
       await sendAccountStatementEmail({
-        to: statement.customer.email,
-        fullName: statement.customer.fullName,
-        startDate,
-        endDate,
-        format: selectedFormat,
+        to: registeredEmail.trim(),
+
+        fullName:
+          statement.customer.fullName,
+
+        startDate:
+          dates.startDate,
+
+        endDate:
+          dates.endDate,
+
+        format:
+          selectedFormat,
+
         attachmentBuffer,
+
+        contentType,
+
+        filename,
       });
 
-      // ======================================================
-      // 7. RETURN SUCCESS
-      // Only return success after the email provider
-      // confirms the request was accepted.
-      // ======================================================
+      // ------------------------------------------------------
+      // 8. RETURN SUCCESS
+      // ------------------------------------------------------
 
       return res.status(200).json({
         success: true,
+
         message:
           'Your account statement has been sent to your registered email address.',
+
         data: {
-          format: selectedFormat,
-          startDate,
-          endDate,
+          format:
+            selectedFormat,
+
+          startDate:
+            dates.startDate,
+
+          endDate:
+            dates.endDate,
         },
       });
+
     } catch (error) {
       console.error(
         'Statement email request failed:',
         error.message
       );
 
-      // Do not expose database errors, internal paths,
-      // account details, or email provider credentials.
+      // ------------------------------------------------------
+      // 9. SAFE ERROR RESPONSES
+      // ------------------------------------------------------
 
       if (
-        error.message &&
-        (
-          error.message.includes('Invalid start date') ||
-          error.message.includes('Invalid end date') ||
-          error.message.includes('date range')
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Please check your statement dates and try again.',
-        });
-      }
-
-      if (
-        error.message &&
-        error.message.includes('No active account')
+        error.message ===
+        'No active customer account was found.'
       ) {
         return res.status(404).json({
           success: false,
@@ -279,5 +321,9 @@ router.post(
     }
   }
 );
+
+// ============================================================
+// EXPORT
+// ============================================================
 
 module.exports = router;
