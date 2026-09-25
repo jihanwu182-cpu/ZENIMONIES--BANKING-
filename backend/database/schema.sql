@@ -1228,6 +1228,185 @@ ADD COLUMN IF NOT EXISTS provider_response JSONB;
 CREATE INDEX IF NOT EXISTS idx_bill_payments_provider_request
 ON bill_payments(provider_request_id);
 
+
+-- ============================================================
+-- ZENIMONIES BANKING
+-- STAGE 1: BUSINESS AND POS TERMINAL REGISTRY
+-- PostgreSQL
+-- ============================================================
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- ============================================================
+-- BUSINESS PROFILES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS businesses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    owner_user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE RESTRICT,
+
+    business_account_id UUID NOT NULL
+        REFERENCES accounts(id)
+        ON DELETE RESTRICT,
+
+    business_name VARCHAR(200) NOT NULL,
+
+    registration_number VARCHAR(100),
+
+    business_type VARCHAR(100),
+
+    country VARCHAR(10) NOT NULL DEFAULT 'NG',
+
+    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
+
+    business_address TEXT,
+
+    verification_status VARCHAR(30)
+        NOT NULL DEFAULT 'pending'
+        CHECK (
+            verification_status IN (
+                'pending',
+                'under_review',
+                'verified',
+                'rejected'
+            )
+        ),
+
+    status VARCHAR(30)
+        NOT NULL DEFAULT 'pending'
+        CHECK (
+            status IN (
+                'pending',
+                'active',
+                'suspended',
+                'closed'
+            )
+        ),
+
+    created_at TIMESTAMPTZ
+        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ
+        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE (business_account_id)
+);
+
+CREATE INDEX IF NOT EXISTS
+    idx_businesses_owner
+ON businesses(owner_user_id);
+
+CREATE INDEX IF NOT EXISTS
+    idx_businesses_status
+ON businesses(status, verification_status);
+
+-- ============================================================
+-- POS TERMINALS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS pos_terminals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    terminal_id VARCHAR(40) NOT NULL UNIQUE,
+
+    business_id UUID NOT NULL
+        REFERENCES businesses(id)
+        ON DELETE RESTRICT,
+
+    business_account_id UUID NOT NULL
+        REFERENCES accounts(id)
+        ON DELETE RESTRICT,
+
+    terminal_name VARCHAR(100),
+
+    manufacturer VARCHAR(100),
+
+    model VARCHAR(100),
+
+    serial_number VARCHAR(150),
+
+    device_fingerprint TEXT,
+
+    -- Store a hash of the terminal secret, never
+    -- the raw terminal secret.
+    secret_hash TEXT NOT NULL,
+
+    status VARCHAR(30)
+        NOT NULL DEFAULT 'pending'
+        CHECK (
+            status IN (
+                'pending',
+                'active',
+                'disabled',
+                'revoked'
+            )
+        ),
+
+    last_seen_at TIMESTAMPTZ,
+
+    activated_at TIMESTAMPTZ,
+
+    activated_by UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    created_at TIMESTAMPTZ
+        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ
+        NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS
+    idx_pos_terminals_business
+ON pos_terminals(business_id);
+
+CREATE INDEX IF NOT EXISTS
+    idx_pos_terminals_account
+ON pos_terminals(business_account_id);
+
+CREATE INDEX IF NOT EXISTS
+    idx_pos_terminals_status
+ON pos_terminals(status);
+
+CREATE INDEX IF NOT EXISTS
+    idx_pos_terminals_serial
+ON pos_terminals(serial_number);
+
+-- ============================================================
+-- POS TERMINAL AUDIT LOG
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS pos_terminal_audit (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    terminal_id UUID NOT NULL
+        REFERENCES pos_terminals(id)
+        ON DELETE RESTRICT,
+
+    actor_user_id UUID
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    action VARCHAR(50) NOT NULL,
+
+    details JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+    created_at TIMESTAMPTZ
+        NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS
+    idx_pos_terminal_audit_terminal
+ON pos_terminal_audit(terminal_id, created_at DESC);
+
+-- ============================================================
+-- END STAGE 1 SCHEMA
+-- ============================================================
+
 -- ============================================================
 -- INDEXES
 -- ============================================================
