@@ -804,6 +804,15 @@ console.log(
     console.log(
       'Database migration completed: legal name verification lock is active'
     );
+ // ========================================================
+// START AUTOMATIC SAVINGS MATURITY SCHEDULER
+// ========================================================
+
+startSavingsMaturityJob();
+
+console.log(
+  'Automatic Savings Maturity Scheduler is active.'
+);
 
     // ========================================================
     // START SERVER
@@ -951,15 +960,6 @@ console.log(
     process.exit(1);
   }
 };
-// ========================================================
-// START AUTOMATIC SAVINGS MATURITY SCHEDULER
-// ========================================================
-
-startSavingsMaturityJob();
-
-console.log(
-  'Automatic Savings Maturity Scheduler is active.'
-);
 // ============================================================
 // START
 // ============================================================
