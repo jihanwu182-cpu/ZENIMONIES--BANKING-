@@ -199,7 +199,7 @@ const sendAccountStatementEmail = async ({
   }
 
   // Conservative attachment limit to prevent oversized emails.
-  const MAX_ATTACHMENT_SIZE = 8 * 1024 * 1024;
+  const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 
   if (attachmentBuffer.length > MAX_ATTACHMENT_SIZE) {
     throw new Error(
