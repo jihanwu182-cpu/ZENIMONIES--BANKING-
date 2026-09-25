@@ -33,6 +33,7 @@ const transactionPinRoutes = require('./routes/transactionPin');
 const beneficiaryRoutes = require('./routes/beneficiaryRoutes');
 const savingsRoutes = require('./routes/savingsRoutes');
 const statementRoutes = require('./routes/statementRoutes');
+const posRoutes = require('./routes/posRoutes');
 const {
   startSavingsMaturityJob,
 } = require('./jobs/savingsMaturityJob');
@@ -152,6 +153,7 @@ app.use(
 );
 app.use('/api/savings', savingsRoutes);
 app.use('/api/statements', statementRoutes);
+app.use('/api/pos', posRoutes);
 // ============================================================
 // BILL PAYMENTS
 // ============================================================
