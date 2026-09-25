@@ -40,6 +40,7 @@ import PasskeySecurity from './pages/PasskeySecurity.tsx';
 import AccountLocked from './pages/AccountLocked.tsx';
 import Savings from './pages/Savings.tsx';
 import Statement from './pages/Statement.tsx';
+import Business from './pages/Business.tsx';
 
 import SessionGuard from './components/SessionGuard.tsx';
 import AirtimeReconciliation from './pages/AirtimeReconciliation.tsx';
@@ -365,6 +366,14 @@ const App: React.FC = () => {
            path="/statement"
            element={<Statement />}
         />
+          <Route
+            path="/business"
+            element={
+              <ProtectedRoute>
+                <Business />
+             </ProtectedRoute>
+           }
+         />
 
           <Route
             path="/admin"
