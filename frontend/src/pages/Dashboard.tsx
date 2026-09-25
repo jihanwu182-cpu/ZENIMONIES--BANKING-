@@ -1499,6 +1499,21 @@ const Dashboard: React.FC = () => {
     Passkey Security
   </span>
 </button>
+       
+       <button
+  type="button"
+  style={styles.moreServiceItem}
+  onClick={() => navigate('/statement')}
+>
+  <Icon
+    name="receipt"
+    size={25}
+  />
+
+  <span>
+    Account Statement
+  </span>
+</button>
 
         {/* ====================================================
             MORE PANEL
