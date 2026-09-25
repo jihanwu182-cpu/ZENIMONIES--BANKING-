@@ -4,9 +4,7 @@ const PDFDocument = require('pdfkit');
 // ============================================================
 // ZENIMONIES BANKING
 // PROFESSIONAL ACCOUNT STATEMENT FILE SERVICE
-//
 // PDF + CSV
-// Forest green and white branding
 // ============================================================
 
 const GREEN = '#145A32';
@@ -21,10 +19,7 @@ const BORDER = '#D8E4DA';
 // FORMAT MONEY
 // ============================================================
 
-const formatMoney = (
-  amount,
-  currency = 'NGN'
-) => {
+const formatMoney = (amount, currency = 'NGN') => {
   if (
     amount === null ||
     amount === undefined ||
@@ -36,20 +31,15 @@ const formatMoney = (
   const value = Number(amount);
 
   if (!Number.isFinite(value)) {
-    throw new Error(
-      'Invalid statement amount.'
-    );
+    throw new Error('Invalid statement amount.');
   }
 
-  return new Intl.NumberFormat(
-    'en-NG',
-    {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }
-  ).format(value);
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 };
 
 // ============================================================
@@ -57,10 +47,7 @@ const formatMoney = (
 // ============================================================
 
 const safeText = (value) => {
-  if (
-    value === null ||
-    value === undefined
-  ) {
+  if (value === null || value === undefined) {
     return '';
   }
 
@@ -69,10 +56,9 @@ const safeText = (value) => {
     .trim();
 };
 
-
- // ============================================================
- // MONEY VALIDATION
- // ============================================================
+// ============================================================
+// MONEY VALIDATION
+// ============================================================
 
 const moneyNumber = (value) => {
   if (
@@ -85,13 +71,11 @@ const moneyNumber = (value) => {
 
   const amount = Number(value);
 
-  // Reject invalid numbers but allow negative balances.
   if (!Number.isFinite(amount)) {
-    throw new Error(
-      'Invalid statement amount.'
-    );
+    throw new Error('Invalid statement amount.');
   }
 
+  // Negative balances are allowed.
   return amount;
 };
 
@@ -102,7 +86,6 @@ const formatAmountCell = (value) => {
     ? 'Not reconciled'
     : amount.toFixed(2);
 };
-
 
 // ============================================================
 // CSV ESCAPING
@@ -119,10 +102,6 @@ const escapeCSV = (value) => {
   return `"${text.replace(/"/g, '""')}"`;
 };
 
-// ============================================================
-// CSV ROW HELPER
-// ============================================================
-
 const csvRow = (values) =>
   values.map(escapeCSV).join(',');
 
@@ -137,9 +116,7 @@ const generateCSVStatement = (data) => {
     !data.account ||
     !data.statement
   ) {
-    throw new Error(
-      'Invalid statement data.'
-    );
+    throw new Error('Invalid statement data.');
   }
 
   const {
@@ -148,24 +125,18 @@ const generateCSVStatement = (data) => {
     statement,
   } = data;
 
-  const currency =
-    account.currency || 'NGN';
-
+  const currency = account.currency || 'NGN';
   const rows = [];
 
-  rows.push(
-    csvRow(['ZENIMONIES BANKING'])
-  );
-
-  rows.push(
-    csvRow(['ACCOUNT STATEMENT'])
-  );
-
+  rows.push(csvRow(['ZENIMONIES BANKING']));
+  rows.push(csvRow(['ACCOUNT STATEMENT']));
   rows.push([]);
 
   // ----------------------------------------------------------
-  // CUSTOMER DETAILS
+  // ACCOUNT STATEMENT DETAILS
   // ----------------------------------------------------------
+
+  rows.push(csvRow(['ACCOUNT STATEMENT']));
 
   rows.push(
     csvRow([
@@ -190,16 +161,16 @@ const generateCSVStatement = (data) => {
 
   rows.push(
     csvRow([
-      'Address',
-      safeText(customer.address) ||
-        'Address not provided',
+      'Statement Period',
+      `${statement.startDate} to ${statement.endDate}`,
     ])
   );
 
   rows.push(
     csvRow([
-      'Statement Period',
-      `${statement.startDate} to ${statement.endDate}`,
+      'Registered Address',
+      safeText(customer.address) ||
+        'Address not provided',
     ])
   );
 
@@ -207,21 +178,14 @@ const generateCSVStatement = (data) => {
 
   // ----------------------------------------------------------
   // ACCOUNT SUMMARY
-  // No Total Fees summary.
   // ----------------------------------------------------------
 
-  rows.push(
-    csvRow([
-      'ACCOUNT SUMMARY',
-    ])
-  );
+  rows.push(csvRow(['ACCOUNT SUMMARY']));
 
   rows.push(
     csvRow([
       'Opening Balance',
-      formatAmountCell(
-        statement.openingBalance
-      ),
+      formatAmountCell(statement.openingBalance),
       currency,
     ])
   );
@@ -229,9 +193,7 @@ const generateCSVStatement = (data) => {
   rows.push(
     csvRow([
       'Total Credits',
-      formatAmountCell(
-        statement.totalCredits
-      ),
+      formatAmountCell(statement.totalCredits),
       currency,
     ])
   );
@@ -239,9 +201,7 @@ const generateCSVStatement = (data) => {
   rows.push(
     csvRow([
       'Total Debits',
-      formatAmountCell(
-        statement.totalDebits
-      ),
+      formatAmountCell(statement.totalDebits),
       currency,
     ])
   );
@@ -249,9 +209,7 @@ const generateCSVStatement = (data) => {
   rows.push(
     csvRow([
       'Closing Balance',
-      formatAmountCell(
-        statement.closingBalance
-      ),
+      formatAmountCell(statement.closingBalance),
       currency,
     ])
   );
@@ -268,7 +226,7 @@ const generateCSVStatement = (data) => {
       'Reference',
       'Description',
       'Beneficiary',
-      'Institution/Bank',
+      'Beneficiary Institution',
       'Debit',
       'Credit',
       'Fee',
@@ -277,56 +235,29 @@ const generateCSVStatement = (data) => {
     ])
   );
 
-  const transactions =
-    statement.transactions || [];
+  const transactions = statement.transactions || [];
 
   if (!Array.isArray(transactions)) {
-    throw new Error(
-      'Invalid statement transactions.'
-    );
+    throw new Error('Invalid statement transactions.');
   }
 
   for (const transaction of transactions) {
     rows.push(
       csvRow([
         safeText(transaction.date),
-
         safeText(transaction.reference),
-
         safeText(transaction.description),
-
-        safeText(
-          transaction.beneficiary
-        ),
-
-        safeText(
-          transaction.institution
-        ),
-
-        formatAmountCell(
-          transaction.debit
-        ),
-
-        formatAmountCell(
-          transaction.credit
-        ),
-
-        formatAmountCell(
-          transaction.fee
-        ),
-
-        formatAmountCell(
-          transaction.balance
-        ),
-
-        safeText(
-          transaction.currency || currency
-        ),
+        safeText(transaction.beneficiary),
+        safeText(transaction.institution),
+        formatAmountCell(transaction.debit),
+        formatAmountCell(transaction.credit),
+        formatAmountCell(transaction.fee),
+        formatAmountCell(transaction.balance),
+        safeText(transaction.currency || currency),
       ])
     );
   }
 
-  // UTF-8 BOM improves Excel compatibility.
   return '\uFEFF' + rows.join('\r\n');
 };
 
@@ -346,14 +277,11 @@ const drawLabelValue = (
     .font('Helvetica-Bold')
     .fontSize(8)
     .fillColor(MUTED)
-    .text(
-      label,
-      x,
-      y,
-      {
-        width,
-      }
-    );
+    .text(label, x, y, {
+      width,
+      lineBreak: false,
+      ellipsis: true,
+    });
 
   doc
     .font('Helvetica')
@@ -365,7 +293,7 @@ const drawLabelValue = (
       y + 12,
       {
         width,
-        height: 30,
+        height: 24,
         ellipsis: true,
       }
     );
@@ -376,680 +304,567 @@ const drawLabelValue = (
 // ============================================================
 
 const generatePDFStatement = (data) => {
-  return new Promise(
-    (resolve, reject) => {
-      let doc;
+  return new Promise((resolve, reject) => {
+    let doc;
+    let settled = false;
 
-      try {
-        if (
-          !data ||
-          !data.customer ||
-          !data.account ||
-          !data.statement
-        ) {
-          throw new Error(
-            'Invalid statement data.'
-          );
+    try {
+      if (
+        !data ||
+        !data.customer ||
+        !data.account ||
+        !data.statement
+      ) {
+        throw new Error('Invalid statement data.');
+      }
+
+      const {
+        customer,
+        account,
+        statement,
+      } = data;
+
+      const currency = account.currency || 'NGN';
+      const transactions = statement.transactions || [];
+
+      if (!Array.isArray(transactions)) {
+        throw new Error('Invalid statement transactions.');
+      }
+
+      doc = new PDFDocument({
+        size: 'A4',
+        layout: 'landscape',
+        margins: {
+          top: 35,
+          bottom: 45,
+          left: 30,
+          right: 30,
+        },
+        bufferPages: true,
+        info: {
+          Title: 'Zenimonies Account Statement',
+          Author: 'Zenimonies Banking',
+          Subject: 'Customer account statement',
+        },
+      });
+
+      const chunks = [];
+
+      doc.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+
+      doc.on('error', (error) => {
+        if (!settled) {
+          settled = true;
+          reject(error);
         }
+      });
 
-        const {
-          customer,
-          account,
-          statement,
-        } = data;
-
-        const currency =
-          account.currency || 'NGN';
-
-        const transactions =
-          statement.transactions || [];
-
-        if (!Array.isArray(transactions)) {
-          throw new Error(
-            'Invalid statement transactions.'
-          );
+      doc.on('end', () => {
+        if (!settled) {
+          settled = true;
+          resolve(Buffer.concat(chunks));
         }
+      });
 
-        doc = new PDFDocument({
-          size: 'A4',
-          layout: 'landscape',
+      const pageWidth = doc.page.width;
+      const pageHeight = doc.page.height;
+      const left = doc.page.margins.left;
+      const right = pageWidth - doc.page.margins.right;
+      const contentWidth = right - left;
 
-          margins: {
-            top: 35,
-            bottom: 45,
-            left: 30,
-            right: 30,
-          },
+      // ------------------------------------------------------
+      // BRAND HEADER
+      // ------------------------------------------------------
 
-          bufferPages: true,
+      doc
+        .rect(0, 0, pageWidth, 100)
+        .fill(DARK_GREEN);
 
-          info: {
-            Title:
-              'Zenimonies Account Statement',
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(24)
+        .fillColor(WHITE)
+        .text('ZENIMONIES', left, 26);
 
-            Author:
-              'Zenimonies Banking',
+      doc
+        .font('Helvetica')
+        .fontSize(10)
+        .fillColor('#D9EADD')
+        .text('BANKING', left, 56);
 
-            Subject:
-              'Customer account statement',
-          },
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(17)
+        .fillColor(WHITE)
+        .text('ACCOUNT STATEMENT', left, 40, {
+          width: contentWidth,
+          align: 'right',
         });
 
-        const chunks = [];
-
-        let settled = false;
-
-        doc.on('data', (chunk) => {
-          chunks.push(chunk);
-        });
-
-        doc.on('error', (error) => {
-          if (!settled) {
-            settled = true;
-            reject(error);
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor('#D9EADD')
+        .text(
+          `${statement.startDate} to ${statement.endDate}`,
+          left,
+          65,
+          {
+            width: contentWidth,
+            align: 'right',
           }
-        });
+        );
 
-        doc.on('end', () => {
-          if (!settled) {
-            settled = true;
+      // ------------------------------------------------------
+      // TWO-COLUMN ACCOUNT STATEMENT + ACCOUNT SUMMARY
+      //
+      // LEFT: ACCOUNT STATEMENT
+      // RIGHT: ACCOUNT SUMMARY
+      //
+      // Summary boxes are no longer below the customer details.
+      // ------------------------------------------------------
 
-            resolve(
-              Buffer.concat(chunks)
-            );
+      const sectionTop = 120;
+      const columnGap = 24;
+      const columnWidth = (contentWidth - columnGap) / 2;
+
+      const leftColumnX = left;
+      const rightColumnX = left + columnWidth + columnGap;
+
+      const sectionHeight = 178;
+
+      // Section backgrounds
+
+      doc
+        .roundedRect(
+          leftColumnX,
+          sectionTop,
+          columnWidth,
+          sectionHeight,
+          6
+        )
+        .fillAndStroke(WHITE, BORDER);
+
+      doc
+        .roundedRect(
+          rightColumnX,
+          sectionTop,
+          columnWidth,
+          sectionHeight,
+          6
+        )
+        .fillAndStroke(WHITE, BORDER);
+
+      // ------------------------------------------------------
+      // LEFT: ACCOUNT STATEMENT
+      // ------------------------------------------------------
+
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(11)
+        .fillColor(GREEN)
+        .text(
+          'ACCOUNT STATEMENT',
+          leftColumnX + 12,
+          sectionTop + 12,
+          {
+            width: columnWidth - 24,
           }
-        });
+        );
 
-        const pageWidth =
-          doc.page.width;
+      doc
+        .moveTo(
+          leftColumnX + 12,
+          sectionTop + 32
+        )
+        .lineTo(
+          leftColumnX + columnWidth - 12,
+          sectionTop + 32
+        )
+        .lineWidth(0.6)
+        .strokeColor(BORDER)
+        .stroke();
 
-        const pageHeight =
-          doc.page.height;
+      const detailsX = leftColumnX + 12;
+      const detailsWidth = columnWidth - 24;
 
-        const left =
-          doc.page.margins.left;
+      drawLabelValue(
+        doc,
+        'Customer Name',
+        customer.fullName,
+        detailsX,
+        sectionTop + 42,
+        detailsWidth
+      );
 
-        const right =
-          pageWidth -
-          doc.page.margins.right;
+      drawLabelValue(
+        doc,
+        'Account Number',
+        account.accountNumber,
+        detailsX,
+        sectionTop + 82,
+        detailsWidth
+      );
 
-        const contentWidth =
-          right - left;
+      drawLabelValue(
+        doc,
+        'Currency',
+        currency,
+        detailsX,
+        sectionTop + 122,
+        detailsWidth
+      );
 
-        // ----------------------------------------------------
-        // BRAND HEADER
-        // ----------------------------------------------------
+      drawLabelValue(
+        doc,
+        'Registered Address',
+        customer.address || 'Address not provided',
+        detailsX,
+        sectionTop + 162,
+        detailsWidth
+      );
+
+      // ------------------------------------------------------
+      // RIGHT: ACCOUNT SUMMARY
+      // ------------------------------------------------------
+
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(11)
+        .fillColor(GREEN)
+        .text(
+          'ACCOUNT SUMMARY',
+          rightColumnX + 12,
+          sectionTop + 12,
+          {
+            width: columnWidth - 24,
+          }
+        );
+
+      doc
+        .moveTo(
+          rightColumnX + 12,
+          sectionTop + 32
+        )
+        .lineTo(
+          rightColumnX + columnWidth - 12,
+          sectionTop + 32
+        )
+        .lineWidth(0.6)
+        .strokeColor(BORDER)
+        .stroke();
+
+      const summaryItems = [
+        {
+          label: 'Opening Balance',
+          value: statement.openingBalance,
+        },
+        {
+          label: 'Total Credits',
+          value: statement.totalCredits,
+        },
+        {
+          label: 'Total Debits',
+          value: statement.totalDebits,
+        },
+        {
+          label: 'Closing Balance',
+          value: statement.closingBalance,
+        },
+      ];
+
+      const summaryX = rightColumnX + 12;
+      const summaryWidth = columnWidth - 24;
+      const summaryStartY = sectionTop + 43;
+      const summaryRowHeight = 31;
+
+      summaryItems.forEach((item, index) => {
+        const rowY =
+          summaryStartY + index * summaryRowHeight;
+
+        if (index === 3) {
+          doc
+            .roundedRect(
+              summaryX,
+              rowY - 3,
+              summaryWidth,
+              28,
+              4
+            )
+            .fill(LIGHT_GREEN);
+        }
 
         doc
+          .font(
+            index === 3
+              ? 'Helvetica-Bold'
+              : 'Helvetica'
+          )
+          .fontSize(8.5)
+          .fillColor(
+            index === 3
+              ? DARK_GREEN
+              : MUTED
+          )
+          .text(
+            item.label,
+            summaryX + 7,
+            rowY + 4,
+            {
+              width: summaryWidth * 0.48,
+              lineBreak: false,
+              ellipsis: true,
+            }
+          );
+
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(9.5)
+          .fillColor(DARK_TEXT)
+          .text(
+            formatMoney(item.value, currency),
+            summaryX + summaryWidth * 0.46,
+            rowY + 4,
+            {
+              width: summaryWidth * 0.52 - 7,
+              align: 'right',
+              lineBreak: false,
+              ellipsis: true,
+            }
+          );
+      });
+
+      // ------------------------------------------------------
+      // TRANSACTION HISTORY
+      // Full width below both sections
+      // ------------------------------------------------------
+
+      let y = sectionTop + sectionHeight + 20;
+
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(12)
+        .fillColor(GREEN)
+        .text('TRANSACTION HISTORY', left, y);
+
+      y += 20;
+
+      const columns = [
+        { title: 'Date', width: 57 },
+        { title: 'Reference', width: 95 },
+        { title: 'Description', width: 120 },
+        { title: 'Beneficiary', width: 90 },
+        { title: 'Beneficiary Institution', width: 90 },
+        { title: 'Debit', width: 70 },
+        { title: 'Credit', width: 70 },
+        { title: 'Fee', width: 50 },
+        { title: 'Balance', width: 85 },
+      ];
+
+      const totalWidth = columns.reduce(
+        (sum, column) => sum + column.width,
+        0
+      );
+
+      const scale = contentWidth / totalWidth;
+
+      const scaledColumns = columns.map((column) => ({
+        ...column,
+        width: column.width * scale,
+      }));
+
+      const headerHeight = 25;
+      const rowHeight = 29;
+
+      const footerY = pageHeight - 27;
+
+      const drawTableHeader = () => {
+        doc
           .rect(
-            0,
-            0,
-            pageWidth,
-            100
+            left,
+            y,
+            contentWidth,
+            headerHeight
           )
           .fill(DARK_GREEN);
 
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(24)
-          .fillColor(WHITE)
-          .text(
-            'ZENIMONIES',
-            left,
-            26
-          );
-
-        doc
-          .font('Helvetica')
-          .fontSize(10)
-          .fillColor('#D9EADD')
-          .text(
-            'BANKING',
-            left,
-            56
-          );
+        let x = left;
 
         doc
           .font('Helvetica-Bold')
-          .fontSize(17)
-          .fillColor(WHITE)
-          .text(
-            'ACCOUNT STATEMENT',
-            left,
-            40,
+          .fontSize(7)
+          .fillColor(WHITE);
+
+        for (const column of scaledColumns) {
+          doc.text(
+            column.title,
+            x + 3,
+            y + 8,
             {
-              width: contentWidth,
-              align: 'right',
+              width: column.width - 6,
+              lineBreak: false,
+              ellipsis: true,
             }
           );
 
-        doc
-          .font('Helvetica')
-          .fontSize(9)
-          .fillColor('#D9EADD')
-          .text(
-            `${statement.startDate} to ${statement.endDate}`,
-            left,
-            65,
-            {
-              width: contentWidth,
-              align: 'right',
-            }
-          );
-
-        // ----------------------------------------------------
-        // CUSTOMER AND ACCOUNT DETAILS
-        // ----------------------------------------------------
-
-        let y = 118;
-
-        const gap = 24;
-
-        const leftColumnWidth =
-          (contentWidth - gap) * 0.55;
-
-        const rightColumnWidth =
-          (contentWidth - gap) * 0.45;
-
-        const rightColumnX =
-          left +
-          leftColumnWidth +
-          gap;
-
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(11)
-          .fillColor(GREEN)
-          .text(
-            'CUSTOMER DETAILS',
-            left,
-            y
-          );
-
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(11)
-          .fillColor(GREEN)
-          .text(
-            'ACCOUNT INFORMATION',
-            rightColumnX,
-            y
-          );
-
-        y += 22;
-
-        drawLabelValue(
-          doc,
-          'Customer Name',
-          customer.fullName,
-          left,
-          y,
-          leftColumnWidth
-        );
-
-        drawLabelValue(
-          doc,
-          'Account Number',
-          account.accountNumber,
-          rightColumnX,
-          y,
-          rightColumnWidth
-        );
-
-        y += 42;
-
-        drawLabelValue(
-          doc,
-          'Registered Address',
-          customer.address ||
-            'Address not provided',
-          left,
-          y,
-          leftColumnWidth
-        );
-
-        drawLabelValue(
-          doc,
-          'Currency',
-          currency,
-          rightColumnX,
-          y,
-          rightColumnWidth
-        );
-
-        y += 42;
-
-        drawLabelValue(
-          doc,
-          'Statement Period',
-          `${statement.startDate} to ${statement.endDate}`,
-          left,
-          y,
-          leftColumnWidth
-        );
-
-        // ----------------------------------------------------
-        // ACCOUNT SUMMARY
-        // ----------------------------------------------------
-
-        y += 44;
-
-        const summaryItems = [
-          {
-            label: 'Opening Balance',
-            value: statement.openingBalance,
-          },
-          {
-            label: 'Total Credits',
-            value: statement.totalCredits,
-          },
-          {
-            label: 'Total Debits',
-            value: statement.totalDebits,
-          },
-          {
-            label: 'Closing Balance',
-            value: statement.closingBalance,
-          },
-        ];
-
-        const summaryGap = 10;
-
-        const summaryWidth =
-          (
-            contentWidth -
-            summaryGap *
-              (summaryItems.length - 1)
-          ) / summaryItems.length;
-
-        const summaryHeight = 54;
-
-        for (
-          let i = 0;
-          i < summaryItems.length;
-          i++
-        ) {
-          const item =
-            summaryItems[i];
-
-          const x =
-            left +
-            i *
-              (summaryWidth + summaryGap);
-
-          doc
-            .roundedRect(
-              x,
-              y,
-              summaryWidth,
-              summaryHeight,
-              5
-            )
-            .fillAndStroke(
-              LIGHT_GREEN,
-              BORDER
-            );
-
-          doc
-            .font('Helvetica')
-            .fontSize(8)
-            .fillColor(MUTED)
-            .text(
-              item.label,
-              x + 8,
-              y + 8,
-              {
-                width:
-                  summaryWidth - 16,
-              }
-            );
-
-          doc
-            .font('Helvetica-Bold')
-            .fontSize(11)
-            .fillColor(DARK_GREEN)
-            .text(
-              formatMoney(
-                item.value,
-                currency
-              ),
-              x + 8,
-              y + 27,
-              {
-                width:
-                  summaryWidth - 16,
-
-                lineBreak: false,
-                ellipsis: true,
-              }
-            );
+          x += column.width;
         }
 
-        y += summaryHeight + 22;
+        y += headerHeight;
+      };
 
-        // ----------------------------------------------------
-        // TRANSACTION TABLE
-        // ----------------------------------------------------
+      const drawFooter = (pageNumber, totalPages) => {
+        doc
+          .moveTo(left, footerY - 7)
+          .lineTo(right, footerY - 7)
+          .lineWidth(0.5)
+          .strokeColor(BORDER)
+          .stroke();
 
         doc
-          .font('Helvetica-Bold')
-          .fontSize(12)
-          .fillColor(GREEN)
+          .font('Helvetica')
+          .fontSize(8)
+          .fillColor(MUTED)
           .text(
-            'TRANSACTION HISTORY',
+            'Generated electronically by Zenimonies Banking.',
             left,
-            y
+            footerY,
+            {
+              width: contentWidth / 2,
+            }
           );
 
-        y += 20;
+        doc
+          .text(
+            `Page ${pageNumber} of ${totalPages}`,
+            left + contentWidth / 2,
+            footerY,
+            {
+              width: contentWidth / 2,
+              align: 'right',
+            }
+          );
+      };
 
-        const columns = [
-          {
-            title: 'Date',
-            width: 57,
-          },
-          {
-            title: 'Reference',
-            width: 95,
-          },
-          {
-            title: 'Description',
-            width: 120,
-          },
-          {
-            title: 'Beneficiary',
-            width: 90,
-          },
-          {
-            title: 'Institution/Bank',
-            width: 90,
-          },
-          {
-            title: 'Debit',
-            width: 70,
-          },
-          {
-            title: 'Credit',
-            width: 70,
-          },
-          {
-            title: 'Fee',
-            width: 50,
-          },
-          {
-            title: 'Balance',
-            width: 85,
-          },
+      drawTableHeader();
+
+      for (let i = 0; i < transactions.length; i++) {
+        const transaction = transactions[i];
+
+        const values = [
+          safeText(transaction.date).slice(0, 10),
+          safeText(transaction.reference),
+          safeText(transaction.description),
+          safeText(transaction.beneficiary),
+          safeText(transaction.institution),
+          formatAmountCell(transaction.debit),
+          formatAmountCell(transaction.credit),
+          formatAmountCell(transaction.fee),
+          formatAmountCell(transaction.balance),
         ];
 
-        const totalWidth =
-          columns.reduce(
-            (sum, column) =>
-              sum + column.width,
-            0
-          );
+        // Start a new page when the next row would overlap
+        // the footer area.
 
-        const scale =
-          contentWidth / totalWidth;
+        if (
+          y + rowHeight >
+          pageHeight - doc.page.margins.bottom - 10
+        ) {
+          doc.addPage();
 
-        const scaledColumns =
-          columns.map((column) => ({
-            ...column,
-            width:
-              column.width * scale,
-          }));
+          y = doc.page.margins.top;
 
-        const headerHeight = 25;
-        const rowHeight = 29;
+          drawTableHeader();
+        }
 
-        const drawTableHeader = () => {
+        if (i % 2 === 0) {
           doc
             .rect(
               left,
               y,
               contentWidth,
-              headerHeight
+              rowHeight
             )
-            .fill(DARK_GREEN);
+            .fill('#F4F8F5');
+        }
 
-          let x = left;
+        let x = left;
+
+        for (let j = 0; j < scaledColumns.length; j++) {
+          const column = scaledColumns[j];
 
           doc
-            .font('Helvetica-Bold')
-            .fontSize(7)
-            .fillColor(WHITE);
-
-          for (
-            const column of scaledColumns
-          ) {
-            doc.text(
-              column.title,
+            .font('Helvetica')
+            .fontSize(6.5)
+            .fillColor(DARK_TEXT)
+            .text(
+              values[j],
               x + 3,
-              y + 8,
+              y + 9,
               {
-                width:
-                  column.width - 6,
-
-                lineBreak: false,
+                width: column.width - 6,
+                height: 14,
                 ellipsis: true,
+                lineBreak: false,
               }
             );
 
-            x += column.width;
-          }
-
-          y += headerHeight;
-        };
-
-        const drawFooter = (
-          pageNumber,
-          totalPages
-        ) => {
-          const footerY =
-            pageHeight - 27;
-
-          doc
-            .moveTo(
-              left,
-              footerY - 7
-            )
-            .lineTo(
-              right,
-              footerY - 7
-            )
-            .lineWidth(0.5)
-            .strokeColor(BORDER)
-            .stroke();
-
-          doc
-            .font('Helvetica')
-            .fontSize(8)
-            .fillColor(MUTED)
-            .text(
-              'Generated electronically by Zenimonies Banking.',
-              left,
-              footerY,
-              {
-                width:
-                  contentWidth / 2,
-              }
-            );
-
-          doc
-            .text(
-              `Page ${pageNumber} of ${totalPages}`,
-              left +
-                contentWidth / 2,
-              footerY,
-              {
-                width:
-                  contentWidth / 2,
-
-                align: 'right',
-              }
-            );
-        };
-
-        drawTableHeader();
-
-        for (
-          let i = 0;
-          i < transactions.length;
-          i++
-        ) {
-          const transaction =
-            transactions[i];
-
-          const values = [
-            safeText(
-              transaction.date
-            ).slice(0, 10),
-
-            safeText(
-              transaction.reference
-            ),
-
-            safeText(
-              transaction.description
-            ),
-
-            safeText(
-              transaction.beneficiary
-            ),
-
-            safeText(
-              transaction.institution
-            ),
-
-            formatAmountCell(
-              transaction.debit
-            ),
-
-            formatAmountCell(
-              transaction.credit
-            ),
-
-            formatAmountCell(
-              transaction.fee
-            ),
-
-            formatAmountCell(
-              transaction.balance
-            ),
-          ];
-
-          if (
-            y + rowHeight >
-            pageHeight -
-              doc.page.margins.bottom -
-              10
-          ) {
-            doc.addPage();
-
-            y = doc.page.margins.top;
-
-            drawTableHeader();
-          }
-
-          if (i % 2 === 0) {
-            doc
-              .rect(
-                left,
-                y,
-                contentWidth,
-                rowHeight
-              )
-              .fill('#F4F8F5');
-          }
-
-          let x = left;
-
-          for (
-            let j = 0;
-            j < scaledColumns.length;
-            j++
-          ) {
-            const column =
-              scaledColumns[j];
-
-            doc
-              .font('Helvetica')
-              .fontSize(6.5)
-              .fillColor(DARK_TEXT)
-              .text(
-                values[j],
-                x + 3,
-                y + 9,
-                {
-                  width:
-                    column.width - 6,
-
-                  height: 14,
-
-                  ellipsis: true,
-                  lineBreak: false,
-                }
-              );
-
-            x += column.width;
-          }
-
-          y += rowHeight;
+          x += column.width;
         }
 
-        // ----------------------------------------------------
-        // NO TRANSACTIONS MESSAGE
-        // ----------------------------------------------------
+        y += rowHeight;
+      }
 
-        if (!transactions.length) {
-          doc
-            .font('Helvetica')
-            .fontSize(9)
-            .fillColor(MUTED)
-            .text(
-              'No completed transactions were found for this statement period.',
-              left,
-              y + 10,
-              {
-                width: contentWidth,
-                align: 'center',
-              }
-            );
-        }
+      // ------------------------------------------------------
+      // NO TRANSACTIONS MESSAGE
+      // ------------------------------------------------------
 
-        // ----------------------------------------------------
-        // FOOTERS ON ALL PAGES
-        // ----------------------------------------------------
-
-        const pageRange =
-          doc.bufferedPageRange();
-
-        for (
-          let i = 0;
-          i < pageRange.count;
-          i++
-        ) {
-          doc.switchToPage(
-            pageRange.start + i
+      if (!transactions.length) {
+        doc
+          .font('Helvetica')
+          .fontSize(9)
+          .fillColor(MUTED)
+          .text(
+            'No completed transactions were found for this statement period.',
+            left,
+            y + 10,
+            {
+              width: contentWidth,
+              align: 'center',
+            }
           );
+      }
 
-          drawFooter(
-            i + 1,
-            pageRange.count
-          );
-        }
+      // ------------------------------------------------------
+      // FOOTERS ON ALL PAGES
+      // ------------------------------------------------------
 
-        doc.end();
+      const pageRange = doc.bufferedPageRange();
 
-      } catch (error) {
-        if (doc && !doc.destroyed) {
-          doc.destroy();
-        }
+      for (let i = 0; i < pageRange.count; i++) {
+        doc.switchToPage(pageRange.start + i);
 
+        drawFooter(
+          i + 1,
+          pageRange.count
+        );
+      }
+
+      doc.end();
+
+    } catch (error) {
+      if (doc && !doc.destroyed) {
+        doc.destroy();
+      }
+
+      if (!settled) {
+        settled = true;
         reject(error);
       }
     }
-  );
+  });
 };
 
 // ============================================================
