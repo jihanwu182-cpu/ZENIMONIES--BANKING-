@@ -394,6 +394,7 @@ async function getOpeningBalance(
 // TRANSACTION DESCRIPTION
 // ============================================================
 
+
 function buildTransactionDetails(transaction) {
   const type = transaction.type;
 
@@ -402,6 +403,10 @@ function buildTransactionDetails(transaction) {
 
   let beneficiary = '';
   let institution = '';
+
+  // ----------------------------------------------------------
+  // BANK TRANSFERS
+  // ----------------------------------------------------------
 
   if (
     type === 'transfer' ||
@@ -418,6 +423,10 @@ function buildTransactionDetails(transaction) {
     }
   }
 
+  // ----------------------------------------------------------
+  // WITHDRAWALS
+  // ----------------------------------------------------------
+
   if (type === 'withdrawal') {
     beneficiary =
       transaction.withdrawal_account_name || '';
@@ -426,10 +435,18 @@ function buildTransactionDetails(transaction) {
       transaction.withdrawal_bank_name || '';
   }
 
+  // ----------------------------------------------------------
+  // DEPOSITS
+  // ----------------------------------------------------------
+
   if (type === 'deposit') {
     institution =
       transaction.deposit_payment_method || '';
   }
+
+  // ----------------------------------------------------------
+  // AIRTIME
+  // ----------------------------------------------------------
 
   if (
     type === 'airtime_purchase' ||
@@ -441,6 +458,10 @@ function buildTransactionDetails(transaction) {
     beneficiary =
       transaction.airtime_phone || '';
   }
+
+  // ----------------------------------------------------------
+  // DATA
+  // ----------------------------------------------------------
 
   if (
     type === 'data_purchase' ||
@@ -458,6 +479,11 @@ function buildTransactionDetails(transaction) {
     }
   }
 
+  // ----------------------------------------------------------
+  // ELECTRICITY AND OTHER BILLS
+  // Never include the full electricity token.
+  // ----------------------------------------------------------
+
   if (
     type === 'electricity_payment' ||
     type === 'electricity_refund' ||
@@ -473,14 +499,8 @@ function buildTransactionDetails(transaction) {
       transaction.bill_meter_number ||
       '';
 
-    if (
-      transaction.electricity_token &&
-      type === 'electricity_payment'
-    ) {
-      description =
-        `${description} | Token: ${transaction.electricity_token}`;
-    }
-
+    // Electricity units may be shown.
+    // Redeemable electricity tokens must never be exposed.
     if (
       transaction.electricity_units &&
       type === 'electricity_payment'
@@ -490,6 +510,10 @@ function buildTransactionDetails(transaction) {
     }
   }
 
+  // ----------------------------------------------------------
+  // SAVINGS
+  // ----------------------------------------------------------
+
   if (type === 'savings_lock') {
     institution = 'Zenimonies Savings';
   }
@@ -498,12 +522,18 @@ function buildTransactionDetails(transaction) {
     institution = 'Zenimonies Savings';
   }
 
+  // ----------------------------------------------------------
+  // RETURN STATEMENT DETAILS
+  // ----------------------------------------------------------
+
   return {
     description,
     beneficiary,
     institution,
   };
 }
+
+    
 
 // ============================================================
 // CALCULATE STATEMENT TOTALS
