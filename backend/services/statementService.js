@@ -35,6 +35,7 @@ const DEBIT_TYPES = new Set([
 
   'airtime_purchase',
   'data_purchase',
+  'tv_subscription',
 
   'bill_payment',
   'electricity_payment',
