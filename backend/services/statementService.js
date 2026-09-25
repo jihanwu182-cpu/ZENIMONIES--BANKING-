@@ -669,9 +669,10 @@ function calculateStatementBalances(
 
       if (type === 'credit') {
         totalCreditsKobo += amountKobo;
-      } else {
-        totalDebitsKobo += amountKobo;
-      }
+     } else {
+       // Include transaction fees in total debits.
+       totalDebitsKobo += amountKobo + feeKobo;
+     }
 
       const details =
         buildTransactionDetails(transaction);
