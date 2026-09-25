@@ -3,7 +3,7 @@ const PDFDocument = require('pdfkit');
 
 // ============================================================
 // ZENIMONIES STATEMENT FILE SERVICE
-// Generates PDF and CSV account statements.
+// PDF and CSV account statement generation.
 // ============================================================
 
 // ============================================================
@@ -14,7 +14,7 @@ const formatMoney = (
   amount,
   currency = 'NGN'
 ) => {
-  const value = Number(amount || 0);
+  const value = Number(amount ?? 0);
 
   if (!Number.isFinite(value)) {
     throw new Error(
@@ -38,13 +38,35 @@ const formatMoney = (
 // ============================================================
 
 const safeText = (value) => {
-  if (value === null || value === undefined) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
     return '';
   }
 
   return String(value)
     .replace(/[\r\n\t]+/g, ' ')
     .trim();
+};
+
+// ============================================================
+// VALIDATE MONEY
+// ============================================================
+
+const moneyNumber = (value) => {
+  const amount = Number(value ?? 0);
+
+  if (
+    !Number.isFinite(amount) ||
+    amount < 0
+  ) {
+    throw new Error(
+      'Invalid statement amount.'
+    );
+  }
+
+  return amount;
 };
 
 // ============================================================
@@ -55,7 +77,6 @@ const safeText = (value) => {
 const escapeCSV = (value) => {
   let text = safeText(value);
 
-  // Prevent CSV formula injection in spreadsheet software.
   if (/^[=+\-@\t\r]/.test(text)) {
     text = `'${text}`;
   }
@@ -67,9 +88,7 @@ const escapeCSV = (value) => {
 // GENERATE CSV STATEMENT
 // ============================================================
 
-const generateCSVStatement = (
-  data
-) => {
+const generateCSVStatement = (data) => {
   if (
     !data ||
     !data.customer ||
@@ -91,10 +110,6 @@ const generateCSVStatement = (
     account.currency || 'NGN';
 
   const rows = [];
-
-  // ----------------------------------------------------------
-  // ACCOUNT INFORMATION
-  // ----------------------------------------------------------
 
   rows.push([
     'ZENIMONIES BANKING',
@@ -133,22 +148,37 @@ const generateCSVStatement = (
 
   rows.push([
     'Opening Balance',
-    Number(statement.openingBalance || 0).toFixed(2),
+    moneyNumber(
+      statement.openingBalance
+    ).toFixed(2),
   ]);
 
   rows.push([
     'Total Credits',
-    Number(statement.totalCredits || 0).toFixed(2),
+    moneyNumber(
+      statement.totalCredits
+    ).toFixed(2),
   ]);
 
   rows.push([
     'Total Debits',
-    Number(statement.totalDebits || 0).toFixed(2),
+    moneyNumber(
+      statement.totalDebits
+    ).toFixed(2),
+  ]);
+
+  rows.push([
+    'Total Fees',
+    moneyNumber(
+      statement.totalFees
+    ).toFixed(2),
   ]);
 
   rows.push([
     'Closing Balance',
-    Number(statement.closingBalance || 0).toFixed(2),
+    moneyNumber(
+      statement.closingBalance
+    ).toFixed(2),
   ]);
 
   rows.push([]);
@@ -164,6 +194,7 @@ const generateCSVStatement = (
     'Counterparty',
     'Debit',
     'Credit',
+    'Fee',
     'Balance',
     'Currency',
   ]);
@@ -177,10 +208,26 @@ const generateCSVStatement = (
       safeText(transaction.reference),
       safeText(transaction.description),
       safeText(transaction.counterparty),
-      Number(transaction.debit || 0).toFixed(2),
-      Number(transaction.credit || 0).toFixed(2),
-      Number(transaction.balance || 0).toFixed(2),
-      safeText(transaction.currency || currency),
+
+      moneyNumber(
+        transaction.debit
+      ).toFixed(2),
+
+      moneyNumber(
+        transaction.credit
+      ).toFixed(2),
+
+      moneyNumber(
+        transaction.fee
+      ).toFixed(2),
+
+      moneyNumber(
+        transaction.balance
+      ).toFixed(2),
+
+      safeText(
+        transaction.currency || currency
+      ),
     ]);
   }
 
@@ -195,9 +242,7 @@ const generateCSVStatement = (
 // GENERATE PDF STATEMENT
 // ============================================================
 
-const generatePDFStatement = (
-  data
-) => {
+const generatePDFStatement = (data) => {
   return new Promise(
     (resolve, reject) => {
       try {
@@ -221,35 +266,63 @@ const generatePDFStatement = (
         const currency =
           account.currency || 'NGN';
 
+        const transactions =
+          statement.transactions || [];
+
+        if (!Array.isArray(transactions)) {
+          throw new Error(
+            'Invalid statement transactions.'
+          );
+        }
+
         const doc = new PDFDocument({
           size: 'A4',
           layout: 'landscape',
+
           margins: {
-            top: 45,
+            top: 40,
             bottom: 45,
-            left: 35,
-            right: 35,
+            left: 30,
+            right: 30,
           },
+
           bufferPages: true,
+
           info: {
-            Title: 'Zenimonies Account Statement',
-            Author: 'Zenimonies Banking',
-            Subject: 'Customer account statement',
+            Title:
+              'Zenimonies Account Statement',
+
+            Author:
+              'Zenimonies Banking',
+
+            Subject:
+              'Customer account statement',
           },
         });
 
         const chunks = [];
 
+        let settled = false;
+
         doc.on('data', (chunk) => {
           chunks.push(chunk);
         });
 
-        doc.on('error', reject);
+        doc.on('error', (error) => {
+          if (!settled) {
+            settled = true;
+            reject(error);
+          }
+        });
 
         doc.on('end', () => {
-          resolve(
-            Buffer.concat(chunks)
-          );
+          if (!settled) {
+            settled = true;
+
+            resolve(
+              Buffer.concat(chunks)
+            );
+          }
         });
 
         const pageWidth =
@@ -276,10 +349,7 @@ const generatePDFStatement = (
           .text(
             'ZENIMONIES',
             left,
-            40,
-            {
-              align: 'left',
-            }
+            35
           );
 
         doc
@@ -289,7 +359,7 @@ const generatePDFStatement = (
           .text(
             'BANKING',
             left,
-            65
+            60
           );
 
         doc
@@ -299,7 +369,7 @@ const generatePDFStatement = (
           .text(
             'ACCOUNT STATEMENT',
             left,
-            90,
+            85,
             {
               width: contentWidth,
               align: 'center',
@@ -307,8 +377,8 @@ const generatePDFStatement = (
           );
 
         doc
-          .moveTo(left, 118)
-          .lineTo(right, 118)
+          .moveTo(left, 112)
+          .lineTo(right, 112)
           .lineWidth(1)
           .strokeColor('#D8DEE8')
           .stroke();
@@ -317,7 +387,7 @@ const generatePDFStatement = (
         // CUSTOMER INFORMATION
         // ----------------------------------------------------
 
-        let y = 135;
+        let y = 125;
 
         const details = [
           [
@@ -338,14 +408,11 @@ const generatePDFStatement = (
           ],
         ];
 
-        doc
-          .font('Helvetica')
-          .fontSize(10)
-          .fillColor('#222222');
-
         for (const [label, value] of details) {
           doc
             .font('Helvetica-Bold')
+            .fontSize(9)
+            .fillColor('#222222')
             .text(
               `${label}:`,
               left,
@@ -361,14 +428,14 @@ const generatePDFStatement = (
               ` ${value}`
             );
 
-          y += 18;
+          y += 16;
         }
 
         // ----------------------------------------------------
-        // SUMMARY
+        // SUMMARY CARDS
         // ----------------------------------------------------
 
-        y += 8;
+        y += 6;
 
         const summaryItems = [
           [
@@ -393,6 +460,13 @@ const generatePDFStatement = (
             ),
           ],
           [
+            'Total Fees',
+            formatMoney(
+              statement.totalFees,
+              currency
+            ),
+          ],
+          [
             'Closing Balance',
             formatMoney(
               statement.closingBalance,
@@ -401,8 +475,14 @@ const generatePDFStatement = (
           ],
         ];
 
+        const summaryGap = 8;
+
         const summaryWidth =
-          contentWidth / 4;
+          (
+            contentWidth -
+            summaryGap *
+              (summaryItems.length - 1)
+          ) / summaryItems.length;
 
         for (
           let i = 0;
@@ -411,14 +491,15 @@ const generatePDFStatement = (
         ) {
           const x =
             left +
-            i * summaryWidth;
+            i *
+              (summaryWidth + summaryGap);
 
           doc
             .roundedRect(
               x,
               y,
-              summaryWidth - 8,
-              48,
+              summaryWidth,
+              45,
               5
             )
             .fillAndStroke(
@@ -432,28 +513,32 @@ const generatePDFStatement = (
             .fillColor('#666666')
             .text(
               summaryItems[i][0],
-              x + 8,
-              y + 8,
+              x + 7,
+              y + 7,
               {
-                width: summaryWidth - 24,
+                width:
+                  summaryWidth - 14,
               }
             );
 
           doc
             .font('Helvetica-Bold')
-            .fontSize(10)
+            .fontSize(9)
             .fillColor('#123C69')
             .text(
               summaryItems[i][1],
-              x + 8,
-              y + 25,
+              x + 7,
+              y + 24,
               {
-                width: summaryWidth - 24,
+                width:
+                  summaryWidth - 14,
+                lineBreak: false,
+                ellipsis: true,
               }
             );
         }
 
-        y += 68;
+        y += 60;
 
         // ----------------------------------------------------
         // TRANSACTION TABLE
@@ -462,31 +547,35 @@ const generatePDFStatement = (
         const columns = [
           {
             title: 'Date',
-            width: 75,
+            width: 70,
           },
           {
             title: 'Reference',
-            width: 105,
+            width: 100,
           },
           {
             title: 'Description',
-            width: 145,
+            width: 140,
           },
           {
             title: 'Counterparty',
-            width: 105,
+            width: 100,
           },
           {
             title: 'Debit',
-            width: 80,
+            width: 75,
           },
           {
             title: 'Credit',
-            width: 80,
+            width: 75,
+          },
+          {
+            title: 'Fee',
+            width: 65,
           },
           {
             title: 'Balance',
-            width: 100,
+            width: 95,
           },
         ];
 
@@ -503,9 +592,13 @@ const generatePDFStatement = (
         const scaledColumns =
           columns.map((column) => ({
             ...column,
+
             width:
               column.width * scale,
           }));
+
+        const headerHeight = 24;
+        const rowHeight = 27;
 
         const drawTableHeader = () => {
           doc
@@ -513,7 +606,7 @@ const generatePDFStatement = (
               left,
               y,
               contentWidth,
-              25
+              headerHeight
             )
             .fill('#123C69');
 
@@ -521,7 +614,7 @@ const generatePDFStatement = (
 
           doc
             .font('Helvetica-Bold')
-            .fontSize(8)
+            .fontSize(7)
             .fillColor('#FFFFFF');
 
           for (
@@ -529,30 +622,59 @@ const generatePDFStatement = (
           ) {
             doc.text(
               column.title,
-              x + 4,
+              x + 3,
               y + 8,
               {
                 width:
-                  column.width - 8,
+                  column.width - 6,
+
                 lineBreak: false,
+                ellipsis: true,
               }
             );
 
             x += column.width;
           }
 
-          y += 25;
+          y += headerHeight;
+        };
+
+        const drawFooter = (pageNumber, totalPages) => {
+          const footerY =
+            doc.page.height - 28;
+
+          doc
+            .font('Helvetica')
+            .fontSize(8)
+            .fillColor('#777777')
+            .text(
+              'Generated electronically by Zenimonies Banking.',
+              left,
+              footerY,
+              {
+                width:
+                  contentWidth / 2,
+
+                align: 'left',
+              }
+            );
+
+          doc
+            .text(
+              `Page ${pageNumber} of ${totalPages}`,
+              left +
+                contentWidth / 2,
+              footerY,
+              {
+                width:
+                  contentWidth / 2,
+
+                align: 'right',
+              }
+            );
         };
 
         drawTableHeader();
-
-        const transactions =
-          statement.transactions || [];
-
-        doc
-          .font('Helvetica')
-          .fontSize(7)
-          .fillColor('#222222');
 
         for (
           const transaction of transactions
@@ -574,41 +696,39 @@ const generatePDFStatement = (
               transaction.counterparty
             ),
 
-            Number(
-              transaction.debit || 0
+            moneyNumber(
+              transaction.debit
             ).toFixed(2),
 
-            Number(
-              transaction.credit || 0
+            moneyNumber(
+              transaction.credit
             ).toFixed(2),
 
-            Number(
-              transaction.balance || 0
+            moneyNumber(
+              transaction.fee
+            ).toFixed(2),
+
+            moneyNumber(
+              transaction.balance
             ).toFixed(2),
           ];
-
-          const rowHeight = 28;
 
           if (
             y + rowHeight >
             doc.page.height -
-              doc.page.margins.bottom
+              doc.page.margins.bottom -
+              10
           ) {
             doc.addPage();
 
             y = doc.page.margins.top;
 
             drawTableHeader();
-
-            doc
-              .font('Helvetica')
-              .fontSize(7)
-              .fillColor('#222222');
           }
 
           if (
-            Math.floor(
-              (y - 200) / rowHeight
+            transactions.indexOf(
+              transaction
             ) % 2 === 0
           ) {
             doc
@@ -637,12 +757,14 @@ const generatePDFStatement = (
               .fillColor('#222222')
               .text(
                 values[i],
-                x + 4,
+                x + 3,
                 y + 8,
                 {
                   width:
-                    column.width - 8,
-                  height: 16,
+                    column.width - 6,
+
+                  height: 14,
+
                   ellipsis: true,
                   lineBreak: false,
                 }
@@ -655,49 +777,25 @@ const generatePDFStatement = (
         }
 
         // ----------------------------------------------------
-        // FOOTER
+        // FOOTERS ON ALL PAGES
         // ----------------------------------------------------
 
-        const range =
+        const pageRange =
           doc.bufferedPageRange();
 
         for (
           let i = 0;
-          i < range.count;
+          i < pageRange.count;
           i++
         ) {
           doc.switchToPage(
-            range.start + i
+            pageRange.start + i
           );
 
-          const footerY =
-            doc.page.height - 30;
-
-          doc
-            .font('Helvetica')
-            .fontSize(8)
-            .fillColor('#777777')
-            .text(
-              'Generated electronically by Zenimonies Banking.',
-              left,
-              footerY,
-              {
-                width: contentWidth / 2,
-                align: 'left',
-              }
-            );
-
-          doc
-            .text(
-              `Page ${i + 1} of ${range.count}`,
-              left +
-                contentWidth / 2,
-              footerY,
-              {
-                width: contentWidth / 2,
-                align: 'right',
-              }
-            );
+          drawFooter(
+            i + 1,
+            pageRange.count
+          );
         }
 
         doc.end();
