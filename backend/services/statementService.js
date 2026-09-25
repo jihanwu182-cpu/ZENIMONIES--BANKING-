@@ -31,16 +31,14 @@ const CREDIT_TYPES = new Set([
 
 const DEBIT_TYPES = new Set([
   'transfer',
+  'transfer_fee',
   'withdrawal',
   'internal_transfer',
-
   'airtime_purchase',
   'data_purchase',
   'tv_subscription',
-
   'bill_payment',
   'electricity_payment',
-
   'savings_lock',
 ]);
 
