@@ -713,17 +713,17 @@ const BusinessDashboard: React.FC = () => {
   // DASHBOARD UI
   // ==========================================================
 
-  return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        bgcolor: PAGE_BG,
-        pb: {
-          xs: 'calc(110px + env(safe-area-inset-bottom))',
-          md: 5,
-        },
-        color: DARK_GREEN,
-      }}
+  <Box
+  sx={{
+    minHeight: '100vh',
+    bgcolor: PAGE_BG,
+    pb: {
+      xs: 'calc(180px + env(safe-area-inset-bottom))',
+      md: 40,
+    },
+    color: DARK_GREEN,
+    overflowX: 'hidden',
+  }}
     >
       {/* ================================================== */}
       {/* TOP BRAND HEADER */}
@@ -2032,7 +2032,8 @@ const BusinessDashboard: React.FC = () => {
           backdropFilter: 'blur(14px)',
           borderTop: `1px solid ${BORDER}`,
           borderRadius: 0,
-          pb: 'env(safe-area-inset-bottom)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          boxSizing: 'border-box',
         }}
       >
         <Box
