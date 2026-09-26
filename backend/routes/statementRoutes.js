@@ -326,6 +326,7 @@ router.post(
 );
 // ============================================================
 // BUSINESS ACCOUNT STATEMENT
+// JSON, PDF AND CSV
 // ============================================================
 
 router.post(
@@ -334,10 +335,8 @@ router.post(
   async (req, res) => {
     try {
       const userId = req.user?.id;
-
       const { businessId } = req.params;
-
-      const { startDate, endDate } = req.body;
+      const { startDate, endDate, format } = req.body;
 
       if (!userId) {
         return res.status(401).json({
@@ -354,6 +353,85 @@ router.post(
           endDate,
         });
 
+      const outputFormat = String(
+        format || 'json'
+      ).toLowerCase();
+
+      // --------------------------------------------------------
+      // PDF DOWNLOAD
+      // --------------------------------------------------------
+
+      if (outputFormat === 'pdf') {
+        const pdfBuffer =
+          await generatePDFStatement(statement);
+
+        if (
+          !Buffer.isBuffer(pdfBuffer) ||
+          pdfBuffer.length < 5 ||
+          pdfBuffer.subarray(0, 5).toString() !== '%PDF-'
+        ) {
+          throw new Error(
+            'PDF generation failed.'
+          );
+        }
+
+        const safeBusinessName = String(
+          statement.business.businessName || 'Business'
+        )
+          .replace(/[^a-zA-Z0-9_-]/g, '_')
+          .slice(0, 60);
+
+        res.setHeader(
+          'Content-Type',
+          'application/pdf'
+        );
+
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="Zenimonies_Business_Statement_${safeBusinessName}.pdf"`
+        );
+
+        return res.status(200).send(pdfBuffer);
+      }
+
+      // --------------------------------------------------------
+      // CSV DOWNLOAD
+      // --------------------------------------------------------
+
+      if (outputFormat === 'csv') {
+        const csv = generateCSVStatement(statement);
+
+        const safeBusinessName = String(
+          statement.business.businessName || 'Business'
+        )
+          .replace(/[^a-zA-Z0-9_-]/g, '_')
+          .slice(0, 60);
+
+        res.setHeader(
+          'Content-Type',
+          'text/csv; charset=utf-8'
+        );
+
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="Zenimonies_Business_Statement_${safeBusinessName}.csv"`
+        );
+
+        return res.status(200).send(csv);
+      }
+
+      // --------------------------------------------------------
+      // JSON RESPONSE
+      // --------------------------------------------------------
+
+      if (outputFormat !== 'json') {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Format must be json, pdf or csv.',
+        });
+      }
+
       return res.status(200).json({
         success: true,
         message:
@@ -365,6 +443,10 @@ router.post(
         'Business statement error:',
         error
       );
+
+      if (res.headersSent) {
+        return;
+      }
 
       return res.status(
         error.statusCode || 400
