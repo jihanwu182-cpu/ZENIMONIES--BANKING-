@@ -71,6 +71,7 @@ import Betting from './pages/Betting.tsx';
 import VirtualCard from './pages/VirtualCard.tsx';
 import Savings from './pages/Savings.tsx';
 import Notifications from './pages/Notifications.tsx';
+import BusinessServicePage from './pages/BusinessServicePage.tsx';
 
 // ==================== ADMIN ====================
 
