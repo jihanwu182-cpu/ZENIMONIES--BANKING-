@@ -1,5 +1,4 @@
 
-
 import React, {
   useCallback,
   useEffect,
@@ -25,6 +24,7 @@ import {
 import {
   AccountBalance,
   ArrowBack,
+  ArrowForward,
   ArrowUpward,
   Business,
   Description,
@@ -54,8 +54,7 @@ import {
 
 // ============================================================
 // ZENIMONIES BANKING
-// BUSINESS DASHBOARD
-// GREEN AND WHITE BRANDING
+// PROFESSIONAL BUSINESS BANKING DASHBOARD
 // ============================================================
 
 const API_BASE =
@@ -65,7 +64,8 @@ const API_BASE =
 const GREEN = '#087A43';
 const DARK_GREEN = '#065F36';
 const LIGHT_GREEN = '#E8F5EC';
-const PAGE_BG = '#F6FAF7';
+const PAGE_BG = '#F5F8F6';
+const BORDER = '#E1EEE5';
 
 // ============================================================
 // TYPES
@@ -124,10 +124,10 @@ const formatMoney = (
   amount: number | string | undefined,
   currency = 'NGN'
 ) => {
-  const value = Number(amount || 0);
-
   const safeCurrency =
     currency === 'ZAR' ? 'ZAR' : 'NGN';
+
+  const value = Number(amount || 0);
 
   return new Intl.NumberFormat(
     safeCurrency === 'ZAR' ? 'en-ZA' : 'en-NG',
@@ -158,29 +158,35 @@ const getStatusColor = (
   const value = (status || '').toLowerCase();
 
   if (
-    value === 'active' ||
-    value === 'approved' ||
-    value === 'verified' ||
-    value === 'successful' ||
-    value === 'completed'
+    [
+      'active',
+      'approved',
+      'verified',
+      'successful',
+      'completed',
+    ].includes(value)
   ) {
     return 'success';
   }
 
   if (
-    value === 'pending' ||
-    value === 'processing' ||
-    value === 'under_review'
+    [
+      'pending',
+      'processing',
+      'under_review',
+    ].includes(value)
   ) {
     return 'warning';
   }
 
   if (
-    value === 'rejected' ||
-    value === 'failed' ||
-    value === 'suspended' ||
-    value === 'blocked' ||
-    value === 'closed'
+    [
+      'rejected',
+      'failed',
+      'suspended',
+      'blocked',
+      'closed',
+    ].includes(value)
   ) {
     return 'error';
   }
@@ -202,24 +208,24 @@ const getVerificationLevel = (
 
   const level = Number(raw);
 
-  if (
-    !Number.isInteger(level) ||
-    level < 1 ||
-    level > 5
-  ) {
-    return null;
-  }
-
-  return level;
+  return Number.isInteger(level) && level >= 1 && level <= 5
+    ? level
+    : null;
 };
 
 // ============================================================
-// COMPONENT
+// DASHBOARD COMPONENT
 // ============================================================
 
 const BusinessDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+
+  const businessId = id || '';
+
+  // All business routes retain the current business ID.
+  const businessPath = (section: string) =>
+    `/business/${encodeURIComponent(businessId)}/${section}`;
 
   const [business, setBusiness] =
     useState<BusinessAccount | null>(null);
@@ -236,14 +242,12 @@ const BusinessDashboard: React.FC = () => {
   const [transactionError, setTransactionError] =
     useState('');
 
-  const [showBalance, setShowBalance] =
-    useState(true);
-
+  const [showBalance, setShowBalance] = useState(true);
   const [notificationCount, setNotificationCount] =
     useState(0);
 
   // ==========================================================
-  // LOAD BUSINESS AND BUSINESS TRANSACTIONS
+  // LOAD BUSINESS ACCOUNT
   // ==========================================================
 
   const loadBusiness = useCallback(
@@ -265,17 +269,13 @@ const BusinessDashboard: React.FC = () => {
           return;
         }
 
-        if (!id) {
+        if (!businessId) {
           setError('Business account ID is missing.');
           return;
         }
 
-        // ----------------------------------------------------
-        // BUSINESS DETAILS
-        // ----------------------------------------------------
-
         const response = await fetch(
-          `${API_BASE}/businesses/${encodeURIComponent(id)}`,
+          `${API_BASE}/businesses/${encodeURIComponent(businessId)}`,
           {
             method: 'GET',
             headers: {
@@ -290,8 +290,8 @@ const BusinessDashboard: React.FC = () => {
         if (!response.ok) {
           throw new Error(
             result.message ||
-              result.error ||
-              'Unable to load business account.'
+            result.error ||
+            'Unable to load business account.'
           );
         }
 
@@ -309,17 +309,13 @@ const BusinessDashboard: React.FC = () => {
 
         setBusiness(businessData);
 
-        // ----------------------------------------------------
-        // BUSINESS TRANSACTIONS
-        // ----------------------------------------------------
-
+        // BUSINESS-SCOPED TRANSACTIONS
         try {
           const transactionResponse = await fetch(
             `${API_BASE}/businesses/${encodeURIComponent(
-              id
+              businessId
             )}/transactions?page=1&limit=20`,
             {
-              method: 'GET',
               headers: {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
@@ -333,7 +329,7 @@ const BusinessDashboard: React.FC = () => {
           if (!transactionResponse.ok) {
             throw new Error(
               transactionResult.message ||
-                'Unable to load business transactions.'
+              'Unable to load business transactions.'
             );
           }
 
@@ -351,20 +347,19 @@ const BusinessDashboard: React.FC = () => {
           setPagination(
             transactionResult.pagination || null
           );
-        } catch (transactionErr: any) {
+        } catch (err: any) {
           setTransactions([]);
           setPagination(null);
 
           setTransactionError(
-            transactionErr.message ||
-              'Unable to load business transactions.'
+            err.message ||
+            'Unable to load business transactions.'
           );
         }
 
-        // ----------------------------------------------------
-        // UNREAD NOTIFICATIONS
-        // ----------------------------------------------------
-
+        // NOTIFICATION COUNT
+        // This count is currently returned by the
+        // existing user notification endpoint.
         try {
           const notificationResponse = await fetch(
             `${API_BASE}/notifications/unread-count`,
@@ -394,20 +389,19 @@ const BusinessDashboard: React.FC = () => {
             );
           }
         } catch {
-          // Notifications are optional.
-          // Their failure must not block the dashboard.
+          // Notification errors do not block dashboard.
         }
       } catch (err: any) {
         setError(
           err.message ||
-            'Something went wrong while loading your business.'
+          'Unable to load your business account.'
         );
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [id, navigate]
+    [businessId, navigate]
   );
 
   useEffect(() => {
@@ -451,20 +445,99 @@ const BusinessDashboard: React.FC = () => {
   );
 
   // ==========================================================
-  // LOADING
+  // BUSINESS SERVICES
+  // ==========================================================
+
+  const businessServices = [
+    {
+      title: 'Transfer',
+      description: 'Payments and bank transfers',
+      icon: <ArrowUpward />,
+      section: 'transfer',
+    },
+    {
+      title: 'Transactions',
+      description: 'Business transaction history',
+      icon: <ReceiptLong />,
+      section: 'transactions',
+    },
+    {
+      title: 'Statements',
+      description: 'Account statements',
+      icon: <Description />,
+      section: 'statements',
+    },
+    {
+      title: 'Airtime',
+      description: 'Business airtime purchases',
+      icon: <PhoneAndroid />,
+      section: 'airtime',
+    },
+    {
+      title: 'Data',
+      description: 'Mobile data bundles',
+      icon: <Wifi />,
+      section: 'data',
+    },
+    {
+      title: 'Electricity',
+      description: 'Electricity payments',
+      icon: <Bolt />,
+      section: 'electricity',
+    },
+    {
+      title: 'TV Payments',
+      description: 'TV subscriptions',
+      icon: <Tv />,
+      section: 'tv',
+    },
+    {
+      title: 'Savings',
+      description: 'Business savings',
+      icon: <Savings />,
+      section: 'savings',
+    },
+    {
+      title: 'Business Cards',
+      description: 'Manage business cards',
+      icon: <CreditCard />,
+      section: 'cards',
+    },
+    {
+      title: 'Staff & Access',
+      description: 'Staff permissions',
+      icon: <People />,
+      section: 'staff',
+    },
+    {
+      title: 'Business Settings',
+      description: 'Business profile and details',
+      icon: <Settings />,
+      section: 'settings',
+    },
+    {
+      title: 'Security',
+      description: 'Security and account access',
+      icon: <Security />,
+      section: 'security',
+    },
+  ];
+
+  // ==========================================================
+  // LOADING SCREEN
   // ==========================================================
 
   if (loading) {
     return (
       <Box
         sx={{
-          minHeight: '70vh',
+          minHeight: '100vh',
+          bgcolor: PAGE_BG,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 2,
-          bgcolor: PAGE_BG,
         }}
       >
         <CircularProgress sx={{ color: GREEN }} />
@@ -477,28 +550,24 @@ const BusinessDashboard: React.FC = () => {
   }
 
   // ==========================================================
-  // ERROR
+  // ERROR SCREEN
   // ==========================================================
 
   if (error || !business) {
     return (
       <Box
         sx={{
+          minHeight: '100vh',
+          bgcolor: PAGE_BG,
           p: 3,
           maxWidth: 700,
           mx: 'auto',
-          bgcolor: PAGE_BG,
-          minHeight: '70vh',
         }}
       >
         <Button
           startIcon={<ArrowBack />}
           onClick={() => navigate('/business')}
-          sx={{
-            mb: 3,
-            color: GREEN,
-            fontWeight: 700,
-          }}
+          sx={{ mb: 3, color: GREEN, fontWeight: 700 }}
         >
           Back to Business Accounts
         </Button>
@@ -522,85 +591,6 @@ const BusinessDashboard: React.FC = () => {
   }
 
   // ==========================================================
-  // BUSINESS ACTIONS
-  // ==========================================================
-
-  const businessServices = [
-    {
-      title: 'Transfer',
-      description: 'Business payments',
-      icon: <ArrowUpward />,
-      path: '/business/transfer',
-    },
-    {
-      title: 'Transactions',
-      description: 'Business transaction history',
-      icon: <ReceiptLong />,
-      path: '/business/transactions',
-    },
-    {
-      title: 'Statements',
-      description: 'Business account statements',
-      icon: <Description />,
-      path: '/business/statements',
-    },
-    {
-      title: 'Airtime',
-      description: 'Buy business airtime',
-      icon: <PhoneAndroid />,
-      path: '/business/airtime',
-    },
-    {
-      title: 'Data',
-      description: 'Purchase data bundles',
-      icon: <Wifi />,
-      path: '/business/data',
-    },
-    {
-      title: 'Electricity',
-      description: 'Pay electricity bills',
-      icon: <Bolt />,
-      path: '/business/electricity',
-    },
-    {
-      title: 'TV Payments',
-      description: 'Pay TV subscriptions',
-      icon: <Tv />,
-      path: '/business/tv',
-    },
-    {
-      title: 'Savings',
-      description: 'Business savings',
-      icon: <Savings />,
-      path: '/business/savings',
-    },
-    {
-      title: 'Cards',
-      description: 'Business cards',
-      icon: <CreditCard />,
-      path: '/business/cards',
-    },
-    {
-      title: 'Staff & Access',
-      description: 'Business user permissions',
-      icon: <People />,
-      path: '/business/staff',
-    },
-    {
-      title: 'Business Settings',
-      description: 'Manage business information',
-      icon: <Settings />,
-      path: '/business/settings',
-    },
-    {
-      title: 'Security',
-      description: 'Business account security',
-      icon: <Security />,
-      path: '/business/security',
-    },
-  ];
-
-  // ==========================================================
   // DASHBOARD
   // ==========================================================
 
@@ -609,19 +599,23 @@ const BusinessDashboard: React.FC = () => {
       sx={{
         minHeight: '100vh',
         bgcolor: PAGE_BG,
-        pb: 5,
+        pb: 6,
       }}
     >
-      {/* ================================================== */}
       {/* HEADER */}
-      {/* ================================================== */}
 
       <Box
         sx={{
-          bgcolor: GREEN,
+          background:
+            'linear-gradient(135deg, #065F36 0%, #087A43 55%, #0B9655 100%)',
           color: '#fff',
           px: { xs: 2, md: 5 },
-          py: 3,
+          py: { xs: 3, md: 4 },
+          borderRadius: {
+            xs: '0 0 24px 24px',
+            md: '0 0 32px 32px',
+          },
+          boxShadow: '0 8px 30px rgba(6,95,54,0.15)',
         }}
       >
         <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
@@ -637,11 +631,12 @@ const BusinessDashboard: React.FC = () => {
                 spacing={1}
                 alignItems="center"
               >
-                <Business sx={{ fontSize: 32 }} />
+                <Business sx={{ fontSize: 34 }} />
 
                 <Typography
                   variant="h5"
-                  fontWeight={800}
+                  fontWeight={900}
+                  letterSpacing={-0.5}
                 >
                   Zenimonies
                 </Typography>
@@ -651,6 +646,7 @@ const BusinessDashboard: React.FC = () => {
                 sx={{
                   mt: 1,
                   color: '#D9F3E4',
+                  fontWeight: 500,
                 }}
               >
                 Business Banking
@@ -663,9 +659,15 @@ const BusinessDashboard: React.FC = () => {
               spacing={1}
             >
               <IconButton
-                aria-label="Notifications"
-                onClick={() => navigate('/notifications')}
-                sx={{ color: '#fff' }}
+                aria-label="Business notifications"
+                onClick={() =>
+                  navigate(businessPath('notifications'))
+                }
+                sx={{
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  position: 'relative',
+                }}
               >
                 <Notifications />
 
@@ -673,10 +675,10 @@ const BusinessDashboard: React.FC = () => {
                   <Box
                     sx={{
                       position: 'absolute',
-                      top: 2,
-                      right: 2,
-                      minWidth: 17,
-                      height: 17,
+                      top: -2,
+                      right: -2,
+                      minWidth: 18,
+                      height: 18,
                       borderRadius: '50%',
                       bgcolor: '#F44336',
                       color: '#fff',
@@ -702,6 +704,7 @@ const BusinessDashboard: React.FC = () => {
                 sx={{
                   color: '#fff',
                   borderColor: '#B8E2C9',
+                  fontWeight: 700,
                   '&:hover': {
                     borderColor: '#fff',
                     bgcolor: 'rgba(255,255,255,0.1)',
@@ -720,45 +723,38 @@ const BusinessDashboard: React.FC = () => {
           maxWidth: 1200,
           mx: 'auto',
           px: { xs: 2, md: 4 },
-          mt: 3,
+          mt: { xs: 2, md: 4 },
         }}
       >
-        {/* ================================================== */}
-        {/* BUSINESS INFORMATION */}
-        {/* ================================================== */}
+        {/* BUSINESS PROFILE */}
 
         <Card
           sx={{
             borderRadius: 4,
             mb: 3,
-            boxShadow: '0 5px 25px rgba(0,0,0,0.05)',
-            border: '1px solid #E1EEE5',
+            border: `1px solid ${BORDER}`,
+            boxShadow: '0 5px 25px rgba(0,0,0,0.04)',
           }}
         >
-          <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
             <Stack
-              direction={{
-                xs: 'column',
-                sm: 'row',
-              }}
+              direction={{ xs: 'column', sm: 'row' }}
               justifyContent="space-between"
-              alignItems={{
-                xs: 'flex-start',
-                sm: 'center',
-              }}
+              alignItems={{ xs: 'flex-start', sm: 'center' }}
               spacing={2}
             >
               <Box sx={{ minWidth: 0 }}>
                 <Typography
                   variant="body2"
                   color="text.secondary"
+                  fontWeight={600}
                 >
-                  Business account
+                  BUSINESS ACCOUNT
                 </Typography>
 
                 <Typography
                   variant="h5"
-                  fontWeight={800}
+                  fontWeight={900}
                   sx={{
                     mt: 1,
                     color: DARK_GREEN,
@@ -769,11 +765,11 @@ const BusinessDashboard: React.FC = () => {
                 </Typography>
 
                 <Typography
+                  variant="body2"
                   color="text.secondary"
                   sx={{ mt: 1 }}
                 >
-                  Account number:{' '}
-                  {business.account_number || 'Not assigned'}
+                  Account number: {business.account_number || 'Not assigned'}
                 </Typography>
 
                 <Typography
@@ -781,8 +777,7 @@ const BusinessDashboard: React.FC = () => {
                   color="text.secondary"
                   sx={{ mt: 0.5 }}
                 >
-                  Business type:{' '}
-                  {business.business_type || 'Not provided'}
+                  Business type: {business.business_type || 'Not provided'}
                 </Typography>
 
                 <Typography
@@ -794,93 +789,95 @@ const BusinessDashboard: React.FC = () => {
                 </Typography>
               </Box>
 
-              <Stack
-                direction="row"
-                flexWrap="wrap"
-                gap={1}
-              >
+              <Stack direction="row" flexWrap="wrap" gap={1}>
                 <Chip
                   label={status.replace(/_/g, ' ').toUpperCase()}
                   color={getStatusColor(status)}
-                  sx={{ fontWeight: 700 }}
+                  sx={{ fontWeight: 800 }}
                 />
 
                 <Chip
                   icon={<VerifiedUser />}
-                  label={
-                    verificationStatus
-                      .replace(/_/g, ' ')
-                      .toUpperCase()
-                  }
+                  label={verificationStatus.replace(/_/g, ' ').toUpperCase()}
                   color={getStatusColor(verificationStatus)}
-                  sx={{ fontWeight: 700 }}
+                  sx={{ fontWeight: 800 }}
                 />
               </Stack>
             </Stack>
           </CardContent>
         </Card>
 
-        {/* ================================================== */}
-        {/* ACCOUNT STATUS NOTICE */}
-        {/* ================================================== */}
+        {/* ACCOUNT STATUS */}
 
         {isSuspended ? (
-          <Alert
-            severity="error"
-            sx={{ mb: 3, borderRadius: 3 }}
-          >
-            Your business account currently has a restricted
-            status. You can view your dashboard and account
-            information, but certain financial services may
-            be unavailable. Please contact Zenimonies support
-            for assistance.
+          <Alert severity="error" sx={{ mb: 3, borderRadius: 3 }}>
+            Your business account is restricted. You can view your
+            account information, but financial services may be
+            unavailable. Please contact Zenimonies support.
           </Alert>
-        ) : (
-          verificationStatus !== 'verified' && (
-            <Alert
-              severity="info"
-              sx={{ mb: 3, borderRadius: 3 }}
-              action={
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={() => navigate('/kyc')}
-                >
-                  Verify
-                </Button>
-              }
-            >
-              Your business dashboard is available while
-              verification is in progress. Complete the
-              required verification steps to access financial
-              services according to your account limits and
-              applicable security checks.
-            </Alert>
-          )
+        ) : verificationStatus !== 'verified' && (
+          <Alert
+            severity="info"
+            sx={{ mb: 3, borderRadius: 3 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() =>
+                  navigate(businessPath('verification'))
+                }
+              >
+                Verify
+              </Button>
+            }
+          >
+            Your business dashboard is available while verification
+            is in progress. Complete the applicable business
+            verification requirements to access services according
+            to your account limits and security checks.
+          </Alert>
         )}
 
-        {/* ================================================== */}
         {/* BALANCE CARD */}
-        {/* ================================================== */}
 
         <Card
           sx={{
-            borderRadius: 4,
+            borderRadius: 5,
             color: '#fff',
             background:
-              'linear-gradient(135deg, #087A43 0%, #065F36 100%)',
-            boxShadow:
-              '0 8px 30px rgba(8,122,67,0.18)',
+              'linear-gradient(135deg, #065F36 0%, #087A43 55%, #0B9655 100%)',
+            boxShadow: '0 12px 35px rgba(8,122,67,0.18)',
+            overflow: 'hidden',
+            position: 'relative',
           }}
         >
-          <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+          <Box
+            sx={{
+              position: 'absolute',
+              width: 220,
+              height: 220,
+              borderRadius: '50%',
+              border: '1px solid rgba(255,255,255,0.10)',
+              right: -70,
+              top: -100,
+            }}
+          />
+
+          <CardContent
+            sx={{
+              p: { xs: 3, md: 4 },
+              position: 'relative',
+            }}
+          >
             <Stack
               direction="row"
               justifyContent="space-between"
               alignItems="flex-start"
             >
               <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ color: '#D9F3E4' }}>
+                <Typography
+                  sx={{ color: '#D9F3E4', fontWeight: 600 }}
+                >
                   Business account balance
                 </Typography>
 
@@ -888,58 +885,61 @@ const BusinessDashboard: React.FC = () => {
                   direction="row"
                   alignItems="center"
                   spacing={1}
-                  sx={{ mt: 1 }}
+                  sx={{ mt: 1.5 }}
                 >
                   <Typography
                     variant="h3"
-                    fontWeight={800}
+                    fontWeight={900}
                     sx={{
                       fontSize: {
                         xs: '1.8rem',
-                        sm: '2.3rem',
-                        md: '2.7rem',
+                        sm: '2.4rem',
+                        md: '2.8rem',
                       },
                       overflowWrap: 'anywhere',
                     }}
                   >
-                    {showBalance
-                      ? accountBalance
-                      : '••••••••'}
+                    {showBalance ? accountBalance : '••••••••'}
                   </Typography>
 
                   <IconButton
                     aria-label={
-                      showBalance
-                        ? 'Hide balance'
-                        : 'Show balance'
+                      showBalance ? 'Hide balance' : 'Show balance'
                     }
                     onClick={() =>
                       setShowBalance((previous) => !previous)
                     }
                     sx={{ color: '#fff' }}
                   >
-                    {showBalance
-                      ? <VisibilityOff />
-                      : <Visibility />}
+                    {showBalance ? <VisibilityOff /> : <Visibility />}
                   </IconButton>
                 </Stack>
 
                 <Typography
                   sx={{
-                    mt: 1,
+                    mt: 1.5,
                     color: '#D9F3E4',
+                    fontWeight: 500,
                   }}
                 >
                   {currency} Business Account
                 </Typography>
+
+                <Chip
+                  label="Business account"
+                  size="small"
+                  sx={{
+                    mt: 2,
+                    color: '#fff',
+                    bgcolor: 'rgba(255,255,255,0.15)',
+                    fontWeight: 700,
+                  }}
+                />
               </Box>
 
               <AccountBalance
                 sx={{
-                  fontSize: {
-                    xs: 40,
-                    md: 55,
-                  },
+                  fontSize: { xs: 42, md: 60 },
                   opacity: 0.7,
                   flexShrink: 0,
                 }}
@@ -948,21 +948,16 @@ const BusinessDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* ================================================== */}
         {/* VERIFICATION AND POS */}
-        {/* ================================================== */}
 
-        <Grid
-          container
-          spacing={2}
-          sx={{ mt: 1 }}
-        >
+        <Grid container spacing={2} sx={{ mt: 1 }}>
           <Grid item xs={12} md={6}>
             <Card
               sx={{
                 height: '100%',
                 borderRadius: 4,
-                border: '1px solid #E1EEE5',
+                border: `1px solid ${BORDER}`,
+                boxShadow: '0 4px 18px rgba(0,0,0,0.03)',
               }}
             >
               <CardContent sx={{ p: 3 }}>
@@ -973,8 +968,8 @@ const BusinessDashboard: React.FC = () => {
                 >
                   <Box
                     sx={{
-                      width: 48,
-                      height: 48,
+                      width: 50,
+                      height: 50,
                       borderRadius: 3,
                       bgcolor: LIGHT_GREEN,
                       color: GREEN,
@@ -987,7 +982,7 @@ const BusinessDashboard: React.FC = () => {
                   </Box>
 
                   <Box sx={{ flex: 1 }}>
-                    <Typography fontWeight={800}>
+                    <Typography fontWeight={900}>
                       Business Verification
                     </Typography>
 
@@ -997,7 +992,7 @@ const BusinessDashboard: React.FC = () => {
                     >
                       {verificationLevel !== null
                         ? `Level ${verificationLevel} of 5`
-                        : 'Verification level not yet confirmed'}
+                        : 'Level not yet confirmed'}
                     </Typography>
                   </Box>
                 </Stack>
@@ -1005,23 +1000,26 @@ const BusinessDashboard: React.FC = () => {
                 <Typography
                   variant="body2"
                   color="text.secondary"
-                  sx={{ mt: 2 }}
+                  sx={{ mt: 2, lineHeight: 1.7 }}
                 >
-                  Complete the applicable verification
-                  requirements to access the services and
-                  transaction limits available to your
-                  business.
+                  View your business verification status and
+                  applicable requirements.
                 </Typography>
 
                 <Button
                   fullWidth
                   variant="outlined"
-                  onClick={() => navigate('/kyc')}
+                  endIcon={<ArrowForward />}
+                  onClick={() =>
+                    navigate(businessPath('verification'))
+                  }
                   sx={{
                     mt: 2,
+                    py: 1.2,
                     borderColor: GREEN,
                     color: GREEN,
-                    fontWeight: 700,
+                    fontWeight: 800,
+                    borderRadius: 2.5,
                   }}
                 >
                   View Verification
@@ -1035,7 +1033,8 @@ const BusinessDashboard: React.FC = () => {
               sx={{
                 height: '100%',
                 borderRadius: 4,
-                border: '1px solid #E1EEE5',
+                border: `1px solid ${BORDER}`,
+                boxShadow: '0 4px 18px rgba(0,0,0,0.03)',
               }}
             >
               <CardContent sx={{ p: 3 }}>
@@ -1046,8 +1045,8 @@ const BusinessDashboard: React.FC = () => {
                 >
                   <Box
                     sx={{
-                      width: 48,
-                      height: 48,
+                      width: 50,
+                      height: 50,
                       borderRadius: 3,
                       bgcolor: LIGHT_GREEN,
                       color: GREEN,
@@ -1060,7 +1059,7 @@ const BusinessDashboard: React.FC = () => {
                   </Box>
 
                   <Box sx={{ flex: 1 }}>
-                    <Typography fontWeight={800}>
+                    <Typography fontWeight={900}>
                       POS Terminal
                     </Typography>
 
@@ -1076,11 +1075,10 @@ const BusinessDashboard: React.FC = () => {
                 <Typography
                   variant="body2"
                   color="text.secondary"
-                  sx={{ mt: 2 }}
+                  sx={{ mt: 2, lineHeight: 1.7 }}
                 >
-                  POS applications and terminal approval
-                  are managed separately from access to your
-                  business dashboard.
+                  POS application and terminal approval are
+                  managed separately from business dashboard access.
                 </Typography>
 
                 <Button
@@ -1089,7 +1087,9 @@ const BusinessDashboard: React.FC = () => {
                   disabled
                   sx={{
                     mt: 2,
-                    fontWeight: 700,
+                    py: 1.2,
+                    borderRadius: 2.5,
+                    fontWeight: 800,
                   }}
                 >
                   POS services not yet connected
@@ -1099,23 +1099,31 @@ const BusinessDashboard: React.FC = () => {
           </Grid>
         </Grid>
 
-        {/* ================================================== */}
         {/* BUSINESS SERVICES */}
-        {/* ================================================== */}
 
         <Stack
           direction="row"
           justifyContent="space-between"
           alignItems="center"
-          sx={{ mt: 4, mb: 2 }}
+          sx={{ mt: 5, mb: 2 }}
         >
-          <Typography
-            variant="h6"
-            fontWeight={800}
-            sx={{ color: DARK_GREEN }}
-          >
-            Business Services
-          </Typography>
+          <Box>
+            <Typography
+              variant="h5"
+              fontWeight={900}
+              sx={{ color: DARK_GREEN }}
+            >
+              Business Services
+            </Typography>
+
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mt: 0.5 }}
+            >
+              Manage your business banking activities
+            </Typography>
+          </Box>
         </Stack>
 
         <Grid container spacing={2}>
@@ -1130,18 +1138,31 @@ const BusinessDashboard: React.FC = () => {
             >
               <Card
                 onClick={() => {
-                  navigate(item.path);
+                  if (!businessId) {
+                    setError('Business account ID is missing.');
+                    return;
+                  }
+
+                  navigate(businessPath(item.section));
                 }}
                 sx={{
                   height: '100%',
-                  borderRadius: 3,
+                  minHeight: 165,
+                  borderRadius: 4,
                   cursor: 'pointer',
-                  border: '1px solid #E1EEE5',
-                  transition: '0.2s',
+                  border: `1px solid ${BORDER}`,
+                  bgcolor: '#fff',
+                  boxShadow: '0 3px 14px rgba(6,95,54,0.04)',
+                  transition: 'all 0.2s ease',
                   '&:hover': {
-                    transform: 'translateY(-3px)',
+                    transform: 'translateY(-4px)',
+                    borderColor: GREEN,
                     boxShadow:
-                      '0 8px 24px rgba(8,122,67,0.12)',
+                      '0 12px 28px rgba(8,122,67,0.13)',
+                    bgcolor: '#FCFFFD',
+                  },
+                  '&:active': {
+                    transform: 'scale(0.98)',
                   },
                 }}
               >
@@ -1169,8 +1190,9 @@ const BusinessDashboard: React.FC = () => {
                   </Box>
 
                   <Typography
-                    fontWeight={800}
+                    fontWeight={900}
                     variant="body2"
+                    sx={{ color: DARK_GREEN }}
                   >
                     {item.title}
                   </Typography>
@@ -1178,6 +1200,11 @@ const BusinessDashboard: React.FC = () => {
                   <Typography
                     variant="caption"
                     color="text.secondary"
+                    sx={{
+                      display: 'block',
+                      mt: 0.7,
+                      lineHeight: 1.5,
+                    }}
                   >
                     {item.description}
                   </Typography>
@@ -1187,15 +1214,14 @@ const BusinessDashboard: React.FC = () => {
           ))}
         </Grid>
 
-        {/* ================================================== */}
         {/* RECENT TRANSACTIONS */}
-        {/* ================================================== */}
 
         <Card
           sx={{
             mt: 4,
             borderRadius: 4,
-            border: '1px solid #E1EEE5',
+            border: `1px solid ${BORDER}`,
+            boxShadow: '0 4px 18px rgba(0,0,0,0.03)',
           }}
         >
           <CardContent sx={{ p: { xs: 2, md: 3 } }}>
@@ -1208,7 +1234,7 @@ const BusinessDashboard: React.FC = () => {
               <Box>
                 <Typography
                   variant="h6"
-                  fontWeight={800}
+                  fontWeight={900}
                   sx={{ color: DARK_GREEN }}
                 >
                   Recent Transactions
@@ -1217,6 +1243,7 @@ const BusinessDashboard: React.FC = () => {
                 <Typography
                   variant="body2"
                   color="text.secondary"
+                  sx={{ mt: 0.5 }}
                 >
                   Business account activity
                 </Typography>
@@ -1225,20 +1252,14 @@ const BusinessDashboard: React.FC = () => {
               <Button
                 startIcon={
                   refreshing ? (
-                    <CircularProgress
-                      size={16}
-                      sx={{ color: GREEN }}
-                    />
+                    <CircularProgress size={16} />
                   ) : (
                     <Refresh />
                   )
                 }
                 onClick={() => loadBusiness(false)}
                 disabled={refreshing}
-                sx={{
-                  color: GREEN,
-                  fontWeight: 700,
-                }}
+                sx={{ color: GREEN, fontWeight: 800 }}
               >
                 Refresh
               </Button>
@@ -1265,12 +1286,7 @@ const BusinessDashboard: React.FC = () => {
             )}
 
             {transactions.length === 0 ? (
-              <Box
-                sx={{
-                  textAlign: 'center',
-                  py: 5,
-                }}
-              >
+              <Box sx={{ textAlign: 'center', py: 5 }}>
                 <TrendingUp
                   sx={{
                     fontSize: 45,
@@ -1279,7 +1295,7 @@ const BusinessDashboard: React.FC = () => {
                   }}
                 />
 
-                <Typography fontWeight={700}>
+                <Typography fontWeight={800}>
                   No business transactions yet
                 </Typography>
 
@@ -1288,8 +1304,8 @@ const BusinessDashboard: React.FC = () => {
                   color="text.secondary"
                   sx={{ mt: 1 }}
                 >
-                  Transactions posted to this business
-                  account will appear here.
+                  Transactions posted to this business account
+                  will appear here.
                 </Typography>
               </Box>
             ) : (
@@ -1297,19 +1313,13 @@ const BusinessDashboard: React.FC = () => {
                 {transactions.slice(0, 10).map((tx) => {
                   const amount = Number(tx.amount || 0);
 
+                  const type = (tx.type || '').toLowerCase();
+
                   const isCredit =
-                    (tx.type || '').toLowerCase().includes(
-                      'received'
-                    ) ||
-                    (tx.type || '').toLowerCase().includes(
-                      'credit'
-                    ) ||
-                    (tx.type || '').toLowerCase().includes(
-                      'deposit'
-                    ) ||
-                    (tx.type || '').toLowerCase().includes(
-                      'refund'
-                    );
+                    type.includes('received') ||
+                    type.includes('credit') ||
+                    type.includes('deposit') ||
+                    type.includes('refund');
 
                   return (
                     <Box key={tx.id}>
@@ -1321,7 +1331,7 @@ const BusinessDashboard: React.FC = () => {
                       >
                         <Box sx={{ minWidth: 0 }}>
                           <Typography
-                            fontWeight={700}
+                            fontWeight={800}
                             noWrap
                           >
                             {tx.description ||
@@ -1350,10 +1360,7 @@ const BusinessDashboard: React.FC = () => {
                             <Box sx={{ mt: 0.5 }}>
                               <Chip
                                 size="small"
-                                label={tx.status.replace(
-                                  /_/g,
-                                  ' '
-                                )}
+                                label={tx.status.replace(/_/g, ' ')}
                                 color={getStatusColor(tx.status)}
                               />
                             </Box>
@@ -1361,12 +1368,10 @@ const BusinessDashboard: React.FC = () => {
                         </Box>
 
                         <Typography
-                          fontWeight={800}
+                          fontWeight={900}
                           sx={{
                             whiteSpace: 'nowrap',
-                            color: isCredit
-                              ? GREEN
-                              : '#263238',
+                            color: isCredit ? GREEN : '#263238',
                           }}
                         >
                           {isCredit ? '+' : ''}
@@ -1401,14 +1406,17 @@ const BusinessDashboard: React.FC = () => {
               fullWidth
               variant="outlined"
               startIcon={<ReceiptLong />}
+              endIcon={<ArrowForward />}
               onClick={() =>
-                navigate('/business/transactions')
+                navigate(businessPath('transactions'))
               }
               sx={{
                 mt: 2,
+                py: 1.3,
                 borderColor: GREEN,
                 color: GREEN,
-                fontWeight: 700,
+                fontWeight: 800,
+                borderRadius: 2.5,
               }}
             >
               View All Transactions
@@ -1416,28 +1424,37 @@ const BusinessDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* ================================================== */}
         {/* ACCOUNT MANAGEMENT */}
-        {/* ================================================== */}
 
-        <Grid
-          container
-          spacing={2}
-          sx={{ mt: 1 }}
+        <Typography
+          variant="h6"
+          fontWeight={900}
+          sx={{ color: DARK_GREEN, mt: 4, mb: 2 }}
         >
+          Account Management
+        </Typography>
+
+        <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <Button
               fullWidth
               variant="outlined"
               startIcon={<Settings />}
+              endIcon={<ArrowForward />}
               onClick={() =>
-                navigate('/business/settings')
+                navigate(businessPath('settings'))
               }
               sx={{
-                py: 1.5,
+                py: 1.7,
+                borderRadius: 3,
                 borderColor: GREEN,
                 color: GREEN,
-                fontWeight: 700,
+                fontWeight: 800,
+                bgcolor: '#fff',
+                '&:hover': {
+                  bgcolor: LIGHT_GREEN,
+                  borderColor: DARK_GREEN,
+                },
               }}
             >
               Business Settings
@@ -1449,20 +1466,53 @@ const BusinessDashboard: React.FC = () => {
               fullWidth
               variant="outlined"
               startIcon={<Security />}
+              endIcon={<ArrowForward />}
               onClick={() =>
-                navigate('/business/security')
+                navigate(businessPath('security'))
               }
               sx={{
-                py: 1.5,
+                py: 1.7,
+                borderRadius: 3,
                 borderColor: GREEN,
                 color: GREEN,
-                fontWeight: 700,
+                fontWeight: 800,
+                bgcolor: '#fff',
+                '&:hover': {
+                  bgcolor: LIGHT_GREEN,
+                  borderColor: DARK_GREEN,
+                },
               }}
             >
               Security & Access
             </Button>
           </Grid>
         </Grid>
+
+        {/* FOOTER */}
+
+        <Box
+          sx={{
+            mt: 5,
+            textAlign: 'center',
+            pb: 2,
+          }}
+        >
+          <Typography
+            variant="caption"
+            color="text.secondary"
+          >
+            Zenimonies Business Banking
+          </Typography>
+
+          <Typography
+            variant="caption"
+            display="block"
+            color="text.secondary"
+            sx={{ mt: 0.5 }}
+          >
+            Your business banking, in one place.
+          </Typography>
+        </Box>
       </Box>
     </Box>
   );
