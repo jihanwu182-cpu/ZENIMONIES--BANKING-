@@ -1,3 +1,4 @@
+
 import React, {
   useCallback,
   useEffect,
@@ -9,12 +10,22 @@ import { useNavigate } from 'react-router-dom';
 // ============================================================
 // ZENIMONIES BANKING
 // BUSINESS BANKING
-// GREEN & WHITE BRANDING
+// Dashboard access is available immediately after registration.
+// Verification and transaction permissions are enforced separately.
 // ============================================================
 
 const API_BASE =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com/api';
+
+const GREEN = '#006341';
+const GREEN_LIGHT = '#008746';
+const GREEN_DARK = '#004D38';
+const WHITE = '#FFFFFF';
+const PAGE_BG = '#F3F8F5';
+const TEXT = '#123B2B';
+const MUTED = '#64756B';
+const BORDER = '#DCE9E0';
 
 // ============================================================
 // TYPES
@@ -23,30 +34,21 @@ const API_BASE =
 type BusinessAccount = {
   id: string;
   business_name: string;
-
   registration_number?: string | null;
   business_type?: string | null;
-
   country: string;
   currency: string;
-
   business_address?: string | null;
-
   verification_status: string;
   status: string;
-
   verification_level?: number | string;
   business_level?: number | string;
   account_level?: number | string;
-
   created_at?: string;
-
   account_id?: string;
   business_account_id?: string;
-
   account_number?: string;
   account_currency?: string;
-
   balance?: string | number;
   account_status?: string;
 };
@@ -58,19 +60,6 @@ type BusinessForm = {
   currency: string;
   businessAddress: string;
 };
-
-// ============================================================
-// BRAND COLORS
-// ============================================================
-
-const GREEN = '#006341';
-const GREEN_LIGHT = '#008746';
-const GREEN_DARK = '#004D38';
-const WHITE = '#FFFFFF';
-const PAGE_BG = '#F3F8F5';
-const TEXT = '#123B2B';
-const MUTED = '#64756B';
-const BORDER = '#DCE9E0';
 
 // ============================================================
 // STYLES
@@ -92,20 +81,11 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
   },
 
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 26,
-  },
-
   brand: {
     display: 'flex',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 20,
+    marginBottom: 24,
   },
 
   logo: {
@@ -119,6 +99,15 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     fontSize: 27,
     fontWeight: 900,
+  },
+
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginBottom: 26,
   },
 
   heading: {
@@ -235,19 +224,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     cursor: 'pointer',
   },
-
-  disabledDashboardButton: {
-    width: '100%',
-    marginTop: 22,
-    padding: '13px 15px',
-    border: '1px solid rgba(255,255,255,0.25)',
-    borderRadius: 12,
-    background: 'rgba(0,0,0,0.12)',
-    color: WHITE,
-    fontSize: 13,
-    lineHeight: 1.7,
-    boxSizing: 'border-box',
-  },
 };
 
 // ============================================================
@@ -326,26 +302,6 @@ function getBusinessLevel(
   }
 
   return level;
-}
-
-// ============================================================
-// BUSINESS APPROVAL
-// ============================================================
-
-function isBusinessApproved(
-  business: BusinessAccount
-): boolean {
-  return (
-    normalizeStatus(
-      business.verification_status
-    ) === 'verified' &&
-    normalizeStatus(
-      business.status
-    ) === 'active' &&
-    normalizeStatus(
-      business.account_status
-    ) === 'active'
-  );
 }
 
 // ============================================================
@@ -484,8 +440,7 @@ function VerificationProgress({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns:
-            'repeat(5, minmax(0, 1fr))',
+          gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
           gap: 6,
           marginBottom: 14,
         }}
@@ -515,8 +470,8 @@ function VerificationProgress({
       >
         Levels 1–3 follow the standard verification
         process. CAC documentation is required when
-        upgrading to Level 4. Level 5 requires
-        additional enhanced business verification.
+        upgrading to Level 4. Level 5 requires additional
+        enhanced business verification.
       </p>
     </div>
   );
@@ -557,77 +512,74 @@ export default function Business() {
   // LOAD BUSINESSES
   // ==========================================================
 
-  const loadBusinesses = useCallback(
-    async () => {
-      const currentToken = getToken();
+  const loadBusinesses = useCallback(async () => {
+    const currentToken = getToken();
 
-      if (!currentToken) {
-        setError(
-          'Your session is missing or expired. Please sign in again.'
-        );
+    if (!currentToken) {
+      setError(
+        'Your session is missing or expired. Please sign in again.'
+      );
 
-        setLoading(false);
-        return;
-      }
+      setLoading(false);
+      return;
+    }
 
-      setLoading(true);
-      setError('');
+    setLoading(true);
+    setError('');
 
-      try {
-        const response = await fetch(
-          `${API_BASE}/businesses`,
-          {
-            method: 'GET',
-            headers: {
-              Authorization: `Bearer ${currentToken}`,
-              Accept: 'application/json',
-            },
-          }
-        );
+    try {
+      const response = await fetch(
+        `${API_BASE}/businesses`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${currentToken}`,
+            Accept: 'application/json',
+          },
+        }
+      );
 
-        const data = await response.json();
+      const data = await response.json();
 
-        if (!response.ok) {
-          if (response.status === 401) {
-            throw new Error(
-              'Your session has expired. Please sign out and sign in again.'
-            );
-          }
-
+      if (!response.ok) {
+        if (response.status === 401) {
           throw new Error(
-            data.message ||
-              data.error ||
-              'Unable to load your businesses.'
+            'Your session has expired. Please sign out and sign in again.'
           );
         }
 
-        const list =
-          data.businesses ||
-          data.data?.businesses ||
-          [];
-
-        setBusinesses(
-          Array.isArray(list) ? list : []
+        throw new Error(
+          data.message ||
+            data.error ||
+            'Unable to load your businesses.'
         );
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Unable to load your businesses.'
-        );
-      } finally {
-        setLoading(false);
       }
-    },
-    []
-  );
+
+      const list =
+        data.businesses ||
+        data.data?.businesses ||
+        [];
+
+      setBusinesses(
+        Array.isArray(list) ? list : []
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to load your businesses.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadBusinesses();
   }, [loadBusinesses]);
 
   // ==========================================================
-  // UPDATE FORM
+  // UPDATE REGISTRATION FORM
   // ==========================================================
 
   function updateField(
@@ -679,16 +631,12 @@ export default function Business() {
     }
 
     if (!form.businessName.trim()) {
-      setError(
-        'Please enter your business name.'
-      );
+      setError('Please enter your business name.');
       return;
     }
 
     if (!form.businessType) {
-      setError(
-        'Please select your business type.'
-      );
+      setError('Please select your business type.');
       return;
     }
 
@@ -705,18 +653,11 @@ export default function Business() {
             Accept: 'application/json',
           },
           body: JSON.stringify({
-            businessName:
-              form.businessName.trim(),
-
-            businessType:
-              form.businessType.trim(),
-
+            businessName: form.businessName.trim(),
+            businessType: form.businessType.trim(),
             country: form.country,
-
             currency: form.currency,
-
-            businessAddress:
-              form.businessAddress.trim(),
+            businessAddress: form.businessAddress.trim(),
           }),
         }
       );
@@ -739,7 +680,7 @@ export default function Business() {
 
       setSuccess(
         data.message ||
-          'Your business application was submitted successfully.'
+          'Your business application was submitted successfully. You can open your business dashboard now.'
       );
 
       setForm({
@@ -752,6 +693,7 @@ export default function Business() {
 
       setShowForm(false);
 
+      // Refresh the business list after registration.
       await loadBusinesses();
     } catch (err) {
       setError(
@@ -765,15 +707,13 @@ export default function Business() {
   }
 
   // ==========================================================
-  // COPY ACCOUNT NUMBER
+  // COPY BUSINESS ACCOUNT NUMBER
   // ==========================================================
 
   async function copyAccountNumber(
     accountNumber?: string
   ) {
-    if (!accountNumber) {
-      return;
-    }
+    if (!accountNumber) return;
 
     setError('');
     setSuccess('');
@@ -795,22 +735,20 @@ export default function Business() {
 
   // ==========================================================
   // OPEN BUSINESS DASHBOARD
+  //
+  // IMPORTANT:
+  // Do not block dashboard access based on approval.
+  // Backend must still enforce financial transaction rules.
   // ==========================================================
 
   function openBusinessDashboard(
     business: BusinessAccount
   ) {
-    if (!isBusinessApproved(business)) {
-      setError(
-        'This business account is not yet verified, approved, and active.'
-      );
-
-      return;
-    }
+    setError('');
 
     if (!business.id) {
       setError(
-        'The business account ID is missing.'
+        'The business account ID is missing. Please refresh and try again.'
       );
 
       return;
@@ -834,9 +772,7 @@ export default function Business() {
         {/* BRAND */}
 
         <div style={styles.brand}>
-          <div style={styles.logo}>
-            Z
-          </div>
+          <div style={styles.logo}>Z</div>
 
           <div>
             <div
@@ -955,8 +891,8 @@ export default function Business() {
                 </h2>
 
                 <p style={styles.subtitle}>
-                  Start your business verification
-                  journey with Level 1.
+                  Start your business verification journey
+                  with Level 1.
                 </p>
               </div>
 
@@ -974,9 +910,6 @@ export default function Business() {
 
             <form onSubmit={handleCreateBusiness}>
               <div style={styles.grid}>
-
-                {/* BUSINESS NAME */}
-
                 <div style={styles.field}>
                   <label style={styles.label}>
                     Business Name *
@@ -992,8 +925,6 @@ export default function Business() {
                     required
                   />
                 </div>
-
-                {/* BUSINESS TYPE */}
 
                 <div style={styles.field}>
                   <label style={styles.label}>
@@ -1041,8 +972,6 @@ export default function Business() {
                   </select>
                 </div>
 
-                {/* COUNTRY */}
-
                 <div style={styles.field}>
                   <label style={styles.label}>
                     Country *
@@ -1055,17 +984,10 @@ export default function Business() {
                     onChange={updateField}
                     required
                   >
-                    <option value="NG">
-                      Nigeria
-                    </option>
-
-                    <option value="ZA">
-                      South Africa
-                    </option>
+                    <option value="NG">Nigeria</option>
+                    <option value="ZA">South Africa</option>
                   </select>
                 </div>
-
-                {/* CURRENCY */}
 
                 <div style={styles.field}>
                   <label style={styles.label}>
@@ -1083,8 +1005,6 @@ export default function Business() {
                     readOnly
                   />
                 </div>
-
-                {/* ADDRESS */}
 
                 <div
                   style={{
@@ -1111,8 +1031,6 @@ export default function Business() {
                 </div>
               </div>
 
-              {/* VERIFICATION INFORMATION */}
-
               <div
                 style={{
                   background: '#E8F5EC',
@@ -1130,27 +1048,25 @@ export default function Business() {
                 </strong>
 
                 <p style={{ margin: '8px 0' }}>
-                  Start with Level 1 and progress
-                  through Levels 1–5 as your business
-                  completes the required verification.
+                  Start with Level 1 and progress through
+                  Levels 1–5 as your business completes
+                  the required verification.
                 </p>
 
                 <p style={{ margin: '8px 0' }}>
-                  <strong>Levels 1–3:</strong> Follow
-                  the standard customer verification
-                  process.
+                  <strong>Levels 1–3:</strong> Follow the
+                  standard customer verification process.
                 </p>
 
                 <p style={{ margin: '8px 0' }}>
                   <strong>Level 4:</strong> CAC
-                  documentation is required when
-                  upgrading to this level.
+                  documentation is required when upgrading
+                  to this level.
                 </p>
 
                 <p style={{ margin: '8px 0 0' }}>
                   <strong>Level 5:</strong> Additional
-                  enhanced business verification
-                  requirements apply.
+                  enhanced business verification applies.
                 </p>
 
                 <p
@@ -1188,12 +1104,7 @@ export default function Business() {
 
         {loading && (
           <section style={styles.card}>
-            <p
-              style={{
-                margin: 0,
-                color: MUTED,
-              }}
-            >
+            <p style={{ margin: 0, color: MUTED }}>
               Loading your business accounts...
             </p>
           </section>
@@ -1246,9 +1157,9 @@ export default function Business() {
                   lineHeight: 1.8,
                 }}
               >
-                Create a separate business profile
-                and start your business verification
-                journey with Zenimonies.
+                Create a separate business profile and
+                start your business verification journey
+                with Zenimonies.
               </p>
 
               <button
@@ -1264,7 +1175,7 @@ export default function Business() {
             </section>
           )}
 
-        {/* BUSINESS ACCOUNT CARDS */}
+        {/* BUSINESS ACCOUNTS */}
 
         {!loading && businesses.length > 0 && (
           <>
@@ -1277,9 +1188,6 @@ export default function Business() {
                   business.account_currency ||
                   business.currency ||
                   'NGN';
-
-                const approved =
-                  isBusinessApproved(business);
 
                 const currentLevel =
                   getBusinessLevel(business);
@@ -1366,17 +1274,14 @@ export default function Business() {
                             letterSpacing: 1.5,
                           }}
                         >
-                          {accountNumber ||
-                            'Not available'}
+                          {accountNumber || 'Not available'}
                         </strong>
 
                         {accountNumber && (
                           <button
                             type="button"
                             onClick={() =>
-                              copyAccountNumber(
-                                accountNumber
-                              )
+                              copyAccountNumber(accountNumber)
                             }
                             style={{
                               border:
@@ -1417,11 +1322,7 @@ export default function Business() {
                           Available Account Balance
                         </div>
 
-                        <strong
-                          style={{
-                            fontSize: 24,
-                          }}
-                        >
+                        <strong style={{ fontSize: 24 }}>
                           {formatMoney(
                             business.balance,
                             currency
@@ -1439,43 +1340,42 @@ export default function Business() {
                           textTransform: 'capitalize',
                         }}
                       >
-                        {business.account_status ||
-                          'pending'}
+                        {business.account_status || 'pending'}
                       </span>
                     </div>
 
-                    {/* VERIFICATION LEVELS */}
+                    {/* VERIFICATION */}
 
                     <VerificationProgress
                       level={currentLevel}
                     />
 
-                    {/* DASHBOARD */}
+                    {/* ALWAYS ALLOW DASHBOARD ACCESS */}
 
-                    {approved ? (
-                      <button
-                        type="button"
-                        style={styles.dashboardButton}
-                        onClick={() =>
-                          openBusinessDashboard(
-                            business
-                          )
-                        }
-                      >
-                        Open Business Dashboard →
-                      </button>
-                    ) : (
-                      <div
-                        style={
-                          styles.disabledDashboardButton
-                        }
-                      >
-                        Your Business Dashboard will
-                        become available once your
-                        business has been verified,
-                        approved, and activated.
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      style={styles.dashboardButton}
+                      onClick={() =>
+                        openBusinessDashboard(business)
+                      }
+                    >
+                      Open Business Dashboard →
+                    </button>
+
+                    <p
+                      style={{
+                        fontSize: 12,
+                        lineHeight: 1.7,
+                        margin: '12px 0 0',
+                        color: '#E0F2E7',
+                      }}
+                    >
+                      Your dashboard is accessible while
+                      verification is pending. Financial
+                      services remain subject to verification,
+                      account status, limits, and security
+                      checks.
+                    </p>
                   </section>
                 );
               })}
@@ -1506,8 +1406,9 @@ export default function Business() {
                   </h2>
 
                   <p style={styles.subtitle}>
-                    Track verification and account
-                    approval.
+                    Track verification and account approval.
+                    You do not need to wait for approval to
+                    open your dashboard.
                   </p>
                 </div>
 
@@ -1517,20 +1418,12 @@ export default function Business() {
                   onClick={loadBusinesses}
                   disabled={loading}
                 >
-                  Refresh
+                  {loading ? 'Refreshing...' : 'Refresh'}
                 </button>
               </div>
 
-              <div
-                style={{
-                  display: 'grid',
-                  gap: 16,
-                }}
-              >
+              <div style={{ display: 'grid', gap: 16 }}>
                 {businesses.map((business) => {
-                  const approved =
-                    isBusinessApproved(business);
-
                   const currentLevel =
                     getBusinessLevel(business);
 
@@ -1540,8 +1433,11 @@ export default function Business() {
                     );
 
                   const businessStatus =
+                    normalizeStatus(business.status);
+
+                  const accountStatus =
                     normalizeStatus(
-                      business.status
+                      business.account_status
                     );
 
                   return (
@@ -1557,8 +1453,7 @@ export default function Business() {
                       <div
                         style={{
                           display: 'flex',
-                          justifyContent:
-                            'space-between',
+                          justifyContent: 'space-between',
                           alignItems: 'flex-start',
                           flexWrap: 'wrap',
                           gap: 14,
@@ -1605,8 +1500,7 @@ export default function Business() {
                               fontWeight: 800,
                             }}
                           >
-                            Verification Level:{' '}
-                            {currentLevel} of 5
+                            Verification Level: {currentLevel} of 5
                           </p>
                         </div>
 
@@ -1615,8 +1509,7 @@ export default function Business() {
                             display: 'flex',
                             flexDirection: 'column',
                             gap: 12,
-                            alignItems:
-                              'flex-start',
+                            alignItems: 'flex-start',
                           }}
                         >
                           <div>
@@ -1633,9 +1526,7 @@ export default function Business() {
                             </span>
 
                             <StatusBadge
-                              status={
-                                business.verification_status
-                              }
+                              status={business.verification_status}
                             />
                           </div>
 
@@ -1671,9 +1562,7 @@ export default function Business() {
                             </span>
 
                             <StatusBadge
-                              status={
-                                business.account_status
-                              }
+                              status={business.account_status}
                             />
                           </div>
                         </div>
@@ -1692,40 +1581,33 @@ export default function Business() {
                           lineHeight: 1.8,
                         }}
                       >
-                        {approved
-                          ? 'Your business has been verified, approved, and activated. You can open your Business Dashboard.'
-                          : verificationStatus ===
-                                'rejected' ||
-                              businessStatus ===
-                                'rejected'
-                          ? 'Your business application was rejected. Please contact Zenimonies support for further information.'
-                          : verificationStatus ===
-                              'under_review'
-                          ? 'Your business verification is under review. Dashboard access becomes available after approval and activation.'
-                          : 'Your business application is pending verification and administrator approval. The dashboard remains unavailable until the required approvals and activation are complete.'}
+                        {verificationStatus === 'rejected' ||
+                        businessStatus === 'rejected'
+                          ? 'Your business application was rejected. You can still access your dashboard to view your business information. Please contact Zenimonies support regarding verification.'
+                          : verificationStatus === 'verified' &&
+                            businessStatus === 'active' &&
+                            accountStatus === 'active'
+                          ? 'Your business has been verified and activated. Your business dashboard is available.'
+                          : 'Your business application is pending or under review. You can open and view your business dashboard now. Financial transactions and other restricted services remain subject to applicable verification, account status, limits, and security checks.'}
                       </div>
 
-                      {/* MANAGE BUSINESS */}
+                      {/* ALWAYS ALLOW BUSINESS MANAGEMENT */}
 
-                      {approved && (
-                        <button
-                          type="button"
-                          style={{
-                            ...styles.secondaryButton,
-                            marginTop: 15,
-                            width: '100%',
-                            color: GREEN,
-                            borderColor: '#A7D9B9',
-                          }}
-                          onClick={() =>
-                            openBusinessDashboard(
-                              business
-                            )
-                          }
-                        >
-                          Manage This Business →
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        style={{
+                          ...styles.secondaryButton,
+                          marginTop: 15,
+                          width: '100%',
+                          color: GREEN,
+                          borderColor: '#A7D9B9',
+                        }}
+                        onClick={() =>
+                          openBusinessDashboard(business)
+                        }
+                      >
+                        Manage This Business →
+                      </button>
                     </div>
                   );
                 })}
