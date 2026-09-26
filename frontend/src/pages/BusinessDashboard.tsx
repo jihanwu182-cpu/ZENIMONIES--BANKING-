@@ -1,4 +1,3 @@
-
 import React, {
   useCallback,
   useEffect,
@@ -8,6 +7,8 @@ import React, {
 
 import {
   Alert,
+  Avatar,
+  Badge,
   Box,
   Button,
   Card,
@@ -17,34 +18,48 @@ import {
   Divider,
   Grid,
   IconButton,
+  Paper,
   Stack,
   Typography,
 } from '@mui/material';
 
 import {
   AccountBalance,
+  Add,
   ArrowBack,
+  ArrowDownward,
   ArrowForward,
   ArrowUpward,
+  Bolt,
   Business,
+  CheckCircle,
+  ChevronRight,
+  CreditCard,
   Description,
+  Home,
+  Lock,
+  MoreHoriz,
+  Notifications,
+  PhoneAndroid,
+  PointOfSale,
   ReceiptLong,
   Refresh,
+  Savings,
   Security,
   Settings,
+  Shield,
   TrendingUp,
-  People,
-  PhoneAndroid,
-  Wifi,
-  Bolt,
   Tv,
-  Savings,
-  PointOfSale,
+  VerifiedUser,
   Visibility,
   VisibilityOff,
-  VerifiedUser,
-  CreditCard,
-  Notifications,
+  Wallet,
+  Wifi,
+  People,
+  SportsSoccer,
+  AccountCircle,
+  Store,
+  GridView,
 } from '@mui/icons-material';
 
 import {
@@ -54,18 +69,20 @@ import {
 
 // ============================================================
 // ZENIMONIES BANKING
-// PROFESSIONAL BUSINESS BANKING DASHBOARD
+// BUSINESS DASHBOARD — MOBILE-FIRST REDESIGN
 // ============================================================
 
 const API_BASE =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com/api';
 
-const GREEN = '#087A43';
-const DARK_GREEN = '#065F36';
-const LIGHT_GREEN = '#E8F5EC';
-const PAGE_BG = '#F5F8F6';
-const BORDER = '#E1EEE5';
+const GREEN = '#008D4F';
+const DARK_GREEN = '#064B37';
+const DEEP_GREEN = '#003E30';
+const LIGHT_GREEN = '#E8F5EE';
+const PAGE_BG = '#F2F8F5';
+const BORDER = '#DDEBE4';
+const MUTED = '#81928A';
 
 // ============================================================
 // TYPES
@@ -124,8 +141,7 @@ const formatMoney = (
   amount: number | string | undefined,
   currency = 'NGN'
 ) => {
-  const safeCurrency =
-    currency === 'ZAR' ? 'ZAR' : 'NGN';
+  const safeCurrency = currency === 'ZAR' ? 'ZAR' : 'NGN';
 
   const value = Number(amount || 0);
 
@@ -145,9 +161,7 @@ const formatDate = (date?: string) => {
 
   const parsed = new Date(date);
 
-  if (Number.isNaN(parsed.getTime())) {
-    return '—';
-  }
+  if (Number.isNaN(parsed.getTime())) return '—';
 
   return parsed.toLocaleString();
 };
@@ -214,7 +228,71 @@ const getVerificationLevel = (
 };
 
 // ============================================================
-// DASHBOARD COMPONENT
+// SERVICE TILE
+// ============================================================
+
+type ServiceItem = {
+  title: string;
+  section: string;
+  icon: React.ReactNode;
+  color?: string;
+};
+
+const quickActions: ServiceItem[] = [
+  {
+    title: 'Add Money',
+    section: 'add-money',
+    icon: <Add />,
+  },
+  {
+    title: 'To Bank',
+    section: 'transfer',
+    icon: <AccountBalance />,
+  },
+  {
+    title: 'Send to\nZENIMONIES',
+    section: 'internal-transfer',
+    icon: <ArrowForward />,
+  },
+  {
+    title: 'Airtime',
+    section: 'airtime',
+    icon: <PhoneAndroid />,
+  },
+  {
+    title: 'Data',
+    section: 'data',
+    icon: <Wifi />,
+  },
+  {
+    title: 'Betting',
+    section: 'betting',
+    icon: <SportsSoccer />,
+  },
+  {
+    title: 'TV',
+    section: 'tv',
+    icon: <Tv />,
+  },
+  {
+    title: 'Bills',
+    section: 'bills',
+    icon: <ReceiptLong />,
+  },
+  {
+    title: 'Savings',
+    section: 'savings',
+    icon: <Savings />,
+  },
+  {
+    title: 'More',
+    section: 'more',
+    icon: <MoreHoriz />,
+  },
+];
+
+// ============================================================
+// MAIN DASHBOARD
 // ============================================================
 
 const BusinessDashboard: React.FC = () => {
@@ -223,7 +301,6 @@ const BusinessDashboard: React.FC = () => {
 
   const businessId = id || '';
 
-  // All business routes retain the current business ID.
   const businessPath = (section: string) =>
     `/business/${encodeURIComponent(businessId)}/${section}`;
 
@@ -247,7 +324,7 @@ const BusinessDashboard: React.FC = () => {
     useState(0);
 
   // ==========================================================
-  // LOAD BUSINESS ACCOUNT
+  // LOAD BUSINESS DATA
   // ==========================================================
 
   const loadBusiness = useCallback(
@@ -290,8 +367,8 @@ const BusinessDashboard: React.FC = () => {
         if (!response.ok) {
           throw new Error(
             result.message ||
-            result.error ||
-            'Unable to load business account.'
+              result.error ||
+              'Unable to load business account.'
           );
         }
 
@@ -309,7 +386,7 @@ const BusinessDashboard: React.FC = () => {
 
         setBusiness(businessData);
 
-        // BUSINESS-SCOPED TRANSACTIONS
+        // Business-specific transaction history.
         try {
           const transactionResponse = await fetch(
             `${API_BASE}/businesses/${encodeURIComponent(
@@ -329,7 +406,7 @@ const BusinessDashboard: React.FC = () => {
           if (!transactionResponse.ok) {
             throw new Error(
               transactionResult.message ||
-              'Unable to load business transactions.'
+                'Unable to load business transactions.'
             );
           }
 
@@ -353,13 +430,12 @@ const BusinessDashboard: React.FC = () => {
 
           setTransactionError(
             err.message ||
-            'Unable to load business transactions.'
+              'Unable to load business transactions.'
           );
         }
 
-        // NOTIFICATION COUNT
-        // This count is currently returned by the
-        // existing user notification endpoint.
+        // Existing user notification count.
+        // This is not a business-scoped notification API.
         try {
           const notificationResponse = await fetch(
             `${API_BASE}/notifications/unread-count`,
@@ -377,9 +453,9 @@ const BusinessDashboard: React.FC = () => {
 
             const count = Number(
               notificationResult.count ??
-              notificationResult.unreadCount ??
-              notificationResult.data?.count ??
-              0
+                notificationResult.unreadCount ??
+                notificationResult.data?.count ??
+                0
             );
 
             setNotificationCount(
@@ -389,12 +465,12 @@ const BusinessDashboard: React.FC = () => {
             );
           }
         } catch {
-          // Notification errors do not block dashboard.
+          // Notifications do not block the dashboard.
         }
       } catch (err: any) {
         setError(
           err.message ||
-          'Unable to load your business account.'
+            'Unable to load your business account.'
         );
       } finally {
         setLoading(false);
@@ -444,84 +520,27 @@ const BusinessDashboard: React.FC = () => {
     [business?.balance, currency]
   );
 
+  const nextLevel =
+    verificationLevel === null
+      ? 1
+      : Math.min(verificationLevel + 1, 5);
+
+  const verificationComplete =
+    verificationStatus === 'verified' &&
+    verificationLevel === 5;
+
   // ==========================================================
-  // BUSINESS SERVICES
+  // NAVIGATION HELPERS
   // ==========================================================
 
-  const businessServices = [
-    {
-      title: 'Transfer',
-      description: 'Payments and bank transfers',
-      icon: <ArrowUpward />,
-      section: 'transfer',
-    },
-    {
-      title: 'Transactions',
-      description: 'Business transaction history',
-      icon: <ReceiptLong />,
-      section: 'transactions',
-    },
-    {
-      title: 'Statements',
-      description: 'Account statements',
-      icon: <Description />,
-      section: 'statements',
-    },
-    {
-      title: 'Airtime',
-      description: 'Business airtime purchases',
-      icon: <PhoneAndroid />,
-      section: 'airtime',
-    },
-    {
-      title: 'Data',
-      description: 'Mobile data bundles',
-      icon: <Wifi />,
-      section: 'data',
-    },
-    {
-      title: 'Electricity',
-      description: 'Electricity payments',
-      icon: <Bolt />,
-      section: 'electricity',
-    },
-    {
-      title: 'TV Payments',
-      description: 'TV subscriptions',
-      icon: <Tv />,
-      section: 'tv',
-    },
-    {
-      title: 'Savings',
-      description: 'Business savings',
-      icon: <Savings />,
-      section: 'savings',
-    },
-    {
-      title: 'Business Cards',
-      description: 'Manage business cards',
-      icon: <CreditCard />,
-      section: 'cards',
-    },
-    {
-      title: 'Staff & Access',
-      description: 'Staff permissions',
-      icon: <People />,
-      section: 'staff',
-    },
-    {
-      title: 'Business Settings',
-      description: 'Business profile and details',
-      icon: <Settings />,
-      section: 'settings',
-    },
-    {
-      title: 'Security',
-      description: 'Security and account access',
-      icon: <Security />,
-      section: 'security',
-    },
-  ];
+  const openBusinessSection = (section: string) => {
+    if (!businessId) {
+      setError('Business account ID is missing.');
+      return;
+    }
+
+    navigate(businessPath(section));
+  };
 
   // ==========================================================
   // LOADING SCREEN
@@ -591,7 +610,7 @@ const BusinessDashboard: React.FC = () => {
   }
 
   // ==========================================================
-  // DASHBOARD
+  // DASHBOARD UI
   // ==========================================================
 
   return (
@@ -599,678 +618,864 @@ const BusinessDashboard: React.FC = () => {
       sx={{
         minHeight: '100vh',
         bgcolor: PAGE_BG,
-        pb: 6,
+        pb: { xs: 12, md: 5 },
+        color: DARK_GREEN,
       }}
     >
-      {/* HEADER */}
+      {/* ================================================== */}
+      {/* TOP BRAND HEADER */}
+      {/* ================================================== */}
 
       <Box
         sx={{
-          background:
-            'linear-gradient(135deg, #065F36 0%, #087A43 55%, #0B9655 100%)',
-          color: '#fff',
-          px: { xs: 2, md: 5 },
-          py: { xs: 3, md: 4 },
-          borderRadius: {
-            xs: '0 0 24px 24px',
-            md: '0 0 32px 32px',
-          },
-          boxShadow: '0 8px 30px rgba(6,95,54,0.15)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+          bgcolor: 'rgba(255,255,255,0.97)',
+          backdropFilter: 'blur(14px)',
+          borderBottom: `1px solid ${BORDER}`,
         }}
       >
-        <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
+        <Box
+          sx={{
+            maxWidth: 1200,
+            mx: 'auto',
+            px: { xs: 2, md: 4 },
+            py: 1.8,
+          }}
+        >
           <Stack
             direction="row"
-            justifyContent="space-between"
             alignItems="center"
-            spacing={2}
+            justifyContent="space-between"
           >
-            <Box>
-              <Stack
-                direction="row"
-                spacing={1}
-                alignItems="center"
-              >
-                <Business sx={{ fontSize: 34 }} />
-
-                <Typography
-                  variant="h5"
-                  fontWeight={900}
-                  letterSpacing={-0.5}
-                >
-                  Zenimonies
-                </Typography>
-              </Stack>
-
-              <Typography
-                sx={{
-                  mt: 1,
-                  color: '#D9F3E4',
-                  fontWeight: 500,
-                }}
-              >
-                Business Banking
-              </Typography>
-            </Box>
-
             <Stack
               direction="row"
               alignItems="center"
-              spacing={1}
+              spacing={1.5}
+              sx={{ minWidth: 0 }}
             >
+              <Box
+                sx={{
+                  width: 54,
+                  height: 54,
+                  borderRadius: '17px',
+                  bgcolor: DARK_GREEN,
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 31,
+                  fontWeight: 1000,
+                  boxShadow: '0 5px 14px rgba(0,62,48,0.16)',
+                  flexShrink: 0,
+                }}
+              >
+                Z
+              </Box>
+
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  sx={{
+                    fontWeight: 1000,
+                    color: '#102E24',
+                    fontSize: { xs: 23, sm: 29 },
+                    letterSpacing: -1.1,
+                    lineHeight: 1.1,
+                  }}
+                >
+                  Zenimonies
+                </Typography>
+
+                <Typography
+                  sx={{
+                    color: '#91A39A',
+                    fontSize: 10,
+                    letterSpacing: 4,
+                    fontWeight: 900,
+                    mt: 0.5,
+                  }}
+                >
+                  BUSINESS BANKING
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Stack direction="row" alignItems="center" spacing={0.5}>
               <IconButton
                 aria-label="Business notifications"
                 onClick={() =>
-                  navigate(businessPath('notifications'))
+                  openBusinessSection('notifications')
                 }
-                sx={{
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.25)',
-                  position: 'relative',
-                }}
+                sx={{ color: DARK_GREEN }}
               >
-                <Notifications />
-
-                {notificationCount > 0 && (
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: -2,
-                      right: -2,
-                      minWidth: 18,
-                      height: 18,
-                      borderRadius: '50%',
-                      bgcolor: '#F44336',
-                      color: '#fff',
-                      fontSize: 10,
-                      fontWeight: 800,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      px: 0.3,
-                    }}
-                  >
-                    {notificationCount > 99
-                      ? '99+'
-                      : notificationCount}
-                  </Box>
-                )}
+                <Badge
+                  badgeContent={notificationCount}
+                  color="error"
+                  max={99}
+                >
+                  <Notifications sx={{ fontSize: 29 }} />
+                </Badge>
               </IconButton>
 
-              <Button
-                variant="outlined"
-                startIcon={<ArrowBack />}
-                onClick={() => navigate('/business')}
-                sx={{
-                  color: '#fff',
-                  borderColor: '#B8E2C9',
-                  fontWeight: 700,
-                  '&:hover': {
-                    borderColor: '#fff',
-                    bgcolor: 'rgba(255,255,255,0.1)',
-                  },
-                }}
+              <IconButton
+                aria-label="Refresh business dashboard"
+                onClick={() => loadBusiness(false)}
+                disabled={refreshing}
+                sx={{ color: DARK_GREEN }}
               >
-                Back
-              </Button>
+                {refreshing ? (
+                  <CircularProgress size={21} />
+                ) : (
+                  <Refresh />
+                )}
+              </IconButton>
             </Stack>
           </Stack>
         </Box>
       </Box>
+
+      {/* ================================================== */}
+      {/* MAIN CONTENT */}
+      {/* ================================================== */}
 
       <Box
         sx={{
           maxWidth: 1200,
           mx: 'auto',
           px: { xs: 2, md: 4 },
-          mt: { xs: 2, md: 4 },
+          pt: 2,
         }}
       >
-        {/* BUSINESS PROFILE */}
+        {/* BUSINESS ACCOUNT CARD */}
 
         <Card
           sx={{
-            borderRadius: 4,
-            mb: 3,
-            border: `1px solid ${BORDER}`,
-            boxShadow: '0 5px 25px rgba(0,0,0,0.04)',
-          }}
-        >
-          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              justifyContent="space-between"
-              alignItems={{ xs: 'flex-start', sm: 'center' }}
-              spacing={2}
-            >
-              <Box sx={{ minWidth: 0 }}>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  fontWeight={600}
-                >
-                  BUSINESS ACCOUNT
-                </Typography>
-
-                <Typography
-                  variant="h5"
-                  fontWeight={900}
-                  sx={{
-                    mt: 1,
-                    color: DARK_GREEN,
-                    overflowWrap: 'anywhere',
-                  }}
-                >
-                  {businessName}
-                </Typography>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 1 }}
-                >
-                  Account number: {business.account_number || 'Not assigned'}
-                </Typography>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 0.5 }}
-                >
-                  Business type: {business.business_type || 'Not provided'}
-                </Typography>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 0.5 }}
-                >
-                  Registered: {formatDate(business.created_at)}
-                </Typography>
-              </Box>
-
-              <Stack direction="row" flexWrap="wrap" gap={1}>
-                <Chip
-                  label={status.replace(/_/g, ' ').toUpperCase()}
-                  color={getStatusColor(status)}
-                  sx={{ fontWeight: 800 }}
-                />
-
-                <Chip
-                  icon={<VerifiedUser />}
-                  label={verificationStatus.replace(/_/g, ' ').toUpperCase()}
-                  color={getStatusColor(verificationStatus)}
-                  sx={{ fontWeight: 800 }}
-                />
-              </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
-
-        {/* ACCOUNT STATUS */}
-
-        {isSuspended ? (
-          <Alert severity="error" sx={{ mb: 3, borderRadius: 3 }}>
-            Your business account is restricted. You can view your
-            account information, but financial services may be
-            unavailable. Please contact Zenimonies support.
-          </Alert>
-        ) : verificationStatus !== 'verified' && (
-          <Alert
-            severity="info"
-            sx={{ mb: 3, borderRadius: 3 }}
-            action={
-              <Button
-                color="inherit"
-                size="small"
-                onClick={() =>
-                  navigate(businessPath('verification'))
-                }
-              >
-                Verify
-              </Button>
-            }
-          >
-            Your business dashboard is available while verification
-            is in progress. Complete the applicable business
-            verification requirements to access services according
-            to your account limits and security checks.
-          </Alert>
-        )}
-
-        {/* BALANCE CARD */}
-
-        <Card
-          sx={{
-            borderRadius: 5,
-            color: '#fff',
-            background:
-              'linear-gradient(135deg, #065F36 0%, #087A43 55%, #0B9655 100%)',
-            boxShadow: '0 12px 35px rgba(8,122,67,0.18)',
-            overflow: 'hidden',
             position: 'relative',
+            overflow: 'hidden',
+            borderRadius: { xs: '0 0 34px 34px', md: 5 },
+            bgcolor: DARK_GREEN,
+            background:
+              'linear-gradient(130deg, #00613F 0%, #004A37 65%, #00382D 100%)',
+            color: '#fff',
+            minHeight: 245,
+            boxShadow: '0 16px 35px rgba(0,62,48,0.15)',
           }}
         >
-          <Box
+          {/* Decorative Z */}
+
+          <Typography
+            aria-hidden="true"
             sx={{
               position: 'absolute',
-              width: 220,
-              height: 220,
-              borderRadius: '50%',
-              border: '1px solid rgba(255,255,255,0.10)',
-              right: -70,
-              top: -100,
+              right: -5,
+              bottom: -100,
+              fontSize: 300,
+              fontWeight: 1000,
+              lineHeight: 1,
+              color: 'rgba(255,255,255,0.035)',
+              pointerEvents: 'none',
             }}
-          />
+          >
+            Z
+          </Typography>
 
           <CardContent
             sx={{
-              p: { xs: 3, md: 4 },
               position: 'relative',
+              zIndex: 1,
+              p: { xs: 3, md: 4 },
+              '&:last-child': { pb: 4 },
             }}
           >
             <Stack
               direction="row"
               justifyContent="space-between"
               alignItems="flex-start"
+              spacing={2}
             >
               <Box sx={{ minWidth: 0 }}>
                 <Typography
-                  sx={{ color: '#D9F3E4', fontWeight: 600 }}
+                  sx={{
+                    color: '#BBDACB',
+                    fontSize: 14,
+                    fontWeight: 700,
+                  }}
                 >
-                  Business account balance
+                  Business
                 </Typography>
-
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  spacing={1}
-                  sx={{ mt: 1.5 }}
-                >
-                  <Typography
-                    variant="h3"
-                    fontWeight={900}
-                    sx={{
-                      fontSize: {
-                        xs: '1.8rem',
-                        sm: '2.4rem',
-                        md: '2.8rem',
-                      },
-                      overflowWrap: 'anywhere',
-                    }}
-                  >
-                    {showBalance ? accountBalance : '••••••••'}
-                  </Typography>
-
-                  <IconButton
-                    aria-label={
-                      showBalance ? 'Hide balance' : 'Show balance'
-                    }
-                    onClick={() =>
-                      setShowBalance((previous) => !previous)
-                    }
-                    sx={{ color: '#fff' }}
-                  >
-                    {showBalance ? <VisibilityOff /> : <Visibility />}
-                  </IconButton>
-                </Stack>
 
                 <Typography
                   sx={{
-                    mt: 1.5,
-                    color: '#D9F3E4',
-                    fontWeight: 500,
+                    fontSize: { xs: 19, sm: 23 },
+                    fontWeight: 900,
+                    mt: 0.5,
+                    overflowWrap: 'anywhere',
                   }}
                 >
-                  {currency} Business Account
+                  {businessName}
                 </Typography>
-
-                <Chip
-                  label="Business account"
-                  size="small"
-                  sx={{
-                    mt: 2,
-                    color: '#fff',
-                    bgcolor: 'rgba(255,255,255,0.15)',
-                    fontWeight: 700,
-                  }}
-                />
               </Box>
 
-              <AccountBalance
+              <Chip
+                icon={<Business />}
+                label="Business"
+                size="small"
                 sx={{
-                  fontSize: { xs: 42, md: 60 },
-                  opacity: 0.7,
+                  color: '#fff',
+                  bgcolor: 'rgba(255,255,255,0.10)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  fontWeight: 800,
                   flexShrink: 0,
                 }}
               />
             </Stack>
+
+            <Typography
+              sx={{
+                mt: 3,
+                color: '#C0DDCF',
+                fontWeight: 600,
+                fontSize: 14,
+              }}
+            >
+              Available Balance
+            </Typography>
+
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+              sx={{ mt: 0.5 }}
+            >
+              <Typography
+                sx={{
+                  fontWeight: 1000,
+                  fontSize: {
+                    xs: '2.35rem',
+                    sm: '2.8rem',
+                    md: '3.2rem',
+                  },
+                  letterSpacing: -1.2,
+                  lineHeight: 1.25,
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {showBalance ? accountBalance : '••••••••'}
+              </Typography>
+
+              <IconButton
+                aria-label={
+                  showBalance ? 'Hide balance' : 'Show balance'
+                }
+                onClick={() =>
+                  setShowBalance((previous) => !previous)
+                }
+                sx={{ color: '#fff' }}
+              >
+                {showBalance ? (
+                  <VisibilityOff />
+                ) : (
+                  <Visibility />
+                )}
+              </IconButton>
+            </Stack>
+
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{ mt: 3 }}
+            >
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Box
+                  sx={{
+                    width: 11,
+                    height: 11,
+                    borderRadius: '50%',
+                    bgcolor:
+                      status === 'active'
+                        ? '#4FE0A0'
+                        : '#FFCC66',
+                    boxShadow: '0 0 0 6px rgba(255,255,255,0.06)',
+                  }}
+                />
+
+                <Typography
+                  sx={{
+                    color: '#D4E8DE',
+                    fontWeight: 800,
+                    fontSize: 14,
+                  }}
+                >
+                  {status === 'active'
+                    ? 'Secure'
+                    : status.replace(/_/g, ' ')}
+                </Typography>
+              </Stack>
+
+              <Typography
+                sx={{
+                  color: '#A6C8B8',
+                  fontWeight: 1000,
+                  letterSpacing: 3,
+                  fontSize: 14,
+                }}
+              >
+                {currency}
+              </Typography>
+            </Stack>
+
+            {business.account_number && (
+              <Typography
+                sx={{
+                  mt: 1.5,
+                  color: '#A6C8B8',
+                  fontSize: 12,
+                  letterSpacing: 1,
+                }}
+              >
+                Account: {business.account_number}
+              </Typography>
+            )}
           </CardContent>
         </Card>
 
-        {/* VERIFICATION AND POS */}
+        {/* ACCOUNT RESTRICTIONS */}
 
-        <Grid container spacing={2} sx={{ mt: 1 }}>
-          <Grid item xs={12} md={6}>
-            <Card
+        {isSuspended ? (
+          <Alert
+            severity="error"
+            sx={{
+              mt: 3,
+              borderRadius: 3,
+              fontWeight: 600,
+            }}
+          >
+            Your business account is restricted. Some financial
+            services may be unavailable. Please contact Zenimonies
+            support.
+          </Alert>
+        ) : null}
+
+        {/* ================================================== */}
+        {/* VERIFICATION BANNER */}
+        {/* ================================================== */}
+
+        {!verificationComplete && (
+          <Card
+            onClick={() =>
+              openBusinessSection('verification')
+            }
+            sx={{
+              mt: 3,
+              borderRadius: 4,
+              border: '1px solid #F2D2CE',
+              bgcolor: '#FFF5F3',
+              boxShadow: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              '&:hover': {
+                boxShadow: '0 6px 20px rgba(170,50,40,0.08)',
+                transform: 'translateY(-2px)',
+              },
+            }}
+          >
+            <CardContent
               sx={{
-                height: '100%',
-                borderRadius: 4,
-                border: `1px solid ${BORDER}`,
-                boxShadow: '0 4px 18px rgba(0,0,0,0.03)',
+                p: { xs: 2, md: 2.5 },
+                '&:last-child': { pb: 2.5 },
               }}
             >
-              <CardContent sx={{ p: 3 }}>
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  spacing={2}
-                >
-                  <Box
-                    sx={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 3,
-                      bgcolor: LIGHT_GREEN,
-                      color: GREEN,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <VerifiedUser />
-                  </Box>
-
-                  <Box sx={{ flex: 1 }}>
-                    <Typography fontWeight={900}>
-                      Business Verification
-                    </Typography>
-
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                    >
-                      {verificationLevel !== null
-                        ? `Level ${verificationLevel} of 5`
-                        : 'Level not yet confirmed'}
-                    </Typography>
-                  </Box>
-                </Stack>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 2, lineHeight: 1.7 }}
-                >
-                  View your business verification status and
-                  applicable requirements.
-                </Typography>
-
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  endIcon={<ArrowForward />}
-                  onClick={() =>
-                    navigate(businessPath('verification'))
-                  }
-                  sx={{
-                    mt: 2,
-                    py: 1.2,
-                    borderColor: GREEN,
-                    color: GREEN,
-                    fontWeight: 800,
-                    borderRadius: 2.5,
-                  }}
-                >
-                  View Verification
-                </Button>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Card
-              sx={{
-                height: '100%',
-                borderRadius: 4,
-                border: `1px solid ${BORDER}`,
-                boxShadow: '0 4px 18px rgba(0,0,0,0.03)',
-              }}
-            >
-              <CardContent sx={{ p: 3 }}>
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  spacing={2}
-                >
-                  <Box
-                    sx={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 3,
-                      bgcolor: LIGHT_GREEN,
-                      color: GREEN,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <PointOfSale />
-                  </Box>
-
-                  <Box sx={{ flex: 1 }}>
-                    <Typography fontWeight={900}>
-                      POS Terminal
-                    </Typography>
-
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                    >
-                      Business payment terminals
-                    </Typography>
-                  </Box>
-                </Stack>
-
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 2, lineHeight: 1.7 }}
-                >
-                  POS application and terminal approval are
-                  managed separately from business dashboard access.
-                </Typography>
-
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  disabled
-                  sx={{
-                    mt: 2,
-                    py: 1.2,
-                    borderRadius: 2.5,
-                    fontWeight: 800,
-                  }}
-                >
-                  POS services not yet connected
-                </Button>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        {/* BUSINESS SERVICES */}
-
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="center"
-          sx={{ mt: 5, mb: 2 }}
-        >
-          <Box>
-            <Typography
-              variant="h5"
-              fontWeight={900}
-              sx={{ color: DARK_GREEN }}
-            >
-              Business Services
-            </Typography>
-
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ mt: 0.5 }}
-            >
-              Manage your business banking activities
-            </Typography>
-          </Box>
-        </Stack>
-
-        <Grid container spacing={2}>
-          {businessServices.map((item) => (
-            <Grid
-              item
-              xs={6}
-              sm={4}
-              md={3}
-              lg={2}
-              key={item.title}
-            >
-              <Card
-                onClick={() => {
-                  if (!businessId) {
-                    setError('Business account ID is missing.');
-                    return;
-                  }
-
-                  navigate(businessPath(item.section));
-                }}
-                sx={{
-                  height: '100%',
-                  minHeight: 165,
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  border: `1px solid ${BORDER}`,
-                  bgcolor: '#fff',
-                  boxShadow: '0 3px 14px rgba(6,95,54,0.04)',
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    borderColor: GREEN,
-                    boxShadow:
-                      '0 12px 28px rgba(8,122,67,0.13)',
-                    bgcolor: '#FCFFFD',
-                  },
-                  '&:active': {
-                    transform: 'scale(0.98)',
-                  },
-                }}
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={2}
               >
-                <CardContent
+                <Box
                   sx={{
-                    textAlign: 'center',
-                    p: 2,
+                    width: 70,
+                    height: 70,
+                    borderRadius: 4,
+                    bgcolor: '#FFE7E3',
+                    color: '#C62828',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
                   }}
                 >
-                  <Box
+                  <Shield sx={{ fontSize: 37 }} />
+                </Box>
+
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography
                     sx={{
-                      width: 52,
-                      height: 52,
-                      borderRadius: 3,
-                      bgcolor: LIGHT_GREEN,
-                      color: GREEN,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      mx: 'auto',
-                      mb: 2,
+                      color: '#BF2828',
+                      fontWeight: 1000,
+                      fontSize: { xs: 17, sm: 20 },
                     }}
                   >
-                    {item.icon}
-                  </Box>
-
-                  <Typography
-                    fontWeight={900}
-                    variant="body2"
-                    sx={{ color: DARK_GREEN }}
-                  >
-                    {item.title}
+                    Business Verification
                   </Typography>
 
                   <Typography
-                    variant="caption"
-                    color="text.secondary"
                     sx={{
-                      display: 'block',
-                      mt: 0.7,
+                      color: '#73877D',
+                      mt: 0.5,
+                      fontSize: { xs: 13, sm: 15 },
                       lineHeight: 1.5,
                     }}
                   >
-                    {item.description}
+                    {verificationLevel !== null
+                      ? `You're on Level ${verificationLevel} of 5. Complete your next verification upgrade to increase your applicable limits.`
+                      : 'Complete your business verification to access services according to your account limits.'}
                   </Typography>
-                </CardContent>
-              </Card>
+
+                  <Typography
+                    sx={{
+                      color: GREEN,
+                      fontWeight: 900,
+                      fontSize: 13,
+                      mt: 1,
+                    }}
+                  >
+                    {verificationLevel === 5
+                      ? 'Review verification status'
+                      : `View Level ${nextLevel} upgrade`}
+                  </Typography>
+                </Box>
+
+                <ChevronRight
+                  sx={{
+                    color: '#81928A',
+                    fontSize: 32,
+                    flexShrink: 0,
+                  }}
+                />
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+
+        {verificationComplete && (
+          <Card
+            sx={{
+              mt: 3,
+              borderRadius: 4,
+              bgcolor: '#EAF7EF',
+              border: `1px solid ${BORDER}`,
+              boxShadow: 'none',
+            }}
+          >
+            <CardContent sx={{ p: 2.5 }}>
+              <Stack direction="row" alignItems="center" spacing={2}>
+                <CheckCircle sx={{ color: GREEN, fontSize: 35 }} />
+                <Box>
+                  <Typography fontWeight={900} color={DARK_GREEN}>
+                    Business Verification Complete
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                  >
+                    Level 5 verification is recorded on your account.
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ================================================== */}
+        {/* QUICK ACTIONS */}
+        {/* ================================================== */}
+
+        <Box sx={{ mt: 5 }}>
+          <Typography
+            sx={{
+              fontSize: { xs: 25, sm: 30 },
+              fontWeight: 1000,
+              letterSpacing: -1,
+              color: '#102E24',
+            }}
+          >
+            Quick Actions
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.5,
+              color: '#8B9B93',
+              fontSize: 15,
+              fontWeight: 500,
+            }}
+          >
+            Everything your business needs, in one place.
+          </Typography>
+        </Box>
+
+        <Grid container spacing={{ xs: 1.5, sm: 2 }} sx={{ mt: 1 }}>
+          {quickActions.map((item) => (
+            <Grid
+              item
+              xs={4}
+              sm={3}
+              md={2.4}
+              key={item.section}
+            >
+              <Stack
+                onClick={() =>
+                  openBusinessSection(item.section)
+                }
+                alignItems="center"
+                spacing={1.2}
+                sx={{
+                  cursor: 'pointer',
+                  height: '100%',
+                  '&:active .quick-action-icon': {
+                    transform: 'scale(0.96)',
+                  },
+                }}
+              >
+                <Paper
+                  className="quick-action-icon"
+                  elevation={0}
+                  sx={{
+                    width: '100%',
+                    maxWidth: 116,
+                    aspectRatio: '1 / 1',
+                    borderRadius: { xs: 3.5, sm: 4 },
+                    bgcolor: '#fff',
+                    border: `1px solid ${BORDER}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: GREEN,
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      borderColor: GREEN,
+                      boxShadow: '0 8px 20px rgba(0,141,79,0.10)',
+                      transform: 'translateY(-3px)',
+                    },
+                    '& .MuiSvgIcon-root': {
+                      fontSize: { xs: 35, sm: 43 },
+                    },
+                  }}
+                >
+                  {item.icon}
+                </Paper>
+
+                <Typography
+                  sx={{
+                    textAlign: 'center',
+                    color: '#203B30',
+                    fontSize: { xs: 12, sm: 15 },
+                    fontWeight: 900,
+                    lineHeight: 1.4,
+                    whiteSpace: 'pre-line',
+                    minHeight: 34,
+                  }}
+                >
+                  {item.title}
+                </Typography>
+              </Stack>
             </Grid>
           ))}
         </Grid>
 
+        {/* ================================================== */}
+        {/* MORE BUSINESS SERVICES */}
+        {/* ================================================== */}
+
+        <Card
+          sx={{
+            mt: 5,
+            borderRadius: 4,
+            border: `1px solid ${BORDER}`,
+            boxShadow: '0 4px 18px rgba(0,0,0,0.025)',
+            overflow: 'hidden',
+          }}
+        >
+          <CardContent
+            sx={{
+              p: { xs: 2.5, md: 3.5 },
+              '&:last-child': { pb: 3.5 },
+            }}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+            >
+              <Typography
+                sx={{
+                  fontSize: { xs: 25, sm: 30 },
+                  fontWeight: 1000,
+                  letterSpacing: -1,
+                  color: '#102E24',
+                }}
+              >
+                More Services
+              </Typography>
+
+              <Button
+                onClick={() => openBusinessSection('more')}
+                endIcon={<ArrowForward />}
+                sx={{
+                  color: GREEN,
+                  fontWeight: 900,
+                  textTransform: 'none',
+                }}
+              >
+                See all
+              </Button>
+            </Stack>
+
+            <Typography
+              sx={{
+                color: '#8B9B93',
+                mt: 0.5,
+                mb: 2.5,
+                fontSize: 15,
+              }}
+            >
+              Manage your Zenimonies business account.
+            </Typography>
+
+            <Grid container spacing={1.5}>
+              {[
+                {
+                  title: 'Transactions',
+                  section: 'transactions',
+                  icon: <ReceiptLong />,
+                },
+                {
+                  title: 'Statements',
+                  section: 'statements',
+                  icon: <Description />,
+                },
+                {
+                  title: 'Business Wallet',
+                  section: 'wallet',
+                  icon: <Wallet />,
+                },
+                {
+                  title: 'Business Cards',
+                  section: 'cards',
+                  icon: <CreditCard />,
+                },
+                {
+                  title: 'Staff & Access',
+                  section: 'staff',
+                  icon: <People />,
+                },
+                {
+                  title: 'Security',
+                  section: 'security',
+                  icon: <Lock />,
+                },
+                {
+                  title: 'Business Settings',
+                  section: 'settings',
+                  icon: <Settings />,
+                },
+                {
+                  title: 'POS Terminal',
+                  section: 'pos',
+                  icon: <PointOfSale />,
+                },
+              ].map((item) => (
+                <Grid item xs={6} sm={4} md={3} key={item.section}>
+                  <Paper
+                    onClick={() =>
+                      openBusinessSection(item.section)
+                    }
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      minHeight: 112,
+                      borderRadius: 3.5,
+                      bgcolor: '#F2F8F5',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        bgcolor: '#E7F4EC',
+                        transform: 'translateY(-2px)',
+                      },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        color: GREEN,
+                        '& .MuiSvgIcon-root': {
+                          fontSize: 31,
+                        },
+                      }}
+                    >
+                      {item.icon}
+                    </Box>
+
+                    <Typography
+                      sx={{
+                        mt: 1.5,
+                        fontSize: { xs: 13, sm: 14 },
+                        fontWeight: 900,
+                        color: GREEN,
+                        lineHeight: 1.35,
+                      }}
+                    >
+                      {item.title}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+          </CardContent>
+        </Card>
+
+        {/* ================================================== */}
+        {/* POS TERMINAL FEATURE */}
+        {/* ================================================== */}
+
+        <Card
+          sx={{
+            mt: 3,
+            borderRadius: 4,
+            bgcolor: '#fff',
+            border: `1px solid ${BORDER}`,
+            boxShadow: '0 4px 18px rgba(0,0,0,0.025)',
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              alignItems={{ xs: 'flex-start', sm: 'center' }}
+              spacing={2}
+            >
+              <Avatar
+                sx={{
+                  width: 60,
+                  height: 60,
+                  bgcolor: LIGHT_GREEN,
+                  color: GREEN,
+                }}
+              >
+                <PointOfSale sx={{ fontSize: 34 }} />
+              </Avatar>
+
+              <Box sx={{ flex: 1 }}>
+                <Typography
+                  sx={{
+                    fontWeight: 1000,
+                    fontSize: 20,
+                    color: DARK_GREEN,
+                  }}
+                >
+                  POS Terminal
+                </Typography>
+
+                <Typography
+                  sx={{
+                    color: '#81928A',
+                    fontSize: 14,
+                    mt: 0.5,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Apply for a business POS terminal, check your
+                  application status, and manage approved terminals.
+                  POS approval is separate from business account access.
+                </Typography>
+              </Box>
+
+              <Button
+                variant="contained"
+                endIcon={<ArrowForward />}
+                onClick={() => openBusinessSection('pos')}
+                sx={{
+                  width: { xs: '100%', sm: 'auto' },
+                  bgcolor: GREEN,
+                  borderRadius: 3,
+                  px: 3,
+                  py: 1.3,
+                  fontWeight: 900,
+                  textTransform: 'none',
+                  boxShadow: 'none',
+                  '&:hover': {
+                    bgcolor: DARK_GREEN,
+                    boxShadow: 'none',
+                  },
+                }}
+              >
+                POS Services
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {/* ================================================== */}
         {/* RECENT TRANSACTIONS */}
+        {/* ================================================== */}
 
         <Card
           sx={{
             mt: 4,
             borderRadius: 4,
             border: `1px solid ${BORDER}`,
-            boxShadow: '0 4px 18px rgba(0,0,0,0.03)',
+            boxShadow: '0 4px 18px rgba(0,0,0,0.025)',
           }}
         >
-          <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
             <Stack
               direction="row"
-              justifyContent="space-between"
               alignItems="center"
+              justifyContent="space-between"
               spacing={2}
             >
               <Box>
                 <Typography
-                  variant="h6"
-                  fontWeight={900}
-                  sx={{ color: DARK_GREEN }}
+                  sx={{
+                    fontSize: { xs: 22, sm: 26 },
+                    fontWeight: 1000,
+                    color: '#102E24',
+                    letterSpacing: -0.5,
+                  }}
                 >
                   Recent Transactions
                 </Typography>
 
                 <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 0.5 }}
+                  sx={{
+                    mt: 0.5,
+                    fontSize: 14,
+                    color: '#8B9B93',
+                  }}
                 >
                   Business account activity
                 </Typography>
               </Box>
 
-              <Button
-                startIcon={
-                  refreshing ? (
-                    <CircularProgress size={16} />
-                  ) : (
-                    <Refresh />
-                  )
-                }
+              <IconButton
+                aria-label="Refresh transactions"
                 onClick={() => loadBusiness(false)}
                 disabled={refreshing}
-                sx={{ color: GREEN, fontWeight: 800 }}
+                sx={{ color: GREEN }}
               >
-                Refresh
-              </Button>
+                {refreshing ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <Refresh />
+                )}
+              </IconButton>
             </Stack>
 
-            <Divider sx={{ my: 2 }} />
+            <Divider sx={{ my: 2.5 }} />
 
             {transactionError && (
               <Alert
                 severity="warning"
-                sx={{ mb: 2 }}
+                sx={{ mb: 2, borderRadius: 3 }}
                 action={
                   <Button
                     color="inherit"
@@ -1286,23 +1491,34 @@ const BusinessDashboard: React.FC = () => {
             )}
 
             {transactions.length === 0 ? (
-              <Box sx={{ textAlign: 'center', py: 5 }}>
-                <TrendingUp
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Box
                   sx={{
-                    fontSize: 45,
+                    width: 65,
+                    height: 65,
+                    mx: 'auto',
+                    mb: 2,
+                    borderRadius: '50%',
+                    bgcolor: LIGHT_GREEN,
                     color: GREEN,
-                    mb: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
-                />
+                >
+                  <TrendingUp sx={{ fontSize: 34 }} />
+                </Box>
 
-                <Typography fontWeight={800}>
+                <Typography fontWeight={900} color={DARK_GREEN}>
                   No business transactions yet
                 </Typography>
 
                 <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 1 }}
+                  sx={{
+                    mt: 1,
+                    color: '#81928A',
+                    fontSize: 14,
+                  }}
                 >
                   Transactions posted to this business account
                   will appear here.
@@ -1310,9 +1526,8 @@ const BusinessDashboard: React.FC = () => {
               </Box>
             ) : (
               <Stack spacing={2}>
-                {transactions.slice(0, 10).map((tx) => {
+                {transactions.slice(0, 5).map((tx) => {
                   const amount = Number(tx.amount || 0);
-
                   const type = (tx.type || '').toLowerCase();
 
                   const isCredit =
@@ -1325,13 +1540,33 @@ const BusinessDashboard: React.FC = () => {
                     <Box key={tx.id}>
                       <Stack
                         direction="row"
-                        justifyContent="space-between"
                         alignItems="center"
-                        spacing={2}
+                        spacing={1.5}
                       >
-                        <Box sx={{ minWidth: 0 }}>
+                        <Avatar
+                          sx={{
+                            width: 43,
+                            height: 43,
+                            bgcolor: isCredit
+                              ? '#E7F5EC'
+                              : '#F0F3F1',
+                            color: isCredit ? GREEN : '#75857C',
+                          }}
+                        >
+                          {isCredit ? (
+                            <ArrowDownward />
+                          ) : (
+                            <ArrowUpward />
+                          )}
+                        </Avatar>
+
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Typography
-                            fontWeight={800}
+                            sx={{
+                              fontWeight: 900,
+                              fontSize: 14,
+                              color: '#203B30',
+                            }}
                             noWrap
                           >
                             {tx.description ||
@@ -1340,38 +1575,36 @@ const BusinessDashboard: React.FC = () => {
                           </Typography>
 
                           <Typography
-                            variant="caption"
-                            color="text.secondary"
+                            sx={{
+                              fontSize: 12,
+                              color: '#8B9B93',
+                              mt: 0.4,
+                            }}
                           >
                             {formatDate(tx.created_at)}
                           </Typography>
 
-                          {tx.reference && (
-                            <Typography
-                              variant="caption"
-                              display="block"
-                              color="text.secondary"
-                            >
-                              Ref: {tx.reference}
-                            </Typography>
-                          )}
-
                           {tx.status && (
-                            <Box sx={{ mt: 0.5 }}>
-                              <Chip
-                                size="small"
-                                label={tx.status.replace(/_/g, ' ')}
-                                color={getStatusColor(tx.status)}
-                              />
-                            </Box>
+                            <Chip
+                              size="small"
+                              label={tx.status.replace(/_/g, ' ')}
+                              color={getStatusColor(tx.status)}
+                              sx={{
+                                mt: 0.6,
+                                height: 22,
+                                fontSize: 10,
+                                fontWeight: 800,
+                              }}
+                            />
                           )}
                         </Box>
 
                         <Typography
-                          fontWeight={900}
                           sx={{
+                            fontWeight: 1000,
+                            fontSize: { xs: 12, sm: 15 },
+                            color: isCredit ? GREEN : '#203B30',
                             whiteSpace: 'nowrap',
-                            color: isCredit ? GREEN : '#263238',
                           }}
                         >
                           {isCredit ? '+' : ''}
@@ -1389,34 +1622,34 @@ const BusinessDashboard: React.FC = () => {
               </Stack>
             )}
 
-            {pagination && pagination.total > 20 && (
+            {pagination && pagination.total > 5 && (
               <Typography
-                variant="caption"
-                color="text.secondary"
-                display="block"
-                textAlign="center"
-                sx={{ mt: 2 }}
+                sx={{
+                  mt: 2,
+                  textAlign: 'center',
+                  color: '#81928A',
+                  fontSize: 12,
+                }}
               >
-                Showing the latest 20 of {pagination.total}{' '}
+                Showing the latest 5 of {pagination.total}{' '}
                 business transactions.
               </Typography>
             )}
 
             <Button
               fullWidth
-              variant="outlined"
-              startIcon={<ReceiptLong />}
-              endIcon={<ArrowForward />}
               onClick={() =>
-                navigate(businessPath('transactions'))
+                openBusinessSection('transactions')
               }
+              endIcon={<ArrowForward />}
               sx={{
                 mt: 2,
-                py: 1.3,
-                borderColor: GREEN,
+                py: 1.5,
                 color: GREEN,
-                fontWeight: 800,
-                borderRadius: 2.5,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 3,
+                fontWeight: 900,
+                textTransform: 'none',
               }}
             >
               View All Transactions
@@ -1424,98 +1657,244 @@ const BusinessDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* ACCOUNT MANAGEMENT */}
+        {/* ================================================== */}
+        {/* BUSINESS PROFILE */}
+        {/* ================================================== */}
 
-        <Typography
-          variant="h6"
-          fontWeight={900}
-          sx={{ color: DARK_GREEN, mt: 4, mb: 2 }}
+        <Card
+          sx={{
+            mt: 3,
+            borderRadius: 4,
+            border: `1px solid ${BORDER}`,
+            boxShadow: 'none',
+          }}
         >
-          Account Management
-        </Typography>
-
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<Settings />}
-              endIcon={<ArrowForward />}
-              onClick={() =>
-                navigate(businessPath('settings'))
-              }
-              sx={{
-                py: 1.7,
-                borderRadius: 3,
-                borderColor: GREEN,
-                color: GREEN,
-                fontWeight: 800,
-                bgcolor: '#fff',
-                '&:hover': {
-                  bgcolor: LIGHT_GREEN,
-                  borderColor: DARK_GREEN,
-                },
-              }}
+          <CardContent sx={{ p: 2.5 }}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={2}
             >
-              Business Settings
-            </Button>
-          </Grid>
-
-          <Grid item xs={12} sm={6}>
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<Security />}
-              endIcon={<ArrowForward />}
-              onClick={() =>
-                navigate(businessPath('security'))
-              }
-              sx={{
-                py: 1.7,
-                borderRadius: 3,
-                borderColor: GREEN,
-                color: GREEN,
-                fontWeight: 800,
-                bgcolor: '#fff',
-                '&:hover': {
+              <Avatar
+                sx={{
+                  width: 52,
+                  height: 52,
                   bgcolor: LIGHT_GREEN,
-                  borderColor: DARK_GREEN,
-                },
-              }}
-            >
-              Security & Access
-            </Button>
-          </Grid>
-        </Grid>
+                  color: GREEN,
+                }}
+              >
+                <Store />
+              </Avatar>
+
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography fontWeight={1000} color={DARK_GREEN}>
+                  {businessName}
+                </Typography>
+
+                <Typography
+                  sx={{
+                    color: '#81928A',
+                    fontSize: 13,
+                    mt: 0.5,
+                  }}
+                >
+                  {business.business_type || 'Business account'}
+                </Typography>
+
+                <Typography
+                  sx={{
+                    color: '#81928A',
+                    fontSize: 12,
+                    mt: 0.5,
+                  }}
+                >
+                  Account status: {status.replace(/_/g, ' ')}
+                </Typography>
+              </Box>
+
+              <IconButton
+                aria-label="Business settings"
+                onClick={() => openBusinessSection('settings')}
+                sx={{ color: GREEN }}
+              >
+                <ChevronRight />
+              </IconButton>
+            </Stack>
+          </CardContent>
+        </Card>
 
         {/* FOOTER */}
 
         <Box
           sx={{
-            mt: 5,
+            mt: 4,
+            mb: 2,
             textAlign: 'center',
-            pb: 2,
           }}
         >
           <Typography
-            variant="caption"
-            color="text.secondary"
+            sx={{
+              color: '#81928A',
+              fontSize: 13,
+              fontWeight: 700,
+            }}
           >
             Zenimonies Business Banking
           </Typography>
 
           <Typography
-            variant="caption"
-            display="block"
-            color="text.secondary"
-            sx={{ mt: 0.5 }}
+            sx={{
+              color: '#A0AEA7',
+              fontSize: 12,
+              mt: 0.5,
+            }}
           >
             Your business banking, in one place.
           </Typography>
         </Box>
       </Box>
+
+      {/* ================================================== */}
+      {/* FIXED BOTTOM NAVIGATION */}
+      {/* ================================================== */}
+
+      <Paper
+        elevation={0}
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1200,
+          bgcolor: 'rgba(255,255,255,0.98)',
+          backdropFilter: 'blur(14px)',
+          borderTop: `1px solid ${BORDER}`,
+          borderRadius: 0,
+          pb: 'env(safe-area-inset-bottom)',
+        }}
+      >
+        <Box
+          sx={{
+            maxWidth: 900,
+            mx: 'auto',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, 1fr)',
+            px: 0.5,
+          }}
+        >
+          {[
+            {
+              title: 'Home',
+              icon: <Home />,
+              section: '',
+            },
+            {
+              title: 'Transactions',
+              icon: <SwapNavIcon />,
+              section: 'transactions',
+            },
+            {
+              title: 'Cards',
+              icon: <CreditCard />,
+              section: 'cards',
+            },
+            {
+              title: 'Wallet',
+              icon: <Wallet />,
+              section: 'wallet',
+            },
+            {
+              title: 'Profile',
+              icon: <AccountCircle />,
+              section: 'settings',
+            },
+          ].map((item) => {
+            const active = item.section === '';
+
+            return (
+              <Box
+                key={item.title}
+                onClick={() => {
+                  if (item.section) {
+                    openBusinessSection(item.section);
+                  } else {
+                    window.scrollTo({
+                      top: 0,
+                      behavior: 'smooth',
+                    });
+                  }
+                }}
+                sx={{
+                  position: 'relative',
+                  cursor: 'pointer',
+                  py: 1.3,
+                  minHeight: 72,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 0.4,
+                  color: active ? GREEN : '#81928A',
+                  '&:active': {
+                    bgcolor: '#F2F8F5',
+                  },
+                }}
+              >
+                {active && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: '25%',
+                      right: '25%',
+                      height: 4,
+                      borderRadius: '0 0 5px 5px',
+                      bgcolor: GREEN,
+                    }}
+                  />
+                )}
+
+                {React.cloneElement(
+                  item.icon as React.ReactElement,
+                  {
+                    sx: { fontSize: 27 },
+                  }
+                )}
+
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    fontWeight: active ? 900 : 700,
+                    textAlign: 'center',
+                  }}
+                >
+                  {item.title}
+                </Typography>
+              </Box>
+            );
+          })}
+        </Box>
+      </Paper>
     </Box>
   );
 };
+
+// ============================================================
+// BOTTOM NAVIGATION TRANSACTION ICON
+// ============================================================
+
+const SwapNavIcon: React.FC = () => (
+  <Box
+    sx={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      lineHeight: 0.8,
+    }}
+  >
+    <ArrowUpward sx={{ fontSize: 18, mb: -0.5 }} />
+    <ArrowDownward sx={{ fontSize: 18 }} />
+  </Box>
+);
 
 export default BusinessDashboard;
