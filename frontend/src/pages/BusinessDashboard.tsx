@@ -1141,7 +1141,7 @@ const BusinessDashboard: React.FC = () => {
         {!verificationComplete && (
           <Card
             onClick={() =>
-              openBusinessSection('verification')
+              openBusinessSection('kyc')
             }
             sx={{
               mt: 2,
