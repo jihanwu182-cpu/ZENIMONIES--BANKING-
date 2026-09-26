@@ -575,8 +575,31 @@ export default function Business() {
   }, []);
 
   useEffect(() => {
-    loadBusinesses();
-  }, [loadBusinesses]);
+  loadBusinesses();
+}, [loadBusinesses]);
+
+// ============================================================
+// AUTOMATIC BUSINESS DASHBOARD
+// If the customer already has a business account,
+// open it immediately without showing the landing page.
+// ============================================================
+
+useEffect(() => {
+  if (loading || businesses.length === 0) {
+    return;
+  }
+
+  const business = businesses[0];
+
+  if (business?.id) {
+    navigate(
+      `/business/dashboard/${encodeURIComponent(
+        business.id
+      )}`,
+      { replace: true }
+    );
+  }
+}, [loading, businesses, navigate]);
 
   // ==========================================================
   // UPDATE REGISTRATION FORM
