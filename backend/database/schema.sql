@@ -1406,7 +1406,29 @@ ON pos_terminal_audit(terminal_id, created_at DESC);
 -- ============================================================
 -- END STAGE 1 SCHEMA
 -- ============================================================
+-- ============================================================
+-- ZENIMONIES: REGISTRATION PROFILE FIELDS
+-- ============================================================
 
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS first_name VARCHAR(100);
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS middle_name VARCHAR(100);
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS surname VARCHAR(100);
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS registration_account_type VARCHAR(20)
+NOT NULL DEFAULT 'personal';
+
+-- Allow only the two registration account choices.
+ALTER TABLE users
+ADD CONSTRAINT users_registration_account_type_check
+CHECK (
+    registration_account_type IN ('personal', 'business')
+);
 -- ============================================================
 -- INDEXES
 -- ============================================================
