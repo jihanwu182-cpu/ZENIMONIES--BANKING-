@@ -4,9 +4,15 @@ import { Link, useNavigate } from 'react-router-dom';
 
 const API_URL = 'https://zenimonies-banking.onrender.com';
 
+type AccountType = 'personal' | 'business';
+
 type User = {
   id?: string;
   full_name?: string;
+  first_name?: string;
+  middle_name?: string;
+  surname?: string;
+  gender?: string;
   email?: string;
   phone?: string;
   role?: string;
@@ -45,11 +51,8 @@ type RegisterResponse = {
 
 function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    const axiosError =
-      error as AxiosError<RegisterResponse>;
-
-    const response =
-      axiosError.response;
+    const axiosError = error as AxiosError<RegisterResponse>;
+    const response = axiosError.response;
 
     if (response?.data?.message) {
       return response.data.message;
@@ -88,16 +91,24 @@ function getErrorMessage(error: unknown): string {
 const Register: React.FC = () => {
   const navigate = useNavigate();
 
-  const [fullName, setFullName] = useState('');
+  // NAME
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [surname, setSurname] = useState('');
+  const [gender, setGender] = useState('');
+
+  // ACCOUNT TYPE
+  const [accountType, setAccountType] =
+    useState<AccountType | ''>('');
+
+  // CONTACT
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+
+  // PASSWORD
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] =
     useState('');
-
-  // ========================================================
-  // PASSWORD VISIBILITY
-  // ========================================================
 
   const [showPassword, setShowPassword] =
     useState(false);
@@ -105,6 +116,7 @@ const Register: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] =
     useState(false);
 
+  // STATUS
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -117,30 +129,31 @@ const Register: React.FC = () => {
     setError('');
     setSuccess('');
 
-    // ========================================================
     // CLEAN INPUTS
-    // ========================================================
+    const cleanFirstName = firstName.trim();
+    const cleanMiddleName = middleName.trim();
+    const cleanSurname = surname.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = phone.trim();
 
-    const cleanFullName =
-      fullName.trim();
-
-    const cleanEmail =
-      email.trim().toLowerCase();
-
-    const cleanPhone =
-      phone.trim();
-
-    // ========================================================
     // VALIDATION
-    // ========================================================
-
-    if (!cleanFullName) {
-      setError('Full name is required.');
+    if (!accountType) {
+      setError('Please select an account type.');
       return;
     }
 
-    if (cleanFullName.length < 2) {
-      setError('Please enter your full name.');
+    if (!cleanFirstName) {
+      setError('First name is required.');
+      return;
+    }
+
+    if (!cleanSurname) {
+      setError('Surname is required.');
+      return;
+    }
+
+    if (!gender) {
+      setError('Please select your gender.');
       return;
     }
 
@@ -149,58 +162,39 @@ const Register: React.FC = () => {
       return;
     }
 
-    if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        cleanEmail
-      )
-    ) {
-      setError(
-        'Please enter a valid email address.'
-      );
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError('Please enter a valid email address.');
       return;
     }
 
-    if (!cleanPhone) {
-      setError('Phone number is required.');
-      return;
-    }
-
-    if (cleanPhone.length < 7) {
-      setError(
-        'Please enter a valid phone number.'
-      );
-      return;
-    }
-
-    if (!password) {
-      setError('Password is required.');
+    if (!cleanPhone || cleanPhone.length < 7) {
+      setError('Please enter a valid phone number.');
       return;
     }
 
     if (password.length < 8) {
-      setError(
-        'Password must be at least 8 characters.'
-      );
+      setError('Password must be at least 8 characters.');
       return;
     }
 
     if (!confirmPassword) {
-      setError(
-        'Please confirm your password.'
-      );
+      setError('Please confirm your password.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setError(
-        'Passwords do not match.'
-      );
+      setError('Passwords do not match.');
       return;
     }
 
-    // ========================================================
-    // SUBMIT REGISTRATION
-    // ========================================================
+    // ASSEMBLE CUSTOMER'S REGISTERED FULL NAME
+    const fullName = [
+      cleanFirstName,
+      cleanMiddleName,
+      cleanSurname,
+    ]
+      .filter(Boolean)
+      .join(' ');
 
     try {
       setLoading(true);
@@ -209,10 +203,17 @@ const Register: React.FC = () => {
         await axios.post<RegisterResponse>(
           `${API_URL}/api/auth/register`,
           {
-            full_name: cleanFullName,
+            first_name: cleanFirstName,
+            middle_name: cleanMiddleName || null,
+            surname: cleanSurname,
+            full_name: fullName,
+            gender,
             email: cleanEmail,
             phone: cleanPhone,
             password,
+
+            // Account type selected by customer
+            account_type: accountType,
           },
           {
             timeout: 60000,
@@ -229,22 +230,14 @@ const Register: React.FC = () => {
         data
       );
 
-      // ======================================================
-      // SERVER REJECTED REGISTRATION
-      // ======================================================
-
       if (data.success !== true) {
         setError(
-          data.message ||
-            'Registration failed.'
+          data.message || 'Registration failed.'
         );
         return;
       }
 
-      // ======================================================
-      // TOKEN
-      // ======================================================
-
+      // SAVE TOKEN
       if (data.token) {
         localStorage.setItem(
           'zenimonies_token',
@@ -257,10 +250,7 @@ const Register: React.FC = () => {
         );
       }
 
-      // ======================================================
-      // USER
-      // ======================================================
-
+      // SAVE USER
       if (data.user) {
         localStorage.setItem(
           'zenimonies_user',
@@ -268,34 +258,24 @@ const Register: React.FC = () => {
         );
       }
 
-      // ======================================================
-      // ACCOUNT
-      // ======================================================
+      // SAVE ACCOUNTS
+      const accounts = data.account
+        ? [data.account]
+        : data.accounts || [];
 
-      if (data.account) {
-        localStorage.setItem(
-          'zenimonies_accounts',
-          JSON.stringify([
-            data.account,
-          ])
-        );
-      } else {
-        localStorage.setItem(
-          'zenimonies_accounts',
-          JSON.stringify(
-            data.accounts || []
-          )
-        );
-      }
+      localStorage.setItem(
+        'zenimonies_accounts',
+        JSON.stringify(accounts)
+      );
 
-      // ======================================================
+      // SAVE SELECTED ACCOUNT TYPE
+      sessionStorage.setItem(
+        'zenimonies_registration_account_type',
+        accountType
+      );
+
       // PHONE VERIFICATION
-      // ======================================================
-
-      if (
-        data.requires_phone_verification ===
-        true
-      ) {
+      if (data.requires_phone_verification === true) {
         sessionStorage.setItem(
           'zenimonies_phone',
           cleanPhone
@@ -305,10 +285,6 @@ const Register: React.FC = () => {
           'zenimonies_otp_email',
           cleanEmail
         );
-
-        // ----------------------------------------------------
-        // DEVELOPMENT TEST OTP
-        // ----------------------------------------------------
 
         if (data.development_otp) {
           sessionStorage.setItem(
@@ -329,10 +305,7 @@ const Register: React.FC = () => {
         return;
       }
 
-      // ======================================================
-      // FALLBACK
-      // ======================================================
-
+      // REGISTRATION SUCCESS
       if (data.token) {
         setSuccess(
           data.message ||
@@ -361,12 +334,32 @@ const Register: React.FC = () => {
         error
       );
 
-      setError(
-        getErrorMessage(error)
-      );
+      setError(getErrorMessage(error));
+
     } finally {
       setLoading(false);
     }
+  };
+
+  // REUSABLE INPUT STYLE
+  const inputStyle: React.CSSProperties = {
+    boxSizing: 'border-box',
+    width: '100%',
+    padding: '13px',
+    border: '1px solid #d0d5dd',
+    borderRadius: '9px',
+    outline: 'none',
+    fontSize: '15px',
+    background: '#ffffff',
+    color: '#172033',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: 'block',
+    marginBottom: '7px',
+    fontWeight: 600,
+    fontSize: '14px',
+    color: '#344054',
   };
 
   return (
@@ -376,29 +369,32 @@ const Register: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '24px',
-        background: '#f5f7fb',
+        padding: '24px 16px',
+        background:
+          'linear-gradient(135deg, #f0f4ff 0%, #f8fafc 100%)',
       }}
     >
       <div
         style={{
           width: '100%',
-          maxWidth: '440px',
+          maxWidth: '520px',
           background: '#ffffff',
           padding: '32px',
-          borderRadius: '16px',
+          borderRadius: '18px',
           boxShadow:
-            '0 8px 30px rgba(0, 0, 0, 0.08)',
+            '0 12px 40px rgba(16, 24, 40, 0.08)',
+          boxSizing: 'border-box',
         }}
       >
         {/* HEADER */}
 
         <h1
           style={{
-            marginTop: 0,
-            marginBottom: '8px',
+            margin: '0 0 8px',
             textAlign: 'center',
             color: '#172033',
+            fontSize: '30px',
+            fontWeight: 800,
           }}
         >
           Zenimonies
@@ -409,6 +405,7 @@ const Register: React.FC = () => {
             textAlign: 'center',
             color: '#667085',
             marginBottom: '28px',
+            fontSize: '15px',
           }}
         >
           Create your banking account
@@ -422,7 +419,7 @@ const Register: React.FC = () => {
             style={{
               padding: '14px',
               marginBottom: '18px',
-              borderRadius: '8px',
+              borderRadius: '9px',
               background: '#fee4e2',
               color: '#b42318',
               fontSize: '14px',
@@ -442,7 +439,7 @@ const Register: React.FC = () => {
             style={{
               padding: '14px',
               marginBottom: '18px',
-              borderRadius: '8px',
+              borderRadius: '9px',
               background: '#ecfdf3',
               color: '#027a48',
               fontSize: '14px',
@@ -453,295 +450,454 @@ const Register: React.FC = () => {
           </div>
         )}
 
-        {/* FORM */}
+        <form onSubmit={handleSubmit} noValidate>
+          {/* ACCOUNT TYPE */}
 
-        <form
-          onSubmit={handleSubmit}
-          noValidate
-        >
-          {/* FULL NAME */}
-
-          <label
-            htmlFor="fullName"
+          <h3
             style={{
-              display: 'block',
-              marginBottom: '6px',
-              fontWeight: 600,
               color: '#172033',
+              fontSize: '17px',
+              margin: '0 0 12px',
             }}
           >
-            Full Name
-          </label>
-
-          <input
-            id="fullName"
-            type="text"
-            value={fullName}
-            onChange={(event) =>
-              setFullName(
-                event.target.value
-              )
-            }
-            placeholder="Enter your full name"
-            autoComplete="name"
-            disabled={loading}
-            style={{
-              boxSizing: 'border-box',
-              width: '100%',
-              padding: '12px',
-              marginBottom: '18px',
-              border:
-                '1px solid #d0d5dd',
-              borderRadius: '8px',
-              outline: 'none',
-              fontSize: '15px',
-            }}
-          />
-
-          {/* EMAIL */}
-
-          <label
-            htmlFor="email"
-            style={{
-              display: 'block',
-              marginBottom: '6px',
-              fontWeight: 600,
-              color: '#172033',
-            }}
-          >
-            Email
-          </label>
-
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(event) =>
-              setEmail(
-                event.target.value
-              )
-            }
-            placeholder="Enter your email"
-            autoComplete="email"
-            disabled={loading}
-            style={{
-              boxSizing: 'border-box',
-              width: '100%',
-              padding: '12px',
-              marginBottom: '18px',
-              border:
-                '1px solid #d0d5dd',
-              borderRadius: '8px',
-              outline: 'none',
-              fontSize: '15px',
-            }}
-          />
-
-          {/* PHONE */}
-
-          <label
-            htmlFor="phone"
-            style={{
-              display: 'block',
-              marginBottom: '6px',
-              fontWeight: 600,
-              color: '#172033',
-            }}
-          >
-            Phone Number
-          </label>
-
-          <input
-            id="phone"
-            type="tel"
-            value={phone}
-            onChange={(event) =>
-              setPhone(
-                event.target.value
-              )
-            }
-            placeholder="Enter your phone number"
-            autoComplete="tel"
-            disabled={loading}
-            style={{
-              boxSizing: 'border-box',
-              width: '100%',
-              padding: '12px',
-              marginBottom: '18px',
-              border:
-                '1px solid #d0d5dd',
-              borderRadius: '8px',
-              outline: 'none',
-              fontSize: '15px',
-            }}
-          />
-
-          {/* PASSWORD */}
-
-          <label
-            htmlFor="password"
-            style={{
-              display: 'block',
-              marginBottom: '6px',
-              fontWeight: 600,
-              color: '#172033',
-            }}
-          >
-            Password
-          </label>
+            Choose Account Type
+          </h3>
 
           <div
             style={{
-              position: 'relative',
-              width: '100%',
-              marginBottom: '18px',
+              display: 'grid',
+              gridTemplateColumns:
+                'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '12px',
+              marginBottom: '26px',
             }}
           >
-            <input
-              id="password"
-              type={
-                showPassword
-                  ? 'text'
-                  : 'password'
-              }
-              value={password}
-              onChange={(event) =>
-                setPassword(
-                  event.target.value
-                )
-              }
-              placeholder="Minimum 8 characters"
-              autoComplete="new-password"
-              disabled={loading}
-              style={{
-                boxSizing: 'border-box',
-                width: '100%',
-                padding: '12px 48px 12px 12px',
-                border:
-                  '1px solid #d0d5dd',
-                borderRadius: '8px',
-                outline: 'none',
-                fontSize: '15px',
-              }}
-            />
+            {/* PERSONAL */}
 
             <button
               type="button"
-              onClick={() =>
-                setShowPassword(
-                  (current) => !current
-                )
-              }
-              aria-label={
-                showPassword
-                  ? 'Hide password'
-                  : 'Show password'
-              }
               disabled={loading}
+              onClick={() => setAccountType('personal')}
+              aria-pressed={accountType === 'personal'}
               style={{
-                position: 'absolute',
-                right: '10px',
-                top: '50%',
-                transform:
-                  'translateY(-50%)',
-                border: 'none',
-                background: 'transparent',
-                cursor: loading
-                  ? 'not-allowed'
-                  : 'pointer',
-                fontSize: '20px',
-                padding: '4px',
-                lineHeight: 1,
+                textAlign: 'left',
+                padding: '17px',
+                borderRadius: '12px',
+                border:
+                  accountType === 'personal'
+                    ? '2px solid #0b5cff'
+                    : '1px solid #d0d5dd',
+                background:
+                  accountType === 'personal'
+                    ? '#eff6ff'
+                    : '#ffffff',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                color: '#172033',
               }}
             >
-              {showPassword
-                ? '🙈'
-                : '👁️'}
+              <div
+                style={{
+                  fontSize: '25px',
+                  marginBottom: '8px',
+                }}
+              >
+                👤
+              </div>
+
+              <strong
+                style={{
+                  display: 'block',
+                  fontSize: '15px',
+                  marginBottom: '6px',
+                }}
+              >
+                Personal Account
+              </strong>
+
+              <span
+                style={{
+                  fontSize: '13px',
+                  lineHeight: 1.5,
+                  color: '#667085',
+                }}
+              >
+                For personal banking, transfers,
+                bills, airtime and data.
+              </span>
+
+              {accountType === 'personal' && (
+                <div
+                  style={{
+                    color: '#0b5cff',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    marginTop: '10px',
+                  }}
+                >
+                  ✓ Selected
+                </div>
+              )}
             </button>
+
+            {/* BUSINESS */}
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => setAccountType('business')}
+              aria-pressed={accountType === 'business'}
+              style={{
+                textAlign: 'left',
+                padding: '17px',
+                borderRadius: '12px',
+                border:
+                  accountType === 'business'
+                    ? '2px solid #0b5cff'
+                    : '1px solid #d0d5dd',
+                background:
+                  accountType === 'business'
+                    ? '#eff6ff'
+                    : '#ffffff',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                color: '#172033',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '25px',
+                  marginBottom: '8px',
+                }}
+              >
+                🏢
+              </div>
+
+              <strong
+                style={{
+                  display: 'block',
+                  fontSize: '15px',
+                  marginBottom: '6px',
+                }}
+              >
+                Business Account
+              </strong>
+
+              <span
+                style={{
+                  fontSize: '13px',
+                  lineHeight: 1.5,
+                  color: '#667085',
+                }}
+              >
+                For business banking, business
+                statements and POS services.
+              </span>
+
+              {accountType === 'business' && (
+                <div
+                  style={{
+                    color: '#0b5cff',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    marginTop: '10px',
+                  }}
+                >
+                  ✓ Selected
+                </div>
+              )}
+            </button>
+          </div>
+
+          {/* CUSTOMER INFORMATION */}
+
+          <h3
+            style={{
+              color: '#172033',
+              fontSize: '17px',
+              margin: '0 0 16px',
+            }}
+          >
+            Personal Information
+          </h3>
+
+          {/* FIRST NAME */}
+
+          <div style={{ marginBottom: '18px' }}>
+            <label htmlFor="firstName" style={labelStyle}>
+              First Name *
+            </label>
+
+            <input
+              id="firstName"
+              type="text"
+              value={firstName}
+              onChange={(event) =>
+                setFirstName(event.target.value)
+              }
+              placeholder="Enter your first name"
+              autoComplete="given-name"
+              disabled={loading}
+              required
+              style={inputStyle}
+            />
+          </div>
+
+          {/* MIDDLE NAME */}
+
+          <div style={{ marginBottom: '18px' }}>
+            <label htmlFor="middleName" style={labelStyle}>
+              Middle Name (Optional)
+            </label>
+
+            <input
+              id="middleName"
+              type="text"
+              value={middleName}
+              onChange={(event) =>
+                setMiddleName(event.target.value)
+              }
+              placeholder="Enter your middle name"
+              autoComplete="additional-name"
+              disabled={loading}
+              style={inputStyle}
+            />
+          </div>
+
+          {/* SURNAME */}
+
+          <div style={{ marginBottom: '18px' }}>
+            <label htmlFor="surname" style={labelStyle}>
+              Surname *
+            </label>
+
+            <input
+              id="surname"
+              type="text"
+              value={surname}
+              onChange={(event) =>
+                setSurname(event.target.value)
+              }
+              placeholder="Enter your surname"
+              autoComplete="family-name"
+              disabled={loading}
+              required
+              style={inputStyle}
+            />
+          </div>
+
+          {/* GENDER */}
+
+          <div style={{ marginBottom: '22px' }}>
+            <label htmlFor="gender" style={labelStyle}>
+              Gender *
+            </label>
+
+            <select
+              id="gender"
+              value={gender}
+              onChange={(event) =>
+                setGender(event.target.value)
+              }
+              disabled={loading}
+              required
+              style={{
+                ...inputStyle,
+                cursor: loading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <option value="">
+                Select your gender
+              </option>
+
+              <option value="male">Male</option>
+
+              <option value="female">Female</option>
+            </select>
+          </div>
+
+          {/* CONTACT DETAILS */}
+
+          <h3
+            style={{
+              color: '#172033',
+              fontSize: '17px',
+              margin: '0 0 16px',
+            }}
+          >
+            Contact Information
+          </h3>
+
+          {/* EMAIL */}
+
+          <div style={{ marginBottom: '18px' }}>
+            <label htmlFor="email" style={labelStyle}>
+              Email Address *
+            </label>
+
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(event) =>
+                setEmail(event.target.value)
+              }
+              placeholder="Enter your email address"
+              autoComplete="email"
+              disabled={loading}
+              required
+              style={inputStyle}
+            />
+          </div>
+
+          {/* PHONE */}
+
+          <div style={{ marginBottom: '22px' }}>
+            <label htmlFor="phone" style={labelStyle}>
+              Phone Number *
+            </label>
+
+            <input
+              id="phone"
+              type="tel"
+              value={phone}
+              onChange={(event) =>
+                setPhone(event.target.value)
+              }
+              placeholder="Enter your phone number"
+              autoComplete="tel"
+              disabled={loading}
+              required
+              style={inputStyle}
+            />
+          </div>
+
+          {/* PASSWORD */}
+
+          <h3
+            style={{
+              color: '#172033',
+              fontSize: '17px',
+              margin: '0 0 16px',
+            }}
+          >
+            Secure Your Account
+          </h3>
+
+          <div style={{ marginBottom: '18px' }}>
+            <label htmlFor="password" style={labelStyle}>
+              Password *
+            </label>
+
+            <div style={{ position: 'relative' }}>
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(event) =>
+                  setPassword(event.target.value)
+                }
+                placeholder="Minimum 8 characters"
+                autoComplete="new-password"
+                disabled={loading}
+                required
+                style={{
+                  ...inputStyle,
+                  paddingRight: '55px',
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowPassword((current) => !current)
+                }
+                aria-label={
+                  showPassword ? 'Hide password' : 'Show password'
+                }
+                disabled={loading}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontSize: '20px',
+                }}
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
+
+            <p
+              style={{
+                fontSize: '12px',
+                color: '#667085',
+                margin: '7px 0 0',
+              }}
+            >
+              Use at least 8 characters. Never share
+              your password with anyone.
+            </p>
           </div>
 
           {/* CONFIRM PASSWORD */}
 
-          <label
-            htmlFor="confirmPassword"
-            style={{
-              display: 'block',
-              marginBottom: '6px',
-              fontWeight: 600,
-              color: '#172033',
-            }}
-          >
-            Confirm Password
-          </label>
-
-          <div
-            style={{
-              position: 'relative',
-              width: '100%',
-              marginBottom: '22px',
-            }}
-          >
-            <input
-              id="confirmPassword"
-              type={
-                showConfirmPassword
-                  ? 'text'
-                  : 'password'
-              }
-              value={confirmPassword}
-              onChange={(event) =>
-                setConfirmPassword(
-                  event.target.value
-                )
-              }
-              placeholder="Enter your password again"
-              autoComplete="new-password"
-              disabled={loading}
-              style={{
-                boxSizing: 'border-box',
-                width: '100%',
-                padding: '12px 48px 12px 12px',
-                border:
-                  '1px solid #d0d5dd',
-                borderRadius: '8px',
-                outline: 'none',
-                fontSize: '15px',
-              }}
-            />
-
-            <button
-              type="button"
-              onClick={() =>
-                setShowConfirmPassword(
-                  (current) => !current
-                )
-              }
-              aria-label={
-                showConfirmPassword
-                  ? 'Hide confirm password'
-                  : 'Show confirm password'
-              }
-              disabled={loading}
-              style={{
-                position: 'absolute',
-                right: '10px',
-                top: '50%',
-                transform:
-                  'translateY(-50%)',
-                border: 'none',
-                background: 'transparent',
-                cursor: loading
-                  ? 'not-allowed'
-                  : 'pointer',
-                fontSize: '20px',
-                padding: '4px',
-                lineHeight: 1,
-              }}
+          <div style={{ marginBottom: '24px' }}>
+            <label
+              htmlFor="confirmPassword"
+              style={labelStyle}
             >
-              {showConfirmPassword
-                ? '🙈'
-                : '👁️'}
-            </button>
+              Confirm Password *
+            </label>
+
+            <div style={{ position: 'relative' }}>
+              <input
+                id="confirmPassword"
+                type={
+                  showConfirmPassword ? 'text' : 'password'
+                }
+                value={confirmPassword}
+                onChange={(event) =>
+                  setConfirmPassword(event.target.value)
+                }
+                placeholder="Enter your password again"
+                autoComplete="new-password"
+                disabled={loading}
+                required
+                style={{
+                  ...inputStyle,
+                  paddingRight: '55px',
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowConfirmPassword(
+                    (current) => !current
+                  )
+                }
+                aria-label={
+                  showConfirmPassword
+                    ? 'Hide confirm password'
+                    : 'Show confirm password'
+                }
+                disabled={loading}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  fontSize: '20px',
+                }}
+              >
+                {showConfirmPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
           </div>
 
           {/* SUBMIT */}
@@ -751,25 +907,35 @@ const Register: React.FC = () => {
             disabled={loading}
             style={{
               width: '100%',
-              padding: '13px',
+              padding: '15px',
               border: 'none',
-              borderRadius: '8px',
+              borderRadius: '10px',
               background: '#0b5cff',
               color: '#ffffff',
-              fontWeight: 600,
-              fontSize: '15px',
-              cursor: loading
-                ? 'not-allowed'
-                : 'pointer',
-              opacity: loading
-                ? 0.7
-                : 1,
+              fontWeight: 700,
+              fontSize: '16px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.7 : 1,
             }}
           >
             {loading
               ? 'Creating Account...'
               : 'Create Account'}
           </button>
+
+          <p
+            style={{
+              fontSize: '12px',
+              lineHeight: 1.6,
+              color: '#667085',
+              textAlign: 'center',
+              marginTop: '14px',
+            }}
+          >
+            By creating an account, you agree to
+            complete the required identity verification
+            and comply with Zenimonies account requirements.
+          </p>
         </form>
 
         {/* LOGIN */}
@@ -778,7 +944,9 @@ const Register: React.FC = () => {
           style={{
             textAlign: 'center',
             marginTop: '24px',
+            marginBottom: 0,
             color: '#667085',
+            fontSize: '14px',
           }}
         >
           Already have an account?{' '}
@@ -787,7 +955,7 @@ const Register: React.FC = () => {
             to="/login"
             style={{
               color: '#0b5cff',
-              fontWeight: 600,
+              fontWeight: 700,
               textDecoration: 'none',
             }}
           >
