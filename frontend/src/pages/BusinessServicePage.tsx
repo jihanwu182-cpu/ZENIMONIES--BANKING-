@@ -40,32 +40,34 @@ import {
 
 // ============================================================
 // ZENIMONIES BANKING
-// BUSINESS SERVICES PAGE
+// BUSINESS SERVICE PAGE
 // ============================================================
 
 const API_BASE =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com/api';
 
-const GREEN = '#008D4F';
-const DARK_GREEN = '#064B37';
-const PAGE_BG = '#F3F8F5';
-const BORDER = '#DDEBE4';
-const MUTED = '#81928A';
-const LIGHT_GREEN = '#E8F5EE';
-
 // ============================================================
 // TYPES
 // ============================================================
 
-type BusinessAccount = {
+interface BusinessAccount {
   id: string;
   business_name?: string;
-  business_type?: string;
-
   customer_name?: string;
   full_name?: string;
   owner_name?: string;
+
+  account_number?: string;
+  account_type?: string;
+  currency?: string;
+  balance?: number | string;
+
+  status?: string;
+  verification_status?: string;
+  verification_level?: number | string;
+  business_level?: number | string;
+  kyc_status?: string;
 
   user?: {
     full_name?: string;
@@ -76,44 +78,18 @@ type BusinessAccount = {
     full_name?: string;
     name?: string;
   };
+}
 
-  verification_level?: number | string;
-  business_level?: number | string;
-  account_level?: number | string;
-
-  verification_status?: string;
-  status?: string;
-  account_status?: string;
-
-  cac_status?: string;
-  cac_verification_status?: string;
-  cac_verified?: boolean;
-
-  currency?: string;
-  balance?: number | string;
-  account_number?: string;
-};
-
-type ServiceInfo = {
-  title: string;
-  description: string;
-};
+type StatementFormat = 'pdf' | 'csv';
 
 // ============================================================
-// HELPERS
+// DATE HELPERS
 // ============================================================
 
-const getToken = () =>
-  localStorage.getItem('zenimonies_token') ||
-  localStorage.getItem('token') ||
-  localStorage.getItem('access_token') ||
-  '';
-
-const getLocalDate = () => {
+const getLocalDate = (): string => {
   const date = new Date();
 
   const year = date.getFullYear();
-
   const month = String(
     date.getMonth() + 1
   ).padStart(2, '0');
@@ -125,7 +101,7 @@ const getLocalDate = () => {
   return `${year}-${month}-${day}`;
 };
 
-const getDateOneMonthAgo = () => {
+const getDateOneMonthAgo = (): string => {
   const date = new Date();
 
   date.setMonth(date.getMonth() - 1);
@@ -143,184 +119,59 @@ const getDateOneMonthAgo = () => {
   return `${year}-${month}-${day}`;
 };
 
-const getLevel = (
-  business: BusinessAccount | null
-): number => {
-  if (!business) return 1;
-
-  const raw =
-    business.verification_level ??
-    business.business_level ??
-    business.account_level;
-
-  const level = Number(raw);
-
-  if (
-    !Number.isInteger(level) ||
-    level < 1 ||
-    level > 5
-  ) {
-    return 1;
-  }
-
-  return level;
-};
+// ============================================================
+// CUSTOMER NAME
+// ============================================================
 
 const getCustomerName = (
-  business: BusinessAccount
-): string =>
-  business.customer_name ||
-  business.full_name ||
-  business.owner_name ||
-  business.user?.full_name ||
-  business.user?.name ||
-  business.owner?.full_name ||
-  business.owner?.name ||
-  business.business_name ||
-  'Business Account';
-
-const getSectionInfo = (
-  section: string
-): ServiceInfo => {
-  const services: Record<string, ServiceInfo> = {
-    verification: {
-      title: 'Business Verification',
-      description:
-        'Review your business verification level and the requirements for upgrading your account.',
-    },
-
-    kyc: {
-      title: 'Business Verification',
-      description:
-        'Review your business verification level and the requirements for upgrading your account.',
-    },
-
-    transactions: {
-      title: 'Business Transactions',
-      description:
-        'View and manage activity associated with your business account.',
-    },
-
-    statements: {
-      title: 'Business Statements',
-      description:
-        'Access statements for your business account.',
-    },
-
-    wallet: {
-      title: 'Business Wallet',
-      description:
-        'Manage your business wallet and account information.',
-    },
-
-    cards: {
-      title: 'Business Cards',
-      description:
-        'View business card services and applicable account options.',
-    },
-
-    staff: {
-      title: 'Staff and Access',
-      description:
-        'Manage business team access when the service is enabled.',
-    },
-
-    security: {
-      title: 'Business Security',
-      description:
-        'Review security and access options for your business account.',
-    },
-
-    settings: {
-      title: 'Business Settings',
-      description:
-        'Review your business account information and settings.',
-    },
-
-    pos: {
-      title: 'POS Terminal',
-      description:
-        'Apply for a POS terminal and manage approved devices when POS services are enabled.',
-    },
-
-    notifications: {
-      title: 'Business Notifications',
-      description:
-        'View notifications related to your business account.',
-    },
-
-    'add-money': {
-      title: 'Add Money',
-      description:
-        'Business account funding options.',
-    },
-
-    transfer: {
-      title: 'Bank Transfer',
-      description:
-        'Business bank transfer services.',
-    },
-
-    'internal-transfer': {
-      title: 'ZENIMONIES Transfer',
-      description:
-        'Transfers between supported ZENIMONIES accounts.',
-    },
-
-    airtime: {
-      title: 'Airtime',
-      description:
-        'Business airtime services.',
-    },
-
-    data: {
-      title: 'Data',
-      description:
-        'Business mobile data services.',
-    },
-
-    betting: {
-      title: 'Betting',
-      description:
-        'Business betting payment services.',
-    },
-
-    tv: {
-      title: 'TV Subscription',
-      description:
-        'Business television subscription services.',
-    },
-
-    bills: {
-      title: 'Bill Payments',
-      description:
-        'Business bill payment services.',
-    },
-
-    savings: {
-      title: 'Business Savings',
-      description:
-        'Business savings services and account options.',
-    },
-
-    more: {
-      title: 'More Business Services',
-      description:
-        'Explore services available for your business account.',
-    },
-  };
+  business: BusinessAccount | null
+): string => {
+  if (!business) {
+    return 'Business Account';
+  }
 
   return (
-    services[section] || {
-      title: 'Business Services',
-      description:
-        'Business account services and information.',
-    }
+    business.customer_name ||
+    business.full_name ||
+    business.owner_name ||
+    business.user?.full_name ||
+    business.user?.name ||
+    business.owner?.full_name ||
+    business.owner?.name ||
+    business.business_name ||
+    'Business Account'
   );
 };
 
 // ============================================================
-// MAIN COMPONENT
+// CURRENCY FORMATTER
+// ============================================================
+
+const formatCurrency = (
+  amount: number | string | undefined,
+  currency: string | undefined
+): string => {
+  const numericAmount = Number(amount || 0);
+
+  const selectedCurrency = currency || 'NGN';
+
+  try {
+    return new Intl.NumberFormat(
+      'en',
+      {
+        style: 'currency',
+        currency: selectedCurrency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }
+    ).format(numericAmount);
+  } catch {
+    return `${selectedCurrency} ${numericAmount.toFixed(2)}`;
+  }
+};
+
+// ============================================================
+// COMPONENT
 // ============================================================
 
 const BusinessServicePage: React.FC = () => {
@@ -333,9 +184,9 @@ const BusinessServicePage: React.FC = () => {
 
   const businessId = id || '';
 
-  const currentSection = (
-    section || 'more'
-  ).toLowerCase();
+  // ----------------------------------------------------------
+  // BUSINESS ACCOUNT STATE
+  // ----------------------------------------------------------
 
   const [business, setBusiness] =
     useState<BusinessAccount | null>(null);
@@ -349,60 +200,98 @@ const BusinessServicePage: React.FC = () => {
   const [refreshing, setRefreshing] =
     useState(false);
 
+  // ----------------------------------------------------------
+  // STATEMENT STATE
+  // ----------------------------------------------------------
+
+  const [
+    statementStartDate,
+    setStatementStartDate,
+  ] = useState(getDateOneMonthAgo);
+
+  const [
+    statementEndDate,
+    setStatementEndDate,
+  ] = useState(getLocalDate);
+
+  const [
+    statementDownloading,
+    setStatementDownloading,
+  ] = useState(false);
+
+  const [
+    statementEmailing,
+    setStatementEmailing,
+  ] = useState(false);
+
+  const [
+    statementEmailFormat,
+    setStatementEmailFormat,
+  ] = useState<StatementFormat | null>(
+    null
+  );
+
+  const [
+    statementError,
+    setStatementError,
+  ] = useState('');
+
+  const [
+    statementSuccess,
+    setStatementSuccess,
+  ] = useState('');
+
   // ==========================================================
-  // BUSINESS STATEMENT STATE
+  // AUTHENTICATION TOKEN
   // ==========================================================
 
-  const [statementStartDate, setStatementStartDate] =
-    useState(getDateOneMonthAgo);
-
-  const [statementEndDate, setStatementEndDate] =
-    useState(getLocalDate);
-
-  const [statementDownloading, setStatementDownloading] =
-    useState(false);
-
-  const [statementError, setStatementError] =
-    useState('');
-
-  const [statementSuccess, setStatementSuccess] =
-    useState('');
+  const getToken = (): string | null => {
+    return localStorage.getItem(
+      'zenimonies_token'
+    );
+  };
 
   // ==========================================================
   // LOAD BUSINESS ACCOUNT
   // ==========================================================
 
   const loadBusiness = useCallback(
-    async (showLoader = true) => {
-      if (showLoader) {
-        setLoading(true);
-      } else {
+    async (showRefresh = false) => {
+      if (!businessId) {
+        setError(
+          'Business account ID is missing.'
+        );
+
+        setLoading(false);
+        return;
+      }
+
+      const token = getToken();
+
+      if (!token) {
+        setError(
+          'Your session has expired. Please sign in again.'
+        );
+
+        setLoading(false);
+        return;
+      }
+
+      if (showRefresh) {
         setRefreshing(true);
+      } else {
+        setLoading(true);
       }
 
       setError('');
 
       try {
-        const token = getToken();
-
-        if (!token) {
-          navigate('/login');
-          return;
-        }
-
-        if (!businessId) {
-          throw new Error(
-            'Business account ID is missing.'
-          );
-        }
-
         const response = await fetch(
           `${API_BASE}/businesses/${encodeURIComponent(
             businessId
           )}`,
           {
             method: 'GET',
-
             headers: {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
@@ -415,24 +304,26 @@ const BusinessServicePage: React.FC = () => {
         if (!response.ok) {
           throw new Error(
             result.message ||
-              result.error ||
               'Unable to load business account.'
           );
         }
 
-        const data =
-          result.business ||
+        const account =
           result.data?.business ||
+          result.business ||
           result.data ||
           result;
 
-        if (!data?.id) {
+        if (
+          !account ||
+          typeof account !== 'object'
+        ) {
           throw new Error(
-            'Business account was not found.'
+            'Business account information is unavailable.'
           );
         }
 
-        setBusiness(data);
+        setBusiness(account);
       } catch (err: any) {
         setError(
           err.message ||
@@ -443,7 +334,7 @@ const BusinessServicePage: React.FC = () => {
         setRefreshing(false);
       }
     },
-    [businessId, navigate]
+    [businessId]
   );
 
   useEffect(() => {
@@ -451,47 +342,22 @@ const BusinessServicePage: React.FC = () => {
   }, [loadBusiness]);
 
   // ==========================================================
-  // NAVIGATION
+  // STATEMENT DATE VALIDATION
   // ==========================================================
 
-  const goToDashboard = () => {
-    if (!businessId) {
-      navigate('/business');
-      return;
-    }
-
-    navigate(
-      `/business/dashboard/${encodeURIComponent(
-        businessId
-      )}`
-    );
-  };
-
-  // ==========================================================
-  // DOWNLOAD BUSINESS STATEMENT
-  // ==========================================================
-
-  const downloadBusinessStatement = async (
-    format: 'pdf' | 'csv'
-  ) => {
+  const validateStatementDates = (): boolean => {
     setStatementError('');
     setStatementSuccess('');
-
-    if (!businessId) {
-      setStatementError(
-        'Business account ID is missing.'
-      );
-      return;
-    }
 
     if (
       !statementStartDate ||
       !statementEndDate
     ) {
       setStatementError(
-        'Please select both statement dates.'
+        'Please select both the start date and end date.'
       );
-      return;
+
+      return false;
     }
 
     if (
@@ -501,7 +367,8 @@ const BusinessServicePage: React.FC = () => {
       setStatementError(
         'The start date cannot be after the end date.'
       );
-      return;
+
+      return false;
     }
 
     const start = new Date(
@@ -512,30 +379,68 @@ const BusinessServicePage: React.FC = () => {
       `${statementEndDate}T00:00:00`
     );
 
-    const days =
-      Math.floor(
-        (end.getTime() - start.getTime()) /
-          (24 * 60 * 60 * 1000)
-      ) + 1;
+    const today = new Date();
 
-    if (days > 365) {
+    today.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    if (
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime())
+    ) {
       setStatementError(
-        'Please select a period of 365 days or less.'
+        'Please select valid statement dates.'
       );
-      return;
+
+      return false;
     }
 
-    if (statementEndDate > getLocalDate()) {
+    if (end > today) {
       setStatementError(
         'The end date cannot be in the future.'
       );
+
+      return false;
+    }
+
+    const difference =
+      (end.getTime() - start.getTime()) /
+      (1000 * 60 * 60 * 24);
+
+    if (difference > 365) {
+      setStatementError(
+        'Statements cannot cover more than 365 days.'
+      );
+
+      return false;
+    }
+
+    return true;
+  };
+
+  // ==========================================================
+  // DOWNLOAD BUSINESS STATEMENT
+  // PDF AND CSV
+  // ==========================================================
+
+  const downloadBusinessStatement = async (
+    format: StatementFormat
+  ) => {
+    if (!validateStatementDates()) {
       return;
     }
 
     const token = getToken();
 
     if (!token) {
-      navigate('/login');
+      setStatementError(
+        'Your session has expired. Please sign in again.'
+      );
+
       return;
     }
 
@@ -548,17 +453,10 @@ const BusinessServicePage: React.FC = () => {
         )}`,
         {
           method: 'POST',
-
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
-
-            Accept:
-              format === 'pdf'
-                ? 'application/pdf'
-                : 'text/csv',
           },
-
           body: JSON.stringify({
             startDate: statementStartDate,
             endDate: statementEndDate,
@@ -569,63 +467,53 @@ const BusinessServicePage: React.FC = () => {
 
       if (!response.ok) {
         let message =
-          'Unable to generate business statement.';
+          'Unable to generate your business statement.';
 
         try {
           const result = await response.json();
 
           message =
-            result.message ||
-            result.error ||
-            message;
+            result.message || message;
         } catch {
-          // Keep the default error message.
+          // The server may return a non-JSON error.
         }
 
         throw new Error(message);
       }
 
-      const blob = await response.blob();
+      const blob =
+        await response.blob();
 
       if (!blob.size) {
         throw new Error(
-          'The statement file is empty.'
+          'The generated statement is empty.'
         );
       }
 
-      // ------------------------------------------------------
-      // VALIDATE PDF RESPONSE
-      // ------------------------------------------------------
-
       if (format === 'pdf') {
-        const signature = await blob
+        const header = await blob
           .slice(0, 5)
           .text();
 
-        if (signature !== '%PDF-') {
+        if (header !== '%PDF-') {
           throw new Error(
-            'The server did not return a valid PDF file.'
+            'The server did not return a valid PDF statement.'
           );
         }
       }
 
-      // ------------------------------------------------------
-      // DOWNLOAD FILE
-      // ------------------------------------------------------
-
-      const fileExtension =
-        format === 'pdf' ? 'pdf' : 'csv';
+      const fileExtension = format;
 
       const filename =
         `Zenimonies_Business_Statement_${statementStartDate}_to_${statementEndDate}.${fileExtension}`;
 
-      const downloadUrl =
+      const fileUrl =
         window.URL.createObjectURL(blob);
 
       const link =
         document.createElement('a');
 
-      link.href = downloadUrl;
+      link.href = fileUrl;
       link.download = filename;
 
       document.body.appendChild(link);
@@ -634,19 +522,17 @@ const BusinessServicePage: React.FC = () => {
 
       link.remove();
 
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(
-          downloadUrl
-        );
-      }, 1000);
+      window.URL.revokeObjectURL(
+        fileUrl
+      );
 
       setStatementSuccess(
-        `${format.toUpperCase()} statement generated.`
+        `${format.toUpperCase()} statement generated successfully.`
       );
     } catch (err: any) {
       setStatementError(
         err.message ||
-          'Unable to download business statement.'
+          'Unable to download your statement.'
       );
     } finally {
       setStatementDownloading(false);
@@ -654,133 +540,212 @@ const BusinessServicePage: React.FC = () => {
   };
 
   // ==========================================================
-  // LOADING SCREEN
+  // EMAIL BUSINESS STATEMENT
+  // PDF AND CSV
+  // ==========================================================
+
+  const emailBusinessStatement = async (
+    format: StatementFormat
+  ) => {
+    if (!validateStatementDates()) {
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      setStatementError(
+        'Your session has expired. Please sign in again.'
+      );
+
+      return;
+    }
+
+    setStatementEmailing(true);
+
+    setStatementEmailFormat(format);
+
+    setStatementError('');
+    setStatementSuccess('');
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/statements/business/${encodeURIComponent(
+          businessId
+        )}/email`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            startDate: statementStartDate,
+            endDate: statementEndDate,
+            format,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        throw new Error(
+          result.message ||
+            'Unable to email your business statement.'
+        );
+      }
+
+      setStatementSuccess(
+        result.message ||
+          `Your business ${format.toUpperCase()} statement has been sent to your registered email address.`
+      );
+    } catch (err: any) {
+      setStatementError(
+        err.message ||
+          'Unable to email your statement. Please try again.'
+      );
+    } finally {
+      setStatementEmailing(false);
+      setStatementEmailFormat(null);
+    }
+  };
+
+  // ==========================================================
+  // NAVIGATION
+  // ==========================================================
+
+  const goToBusinessDashboard = () => {
+    navigate(
+      `/business/dashboard/${encodeURIComponent(
+        businessId
+      )}`
+    );
+  };
+
+  const goToBusinessTransactions = () => {
+    navigate(
+      `/business/${encodeURIComponent(
+        businessId
+      )}/transactions`
+    );
+  };
+
+  const goToBusinessSection = (
+    selectedSection: string
+  ) => {
+    navigate(
+      `/business/${encodeURIComponent(
+        businessId
+      )}/${selectedSection}`
+    );
+  };
+
+  // ==========================================================
+  // LOADING
   // ==========================================================
 
   if (loading) {
     return (
       <Box
         sx={{
-          minHeight: '100dvh',
-          bgcolor: PAGE_BG,
+          minHeight: '70vh',
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 1.5,
+          flexDirection: 'column',
+          gap: 2,
         }}
       >
-        <CircularProgress
-          size={32}
-          sx={{ color: GREEN }}
-        />
+        <CircularProgress />
 
-        <Typography
-          sx={{
-            color: MUTED,
-            fontSize: 13,
-            fontWeight: 700,
-          }}
-        >
-          Loading business services...
+        <Typography>
+          Loading business account...
         </Typography>
       </Box>
     );
   }
 
   // ==========================================================
-  // ERROR SCREEN
+  // ERROR
   // ==========================================================
 
-  if (error || !business) {
+  if (error && !business) {
     return (
       <Box
         sx={{
-          minHeight: '100dvh',
-          bgcolor: PAGE_BG,
-          p: 2,
+          maxWidth: 600,
+          mx: 'auto',
+          mt: 5,
+          px: 2,
         }}
       >
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={goToDashboard}
-          sx={{
-            color: GREEN,
-            textTransform: 'none',
-            fontWeight: 800,
-          }}
-        >
-          Back to Business Dashboard
-        </Button>
-
         <Alert
           severity="error"
-          sx={{ mt: 2 }}
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={() => loadBusiness()}
-            >
-              Retry
-            </Button>
+          sx={{ mb: 2 }}
+        >
+          {error}
+        </Alert>
+
+        <Button
+          variant="contained"
+          onClick={() => loadBusiness()}
+          fullWidth
+        >
+          Try Again
+        </Button>
+
+        <Button
+          sx={{ mt: 1 }}
+          fullWidth
+          onClick={() =>
+            navigate('/business')
           }
         >
-          {error || 'Business account not found.'}
-        </Alert>
+          Back to Business
+        </Button>
       </Box>
     );
   }
 
   // ==========================================================
-  // BUSINESS VERIFICATION DATA
+  // BUSINESS DETAILS
   // ==========================================================
 
-  const level = getLevel(business);
+  const customerName =
+    getCustomerName(business);
 
-  const verificationStatus = String(
-    business.verification_status || 'pending'
-  ).toLowerCase();
+  const currency =
+    business?.currency || 'NGN';
 
-  const cacStatus = String(
-    business.cac_status ||
-      business.cac_verification_status ||
-      ''
-  ).toLowerCase();
+  const verificationLevel = Number(
+    business?.verification_level ||
+      business?.business_level ||
+      1
+  );
 
-  const cacApproved =
-    business.cac_verified === true ||
-    [
-      'approved',
-      'verified',
-      'completed',
-    ].includes(cacStatus);
+  const verificationStatus =
+    business?.verification_status ||
+    business?.kyc_status ||
+    'pending';
 
-  const isLevelFourOrHigher =
-    level >= 4;
+  const normalizedSection =
+    (section || '').toLowerCase();
 
-  const isLevelFiveVerified =
-    level === 5 &&
-    verificationStatus === 'verified';
+  const isStatementPage =
+    normalizedSection === 'statements' ||
+    normalizedSection === 'statement';
 
-  const accountStatus = String(
-    business.status ||
-      business.account_status ||
-      'pending'
-  ).toLowerCase();
+  const isPOSPage =
+    normalizedSection === 'pos' ||
+    normalizedSection === 'terminal';
 
-  const service =
-    getSectionInfo(currentSection);
-
-  const isVerificationPage =
-    currentSection === 'verification' ||
-    currentSection === 'kyc';
-
-  const isPosPage =
-    currentSection === 'pos';
-
-  const isStatementsPage =
-    currentSection === 'statements';
+  const isUpgradePage =
+    normalizedSection === 'upgrade' ||
+    normalizedSection === 'verification';
 
   // ==========================================================
   // PAGE
@@ -789,882 +754,823 @@ const BusinessServicePage: React.FC = () => {
   return (
     <Box
       sx={{
-        minHeight: '100dvh',
-        bgcolor: PAGE_BG,
-        color: DARK_GREEN,
-        pb: 'calc(32px + env(safe-area-inset-bottom))',
+        maxWidth: 1000,
+        mx: 'auto',
+        px: { xs: 2, sm: 3 },
+        py: 3,
+        pb: 6,
       }}
     >
       {/* HEADER */}
 
-      <Box
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={2}
+        sx={{ mb: 3 }}
+      >
+        <Box>
+          <Typography
+            variant="h5"
+            fontWeight={800}
+          >
+            Business Services
+          </Typography>
+
+          <Typography
+            variant="body2"
+            color="text.secondary"
+          >
+            Zenimonies Business Banking
+          </Typography>
+        </Box>
+
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBack />}
+          onClick={goToBusinessDashboard}
+        >
+          Dashboard
+        </Button>
+      </Stack>
+
+      {/* BUSINESS ACCOUNT CARD */}
+
+      <Card
         sx={{
-          bgcolor: '#FFFFFF',
-          borderBottom: `1px solid ${BORDER}`,
-          borderTop: `4px solid ${GREEN}`,
-          px: 2,
-          py: 1.5,
+          mb: 3,
+          borderRadius: 3,
+          color: '#fff',
+          background:
+            'linear-gradient(135deg, #073b2a 0%, #087f5b 100%)',
         }}
       >
-        <Box
-          sx={{
-            maxWidth: 760,
-            mx: 'auto',
-          }}
-        >
-          <Button
-            startIcon={<ArrowBack />}
-            onClick={goToDashboard}
-            sx={{
-              color: GREEN,
-              textTransform: 'none',
-              fontWeight: 800,
-              fontSize: 13,
-              px: 0,
-            }}
-          >
-            Back to Business Dashboard
-          </Button>
-
+        <CardContent sx={{ p: 3 }}>
           <Stack
             direction="row"
             alignItems="center"
-            spacing={1.2}
-            sx={{ mt: 1 }}
+            spacing={1}
+            sx={{ mb: 2 }}
           >
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
-                borderRadius: 2.5,
-                bgcolor: DARK_GREEN,
-                color: '#FFFFFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 23,
-                fontWeight: 900,
-              }}
+            <Store />
+
+            <Typography
+              variant="subtitle2"
+              fontWeight={700}
             >
-              Z
-            </Box>
-
-            <Box>
-              <Typography
-                sx={{
-                  fontSize: 19,
-                  fontWeight: 900,
-                  color: DARK_GREEN,
-                  lineHeight: 1.2,
-                }}
-              >
-                Zenimonies
-              </Typography>
-
-              <Typography
-                sx={{
-                  color: MUTED,
-                  fontSize: 10,
-                  fontWeight: 800,
-                  letterSpacing: 1.5,
-                }}
-              >
-                BUSINESS BANKING
-              </Typography>
-            </Box>
+              BUSINESS ACCOUNT
+            </Typography>
           </Stack>
-        </Box>
-      </Box>
 
-      {/* MAIN CONTENT */}
+          <Typography
+            variant="h6"
+            fontWeight={800}
+            sx={{ mb: 1 }}
+          >
+            {customerName}
+          </Typography>
 
-      <Box
+          <Typography
+            variant="body2"
+            sx={{ opacity: 0.85 }}
+          >
+            Account Type: Business Account
+          </Typography>
+
+          <Divider
+            sx={{
+              my: 2,
+              borderColor:
+                'rgba(255,255,255,0.2)',
+            }}
+          />
+
+          <Typography
+            variant="body2"
+            sx={{ opacity: 0.85 }}
+          >
+            Account Number
+          </Typography>
+
+          <Typography
+            fontWeight={700}
+            sx={{ mb: 2 }}
+          >
+            {business?.account_number ||
+              'Not available'}
+          </Typography>
+
+          <Typography
+            variant="body2"
+            sx={{ opacity: 0.85 }}
+          >
+            Available Balance
+          </Typography>
+
+          <Typography
+            variant="h5"
+            fontWeight={800}
+          >
+            {formatCurrency(
+              business?.balance,
+              currency
+            )}
+          </Typography>
+
+          <Chip
+            label={
+              business?.status || 'Active'
+            }
+            size="small"
+            sx={{
+              mt: 2,
+              color: '#fff',
+              bgcolor:
+                'rgba(255,255,255,0.18)',
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* VERIFICATION STATUS */}
+
+      <Card
         sx={{
-          maxWidth: 760,
-          mx: 'auto',
-          px: { xs: 1.75, sm: 3 },
-          py: 2.5,
+          mb: 3,
+          borderRadius: 3,
         }}
       >
-        <Typography
-          sx={{
-            fontSize: {
-              xs: 24,
-              sm: 30,
-            },
-            fontWeight: 900,
-            letterSpacing: -0.7,
-            color: DARK_GREEN,
-          }}
-        >
-          {service.title}
-        </Typography>
+        <CardContent>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            sx={{ mb: 2 }}
+          >
+            <Shield color="primary" />
 
-        <Typography
-          sx={{
-            mt: 0.7,
-            color: MUTED,
-            fontSize: 13,
-            lineHeight: 1.6,
-          }}
-        >
-          {service.description}
-        </Typography>
-
-        {/* BUSINESS ACCOUNT CARD */}
-
-        <Card
-          sx={{
-            mt: 2.5,
-            borderRadius: 3,
-            border: `1px solid ${BORDER}`,
-            boxShadow: 'none',
-          }}
-        >
-          <CardContent sx={{ p: 2.2 }}>
-            <Stack
-              direction="row"
-              alignItems="center"
-              spacing={1.5}
+            <Typography
+              variant="h6"
+              fontWeight={700}
             >
-              <Box
-                sx={{
-                  width: 45,
-                  height: 45,
-                  borderRadius: 2.5,
-                  bgcolor: '#E8F5EE',
-                  color: GREEN,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Store />
-              </Box>
+              Business Verification
+            </Typography>
+          </Stack>
 
-              <Box
-                sx={{
-                  flex: 1,
-                  minWidth: 0,
-                }}
-              >
-                <Typography
-                  sx={{
-                    color: MUTED,
-                    fontSize: 11,
-                    fontWeight: 700,
-                  }}
-                >
-                  Business Account
-                </Typography>
-
-                <Typography
-                  sx={{
-                    mt: 0.3,
-                    fontSize: 16,
-                    fontWeight: 900,
-                    overflowWrap: 'anywhere',
-                  }}
-                >
-                  {getCustomerName(business)}
-                </Typography>
-
-                <Typography
-                  sx={{
-                    mt: 0.5,
-                    fontSize: 12,
-                    color: MUTED,
-                  }}
-                >
-                  Account status:{' '}
-                  {accountStatus.replace(/_/g, ' ')}
-                </Typography>
-              </Box>
-            </Stack>
-
-            <Divider sx={{ my: 1.8 }} />
-
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-            >
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            flexWrap="wrap"
+            gap={2}
+          >
+            <Box>
               <Typography
-                sx={{
-                  color: MUTED,
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
+                variant="body2"
+                color="text.secondary"
               >
                 Verification Level
               </Typography>
 
-              <Chip
-                label={`Level ${level} of 5`}
-                size="small"
-                sx={{
-                  bgcolor: LIGHT_GREEN,
-                  color: GREEN,
-                  fontWeight: 900,
-                }}
-              />
-            </Stack>
-
-            <Box
-              sx={{
-                display: 'flex',
-                gap: 0.6,
-                mt: 1.5,
-              }}
-            >
-              {[1, 2, 3, 4, 5].map((item) => (
-                <Box
-                  key={item}
-                  sx={{
-                    flex: 1,
-                    height: 6,
-                    borderRadius: 10,
-                    bgcolor:
-                      item <= level
-                        ? GREEN
-                        : '#E1EAE5',
-                  }}
-                />
-              ))}
+              <Typography
+                variant="h5"
+                fontWeight={800}
+              >
+                Level {verificationLevel}
+              </Typography>
             </Box>
 
-            <Typography
-              sx={{
-                mt: 1.2,
-                color: MUTED,
-                fontSize: 12,
-              }}
-            >
-              Verification status:{' '}
-              {verificationStatus.replace(/_/g, ' ')}
-            </Typography>
-          </CardContent>
-        </Card>
+            <Chip
+              icon={
+                verificationStatus
+                  .toLowerCase()
+                  .includes('verified') ? (
+                  <CheckCircle />
+                ) : (
+                  <WarningAmber />
+                )
+              }
+              label={verificationStatus}
+              color={
+                verificationStatus
+                  .toLowerCase()
+                  .includes('verified')
+                  ? 'success'
+                  : 'warning'
+              }
+            />
+          </Stack>
 
-        {/* ==================================================
-            BUSINESS STATEMENTS
-        ================================================== */}
-
-        {isStatementsPage && (
-          <Card
-            sx={{
-              mt: 2.5,
-              borderRadius: 3,
-              border: `1px solid ${BORDER}`,
-              boxShadow: 'none',
-            }}
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 2 }}
           >
-            <CardContent sx={{ p: 2.5 }}>
-              <ReceiptLong
-                sx={{
-                  color: GREEN,
-                  fontSize: 36,
-                }}
-              />
-
-              <Typography
-                sx={{
-                  mt: 1,
-                  fontSize: 19,
-                  fontWeight: 900,
-                  color: DARK_GREEN,
-                }}
-              >
-                Download Business Statement
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 0.8,
-                  color: MUTED,
-                  fontSize: 13,
-                  lineHeight: 1.7,
-                }}
-              >
-                Select a statement period to
-                generate a PDF or CSV statement
-                for your business account.
-              </Typography>
-
-              <Stack
-                spacing={2}
-                sx={{ mt: 2.5 }}
-              >
-                <TextField
-                  fullWidth
-                  label="Start Date"
-                  type="date"
-                  value={statementStartDate}
-                  onChange={(event) => {
-                    setStatementStartDate(
-                      event.target.value
-                    );
-
-                    setStatementError('');
-                    setStatementSuccess('');
-                  }}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                  inputProps={{
-                    max:
-                      statementEndDate ||
-                      getLocalDate(),
-                  }}
-                  disabled={statementDownloading}
-                />
-
-                <TextField
-                  fullWidth
-                  label="End Date"
-                  type="date"
-                  value={statementEndDate}
-                  onChange={(event) => {
-                    setStatementEndDate(
-                      event.target.value
-                    );
-
-                    setStatementError('');
-                    setStatementSuccess('');
-                  }}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                  inputProps={{
-                    min: statementStartDate,
-                    max: getLocalDate(),
-                  }}
-                  disabled={statementDownloading}
-                />
-
-                {statementError && (
-                  <Alert severity="error">
-                    {statementError}
-                  </Alert>
-                )}
-
-                {statementSuccess && (
-                  <Alert severity="success">
-                    {statementSuccess}
-                  </Alert>
-                )}
-
-                <Button
-                  fullWidth
-                  variant="contained"
-                  startIcon={
-                    statementDownloading ? (
-                      <CircularProgress
-                        size={18}
-                        color="inherit"
-                      />
-                    ) : (
-                      <Description />
-                    )
-                  }
-                  onClick={() =>
-                    downloadBusinessStatement('pdf')
-                  }
-                  disabled={statementDownloading}
-                  sx={{
-                    minHeight: 52,
-                    borderRadius: 2.5,
-                    bgcolor: GREEN,
-                    fontWeight: 900,
-                    textTransform: 'none',
-                    '&:hover': {
-                      bgcolor: DARK_GREEN,
-                    },
-                  }}
-                >
-                  {statementDownloading
-                    ? 'Generating Statement...'
-                    : 'Download PDF Statement'}
-                </Button>
-
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<ReceiptLong />}
-                  onClick={() =>
-                    downloadBusinessStatement('csv')
-                  }
-                  disabled={statementDownloading}
-                  sx={{
-                    minHeight: 50,
-                    borderRadius: 2.5,
-                    borderColor: GREEN,
-                    color: GREEN,
-                    fontWeight: 900,
-                    textTransform: 'none',
-                  }}
-                >
-                  Download CSV Statement
-                </Button>
-              </Stack>
-
-              <Alert
-                severity="info"
-                sx={{
-                  mt: 2.5,
-                  fontSize: 12,
-                  lineHeight: 1.7,
-                }}
-              >
-                Business statements are requested
-                separately from personal account
-                statements. The server must verify
-                your business ownership and retrieve
-                transactions from the business
-                account ledger.
-              </Alert>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ==================================================
-            BUSINESS VERIFICATION
-        ================================================== */}
-
-        {isVerificationPage && (
-          <>
-            <Typography
-              sx={{
-                mt: 3,
-                mb: 1.5,
-                fontSize: 20,
-                fontWeight: 900,
-                color: DARK_GREEN,
-              }}
-            >
-              Verification Requirements
-            </Typography>
-
-            {/* LEVELS 1-3 */}
-
-            <Card
-              sx={{
-                mb: 1.5,
-                borderRadius: 3,
-                border: `1px solid ${BORDER}`,
-                boxShadow: 'none',
-              }}
-            >
-              <CardContent sx={{ p: 2 }}>
-                <Stack
-                  direction="row"
-                  spacing={1.3}
-                  alignItems="flex-start"
-                >
-                  <Shield
-                    sx={{
-                      color: GREEN,
-                      fontSize: 27,
-                      mt: 0.2,
-                    }}
-                  />
-
-                  <Box sx={{ flex: 1 }}>
-                    <Typography
-                      sx={{
-                        fontWeight: 900,
-                        fontSize: 15,
-                      }}
-                    >
-                      Levels 1–3
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        mt: 0.7,
-                        color: MUTED,
-                        fontSize: 13,
-                        lineHeight: 1.7,
-                      }}
-                    >
-                      Personal identity verification
-                      requirements apply to business
-                      Levels 1, 2, and 3. Follow the
-                      verification instructions provided
-                      by Zenimonies for your account.
-                    </Typography>
-
-                    <Chip
-                      sx={{
-                        mt: 1,
-                        fontWeight: 800,
-                      }}
-                      size="small"
-                      color={
-                        level <= 3 &&
-                        verificationStatus === 'verified'
-                          ? 'success'
-                          : 'default'
-                      }
-                      label={
-                        level <= 3
-                          ? `Current level: ${level}`
-                          : 'Levels 1–3'
-                      }
-                    />
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-
-            {/* LEVEL 4 CAC */}
-
-            <Card
-              sx={{
-                mb: 1.5,
-                borderRadius: 3,
-                border: `1px solid ${BORDER}`,
-                boxShadow: 'none',
-              }}
-            >
-              <CardContent sx={{ p: 2 }}>
-                <Stack
-                  direction="row"
-                  spacing={1.3}
-                  alignItems="flex-start"
-                >
-                  <Description
-                    sx={{
-                      color: GREEN,
-                      fontSize: 27,
-                      mt: 0.2,
-                    }}
-                  />
-
-                  <Box sx={{ flex: 1 }}>
-                    <Typography
-                      sx={{
-                        fontWeight: 900,
-                        fontSize: 15,
-                      }}
-                    >
-                      Level 4 — CAC Verification
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        mt: 0.7,
-                        color: MUTED,
-                        fontSize: 13,
-                        lineHeight: 1.7,
-                      }}
-                    >
-                      CAC registration documents are
-                      required for the Level 4 business
-                      verification upgrade. They are
-                      not required during initial
-                      registration or Levels 1–3.
-                    </Typography>
-
-                    {isLevelFourOrHigher ? (
-                      <Alert
-                        severity={
-                          cacApproved
-                            ? 'success'
-                            : 'info'
-                        }
-                        sx={{
-                          mt: 1.5,
-                          fontSize: 12,
-                        }}
-                      >
-                        CAC status:{' '}
-                        {cacApproved
-                          ? 'Approved'
-                          : cacStatus
-                            ? cacStatus.replace(/_/g, ' ')
-                            : 'Not confirmed'}
-                      </Alert>
-                    ) : (
-                      <Chip
-                        sx={{
-                          mt: 1,
-                          fontWeight: 800,
-                        }}
-                        size="small"
-                        label="Required for Level 4 upgrade"
-                      />
-                    )}
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-
-            {/* LEVEL 5 */}
-
-            <Card
-              sx={{
-                mb: 1.5,
-                borderRadius: 3,
-                border: `1px solid ${BORDER}`,
-                boxShadow: 'none',
-              }}
-            >
-              <CardContent sx={{ p: 2 }}>
-                <Stack
-                  direction="row"
-                  spacing={1.3}
-                  alignItems="flex-start"
-                >
-                  <Lock
-                    sx={{
-                      color: GREEN,
-                      fontSize: 27,
-                      mt: 0.2,
-                    }}
-                  />
-
-                  <Box sx={{ flex: 1 }}>
-                    <Typography
-                      sx={{
-                        fontWeight: 900,
-                        fontSize: 15,
-                      }}
-                    >
-                      Level 5 — Enhanced Verification
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        mt: 0.7,
-                        color: MUTED,
-                        fontSize: 13,
-                        lineHeight: 1.7,
-                      }}
-                    >
-                      Level 5 is intended for enhanced
-                      business verification. The
-                      applicable requirements must be
-                      confirmed by Zenimonies before
-                      submission.
-                    </Typography>
-
-                    {isLevelFiveVerified && (
-                      <Chip
-                        color="success"
-                        icon={<CheckCircle />}
-                        label="Level 5 verified"
-                        sx={{
-                          mt: 1.2,
-                          fontWeight: 800,
-                        }}
-                      />
-                    )}
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-
-            <Alert
-              severity="warning"
-              icon={<WarningAmber />}
-              sx={{
-                mt: 2,
-                borderRadius: 3,
-                fontSize: 13,
-                lineHeight: 1.7,
-              }}
-            >
-              Verification submissions, CAC document
-              uploads, approval decisions, and account
-              limits must be connected to the secure
-              verification backend. This page does not
-              submit identity documents or approve
-              verification.
-            </Alert>
-          </>
-        )}
-
-        {/* ==================================================
-            POS INFORMATION
-        ================================================== */}
-
-        {isPosPage && (
-          <Card
-            sx={{
-              mt: 2.5,
-              borderRadius: 3,
-              border: `1px solid ${BORDER}`,
-              boxShadow: 'none',
-            }}
-          >
-            <CardContent sx={{ p: 2.5 }}>
-              <PointOfSale
-                sx={{
-                  color: GREEN,
-                  fontSize: 35,
-                }}
-              />
-
-              <Typography
-                sx={{
-                  mt: 1,
-                  fontWeight: 900,
-                  fontSize: 18,
-                }}
-              >
-                POS Terminal Services
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 1,
-                  color: MUTED,
-                  fontSize: 13,
-                  lineHeight: 1.7,
-                }}
-              >
-                POS applications, terminal approval,
-                device management, and settlement
-                services must be connected to the
-                dedicated business POS backend.
-              </Typography>
-
-              <Alert
-                severity="info"
-                sx={{
-                  mt: 2,
-                  fontSize: 12,
-                }}
-              >
-                POS application and device management
-                are not activated by this information
-                page.
-              </Alert>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ==================================================
-            OTHER BUSINESS SERVICES
-        ================================================== */}
-
-        {!isVerificationPage &&
-          !isPosPage &&
-          !isStatementsPage && (
-            <Card
-              sx={{
-                mt: 2.5,
-                borderRadius: 3,
-                border: `1px solid ${BORDER}`,
-                boxShadow: 'none',
-              }}
-            >
-              <CardContent sx={{ p: 2.5 }}>
-                <AccountBalance
-                  sx={{
-                    color: GREEN,
-                    fontSize: 34,
-                  }}
-                />
-
-                <Typography
-                  sx={{
-                    mt: 1,
-                    fontWeight: 900,
-                    fontSize: 18,
-                  }}
-                >
-                  Business Service
-                </Typography>
-
-                <Typography
-                  sx={{
-                    mt: 1,
-                    color: MUTED,
-                    fontSize: 13,
-                    lineHeight: 1.7,
-                  }}
-                >
-                  This page is connected to your
-                  business account information. The
-                  requested service requires its own
-                  business-specific backend and
-                  authorization before it can perform
-                  financial operations.
-                </Typography>
-
-                <Alert
-                  severity="info"
-                  sx={{
-                    mt: 2,
-                    fontSize: 12,
-                  }}
-                >
-                  No business transfer or payment is
-                  processed by this placeholder.
-                </Alert>
-              </CardContent>
-            </Card>
-          )}
-
-        {/* ==================================================
-            FOOTER ACTIONS
-        ================================================== */}
-
-        <Stack
-          spacing={1.5}
-          sx={{ mt: 3 }}
-        >
-          <Button
-            fullWidth
-            variant="contained"
-            onClick={goToDashboard}
-            endIcon={<ArrowForward />}
-            sx={{
-              minHeight: 52,
-              borderRadius: 2.5,
-              bgcolor: GREEN,
-              fontWeight: 900,
-              fontSize: 13,
-              textTransform: 'none',
-              '&:hover': {
-                bgcolor: DARK_GREEN,
-              },
-            }}
-          >
-            Return to Business Dashboard
-          </Button>
+            Business verification requirements
+            and account limits depend on your
+            approved verification level.
+          </Typography>
 
           <Button
             fullWidth
             variant="outlined"
-            onClick={() => loadBusiness(false)}
-            disabled={refreshing}
-            sx={{
-              minHeight: 48,
-              borderRadius: 2.5,
-              borderColor: GREEN,
-              color: GREEN,
-              fontWeight: 900,
-              textTransform: 'none',
-            }}
+            endIcon={<ArrowForward />}
+            sx={{ mt: 2 }}
+            onClick={() =>
+              goToBusinessSection('upgrade')
+            }
           >
-            {refreshing
-              ? 'Refreshing...'
-              : 'Refresh Account Information'}
+            View Verification Requirements
           </Button>
-        </Stack>
+        </CardContent>
+      </Card>
 
-        <Typography
+      {/* SERVICE NAVIGATION */}
+
+      {!isStatementPage &&
+        !isPOSPage &&
+        !isUpgradePage && (
+          <Stack spacing={2}>
+            <Button
+              fullWidth
+              variant="outlined"
+              size="large"
+              startIcon={<ReceiptLong />}
+              endIcon={<ArrowForward />}
+              onClick={
+                goToBusinessTransactions
+              }
+              sx={{
+                justifyContent:
+                  'space-between',
+                py: 2,
+              }}
+            >
+              Business Transactions
+            </Button>
+
+            <Button
+              fullWidth
+              variant="outlined"
+              size="large"
+              startIcon={<Description />}
+              endIcon={<ArrowForward />}
+              onClick={() =>
+                goToBusinessSection(
+                  'statements'
+                )
+              }
+              sx={{
+                justifyContent:
+                  'space-between',
+                py: 2,
+              }}
+            >
+              Account Statements
+            </Button>
+
+            <Button
+              fullWidth
+              variant="outlined"
+              size="large"
+              startIcon={<PointOfSale />}
+              endIcon={<ArrowForward />}
+              onClick={() =>
+                goToBusinessSection('pos')
+              }
+              sx={{
+                justifyContent:
+                  'space-between',
+                py: 2,
+              }}
+            >
+              POS Terminal
+            </Button>
+
+            <Button
+              fullWidth
+              variant="outlined"
+              size="large"
+              startIcon={<Shield />}
+              endIcon={<ArrowForward />}
+              onClick={() =>
+                goToBusinessSection(
+                  'upgrade'
+                )
+              }
+              sx={{
+                justifyContent:
+                  'space-between',
+                py: 2,
+              }}
+            >
+              Upgrade Business Level
+            </Button>
+          </Stack>
+        )}
+
+      {/* =====================================================
+          BUSINESS STATEMENTS
+          ===================================================== */}
+
+      {isStatementPage && (
+        <Card
           sx={{
-            mt: 3,
-            textAlign: 'center',
-            color: MUTED,
-            fontSize: 11,
+            borderRadius: 3,
           }}
         >
-          Zenimonies Business Banking
+          <CardContent sx={{ p: 3 }}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+              sx={{ mb: 1 }}
+            >
+              <ReceiptLong color="primary" />
+
+              <Typography
+                variant="h6"
+                fontWeight={800}
+              >
+                Business Account Statement
+              </Typography>
+            </Stack>
+
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 3 }}
+            >
+              Select your statement period
+              and download your statement or
+              send it to your registered email
+              address.
+            </Typography>
+
+            {statementError && (
+              <Alert
+                severity="error"
+                sx={{ mb: 2 }}
+                onClose={() =>
+                  setStatementError('')
+                }
+              >
+                {statementError}
+              </Alert>
+            )}
+
+            {statementSuccess && (
+              <Alert
+                severity="success"
+                sx={{ mb: 2 }}
+                onClose={() =>
+                  setStatementSuccess('')
+                }
+              >
+                {statementSuccess}
+              </Alert>
+            )}
+
+            <Stack spacing={2}>
+              <TextField
+                label="Start Date"
+                type="date"
+                fullWidth
+                value={statementStartDate}
+                onChange={(event) => {
+                  setStatementStartDate(
+                    event.target.value
+                  );
+
+                  setStatementError('');
+                  setStatementSuccess('');
+                }}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+                inputProps={{
+                  max:
+                    statementEndDate ||
+                    getLocalDate(),
+                }}
+              />
+
+              <TextField
+                label="End Date"
+                type="date"
+                fullWidth
+                value={statementEndDate}
+                onChange={(event) => {
+                  setStatementEndDate(
+                    event.target.value
+                  );
+
+                  setStatementError('');
+                  setStatementSuccess('');
+                }}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+                inputProps={{
+                  min:
+                    statementStartDate ||
+                    undefined,
+                  max: getLocalDate(),
+                }}
+              />
+            </Stack>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography
+              variant="subtitle1"
+              fontWeight={800}
+              sx={{ mb: 2 }}
+            >
+              Download Statement
+            </Typography>
+
+            <Stack spacing={2}>
+              <Button
+                fullWidth
+                variant="contained"
+                size="large"
+                startIcon={
+                  statementDownloading ? (
+                    <CircularProgress
+                      size={20}
+                      color="inherit"
+                    />
+                  ) : (
+                    <Description />
+                  )
+                }
+                disabled={
+                  statementDownloading ||
+                  statementEmailing
+                }
+                onClick={() =>
+                  downloadBusinessStatement(
+                    'pdf'
+                  )
+                }
+              >
+                {statementDownloading
+                  ? 'Generating Statement...'
+                  : 'Download PDF'}
+              </Button>
+
+              <Button
+                fullWidth
+                variant="outlined"
+                size="large"
+                startIcon={<Description />}
+                disabled={
+                  statementDownloading ||
+                  statementEmailing
+                }
+                onClick={() =>
+                  downloadBusinessStatement(
+                    'csv'
+                  )
+                }
+              >
+                Download CSV
+              </Button>
+            </Stack>
+
+            <Divider sx={{ my: 3 }} />
+
+            <Typography
+              variant="subtitle1"
+              fontWeight={800}
+              sx={{ mb: 1 }}
+            >
+              Email Statement
+            </Typography>
+
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mb: 2 }}
+            >
+              Your statement will be sent
+              to the email address registered
+              to your Zenimonies account.
+              For your security, the recipient
+              is determined by the server.
+            </Typography>
+
+            <Stack spacing={2}>
+              <Button
+                fullWidth
+                variant="contained"
+                color="success"
+                size="large"
+                startIcon={
+                  statementEmailing &&
+                  statementEmailFormat ===
+                    'pdf' ? (
+                    <CircularProgress
+                      size={20}
+                      color="inherit"
+                    />
+                  ) : (
+                    <Description />
+                  )
+                }
+                disabled={
+                  statementEmailing ||
+                  statementDownloading
+                }
+                onClick={() =>
+                  emailBusinessStatement(
+                    'pdf'
+                  )
+                }
+              >
+                {statementEmailing &&
+                statementEmailFormat ===
+                  'pdf'
+                  ? 'Emailing PDF...'
+                  : 'Email PDF'}
+              </Button>
+
+              <Button
+                fullWidth
+                variant="outlined"
+                color="success"
+                size="large"
+                startIcon={
+                  statementEmailing &&
+                  statementEmailFormat ===
+                    'csv' ? (
+                    <CircularProgress
+                      size={20}
+                      color="success"
+                    />
+                  ) : (
+                    <Description />
+                  )
+                }
+                disabled={
+                  statementEmailing ||
+                  statementDownloading
+                }
+                onClick={() =>
+                  emailBusinessStatement(
+                    'csv'
+                  )
+                }
+              >
+                {statementEmailing &&
+                statementEmailFormat ===
+                  'csv'
+                  ? 'Emailing CSV...'
+                  : 'Email CSV'}
+              </Button>
+            </Stack>
+
+            <Alert
+              severity="info"
+              sx={{ mt: 3 }}
+            >
+              Statements are generated for
+              the selected business account.
+              Always check that the business
+              account and statement period
+              are correct before sending.
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* =====================================================
+          POS TERMINAL
+          ===================================================== */}
+
+      {isPOSPage && (
+        <Card
+          sx={{
+            borderRadius: 3,
+          }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+              sx={{ mb: 2 }}
+            >
+              <PointOfSale color="primary" />
+
+              <Typography
+                variant="h6"
+                fontWeight={800}
+              >
+                POS Terminal
+              </Typography>
+            </Stack>
+
+            <Typography
+              color="text.secondary"
+              sx={{ mb: 3 }}
+            >
+              Apply for a business POS
+              terminal and manage your
+              terminal application.
+            </Typography>
+
+            <Alert
+              severity="info"
+              sx={{ mb: 2 }}
+            >
+              POS terminal applications
+              require approval before a
+              terminal can be activated.
+            </Alert>
+
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={<PointOfSale />}
+              onClick={() =>
+                goToBusinessSection(
+                  'pos'
+                )
+              }
+            >
+              POS Terminal
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* =====================================================
+          BUSINESS VERIFICATION
+          ===================================================== */}
+
+      {isUpgradePage && (
+        <Card
+          sx={{
+            borderRadius: 3,
+          }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+              sx={{ mb: 2 }}
+            >
+              <Shield color="primary" />
+
+              <Typography
+                variant="h6"
+                fontWeight={800}
+              >
+                Business Level Upgrade
+              </Typography>
+            </Stack>
+
+            <Typography
+              color="text.secondary"
+              sx={{ mb: 3 }}
+            >
+              Review the requirements for
+              upgrading your business account.
+            </Typography>
+
+            <Stack spacing={2}>
+              <Box>
+                <Typography
+                  fontWeight={700}
+                >
+                  Levels 1–3
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Follow the business
+                  verification process and
+                  provide the requested
+                  personal verification
+                  information.
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              <Box>
+                <Typography
+                  fontWeight={700}
+                >
+                  Level 4
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  CAC registration documents
+                  are required for the Level 4
+                  business verification
+                  application.
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              <Box>
+                <Typography
+                  fontWeight={700}
+                >
+                  Level 5
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Enhanced business
+                  verification may be required.
+                  Requirements are subject
+                  to the bank's verification
+                  process.
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Alert
+              severity="warning"
+              sx={{ mt: 3 }}
+            >
+              This page displays general
+              requirements. Actual verification
+              approval and account limits
+              must be enforced by the
+              backend.
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* =====================================================
+          FOOTER ACTIONS
+          ===================================================== */}
+
+      <Stack
+        direction={{
+          xs: 'column',
+          sm: 'row',
+        }}
+        spacing={2}
+        sx={{ mt: 3 }}
+      >
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<ArrowBack />}
+          onClick={goToBusinessDashboard}
+        >
+          Business Dashboard
+        </Button>
+
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={
+            refreshing ? (
+              <CircularProgress size={18} />
+            ) : (
+              <AccountBalance />
+            )
+          }
+          disabled={refreshing}
+          onClick={() =>
+            loadBusiness(true)
+          }
+        >
+          {refreshing
+            ? 'Refreshing...'
+            : 'Refresh Account'}
+        </Button>
+      </Stack>
+
+      <Box
+        sx={{
+          textAlign: 'center',
+          mt: 4,
+        }}
+      >
+        <Typography
+          variant="caption"
+          color="text.secondary"
+        >
+          Zenimonies Banking
         </Typography>
       </Box>
     </Box>
