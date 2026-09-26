@@ -213,7 +213,7 @@ const Register: React.FC = () => {
             password,
 
             // Account type selected by customer
-            account_type: accountType,
+               registration_account_type: accountType,
           },
           {
             timeout: 60000,
@@ -258,15 +258,28 @@ const Register: React.FC = () => {
         );
       }
 
-      // SAVE ACCOUNTS
-      const accounts = data.account
-        ? [data.account]
-        : data.accounts || [];
+      // SAVE ACCOUNTS WITHOUT INTERNAL ACCOUNT NUMBERS
+      const receivedAccounts = data.accounts?.length
+  ? data.accounts
+  : data.account
+    ? [data.account]
+    : [];
 
-      localStorage.setItem(
-        'zenimonies_accounts',
-        JSON.stringify(accounts)
-      );
+const safeAccounts = receivedAccounts.map(
+  (account) => {
+    const {
+      account_number,
+      ...safeAccount
+    } = account;
+
+    return safeAccount;
+  }
+);
+
+localStorage.setItem(
+  'zenimonies_accounts',
+  JSON.stringify(safeAccounts)
+);
 
       // SAVE SELECTED ACCOUNT TYPE
       sessionStorage.setItem(
