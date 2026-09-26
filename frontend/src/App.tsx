@@ -53,6 +53,7 @@ import Transactions from './pages/Transactions.tsx';
 import TransferConfirmation from './pages/TransferConfirmation.tsx';
 import TransactionReceipt from './pages/TransactionReceipt.tsx';
 import Statement from './pages/Statement.tsx';
+import BusinessTransactions from './pages/BusinessTransactions.tsx';
 
 // ==================== PAYMENTS ====================
 
@@ -644,6 +645,10 @@ const App: React.FC = () => {
           <Route
             path="/business/dashboard/:id"
             element={<BusinessDashboard />}
+          />
+          <Route
+             path="/business/:id/transactions"
+             element={<BusinessTransactions />}
           />
 
           {/* Business services must remain under the selected
