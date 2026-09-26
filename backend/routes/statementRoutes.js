@@ -13,6 +13,9 @@ const {
 } = require('../services/statementService');
 
 const {
+  buildBusinessAccountStatement,
+} = require('../services/businessStatementService');
+const {
   generateCSVStatement,
   generatePDFStatement,
 } = require('../services/statementFileService');
@@ -321,7 +324,59 @@ router.post(
     }
   }
 );
+// ============================================================
+// BUSINESS ACCOUNT STATEMENT
+// ============================================================
 
+router.post(
+  '/business/:businessId',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const userId = req.user?.id;
+
+      const { businessId } = req.params;
+
+      const { startDate, endDate } = req.body;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required.',
+        });
+      }
+
+      const statement =
+        await buildBusinessAccountStatement({
+          userId,
+          businessId,
+          startDate,
+          endDate,
+        });
+
+      return res.status(200).json({
+        success: true,
+        message:
+          'Business statement generated successfully.',
+        data: statement,
+      });
+    } catch (error) {
+      console.error(
+        'Business statement error:',
+        error
+      );
+
+      return res.status(
+        error.statusCode || 400
+      ).json({
+        success: false,
+        message:
+          error.message ||
+          'Unable to generate business statement.',
+      });
+    }
+  }
+);
 // ============================================================
 // EXPORT
 // ============================================================
