@@ -47,6 +47,7 @@ const DARK_GREEN = '#064B37';
 const PAGE_BG = '#F3F8F5';
 const BORDER = '#DDEBE4';
 const MUTED = '#81928A';
+const LIGHT_GREEN = '#E8F5EE';
 
 // ============================================================
 // TYPES
