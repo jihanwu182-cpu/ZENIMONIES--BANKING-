@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 import {
@@ -7,8 +8,6 @@ import {
   Navigate,
   Link,
   useLocation,
-  useNavigate,
-  useParams,
 } from 'react-router-dom';
 
 // ============================================================
@@ -71,6 +70,11 @@ import Betting from './pages/Betting.tsx';
 import VirtualCard from './pages/VirtualCard.tsx';
 import Savings from './pages/Savings.tsx';
 import Notifications from './pages/Notifications.tsx';
+
+// IMPORTANT:
+// Import the real business services page.
+// Do not declare another component with this name below.
+
 import BusinessServicePage from './pages/BusinessServicePage.tsx';
 
 // ==================== ADMIN ====================
@@ -81,18 +85,6 @@ import AirtimeReconciliation from './pages/AirtimeReconciliation.tsx';
 // ==================== SESSION ====================
 
 import SessionGuard from './components/SessionGuard.tsx';
-
-// ==================== MATERIAL UI ====================
-
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Stack,
-  Typography,
-} from '@mui/material';
 
 // ============================================================
 // GENERAL SERVICE PAGE
@@ -123,6 +115,8 @@ const ServicePage: React.FC<ServicePageProps> = ({
         paddingBottom: '40px',
       }}
     >
+      {/* HEADER */}
+
       <header
         style={{
           background: '#ffffff',
@@ -205,6 +199,8 @@ const ServicePage: React.FC<ServicePageProps> = ({
           </Link>
         </div>
       </header>
+
+      {/* CONTENT */}
 
       <main
         style={{
@@ -351,236 +347,6 @@ const ServicePage: React.FC<ServicePageProps> = ({
 };
 
 // ============================================================
-// BUSINESS SERVICE PAGE
-// BUSINESS-SPECIFIC NAVIGATION
-// ============================================================
-
-const BusinessServicePage: React.FC = () => {
-  const navigate = useNavigate();
-
-  const { id, section } = useParams<{
-    id: string;
-    section: string;
-  }>();
-
-  const businessId = id || '';
-
-  const titles: Record<string, string> = {
-    transfer: 'Business Transfer',
-    transactions: 'Business Transactions',
-    statements: 'Business Statements',
-    airtime: 'Business Airtime',
-    data: 'Business Data',
-    electricity: 'Business Electricity',
-    tv: 'Business TV Payments',
-    savings: 'Business Savings',
-    cards: 'Business Cards',
-    staff: 'Business Staff & Access',
-    settings: 'Business Settings',
-    security: 'Business Security',
-    notifications: 'Business Notifications',
-    kyc: 'Business Verification',
-    pos: 'POS Terminal',
-    upgrade: 'Business Level Upgrade',
-  };
-
-  const descriptions: Record<string, string> = {
-    transfer:
-      'Manage payments from your business account. Business transfers require dedicated business payment functionality and server-side authorization.',
-    transactions:
-      'View activity belonging to your selected business account.',
-    statements:
-      'Business account statements and statement downloads.',
-    airtime:
-      'Purchase airtime using your business account when the business payment service is connected.',
-    data:
-      'Purchase data bundles using your business account when the business payment service is connected.',
-    electricity:
-      'Pay electricity bills from your business account when business bill payments are connected.',
-    tv:
-      'Manage TV subscription payments for your business.',
-    savings:
-      'Manage business savings services.',
-    cards:
-      'Manage business card services.',
-    staff:
-      'Manage business staff and access permissions.',
-    settings:
-      'Manage your business information and account preferences.',
-    security:
-      'Manage security settings and business access controls.',
-    notifications:
-      'Business banking notifications.',
-    kyc:
-      'View and manage applicable business verification requirements.',
-    pos:
-      'Manage business POS terminal applications and approved terminals.',
-    upgrade:
-      'Review the requirements for upgrading your business verification level.',
-  };
-
-  const normalizedSection = (
-    section || ''
-  ).toLowerCase();
-
-  const title =
-    titles[normalizedSection] ||
-    'Business Service';
-
-  const description =
-    descriptions[normalizedSection] ||
-    'This section belongs to your business account.';
-
-  const dashboardPath =
-    `/business/dashboard/${encodeURIComponent(businessId)}`;
-
-  return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        bgcolor: '#F6FAF7',
-        pb: 5,
-      }}
-    >
-      {/* BUSINESS HEADER */}
-
-      <Box
-        sx={{
-          bgcolor: '#087A43',
-          color: '#fff',
-          px: { xs: 2, md: 5 },
-          py: 3,
-        }}
-      >
-        <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
-          <Typography
-            variant="h5"
-            fontWeight={800}
-          >
-            Zenimonies
-          </Typography>
-
-          <Typography
-            sx={{
-              mt: 1,
-              color: '#D9F3E4',
-            }}
-          >
-            Business Banking
-          </Typography>
-        </Box>
-      </Box>
-
-      <Box
-        sx={{
-          maxWidth: 900,
-          mx: 'auto',
-          px: { xs: 2, md: 4 },
-          mt: 4,
-        }}
-      >
-        <Button
-          onClick={() => navigate(dashboardPath)}
-          sx={{
-            mb: 3,
-            color: '#087A43',
-            fontWeight: 700,
-          }}
-        >
-          ← Back to Business Dashboard
-        </Button>
-
-        <Card
-          sx={{
-            borderRadius: 4,
-            border: '1px solid #E1EEE5',
-            boxShadow:
-              '0 5px 25px rgba(0,0,0,0.05)',
-          }}
-        >
-          <CardContent
-            sx={{
-              p: { xs: 3, md: 4 },
-            }}
-          >
-            <Typography
-              variant="h5"
-              fontWeight={800}
-              sx={{
-                color: '#065F36',
-                mb: 2,
-              }}
-            >
-              {title}
-            </Typography>
-
-            <Alert
-              severity="info"
-              sx={{ mb: 3 }}
-            >
-              You are viewing the Business Banking
-              section for business account ID:{' '}
-              {businessId || 'Not provided'}.
-            </Alert>
-
-            <Typography
-              color="text.secondary"
-              sx={{ mb: 3 }}
-            >
-              {description}
-            </Typography>
-
-            <Alert severity="warning">
-              This service page is not yet connected
-              to its dedicated business backend
-              functionality. No transfer, bill payment,
-              staff change, or other financial
-              transaction can be completed from this
-              placeholder page.
-            </Alert>
-
-            <Stack
-              spacing={2}
-              sx={{ mt: 3 }}
-            >
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={() => navigate(dashboardPath)}
-                sx={{
-                  py: 1.5,
-                  bgcolor: '#087A43',
-                  fontWeight: 700,
-                  '&:hover': {
-                    bgcolor: '#065F36',
-                  },
-                }}
-              >
-                Return to Business Dashboard
-              </Button>
-
-              <Button
-                fullWidth
-                variant="outlined"
-                onClick={() => navigate('/')}
-                sx={{
-                  py: 1.5,
-                  borderColor: '#087A43',
-                  color: '#087A43',
-                  fontWeight: 700,
-                }}
-              >
-                Personal Banking
-              </Button>
-            </Stack>
-          </CardContent>
-        </Card>
-      </Box>
-    </Box>
-  );
-};
-
-// ============================================================
 // MAIN APPLICATION
 // ============================================================
 
@@ -647,19 +413,31 @@ const App: React.FC = () => {
             path="/business/dashboard/:id"
             element={<BusinessDashboard />}
           />
+
+          {/* Business-specific transaction history */}
+
           <Route
-             path="/business/:id/transactions"
-             element={<BusinessTransactions />}
+            path="/business/:id/transactions"
+            element={<BusinessTransactions />}
           />
 
-          {/* Business services must remain under the selected
-              business ID. Do not replace these with personal
-              banking components. */}
+          {/* 
+            Business services route.
+
+            This renders the imported BusinessServicePage.tsx.
+            The business ID and selected section are supplied
+            through the URL parameters.
+
+            Example:
+            /business/your-business-id/statements
+          */}
 
           <Route
             path="/business/:id/:section"
             element={<BusinessServicePage />}
           />
+
+          {/* Business account landing */}
 
           <Route
             path="/business/:id"
