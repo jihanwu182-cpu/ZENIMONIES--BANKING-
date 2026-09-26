@@ -1,4 +1,5 @@
 import React from 'react';
+
 import {
   BrowserRouter,
   Routes,
@@ -6,22 +7,55 @@ import {
   Navigate,
   Link,
   useLocation,
+  useNavigate,
+  useParams,
 } from 'react-router-dom';
+
+// ============================================================
+// ZENIMONIES BANKING
+// APPLICATION ROUTES
+// PERSONAL + BUSINESS BANKING
+// ============================================================
+
+// ==================== AUTHENTICATION ====================
 
 import Login from './pages/Login.tsx';
 import Register from './pages/Register.tsx';
+import ForgotPassword from './pages/ForgotPassword.tsx';
+import ResetPassword from './pages/ResetPassword.tsx';
+
+// ==================== DASHBOARDS ====================
+
 import Dashboard from './pages/Dashboard.tsx';
 import BusinessDashboard from './pages/BusinessDashboard.tsx';
+import Business from './pages/Business.tsx';
+
+// ==================== ACCOUNT ====================
+
 import Profile from './pages/Profile.tsx';
 import Settings from './pages/Settings.tsx';
 import KYC from './pages/KYC.tsx';
 import VerifyPhone from './pages/VerifyPhone.tsx';
 import VerifyOTP from './pages/VerifyOTP.tsx';
+
+// ==================== SECURITY ====================
+
+import PasskeySecurity from './pages/PasskeySecurity.tsx';
+import AccountLocked from './pages/AccountLocked.tsx';
+
+// ==================== MONEY ====================
+
 import Transfer from './pages/Transfer.tsx';
 import ToBank from './pages/ToBank.tsx';
 import Deposit from './pages/Deposit.tsx';
 import Withdraw from './pages/Withdraw.tsx';
 import Transactions from './pages/Transactions.tsx';
+import TransferConfirmation from './pages/TransferConfirmation.tsx';
+import TransactionReceipt from './pages/TransactionReceipt.tsx';
+import Statement from './pages/Statement.tsx';
+
+// ==================== PAYMENTS ====================
+
 import Airtime from './pages/Airtime.tsx';
 import Data from './pages/Data.tsx';
 import TVSubscription from './pages/TVSubscription.tsx';
@@ -30,21 +64,39 @@ import Electricity from './pages/Electricity.tsx';
 import ElectricityVerification from './pages/ElectricityVerification.tsx';
 import ElectricityPaymentConfirmation from './pages/ElectricityPaymentConfirmation.tsx';
 import Betting from './pages/Betting.tsx';
+
+// ==================== OTHER SERVICES ====================
+
 import VirtualCard from './pages/VirtualCard.tsx';
-import Admin from './pages/AdminDashboard.tsx';
-import TransferConfirmation from './pages/TransferConfirmation.tsx';
-import TransactionReceipt from './pages/TransactionReceipt.tsx';
-import ForgotPassword from './pages/ForgotPassword.tsx';
-import ResetPassword from './pages/ResetPassword.tsx';
-import Notifications from './pages/Notifications.tsx';
-import PasskeySecurity from './pages/PasskeySecurity.tsx';
-import AccountLocked from './pages/AccountLocked.tsx';
 import Savings from './pages/Savings.tsx';
-import Statement from './pages/Statement.tsx';
-import Business from './pages/Business.tsx';
+import Notifications from './pages/Notifications.tsx';
+
+// ==================== ADMIN ====================
+
+import Admin from './pages/AdminDashboard.tsx';
+import AirtimeReconciliation from './pages/AirtimeReconciliation.tsx';
+
+// ==================== SESSION ====================
 
 import SessionGuard from './components/SessionGuard.tsx';
-import AirtimeReconciliation from './pages/AirtimeReconciliation.tsx';
+
+// ==================== MATERIAL UI ====================
+
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Stack,
+  Typography,
+} from '@mui/material';
+
+// ============================================================
+// GENERAL SERVICE PAGE
+// USED BY PERSONAL BANKING
+// ============================================================
+
 interface ServicePageProps {
   title: string;
   description: string;
@@ -296,6 +348,240 @@ const ServicePage: React.FC<ServicePageProps> = ({
   );
 };
 
+// ============================================================
+// BUSINESS SERVICE PAGE
+// BUSINESS-SPECIFIC NAVIGATION
+// ============================================================
+
+const BusinessServicePage: React.FC = () => {
+  const navigate = useNavigate();
+
+  const { id, section } = useParams<{
+    id: string;
+    section: string;
+  }>();
+
+  const businessId = id || '';
+
+  const titles: Record<string, string> = {
+    transfer: 'Business Transfer',
+    transactions: 'Business Transactions',
+    statements: 'Business Statements',
+    airtime: 'Business Airtime',
+    data: 'Business Data',
+    electricity: 'Business Electricity',
+    tv: 'Business TV Payments',
+    savings: 'Business Savings',
+    cards: 'Business Cards',
+    staff: 'Business Staff & Access',
+    settings: 'Business Settings',
+    security: 'Business Security',
+    notifications: 'Business Notifications',
+    kyc: 'Business Verification',
+    pos: 'POS Terminal',
+    upgrade: 'Business Level Upgrade',
+  };
+
+  const descriptions: Record<string, string> = {
+    transfer:
+      'Manage payments from your business account. Business transfers require dedicated business payment functionality and server-side authorization.',
+    transactions:
+      'View activity belonging to your selected business account.',
+    statements:
+      'Business account statements and statement downloads.',
+    airtime:
+      'Purchase airtime using your business account when the business payment service is connected.',
+    data:
+      'Purchase data bundles using your business account when the business payment service is connected.',
+    electricity:
+      'Pay electricity bills from your business account when business bill payments are connected.',
+    tv:
+      'Manage TV subscription payments for your business.',
+    savings:
+      'Manage business savings services.',
+    cards:
+      'Manage business card services.',
+    staff:
+      'Manage business staff and access permissions.',
+    settings:
+      'Manage your business information and account preferences.',
+    security:
+      'Manage security settings and business access controls.',
+    notifications:
+      'Business banking notifications.',
+    kyc:
+      'View and manage applicable business verification requirements.',
+    pos:
+      'Manage business POS terminal applications and approved terminals.',
+    upgrade:
+      'Review the requirements for upgrading your business verification level.',
+  };
+
+  const normalizedSection = (
+    section || ''
+  ).toLowerCase();
+
+  const title =
+    titles[normalizedSection] ||
+    'Business Service';
+
+  const description =
+    descriptions[normalizedSection] ||
+    'This section belongs to your business account.';
+
+  const dashboardPath =
+    `/business/dashboard/${encodeURIComponent(businessId)}`;
+
+  return (
+    <Box
+      sx={{
+        minHeight: '100vh',
+        bgcolor: '#F6FAF7',
+        pb: 5,
+      }}
+    >
+      {/* BUSINESS HEADER */}
+
+      <Box
+        sx={{
+          bgcolor: '#087A43',
+          color: '#fff',
+          px: { xs: 2, md: 5 },
+          py: 3,
+        }}
+      >
+        <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
+          <Typography
+            variant="h5"
+            fontWeight={800}
+          >
+            Zenimonies
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 1,
+              color: '#D9F3E4',
+            }}
+          >
+            Business Banking
+          </Typography>
+        </Box>
+      </Box>
+
+      <Box
+        sx={{
+          maxWidth: 900,
+          mx: 'auto',
+          px: { xs: 2, md: 4 },
+          mt: 4,
+        }}
+      >
+        <Button
+          onClick={() => navigate(dashboardPath)}
+          sx={{
+            mb: 3,
+            color: '#087A43',
+            fontWeight: 700,
+          }}
+        >
+          ← Back to Business Dashboard
+        </Button>
+
+        <Card
+          sx={{
+            borderRadius: 4,
+            border: '1px solid #E1EEE5',
+            boxShadow:
+              '0 5px 25px rgba(0,0,0,0.05)',
+          }}
+        >
+          <CardContent
+            sx={{
+              p: { xs: 3, md: 4 },
+            }}
+          >
+            <Typography
+              variant="h5"
+              fontWeight={800}
+              sx={{
+                color: '#065F36',
+                mb: 2,
+              }}
+            >
+              {title}
+            </Typography>
+
+            <Alert
+              severity="info"
+              sx={{ mb: 3 }}
+            >
+              You are viewing the Business Banking
+              section for business account ID:{' '}
+              {businessId || 'Not provided'}.
+            </Alert>
+
+            <Typography
+              color="text.secondary"
+              sx={{ mb: 3 }}
+            >
+              {description}
+            </Typography>
+
+            <Alert severity="warning">
+              This service page is not yet connected
+              to its dedicated business backend
+              functionality. No transfer, bill payment,
+              staff change, or other financial
+              transaction can be completed from this
+              placeholder page.
+            </Alert>
+
+            <Stack
+              spacing={2}
+              sx={{ mt: 3 }}
+            >
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={() => navigate(dashboardPath)}
+                sx={{
+                  py: 1.5,
+                  bgcolor: '#087A43',
+                  fontWeight: 700,
+                  '&:hover': {
+                    bgcolor: '#065F36',
+                  },
+                }}
+              >
+                Return to Business Dashboard
+              </Button>
+
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={() => navigate('/')}
+                sx={{
+                  py: 1.5,
+                  borderColor: '#087A43',
+                  color: '#087A43',
+                  fontWeight: 700,
+                }}
+              >
+                Personal Banking
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Box>
+    </Box>
+  );
+};
+
+// ============================================================
+// MAIN APPLICATION
+// ============================================================
+
 const App: React.FC = () => {
   return (
     <BrowserRouter>
@@ -336,21 +622,11 @@ const App: React.FC = () => {
             element={<AccountLocked />}
           />
 
-          {/* ================= DASHBOARD ================= */}
+          {/* ================= PERSONAL DASHBOARD ================= */}
 
           <Route
             path="/"
             element={<Dashboard />}
-          />
-
-          <Route
-            path="/business/dashboard/:id"
-            element={<BusinessDashboard />}
-         />
-
-          <Route
-            path="/notifications"
-            element={<Notifications />}
           />
 
           <Route
@@ -363,23 +639,54 @@ const App: React.FC = () => {
             }
           />
 
-          <Route
-           path="/airtime-reconciliation"
-           element={<AirtimeReconciliation />}
-        />
+          {/* ================= BUSINESS BANKING ================= */}
 
           <Route
-           path="/statement"
-           element={<Statement />}
-        />
+            path="/business/dashboard/:id"
+            element={<BusinessDashboard />}
+          />
+
+          {/* Business services must remain under the selected
+              business ID. Do not replace these with personal
+              banking components. */}
+
           <Route
-           path="/business"
-           element={<Business />}
-        />
+            path="/business/:id/:section"
+            element={<BusinessServicePage />}
+          />
+
+          <Route
+            path="/business/:id"
+            element={
+              <Navigate
+                to="/business"
+                replace
+              />
+            }
+          />
+
+          <Route
+            path="/business"
+            element={<Business />}
+          />
+
+          {/* ================= NOTIFICATIONS ================= */}
+
+          <Route
+            path="/notifications"
+            element={<Notifications />}
+          />
+
+          {/* ================= ADMIN ================= */}
 
           <Route
             path="/admin"
             element={<Admin />}
+          />
+
+          <Route
+            path="/airtime-reconciliation"
+            element={<AirtimeReconciliation />}
           />
 
           {/* ================= ACCOUNT ================= */}
@@ -447,6 +754,13 @@ const App: React.FC = () => {
           />
 
           <Route
+            path="/statement"
+            element={<Statement />}
+          />
+
+          {/* ================= WALLET ================= */}
+
+          <Route
             path="/wallet"
             element={
               <ServicePage
@@ -478,39 +792,39 @@ const App: React.FC = () => {
             element={<Data />}
           />
 
+          {/* ================= TV ================= */}
+
           <Route
             path="/tv-subscription"
             element={<TVSubscription />}
           />
 
-          {/* ================= TV ================= */}
-
           <Route
             path="/tv"
-             element={<TVSubscription />}
-              />
+            element={<TVSubscription />}
+          />
 
           {/* ================= BILLS ================= */}
 
           <Route
             path="/bills"
             element={<Bills />}
-         />
+          />
 
           <Route
             path="/electricity"
             element={<Electricity />}
-         />
+          />
 
           <Route
             path="/electricity/verification"
             element={<ElectricityVerification />}
-         />
+          />
 
           <Route
             path="/electricity/payment-confirmation"
             element={<ElectricityPaymentConfirmation />}
-         />
+          />
 
           {/* ================= BETTING ================= */}
 
@@ -519,7 +833,7 @@ const App: React.FC = () => {
             element={<Betting />}
           />
 
-          {/* ================= SAFEBOX ================= */}
+          {/* ================= SAVINGS ================= */}
 
           <Route
             path="/safebox"
@@ -531,6 +845,7 @@ const App: React.FC = () => {
               />
             }
           />
+
           <Route
             path="/savings"
             element={<Savings />}
