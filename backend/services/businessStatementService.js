@@ -240,6 +240,7 @@ const getBusinessLedgerTransactions = async ({
 }) => {
   const result = await pool.query(
     `
+      
       SELECT
         id,
         account_id,
@@ -251,7 +252,7 @@ const getBusinessLedgerTransactions = async ({
         status,
         balance_before,
         balance_after,
-        fee,
+        0::numeric AS fee,
         created_at
       FROM transactions
       WHERE account_id = $1
