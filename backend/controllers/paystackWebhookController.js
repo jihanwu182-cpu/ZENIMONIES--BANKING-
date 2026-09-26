@@ -1,3 +1,4 @@
+
 const crypto = require('crypto');
 const pool = require('../config/database');
 
@@ -23,24 +24,14 @@ const verifyPaystackSignature = (req) => {
       .update(rawBody)
       .digest('hex');
 
-    const received = Buffer.from(
-      String(signature),
-      'utf8'
-    );
-
-    const expected = Buffer.from(
-      expectedSignature,
-      'utf8'
-    );
+    const received = Buffer.from(String(signature), 'utf8');
+    const expected = Buffer.from(expectedSignature, 'utf8');
 
     if (received.length !== expected.length) {
       return false;
     }
 
-    return crypto.timingSafeEqual(
-      received,
-      expected
-    );
+    return crypto.timingSafeEqual(received, expected);
   } catch (error) {
     console.error(
       'Paystack signature verification error:',
@@ -58,9 +49,7 @@ const verifyPaystackSignature = (req) => {
 const parsePaystackBody = (req) => {
   try {
     if (Buffer.isBuffer(req.body)) {
-      return JSON.parse(
-        req.body.toString('utf8')
-      );
+      return JSON.parse(req.body.toString('utf8'));
     }
 
     if (typeof req.body === 'string') {
@@ -82,50 +71,26 @@ const parsePaystackBody = (req) => {
 // ACCOUNT BALANCE LIMIT
 // ============================================================
 
-const getAccountLimit = (
-  kycStatus,
-  kycTier
-) => {
-  const status = String(
-    kycStatus || ''
-  ).toLowerCase();
-
-  const tier = Number(
-    kycTier || 0
-  );
+const getAccountLimit = (kycStatus, kycTier) => {
+  const status = String(kycStatus || '').toLowerCase();
+  const tier = Number(kycTier || 0);
 
   const verified =
     status === 'verified' ||
     status === 'approved' ||
     status === 'completed';
 
-  // ----------------------------------------------------------
-  // NOT VERIFIED
-  // ----------------------------------------------------------
-
   if (!verified) {
     return 50000;
   }
-
-  // ----------------------------------------------------------
-  // TIER 3
-  // ----------------------------------------------------------
 
   if (tier >= 3) {
     return null;
   }
 
-  // ----------------------------------------------------------
-  // TIER 2
-  // ----------------------------------------------------------
-
   if (tier === 2) {
     return 500000;
   }
-
-  // ----------------------------------------------------------
-  // TIER 1
-  // ----------------------------------------------------------
 
   if (tier === 1) {
     return 200000;
@@ -137,144 +102,87 @@ const getAccountLimit = (
 // ============================================================
 // PROCESS SUCCESSFUL PAYSTACK CHARGE
 // ============================================================
-//
-// IMPORTANT:
-//
-// This handler only credits a deposit when:
-//
-// 1. Paystack's webhook signature is valid.
-// 2. The deposit reference exists in Zenimonies.
-// 3. The deposit is still pending.
-// 4. The Paystack amount matches the requested amount.
-// 5. The account is active.
-// 6. The resulting balance does not exceed the KYC limit.
-//
-// The frontend cannot directly credit the balance.
-// ============================================================
 
-const handleSuccessfulCharge = async (
-  eventData
-) => {
-  const reference =
-    eventData?.reference;
+const handleSuccessfulCharge = async (eventData) => {
+  const reference = eventData?.reference;
 
   if (!reference) {
     return {
       handled: false,
-      message:
-        'Charge received without a reference',
+      message: 'Charge received without a reference',
     };
   }
 
-  const client =
-    await pool.connect();
+  const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
-    // ========================================================
-    // FIND AND LOCK DEPOSIT
-    // ========================================================
+    const depositResult = await client.query(
+      `
+      SELECT
+        d.id,
+        d.account_id,
+        d.amount,
+        d.currency,
+        d.reference,
+        d.payment_method,
+        d.status,
+        a.user_id,
+        a.balance,
+        a.currency AS account_currency,
+        a.status AS account_status,
+        u.kyc_status,
+        u.kyc_tier
+      FROM deposits d
+      INNER JOIN accounts a
+        ON a.id = d.account_id
+      INNER JOIN users u
+        ON u.id = a.user_id
+      WHERE d.reference = $1
+      FOR UPDATE OF d, a
+      `,
+      [reference]
+    );
 
-    const depositResult =
-      await client.query(
-        `
-        SELECT
-          d.id,
-          d.account_id,
-          d.amount,
-          d.currency,
-          d.reference,
-          d.payment_method,
-          d.status,
-          a.user_id,
-          a.balance,
-          a.currency AS account_currency,
-          a.status AS account_status,
-          u.kyc_status,
-          u.kyc_tier
-        FROM deposits d
-        INNER JOIN accounts a
-          ON a.id = d.account_id
-        INNER JOIN users u
-          ON u.id = a.user_id
-        WHERE d.reference = $1
-        FOR UPDATE
-        `,
-        [reference]
-      );
-
-    if (
-      depositResult.rows.length === 0
-    ) {
+    if (depositResult.rows.length === 0) {
       await client.query('ROLLBACK');
 
       return {
         handled: false,
-        message:
-          'Deposit reference not found',
+        message: 'Deposit reference not found',
       };
     }
 
-    const deposit =
-      depositResult.rows[0];
+    const deposit = depositResult.rows[0];
 
-    // ========================================================
-    // IDEMPOTENCY
-    // ========================================================
-
-    if (
-      deposit.status === 'completed'
-    ) {
+    if (deposit.status === 'completed') {
       await client.query('ROLLBACK');
 
       return {
         handled: true,
         alreadyProcessed: true,
-        message:
-          'Deposit already processed',
+        message: 'Deposit already processed',
       };
     }
 
-    // ========================================================
-    // ONLY PENDING DEPOSITS CAN BE CREDITED
-    // ========================================================
-
-    if (
-      deposit.status !== 'pending'
-    ) {
+    if (deposit.status !== 'pending') {
       await client.query('ROLLBACK');
 
       return {
         handled: false,
-        message:
-          'Deposit is not pending',
+        message: 'Deposit is not pending',
       };
     }
 
-    // ========================================================
-    // ACCOUNT MUST BE ACTIVE
-    // ========================================================
-
-    if (
-      deposit.account_status !== 'active'
-    ) {
+    if (deposit.account_status !== 'active') {
       throw new Error(
         'Cannot credit an inactive account'
       );
     }
 
-    // ========================================================
-    // VALIDATE PAYMENT AMOUNT
-    // ========================================================
-
-    const expectedAmount =
-      Number(deposit.amount);
-
-    const paidAmount =
-      Number(
-        eventData.amount || 0
-      ) / 100;
+    const expectedAmount = Number(deposit.amount);
+    const paidAmount = Number(eventData.amount || 0) / 100;
 
     if (
       !Number.isFinite(paidAmount) ||
@@ -286,95 +194,56 @@ const handleSuccessfulCharge = async (
     }
 
     if (
-      Math.abs(
-        paidAmount -
-          expectedAmount
-      ) > 0.01
+      !Number.isFinite(expectedAmount) ||
+      Math.abs(paidAmount - expectedAmount) > 0.01
     ) {
       throw new Error(
         `Paystack amount mismatch. Expected ${expectedAmount}, received ${paidAmount}`
       );
     }
 
-    // ========================================================
-    // VALIDATE CURRENCY
-    // ========================================================
+    const paymentCurrency = String(
+      eventData.currency || ''
+    ).toUpperCase();
 
-    const paymentCurrency =
-      String(
-        eventData.currency ||
-          ''
-      ).toUpperCase();
-
-    const accountCurrency =
-      String(
-        deposit.account_currency ||
-          deposit.currency ||
-          ''
-      ).toUpperCase();
+    const accountCurrency = String(
+      deposit.account_currency || deposit.currency || ''
+    ).toUpperCase();
 
     if (
       paymentCurrency &&
       accountCurrency &&
-      paymentCurrency !==
-        accountCurrency
+      paymentCurrency !== accountCurrency
     ) {
       throw new Error(
         `Currency mismatch. Expected ${accountCurrency}, received ${paymentCurrency}`
       );
     }
 
-    // ========================================================
-    // CURRENT BALANCE
-    // ========================================================
-
-    const currentBalance =
-      Number(
-        deposit.balance || 0
-      );
+    const currentBalance = Number(deposit.balance || 0);
 
     if (
-      !Number.isFinite(
-        currentBalance
-      ) ||
+      !Number.isFinite(currentBalance) ||
       currentBalance < 0
     ) {
-      throw new Error(
-        'Invalid account balance'
-      );
+      throw new Error('Invalid account balance');
     }
 
-    // ========================================================
-    // ACCOUNT LIMIT
-    // ========================================================
+    const accountLimit = getAccountLimit(
+      deposit.kyc_status,
+      deposit.kyc_tier
+    );
 
-    const accountLimit =
-      getAccountLimit(
-        deposit.kyc_status,
-        deposit.kyc_tier
-      );
-
-    const projectedBalance =
-      currentBalance +
-      paidAmount;
-
-    // ========================================================
-    // ENFORCE BALANCE LIMIT
-    // ========================================================
+    const projectedBalance = currentBalance + paidAmount;
 
     if (
       accountLimit !== null &&
-      projectedBalance >
-        accountLimit
+      projectedBalance > accountLimit
     ) {
       throw new Error(
         `Payment would exceed account balance limit of ${accountLimit}`
       );
     }
-
-    // ========================================================
-    // CREDIT ACCOUNT
-    // ========================================================
 
     await client.query(
       `
@@ -384,31 +253,17 @@ const handleSuccessfulCharge = async (
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
       `,
-      [
-        projectedBalance,
-        deposit.account_id,
-      ]
+      [projectedBalance, deposit.account_id]
     );
-
-    // ========================================================
-    // MARK DEPOSIT COMPLETED
-    // ========================================================
 
     await client.query(
       `
       UPDATE deposits
-      SET
-        status = 'completed'
+      SET status = 'completed'
       WHERE id = $1
       `,
       [deposit.id]
     );
-
-    // ========================================================
-    // CREATE COMPLETED TRANSACTION
-    // ========================================================
-
-    const transactionReference = reference;
 
     await client.query(
       `
@@ -439,16 +294,12 @@ const handleSuccessfulCharge = async (
         deposit.account_id,
         paidAmount,
         accountCurrency || 'NGN',
-        transactionReference,
+        reference,
         `Paystack deposit ${reference}`,
         currentBalance,
         projectedBalance,
       ]
     );
-
-    // ========================================================
-    // AUDIT LOG
-    // ========================================================
 
     try {
       await client.query(
@@ -458,11 +309,7 @@ const handleSuccessfulCharge = async (
           action,
           description
         )
-        VALUES (
-          $1,
-          'deposit_completed',
-          $2
-        )
+        VALUES ($1, 'deposit_completed', $2)
         `,
         [
           deposit.user_id,
@@ -476,10 +323,6 @@ const handleSuccessfulCharge = async (
       );
     }
 
-    // ========================================================
-    // COMMIT
-    // ========================================================
-
     await client.query('COMMIT');
 
     console.log(
@@ -491,16 +334,17 @@ const handleSuccessfulCharge = async (
     return {
       handled: true,
       alreadyProcessed: false,
-      message:
-        'Deposit successfully credited',
+      message: 'Deposit successfully credited',
     };
-
   } catch (error) {
     try {
-      await client.query(
-        'ROLLBACK'
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error(
+        'Deposit rollback error:',
+        rollbackError
       );
-    } catch {}
+    }
 
     console.error(
       'PAYSTACK CHARGE PROCESSING ERROR:',
@@ -508,7 +352,6 @@ const handleSuccessfulCharge = async (
     );
 
     throw error;
-
   } finally {
     client.release();
   }
@@ -518,75 +361,85 @@ const handleSuccessfulCharge = async (
 // TRANSFER SUCCESS
 // ============================================================
 
-const handleTransferSuccess = async (
-  eventData
-) => {
-  const reference =
-    eventData?.reference;
+const handleTransferSuccess = async (eventData) => {
+  const reference = eventData?.reference;
 
   if (!reference) {
     return {
-      message:
-        'Transfer webhook received without reference',
+      message: 'Transfer webhook received without reference',
     };
   }
 
-  const client =
-    await pool.connect();
+  const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
-    const transferResult =
-      await client.query(
-        `
-        SELECT
-          id,
-          account_id,
-          amount,
-          currency,
-          reference,
-          status,
-          provider_reference
-        FROM bank_transfers
-        WHERE reference = $1
-        FOR UPDATE
-        `,
-        [reference]
+    const transferResult = await client.query(
+      `
+      SELECT
+        id,
+        account_id,
+        amount,
+        currency,
+        reference,
+        status,
+        provider_reference
+      FROM bank_transfers
+      WHERE reference = $1
+      FOR UPDATE
+      `,
+      [reference]
+    );
+
+    if (transferResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+
+      return {
+        message: 'Transfer reference not found',
+      };
+    }
+
+    const transfer = transferResult.rows[0];
+
+    // A completed transfer must never be processed twice.
+    if (transfer.status === 'completed') {
+      await client.query('ROLLBACK');
+
+      return {
+        message: 'Transfer already processed',
+      };
+    }
+
+    // Do not resurrect a failed or reversed transfer.
+    if (
+      transfer.status === 'failed' ||
+      transfer.status === 'reversed' ||
+      transfer.status === 'cancelled'
+    ) {
+      await client.query('ROLLBACK');
+
+      console.error(
+        `Paystack success received for terminal transfer ${reference}, status=${transfer.status}`
       );
 
+      return {
+        message:
+          'Transfer is already in a terminal state; manual reconciliation required',
+      };
+    }
+
+    // Only transfers awaiting provider confirmation can complete.
     if (
-      transferResult.rows.length === 0
+      transfer.status !== 'processing' &&
+      transfer.status !== 'pending'
     ) {
       await client.query('ROLLBACK');
 
       return {
-        message:
-          'Transfer reference not found',
+        message: 'Transfer is not awaiting confirmation',
       };
     }
-
-    const transfer =
-      transferResult.rows[0];
-
-    // ========================================================
-    // IDEMPOTENCY
-    // ========================================================
-
-    if (
-      transfer.status === 'completed'
-    ) {
-      await client.query('ROLLBACK');
-
-      return {
-        message:
-          'Transfer already processed',
-      };
-    }
-
-    // ========================================================
-    // COMPLETE TRANSFER
-    // ========================================================
 
     await client.query(
       `
@@ -599,21 +452,20 @@ const handleTransferSuccess = async (
       WHERE id = $2
       `,
       [
-        reference,
+        eventData.transfer_code ||
+          eventData.reference ||
+          reference,
         transfer.id,
       ]
     );
 
-    // ========================================================
-    // COMPLETE ORIGINAL TRANSACTION
-    // ========================================================
-
     await client.query(
       `
       UPDATE transactions
-      SET
-        status = 'completed'
+      SET status = 'completed'
       WHERE reference = $1
+        AND type = 'transfer'
+        AND status IN ('pending', 'processing')
       `,
       [reference]
     );
@@ -625,16 +477,17 @@ const handleTransferSuccess = async (
     );
 
     return {
-      message:
-        'Transfer success processed',
+      message: 'Transfer success processed',
     };
-
   } catch (error) {
     try {
-      await client.query(
-        'ROLLBACK'
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error(
+        'Transfer success rollback error:',
+        rollbackError
       );
-    } catch {}
+    }
 
     console.error(
       'Transfer success processing error:',
@@ -642,7 +495,6 @@ const handleTransferSuccess = async (
     );
 
     throw error;
-
   } finally {
     client.release();
   }
@@ -651,22 +503,32 @@ const handleTransferSuccess = async (
 // ============================================================
 // TRANSFER FAILED
 // ============================================================
+//
+// SAFETY RULES:
+//
+// 1. Lock the transfer row before making a decision.
+// 2. Never refund a completed transfer.
+// 3. Never refund a transfer twice.
+// 4. Only refund an eligible pending/processing transfer.
+// 5. Lock the account before calculating its new balance.
+// 6. Update the transfer, ledger and refund atomically.
+//
+// IMPORTANT:
+// A provider's failure event must be genuine and final.
+// Transfers with uncertain provider outcomes require
+// reconciliation before a refund is issued.
+// ============================================================
 
-const handleTransferFailed = async (
-  eventData
-) => {
-  const reference =
-    eventData?.reference;
+const handleTransferFailed = async (eventData) => {
+  const reference = eventData?.reference;
 
   if (!reference) {
     return {
-      message:
-        'Transfer webhook received without reference',
+      message: 'Transfer webhook received without reference',
     };
   }
 
-  const client =
-    await pool.connect();
+  const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
@@ -675,76 +537,109 @@ const handleTransferFailed = async (
     // LOCK TRANSFER
     // ========================================================
 
-    const transferResult =
-      await client.query(
-        `
-        SELECT
-          id,
-          account_id,
-          amount,
-          currency,
-          reference,
-          status
-        FROM bank_transfers
-        WHERE reference = $1
-        FOR UPDATE
-        `,
-        [reference]
+    const transferResult = await client.query(
+      `
+      SELECT
+        id,
+        account_id,
+        amount,
+        currency,
+        reference,
+        status
+      FROM bank_transfers
+      WHERE reference = $1
+      FOR UPDATE
+      `,
+      [reference]
+    );
+
+    if (transferResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+
+      return {
+        message: 'Transfer reference not found',
+      };
+    }
+
+    const transfer = transferResult.rows[0];
+
+    // ========================================================
+    // NEVER REFUND A COMPLETED TRANSFER
+    // ========================================================
+
+    if (transfer.status === 'completed') {
+      await client.query('ROLLBACK');
+
+      console.error(
+        `Rejected late failure webhook for completed transfer ${reference}. Reconciliation required.`
       );
 
+      return {
+        message:
+          'Transfer already completed. No refund issued.',
+      };
+    }
+
+    // ========================================================
+    // PREVENT DUPLICATE REFUNDS
+    // ========================================================
+
     if (
-      transferResult.rows.length === 0
+      transfer.status === 'failed' ||
+      transfer.status === 'reversed' ||
+      transfer.status === 'cancelled'
     ) {
       await client.query('ROLLBACK');
 
       return {
         message:
-          'Transfer reference not found',
+          'Transfer already in a terminal state. No refund issued.',
       };
     }
 
-    const transfer =
-      transferResult.rows[0];
-
     // ========================================================
-    // IDEMPOTENCY
+    // ONLY REFUND PENDING OR PROCESSING TRANSFERS
     // ========================================================
 
     if (
-      transfer.status === 'failed'
+      transfer.status !== 'pending' &&
+      transfer.status !== 'processing'
     ) {
       await client.query('ROLLBACK');
 
+      console.error(
+        `Transfer ${reference} has unexpected status ${transfer.status}. No refund issued.`
+      );
+
       return {
         message:
-          'Transfer already marked failed',
+          'Transfer status is not eligible for automatic refund',
       };
     }
 
     // ========================================================
-    // GET ORIGINAL TRANSACTION
+    // LOCK ORIGINAL TRANSACTION
     // ========================================================
 
-    const transactionResult =
-      await client.query(
-        `
-        SELECT
-          id,
-          amount,
-          status,
-          balance_before,
-          balance_after
-        FROM transactions
-        WHERE reference = $1
-          AND type = 'transfer'
-        FOR UPDATE
-        `,
-        [reference]
-      );
+    const transactionResult = await client.query(
+      `
+      SELECT
+        id,
+        account_id,
+        amount,
+        currency,
+        status,
+        balance_before,
+        balance_after
+      FROM transactions
+      WHERE reference = $1
+        AND type = 'transfer'
+      FOR UPDATE
+      `,
+      [reference]
+    );
 
-    if (
-      transactionResult.rows.length === 0
-    ) {
+    if (transactionResult.rows.length === 0) {
       throw new Error(
         'Original transfer transaction not found'
       );
@@ -753,20 +648,101 @@ const handleTransferFailed = async (
     const originalTransaction =
       transactionResult.rows[0];
 
-    // ========================================================
-    // PREVENT DOUBLE REFUND
-    // ========================================================
+    // Verify that the ledger and transfer refer to the same account.
+    if (
+      String(originalTransaction.account_id) !==
+      String(transfer.account_id)
+    ) {
+      throw new Error(
+        'Transfer account does not match original ledger transaction'
+      );
+    }
+
+    // A completed ledger transaction cannot be refunded automatically.
+    if (originalTransaction.status === 'completed') {
+      await client.query('ROLLBACK');
+
+      console.error(
+        `Transfer ${reference} has a completed ledger transaction. No automatic refund issued.`
+      );
+
+      return {
+        message:
+          'Ledger transaction is completed. Manual reconciliation required.',
+      };
+    }
 
     if (
-      originalTransaction.status ===
-      'failed'
+      originalTransaction.status !== 'pending' &&
+      originalTransaction.status !== 'processing'
     ) {
       await client.query('ROLLBACK');
 
       return {
         message:
-          'Original transfer already failed/refunded',
+          'Original transaction is not eligible for automatic refund',
       };
+    }
+
+    // ========================================================
+    // VALIDATE REFUND AMOUNT
+    // ========================================================
+
+    const refundAmount = Number(
+      originalTransaction.amount
+    );
+
+    if (
+      !Number.isFinite(refundAmount) ||
+      refundAmount <= 0
+    ) {
+      throw new Error(
+        'Invalid transfer refund amount'
+      );
+    }
+
+    // ========================================================
+    // LOCK ACCOUNT
+    // ========================================================
+
+    const accountResult = await client.query(
+      `
+      SELECT
+        id,
+        balance,
+        currency
+      FROM accounts
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [transfer.account_id]
+    );
+
+    if (accountResult.rows.length === 0) {
+      throw new Error(
+        'Account for failed transfer not found'
+      );
+    }
+
+    const account = accountResult.rows[0];
+
+    const oldBalance = Number(account.balance);
+
+    if (
+      !Number.isFinite(oldBalance) ||
+      oldBalance < 0
+    ) {
+      throw new Error(
+        'Invalid account balance during refund'
+      );
+    }
+
+    const newBalance = oldBalance + refundAmount;
+
+    if (!Number.isFinite(newBalance)) {
+      throw new Error(
+        'Invalid resulting account balance'
+      );
     }
 
     // ========================================================
@@ -783,72 +759,25 @@ const handleTransferFailed = async (
       UPDATE bank_transfers
       SET
         status = 'failed',
-        provider_reference = $1,
+        provider_reference = COALESCE(
+          $1,
+          provider_reference
+        ),
         failure_reason = $2
       WHERE id = $3
       `,
       [
-        reference,
-        failureReason,
+        eventData.transfer_code ||
+          eventData.reference ||
+          reference,
+        String(failureReason).slice(0, 1000),
         transfer.id,
       ]
     );
 
     // ========================================================
-    // LOCK ACCOUNT
+    // REFUND THE ORIGINAL ACCOUNT
     // ========================================================
-
-    const accountResult =
-      await client.query(
-        `
-        SELECT
-          id,
-          balance,
-          currency
-        FROM accounts
-        WHERE id = $1
-        FOR UPDATE
-        `,
-        [transfer.account_id]
-      );
-
-    if (
-      accountResult.rows.length === 0
-    ) {
-      throw new Error(
-        'Account for failed transfer not found'
-      );
-    }
-
-    const account =
-      accountResult.rows[0];
-
-    const oldBalance =
-      Number(account.balance);
-
-    const refundAmount =
-      Number(
-        originalTransaction.amount
-      );
-
-    if (
-      !Number.isFinite(
-        refundAmount
-      ) ||
-      refundAmount <= 0
-    ) {
-      throw new Error(
-        'Invalid transfer refund amount'
-      );
-    }
-
-    // ========================================================
-    // REFUND
-    // ========================================================
-
-    const newBalance =
-      oldBalance +
-      refundAmount;
 
     await client.query(
       `
@@ -858,10 +787,7 @@ const handleTransferFailed = async (
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
       `,
-      [
-        newBalance,
-        account.id,
-      ]
+      [newBalance, account.id]
     );
 
     // ========================================================
@@ -871,22 +797,18 @@ const handleTransferFailed = async (
     await client.query(
       `
       UPDATE transactions
-      SET
-        status = 'failed'
+      SET status = 'failed'
       WHERE id = $1
       `,
       [originalTransaction.id]
     );
 
     // ========================================================
-    // REFUND TRANSACTION
+    // CREATE REFUND LEDGER ENTRY
     // ========================================================
 
     const refundReference =
-      `ZEN-REF-${Date.now()}-${crypto
-        .randomBytes(4)
-        .toString('hex')
-        .toUpperCase()}`;
+      `ZEN-REF-${crypto.randomUUID()}`;
 
     await client.query(
       `
@@ -917,6 +839,7 @@ const handleTransferFailed = async (
         account.id,
         refundAmount,
         transfer.currency ||
+          originalTransaction.currency ||
           account.currency,
         refundReference,
         `Refund for failed bank transfer ${reference}`,
@@ -924,6 +847,10 @@ const handleTransferFailed = async (
         newBalance,
       ]
     );
+
+    // ========================================================
+    // COMMIT ALL CHANGES TOGETHER
+    // ========================================================
 
     await client.query('COMMIT');
 
@@ -936,13 +863,15 @@ const handleTransferFailed = async (
       message:
         'Transfer failure processed and balance refunded',
     };
-
   } catch (error) {
     try {
-      await client.query(
-        'ROLLBACK'
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error(
+        'Transfer failure rollback error:',
+        rollbackError
       );
-    } catch {}
+    }
 
     console.error(
       'Transfer failure processing error:',
@@ -950,7 +879,6 @@ const handleTransferFailed = async (
     );
 
     throw error;
-
   } finally {
     client.release();
   }
@@ -960,43 +888,24 @@ const handleTransferFailed = async (
 // MAIN PAYSTACK WEBHOOK
 // ============================================================
 
-const handlePaystackWebhook = async (
-  req,
-  res
-) => {
-  // ==========================================================
-  // SIGNATURE MUST BE VALID
-  // ==========================================================
-
-  if (
-    !verifyPaystackSignature(req)
-  ) {
+const handlePaystackWebhook = async (req, res) => {
+  if (!verifyPaystackSignature(req)) {
     console.error(
       'Rejected Paystack webhook: invalid signature'
     );
 
     return res.status(401).json({
       success: false,
-      message:
-        'Invalid webhook signature',
+      message: 'Invalid webhook signature',
     });
   }
 
-  // ==========================================================
-  // PARSE EVENT
-  // ==========================================================
+  const event = parsePaystackBody(req);
 
-  const event =
-    parsePaystackBody(req);
-
-  if (
-    !event ||
-    !event.event
-  ) {
+  if (!event || !event.event) {
     return res.status(400).json({
       success: false,
-      message:
-        'Invalid webhook payload',
+      message: 'Invalid webhook payload',
     });
   }
 
@@ -1005,69 +914,38 @@ const handlePaystackWebhook = async (
   );
 
   try {
-    // ========================================================
-    // SUCCESSFUL PAYMENT / CHECKOUT
-    // ========================================================
-
-    if (
-      event.event ===
-      'charge.success'
-    ) {
-      const result =
-        await handleSuccessfulCharge(
-          event.data || {}
-        );
+    if (event.event === 'charge.success') {
+      const result = await handleSuccessfulCharge(
+        event.data || {}
+      );
 
       return res.status(200).json({
         success: true,
-        message:
-          result.message,
+        message: result.message,
       });
     }
 
-    // ========================================================
-    // TRANSFER SUCCESS
-    // ========================================================
-
-    if (
-      event.event ===
-      'transfer.success'
-    ) {
-      const result =
-        await handleTransferSuccess(
-          event.data || {}
-        );
+    if (event.event === 'transfer.success') {
+      const result = await handleTransferSuccess(
+        event.data || {}
+      );
 
       return res.status(200).json({
         success: true,
-        message:
-          result.message,
+        message: result.message,
       });
     }
 
-    // ========================================================
-    // TRANSFER FAILED
-    // ========================================================
-
-    if (
-      event.event ===
-      'transfer.failed'
-    ) {
-      const result =
-        await handleTransferFailed(
-          event.data || {}
-        );
+    if (event.event === 'transfer.failed') {
+      const result = await handleTransferFailed(
+        event.data || {}
+      );
 
       return res.status(200).json({
         success: true,
-        message:
-          result.message,
+        message: result.message,
       });
     }
-
-    // ========================================================
-    // OTHER PAYSTACK EVENTS
-    // ========================================================
 
     console.log(
       `Paystack event acknowledged without processing: ${event.event}`
@@ -1075,27 +953,17 @@ const handlePaystackWebhook = async (
 
     return res.status(200).json({
       success: true,
-      message:
-        'Webhook received',
+      message: 'Webhook received',
     });
-
   } catch (error) {
     console.error(
       'PAYSTACK WEBHOOK PROCESSING ERROR:',
       error
     );
 
-    /*
-     * Return 500 so Paystack can retry the webhook.
-     *
-     * We deliberately do NOT acknowledge a payment that
-     * failed to process internally.
-     */
-
     return res.status(500).json({
       success: false,
-      message:
-        'Webhook processing failed',
+      message: 'Webhook processing failed',
     });
   }
 };
