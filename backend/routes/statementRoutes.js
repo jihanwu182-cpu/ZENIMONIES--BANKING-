@@ -459,6 +459,153 @@ router.post(
     }
   }
 );
+/* ============================================================
+   EMAIL BUSINESS ACCOUNT STATEMENT
+   Sends the statement to the registered business owner's email.
+   ============================================================ */
+
+router.post(
+  '/business/:businessId/email',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const { businessId } = req.params;
+      const { startDate, endDate, format } = req.body;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required.',
+        });
+      }
+
+      const selectedFormat = String(
+        format || 'pdf'
+      ).toLowerCase().trim();
+
+      if (!['pdf', 'csv'].includes(selectedFormat)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Format must be PDF or CSV.',
+        });
+      }
+
+      // The business statement service verifies ownership.
+      const statement =
+        await buildBusinessAccountStatement({
+          userId,
+          businessId,
+          startDate,
+          endDate,
+        });
+
+      // Always use the authenticated owner's registered email.
+      const ownerResult = await require('../config/database').query(
+        `
+          SELECT email, full_name
+          FROM users
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [userId]
+      );
+
+      if (
+        ownerResult.rows.length === 0 ||
+        !ownerResult.rows[0].email
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Registered email address not found.',
+        });
+      }
+
+      const owner = ownerResult.rows[0];
+
+      let attachmentBuffer;
+      let contentType;
+      let filename;
+
+      const safeName = String(
+        statement.business.businessName || 'Business'
+      )
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .slice(0, 60);
+
+      if (selectedFormat === 'pdf') {
+        attachmentBuffer =
+          await generatePDFStatement(statement);
+
+        if (
+          !Buffer.isBuffer(attachmentBuffer) ||
+          attachmentBuffer.subarray(0, 5).toString() !== '%PDF-'
+        ) {
+          throw new Error('PDF generation failed.');
+        }
+
+        contentType = 'application/pdf';
+
+        filename =
+          `Zenimonies_Business_Statement_${safeName}.pdf`;
+      } else {
+        const csv = generateCSVStatement(statement);
+
+        if (typeof csv !== 'string' || !csv.trim()) {
+          throw new Error('CSV generation failed.');
+        }
+
+        // The CSV generator already supplies its BOM.
+        attachmentBuffer = Buffer.from(csv, 'utf8');
+
+        contentType = 'text/csv';
+
+        filename =
+          `Zenimonies_Business_Statement_${safeName}.csv`;
+      }
+
+      await sendAccountStatementEmail({
+        to: owner.email.trim(),
+        fullName:
+          statement.business.businessName ||
+          owner.full_name ||
+          'Business Customer',
+        startDate,
+        endDate,
+        format: selectedFormat,
+        attachmentBuffer,
+        contentType,
+        filename,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message:
+          'Business statement sent to your registered email address.',
+        data: {
+          format: selectedFormat,
+          startDate,
+          endDate,
+        },
+      });
+    } catch (error) {
+      console.error(
+        'Business statement email failed:',
+        error.message
+      );
+
+      if (res.headersSent) return;
+
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message:
+          error.message ||
+          'Unable to email the business statement.',
+      });
+    }
+  }
+);
+
 // ============================================================
 // EXPORT
 // ============================================================
