@@ -1447,6 +1447,30 @@ END
 $$;
 
 -- ============================================================
+-- ZENIMONIES SMS ALERT PREFERENCES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS sms_preferences (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL UNIQUE
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    transaction_alerts BOOLEAN NOT NULL DEFAULT true,
+
+    security_alerts BOOLEAN NOT NULL DEFAULT true,
+
+    promotional_alerts BOOLEAN NOT NULL DEFAULT false,
+
+    created_at TIMESTAMPTZ NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL
+        DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================
 -- INDEXES
 -- ============================================================
 
