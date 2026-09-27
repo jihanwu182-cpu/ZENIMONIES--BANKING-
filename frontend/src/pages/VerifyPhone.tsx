@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import axios, { AxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
@@ -17,12 +18,18 @@ type VerifyResponse = {
     kyc_status?: string;
     kyc_tier?: number;
   };
+  development_otp?: string;
 };
 
 type ErrorResponse = {
   success?: boolean;
   message?: string;
 };
+
+// ============================================================
+// ZENIMONIES PHONE VERIFICATION
+// Green and white banking design
+// ============================================================
 
 const VerifyPhone: React.FC = () => {
   const navigate = useNavigate();
@@ -33,17 +40,14 @@ const VerifyPhone: React.FC = () => {
 
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-
   const [countdown, setCountdown] = useState(0);
 
-  // ============================================================
+  // ==========================================================
   // RESEND COUNTDOWN
-  // ============================================================
+  // ==========================================================
 
   useEffect(() => {
-    if (countdown <= 0) {
-      return;
-    }
+    if (countdown <= 0) return;
 
     const timer = window.setInterval(() => {
       setCountdown((previous) => {
@@ -56,14 +60,12 @@ const VerifyPhone: React.FC = () => {
       });
     }, 1000);
 
-    return () => {
-      window.clearInterval(timer);
-    };
+    return () => window.clearInterval(timer);
   }, [countdown]);
 
-  // ============================================================
-  // GET TOKEN
-  // ============================================================
+  // ==========================================================
+  // AUTHENTICATION TOKEN
+  // ==========================================================
 
   const getToken = (): string | null => {
     return (
@@ -72,9 +74,9 @@ const VerifyPhone: React.FC = () => {
     );
   };
 
-  // ============================================================
+  // ==========================================================
   // VERIFY PHONE
-  // ============================================================
+  // ==========================================================
 
   const handleVerify = async (
     event: React.FormEvent<HTMLFormElement>
@@ -84,14 +86,8 @@ const VerifyPhone: React.FC = () => {
     setError('');
     setMessage('');
 
-    // ----------------------------------------------------------
-    // VALIDATE OTP
-    // ----------------------------------------------------------
-
     if (!/^\d{6}$/.test(otp)) {
-      setError(
-        'Please enter the 6-digit verification code.'
-      );
+      setError('Please enter the 6-digit verification code.');
       return;
     }
 
@@ -107,59 +103,29 @@ const VerifyPhone: React.FC = () => {
     setLoading(true);
 
     try {
-      console.log(
-        'Zenimonies phone verification request'
-      );
-
-      const response =
-        await axios.post<VerifyResponse>(
-          `${API_URL}/api/auth/verify-phone-otp`,
-          {
-            otp,
+      const response = await axios.post<VerifyResponse>(
+        `${API_URL}/api/auth/verify-phone-otp`,
+        { otp },
+        {
+          timeout: 30000,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
           },
-          {
-            timeout: 30000,
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        }
+      );
 
       const data = response.data;
 
-      console.log(
-        'Zenimonies phone verification response:',
-        data
-      );
-
       if (data.success !== true) {
         throw new Error(
-          data.message ||
-            'Phone verification failed.'
+          data.message || 'Phone verification failed.'
         );
       }
 
-      // --------------------------------------------------------
-      // UPDATE LOCAL USER
-      // --------------------------------------------------------
-      //
-      // IMPORTANT:
-      // Phone verification does NOT mean KYC verification.
-      //
-      // Therefore:
-      //
-      // phone_verified = true
-      // is_verified    = unchanged
-      //
-      // KYC will later be verified through the actual
-      // identity verification process.
-      // --------------------------------------------------------
+      // Phone verification does not automatically verify KYC.
 
-      const storedUser =
-        localStorage.getItem(
-          'zenimonies_user'
-        );
+      const storedUser = localStorage.getItem('zenimonies_user');
 
       if (storedUser) {
         try {
@@ -167,14 +133,9 @@ const VerifyPhone: React.FC = () => {
 
           const updatedUser = {
             ...user,
-
-            // Phone verification only.
             phone_verified: true,
             phoneVerified: true,
-
-            // Do NOT automatically mark identity/KYC verified.
-            is_verified:
-              user.is_verified ?? false,
+            is_verified: user.is_verified ?? false,
           };
 
           localStorage.setItem(
@@ -188,58 +149,32 @@ const VerifyPhone: React.FC = () => {
         }
       }
 
-      // --------------------------------------------------------
-      // CLEAR OLD DEVELOPMENT OTP
-      // --------------------------------------------------------
-
       sessionStorage.removeItem(
         'zenimonies_development_otp'
       );
 
-      // --------------------------------------------------------
-      // SUCCESS
-      // --------------------------------------------------------
-
       setOtp('');
-
       setMessage(
-        data.message ||
-          'Phone number verified successfully.'
+        data.message || 'Phone number verified successfully.'
       );
 
-      // --------------------------------------------------------
-      // GO TO PROFILE
-      // --------------------------------------------------------
-
-      setTimeout(() => {
+      window.setTimeout(() => {
         navigate('/profile');
       }, 1200);
+    } catch (err: unknown) {
+      console.error('Zenimonies phone verification error:', err);
 
-    } catch (error: unknown) {
-      console.error(
-        'Zenimonies phone verification error:',
-        error
-      );
-
-      if (axios.isAxiosError(error)) {
-        const axiosError =
-          error as AxiosError<ErrorResponse>;
-
-        const response =
-          axiosError.response;
+      if (axios.isAxiosError(err)) {
+        const axiosError = err as AxiosError<ErrorResponse>;
+        const response = axiosError.response;
 
         if (response?.status === 401) {
           setError(
             'Your authentication session is invalid or expired. Please log in again.'
           );
         } else if (response?.data?.message) {
-          setError(
-            response.data.message
-          );
-        } else if (
-          axiosError.code ===
-          'ECONNABORTED'
-        ) {
+          setError(response.data.message);
+        } else if (axiosError.code === 'ECONNABORTED') {
           setError(
             'The server took too long to respond. Please try again.'
           );
@@ -252,26 +187,22 @@ const VerifyPhone: React.FC = () => {
             `Phone verification failed. Server returned HTTP ${response.status}.`
           );
         }
-      } else if (error instanceof Error) {
-        setError(error.message);
+      } else if (err instanceof Error) {
+        setError(err.message);
       } else {
-        setError(
-          'Unable to verify phone number. Please try again.'
-        );
+        setError('Unable to verify phone number. Please try again.');
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // ============================================================
+  // ==========================================================
   // RESEND OTP
-  // ============================================================
+  // ==========================================================
 
   const handleResend = async () => {
-    if (resending || countdown > 0) {
-      return;
-    }
+    if (resending || countdown > 0) return;
 
     setError('');
     setMessage('');
@@ -288,34 +219,23 @@ const VerifyPhone: React.FC = () => {
     setResending(true);
 
     try {
-      console.log(
-        'Zenimonies resend phone OTP request'
+      const response = await axios.post<VerifyResponse>(
+        `${API_URL}/api/auth/send-phone-otp`,
+        {},
+        {
+          timeout: 30000,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
-
-      const response =
-        await axios.post<VerifyResponse>(
-          `${API_URL}/api/auth/send-phone-otp`,
-          {},
-          {
-            timeout: 30000,
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
 
       const data = response.data;
 
-      console.log(
-        'Zenimonies resend OTP response:',
-        data
-      );
-
       if (data.success !== true) {
         throw new Error(
-          data.message ||
-            'Unable to resend verification code.'
+          data.message || 'Unable to resend verification code.'
         );
       }
 
@@ -325,217 +245,660 @@ const VerifyPhone: React.FC = () => {
       );
 
       setCountdown(60);
-
       setOtp('');
 
-      // --------------------------------------------------------
-      // DEVELOPMENT OTP
-      // --------------------------------------------------------
-      //
-      // If the backend provides a development OTP during
-      // sandbox/testing, store it for testing.
-      //
-      // Production should deliver the OTP through SMS.
-      // --------------------------------------------------------
+      // Development OTP is stored only if the backend
+      // explicitly returns one. Never expose this in production.
 
-      const responseWithOtp =
-        data as VerifyResponse & {
-          development_otp?: string;
-        };
-
-      if (
-        responseWithOtp.development_otp
-      ) {
+      if (data.development_otp) {
         sessionStorage.setItem(
           'zenimonies_development_otp',
-          String(
-            responseWithOtp.development_otp
-          )
+          String(data.development_otp)
         );
       }
+    } catch (err: unknown) {
+      console.error('Zenimonies resend OTP error:', err);
 
-    } catch (error: unknown) {
-      console.error(
-        'Zenimonies resend OTP error:',
-        error
-      );
-
-      if (axios.isAxiosError(error)) {
-        const axiosError =
-          error as AxiosError<ErrorResponse>;
-
-        const response =
-          axiosError.response;
+      if (axios.isAxiosError(err)) {
+        const axiosError = err as AxiosError<ErrorResponse>;
+        const response = axiosError.response;
 
         if (response?.status === 401) {
           setError(
             'Your authentication session is invalid or expired. Please log in again.'
           );
         } else if (response?.data?.message) {
-          setError(
-            response.data.message
-          );
-        } else if (
-          axiosError.code ===
-          'ECONNABORTED'
-        ) {
+          setError(response.data.message);
+        } else if (axiosError.code === 'ECONNABORTED') {
           setError(
             'The server took too long to respond. Please try again.'
           );
         } else if (!response) {
-          setError(
-            'Unable to reach the Zenimonies server.'
-          );
+          setError('Unable to reach the Zenimonies server.');
         } else {
           setError(
             `Unable to resend the code. Server returned HTTP ${response.status}.`
           );
         }
-      } else if (error instanceof Error) {
-        setError(error.message);
+      } else if (err instanceof Error) {
+        setError(err.message);
       } else {
-        setError(
-          'Unable to resend verification code.'
-        );
+        setError('Unable to resend verification code.');
       }
     } finally {
       setResending(false);
     }
   };
 
-  // ============================================================
-  // RENDER
-  // ============================================================
+  // ==========================================================
+  // PAGE
+  // ==========================================================
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: '#f5f7fb',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '480px',
-          background: '#ffffff',
-          borderRadius: '18px',
-          padding: '32px',
-          border: '1px solid #eaecf0',
-          boxShadow:
-            '0 10px 30px rgba(16, 24, 40, 0.08)',
-        }}
-      >
-        {/* ================================================== */}
-        {/* HEADER */}
-        {/* ================================================== */}
+    <div className="zv-page">
+      <style>{`
+        * {
+          box-sizing: border-box;
+        }
 
-        <div
-          style={{
-            textAlign: 'center',
-            marginBottom: '28px',
-          }}
-        >
-          <Link
-            to="/"
-            style={{
-              textDecoration: 'none',
-              color: '#0b5cff',
-              fontSize: '26px',
-              fontWeight: 800,
-            }}
-          >
-            Zenimonies
+        .zv-page {
+          min-height: 100vh;
+          min-height: 100dvh;
+          width: 100%;
+          padding: 24px 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          overflow: hidden;
+          background: #f2faf5;
+          font-family: Inter, -apple-system, BlinkMacSystemFont,
+            "Segoe UI", sans-serif;
+          color: #064e35;
+        }
+
+        .zv-page::before,
+        .zv-page::after {
+          content: "";
+          position: fixed;
+          width: 300px;
+          height: 300px;
+          border-radius: 50%;
+          background: rgba(34, 197, 94, 0.08);
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .zv-page::before {
+          top: 18%;
+          left: -220px;
+        }
+
+        .zv-page::after {
+          bottom: 8%;
+          right: -220px;
+        }
+
+        .zv-card {
+          position: relative;
+          z-index: 1;
+          width: 100%;
+          max-width: 600px;
+          padding: 36px 40px 32px;
+          background: #ffffff;
+          border: 1px solid #e2eee6;
+          border-radius: 26px;
+          box-shadow: 0 24px 65px rgba(15, 70, 43, 0.09);
+        }
+
+        .zv-header {
+          text-align: center;
+          margin-bottom: 24px;
+        }
+
+        .zv-brand {
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          text-decoration: none;
+          margin-bottom: 10px;
+        }
+
+        .zv-brand-name {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #064e35;
+          font-size: clamp(30px, 7vw, 45px);
+          font-weight: 900;
+          letter-spacing: -2px;
+          line-height: 1.1;
+        }
+
+        .zv-brand-z {
+          position: relative;
+          display: inline-block;
+          color: #087f45;
+          margin-right: 1px;
+        }
+
+        .zv-brand-z::before {
+          content: "";
+          position: absolute;
+          top: 3px;
+          left: 1px;
+          width: 25px;
+          height: 9px;
+          background: #16a34a;
+          border-radius: 0 0 5px 0;
+        }
+
+        .zv-brand-subtitle {
+          font-size: 12px;
+          font-weight: 500;
+          letter-spacing: 9px;
+          padding-left: 9px;
+          margin-top: 4px;
+          color: #32634b;
+        }
+
+        .zv-illustration {
+          display: block;
+          width: 100%;
+          max-width: 290px;
+          height: auto;
+          margin: 16px auto 18px;
+        }
+
+        .zv-title {
+          color: #064e35;
+          font-size: clamp(27px, 5vw, 36px);
+          font-weight: 800;
+          letter-spacing: -1px;
+          margin: 0 0 12px;
+          line-height: 1.2;
+        }
+
+        .zv-description {
+          color: #466b59;
+          font-size: 16px;
+          line-height: 1.65;
+          margin: 0 auto;
+          max-width: 450px;
+        }
+
+        .zv-alert {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 15px 17px;
+          margin: 22px 0;
+          border-radius: 12px;
+          font-size: 14px;
+          line-height: 1.5;
+          overflow-wrap: anywhere;
+        }
+
+        .zv-alert-error {
+          color: #b42318;
+          background: #fff3f2;
+          border: 1px solid #fecaca;
+        }
+
+        .zv-alert-success {
+          color: #166534;
+          background: #effdf4;
+          border: 1px solid #bbf7d0;
+        }
+
+        .zv-alert-icon {
+          flex-shrink: 0;
+          width: 26px;
+          height: 26px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px solid currentColor;
+          border-radius: 50%;
+          font-weight: 800;
+          font-size: 15px;
+        }
+
+        .zv-label {
+          display: block;
+          color: #14532d;
+          font-size: 15px;
+          font-weight: 700;
+          margin-bottom: 10px;
+        }
+
+        .zv-input {
+          display: block;
+          width: 100%;
+          min-width: 0;
+          padding: 17px 12px;
+          border: 1.5px solid #d2ded6;
+          border-radius: 15px;
+          background: #ffffff;
+          color: #064e35;
+          font-family: inherit;
+          font-size: 25px;
+          font-weight: 600;
+          letter-spacing: 9px;
+          text-align: center;
+          outline: none;
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .zv-input::placeholder {
+          color: #a1aaa5;
+          font-size: 19px;
+          font-weight: 400;
+          letter-spacing: 5px;
+        }
+
+        .zv-input:focus {
+          border-color: #15803d;
+          box-shadow: 0 0 0 4px rgba(21, 128, 61, 0.1);
+        }
+
+        .zv-input:disabled {
+          background: #f8faf9;
+          cursor: not-allowed;
+        }
+
+        .zv-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          min-height: 58px;
+          padding: 15px 20px;
+          border: 0;
+          border-radius: 15px;
+          background: #087f45;
+          color: #ffffff;
+          font-family: inherit;
+          font-size: 17px;
+          font-weight: 750;
+          cursor: pointer;
+          margin-top: 18px;
+          transition: background 0.2s, transform 0.15s;
+        }
+
+        .zv-button:hover:not(:disabled) {
+          background: #066638;
+          transform: translateY(-1px);
+        }
+
+        .zv-button:disabled {
+          background: #a7b8ad;
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        .zv-resend {
+          display: block;
+          width: 100%;
+          margin: 20px auto 0;
+          padding: 8px;
+          border: 0;
+          background: transparent;
+          color: #087f45;
+          font-family: inherit;
+          font-size: 16px;
+          font-weight: 750;
+          cursor: pointer;
+        }
+
+        .zv-resend:disabled {
+          color: #98a2a0;
+          cursor: not-allowed;
+        }
+
+        .zv-back {
+          display: block;
+          width: fit-content;
+          margin: 12px auto 0;
+          padding: 8px;
+          color: #087f45;
+          text-decoration: none;
+          font-size: 15px;
+          font-weight: 750;
+        }
+
+        .zv-back:hover,
+        .zv-resend:hover:not(:disabled) {
+          color: #065f36;
+          text-decoration: underline;
+        }
+
+        .zv-security {
+          display: flex;
+          align-items: center;
+          gap: 18px;
+          margin-top: 26px;
+          padding: 20px;
+          border-radius: 15px;
+          background: #f0faf4;
+          color: #466b59;
+        }
+
+        .zv-security-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          width: 82px;
+          height: 82px;
+          border-radius: 50%;
+          background: #d9f5e4;
+        }
+
+        .zv-security-text {
+          border-left: 2px solid #b9e4c9;
+          padding-left: 18px;
+          font-size: 14px;
+          line-height: 1.65;
+        }
+
+        .zv-security-text strong {
+          color: #14532d;
+        }
+
+        @media (max-width: 520px) {
+          .zv-page {
+            padding: 14px 12px;
+            align-items: center;
+          }
+
+          .zv-card {
+            padding: 28px 20px 24px;
+            border-radius: 23px;
+          }
+
+          .zv-illustration {
+            max-width: 245px;
+            margin: 12px auto 15px;
+          }
+
+          .zv-description {
+            font-size: 15px;
+          }
+
+          .zv-input {
+            font-size: 23px;
+            letter-spacing: 7px;
+          }
+
+          .zv-security {
+            padding: 15px;
+            gap: 12px;
+          }
+
+          .zv-security-icon {
+            width: 64px;
+            height: 64px;
+          }
+
+          .zv-security-text {
+            padding-left: 12px;
+            font-size: 13px;
+          }
+        }
+
+        @media (max-width: 360px) {
+          .zv-card {
+            padding: 24px 15px;
+          }
+
+          .zv-security-icon {
+            width: 50px;
+            height: 50px;
+          }
+
+          .zv-security-text {
+            padding-left: 10px;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .zv-button,
+          .zv-input {
+            transition: none;
+          }
+        }
+      `}</style>
+
+      <div className="zv-card">
+
+        {/* BRAND */}
+
+        <header className="zv-header">
+          <Link to="/" className="zv-brand">
+            <span className="zv-brand-name">
+              <span className="zv-brand-z">Z</span>
+              enimonies
+            </span>
+
+            <span className="zv-brand-subtitle">
+              BANKING
+            </span>
           </Link>
 
-          <h1
-            style={{
-              color: '#172033',
-              fontSize: '25px',
-              margin: '24px 0 8px',
-            }}
+          {/* PHONE AND OTP ILLUSTRATION */}
+
+          <svg
+            className="zv-illustration"
+            viewBox="0 0 320 250"
+            role="img"
+            aria-label="Phone verification and security illustration"
           >
+            <defs>
+              <linearGradient
+                id="zvPhoneGradient"
+                x1="0"
+                y1="0"
+                x2="1"
+                y2="1"
+              >
+                <stop offset="0%" stopColor="#087f45" />
+                <stop offset="100%" stopColor="#064e35" />
+              </linearGradient>
+
+              <linearGradient
+                id="zvMessageGradient"
+                x1="0"
+                y1="0"
+                x2="1"
+                y2="1"
+              >
+                <stop offset="0%" stopColor="#16a34a" />
+                <stop offset="100%" stopColor="#087f45" />
+              </linearGradient>
+            </defs>
+
+            <circle
+              cx="160"
+              cy="125"
+              r="115"
+              fill="#effaf3"
+            />
+
+            <circle
+              cx="160"
+              cy="125"
+              r="94"
+              fill="#e5f7ec"
+            />
+
+            {/* Phone body */}
+
+            <rect
+              x="92"
+              y="15"
+              width="136"
+              height="220"
+              rx="23"
+              fill="url(#zvPhoneGradient)"
+            />
+
+            <rect
+              x="99"
+              y="24"
+              width="122"
+              height="198"
+              rx="17"
+              fill="#ffffff"
+            />
+
+            {/* Phone speaker */}
+
+            <rect
+              x="137"
+              y="31"
+              width="47"
+              height="5"
+              rx="2.5"
+              fill="#a7d8b8"
+            />
+
+            <circle
+              cx="160"
+              cy="211"
+              r="5"
+              fill="#d8eee0"
+            />
+
+            {/* Message bubble */}
+
+            <path
+              d="M117 78 Q117 64 132 64 H213 Q228 64 228 79 V119 Q228 134 213 134 H157 L136 151 V134 H132 Q117 134 117 119 Z"
+              fill="url(#zvMessageGradient)"
+            />
+
+            {/* OTP dots */}
+
+            {[143, 163, 183, 203].map((x) => (
+              <g key={x}>
+                <circle
+                  cx={x}
+                  cy="98"
+                  r="7"
+                  fill="#ffffff"
+                />
+                <circle
+                  cx={x}
+                  cy="98"
+                  r="2"
+                  fill="#087f45"
+                />
+              </g>
+            ))}
+
+            {/* Shield */}
+
+            <path
+              d="M252 133 L281 145 V169 Q281 193 252 207 Q223 193 223 169 V145 Z"
+              fill="#d8f5e3"
+            />
+
+            <path
+              d="M252 140 L274 150 V169 Q274 188 252 199 Q230 188 230 169 V150 Z"
+              fill="#087f45"
+            />
+
+            <rect
+              x="243"
+              y="166"
+              width="18"
+              height="14"
+              rx="3"
+              fill="#ffffff"
+            />
+
+            <path
+              d="M247 166 V161 A5 5 0 0 1 257 161 V166"
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+
+            <circle
+              cx="252"
+              cy="172"
+              r="2"
+              fill="#087f45"
+            />
+
+            {/* Decorative signal marks */}
+
+            <path
+              d="M69 91 L57 80 M61 116 H45 M69 141 L57 152"
+              fill="none"
+              stroke="#5cc98a"
+              strokeWidth="6"
+              strokeLinecap="round"
+            />
+
+            <path
+              d="M240 55 L251 44 M255 78 H271"
+              fill="none"
+              stroke="#8bd8a8"
+              strokeWidth="5"
+              strokeLinecap="round"
+            />
+
+            <ellipse
+              cx="160"
+              cy="235"
+              rx="95"
+              ry="6"
+              fill="#dcefe3"
+            />
+          </svg>
+
+          <h1 className="zv-title">
             Verify Your Phone
           </h1>
 
-          <p
-            style={{
-              color: '#667085',
-              margin: 0,
-              lineHeight: 1.6,
-            }}
-          >
-            Enter the 6-digit OTP code sent to
-            your registered phone number.
+          <p className="zv-description">
+            Enter the 6-digit OTP code sent to your
+            registered phone number.
           </p>
-        </div>
+        </header>
 
-        {/* ================================================== */}
-        {/* ERROR */}
-        {/* ================================================== */}
+        {/* ERROR MESSAGE */}
 
         {error && (
           <div
+            className="zv-alert zv-alert-error"
             role="alert"
-            style={{
-              background: '#fef3f2',
-              border: '1px solid #fecdca',
-              color: '#b42318',
-              borderRadius: '10px',
-              padding: '12px 14px',
-              marginBottom: '18px',
-              fontSize: '14px',
-              lineHeight: 1.5,
-            }}
+            aria-live="assertive"
           >
-            {error}
+            <span className="zv-alert-icon">!</span>
+            <span>{error}</span>
           </div>
         )}
 
-        {/* ================================================== */}
-        {/* SUCCESS */}
-        {/* ================================================== */}
+        {/* SUCCESS MESSAGE */}
 
         {message && (
           <div
+            className="zv-alert zv-alert-success"
             role="status"
-            style={{
-              background: '#ecfdf3',
-              border: '1px solid #abefc6',
-              color: '#027a48',
-              borderRadius: '10px',
-              padding: '12px 14px',
-              marginBottom: '18px',
-              fontSize: '14px',
-              lineHeight: 1.5,
-            }}
+            aria-live="polite"
           >
-            {message}
+            <span className="zv-alert-icon">✓</span>
+            <span>{message}</span>
           </div>
         )}
 
-        {/* ================================================== */}
         {/* OTP FORM */}
-        {/* ================================================== */}
 
-        <form
-          onSubmit={handleVerify}
-          noValidate
-        >
-          <label
-            htmlFor="otp"
-            style={{
-              display: 'block',
-              color: '#344054',
-              fontSize: '14px',
-              fontWeight: 600,
-              marginBottom: '7px',
-            }}
-          >
+        <form onSubmit={handleVerify} noValidate>
+          <label htmlFor="otp" className="zv-label">
             OTP Code
           </label>
 
@@ -548,155 +911,110 @@ const VerifyPhone: React.FC = () => {
             maxLength={6}
             value={otp}
             onChange={(event) => {
-              const value =
-                event.target.value
-                  .replace(/\D/g, '')
-                  .slice(0, 6);
+              const value = event.target.value
+                .replace(/\D/g, '')
+                .slice(0, 6);
 
               setOtp(value);
               setError('');
             }}
             placeholder="Enter 6-digit code"
             disabled={loading}
-            style={{
-              width: '100%',
-              boxSizing: 'border-box',
-              padding: '14px',
-              borderRadius: '10px',
-              border: '1px solid #d0d5dd',
-              outline: 'none',
-              fontSize: '20px',
-              letterSpacing: '6px',
-              textAlign: 'center',
-            }}
+            className="zv-input"
+            aria-describedby="otp-help"
+            required
           />
-
-          {/* VERIFY BUTTON */}
 
           <button
             type="submit"
-            disabled={
-              loading ||
-              otp.length !== 6
-            }
-            style={{
-              width: '100%',
-              marginTop: '18px',
-              padding: '13px 18px',
-              border: 'none',
-              borderRadius: '10px',
-              background:
-                loading ||
-                otp.length !== 6
-                  ? '#98a2b3'
-                  : '#0b5cff',
-              color: '#ffffff',
-              fontSize: '15px',
-              fontWeight: 700,
-              cursor:
-                loading ||
-                otp.length !== 6
-                  ? 'not-allowed'
-                  : 'pointer',
-            }}
+            disabled={loading || otp.length !== 6}
+            className="zv-button"
           >
-            {loading
-              ? 'Verifying...'
-              : 'Verify Phone'}
+            {loading ? 'Verifying...' : 'Verify Phone'}
           </button>
         </form>
 
-        {/* ================================================== */}
         {/* RESEND */}
-        {/* ================================================== */}
 
-        <div
-          style={{
-            textAlign: 'center',
-            marginTop: '20px',
-          }}
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={resending || countdown > 0}
+          className="zv-resend"
         >
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={
-              resending ||
-              countdown > 0
-            }
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color:
-                resending ||
-                countdown > 0
-                  ? '#98a2b3'
-                  : '#0b5cff',
-              fontSize: '14px',
-              fontWeight: 700,
-              cursor:
-                resending ||
-                countdown > 0
-                  ? 'not-allowed'
-                  : 'pointer',
-              padding: '8px',
-            }}
-          >
-            {resending
-              ? 'Sending new code...'
-              : countdown > 0
-              ? `Resend code in ${countdown}s`
-              : 'Resend code'}
-          </button>
-        </div>
+          {resending
+            ? 'Sending new code...'
+            : countdown > 0
+            ? `Resend code in ${countdown}s`
+            : 'Resend code'}
+        </button>
 
-        {/* ================================================== */}
-        {/* BACK */}
-        {/* ================================================== */}
+        {/* BACK TO PROFILE */}
 
-        <div
-          style={{
-            textAlign: 'center',
-            marginTop: '12px',
-          }}
-        >
-          <Link
-            to="/profile"
-            style={{
-              textDecoration: 'none',
-              color: '#0b5cff',
-              fontSize: '14px',
-              fontWeight: 600,
-            }}
-          >
-            ← Back to Profile
-          </Link>
-        </div>
+        <Link to="/profile" className="zv-back">
+          ← Back to Profile
+        </Link>
 
-        {/* ================================================== */}
         {/* SECURITY NOTICE */}
-        {/* ================================================== */}
 
-        <div
-          style={{
-            marginTop: '24px',
-            padding: '14px',
-            background: '#f8faff',
-            borderRadius: '10px',
-            color: '#667085',
-            fontSize: '13px',
-            lineHeight: 1.6,
-          }}
-        >
-          <strong
-            style={{
-              color: '#344054',
-            }}
-          >
-            Security notice:
-          </strong>{' '}
-          Never share your OTP with another person.
-          Zenimonies will never ask you to send your
-          verification code to anyone.
+        <div className="zv-security">
+          <div className="zv-security-icon">
+            <svg
+              width="58"
+              height="62"
+              viewBox="0 0 64 70"
+              role="img"
+              aria-label="Security shield"
+            >
+              <path
+                d="M32 3 L58 14 V34 Q58 55 32 67 Q6 55 6 34 V14 Z"
+                fill="#b8ebcb"
+              />
+
+              <path
+                d="M32 9 L52 18 V34 Q52 51 32 61 Q12 51 12 34 V18 Z"
+                fill="#087f45"
+              />
+
+              <rect
+                x="21"
+                y="31"
+                width="22"
+                height="18"
+                rx="4"
+                fill="#ffffff"
+              />
+
+              <path
+                d="M26 31 V25 A6 6 0 0 1 38 25 V31"
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+
+              <circle
+                cx="32"
+                cy="38"
+                r="2.5"
+                fill="#087f45"
+              />
+
+              <path
+                d="M32 39 V43"
+                stroke="#087f45"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </div>
+
+          <div className="zv-security-text">
+            <strong>Security notice:</strong>{' '}
+            Never share your OTP with another person.
+            Zenimonies will never ask you to send your
+            verification code to anyone.
+          </div>
         </div>
       </div>
     </div>
