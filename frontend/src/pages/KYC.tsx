@@ -1,53 +1,32 @@
-
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+
 import {
   Alert,
   Box,
   Button,
   Card,
   CardContent,
-  Chip,
   CircularProgress,
-  Container,
-  Divider,
   FormControl,
-  FormHelperText,
   InputLabel,
   MenuItem,
   Select,
-  Stack,
   TextField,
   Typography,
-  LinearProgress,
 } from '@mui/material';
-import {
-  CheckCircleOutline,
-  CloudUploadOutlined,
-  VerifiedUserOutlined,
-  LockOutlined,
-  AccountBalanceOutlined,
-  BadgeOutlined,
-  HomeOutlined,
-  RefreshOutlined,
-} from '@mui/icons-material';
 
-// ============================================================
-// ZENIMONIES BANKING
-// CUSTOMER IDENTITY VERIFICATION
-// ============================================================
+import type { SelectChangeEvent } from '@mui/material';
 
-const API_BASE_URL = (
+const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
-  'https://zenimonies-banking.onrender.com/api'
-).replace(/\/+$/, '');
+  'https://zenimonies-banking.onrender.com/api';
 
 type VerificationStatus =
   | 'not_submitted'
   | 'pending'
   | 'verified'
-  | 'rejected'
-  | 'not_verified';
+  | 'rejected';
 
 interface KycData {
   status?: string;
@@ -57,106 +36,40 @@ interface KycData {
 
   bvn_verified?: boolean;
   bvn_status?: string;
-  bvn_verification_status?: string;
   bvn_locked?: boolean;
   bvn_rejection_reason?: string;
 
   id_verified?: boolean;
   id_status?: string;
-  id_verification_status?: string;
   id_locked?: boolean;
   id_rejection_reason?: string;
 
   tier_3_verified?: boolean;
   tier_3_status?: string;
-  tier_3_verification_status?: string;
   tier_3_locked?: boolean;
   tier_3_method?: string;
   tier_3_rejection_reason?: string;
-
-  record?: {
-    bvn_status?: string;
-    id_status?: string;
-    tier_3_status?: string;
-    tier_3_method?: string;
-    document_type?: string;
-    document_number?: string;
-    rejection_reason?: string;
-  };
-
-  limits?: {
-    tier?: number;
-    account_limit?: number | string;
-    daily_transfer_limit?: number | string;
-    accountLimit?: number | string;
-    dailyTransferLimit?: number | string;
-  };
 }
 
-interface ApiResponse {
+interface KycLimits {
+  account_limit?: number | string | null;
+  daily_transfer_limit?: number | string | null;
+}
+
+interface StatusResponse {
   success?: boolean;
-  message?: string;
   kyc?: KycData;
-  data?: KycData;
+  limits?: KycLimits;
+  message?: string;
 }
 
-const getToken = (): string | null => {
-  return (
-    localStorage.getItem('zenimonies_token') ||
-    localStorage.getItem('token')
-  );
-};
-
-const getAuthHeaders = () => {
-  const token = getToken();
-
-  return token
-    ? { Authorization: `Bearer ${token}` }
-    : {};
-};
-
-const normalizeStatus = (
-  value?: string | boolean | null
-): VerificationStatus => {
-  if (value === true) return 'verified';
-  if (value === false) return 'not_submitted';
-
-  const status = String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, '_');
-
-  if (
-    ['verified', 'approved', 'complete', 'completed', 'success']
-      .includes(status)
-  ) {
-    return 'verified';
-  }
-
-  if (
-    ['pending', 'processing', 'under_review', 'submitted']
-      .includes(status)
-  ) {
-    return 'pending';
-  }
-
-  if (
-    ['rejected', 'declined', 'failed', 'not_verified']
-      .includes(status)
-  ) {
-    return 'rejected';
-  }
-
-  return 'not_submitted';
-};
-
-const formatNaira = (value?: number | string): string => {
-  if (
-    value === undefined ||
-    value === null ||
-    value === ''
-  ) {
+const formatNaira = (value?: number | string | null): string => {
+  if (value === undefined || value === null || value === '') {
     return 'Not available';
+  }
+
+  if (String(value).toLowerCase() === 'unlimited') {
+    return 'Unlimited';
   }
 
   const amount = Number(value);
@@ -168,41 +81,80 @@ const formatNaira = (value?: number | string): string => {
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
     currency: 'NGN',
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 0,
   }).format(amount);
+};
+
+const normalizeStatus = (
+  status?: string,
+  verified?: boolean
+): VerificationStatus => {
+  if (verified === true) {
+    return 'verified';
+  }
+
+  const value = String(status || '').toLowerCase().trim();
+
+  if (['verified', 'approved', 'success', 'completed'].includes(value)) {
+    return 'verified';
+  }
+
+  if (
+    [
+      'pending',
+      'processing',
+      'submitted',
+      'under_review',
+      'under review',
+    ].includes(value)
+  ) {
+    return 'pending';
+  }
+
+  if (
+    ['rejected', 'failed', 'declined', 'not_verified'].includes(value)
+  ) {
+    return 'rejected';
+  }
+
+  return 'not_submitted';
 };
 
 const statusLabel = (status: VerificationStatus): string => {
   switch (status) {
     case 'verified':
       return 'Verified';
-
     case 'pending':
       return 'Pending review';
-
     case 'rejected':
       return 'Not verified';
-
     default:
       return 'Not submitted';
   }
 };
 
-const statusColor = (
-  status: VerificationStatus
-): 'success' | 'warning' | 'error' | 'default' => {
+const statusColors = (status: VerificationStatus) => {
   switch (status) {
     case 'verified':
-      return 'success';
-
+      return {
+        color: '#166534',
+        background: '#dcfce7',
+      };
     case 'pending':
-      return 'warning';
-
+      return {
+        color: '#92400e',
+        background: '#fef3c7',
+      };
     case 'rejected':
-      return 'error';
-
+      return {
+        color: '#991b1b',
+        background: '#fee2e2',
+      };
     default:
-      return 'default';
+      return {
+        color: '#475569',
+        background: '#f1f5f9',
+      };
   }
 };
 
@@ -215,210 +167,139 @@ const getErrorMessage = (error: any): string => {
   );
 };
 
+const getAuthHeaders = () => {
+  const token =
+    localStorage.getItem('zenimonies_token') ||
+    localStorage.getItem('token');
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+};
+
 const KYC: React.FC = () => {
-  const [kyc, setKyc] = useState<KycData | null>(null);
+  const [kyc, setKyc] = useState<KycData>({});
+  const [limits, setLimits] = useState<KycLimits>({});
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [activeTier, setActiveTier] = useState(1);
 
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [activeTier, setActiveTier] = useState<number>(1);
 
-  // Tier 1
   const [bvn, setBvn] = useState('');
 
-  // Tier 2
-  const [documentType, setDocumentType] = useState('');
+  const [documentType, setDocumentType] = useState('national_id');
   const [documentNumber, setDocumentNumber] = useState('');
-  const [documentFront, setDocumentFront] =
-    useState<File | null>(null);
-  const [documentBack, setDocumentBack] =
-    useState<File | null>(null);
-  const [tier2Selfie, setTier2Selfie] =
-    useState<File | null>(null);
 
-  // Tier 3
-  const [tier3Method, setTier3Method] = useState('');
-  const [tier3Document, setTier3Document] =
-    useState<File | null>(null);
-  const [tier3Selfie, setTier3Selfie] =
-    useState<File | null>(null);
+  const [documentFront, setDocumentFront] = useState<File | null>(null);
+  const [documentBack, setDocumentBack] = useState<File | null>(null);
+  const [tier2Selfie, setTier2Selfie] = useState<File | null>(null);
 
-  const fetchKycStatus = useCallback(async () => {
+  const [tier3Method, setTier3Method] = useState('bank_statement');
+  const [tier3Document, setTier3Document] = useState<File | null>(null);
+  const [tier3Selfie, setTier3Selfie] = useState<File | null>(null);
+
+  const [message, setMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const bvnStatus = normalizeStatus(
+    kyc.bvn_status,
+    kyc.bvn_verified
+  );
+
+  const idStatus = normalizeStatus(
+    kyc.id_status,
+    kyc.id_verified
+  );
+
+  const tier3Status = normalizeStatus(
+    kyc.tier_3_status,
+    kyc.tier_3_verified
+  );
+
+  const currentTier = Number(kyc.tier || 0);
+
+  const bvnLocked =
+    Boolean(kyc.bvn_locked) || bvnStatus === 'pending' ||
+    bvnStatus === 'verified';
+
+  const idLocked =
+    Boolean(kyc.id_locked) || idStatus === 'pending' ||
+    idStatus === 'verified';
+
+  const tier3Locked =
+    Boolean(kyc.tier_3_locked) || tier3Status === 'pending' ||
+    tier3Status === 'verified';
+
+  const isPassport =
+    documentType === 'international_passport';
+
+  const loadKycStatus = async () => {
     setLoading(true);
-    setError('');
+    setErrorMessage('');
 
     try {
-      const token = getToken();
-
-      if (!token) {
-        setError(
-          'Your session has expired. Please sign in again.'
-        );
-        return;
-      }
-
-      const response = await axios.get<ApiResponse>(
+      const response = await axios.get<StatusResponse>(
         `${API_BASE_URL}/kyc/status`,
         {
           headers: getAuthHeaders(),
         }
       );
 
-      const payload = response.data;
+      const data = response.data;
 
-      const data =
-        payload?.kyc ||
-        payload?.data ||
-        (payload as any);
+      setKyc(data.kyc || {});
+      setLimits(data.limits || {});
 
-      setKyc(data || {});
-
-      const bvnStatus = normalizeStatus(
-        data?.bvn_status ||
-        data?.bvn_verification_status ||
-        data?.record?.bvn_status ||
-        (data?.bvn_verified ? 'verified' : undefined)
+      const verifiedTier = Number(data.kyc?.tier || 0);
+      const submittedTier = Number(
+        data.kyc?.submitted_tier || 0
       );
 
-      const idStatus = normalizeStatus(
-        data?.id_status ||
-        data?.id_verification_status ||
-        data?.record?.id_status ||
-        (data?.id_verified ? 'verified' : undefined)
-      );
-
-      const tier3Status = normalizeStatus(
-        data?.tier_3_status ||
-        data?.tier_3_verification_status ||
-        data?.record?.tier_3_status ||
-        (data?.tier_3_verified ? 'verified' : undefined)
-      );
-
-      // Open the next incomplete tier by default.
-      if (
-        bvnStatus !== 'verified'
-      ) {
-        setActiveTier(1);
-      } else if (
-        idStatus !== 'verified'
-      ) {
+      if (verifiedTier >= 3) {
+        setActiveTier(3);
+      } else if (submittedTier >= 3) {
+        setActiveTier(3);
+      } else if (verifiedTier >= 2) {
+        setActiveTier(3);
+      } else if (submittedTier >= 2) {
         setActiveTier(2);
-      } else if (
-        tier3Status !== 'verified'
-      ) {
-        setActiveTier(3);
+      } else if (verifiedTier >= 1 || submittedTier >= 1) {
+        setActiveTier(2);
       } else {
-        setActiveTier(3);
+        setActiveTier(1);
       }
-    } catch (err: any) {
-      setError(getErrorMessage(err));
+    } catch (error: any) {
+      setErrorMessage(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    fetchKycStatus();
-  }, [fetchKycStatus]);
-
-  const bvnStatus = normalizeStatus(
-    kyc?.bvn_status ||
-    kyc?.bvn_verification_status ||
-    kyc?.record?.bvn_status ||
-    (kyc?.bvn_verified ? 'verified' : undefined)
-  );
-
-  const idStatus = normalizeStatus(
-    kyc?.id_status ||
-    kyc?.id_verification_status ||
-    kyc?.record?.id_status ||
-    (kyc?.id_verified ? 'verified' : undefined)
-  );
-
-  const tier3Status = normalizeStatus(
-    kyc?.tier_3_status ||
-    kyc?.tier_3_verification_status ||
-    kyc?.record?.tier_3_status ||
-    (kyc?.tier_3_verified ? 'verified' : undefined)
-  );
-
-  const currentTier = Number(kyc?.tier || 0);
-
-  const accountLimit =
-    kyc?.limits?.account_limit ??
-    kyc?.limits?.accountLimit;
-
-  const dailyTransferLimit =
-    kyc?.limits?.daily_transfer_limit ??
-    kyc?.limits?.dailyTransferLimit;
-
-  const tier2Locked = Boolean(kyc?.id_locked);
-  const tier3Locked = Boolean(kyc?.tier_3_locked);
-
-  const bvnLocked = Boolean(kyc?.bvn_locked);
-
-  const isPassport =
-    documentType === 'international_passport';
-
-  const validateFile = (
-    file: File | null,
-    required: boolean,
-    label: string
-  ): string | null => {
-    if (!file) {
-      return required ? `${label} is required.` : null;
-    }
-
-    const allowedTypes = [
-      'image/jpeg',
-      'image/jpg',
-      'image/png',
-      'image/webp',
-      'application/pdf',
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      return (
-        `${label} must be a JPG, PNG, WEBP, or PDF file.`
-      );
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      return `${label} must not exceed 10 MB.`;
-    }
-
-    return null;
   };
 
-  const submitBvn = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
+  useEffect(() => {
+    loadKycStatus();
+  }, []);
+
+  const clearMessages = () => {
+    setMessage('');
+    setErrorMessage('');
+  };
+
+  const submitBvn = async (event: React.FormEvent) => {
     event.preventDefault();
+    clearMessages();
 
-    setError('');
-    setSuccess('');
-
-    if (!/^\d{11}$/.test(bvn.trim())) {
-      setError('Please enter a valid 11-digit BVN.');
+    if (!/^\d{11}$/.test(bvn)) {
+      setErrorMessage('Please enter a valid 11-digit BVN.');
       return;
     }
 
-    if (bvnLocked || bvnStatus === 'pending') {
-      setError(
-        'Your BVN is already submitted or locked. Please wait for review.'
-      );
-      return;
-    }
+    setSubmitting(true);
 
     try {
-      setSubmitting(true);
-
-      const response = await axios.post<ApiResponse>(
+      const response = await axios.post(
         `${API_BASE_URL}/kyc/bvn`,
-        {
-          bvn: bvn.trim(),
-        },
+        { bvn },
         {
           headers: {
             ...getAuthHeaders(),
@@ -427,383 +308,488 @@ const KYC: React.FC = () => {
         }
       );
 
-      setSuccess(
+      setMessage(
         response.data?.message ||
-        'Your BVN submission has been received. Verification is pending review.'
+          'Your BVN submission has been received and is awaiting verification.'
       );
 
       setBvn('');
-
-      await fetchKycStatus();
-    } catch (err: any) {
-      setError(getErrorMessage(err));
+      await loadKycStatus();
+    } catch (error: any) {
+      setErrorMessage(getErrorMessage(error));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const submitTier2 = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
+  const submitTier2 = async (event: React.FormEvent) => {
     event.preventDefault();
-
-    setError('');
-    setSuccess('');
-
-    if (!documentType) {
-      setError('Please select your identity document type.');
-      return;
-    }
+    clearMessages();
 
     if (!documentNumber.trim()) {
-      setError('Please enter your document number.');
+      setErrorMessage('Please enter your ID document number.');
       return;
     }
 
-    const frontError = validateFile(
-      documentFront,
-      true,
-      'Front of identity document'
-    );
-
-    const backError = validateFile(
-      documentBack,
-      !isPassport,
-      'Back of identity document'
-    );
-
-    const selfieError = validateFile(
-      tier2Selfie,
-      true,
-      'Selfie'
-    );
-
-    const validationError =
-      frontError || backError || selfieError;
-
-    if (validationError) {
-      setError(validationError);
+    if (!documentFront) {
+      setErrorMessage('Please upload the front of your ID.');
       return;
     }
 
-    if (tier2Locked || idStatus === 'pending') {
-      setError(
-        'Your identity verification is already submitted or locked. Please wait for review.'
-      );
+    if (!isPassport && !documentBack) {
+      setErrorMessage('Please upload the back of your ID.');
       return;
     }
+
+    if (!tier2Selfie) {
+      setErrorMessage('Please upload your facial verification selfie.');
+      return;
+    }
+
+    const formData = new FormData();
+
+    formData.append('document_type', documentType);
+    formData.append('document_number', documentNumber.trim());
+    formData.append('document_front', documentFront);
+
+    if (!isPassport && documentBack) {
+      formData.append('document_back', documentBack);
+    }
+
+    formData.append('selfie', tier2Selfie);
+
+    setSubmitting(true);
 
     try {
-      setSubmitting(true);
-
-      const formData = new FormData();
-
-      formData.append(
-        'document_type',
-        documentType
-      );
-
-      formData.append(
-        'document_number',
-        documentNumber.trim()
-      );
-
-      if (documentFront) {
-        formData.append(
-          'document_front',
-          documentFront
-        );
-      }
-
-      if (documentBack && !isPassport) {
-        formData.append(
-          'document_back',
-          documentBack
-        );
-      }
-
-      if (tier2Selfie) {
-        formData.append(
-          'selfie',
-          tier2Selfie
-        );
-      }
-
-      const response = await axios.post<ApiResponse>(
+      const response = await axios.post(
         `${API_BASE_URL}/kyc/tier-2`,
         formData,
         {
-          headers: {
-            ...getAuthHeaders(),
-          },
+          headers: getAuthHeaders(),
         }
       );
 
-      setSuccess(
+      setMessage(
         response.data?.message ||
-        'Your identity verification submission has been received and is pending review.'
+          'Your Tier 2 documents have been submitted for review.'
       );
 
-      setDocumentType('');
       setDocumentNumber('');
       setDocumentFront(null);
       setDocumentBack(null);
       setTier2Selfie(null);
 
-      await fetchKycStatus();
-    } catch (err: any) {
-      setError(getErrorMessage(err));
+      const frontInput = document.getElementById(
+        'document-front'
+      ) as HTMLInputElement | null;
+
+      const backInput = document.getElementById(
+        'document-back'
+      ) as HTMLInputElement | null;
+
+      const selfieInput = document.getElementById(
+        'tier2-selfie'
+      ) as HTMLInputElement | null;
+
+      if (frontInput) frontInput.value = '';
+      if (backInput) backInput.value = '';
+      if (selfieInput) selfieInput.value = '';
+
+      await loadKycStatus();
+    } catch (error: any) {
+      setErrorMessage(getErrorMessage(error));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const submitTier3 = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
+  const submitTier3 = async (event: React.FormEvent) => {
     event.preventDefault();
+    clearMessages();
 
-    setError('');
-    setSuccess('');
-
-    if (!tier3Method) {
-      setError('Please select a proof-of-address document type.');
-      return;
-    }
-
-    const documentError = validateFile(
-      tier3Document,
-      true,
-      'Proof-of-address document'
-    );
-
-    const selfieError = validateFile(
-      tier3Selfie,
-      true,
-      'Selfie'
-    );
-
-    const validationError =
-      documentError || selfieError;
-
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    if (
-      tier3Locked ||
-      tier3Status === 'pending'
-    ) {
-      setError(
-        'Your proof-of-address verification is already submitted or locked. Please wait for review.'
+    if (!tier3Document) {
+      setErrorMessage(
+        'Please upload your proof-of-address document.'
       );
       return;
     }
+
+    if (!tier3Selfie) {
+      setErrorMessage(
+        'Please upload your selfie for facial verification.'
+      );
+      return;
+    }
+
+    const formData = new FormData();
+
+    formData.append('tier_3_method', tier3Method);
+    formData.append('tier_3_document', tier3Document);
+    formData.append('tier_3_selfie', tier3Selfie);
+
+    setSubmitting(true);
 
     try {
-      setSubmitting(true);
-
-      const formData = new FormData();
-
-      formData.append(
-        'tier_3_method',
-        tier3Method
-      );
-
-      if (tier3Document) {
-        formData.append(
-          'tier_3_document',
-          tier3Document
-        );
-      }
-
-      if (tier3Selfie) {
-        formData.append(
-          'tier_3_selfie',
-          tier3Selfie
-        );
-      }
-
-      const response = await axios.post<ApiResponse>(
+      const response = await axios.post(
         `${API_BASE_URL}/kyc/tier-3`,
         formData,
         {
-          headers: {
-            ...getAuthHeaders(),
-          },
+          headers: getAuthHeaders(),
         }
       );
 
-      setSuccess(
+      setMessage(
         response.data?.message ||
-        'Your proof-of-address submission has been received and is pending review.'
+          'Your Tier 3 proof-of-address documents have been submitted for review.'
       );
 
-      setTier3Method('');
       setTier3Document(null);
       setTier3Selfie(null);
 
-      await fetchKycStatus();
-    } catch (err: any) {
-      setError(getErrorMessage(err));
+      const documentInput = document.getElementById(
+        'tier3-document'
+      ) as HTMLInputElement | null;
+
+      const selfieInput = document.getElementById(
+        'tier3-selfie'
+      ) as HTMLInputElement | null;
+
+      if (documentInput) documentInput.value = '';
+      if (selfieInput) selfieInput.value = '';
+
+      await loadKycStatus();
+    } catch (error: any) {
+      setErrorMessage(getErrorMessage(error));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const renderStatus = (
-    status: VerificationStatus
-  ) => (
-    <Chip
-      label={statusLabel(status)}
-      color={statusColor(status)}
-      size="small"
-      sx={{
-        fontWeight: 700,
-        borderRadius: 2,
-      }}
-    />
-  );
+  const handleDocumentTypeChange = (
+    event: SelectChangeEvent
+  ) => {
+    setDocumentType(event.target.value);
+    setDocumentBack(null);
+  };
 
-  const renderFileInput = (
-    label: string,
-    file: File | null,
-    setFile: (file: File | null) => void,
-    accept = 'image/jpeg,image/png,image/webp,application/pdf'
-  ) => (
-    <Box>
-      <Button
-        variant="outlined"
-        component="label"
-        fullWidth
-        startIcon={<CloudUploadOutlined />}
+  const StatusBadge = ({
+    status,
+  }: {
+    status: VerificationStatus;
+  }) => {
+    const colors = statusColors(status);
+
+    return (
+      <Box
+        component="span"
         sx={{
-          minHeight: 54,
-          borderRadius: 2,
-          borderColor: '#14804A',
-          color: '#14804A',
-          textTransform: 'none',
-          fontWeight: 600,
-          justifyContent: 'flex-start',
-          px: 2,
-          '&:hover': {
-            borderColor: '#0B6337',
-            backgroundColor: '#F0FBF5',
-          },
+          display: 'inline-flex',
+          alignItems: 'center',
+          px: 2.5,
+          py: 1.2,
+          borderRadius: '50px',
+          backgroundColor: colors.background,
+          color: colors.color,
+          fontSize: '0.95rem',
+          fontWeight: 800,
         }}
       >
-        {file ? 'Change file' : label}
-        <input
-          type="file"
-          hidden
-          accept={accept}
-          onChange={(event) => {
-            const selected =
-              event.target.files?.[0] || null;
+        {statusLabel(status)}
+      </Box>
+    );
+  };
 
-            setFile(selected);
+  const LimitBox = ({
+    label,
+    value,
+  }: {
+    label: string;
+    value: string;
+  }) => (
+    <Box
+      sx={{
+        p: 2.5,
+        border: '1px solid #e2e8f0',
+        borderRadius: '16px',
+        backgroundColor: '#f8fafc',
+        minWidth: 0,
+      }}
+    >
+      <Typography
+        sx={{
+          color: '#64748b',
+          fontSize: '0.9rem',
+          fontWeight: 800,
+          textTransform: 'uppercase',
+          letterSpacing: '0.4px',
+          mb: 1,
+        }}
+      >
+        {label}
+      </Typography>
 
-            // Permit selecting the same file again.
-            event.target.value = '';
-          }}
-        />
-      </Button>
+      <Typography
+        sx={{
+          color: '#172033',
+          fontSize: '1.5rem',
+          fontWeight: 900,
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {value}
+      </Typography>
+    </Box>
+  );
 
-      {file && (
+  const TierCard = ({
+    tier,
+    title,
+    description,
+    accountLimit,
+    dailyLimit,
+  }: {
+    tier: number;
+    title: string;
+    description: string;
+    accountLimit: string;
+    dailyLimit: string;
+  }) => {
+    const selected = activeTier === tier;
+
+    return (
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: '24px',
+          border: selected
+            ? '2px solid #2563eb'
+            : '1px solid #e2e8f0',
+          backgroundColor: '#fff',
+          overflow: 'hidden',
+          mb: 3,
+        }}
+      >
+        <CardContent sx={{ p: { xs: 2.5, sm: 4 } }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 2,
+              mb: 2,
+            }}
+          >
+            <Box
+              sx={{
+                width: 48,
+                height: 48,
+                minWidth: 48,
+                borderRadius: '50%',
+                backgroundColor: '#eff6ff',
+                color: '#2563eb',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.2rem',
+                fontWeight: 900,
+              }}
+            >
+              {tier}
+            </Box>
+
+            <Box sx={{ flex: 1 }}>
+              <Typography
+                sx={{
+                  color: '#172033',
+                  fontSize: { xs: '1.35rem', sm: '1.7rem' },
+                  fontWeight: 900,
+                  lineHeight: 1.2,
+                  mb: 1,
+                }}
+              >
+                Tier {tier} – {title}
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: '#64748b',
+                  fontSize: '1rem',
+                  lineHeight: 1.7,
+                }}
+              >
+                {description}
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: '1fr 1fr',
+              },
+              gap: 2,
+              mt: 3,
+              mb: 3,
+            }}
+          >
+            <LimitBox
+              label="Account"
+              value={accountLimit}
+            />
+
+            <LimitBox
+              label="Transfers"
+              value={`${dailyLimit} daily`}
+            />
+          </Box>
+
+          <Button
+            fullWidth
+            variant={selected ? 'contained' : 'outlined'}
+            onClick={() => {
+              setActiveTier(tier);
+              clearMessages();
+              window.scrollTo({
+                top: 0,
+                behavior: 'smooth',
+              });
+            }}
+            sx={{
+              minHeight: 54,
+              borderRadius: '12px',
+              textTransform: 'none',
+              fontSize: '1rem',
+              fontWeight: 900,
+              backgroundColor: selected ? '#2563eb' : '#fff',
+              borderColor: '#2563eb',
+              color: selected ? '#fff' : '#2563eb',
+              '&:hover': {
+                backgroundColor: selected ? '#1d4ed8' : '#eff6ff',
+                borderColor: '#1d4ed8',
+              },
+            }}
+          >
+            {selected
+              ? `Selected Tier ${tier}`
+              : `Continue to Tier ${tier}`}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const FileUpload = ({
+    id,
+    label,
+    description,
+    accept = 'image/jpeg,image/png,image/webp,application/pdf',
+    file,
+    onChange,
+  }: {
+    id: string;
+    label: string;
+    description: string;
+    accept?: string;
+    file: File | null;
+    onChange: (file: File | null) => void;
+  }) => (
+    <Box sx={{ mb: 3 }}>
+      <Typography
+        sx={{
+          fontWeight: 800,
+          color: '#334155',
+          mb: 1,
+        }}
+      >
+        {label}
         <Box
+          component="span"
+          sx={{ color: '#dc2626', ml: 0.5 }}
+        >
+          *
+        </Box>
+      </Typography>
+
+      <Box
+        sx={{
+          border: '1px dashed #94a3b8',
+          borderRadius: '18px',
+          backgroundColor: '#fcfcfd',
+          p: { xs: 2, sm: 3 },
+        }}
+      >
+        <Button
+          component="label"
+          variant="outlined"
           sx={{
-            mt: 1,
-            p: 1.5,
-            bgcolor: '#F0FBF5',
-            borderRadius: 2,
+            textTransform: 'none',
+            fontWeight: 800,
+            borderRadius: '10px',
+            mb: 1.5,
+          }}
+        >
+          Choose File
+          <input
+            id={id}
+            hidden
+            type="file"
+            accept={accept}
+            onChange={(event) => {
+              const selectedFile =
+                event.target.files?.[0] || null;
+
+              onChange(selectedFile);
+            }}
+          />
+        </Button>
+
+        <Typography
+          component="span"
+          sx={{
+            ml: 1,
+            color: file ? '#166534' : '#64748b',
+            fontSize: '0.95rem',
             overflowWrap: 'anywhere',
           }}
         >
-          <Typography
-            variant="body2"
-            fontWeight={600}
-            color="#166534"
-          >
-            {file.name}
-          </Typography>
+          {file ? file.name : 'No file selected'}
+        </Typography>
 
-          <Typography
-            variant="caption"
-            color="text.secondary"
-          >
-            {(file.size / (1024 * 1024)).toFixed(2)} MB
-          </Typography>
+        <Typography
+          sx={{
+            mt: 1,
+            color: '#64748b',
+            lineHeight: 1.7,
+            fontSize: '0.95rem',
+          }}
+        >
+          {description}
+        </Typography>
 
+        {file && (
           <Button
             size="small"
             color="error"
-            onClick={() => setFile(null)}
+            onClick={() => {
+              onChange(null);
+
+              const input = document.getElementById(
+                id
+              ) as HTMLInputElement | null;
+
+              if (input) input.value = '';
+            }}
             sx={{
-              display: 'block',
-              mt: 0.5,
+              mt: 1,
               textTransform: 'none',
             }}
           >
             Remove file
           </Button>
-        </Box>
-      )}
-
-      <FormHelperText>
-        Accepted: JPG, PNG, WEBP or PDF. Maximum 10 MB.
-      </FormHelperText>
+        )}
+      </Box>
     </Box>
-  );
-
-  const renderTierHeader = (
-    tier: number,
-    title: string,
-    description: string,
-    icon: React.ReactNode,
-    status: VerificationStatus
-  ) => (
-    <Stack
-      direction="row"
-      alignItems="center"
-      spacing={2}
-      sx={{ mb: 2 }}
-    >
-      <Box
-        sx={{
-          width: 48,
-          height: 48,
-          minWidth: 48,
-          borderRadius: 2,
-          bgcolor: '#E8F7EE',
-          color: '#14804A',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {icon}
-      </Box>
-
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          variant="subtitle1"
-          fontWeight={800}
-          color="#14532D"
-        >
-          Tier {tier}: {title}
-        </Typography>
-
-        <Typography
-          variant="body2"
-          color="text.secondary"
-        >
-          {description}
-        </Typography>
-      </Box>
-
-      {renderStatus(status)}
-    </Stack>
   );
 
   if (loading) {
@@ -812,13 +798,13 @@ const KYC: React.FC = () => {
         sx={{
           minHeight: '60vh',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
           flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
           gap: 2,
         }}
       >
-        <CircularProgress sx={{ color: '#14804A' }} />
+        <CircularProgress sx={{ color: '#2563eb' }} />
 
         <Typography color="text.secondary">
           Loading your verification status...
@@ -831,881 +817,928 @@ const KYC: React.FC = () => {
     <Box
       sx={{
         minHeight: '100vh',
-        bgcolor: '#F5F8F6',
-        py: { xs: 2, md: 4 },
+        backgroundColor: '#f4f6fa',
+        px: { xs: 2, sm: 3, md: 4 },
+        py: { xs: 3, sm: 4 },
+        boxSizing: 'border-box',
       }}
     >
-      <Container maxWidth="md">
-        {/* ================================================== */}
-        {/* PAGE HEADER */}
-        {/* ================================================== */}
+      <Box
+        sx={{
+          maxWidth: 900,
+          mx: 'auto',
+        }}
+      >
+        {/* Page heading */}
 
-        <Box sx={{ mb: 3 }}>
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={1.5}
-            sx={{ mb: 1 }}
+        <Box sx={{ mb: 5 }}>
+          <Typography
+            sx={{
+              color: '#64748b',
+              fontSize: '1.1rem',
+              fontWeight: 700,
+              mb: 1,
+            }}
           >
-            <Box
-              sx={{
-                width: 44,
-                height: 44,
-                bgcolor: '#14804A',
-                color: '#FFFFFF',
-                borderRadius: 2,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <VerifiedUserOutlined />
-            </Box>
-
-            <Box>
-              <Typography
-                variant="h5"
-                fontWeight={900}
-                color="#14532D"
-              >
-                Account Verification
-              </Typography>
-
-              <Typography
-                variant="body2"
-                color="text.secondary"
-              >
-                Zenimonies Banking
-              </Typography>
-            </Box>
-          </Stack>
+            Account Security
+          </Typography>
 
           <Typography
-            variant="body1"
-            color="text.secondary"
-            sx={{ mt: 2 }}
+            component="h1"
+            sx={{
+              color: '#172033',
+              fontSize: { xs: '2.3rem', sm: '3rem' },
+              fontWeight: 950,
+              lineHeight: 1.1,
+              mb: 2,
+              letterSpacing: '-1px',
+            }}
           >
-            Complete your verification in stages to access
-            the account features and transaction limits
-            available to your account.
+            KYC Verification
+          </Typography>
+
+          <Typography
+            sx={{
+              color: '#64748b',
+              fontSize: { xs: '1.05rem', sm: '1.2rem' },
+              lineHeight: 1.8,
+            }}
+          >
+            Verify your identity to increase your Zenimonies
+            account and transfer limits.
           </Typography>
         </Box>
 
-        {/* ================================================== */}
-        {/* ALERTS */}
-        {/* ================================================== */}
-
-        {error && (
-          <Alert
-            severity="error"
-            onClose={() => setError('')}
-            sx={{ mb: 2, borderRadius: 2 }}
-          >
-            {error}
-          </Alert>
-        )}
-
-        {success && (
-          <Alert
-            severity="success"
-            onClose={() => setSuccess('')}
-            sx={{ mb: 2, borderRadius: 2 }}
-          >
-            {success}
-          </Alert>
-        )}
-
-        {/* ================================================== */}
-        {/* ACCOUNT SUMMARY */}
-        {/* ================================================== */}
+        {/* Current verification summary */}
 
         <Card
           elevation={0}
           sx={{
-            mb: 3,
-            border: '1px solid #DCE9E0',
-            borderRadius: 3,
-            overflow: 'hidden',
+            borderRadius: '28px',
+            border: '1px solid #e2e8f0',
+            backgroundColor: '#fff',
+            mb: 4,
           }}
         >
-          <Box
+          <CardContent
             sx={{
-              bgcolor: '#14804A',
-              color: '#FFFFFF',
-              p: 2.5,
+              p: { xs: 2.5, sm: 4 },
             }}
           >
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
+            <Typography
+              sx={{
+                color: '#172033',
+                fontSize: { xs: '1.5rem', sm: '1.8rem' },
+                fontWeight: 900,
+                mb: 1,
+              }}
             >
-              <Box>
-                <Typography
-                  variant="body2"
-                  sx={{ opacity: 0.9 }}
-                >
-                  Current verification tier
-                </Typography>
+              Current Verification
+            </Typography>
 
-                <Typography
-                  variant="h4"
-                  fontWeight={900}
-                >
-                  Tier {currentTier}
-                </Typography>
-              </Box>
+            <Typography
+              sx={{
+                color: '#64748b',
+                mb: 3,
+                lineHeight: 1.7,
+              }}
+            >
+              Your current KYC level and account limits.
+            </Typography>
 
-              <VerifiedUserOutlined
-                sx={{ fontSize: 42, opacity: 0.9 }}
-              />
-            </Stack>
-          </Box>
-
-          <CardContent sx={{ p: 2.5 }}>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={2}
-              divider={
-                <Divider
-                  orientation="vertical"
-                  flexItem
-                />
+            <StatusBadge
+              status={
+                currentTier > 0
+                  ? 'verified'
+                  : 'not_submitted'
               }
+            />
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: '1fr 1fr',
+                },
+                gap: 2,
+                mt: 4,
+              }}
             >
-              <Box sx={{ flex: 1 }}>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Account limit
-                </Typography>
+              <LimitBox
+                label="Current tier"
+                value={`Tier ${currentTier}`}
+              />
 
-                <Typography
-                  variant="h6"
-                  fontWeight={800}
-                  color="#14532D"
-                >
-                  {formatNaira(accountLimit)}
-                </Typography>
-              </Box>
+              <LimitBox
+                label="Account limit"
+                value={formatNaira(limits.account_limit)}
+              />
 
-              <Box sx={{ flex: 1 }}>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Daily transfer limit
-                </Typography>
+              <LimitBox
+                label="Daily transfer limit"
+                value={formatNaira(
+                  limits.daily_transfer_limit
+                )}
+              />
 
-                <Typography
-                  variant="h6"
-                  fontWeight={800}
-                  color="#14532D"
-                >
-                  {formatNaira(dailyTransferLimit)}
-                </Typography>
-              </Box>
-            </Stack>
+              <LimitBox
+                label="Daily transfers remaining"
+                value={formatNaira(
+                  limits.daily_transfer_limit
+                )}
+              />
+            </Box>
 
             <Alert
               severity="info"
               sx={{
-                mt: 2,
-                borderRadius: 2,
-                fontSize: 13,
+                mt: 3,
+                borderRadius: '16px',
+                lineHeight: 1.7,
               }}
             >
-              Your approved tier and transaction limits
-              are determined by the bank's verification
-              process. Submitting documents does not
-              automatically increase your limits.
+              Your approved tier and transaction limits are
+              determined by the bank's verification process.
+              Submitting documents does not automatically
+              increase your limits.
             </Alert>
           </CardContent>
         </Card>
 
-        {/* ================================================== */}
-        {/* TIER NAVIGATION */}
-        {/* ================================================== */}
+        {/* Notifications */}
 
-        <Card
-          elevation={0}
-          sx={{
-            mb: 3,
-            border: '1px solid #DCE9E0',
-            borderRadius: 3,
-          }}
-        >
-          <CardContent sx={{ p: 2 }}>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1}
-            >
-              {[
-                {
-                  tier: 1,
-                  label: 'Tier 1',
-                  status: bvnStatus,
-                },
-                {
-                  tier: 2,
-                  label: 'Tier 2',
-                  status: idStatus,
-                },
-                {
-                  tier: 3,
-                  label: 'Tier 3',
-                  status: tier3Status,
-                },
-              ].map((item) => (
-                <Button
-                  key={item.tier}
-                  fullWidth
-                  onClick={() => {
-                    setActiveTier(item.tier);
-                    setError('');
-                    setSuccess('');
-                  }}
-                  variant={
-                    activeTier === item.tier
-                      ? 'contained'
-                      : 'outlined'
-                  }
-                  sx={{
-                    py: 1.5,
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 800,
-                    backgroundColor:
-                      activeTier === item.tier
-                        ? '#14804A'
-                        : '#FFFFFF',
-                    borderColor: '#14804A',
-                    color:
-                      activeTier === item.tier
-                        ? '#FFFFFF'
-                        : '#14804A',
-                    '&:hover': {
-                      backgroundColor:
-                        activeTier === item.tier
-                          ? '#0B6337'
-                          : '#F0FBF5',
-                    },
-                  }}
-                >
-                  {item.label}
-                  {' · '}
-                  {statusLabel(item.status)}
-                </Button>
-              ))}
-            </Stack>
-          </CardContent>
-        </Card>
+        {message && (
+          <Alert
+            severity="success"
+            onClose={() => setMessage('')}
+            sx={{
+              mb: 3,
+              borderRadius: '14px',
+            }}
+          >
+            {message}
+          </Alert>
+        )}
 
-        {/* ================================================== */}
-        {/* TIER 1 - BVN */}
-        {/* ================================================== */}
+        {errorMessage && (
+          <Alert
+            severity="error"
+            onClose={() => setErrorMessage('')}
+            sx={{
+              mb: 3,
+              borderRadius: '14px',
+            }}
+          >
+            {errorMessage}
+          </Alert>
+        )}
+
+        {/* Tier overview */}
+
+        <Box sx={{ mb: 5 }}>
+          <TierCard
+            tier={1}
+            title="BVN Verification"
+            description="Verify your account using your Bank Verification Number."
+            accountLimit="₦200,000"
+            dailyLimit="₦50,000"
+          />
+
+          <TierCard
+            tier={2}
+            title="ID + Facial Verification"
+            description="Submit a government-issued ID and complete facial/liveness verification."
+            accountLimit="₦500,000"
+            dailyLimit="₦200,000"
+          />
+
+          <TierCard
+            tier={3}
+            title="Address Verification"
+            description="Submit an accepted proof-of-address document for review."
+            accountLimit="Unlimited"
+            dailyLimit="₦5,000,000"
+          />
+        </Box>
+
+        {/* Tier 1 form */}
 
         {activeTier === 1 && (
           <Card
             elevation={0}
             sx={{
-              mb: 3,
-              border: '1px solid #DCE9E0',
-              borderRadius: 3,
+              borderRadius: '28px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: '#fff',
+              mb: 4,
             }}
           >
             <CardContent
-              sx={{ p: { xs: 2, sm: 3 } }}
+              sx={{
+                p: { xs: 2.5, sm: 4 },
+              }}
             >
-              {renderTierHeader(
-                1,
-                'Basic Verification',
-                'Verify your identity using your BVN.',
-                <AccountBalanceOutlined />,
-                bvnStatus
+              <Typography
+                sx={{
+                  color: '#2563eb',
+                  fontWeight: 900,
+                  mb: 2,
+                }}
+              >
+                Tier 1
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: '#172033',
+                  fontSize: { xs: '1.6rem', sm: '2rem' },
+                  fontWeight: 900,
+                  mb: 2,
+                }}
+              >
+                BVN Verification
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: '#64748b',
+                  lineHeight: 1.8,
+                  mb: 3,
+                }}
+              >
+                Enter your 11-digit Bank Verification Number.
+                Your BVN will remain pending until the
+                verification provider confirms it.
+              </Typography>
+
+              {bvnStatus !== 'not_submitted' && (
+                <Alert
+                  severity={
+                    bvnStatus === 'verified'
+                      ? 'success'
+                      : bvnStatus === 'pending'
+                      ? 'warning'
+                      : 'error'
+                  }
+                  sx={{ mb: 3, borderRadius: '14px' }}
+                >
+                  BVN status: {statusLabel(bvnStatus)}.
+
+                  {kyc.bvn_rejection_reason &&
+                    bvnStatus === 'rejected' &&
+                    ` Reason: ${kyc.bvn_rejection_reason}`}
+                </Alert>
               )}
 
-              <Divider sx={{ my: 2 }} />
+              <form onSubmit={submitBvn}>
+                <TextField
+                  fullWidth
+                  label="BVN"
+                  value={bvn}
+                  onChange={(event) => {
+                    setBvn(
+                      event.target.value
+                        .replace(/\D/g, '')
+                        .slice(0, 11)
+                    );
+                  }}
+                  placeholder="Enter your 11-digit BVN"
+                  inputProps={{
+                    maxLength: 11,
+                    inputMode: 'numeric',
+                  }}
+                  disabled={bvnLocked || submitting}
+                  helperText={`${bvn.length}/11 digits`}
+                  sx={{
+                    mb: 3,
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '12px',
+                    },
+                  }}
+                />
 
-              {bvnStatus === 'verified' ? (
-                <Alert
-                  severity="success"
-                  sx={{ borderRadius: 2 }}
+                <Typography
+                  sx={{
+                    color: '#64748b',
+                    lineHeight: 1.7,
+                    mb: 3,
+                  }}
                 >
-                  Your Tier 1 BVN verification is marked
-                  as verified.
-                </Alert>
-              ) : bvnStatus === 'pending' ? (
-                <Alert
-                  severity="warning"
-                  sx={{ borderRadius: 2 }}
-                >
-                  Your BVN submission is pending review.
-                  You do not need to submit it again.
-                </Alert>
-              ) : (
-                <>
-                  <Alert
-                    severity="info"
-                    sx={{ mb: 2, borderRadius: 2 }}
-                  >
-                    Enter the 11-digit BVN associated
-                    with your bank identity.
-                  </Alert>
+                  Your BVN is sensitive information. Only
+                  submit it through this secure verification
+                  form. Never share your BVN or OTP with
+                  another person.
+                </Typography>
 
-                  <Box
-                    component="form"
-                    onSubmit={submitBvn}
-                  >
-                    <TextField
-                      label="Bank Verification Number (BVN)"
-                      value={bvn}
-                      onChange={(event) => {
-                        setBvn(
-                          event.target.value
-                            .replace(/\D/g, '')
-                            .slice(0, 11)
-                        );
-                      }}
-                      fullWidth
-                      required
-                      type="password"
-                      autoComplete="off"
-                      inputProps={{
-                        maxLength: 11,
-                        inputMode: 'numeric',
-                      }}
-                      helperText={`${bvn.length}/11 digits`}
-                      sx={{
-                        mb: 2,
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: 2,
-                        },
-                      }}
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={
+                    submitting ||
+                    bvnLocked ||
+                    bvn.length !== 11
+                  }
+                  sx={{
+                    minHeight: 54,
+                    px: 4,
+                    borderRadius: '12px',
+                    backgroundColor: '#2563eb',
+                    fontWeight: 900,
+                    textTransform: 'none',
+                    fontSize: '1rem',
+                    '&:hover': {
+                      backgroundColor: '#1d4ed8',
+                    },
+                  }}
+                >
+                  {submitting ? (
+                    <CircularProgress
+                      size={24}
+                      color="inherit"
                     />
-
-                    <Alert
-                      severity="warning"
-                      icon={<LockOutlined />}
-                      sx={{ mb: 2, borderRadius: 2 }}
-                    >
-                      Never share your BVN or OTP with
-                      anyone. Your BVN is sent to the
-                      authenticated verification endpoint.
-                    </Alert>
-
-                    <Button
-                      type="submit"
-                      fullWidth
-                      variant="contained"
-                      disabled={
-                        submitting ||
-                        bvn.length !== 11 ||
-                        bvnLocked
-                      }
-                      sx={{
-                        py: 1.5,
-                        borderRadius: 2,
-                        bgcolor: '#14804A',
-                        fontWeight: 800,
-                        textTransform: 'none',
-                        '&:hover': {
-                          bgcolor: '#0B6337',
-                        },
-                      }}
-                    >
-                      {submitting ? (
-                        <CircularProgress
-                          size={24}
-                          color="inherit"
-                        />
-                      ) : (
-                        'Submit BVN for Verification'
-                      )}
-                    </Button>
-                  </Box>
-                </>
-              )}
+                  ) : bvnLocked ? (
+                    `BVN ${statusLabel(bvnStatus)}`
+                  ) : (
+                    'Submit BVN'
+                  )}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         )}
 
-        {/* ================================================== */}
-        {/* TIER 2 - ID AND SELFIE */}
-        {/* ================================================== */}
+        {/* Tier 2 form */}
 
         {activeTier === 2 && (
           <Card
             elevation={0}
             sx={{
-              mb: 3,
-              border: '1px solid #DCE9E0',
-              borderRadius: 3,
+              borderRadius: '28px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: '#fff',
+              mb: 4,
             }}
           >
             <CardContent
-              sx={{ p: { xs: 2, sm: 3 } }}
+              sx={{
+                p: { xs: 2.5, sm: 4 },
+              }}
             >
-              {renderTierHeader(
-                2,
-                'Identity Verification',
-                'Submit your identity document and selfie.',
-                <BadgeOutlined />,
-                idStatus
+              <Typography
+                sx={{
+                  color: '#2563eb',
+                  fontWeight: 900,
+                  mb: 2,
+                }}
+              >
+                Tier 2
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: '#172033',
+                  fontSize: { xs: '1.6rem', sm: '2rem' },
+                  fontWeight: 900,
+                  mb: 2,
+                }}
+              >
+                ID + Facial Verification
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: '#64748b',
+                  lineHeight: 1.8,
+                  mb: 3,
+                }}
+              >
+                Upload your actual government-issued ID and
+                complete a facial verification submission.
+                Uploading files does not automatically approve
+                your account.
+              </Typography>
+
+              {idStatus !== 'not_submitted' && (
+                <Alert
+                  severity={
+                    idStatus === 'verified'
+                      ? 'success'
+                      : idStatus === 'pending'
+                      ? 'warning'
+                      : 'error'
+                  }
+                  sx={{ mb: 3, borderRadius: '14px' }}
+                >
+                  Tier 2 status: {statusLabel(idStatus)}.
+
+                  {kyc.id_rejection_reason &&
+                    idStatus === 'rejected' &&
+                    ` Reason: ${kyc.id_rejection_reason}`}
+                </Alert>
               )}
 
-              <Divider sx={{ my: 2 }} />
-
-              {idStatus === 'verified' ? (
-                <Alert
-                  severity="success"
-                  sx={{ borderRadius: 2 }}
+              <form onSubmit={submitTier2}>
+                <FormControl
+                  fullWidth
+                  sx={{ mb: 3 }}
+                  disabled={idLocked || submitting}
                 >
-                  Your Tier 2 identity verification is
-                  marked as verified.
-                </Alert>
-              ) : idStatus === 'pending' ? (
+                  <InputLabel id="document-type-label">
+                    ID Document Type
+                  </InputLabel>
+
+                  <Select
+                    labelId="document-type-label"
+                    value={documentType}
+                    label="ID Document Type"
+                    onChange={handleDocumentTypeChange}
+                    sx={{
+                      borderRadius: '12px',
+                    }}
+                  >
+                    <MenuItem value="national_id">
+                      National ID
+                    </MenuItem>
+
+                    <MenuItem value="nin">
+                      NIN
+                    </MenuItem>
+
+                    <MenuItem value="drivers_license">
+                      Driver's License
+                    </MenuItem>
+
+                    <MenuItem value="international_passport">
+                      International Passport
+                    </MenuItem>
+
+                    <MenuItem value="voters_card">
+                      Voter's Card
+                    </MenuItem>
+                  </Select>
+                </FormControl>
+
+                <TextField
+                  fullWidth
+                  label="ID Document Number"
+                  value={documentNumber}
+                  onChange={(event) =>
+                    setDocumentNumber(event.target.value)
+                  }
+                  disabled={idLocked || submitting}
+                  sx={{
+                    mb: 3,
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '12px',
+                    },
+                  }}
+                />
+
+                <FileUpload
+                  id="document-front"
+                  label="Front of ID"
+                  description="Upload a clear image of the front of your government-issued ID."
+                  file={documentFront}
+                  onChange={setDocumentFront}
+                />
+
+                {!isPassport && (
+                  <FileUpload
+                    id="document-back"
+                    label="Back of ID"
+                    description="Upload the back of your ID if your document has a reverse side."
+                    file={documentBack}
+                    onChange={setDocumentBack}
+                  />
+                )}
+
+                <Box
+                  sx={{
+                    p: { xs: 2, sm: 3 },
+                    border: '1px solid #dbeafe',
+                    borderRadius: '20px',
+                    backgroundColor: '#f8fafc',
+                    mb: 3,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: '#172033',
+                      fontSize: '1.4rem',
+                      fontWeight: 900,
+                      mb: 2,
+                    }}
+                  >
+                    Facial Verification
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      color: '#64748b',
+                      lineHeight: 1.8,
+                      mb: 3,
+                    }}
+                  >
+                    Take a clear selfie using your device.
+                    Your selfie is intended for facial/liveness
+                    verification. A submitted selfie does not
+                    mean that you have passed verification.
+                  </Typography>
+
+                  <FileUpload
+                    id="tier2-selfie"
+                    label="Live Selfie"
+                    description="Use a clear image of your face. Remove sunglasses, masks, and anything covering your face."
+                    accept="image/jpeg,image/png,image/webp"
+                    file={tier2Selfie}
+                    onChange={setTier2Selfie}
+                  />
+                </Box>
+
                 <Alert
                   severity="warning"
-                  sx={{ borderRadius: 2 }}
+                  sx={{
+                    mb: 3,
+                    borderRadius: '14px',
+                    lineHeight: 1.7,
+                  }}
                 >
-                  Your identity verification is pending
-                  review. Please wait for an update.
+                  Important: Your ID and selfie must receive
+                  a successful verification result before
+                  your Tier 2 status changes to Verified.
                 </Alert>
-              ) : (
-                <>
-                  <Alert
-                    severity="info"
-                    sx={{ mb: 2, borderRadius: 2 }}
-                  >
-                    Select your government-issued identity
-                    document. Upload clear images of the
-                    required sides and a recent selfie.
-                  </Alert>
 
-                  <Box
-                    component="form"
-                    onSubmit={submitTier2}
-                  >
-                    <Stack spacing={2}>
-                      <FormControl fullWidth required>
-                        <InputLabel>
-                          Identity Document Type
-                        </InputLabel>
-
-                        <Select
-                          value={documentType}
-                          label="Identity Document Type"
-                          onChange={(event) => {
-                            setDocumentType(
-                              event.target.value
-                            );
-                            setDocumentFront(null);
-                            setDocumentBack(null);
-                          }}
-                          sx={{ borderRadius: 2 }}
-                        >
-                          <MenuItem value="national_id">
-                            National ID
-                          </MenuItem>
-
-                          <MenuItem value="nin">
-                            National Identification Number (NIN)
-                          </MenuItem>
-
-                          <MenuItem value="drivers_license">
-                            Driver's License
-                          </MenuItem>
-
-                          <MenuItem value="international_passport">
-                            International Passport
-                          </MenuItem>
-
-                          <MenuItem value="voters_card">
-                            Voter's Card
-                          </MenuItem>
-                        </Select>
-                      </FormControl>
-
-                      <TextField
-                        label="Document Number"
-                        value={documentNumber}
-                        onChange={(event) =>
-                          setDocumentNumber(
-                            event.target.value
-                          )
-                        }
-                        fullWidth
-                        required
-                        autoComplete="off"
-                        sx={{
-                          '& .MuiOutlinedInput-root': {
-                            borderRadius: 2,
-                          },
-                        }}
-                      />
-
-                      {renderFileInput(
-                        'Upload Front of ID',
-                        documentFront,
-                        setDocumentFront
-                      )}
-
-                      {!isPassport &&
-                        renderFileInput(
-                          'Upload Back of ID',
-                          documentBack,
-                          setDocumentBack
-                        )}
-
-                      {isPassport && (
-                        <Alert
-                          severity="info"
-                          sx={{ borderRadius: 2 }}
-                        >
-                          For international passports,
-                          upload the page containing your
-                          photograph and personal details.
-                        </Alert>
-                      )}
-
-                      {renderFileInput(
-                        'Upload Recent Selfie',
-                        tier2Selfie,
-                        setTier2Selfie,
-                        'image/jpeg,image/png,image/webp'
-                      )}
-
-                      <Alert
-                        severity="warning"
-                        icon={<LockOutlined />}
-                        sx={{ borderRadius: 2 }}
-                      >
-                        Upload only your own documents.
-                        Your submission will not be
-                        considered verified until the
-                        required review is completed.
-                      </Alert>
-
-                      <Button
-                        type="submit"
-                        fullWidth
-                        variant="contained"
-                        disabled={
-                          submitting ||
-                          !documentType ||
-                          !documentNumber.trim() ||
-                          !documentFront ||
-                          !tier2Selfie ||
-                          (!isPassport && !documentBack) ||
-                          tier2Locked
-                        }
-                        sx={{
-                          py: 1.5,
-                          borderRadius: 2,
-                          bgcolor: '#14804A',
-                          fontWeight: 800,
-                          textTransform: 'none',
-                          '&:hover': {
-                            bgcolor: '#0B6337',
-                          },
-                        }}
-                      >
-                        {submitting ? (
-                          <CircularProgress
-                            size={24}
-                            color="inherit"
-                          />
-                        ) : (
-                          'Submit Tier 2 Verification'
-                        )}
-                      </Button>
-                    </Stack>
-                  </Box>
-                </>
-              )}
+                <Button
+                  type="submit"
+                  fullWidth
+                  variant="contained"
+                  disabled={submitting || idLocked}
+                  sx={{
+                    minHeight: 56,
+                    borderRadius: '12px',
+                    backgroundColor: '#2563eb',
+                    fontWeight: 900,
+                    fontSize: '1rem',
+                    textTransform: 'none',
+                    '&:hover': {
+                      backgroundColor: '#1d4ed8',
+                    },
+                  }}
+                >
+                  {submitting ? (
+                    <CircularProgress
+                      size={24}
+                      color="inherit"
+                    />
+                  ) : idLocked ? (
+                    `Tier 2 ${statusLabel(idStatus)}`
+                  ) : (
+                    'Submit Tier 2 Verification'
+                  )}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         )}
 
-        {/* ================================================== */}
-        {/* TIER 3 - PROOF OF ADDRESS */}
-        {/* ================================================== */}
+        {/* Tier 3 form */}
 
         {activeTier === 3 && (
           <Card
             elevation={0}
             sx={{
-              mb: 3,
-              border: '1px solid #DCE9E0',
-              borderRadius: 3,
+              borderRadius: '28px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: '#fff',
+              mb: 4,
             }}
           >
             <CardContent
-              sx={{ p: { xs: 2, sm: 3 } }}
+              sx={{
+                p: { xs: 2.5, sm: 4 },
+              }}
             >
-              {renderTierHeader(
-                3,
-                'Address Verification',
-                'Submit proof of your residential address.',
-                <HomeOutlined />,
-                tier3Status
+              <Typography
+                sx={{
+                  color: '#2563eb',
+                  fontWeight: 900,
+                  mb: 2,
+                }}
+              >
+                Tier 3
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: '#172033',
+                  fontSize: { xs: '1.6rem', sm: '2rem' },
+                  fontWeight: 900,
+                  mb: 2,
+                }}
+              >
+                Address Verification
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: '#64748b',
+                  lineHeight: 1.8,
+                  mb: 3,
+                }}
+              >
+                Choose an accepted proof-of-address method
+                and upload your document for review.
+              </Typography>
+
+              {tier3Status !== 'not_submitted' && (
+                <Alert
+                  severity={
+                    tier3Status === 'verified'
+                      ? 'success'
+                      : tier3Status === 'pending'
+                      ? 'warning'
+                      : 'error'
+                  }
+                  sx={{ mb: 3, borderRadius: '14px' }}
+                >
+                  Tier 3 status: {statusLabel(tier3Status)}.
+
+                  {kyc.tier_3_rejection_reason &&
+                    tier3Status === 'rejected' &&
+                    ` Reason: ${kyc.tier_3_rejection_reason}`}
+                </Alert>
               )}
 
-              <Divider sx={{ my: 2 }} />
-
-              {tier3Status === 'verified' ? (
-                <Alert
-                  severity="success"
-                  sx={{ borderRadius: 2 }}
+              <form onSubmit={submitTier3}>
+                <Typography
+                  sx={{
+                    color: '#334155',
+                    fontWeight: 900,
+                    mb: 2,
+                  }}
                 >
-                  Your Tier 3 address verification is
-                  marked as verified.
-                </Alert>
-              ) : tier3Status === 'pending' ? (
-                <Alert
-                  severity="warning"
-                  sx={{ borderRadius: 2 }}
-                >
-                  Your proof-of-address submission is
-                  pending review.
-                </Alert>
-              ) : (
-                <>
-                  <Alert
-                    severity="info"
-                    sx={{ mb: 2, borderRadius: 2 }}
-                  >
-                    Upload a valid document that supports
-                    your residential address.
-                  </Alert>
+                  Choose Verification Method
+                </Typography>
 
-                  <Box
-                    component="form"
-                    onSubmit={submitTier3}
-                  >
-                    <Stack spacing={2}>
-                      <FormControl fullWidth required>
-                        <InputLabel>
-                          Proof of Address Type
-                        </InputLabel>
-
-                        <Select
-                          value={tier3Method}
-                          label="Proof of Address Type"
-                          onChange={(event) => {
-                            setTier3Method(
-                              event.target.value
-                            );
-                            setTier3Document(null);
-                          }}
-                          sx={{ borderRadius: 2 }}
-                        >
-                          <MenuItem value="bank_statement">
-                            Bank Statement
-                          </MenuItem>
-
-                          <MenuItem value="utility_bill">
-                            Utility Bill
-                          </MenuItem>
-
-                          <MenuItem value="proof_of_address">
-                            Other Proof of Address
-                          </MenuItem>
-                        </Select>
-                      </FormControl>
-
-                      {renderFileInput(
-                        'Upload Proof of Address',
-                        tier3Document,
-                        setTier3Document
-                      )}
-
-                      {renderFileInput(
-                        'Upload Recent Selfie',
-                        tier3Selfie,
-                        setTier3Selfie,
-                        'image/jpeg,image/png,image/webp'
-                      )}
-
-                      <Alert
-                        severity="warning"
-                        icon={<LockOutlined />}
-                        sx={{ borderRadius: 2 }}
-                      >
-                        Make sure the document is clear
-                        and shows your residential
-                        address. Your account tier will
-                        not change until verification
-                        is approved.
-                      </Alert>
-
-                      <Button
-                        type="submit"
-                        fullWidth
-                        variant="contained"
-                        disabled={
-                          submitting ||
-                          !tier3Method ||
-                          !tier3Document ||
-                          !tier3Selfie ||
-                          tier3Locked
+                <Box sx={{ mb: 3 }}>
+                  {[
+                    {
+                      value: 'bank_statement',
+                      title: 'Bank Statement',
+                      description:
+                        'Upload a recent bank statement.',
+                    },
+                    {
+                      value: 'utility_bill',
+                      title: 'Utility Bill',
+                      description:
+                        'Upload an eligible recent utility bill.',
+                    },
+                    {
+                      value: 'proof_of_address',
+                      title: 'Proof of Address',
+                      description:
+                        'Upload an accepted proof-of-address document.',
+                    },
+                  ].map((option) => (
+                    <Box
+                      key={option.value}
+                      onClick={() => {
+                        if (!tier3Locked && !submitting) {
+                          setTier3Method(option.value);
                         }
+                      }}
+                      sx={{
+                        border:
+                          tier3Method === option.value
+                            ? '2px solid #2563eb'
+                            : '1px solid #cbd5e1',
+                        borderRadius: '18px',
+                        p: 2.5,
+                        mb: 2,
+                        cursor: tier3Locked
+                          ? 'not-allowed'
+                          : 'pointer',
+                        backgroundColor:
+                          tier3Method === option.value
+                            ? '#eff6ff'
+                            : '#fff',
+                      }}
+                    >
+                      <Typography
                         sx={{
-                          py: 1.5,
-                          borderRadius: 2,
-                          bgcolor: '#14804A',
-                          fontWeight: 800,
-                          textTransform: 'none',
-                          '&:hover': {
-                            bgcolor: '#0B6337',
-                          },
+                          color: '#172033',
+                          fontWeight: 900,
+                          fontSize: '1.1rem',
+                          mb: 1,
                         }}
                       >
-                        {submitting ? (
-                          <CircularProgress
-                            size={24}
-                            color="inherit"
-                          />
-                        ) : (
-                          'Submit Tier 3 Verification'
-                        )}
-                      </Button>
-                    </Stack>
-                  </Box>
-                </>
-              )}
+                        {option.title}
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          color: '#64748b',
+                          lineHeight: 1.7,
+                        }}
+                      >
+                        {option.description}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+
+                <FileUpload
+                  id="tier3-document"
+                  label="Proof-of-Address Document"
+                  description="Upload the actual document in PDF or an accepted image format. Screenshots and ordinary photos of documents may not be accepted."
+                  file={tier3Document}
+                  onChange={setTier3Document}
+                />
+
+                <FileUpload
+                  id="tier3-selfie"
+                  label="Facial Verification Selfie"
+                  description="Upload a clear image of your face for the verification process."
+                  accept="image/jpeg,image/png,image/webp"
+                  file={tier3Selfie}
+                  onChange={setTier3Selfie}
+                />
+
+                <Alert
+                  severity="warning"
+                  sx={{
+                    mb: 3,
+                    borderRadius: '14px',
+                    lineHeight: 1.7,
+                  }}
+                >
+                  Only one proof-of-address method is required.
+                  Your Tier 3 status will remain pending until
+                  your submission has been reviewed and
+                  approved.
+                </Alert>
+
+                <Button
+                  type="submit"
+                  fullWidth
+                  variant="contained"
+                  disabled={submitting || tier3Locked}
+                  sx={{
+                    minHeight: 56,
+                    borderRadius: '12px',
+                    backgroundColor: '#2563eb',
+                    fontWeight: 900,
+                    fontSize: '1rem',
+                    textTransform: 'none',
+                    '&:hover': {
+                      backgroundColor: '#1d4ed8',
+                    },
+                  }}
+                >
+                  {submitting ? (
+                    <CircularProgress
+                      size={24}
+                      color="inherit"
+                    />
+                  ) : tier3Locked ? (
+                    `Tier 3 ${statusLabel(tier3Status)}`
+                  ) : (
+                    'Submit Tier 3 Verification'
+                  )}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         )}
 
-        {/* ================================================== */}
-        {/* VERIFICATION SUMMARY */}
-        {/* ================================================== */}
+        {/* Verification status summary */}
 
         <Card
           elevation={0}
           sx={{
-            mb: 3,
-            border: '1px solid #DCE9E0',
-            borderRadius: 3,
+            borderRadius: '28px',
+            border: '1px solid #e2e8f0',
+            backgroundColor: '#fff',
+            mb: 4,
           }}
         >
-          <CardContent sx={{ p: 2.5 }}>
+          <CardContent
+            sx={{
+              p: { xs: 2.5, sm: 4 },
+            }}
+          >
             <Typography
-              variant="h6"
-              fontWeight={900}
-              color="#14532D"
-              sx={{ mb: 2 }}
+              sx={{
+                color: '#172033',
+                fontSize: '1.5rem',
+                fontWeight: 900,
+                mb: 3,
+              }}
             >
-              Verification Summary
+              Verification Status
             </Typography>
 
-            <Stack spacing={2}>
-              {[
-                {
-                  label: 'Tier 1 · BVN',
-                  status: bvnStatus,
-                },
-                {
-                  label: 'Tier 2 · Identity Document',
-                  status: idStatus,
-                },
-                {
-                  label: 'Tier 3 · Proof of Address',
-                  status: tier3Status,
-                },
-              ].map((item) => (
-                <Stack
-                  key={item.label}
-                  direction="row"
-                  alignItems="center"
-                  justifyContent="space-between"
-                  spacing={2}
+            {[
+              {
+                number: 1,
+                title: 'Tier 1 – BVN Verification',
+                description:
+                  'Verify your 11-digit BVN. Your account remains pending until an approved verification provider confirms the BVN.',
+                status: bvnStatus,
+              },
+              {
+                number: 2,
+                title: 'Tier 2 – ID + Facial Verification',
+                description:
+                  'Submit your government-issued ID and facial verification documents for review.',
+                status: idStatus,
+              },
+              {
+                number: 3,
+                title: 'Tier 3 – Address Verification',
+                description:
+                  'Submit an accepted proof-of-address document for review.',
+                status: tier3Status,
+              },
+            ].map((item) => (
+              <Box
+                key={item.number}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 2,
+                  mb: 3,
+                  '&:last-child': {
+                    mb: 0,
+                  },
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    minWidth: 44,
+                    borderRadius: '50%',
+                    backgroundColor: '#eff6ff',
+                    color: '#2563eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 900,
+                  }}
                 >
+                  {item.number}
+                </Box>
+
+                <Box sx={{ flex: 1 }}>
                   <Typography
-                    variant="body2"
-                    fontWeight={600}
+                    sx={{
+                      color: '#172033',
+                      fontSize: '1.1rem',
+                      fontWeight: 900,
+                      mb: 1,
+                    }}
                   >
-                    {item.label}
+                    {item.title}
                   </Typography>
 
-                  {renderStatus(item.status)}
-                </Stack>
-              ))}
-            </Stack>
+                  <Typography
+                    sx={{
+                      color: '#64748b',
+                      lineHeight: 1.7,
+                      mb: 1.5,
+                    }}
+                  >
+                    {item.description}
+                  </Typography>
 
-            <Divider sx={{ my: 2 }} />
+                  <StatusBadge status={item.status} />
+                </Box>
+              </Box>
+            ))}
 
             <Button
-              onClick={fetchKycStatus}
-              fullWidth
               variant="outlined"
-              startIcon={<RefreshOutlined />}
+              fullWidth
+              onClick={loadKycStatus}
               disabled={loading || submitting}
               sx={{
-                borderRadius: 2,
-                borderColor: '#14804A',
-                color: '#14804A',
-                fontWeight: 800,
+                mt: 4,
+                minHeight: 52,
+                borderRadius: '12px',
+                borderColor: '#2563eb',
+                color: '#2563eb',
+                fontWeight: 900,
                 textTransform: 'none',
-                py: 1.25,
-                '&:hover': {
-                  borderColor: '#0B6337',
-                  backgroundColor: '#F0FBF5',
-                },
               }}
             >
               Refresh Verification Status
             </Button>
           </CardContent>
         </Card>
-
-        {/* ================================================== */}
-        {/* SECURITY FOOTER */}
-        {/* ================================================== */}
-
-        <Box
-          sx={{
-            textAlign: 'center',
-            px: 2,
-            pb: 3,
-          }}
-        >
-          <Stack
-            direction="row"
-            spacing={1}
-            justifyContent="center"
-            alignItems="center"
-            sx={{ mb: 1 }}
-          >
-            <LockOutlined
-              sx={{
-                fontSize: 18,
-                color: '#14804A',
-              }}
-            />
-
-            <Typography
-              variant="body2"
-              fontWeight={700}
-              color="#14532D"
-            >
-              Your security matters
-            </Typography>
-          </Stack>
-
-          <Typography
-            variant="caption"
-            color="text.secondary"
-          >
-            Never share your password, PIN, BVN, or
-            one-time passwords with anyone claiming
-            to represent Zenimonies Banking.
-          </Typography>
-        </Box>
-      </Container>
+      </Box>
     </Box>
   );
 };
