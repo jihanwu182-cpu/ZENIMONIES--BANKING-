@@ -28,7 +28,7 @@ type ErrorResponse = {
 
 // ============================================================
 // ZENIMONIES PHONE VERIFICATION
-// Green and white banking design
+// Compact green and white banking design
 // ============================================================
 
 const VerifyPhone: React.FC = () => {
@@ -154,6 +154,7 @@ const VerifyPhone: React.FC = () => {
       );
 
       setOtp('');
+
       setMessage(
         data.message || 'Phone number verified successfully.'
       );
@@ -247,8 +248,8 @@ const VerifyPhone: React.FC = () => {
       setCountdown(60);
       setOtp('');
 
-      // Development OTP is stored only if the backend
-      // explicitly returns one. Never expose this in production.
+      // Store a development OTP only if the backend
+      // explicitly returns one during testing.
 
       if (data.development_otp) {
         sessionStorage.setItem(
@@ -297,7 +298,8 @@ const VerifyPhone: React.FC = () => {
   return (
     <div className="zv-page">
       <style>{`
-        * {
+        .zv-page,
+        .zv-page * {
           box-sizing: border-box;
         }
 
@@ -305,12 +307,12 @@ const VerifyPhone: React.FC = () => {
           min-height: 100vh;
           min-height: 100dvh;
           width: 100%;
-          padding: 24px 16px;
+          padding: 16px 12px;
           display: flex;
           align-items: center;
           justify-content: center;
           position: relative;
-          overflow: hidden;
+          overflow-x: hidden;
           background: #f2faf5;
           font-family: Inter, -apple-system, BlinkMacSystemFont,
             "Segoe UI", sans-serif;
@@ -321,8 +323,8 @@ const VerifyPhone: React.FC = () => {
         .zv-page::after {
           content: "";
           position: fixed;
-          width: 300px;
-          height: 300px;
+          width: 240px;
+          height: 240px;
           border-radius: 50%;
           background: rgba(34, 197, 94, 0.08);
           pointer-events: none;
@@ -331,37 +333,41 @@ const VerifyPhone: React.FC = () => {
 
         .zv-page::before {
           top: 18%;
-          left: -220px;
+          left: -190px;
         }
 
         .zv-page::after {
           bottom: 8%;
-          right: -220px;
+          right: -190px;
         }
+
+        /* COMPACT MAIN CARD */
 
         .zv-card {
           position: relative;
           z-index: 1;
           width: 100%;
-          max-width: 600px;
-          padding: 36px 40px 32px;
+          max-width: 440px;
+          padding: 24px 28px 22px;
           background: #ffffff;
           border: 1px solid #e2eee6;
-          border-radius: 26px;
-          box-shadow: 0 24px 65px rgba(15, 70, 43, 0.09);
+          border-radius: 22px;
+          box-shadow: 0 18px 45px rgba(15, 70, 43, 0.08);
         }
 
         .zv-header {
           text-align: center;
-          margin-bottom: 24px;
+          margin-bottom: 18px;
         }
+
+        /* BRAND */
 
         .zv-brand {
           display: inline-flex;
           flex-direction: column;
           align-items: center;
           text-decoration: none;
-          margin-bottom: 10px;
+          margin-bottom: 5px;
         }
 
         .zv-brand-name {
@@ -369,9 +375,9 @@ const VerifyPhone: React.FC = () => {
           align-items: center;
           justify-content: center;
           color: #064e35;
-          font-size: clamp(30px, 7vw, 45px);
+          font-size: clamp(28px, 6vw, 36px);
           font-weight: 900;
-          letter-spacing: -2px;
+          letter-spacing: -1.7px;
           line-height: 1.1;
         }
 
@@ -385,56 +391,60 @@ const VerifyPhone: React.FC = () => {
         .zv-brand-z::before {
           content: "";
           position: absolute;
-          top: 3px;
+          top: 2px;
           left: 1px;
-          width: 25px;
-          height: 9px;
+          width: 20px;
+          height: 7px;
           background: #16a34a;
           border-radius: 0 0 5px 0;
         }
 
         .zv-brand-subtitle {
-          font-size: 12px;
+          font-size: 10px;
           font-weight: 500;
-          letter-spacing: 9px;
-          padding-left: 9px;
-          margin-top: 4px;
+          letter-spacing: 7px;
+          padding-left: 7px;
+          margin-top: 3px;
           color: #32634b;
         }
+
+        /* SMALLER ILLUSTRATION */
 
         .zv-illustration {
           display: block;
           width: 100%;
-          max-width: 290px;
+          max-width: 195px;
           height: auto;
-          margin: 16px auto 18px;
+          margin: 8px auto 12px;
         }
 
         .zv-title {
           color: #064e35;
-          font-size: clamp(27px, 5vw, 36px);
+          font-size: clamp(24px, 5vw, 29px);
           font-weight: 800;
-          letter-spacing: -1px;
-          margin: 0 0 12px;
+          letter-spacing: -0.7px;
+          margin: 0 0 8px;
           line-height: 1.2;
         }
 
         .zv-description {
           color: #466b59;
-          font-size: 16px;
-          line-height: 1.65;
+          font-size: 14px;
+          line-height: 1.5;
           margin: 0 auto;
-          max-width: 450px;
+          max-width: 380px;
         }
+
+        /* ALERTS */
 
         .zv-alert {
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 15px 17px;
-          margin: 22px 0;
-          border-radius: 12px;
-          font-size: 14px;
+          gap: 10px;
+          padding: 11px 13px;
+          margin: 16px 0;
+          border-radius: 11px;
+          font-size: 13px;
           line-height: 1.5;
           overflow-wrap: anywhere;
         }
@@ -453,38 +463,40 @@ const VerifyPhone: React.FC = () => {
 
         .zv-alert-icon {
           flex-shrink: 0;
-          width: 26px;
-          height: 26px;
+          width: 25px;
+          height: 25px;
           display: flex;
           align-items: center;
           justify-content: center;
           border: 2px solid currentColor;
           border-radius: 50%;
           font-weight: 800;
-          font-size: 15px;
+          font-size: 14px;
         }
+
+        /* OTP INPUT */
 
         .zv-label {
           display: block;
           color: #14532d;
-          font-size: 15px;
+          font-size: 14px;
           font-weight: 700;
-          margin-bottom: 10px;
+          margin-bottom: 7px;
         }
 
         .zv-input {
           display: block;
           width: 100%;
           min-width: 0;
-          padding: 17px 12px;
+          padding: 13px 10px;
           border: 1.5px solid #d2ded6;
-          border-radius: 15px;
+          border-radius: 12px;
           background: #ffffff;
           color: #064e35;
           font-family: inherit;
-          font-size: 25px;
+          font-size: 21px;
           font-weight: 600;
-          letter-spacing: 9px;
+          letter-spacing: 7px;
           text-align: center;
           outline: none;
           transition: border-color 0.2s, box-shadow 0.2s;
@@ -492,14 +504,14 @@ const VerifyPhone: React.FC = () => {
 
         .zv-input::placeholder {
           color: #a1aaa5;
-          font-size: 19px;
+          font-size: 15px;
           font-weight: 400;
-          letter-spacing: 5px;
+          letter-spacing: 3px;
         }
 
         .zv-input:focus {
           border-color: #15803d;
-          box-shadow: 0 0 0 4px rgba(21, 128, 61, 0.1);
+          box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.1);
         }
 
         .zv-input:disabled {
@@ -507,22 +519,24 @@ const VerifyPhone: React.FC = () => {
           cursor: not-allowed;
         }
 
+        /* VERIFY BUTTON */
+
         .zv-button {
           display: flex;
           align-items: center;
           justify-content: center;
           width: 100%;
-          min-height: 58px;
-          padding: 15px 20px;
+          min-height: 48px;
+          padding: 12px 16px;
           border: 0;
-          border-radius: 15px;
+          border-radius: 12px;
           background: #087f45;
           color: #ffffff;
           font-family: inherit;
-          font-size: 17px;
+          font-size: 15px;
           font-weight: 750;
           cursor: pointer;
-          margin-top: 18px;
+          margin-top: 14px;
           transition: background 0.2s, transform 0.15s;
         }
 
@@ -537,16 +551,18 @@ const VerifyPhone: React.FC = () => {
           transform: none;
         }
 
+        /* RESEND */
+
         .zv-resend {
           display: block;
           width: 100%;
-          margin: 20px auto 0;
-          padding: 8px;
+          margin: 13px auto 0;
+          padding: 7px;
           border: 0;
           background: transparent;
           color: #087f45;
           font-family: inherit;
-          font-size: 16px;
+          font-size: 14px;
           font-weight: 750;
           cursor: pointer;
         }
@@ -556,14 +572,16 @@ const VerifyPhone: React.FC = () => {
           cursor: not-allowed;
         }
 
+        /* BACK TO PROFILE */
+
         .zv-back {
           display: block;
           width: fit-content;
-          margin: 12px auto 0;
-          padding: 8px;
+          margin: 7px auto 0;
+          padding: 6px;
           color: #087f45;
           text-decoration: none;
-          font-size: 15px;
+          font-size: 13px;
           font-weight: 750;
         }
 
@@ -573,13 +591,15 @@ const VerifyPhone: React.FC = () => {
           text-decoration: underline;
         }
 
+        /* SECURITY NOTICE */
+
         .zv-security {
           display: flex;
           align-items: center;
-          gap: 18px;
-          margin-top: 26px;
-          padding: 20px;
-          border-radius: 15px;
+          gap: 12px;
+          margin-top: 18px;
+          padding: 14px;
+          border-radius: 12px;
           background: #f0faf4;
           color: #466b59;
         }
@@ -589,76 +609,111 @@ const VerifyPhone: React.FC = () => {
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          width: 82px;
-          height: 82px;
+          width: 58px;
+          height: 58px;
           border-radius: 50%;
           background: #d9f5e4;
         }
 
+        .zv-security-icon svg {
+          width: 43px;
+          height: 47px;
+        }
+
         .zv-security-text {
           border-left: 2px solid #b9e4c9;
-          padding-left: 18px;
-          font-size: 14px;
-          line-height: 1.65;
+          padding-left: 12px;
+          font-size: 12px;
+          line-height: 1.5;
         }
 
         .zv-security-text strong {
           color: #14532d;
         }
 
+        /* SMALL MOBILE SCREENS */
+
         @media (max-width: 520px) {
           .zv-page {
-            padding: 14px 12px;
+            padding: 12px;
             align-items: center;
           }
 
           .zv-card {
-            padding: 28px 20px 24px;
-            border-radius: 23px;
+            max-width: 390px;
+            padding: 22px 20px 20px;
+            border-radius: 20px;
+          }
+
+          .zv-header {
+            margin-bottom: 15px;
           }
 
           .zv-illustration {
-            max-width: 245px;
-            margin: 12px auto 15px;
+            max-width: 175px;
+            margin: 8px auto 10px;
+          }
+
+          .zv-title {
+            font-size: 25px;
           }
 
           .zv-description {
-            font-size: 15px;
+            font-size: 13px;
           }
 
           .zv-input {
-            font-size: 23px;
-            letter-spacing: 7px;
+            font-size: 20px;
+            letter-spacing: 6px;
+          }
+
+          .zv-button {
+            min-height: 46px;
+            font-size: 14px;
           }
 
           .zv-security {
-            padding: 15px;
-            gap: 12px;
+            padding: 12px;
+            gap: 10px;
           }
 
           .zv-security-icon {
-            width: 64px;
-            height: 64px;
+            width: 48px;
+            height: 48px;
+          }
+
+          .zv-security-icon svg {
+            width: 36px;
+            height: 39px;
           }
 
           .zv-security-text {
-            padding-left: 12px;
-            font-size: 13px;
+            padding-left: 10px;
+            font-size: 11px;
           }
         }
 
         @media (max-width: 360px) {
           .zv-card {
-            padding: 24px 15px;
+            padding: 20px 15px;
+          }
+
+          .zv-illustration {
+            max-width: 155px;
+          }
+
+          .zv-title {
+            font-size: 23px;
           }
 
           .zv-security-icon {
-            width: 50px;
-            height: 50px;
+            width: 42px;
+            height: 42px;
           }
 
           .zv-security-text {
-            padding-left: 10px;
+            padding-left: 9px;
+            font-size: 10px;
           }
         }
 
