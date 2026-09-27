@@ -1423,12 +1423,29 @@ ALTER TABLE users
 ADD COLUMN IF NOT EXISTS registration_account_type VARCHAR(20)
 NOT NULL DEFAULT 'personal';
 
+
 -- Allow only the two registration account choices.
-ALTER TABLE users
-ADD CONSTRAINT users_registration_account_type_check
-CHECK (
-    registration_account_type IN ('personal', 'business')
-);
+-- Safely create the constraint only if it does not exist.
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname =
+            'users_registration_account_type_check'
+          AND conrelid = 'users'::regclass
+    ) THEN
+        ALTER TABLE users
+        ADD CONSTRAINT users_registration_account_type_check
+        CHECK (
+            registration_account_type
+            IN ('personal', 'business')
+        );
+    END IF;
+END
+$$;
+
 -- ============================================================
 -- INDEXES
 -- ============================================================
