@@ -2459,59 +2459,163 @@ const Settings: React.FC = () => {
               </div>
             )}
 
-            {/* =================================================
-                SMS
-            ================================================= */}
+            
+{/* =================================================
+    SMS ALERT SETTINGS
+================================================= */}
 
-            {activeSection ===
-              'SMS Alert Settings' && (
-              <div
-                style={{
-                  marginTop: 20,
-                }}
-              >
-                <ToggleRow
-                  title="SMS Alerts"
-                  description="Receive important account notifications by SMS."
-                  enabled={smsAlerts}
-                  onChange={
-                    setSmsAlerts
-                  }
-                />
+{activeSection === 'SMS Alert Settings' && (
+  <div style={{ marginTop: 20 }}>
 
-                <ToggleRow
-                  title="Transaction Alerts"
-                  description="Receive alerts when money is sent or received."
-                  enabled={smsAlerts}
-                  onChange={
-                    setSmsAlerts
-                  }
-                />
+    <div style={styles.infoBox}>
+      <strong>SMS Notification Preferences</strong>
 
-                <ToggleRow
-                  title="Security Alerts"
-                  description="Receive alerts for important security events."
-                  enabled={smsAlerts}
-                  onChange={
-                    setSmsAlerts
-                  }
-                />
+      <p style={styles.infoText}>
+        Choose which types of SMS notifications you
+        would like to receive on your registered
+        mobile number.
+      </p>
+    </div>
 
-                <button
-                  type="button"
-                  style={
-                    styles.primaryButton
-                  }
-                  onClick={() =>
-                    alert(
-                      'SMS alert preferences saved.'
-                    )
-                  }
-                >
-                  Save Alert Settings
-                </button>
-              </div>
-            )}
+    {/* LOADING */}
+
+    {smsPreferencesLoading && (
+      <div
+        role="status"
+        style={{
+          marginTop: 15,
+          padding: 12,
+          borderRadius: 12,
+          background: '#f7faf8',
+          color: '#6f7d76',
+          fontSize: 12,
+        }}
+      >
+        Loading your saved SMS preferences…
+      </div>
+    )}
+
+    {/* ERROR */}
+
+    {smsPreferencesError && (
+      <div
+        role="alert"
+        style={{
+          marginTop: 15,
+          background: '#fff1f1',
+          border: '1px solid #f3d3d0',
+          color: '#b42318',
+          borderRadius: 12,
+          padding: 12,
+          fontSize: 12,
+          lineHeight: 1.5,
+        }}
+      >
+        {smsPreferencesError}
+      </div>
+    )}
+
+    {/* SUCCESS */}
+
+    {smsPreferencesMessage && (
+      <div
+        role="status"
+        style={{
+          marginTop: 15,
+          background: '#effbf5',
+          border: '1px solid #d9eee3',
+          color: '#12633f',
+          borderRadius: 12,
+          padding: 12,
+          fontSize: 12,
+          lineHeight: 1.5,
+        }}
+      >
+        {smsPreferencesMessage}
+      </div>
+    )}
+
+    {/* TRANSACTION ALERTS */}
+
+    <ToggleRow
+      title="Transaction Alerts"
+      description="Receive SMS alerts for transfers, deposits, payments and other supported transaction events."
+      enabled={transactionSmsAlerts}
+      onChange={(value) => {
+        setTransactionSmsAlerts(value);
+        setSmsPreferencesMessage('');
+        setSmsPreferencesError('');
+      }}
+    />
+
+    {/* SECURITY ALERTS */}
+
+    <ToggleRow
+      title="Security Alerts"
+      description="Receive SMS alerts for supported account security events."
+      enabled={securitySmsAlerts}
+      onChange={(value) => {
+        setSecuritySmsAlerts(value);
+        setSmsPreferencesMessage('');
+        setSmsPreferencesError('');
+      }}
+    />
+
+    {/* PROMOTIONAL ALERTS */}
+
+    <ToggleRow
+      title="Promotional Messages"
+      description="Optional promotional offers and marketing messages from Zenimonies."
+      enabled={promotionalSmsAlerts}
+      onChange={(value) => {
+        setPromotionalSmsAlerts(value);
+        setSmsPreferencesMessage('');
+        setSmsPreferencesError('');
+      }}
+    />
+
+    {/* SAVE */}
+
+    <button
+      type="button"
+      style={{
+        ...styles.primaryButton,
+        opacity: smsPreferencesSaving ? 0.65 : 1,
+      }}
+      disabled={
+        smsPreferencesSaving ||
+        smsPreferencesLoading
+      }
+      onClick={handleSaveSmsPreferences}
+    >
+      {smsPreferencesSaving
+        ? 'Saving Preferences…'
+        : 'Save Alert Settings'}
+    </button>
+
+    <div
+      style={{
+        marginTop: 15,
+        padding: 12,
+        borderRadius: 12,
+        background: '#f7faf8',
+        color: '#6f7d76',
+        fontSize: 11,
+        lineHeight: 1.55,
+      }}
+    >
+      <strong style={{ color: '#34443c' }}>
+        Important
+      </strong>
+      <br />
+      These settings save your SMS preferences.
+      Actual SMS delivery depends on the SMS provider
+      and the relevant notification event being
+      connected to the backend.
+    </div>
+  </div>
+)}
+
 
             {/* =================================================
                 THEMES
