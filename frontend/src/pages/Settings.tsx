@@ -104,8 +104,36 @@ const Settings: React.FC = () => {
   const [showCloseConfirmation, setShowCloseConfirmation] =
     useState(false);
 
-  const [darkMode, setDarkMode] = useState(false);
-  const [smsAlerts, setSmsAlerts] = useState(true);
+  // ==========================================================
+// THEME SETTINGS
+// ==========================================================
+
+const [darkMode, setDarkMode] = useState(false);
+
+// ==========================================================
+// SMS PREFERENCES STATE
+// ==========================================================
+
+const [transactionSmsAlerts, setTransactionSmsAlerts] =
+  useState(true);
+
+const [securitySmsAlerts, setSecuritySmsAlerts] =
+  useState(true);
+
+const [promotionalSmsAlerts, setPromotionalSmsAlerts] =
+  useState(false);
+
+const [smsPreferencesLoading, setSmsPreferencesLoading] =
+  useState(false);
+
+const [smsPreferencesSaving, setSmsPreferencesSaving] =
+  useState(false);
+
+const [smsPreferencesMessage, setSmsPreferencesMessage] =
+  useState('');
+
+const [smsPreferencesError, setSmsPreferencesError] =
+  useState('');
 
   // ==========================================================
   // ACCOUNT UNLOCK PASSCODE STATE
@@ -210,7 +238,170 @@ const Settings: React.FC = () => {
       ''
     );
   };
+// ==========================================================
+// LOAD SMS PREFERENCES FROM BACKEND
+// ==========================================================
 
+const loadSmsPreferences = async () => {
+  const token = getToken();
+
+  if (!token) {
+    setSmsPreferencesError(
+      'Your session has expired. Please log in again.'
+    );
+    return;
+  }
+
+  setSmsPreferencesLoading(true);
+  setSmsPreferencesError('');
+  setSmsPreferencesMessage('');
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/sms-preferences`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      }
+    );
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message ||
+          'Unable to load your SMS preferences.'
+      );
+    }
+
+    // Support either a direct response or a response
+    // wrapped inside a preferences property.
+    const preferences =
+      data?.preferences &&
+      typeof data.preferences === 'object'
+        ? data.preferences
+        : data;
+
+    setTransactionSmsAlerts(
+      preferences?.transaction_alerts !== false
+    );
+
+    setSecuritySmsAlerts(
+      preferences?.security_alerts !== false
+    );
+
+    setPromotionalSmsAlerts(
+      preferences?.promotional_alerts === true
+    );
+  } catch (error) {
+    setSmsPreferencesError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to load your SMS preferences.'
+    );
+  } finally {
+    setSmsPreferencesLoading(false);
+  }
+};
+
+// ==========================================================
+// SAVE SMS PREFERENCES TO BACKEND
+// ==========================================================
+
+const handleSaveSmsPreferences = async () => {
+  setSmsPreferencesMessage('');
+  setSmsPreferencesError('');
+
+  const token = getToken();
+
+  if (!token) {
+    setSmsPreferencesError(
+      'Your session has expired. Please log in again.'
+    );
+    return;
+  }
+
+  setSmsPreferencesSaving(true);
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/sms-preferences`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          transaction_alerts: transactionSmsAlerts,
+          security_alerts: securitySmsAlerts,
+          promotional_alerts: promotionalSmsAlerts,
+        }),
+      }
+    );
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message ||
+          'Unable to save your SMS preferences.'
+      );
+    }
+
+    // Update the toggles using the saved server response
+    // when the backend returns the preferences.
+    const savedPreferences =
+      data?.preferences &&
+      typeof data.preferences === 'object'
+        ? data.preferences
+        : data;
+
+    if (
+      typeof savedPreferences?.transaction_alerts ===
+      'boolean'
+    ) {
+      setTransactionSmsAlerts(
+        savedPreferences.transaction_alerts
+      );
+    }
+
+    if (
+      typeof savedPreferences?.security_alerts ===
+      'boolean'
+    ) {
+      setSecuritySmsAlerts(
+        savedPreferences.security_alerts
+      );
+    }
+
+    if (
+      typeof savedPreferences?.promotional_alerts ===
+      'boolean'
+    ) {
+      setPromotionalSmsAlerts(
+        savedPreferences.promotional_alerts
+      );
+    }
+
+    setSmsPreferencesMessage(
+      data?.message ||
+        'Your SMS preferences have been saved successfully.'
+    );
+  } catch (error) {
+    setSmsPreferencesError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to save your SMS preferences.'
+    );
+  } finally {
+    setSmsPreferencesSaving(false);
+  }
+};
   // ==========================================================
   // LOAD ACCOUNT PASSCODE STATUS
   // ==========================================================
@@ -334,24 +525,28 @@ const Settings: React.FC = () => {
     loadTransactionPinStatus();
   }, []);
 
-  // ==========================================================
-  // OPEN SECTION
-  // ==========================================================
+// ==========================================================
+// OPEN SECTION
+// ==========================================================
 
-  const openSection = (section: string) => {
-    setActiveSection(section);
+const openSection = (section: string) => {
+  setActiveSection(section);
 
-    if (section === 'Login Settings') {
-      loadPasscodeStatus();
-    }
+  if (section === 'Login Settings') {
+    loadPasscodeStatus();
+  }
 
-    if (
-      section === 'Payment Settings' ||
-      section === 'Security Center'
-    ) {
-      loadTransactionPinStatus();
-    }
-  };
+  if (
+    section === 'Payment Settings' ||
+    section === 'Security Center'
+  ) {
+    loadTransactionPinStatus();
+  }
+
+  if (section === 'SMS Alert Settings') {
+    loadSmsPreferences();
+  }
+};
 
   // ==========================================================
   // CLOSE SECTION
@@ -381,8 +576,11 @@ const Settings: React.FC = () => {
     setCurrentTransactionPin('');
     setReplacementTransactionPin('');
     setConfirmReplacementTransactionPin('');
+  
+  // SMS Preferences
+    setSmsPreferencesMessage('');
+    setSmsPreferencesError('');
   };
-
   // ==========================================================
   // CREATE ACCOUNT PASSCODE
   // ==========================================================
