@@ -34,6 +34,7 @@ const beneficiaryRoutes = require('./routes/beneficiaryRoutes');
 const savingsRoutes = require('./routes/savingsRoutes');
 const statementRoutes = require('./routes/statementRoutes');
 const posRoutes = require('./routes/posRoutes');
+const smsPreferencesRoutes = require('./routes/smsPreferences');
 const businessRoutes =
   require('./routes/businessRoutes');
 const {
@@ -282,7 +283,10 @@ app.use(
   '/api/notifications',
   notificationRoutes
 );
-
+app.use(
+  '/api/sms-preferences',
+  smsPreferencesRoutes
+);
 // ============================================================
 // PASSKEY
 // ============================================================
