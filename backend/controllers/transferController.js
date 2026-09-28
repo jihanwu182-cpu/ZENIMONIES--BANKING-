@@ -558,60 +558,55 @@ const transferToBank = async (req, res) => {
     // Daily boundaries use Africa/Lagos.
     // ========================================================
 
-    const dailyTotalResult =
-      await client.query(
-        `
-        SELECT
-          COALESCE(SUM(amount), 0) AS total
-        FROM transactions
-        WHERE account_id = $1
-          AND currency = 'NGN'
-          AND (
-            (
-              type = 'internal_transfer'
-              AND status = 'completed'
-            )
-            OR
-            (
-              type = 'transfer'
-              AND status IN (
-                'pending',
-                'processing',
-                'completed'
-              )
+        const dailyTotalResult = await client.query(
+      `
+      SELECT
+        COALESCE(SUM(amount), 0) AS total
+      FROM transactions
+      WHERE account_id = $1
+        AND (
+          (
+            type = 'internal_transfer'
+            AND status = 'completed'
+          )
+          OR
+          (
+            type = 'transfer'
+            AND status IN (
+              'pending',
+              'processing',
+              'completed'
             )
           )
-          AND created_at >= (
+        )
+        AND created_at >= (
+          date_trunc(
+            'day',
+            CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos'
+          ) AT TIME ZONE 'Africa/Lagos'
+        )
+        AND created_at < (
+          (
             date_trunc(
               'day',
               CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos'
-            ) AT TIME ZONE 'Africa/Lagos'
-          )
-          AND created_at < (
-            (
-              date_trunc(
-                'day',
-                CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos'
-              ) + INTERVAL '1 day'
-            ) AT TIME ZONE 'Africa/Lagos'
-          )
-        `,
-        [account.id]
-      );
+            ) + INTERVAL '1 day'
+          ) AT TIME ZONE 'Africa/Lagos'
+        )
+      `,
+      [account.id]
+    );
 
-    const dailyTransferred =
-      Number(
-        dailyTotalResult.rows[0]?.total || 0
-      );
+    const dailyTransferred = Number(
+      dailyTotalResult.rows[0]?.total || 0
+    );
 
     const remainingDailyLimit = Math.max(
       dailyLimit - dailyTransferred,
       0
     );
 
-    if (
-      transferAmount > remainingDailyLimit
-    ) {
+    if (transferAmount > remainingDailyLimit) {
       await client.query('ROLLBACK');
       transactionStarted = false;
 
@@ -622,8 +617,7 @@ const transferToBank = async (req, res) => {
           `This transfer exceeds your remaining daily transfer limit of ₦${formatNaira(remainingDailyLimit)}.`,
         daily_transfer_limit: dailyLimit,
         daily_transferred: dailyTransferred,
-        remaining_daily_limit:
-          remainingDailyLimit,
+        remaining_daily_limit: remainingDailyLimit,
         requested_amount: transferAmount,
       });
     }
