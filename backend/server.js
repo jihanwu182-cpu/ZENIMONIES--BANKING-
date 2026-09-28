@@ -121,17 +121,35 @@ app.post(
   }),
   handleSogoWebhook
 );
-// ============================================================
+
+ // ============================================================
 // NORMAL BODY PARSING
 // ============================================================
+//
+// Preserve the original JSON request body so the Dojah
+// webhook signature can be verified against the raw bytes.
+//
+// Keep this BEFORE the API routes, but AFTER the Paystack
+// and Sogo raw-body webhook routes.
+// ============================================================
 
-app.use(express.json());
+app.use(
+  express.json({
+    limit: '2mb',
+
+    verify: (req, res, buf) => {
+      req.rawBody = Buffer.from(buf);
+    },
+  })
+);
 
 app.use(
   express.urlencoded({
     extended: true,
+    limit: '2mb',
   })
 );
+
 
 // ============================================================
 // API ROUTES
