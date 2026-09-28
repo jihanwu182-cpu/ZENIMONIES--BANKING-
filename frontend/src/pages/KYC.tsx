@@ -105,71 +105,201 @@ const TIER_LIMITS: Record<0 | 1 | 2 | 3, TierLimit> = {
   3: { account: null, daily: 5000000 },
 };
 
-const GREEN = '#2855F5';
-const DARK_GREEN = '#193FC4';
+const GREEN = '#176B45';
+const DARK_GREEN = '#105536';
 
 const styles = `
-*{box-sizing:border-box}
-.zk-page{min-height:100vh;padding:30px 20px 60px;background:#F3F5FA;color:#172033;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:15px;-webkit-font-smoothing:antialiased}
-.zk-container{width:100%;max-width:900px;margin:0 auto}
-.zk-hero{position:relative;overflow:hidden;padding:38px;margin-bottom:26px;color:#fff;background:linear-gradient(135deg,#172033 0%,#253D78 60%,#2855F5 100%);border-radius:24px;box-shadow:0 14px 40px rgba(28,52,115,.14)}
-.zk-brand{margin-bottom:14px;font-size:11px;font-weight:800;letter-spacing:2px;opacity:.8}
-.zk-hero h1{position:relative;z-index:1;margin:0;font-size:clamp(30px,5vw,46px);font-weight:850;line-height:1.15;letter-spacing:-1.5px}
-.zk-hero p{position:relative;z-index:1;max-width:570px;margin:16px 0 0;color:#DCE5FF;font-size:16px;line-height:1.75}
-.zk-hero-pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
-.zk-pill{display:inline-flex;align-items:center;gap:7px;padding:10px 15px;color:white;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:999px;font-size:12px;font-weight:750}
-.zk-card{padding:30px;margin-bottom:24px;background:#fff;border:1px solid #E2E6EF;border-radius:24px;box-shadow:0 8px 30px rgba(23,32,51,.035)}
-.zk-card-heading{display:flex;align-items:center;gap:16px;margin-bottom:20px}
-.zk-number{display:grid;flex:0 0 48px;width:48px;height:48px;place-items:center;color:${GREEN};background:#EDF2FF;border:1px solid #DFE8FF;border-radius:16px;font-size:18px;font-weight:850}
-.zk-card h2{margin:0;color:#172033;font-size:clamp(20px,3vw,26px);font-weight:850;line-height:1.3}
-.zk-card-heading p{margin:7px 0 0;color:#667085;font-size:14px;line-height:1.7}
-.zk-status{display:inline-flex;align-items:center;gap:8px;padding:9px 15px;margin:0 0 18px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap;text-transform:capitalize}
-.zk-status.pending{color:#946200;background:#FFF5D8;border:1px solid #F5DF9F}
-.zk-status.verified{color:#067647;background:#E8F8EF;border:1px solid #BCE8CE}
-.zk-status.rejected{color:#B42318;background:#FEF0EF;border:1px solid #F6CECB}
-.zk-status.not-submitted{color:#475467;background:#F0F2F5;border:1px solid #E2E5EA}
-.zk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:20px 0}
-.zk-stat{min-width:0;padding:22px;background:#F8F9FC;border:1px solid #E5E8F0;border-radius:18px}
-.zk-stat-label{margin-bottom:12px;color:#667085;font-size:12px;font-weight:800;letter-spacing:.5px;line-height:1.5;text-transform:uppercase}
-.zk-stat-value{color:#172033;font-size:clamp(20px,3vw,28px);font-weight:850;line-height:1.3;overflow-wrap:anywhere}
-.zk-stat-sub{margin-top:8px;color:#667085;font-size:12px}
-.zk-label{display:block;margin:22px 0 10px;color:#344054;font-size:14px;font-weight:800}
-.zk-input,.zk-select{display:block;width:100%;min-height:58px;padding:15px 18px;color:#172033;background:#fff;border:1.5px solid #D0D5DD;border-radius:15px;outline:none;font:inherit;font-size:15px}
-.zk-input:focus,.zk-select:focus{border-color:${GREEN};box-shadow:0 0 0 4px rgba(40,85,245,.1)}
-.zk-input:disabled,.zk-select:disabled{background:#F2F4F7;color:#98A2B3;cursor:not-allowed}
-.zk-input[type=file]{min-height:70px;padding:18px;background:#F9FAFC;border:1.5px dashed #AAB5C9;border-radius:16px;font-size:13px}
-.zk-help{margin:9px 0 0;color:#667085;font-size:13px;line-height:1.8}
-.zk-methods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0 22px}
-.zk-method{min-width:0;padding:20px;color:#172033;text-align:left;background:#fff;border:1.5px solid #D0D5DD;border-radius:17px;cursor:pointer;font:inherit}
-.zk-method strong{display:block;margin-bottom:10px;font-size:15px;font-weight:850}
-.zk-method span{display:block;color:#667085;font-size:13px;line-height:1.7}
-.zk-method.selected{background:#F1F5FF;border:2px solid ${GREEN}}
-.zk-method:disabled{opacity:.55;cursor:not-allowed}
-.zk-button{display:flex;align-items:center;justify-content:center;width:100%;min-height:58px;padding:16px 24px;margin-top:24px;color:#fff;background:${GREEN};border:1px solid ${GREEN};border-radius:15px;font:inherit;font-size:15px;font-weight:850;cursor:pointer}
-.zk-button:hover:not(:disabled){background:${DARK_GREEN}}
-.zk-button:disabled{opacity:.5;cursor:not-allowed}
-.zk-dojah-button{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;padding:12px 18px;margin:12px 0;color:${GREEN};background:#fff;border:1.5px solid ${GREEN};border-radius:13px;font:inherit;font-size:14px;font-weight:800;cursor:pointer}
-.zk-dojah-button:hover:not(:disabled){background:#F1F5FF}
-.zk-dojah-button:disabled{opacity:.5;cursor:not-allowed}
-.zk-alert{padding:18px 20px;margin-bottom:22px;color:#805B10;background:#FFFAEB;border:1px solid #F5D98A;border-radius:16px;font-size:14px;line-height:1.8;overflow-wrap:anywhere}
-.zk-alert.error{color:#912018;background:#FEF3F2;border-color:#F4C7C3}
-.zk-alert.success{color:#067647;background:#ECFDF3;border-color:#ABEFC6}
-.zk-note{padding:18px 20px;margin-top:18px;color:#475467;background:#F3F6FF;border:1px solid #D8E2FF;border-radius:16px;font-size:13px;line-height:1.8}
-.zk-tier-limits{padding:22px;margin:20px 0;background:#F8F9FC;border:1px solid #E1E6F0;border-radius:18px}
-.zk-tier-limits h3{margin:0 0 14px;color:#344054;font-size:16px;font-weight:850}
-.zk-tier-limit-row{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 0;border-bottom:1px solid #E4E7EC;font-size:14px}
-.zk-tier-limit-row:last-child{border-bottom:0}
-.zk-tier-limit-row span{color:#667085;line-height:1.6}
-.zk-tier-limit-row strong{color:#172033;text-align:right;font-weight:850}
-.zk-progress{height:8px;margin:16px 0 0;overflow:hidden;background:#E4E7EC;border-radius:999px}
-.zk-progress>div{height:100%;background:linear-gradient(90deg,#2855F5,#7391FF);border-radius:inherit}
-.zk-status-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 0;border-bottom:1px solid #EAECF0}
-.zk-status-row:last-child{border-bottom:0}
-.zk-status-row strong{display:block;color:#172033;font-size:15px;font-weight:850}
-.zk-status-row small{display:block;margin-top:6px;color:#667085;font-size:13px;line-height:1.6}
-.zk-footer{margin:32px 0 0;color:#98A2B3;text-align:center;font-size:12px;line-height:1.7}
-@media(max-width:700px){.zk-page{padding:20px 14px 45px}.zk-hero{padding:28px 24px}.zk-hero h1{font-size:32px}.zk-card{padding:24px 20px;margin-bottom:18px}.zk-card h2{font-size:21px}.zk-grid{gap:10px}.zk-stat{padding:17px}.zk-stat-value{font-size:21px}.zk-methods{grid-template-columns:1fr}}
-@media(max-width:400px){.zk-page{padding:14px 10px 35px}.zk-hero{padding:23px 19px}.zk-hero h1{font-size:28px}.zk-card{padding:20px 15px}.zk-card-heading{gap:12px}.zk-number{flex-basis:40px;width:40px;height:40px}.zk-grid{grid-template-columns:1fr}.zk-tier-limit-row,.zk-status-row{align-items:flex-start;flex-direction:column;gap:6px}.zk-tier-limit-row strong{text-align:left}}
+.zk-page{
+  min-height:100vh;
+  padding:20px 16px 45px;
+  background:#F5F7F5;
+  color:#172033;
+  font-family:Inter,-apple-system,BlinkMacSystemFont,
+  "Segoe UI",Roboto,Arial,sans-serif;
+  font-size:15px;
+  -webkit-font-smoothing:antialiased
+}
+
+.zk-container{
+  width:100%;
+  max-width:760px;
+  margin:0 auto
+}
+
+.zk-hero{
+  position:relative;
+  overflow:hidden;
+  padding:24px 26px;
+  margin-bottom:20px;
+  color:#fff;
+  background:#176B45;
+  border-radius:16px;
+  box-shadow:0 5px 16px rgba(23,107,69,.10)
+}
+
+.zk-brand{
+  margin-bottom:10px;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:1.5px;
+  opacity:.85
+}
+
+.zk-hero h1{
+  position:relative;
+  z-index:1;
+  margin:0;
+  font-size:clamp(23px,4vw,30px);
+  font-weight:800;
+  line-height:1.25;
+  letter-spacing:-.5px
+}
+
+.zk-hero p{
+  position:relative;
+  z-index:1;
+  max-width:500px;
+  margin:10px 0 0;
+  color:#E3F4E9;
+  font-size:13px;
+  line-height:1.65
+}
+
+.zk-hero-pills{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:14px
+}
+
+.zk-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 11px;
+  color:#fff;
+  background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700
+}
+
+.zk-card{
+  padding:22px;
+  margin-bottom:18px;
+  background:#fff;
+  border:1px solid #E2EAE4;
+  border-radius:17px;
+  box-shadow:0 4px 18px rgba(23,32,51,.025)
+}
+
+.zk-card-heading{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:16px
+}
+
+.zk-number{
+  display:grid;
+  flex:0 0 38px;
+  width:38px;
+  height:38px;
+  place-items:center;
+  color:#176B45;
+  background:#E7F4EC;
+  border:1px solid #D2E9DA;
+  border-radius:12px;
+  font-size:15px;
+  font-weight:800
+}
+
+.zk-card h2{
+  margin:0;
+  color:#172033;
+  font-size:clamp(18px,3vw,22px);
+  font-weight:800;
+  line-height:1.3
+}
+
+.zk-card-heading p{
+  margin:5px 0 0;
+  color:#667085;
+  font-size:13px;
+  line-height:1.6
+}
+
+.zk-dojah-button{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  min-height:44px;
+  padding:11px 16px;
+  margin:12px 0;
+  color:#fff;
+  background:#176B45;
+  border:1px solid #176B45;
+  border-radius:11px;
+  font:inherit;
+  font-size:13px;
+  font-weight:750;
+  cursor:pointer
+}
+
+.zk-dojah-button:hover:not(:disabled){
+  background:#105536
+}
+
+.zk-dojah-button:disabled{
+  opacity:.5;
+  cursor:not-allowed
+}
+
+.zk-note{
+  padding:13px 15px;
+  margin-top:14px;
+  color:#475467;
+  background:#F0F7F2;
+  border:1px solid #D9EADF;
+  border-radius:12px;
+  font-size:12px;
+  line-height:1.7
+}
+
+@media(max-width:600px){
+  .zk-page{
+    padding:14px 11px 35px
+  }
+
+  .zk-hero{
+    padding:20px 18px;
+    margin-bottom:15px;
+    border-radius:14px
+  }
+
+  .zk-hero h1{
+    font-size:25px
+  }
+
+  .zk-card{
+    padding:18px 15px;
+    margin-bottom:15px;
+    border-radius:15px
+  }
+
+  .zk-card h2{
+    font-size:19px
+  }
+
+  .zk-number{
+    flex-basis:35px;
+    width:35px;
+    height:35px;
+    border-radius:10px
+  }
+}
 `;
 
 const money = (value: number | null | undefined) => {
