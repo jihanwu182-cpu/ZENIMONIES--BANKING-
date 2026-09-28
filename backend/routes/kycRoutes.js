@@ -7,7 +7,10 @@ const {
   submitTier2,
   submitTier3,
 } = require('../controllers/kycController');
-
+const {
+  startDojahVerification,
+  confirmDojahVerification,
+} = require('../controllers/kycController');
 const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -226,5 +229,19 @@ router.use((error, req, res, next) => {
 
   next(error);
 });
+// ============================================================
+// DOJAH IDENTITY VERIFICATION
+// ============================================================
 
+router.post(
+  '/dojah/start',
+  authMiddleware,
+  startDojahVerification
+);
+
+router.post(
+  '/dojah/confirm',
+  authMiddleware,
+  confirmDojahVerification
+);
 module.exports = router;
