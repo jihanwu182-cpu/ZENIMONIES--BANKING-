@@ -1255,7 +1255,6 @@ const KYC: React.FC = () => {
       : 'Verify my identity'}
 </button>
 
-              )}
 
               <form onSubmit={submitTier2}>
                 <label
