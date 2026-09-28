@@ -55,7 +55,37 @@ type KycResponse = {
   };
 };
 
+// ============================================================
+// ZENIMONIES BANKING
+// KYC TIER VERIFICATION LIMITS
+// ============================================================
 
+type TierLimit = {
+  account: number | null;
+  daily: number | null;
+};
+
+const TIER_LIMITS: Record<0 | 1 | 2 | 3, TierLimit> = {
+  0: {
+    account: 50000,
+    daily: 25000,
+  },
+
+  1: {
+    account: 200000,
+    daily: 50000,
+  },
+
+  2: {
+    account: 500000,
+    daily: 200000,
+  },
+
+  3: {
+    account: null,
+    daily: 5000000,
+  },
+};
 const GREEN = '#2855F5';
 const DARK_GREEN = '#193FC4';
 
