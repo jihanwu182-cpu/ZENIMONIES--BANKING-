@@ -13,7 +13,6 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "axios": "^1.7.9",
-    "dojah-kyc-sdk-react": "latest",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "qrcode.react": "^4.2.0",
