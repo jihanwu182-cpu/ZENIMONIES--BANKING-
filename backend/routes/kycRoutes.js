@@ -6,8 +6,6 @@ const {
   submitBvn,
   submitTier2,
   submitTier3,
-} = require('../controllers/kycController');
-const {
   startDojahVerification,
   confirmDojahVerification,
 } = require('../controllers/kycController');
