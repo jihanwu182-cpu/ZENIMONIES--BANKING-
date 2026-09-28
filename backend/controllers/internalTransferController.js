@@ -507,43 +507,63 @@ const transferToZenimoniesUser = async (req, res) => {
       });
     }
 
-    // ========================================================
-    // CHECK DAILY COMPLETED INTERNAL TRANSFERS
+        // ========================================================
+    // SHARED DAILY TRANSFER LIMIT
     //
-    // Uses the Nigeria calendar day.
-    // Only completed outgoing internal transfers count.
-    // The transaction amount is counted, not the fee.
+    // Counts outgoing internal and external transfers
+    // against one shared Nigeria calendar-day limit.
     //
-    // Sender account row is locked above, serializing
-    // concurrent transfers from this account.
+    // Internal transfers:
+    //   completed only
+    //
+    // External transfers:
+    //   pending, processing, and completed
+    //
+    // Failed external transfers are excluded.
+    // Incoming transfers and duplicate bank_transfers
+    // records are excluded.
+    //
+    // Amount only is counted, excluding fees.
     // ========================================================
 
-    const dailyTotalResult =
-      await client.query(
-        `
-        SELECT
-          COALESCE(SUM(amount), 0) AS total
-        FROM transactions
-        WHERE account_id = $1
-          AND type = 'internal_transfer'
-          AND status = 'completed'
-          AND created_at >= (
+    const dailyTotalResult = await client.query(
+      `
+      SELECT
+        COALESCE(SUM(amount), 0) AS total
+      FROM transactions
+      WHERE account_id = $1
+        AND (
+          (
+            type = 'internal_transfer'
+            AND status = 'completed'
+          )
+          OR
+          (
+            type = 'transfer'
+            AND status IN (
+              'pending',
+              'processing',
+              'completed'
+            )
+          )
+        )
+        AND created_at >= (
+          date_trunc(
+            'day',
+            CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos'
+          ) AT TIME ZONE 'Africa/Lagos'
+        )
+        AND created_at < (
+          (
             date_trunc(
               'day',
               CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos'
-            ) AT TIME ZONE 'Africa/Lagos'
-          )
-          AND created_at < (
-            (
-              date_trunc(
-                'day',
-                CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos'
-              ) + INTERVAL '1 day'
-            ) AT TIME ZONE 'Africa/Lagos'
-          )
-        `,
-        [senderAccount.id]
-      );
+            ) + INTERVAL '1 day'
+          ) AT TIME ZONE 'Africa/Lagos'
+        )
+      `,
+      [senderAccount.id]
+    );
 
     const dailyTotal =
       Number(dailyTotalResult.rows[0]?.total || 0);
@@ -551,9 +571,7 @@ const transferToZenimoniesUser = async (req, res) => {
     const remainingDailyLimit =
       Math.max(dailyLimit - dailyTotal, 0);
 
-    if (
-      transferAmount > remainingDailyLimit
-    ) {
+    if (transferAmount > remainingDailyLimit) {
       await client.query('ROLLBACK');
       transactionStarted = false;
 
