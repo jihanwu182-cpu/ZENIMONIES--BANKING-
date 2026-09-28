@@ -15,24 +15,19 @@ type KycData = {
   status?: string;
   tier?: number;
   submitted_tier?: number;
-
   bvn_status?: string;
   bvn_verified?: boolean;
   bvn_rejection_reason?: string;
-
   id_status?: string;
   id_verified?: boolean;
   id_rejection_reason?: string;
-
   tier_3_status?: string;
   tier_3_verified?: boolean;
   tier_3_method?: string;
   tier_3_rejection_reason?: string;
-
   rejection_reason?: string;
   missing_profile_fields?: string[];
   missingProfileFields?: string[];
-
   account_limit?: number | null;
   daily_transfer_limit?: number | null;
   daily_transfer_used?: number;
@@ -58,433 +53,433 @@ const GREEN = '#087A43';
 const DARK_GREEN = '#075C35';
 
 const styles = `
-  * {
-    box-sizing: border-box;
-  }
+* {
+  box-sizing: border-box;
+}
 
+.zk-page {
+  min-height: 100vh;
+  padding: 12px 10px 24px;
+  background: #F4F8F5;
+  color: #172B21;
+  font-family: Inter, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 13px;
+}
+
+.zk-container {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.zk-hero {
+  padding: 19px;
+  margin-bottom: 12px;
+  color: white;
+  background: linear-gradient(135deg, #075C35, #087A43);
+  border-radius: 14px;
+}
+
+.zk-brand {
+  margin-bottom: 7px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  opacity: .85;
+}
+
+.zk-hero h1 {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -.4px;
+}
+
+.zk-hero p {
+  margin: 8px 0 0;
+  color: #E2F1E8;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.zk-hero-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.zk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  color: white;
+  background: rgba(255,255,255,.13);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.zk-card {
+  padding: 15px;
+  margin-bottom: 12px;
+  background: white;
+  border: 1px solid #DFE9E2;
+  border-radius: 13px;
+  box-shadow: 0 2px 8px rgba(25,65,42,.035);
+}
+
+.zk-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 11px;
+}
+
+.zk-number {
+  display: grid;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: ${GREEN};
+  background: #EAF4EE;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.zk-card h2 {
+  margin: 0;
+  color: #172B21;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.zk-card-heading p {
+  margin: 3px 0 0;
+  color: #68776D;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.zk-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  margin: 0 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+
+.zk-status.pending {
+  color: #805A13;
+  background: #FFF3D6;
+}
+
+.zk-status.verified {
+  color: #17623A;
+  background: #E6F5EB;
+}
+
+.zk-status.rejected {
+  color: #9A3030;
+  background: #FDECEC;
+}
+
+.zk-status.not-submitted {
+  color: #58675E;
+  background: #EEF2EF;
+}
+
+.zk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.zk-stat {
+  min-width: 0;
+  padding: 11px;
+  background: #F6F9F7;
+  border: 1px solid #E1EAE4;
+  border-radius: 10px;
+}
+
+.zk-stat-label {
+  margin-bottom: 5px;
+  color: #69786E;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .45px;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.zk-stat-value {
+  color: ${DARK_GREEN};
+  font-size: clamp(15px, 4vw, 19px);
+  font-weight: 800;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.zk-stat-sub {
+  margin-top: 4px;
+  color: #7A877F;
+  font-size: 10px;
+}
+
+.zk-label {
+  display: block;
+  margin: 12px 0 5px;
+  color: #263B2F;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.zk-input,
+.zk-select {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  color: #172B21;
+  background: white;
+  border: 1px solid #D4E0D7;
+  border-radius: 9px;
+  outline: none;
+  font: inherit;
+  font-size: 13px;
+}
+
+.zk-input:focus,
+.zk-select:focus {
+  border-color: ${GREEN};
+  box-shadow: 0 0 0 2px rgba(8,122,67,.10);
+}
+
+.zk-input[type="file"] {
+  min-height: 38px;
+  padding: 7px;
+  background: #F8FAF8;
+  font-size: 11px;
+}
+
+.zk-help {
+  margin: 5px 0 0;
+  color: #718076;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.zk-methods {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin: 10px 0 12px;
+}
+
+.zk-method {
+  padding: 10px;
+  color: #263B2F;
+  text-align: left;
+  background: white;
+  border: 1px solid #DDE8E0;
+  border-radius: 9px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.zk-method strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.zk-method span {
+  display: block;
+  color: #718076;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.zk-method.selected {
+  padding: 9px;
+  background: #F0F8F3;
+  border: 2px solid ${GREEN};
+}
+
+.zk-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 13px;
+  margin-top: 12px;
+  color: white;
+  background: ${GREEN};
+  border: 1px solid ${GREEN};
+  border-radius: 9px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.zk-button:hover:not(:disabled) {
+  background: ${DARK_GREEN};
+}
+
+.zk-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.zk-alert {
+  padding: 11px 13px;
+  margin-bottom: 12px;
+  color: #755019;
+  background: #FFF9E9;
+  border: 1px solid #F0D48B;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.zk-alert.error {
+  color: #922D2D;
+  background: #FFF1F1;
+  border-color: #F1C6C6;
+}
+
+.zk-alert.success {
+  color: #17623A;
+  background: #ECF8F0;
+  border-color: #B9DEC8;
+}
+
+.zk-note {
+  padding: 10px 12px;
+  margin-top: 10px;
+  color: #5F7065;
+  background: #F5F9F6;
+  border: 1px solid #DCE9E0;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.zk-progress {
+  height: 5px;
+  margin: 8px 0 0;
+  overflow: hidden;
+  background: #E7EEE9;
+  border-radius: 999px;
+}
+
+.zk-progress > div {
+  height: 100%;
+  background: ${GREEN};
+  border-radius: inherit;
+  transition: width .2s;
+}
+
+.zk-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 0;
+  border-bottom: 1px solid #E8EEE9;
+}
+
+.zk-status-row:last-child {
+  border-bottom: 0;
+}
+
+.zk-status-row strong {
+  display: block;
+  color: #263B2F;
+  font-size: 12px;
+}
+
+.zk-status-row small {
+  display: block;
+  margin-top: 3px;
+  color: #718076;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.zk-footer {
+  margin: 16px 0 0;
+  color: #829087;
+  text-align: center;
+  font-size: 10px;
+}
+
+@media (max-width: 520px) {
   .zk-page {
-    min-height: 100vh;
-    padding: 12px 10px 24px;
-    background: #F4F8F5;
-    color: #172B21;
-    font-family: Inter, -apple-system, BlinkMacSystemFont,
-      "Segoe UI", Roboto, Arial, sans-serif;
-    font-size: 13px;
-  }
-
-  .zk-container {
-    width: 100%;
-    max-width: 620px;
-    margin: 0 auto;
+    padding: 9px 8px 20px;
   }
 
   .zk-hero {
-    padding: 19px;
-    margin-bottom: 12px;
-    color: white;
-    background: linear-gradient(135deg, #075C35, #087A43);
-    border-radius: 14px;
-  }
-
-  .zk-brand {
-    margin-bottom: 7px;
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 1.4px;
-    opacity: .85;
+    padding: 16px;
+    border-radius: 12px;
   }
 
   .zk-hero h1 {
-    margin: 0;
-    font-size: 23px;
-    font-weight: 800;
-    line-height: 1.25;
-    letter-spacing: -.4px;
-  }
-
-  .zk-hero p {
-    margin: 8px 0 0;
-    color: #E2F1E8;
-    font-size: 12px;
-    line-height: 1.55;
-  }
-
-  .zk-hero-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-    margin-top: 13px;
-  }
-
-  .zk-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 6px 10px;
-    color: white;
-    background: rgba(255,255,255,.13);
-    border: 1px solid rgba(255,255,255,.15);
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 21px;
   }
 
   .zk-card {
-    padding: 15px;
-    margin-bottom: 12px;
-    background: white;
-    border: 1px solid #DFE9E2;
-    border-radius: 13px;
-    box-shadow: 0 2px 8px rgba(25,65,42,.035);
-  }
-
-  .zk-card-heading {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 11px;
-  }
-
-  .zk-number {
-    display: grid;
-    flex: 0 0 30px;
-    width: 30px;
-    height: 30px;
-    place-items: center;
-    color: ${GREEN};
-    background: #EAF4EE;
-    border-radius: 9px;
-    font-size: 13px;
-    font-weight: 800;
+    padding: 13px;
+    margin-bottom: 10px;
+    border-radius: 11px;
   }
 
   .zk-card h2 {
-    margin: 0;
-    color: #172B21;
-    font-size: 16px;
-    font-weight: 800;
-    line-height: 1.35;
-  }
-
-  .zk-card-heading p {
-    margin: 3px 0 0;
-    color: #68776D;
-    font-size: 11px;
-    line-height: 1.5;
-  }
-
-  .zk-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 9px;
-    margin: 0 0 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 800;
-    white-space: nowrap;
-    text-transform: capitalize;
-  }
-
-  .zk-status.pending {
-    color: #805A13;
-    background: #FFF3D6;
-  }
-
-  .zk-status.verified {
-    color: #17623A;
-    background: #E6F5EB;
-  }
-
-  .zk-status.rejected {
-    color: #9A3030;
-    background: #FDECEC;
-  }
-
-  .zk-status.not-submitted {
-    color: #58675E;
-    background: #EEF2EF;
+    font-size: 15px;
   }
 
   .zk-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin: 10px 0;
+    gap: 7px;
   }
 
   .zk-stat {
-    min-width: 0;
-    padding: 11px;
-    background: #F6F9F7;
-    border: 1px solid #E1EAE4;
-    border-radius: 10px;
-  }
-
-  .zk-stat-label {
-    margin-bottom: 5px;
-    color: #69786E;
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: .45px;
-    line-height: 1.4;
-    text-transform: uppercase;
-  }
-
-  .zk-stat-value {
-    color: ${DARK_GREEN};
-    font-size: clamp(15px, 4vw, 19px);
-    font-weight: 800;
-    line-height: 1.3;
-    overflow-wrap: anywhere;
-  }
-
-  .zk-stat-sub {
-    margin-top: 4px;
-    color: #7A877F;
-    font-size: 10px;
-  }
-
-  .zk-label {
-    display: block;
-    margin: 12px 0 5px;
-    color: #263B2F;
-    font-size: 12px;
-    font-weight: 750;
-  }
-
-  .zk-input,
-  .zk-select {
-    display: block;
-    width: 100%;
-    min-height: 40px;
-    padding: 9px 11px;
-    color: #172B21;
-    background: white;
-    border: 1px solid #D4E0D7;
-    border-radius: 9px;
-    outline: none;
-    font: inherit;
-    font-size: 13px;
-  }
-
-  .zk-input:focus,
-  .zk-select:focus {
-    border-color: ${GREEN};
-    box-shadow: 0 0 0 2px rgba(8,122,67,.10);
-  }
-
-  .zk-input[type="file"] {
-    min-height: 38px;
-    padding: 7px;
-    background: #F8FAF8;
-    font-size: 11px;
-  }
-
-  .zk-help {
-    margin: 5px 0 0;
-    color: #718076;
-    font-size: 11px;
-    line-height: 1.5;
+    padding: 9px;
   }
 
   .zk-methods {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 7px;
-    margin: 10px 0 12px;
+    grid-template-columns: 1fr;
   }
 
   .zk-method {
     padding: 10px;
-    color: #263B2F;
-    text-align: left;
-    background: white;
-    border: 1px solid #DDE8E0;
-    border-radius: 9px;
-    cursor: pointer;
-    font: inherit;
-  }
-
-  .zk-method strong {
-    display: block;
-    margin-bottom: 3px;
-    font-size: 11px;
-    line-height: 1.4;
-  }
-
-  .zk-method span {
-    display: block;
-    color: #718076;
-    font-size: 10px;
-    line-height: 1.4;
   }
 
   .zk-method.selected {
     padding: 9px;
-    background: #F0F8F3;
-    border: 2px solid ${GREEN};
-  }
-
-  .zk-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    min-height: 40px;
-    padding: 10px 13px;
-    margin-top: 12px;
-    color: white;
-    background: ${GREEN};
-    border: 1px solid ${GREEN};
-    border-radius: 9px;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 800;
-    cursor: pointer;
-  }
-
-  .zk-button:hover:not(:disabled) {
-    background: ${DARK_GREEN};
-  }
-
-  .zk-button:disabled {
-    opacity: .55;
-    cursor: not-allowed;
-  }
-
-  .zk-alert {
-    padding: 11px 13px;
-    margin-bottom: 12px;
-    color: #755019;
-    background: #FFF9E9;
-    border: 1px solid #F0D48B;
-    border-radius: 10px;
-    font-size: 12px;
-    line-height: 1.5;
-    overflow-wrap: anywhere;
-  }
-
-  .zk-alert.error {
-    color: #922D2D;
-    background: #FFF1F1;
-    border-color: #F1C6C6;
-  }
-
-  .zk-alert.success {
-    color: #17623A;
-    background: #ECF8F0;
-    border-color: #B9DEC8;
-  }
-
-  .zk-note {
-    padding: 10px 12px;
-    margin-top: 10px;
-    color: #5F7065;
-    background: #F5F9F6;
-    border: 1px solid #DCE9E0;
-    border-radius: 9px;
-    font-size: 11px;
-    line-height: 1.5;
-  }
-
-  .zk-progress {
-    height: 5px;
-    margin: 8px 0 0;
-    overflow: hidden;
-    background: #E7EEE9;
-    border-radius: 999px;
-  }
-
-  .zk-progress > div {
-    height: 100%;
-    background: ${GREEN};
-    border-radius: inherit;
-    transition: width .2s;
   }
 
   .zk-status-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 11px 0;
-    border-bottom: 1px solid #E8EEE9;
+    align-items: flex-start;
   }
-
-  .zk-status-row:last-child {
-    border-bottom: 0;
-  }
-
-  .zk-status-row strong {
-    display: block;
-    color: #263B2F;
-    font-size: 12px;
-  }
-
-  .zk-status-row small {
-    display: block;
-    margin-top: 3px;
-    color: #718076;
-    font-size: 11px;
-    line-height: 1.45;
-  }
-
-  .zk-footer {
-    margin: 16px 0 0;
-    color: #829087;
-    text-align: center;
-    font-size: 10px;
-  }
-
-  @media (max-width: 520px) {
-    .zk-page {
-      padding: 9px 8px 20px;
-    }
-
-    .zk-hero {
-      padding: 16px;
-      border-radius: 12px;
-    }
-
-    .zk-hero h1 {
-      font-size: 21px;
-    }
-
-    .zk-card {
-      padding: 13px;
-      margin-bottom: 10px;
-      border-radius: 11px;
-    }
-
-    .zk-card h2 {
-      font-size: 15px;
-    }
-
-    .zk-grid {
-      gap: 7px;
-    }
-
-    .zk-stat {
-      padding: 9px;
-    }
-
-    .zk-methods {
-      grid-template-columns: 1fr;
-    }
-
-    .zk-method {
-      padding: 10px;
-    }
-
-    .zk-method.selected {
-      padding: 9px;
-    }
-
-    .zk-status-row {
-      align-items: flex-start;
-    }
-  }
+}
 `;
 
 const money = (value: number | null | undefined) => {
@@ -513,10 +508,9 @@ const normalizeStatus = (
     .trim();
 
   if (
-    normalized === 'verified' ||
-    normalized === 'approved' ||
-    normalized === 'success' ||
-    normalized === 'successful'
+    ['verified', 'approved', 'success', 'successful'].includes(
+      normalized
+    )
   ) {
     return 'verified';
   }
@@ -585,6 +579,9 @@ const KYC: React.FC = () => {
   const [tier3Method, setTier3Method] =
     useState('bank_statement');
 
+  const [tier3DocumentType, setTier3DocumentType] =
+    useState('');
+
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
 
@@ -599,10 +596,8 @@ const KYC: React.FC = () => {
 
   const frontRef = useRef<HTMLInputElement>(null);
   const backRef = useRef<HTMLInputElement>(null);
-
   const tier2SelfieRef = useRef<HTMLInputElement>(null);
   const tier3SelfieRef = useRef<HTMLInputElement>(null);
-
   const addressRef = useRef<HTMLInputElement>(null);
 
   const token =
@@ -614,7 +609,6 @@ const KYC: React.FC = () => {
     Authorization: `Bearer ${token}`,
   });
 
-  // Automatically load status when the page opens.
   const fetchStatus = async () => {
     if (!token) {
       setAlert('Please sign in to view your verification status.');
@@ -712,8 +706,7 @@ const KYC: React.FC = () => {
     [];
 
   const canSubmitBvn =
-    bvnStatus !== 'pending' &&
-    bvnStatus !== 'verified';
+    bvnStatus !== 'pending' && bvnStatus !== 'verified';
 
   const canSubmitTier2 =
     bvnStatus === 'verified' &&
@@ -769,7 +762,6 @@ const KYC: React.FC = () => {
         result.message ||
           'Your BVN has been submitted for verification.'
       );
-
       setAlertType('success');
       setBvn('');
 
@@ -822,10 +814,7 @@ const KYC: React.FC = () => {
     const formData = new FormData();
 
     formData.append('document_type', documentType);
-    formData.append(
-      'document_number',
-      documentNumber.trim()
-    );
+    formData.append('document_number', documentNumber.trim());
     formData.append('document_front', frontFile);
 
     if (backFile) {
@@ -858,7 +847,6 @@ const KYC: React.FC = () => {
         result.message ||
           'Your identity documents have been submitted for review.'
       );
-
       setAlertType('success');
 
       setDocumentNumber('');
@@ -891,6 +879,12 @@ const KYC: React.FC = () => {
     event.preventDefault();
     setAlert('');
 
+    if (!tier3DocumentType) {
+      setAlert('Please select your proof-of-address document type.');
+      setAlertType('error');
+      return;
+    }
+
     if (!addressFile) {
       setAlert('Please select your proof-of-address document.');
       setAlertType('error');
@@ -911,6 +905,7 @@ const KYC: React.FC = () => {
 
     const formData = new FormData();
 
+    // These fields match the current backend contract.
     formData.append('tier_3_method', tier3Method);
     formData.append('tier_3_document', addressFile);
     formData.append('tier_3_selfie', tier3Selfie);
@@ -939,7 +934,6 @@ const KYC: React.FC = () => {
         result.message ||
           'Your proof-of-address document has been submitted for review.'
       );
-
       setAlertType('success');
 
       setAddressFile(null);
@@ -973,7 +967,6 @@ const KYC: React.FC = () => {
         <strong>{title}</strong>
         <small>{description}</small>
       </div>
-
       <StatusBadge status={status} />
     </div>
   );
@@ -983,9 +976,6 @@ const KYC: React.FC = () => {
       <style>{styles}</style>
 
       <main className="zk-container">
-
-        {/* Header */}
-
         <section className="zk-hero">
           <div className="zk-brand">
             ZENIMONIES BANKING
@@ -1002,14 +992,11 @@ const KYC: React.FC = () => {
             <span className="zk-pill">
               🔒 Secure verification
             </span>
-
             <span className="zk-pill">
               Tier {approvedTier} approved
             </span>
           </div>
         </section>
-
-        {/* Alerts */}
 
         {alert && (
           <div
@@ -1034,13 +1021,11 @@ const KYC: React.FC = () => {
           </section>
         ) : (
           <>
-
             {/* Current Verification */}
 
             <section className="zk-card">
               <div className="zk-card-heading">
                 <div className="zk-number">✓</div>
-
                 <div>
                   <h2>Current Verification</h2>
                   <p>
@@ -1056,11 +1041,9 @@ const KYC: React.FC = () => {
                   <div className="zk-stat-label">
                     Approved tier
                   </div>
-
                   <div className="zk-stat-value">
                     {approvedTier}
                   </div>
-
                   <div className="zk-stat-sub">
                     Submitted: Tier {submittedTier}
                   </div>
@@ -1070,7 +1053,6 @@ const KYC: React.FC = () => {
                   <div className="zk-stat-label">
                     Account limit
                   </div>
-
                   <div className="zk-stat-value">
                     {money(accountLimit)}
                   </div>
@@ -1080,7 +1062,6 @@ const KYC: React.FC = () => {
                   <div className="zk-stat-label">
                     Daily transfer limit
                   </div>
-
                   <div className="zk-stat-value">
                     {money(dailyLimit)}
                   </div>
@@ -1090,7 +1071,6 @@ const KYC: React.FC = () => {
                   <div className="zk-stat-label">
                     Daily transfers used
                   </div>
-
                   <div className="zk-stat-value">
                     {money(dailyUsed)}
                   </div>
@@ -1103,7 +1083,6 @@ const KYC: React.FC = () => {
                   <div className="zk-stat-label">
                     Daily transfer remaining
                   </div>
-
                   <div className="zk-stat-value">
                     {dailyRemaining === null
                       ? 'Unlimited'
@@ -1138,16 +1117,11 @@ const KYC: React.FC = () => {
               <div className="zk-alert">
                 <strong>Complete your personal information</strong>
                 <br />
-
                 Before submitting your BVN, update these
                 missing profile details:
-
                 <br />
-
                 {missingFields.join(', ')}
-
                 <br />
-
                 Open your profile and complete the missing
                 information before continuing.
               </div>
@@ -1158,7 +1132,6 @@ const KYC: React.FC = () => {
             <section className="zk-card">
               <div className="zk-card-heading">
                 <div className="zk-number">1</div>
-
                 <div>
                   <h2>BVN Verification</h2>
                   <p>
@@ -1178,10 +1151,7 @@ const KYC: React.FC = () => {
                 )}
 
               <form onSubmit={submitBvn}>
-                <label
-                  className="zk-label"
-                  htmlFor="zk-bvn"
-                >
+                <label className="zk-label" htmlFor="zk-bvn">
                   11-digit BVN
                 </label>
 
@@ -1235,7 +1205,6 @@ const KYC: React.FC = () => {
             <section className="zk-card">
               <div className="zk-card-heading">
                 <div className="zk-number">2</div>
-
                 <div>
                   <h2>Identity Verification</h2>
                   <p>
@@ -1278,22 +1247,14 @@ const KYC: React.FC = () => {
                   }
                   disabled={!canSubmitTier2 || submitting}
                 >
-                  <option value="national_id">
-                    National ID
-                  </option>
-
-                  <option value="nin">
-                    NIN slip
-                  </option>
-
+                  <option value="national_id">National ID</option>
+                  <option value="nin">NIN slip</option>
                   <option value="drivers_license">
                     Driver's licence
                   </option>
-
                   <option value="international_passport">
                     International passport
                   </option>
-
                   <option value="voters_card">
                     Voter's card
                   </option>
@@ -1319,10 +1280,7 @@ const KYC: React.FC = () => {
                   disabled={!canSubmitTier2 || submitting}
                 />
 
-                <label
-                  className="zk-label"
-                  htmlFor="zk-front"
-                >
+                <label className="zk-label" htmlFor="zk-front">
                   Front of ID document *
                 </label>
 
@@ -1347,10 +1305,7 @@ const KYC: React.FC = () => {
                 {documentType !==
                   'international_passport' && (
                   <>
-                    <label
-                      className="zk-label"
-                      htmlFor="zk-back"
-                    >
+                    <label className="zk-label" htmlFor="zk-back">
                       Back of ID document *
                     </label>
 
@@ -1365,17 +1320,12 @@ const KYC: React.FC = () => {
                           event.target.files?.[0] || null
                         )
                       }
-                      disabled={
-                        !canSubmitTier2 || submitting
-                      }
+                      disabled={!canSubmitTier2 || submitting}
                     />
                   </>
                 )}
 
-                <label
-                  className="zk-label"
-                  htmlFor="zk-selfie"
-                >
+                <label className="zk-label" htmlFor="zk-selfie">
                   Facial verification selfie *
                 </label>
 
@@ -1426,11 +1376,11 @@ const KYC: React.FC = () => {
             <section className="zk-card">
               <div className="zk-card-heading">
                 <div className="zk-number">3</div>
-
                 <div>
                   <h2>Address Verification</h2>
                   <p>
-                    Submit proof of your residential address.
+                    Submit proof of your Nigerian residential
+                    address.
                   </p>
                 </div>
               </div>
@@ -1454,30 +1404,10 @@ const KYC: React.FC = () => {
 
               <form onSubmit={submitTier3}>
                 <label className="zk-label">
-                  Proof-of-address method
+                  Proof-of-address category
                 </label>
 
                 <div className="zk-methods">
-                  <button
-                    type="button"
-                    className={`zk-method ${
-                      tier3Method === 'bank_statement'
-                        ? 'selected'
-                        : ''
-                    }`}
-                    onClick={() =>
-                      setTier3Method('bank_statement')
-                    }
-                    disabled={
-                      !canSubmitTier3 || submitting
-                    }
-                  >
-                    <strong>Bank statement</strong>
-                    <span>
-                      Recent statement showing your address.
-                    </span>
-                  </button>
-
                   <button
                     type="button"
                     className={`zk-method ${
@@ -1485,16 +1415,34 @@ const KYC: React.FC = () => {
                         ? 'selected'
                         : ''
                     }`}
-                    onClick={() =>
-                      setTier3Method('utility_bill')
-                    }
-                    disabled={
-                      !canSubmitTier3 || submitting
-                    }
+                    onClick={() => {
+                      setTier3Method('utility_bill');
+                      setTier3DocumentType('');
+                    }}
+                    disabled={!canSubmitTier3 || submitting}
                   >
                     <strong>Utility bill</strong>
                     <span>
-                      Recent eligible utility bill.
+                      Electricity, water, waste or internet.
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`zk-method ${
+                      tier3Method === 'bank_statement'
+                        ? 'selected'
+                        : ''
+                    }`}
+                    onClick={() => {
+                      setTier3Method('bank_statement');
+                      setTier3DocumentType('');
+                    }}
+                    disabled={!canSubmitTier3 || submitting}
+                  >
+                    <strong>Bank statement</strong>
+                    <span>
+                      Statement showing your address.
                     </span>
                   </button>
 
@@ -1505,25 +1453,105 @@ const KYC: React.FC = () => {
                         ? 'selected'
                         : ''
                     }`}
-                    onClick={() =>
-                      setTier3Method('proof_of_address')
-                    }
-                    disabled={
-                      !canSubmitTier3 || submitting
-                    }
+                    onClick={() => {
+                      setTier3Method('proof_of_address');
+                      setTier3DocumentType('');
+                    }}
+                    disabled={!canSubmitTier3 || submitting}
                   >
                     <strong>Other proof</strong>
                     <span>
-                      Another accepted address document.
+                      Tenancy or official address document.
                     </span>
                   </button>
                 </div>
 
                 <label
                   className="zk-label"
+                  htmlFor="zk-tier3-document-type"
+                >
+                  Select your document type *
+                </label>
+
+                <select
+                  id="zk-tier3-document-type"
+                  className="zk-select"
+                  value={tier3DocumentType}
+                  onChange={(event) =>
+                    setTier3DocumentType(event.target.value)
+                  }
+                  disabled={!canSubmitTier3 || submitting}
+                  required
+                >
+                  <option value="">Choose a document</option>
+
+                  {tier3Method === 'utility_bill' && (
+                    <>
+                      <option value="electricity_bill">
+                        Electricity bill
+                      </option>
+                      <option value="water_bill">
+                        Water bill
+                      </option>
+                      <option value="waste_management_bill">
+                        Waste management bill
+                      </option>
+                      <option value="internet_bill">
+                        Internet or fixed-line bill
+                      </option>
+                    </>
+                  )}
+
+                  {tier3Method === 'bank_statement' && (
+                    <option value="bank_statement">
+                      Bank statement
+                    </option>
+                  )}
+
+                  {tier3Method === 'proof_of_address' && (
+                    <>
+                      <option value="tenancy_agreement">
+                        Tenancy or rent agreement
+                      </option>
+                      <option value="property_tax">
+                        Property tax document
+                      </option>
+                      <option value="government_letter">
+                        Government-issued address letter
+                      </option>
+                      <option value="other_official_document">
+                        Other official proof of address
+                      </option>
+                    </>
+                  )}
+                </select>
+
+                <p className="zk-help">
+                  Select the type of document you intend to
+                  upload. It should show your name and current
+                  residential address.
+                </p>
+
+                <div className="zk-note">
+                  <strong>Document requirements</strong>
+                  <br />
+                  • The document should be recent, preferably
+                  issued within the last 3 months.
+                  <br />
+                  • Your name and residential address should
+                  be clearly visible.
+                  <br />
+                  • The document must be genuine and unaltered.
+                  <br />
+                  • Documents are subject to verification and
+                  applicable requirements.
+                </div>
+
+                <label
+                  className="zk-label"
                   htmlFor="zk-address-document"
                 >
-                  Proof-of-address document (PDF) *
+                  Upload proof-of-address document (PDF) *
                 </label>
 
                 <input
@@ -1538,11 +1566,14 @@ const KYC: React.FC = () => {
                     )
                   }
                   disabled={!canSubmitTier3 || submitting}
+                  required
                 />
 
-                <p className="zk-help">
-                  Upload the actual PDF document, not a link.
-                </p>
+                {addressFile && (
+                  <p className="zk-help">
+                    Selected: {addressFile.name}
+                  </p>
+                )}
 
                 <label
                   className="zk-label"
@@ -1563,23 +1594,32 @@ const KYC: React.FC = () => {
                     )
                   }
                   disabled={!canSubmitTier3 || submitting}
+                  required
                 />
 
                 <p className="zk-help">
-                  Select a clear face photo if required by
-                  the verification process.
+                  Select a clear face photo. A static photo
+                  upload is not a genuine liveness check.
                 </p>
 
                 <div className="zk-note">
-                  Your proof of address must be reviewed and
-                  approved. A static selfie is not a genuine
-                  liveness check.
+                  Genuine liveness verification must be
+                  completed through an integrated verification
+                  process before approval. Uploading a selfie
+                  or address document does not automatically
+                  verify your identity or address.
                 </div>
 
                 <button
                   className="zk-button"
                   type="submit"
-                  disabled={!canSubmitTier3 || submitting}
+                  disabled={
+                    !canSubmitTier3 ||
+                    submitting ||
+                    !tier3DocumentType ||
+                    !addressFile ||
+                    !tier3Selfie
+                  }
                 >
                   {submitting
                     ? 'Submitting...'
@@ -1597,7 +1637,6 @@ const KYC: React.FC = () => {
             <section className="zk-card">
               <div className="zk-card-heading">
                 <div className="zk-number">✓</div>
-
                 <div>
                   <h2>Verification Status</h2>
                   <p>
