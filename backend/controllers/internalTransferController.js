@@ -1,12 +1,59 @@
+
 const crypto = require('crypto');
 const pool = require('../config/database');
 
+// ============================================================
+// ZENIMONIES BANKING
+// INTERNAL TRANSFER CONTROLLER
+// ============================================================
 
-/*
- * ============================================================
- * GENERATE INTERNAL TRANSFER REFERENCE
- * ============================================================
- */
+// ============================================================
+// ACCOUNT BALANCE LIMITS
+// ============================================================
+
+const getAccountLimit = (kycStatus, kycTier) => {
+  const status = String(kycStatus || '').toLowerCase();
+  const tier = Number(kycTier || 0);
+
+  const verified = [
+    'verified',
+    'approved',
+    'completed',
+  ].includes(status);
+
+  if (!verified) return 50000;
+  if (tier >= 3) return null;
+  if (tier === 2) return 500000;
+  if (tier === 1) return 200000;
+
+  return 50000;
+};
+
+// ============================================================
+// DAILY TRANSFER LIMITS
+// ============================================================
+
+const getDailyTransferLimit = (kycStatus, kycTier) => {
+  const status = String(kycStatus || '').toLowerCase();
+  const tier = Number(kycTier || 0);
+
+  const verified = [
+    'verified',
+    'approved',
+    'completed',
+  ].includes(status);
+
+  if (!verified) return 25000;
+  if (tier >= 3) return 5000000;
+  if (tier === 2) return 200000;
+  if (tier === 1) return 50000;
+
+  return 25000;
+};
+
+// ============================================================
+// REFERENCE
+// ============================================================
 
 const generateReference = () => {
   return `ZEN-INT-${Date.now()}-${crypto
@@ -15,68 +62,95 @@ const generateReference = () => {
     .toUpperCase()}`;
 };
 
-
-/*
- * ============================================================
- * CALCULATE ZENIMONIES TRANSFER FEE
- * ============================================================
- *
- * ₦20 - ₦999         = ₦0
- * ₦1,000 - ₦9,999    = ₦20
- * ₦10,000 - ₦99,999  = ₦56
- * ₦100,000+          = ₦75
- *
- * The backend is the source of truth.
- */
+// ============================================================
+// TRANSFER FEES
+// ============================================================
 
 const calculateTransferFee = (amount) => {
   const transferAmount = Number(amount);
 
-  if (!Number.isFinite(transferAmount)) {
-    return 0;
-  }
-
-  if (transferAmount < 1000) {
-    return 0;
-  }
-
-  if (transferAmount < 10000) {
-    return 20;
-  }
-
-  if (transferAmount < 100000) {
-    return 56;
-  }
+  if (!Number.isFinite(transferAmount)) return 0;
+  if (transferAmount < 1000) return 0;
+  if (transferAmount < 10000) return 20;
+  if (transferAmount < 100000) return 56;
 
   return 75;
 };
 
+// ============================================================
+// PROFILE COMPLETION
+// ============================================================
 
-/*
- * ============================================================
- * FIND ZENIMONIES USER BY PHONE NUMBER
- * ============================================================
- */
+const getMissingProfileFields = (user) => {
+  const requiredFields = [
+    ['full_name', 'Full name'],
+    ['email', 'Email address'],
+    ['phone', 'Phone number'],
+    ['date_of_birth', 'Date of birth'],
+    ['address', 'Residential address'],
+    ['city', 'City'],
+    ['state', 'State'],
+    ['lga', 'Local Government Area'],
+    ['country', 'Country'],
+  ];
+
+  return requiredFields
+    .filter(([field]) => {
+      const value = user[field];
+
+      return (
+        value === null ||
+        value === undefined ||
+        String(value).trim() === ''
+      );
+    })
+    .map(([, label]) => label);
+};
+
+// ============================================================
+// FORMAT MONEY
+// ============================================================
+
+const formatNaira = (amount) => {
+  return Number(amount).toLocaleString('en-NG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+// ============================================================
+// FIND ZENIMONIES USER BY PHONE
+// GET /api/internal-transfers/user
+// ============================================================
 
 const findUserByPhone = async (req, res) => {
   try {
-    const currentUserId = req.user.id;
+    const currentUserId =
+      req.user?.id ||
+      req.user?.userId ||
+      req.user?.user_id;
+
+    if (!currentUserId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required.',
+      });
+    }
 
     const phone = String(
       req.query.phone || ''
-    ).trim();
+    ).replace(/\s+/g, '').trim();
 
     if (!phone) {
       return res.status(400).json({
         success: false,
-        message: 'Phone number is required',
+        message: 'Phone number is required.',
       });
     }
 
-    const cleanPhone = phone.replace(/\s+/g, '');
-
     const result = await pool.query(
-      `SELECT
+      `
+      SELECT
         u.id,
         u.full_name,
         u.phone,
@@ -84,603 +158,635 @@ const findUserByPhone = async (req, res) => {
         u.is_verified,
         a.id AS account_id,
         a.currency AS account_currency
-       FROM users u
-       LEFT JOIN accounts a
-         ON a.user_id = u.id
-        AND a.status = 'active'
-       WHERE u.phone = $1
-       ORDER BY a.created_at ASC
-       LIMIT 1`,
-      [cleanPhone]
+      FROM users u
+      LEFT JOIN accounts a
+        ON a.user_id = u.id
+       AND a.account_type = 'personal'
+       AND a.currency = 'NGN'
+       AND a.status = 'active'
+      WHERE u.phone = $1
+      ORDER BY a.created_at ASC
+      LIMIT 1
+      `,
+      [phone]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message:
-          'No Zenimonies user was found with this phone number',
+          'No Zenimonies user was found with this phone number.',
       });
     }
 
     const user = result.rows[0];
 
-    /*
-     * Prevent self-transfer.
-     */
-
-    if (user.id === currentUserId) {
+    if (String(user.id) === String(currentUserId)) {
       return res.status(400).json({
         success: false,
         message:
-          'You cannot send money to your own account',
+          'You cannot send money to your own account.',
       });
     }
-
-    /*
-     * Recipient must be active.
-     */
 
     if (user.status !== 'active') {
       return res.status(400).json({
         success: false,
         message:
-          'This Zenimonies account is not currently active',
+          'This Zenimonies account is not currently active.',
       });
     }
-
-    /*
-     * Recipient must have an active account.
-     */
 
     if (!user.account_id) {
       return res.status(400).json({
         success: false,
         message:
-          'This user does not have an active Zenimonies account',
+          'This user does not have an active NGN personal account.',
       });
     }
 
     return res.status(200).json({
       success: true,
-
       user: {
         id: user.id,
-
-        full_name:
-          user.full_name,
-
-        phone:
-          user.phone,
-
-        currency:
-          user.account_currency || 'NGN',
-
-        is_verified:
-          user.is_verified,
+        full_name: user.full_name,
+        phone: user.phone,
+        currency: user.account_currency,
+        is_verified: user.is_verified,
       },
     });
 
   } catch (error) {
     console.error(
       'Find Zenimonies user error:',
-      error
+      error?.message || error
     );
 
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to find Zenimonies user',
+      message: 'Unable to find Zenimonies user.',
     });
   }
 };
 
+// ============================================================
+// SEND MONEY TO ZENIMONIES USER
+// POST /api/internal-transfers
+// ============================================================
 
-/*
- * ============================================================
- * SEND MONEY TO ZENIMONIES USER
- * ============================================================
- */
-
-const transferToZenimoniesUser = async (
-  req,
-  res
-) => {
+const transferToZenimoniesUser = async (req, res) => {
   const client = await pool.connect();
 
   let transactionStarted = false;
 
   try {
     const senderUserId =
-      req.user.id;
+      req.user?.id ||
+      req.user?.userId ||
+      req.user?.user_id;
+
+    if (!senderUserId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required.',
+      });
+    }
 
     const {
       recipient_phone,
       amount,
       narration,
-    } = req.body;
+    } = req.body || {};
 
-
-    /*
-     * ========================================================
-     * VALIDATION
-     * ========================================================
-     */
+    // ========================================================
+    // INPUT VALIDATION
+    // ========================================================
 
     if (!recipient_phone) {
       return res.status(400).json({
         success: false,
-        message:
-          'Recipient phone number is required',
+        message: 'Recipient phone number is required.',
       });
     }
 
     if (
       amount === undefined ||
-      amount === null
+      amount === null ||
+      amount === ''
     ) {
       return res.status(400).json({
         success: false,
-        message:
-          'Transfer amount is required',
+        message: 'Transfer amount is required.',
       });
     }
 
-    const cleanPhone =
-      String(
-        recipient_phone
-      ).replace(/\s+/g, '');
-
+    const cleanPhone = String(
+      recipient_phone
+    ).replace(/\s+/g, '').trim();
 
     if (!cleanPhone) {
       return res.status(400).json({
         success: false,
-        message:
-          'Recipient phone number is required',
+        message: 'Recipient phone number is required.',
       });
     }
 
-
-    /*
-     * ========================================================
-     * AMOUNT VALIDATION
-     * ========================================================
-     */
-
-    const transferAmount =
-      Number(amount);
+    const transferAmount = Number(amount);
 
     if (
-      !Number.isFinite(
-        transferAmount
-      ) ||
+      !Number.isFinite(transferAmount) ||
       transferAmount < 20
     ) {
       return res.status(400).json({
         success: false,
-        message:
-          'Minimum transfer amount is ₦20',
+        message: 'Minimum transfer amount is ₦20.',
       });
     }
 
-
-    /*
-     * Maximum two decimal places.
-     */
-
     if (
-      Math.round(
-        transferAmount * 100
-      ) !==
+      Math.round(transferAmount * 100) !==
       transferAmount * 100
     ) {
       return res.status(400).json({
         success: false,
         message:
-          'Transfer amount can have a maximum of two decimal places',
+          'Transfer amount can have a maximum of two decimal places.',
       });
     }
 
-
-    /*
-     * Maximum transfer amount.
-     */
-
-    if (
-      transferAmount > 100000000
-    ) {
+    if (transferAmount > 100000000) {
       return res.status(400).json({
         success: false,
-        message:
-          'Transfer amount is too large',
+        message: 'Transfer amount is too large.',
       });
     }
 
-
-    /*
-     * ========================================================
-     * CALCULATE FEE
-     * ========================================================
-     */
-
     const transactionFee =
-      calculateTransferFee(
-        transferAmount
-      );
+      calculateTransferFee(transferAmount);
 
     const totalDebit =
-      transferAmount +
-      transactionFee;
+      transferAmount + transactionFee;
 
-
-    /*
-     * ========================================================
-     * START DATABASE TRANSACTION
-     * ========================================================
-     */
+    // ========================================================
+    // START DATABASE TRANSACTION
+    // ========================================================
 
     await client.query('BEGIN');
-
     transactionStarted = true;
 
+    // ========================================================
+    // LOCK AND LOAD SENDER PROFILE
+    //
+    // Tier and profile information come from PostgreSQL.
+    // Never trust tier values from the frontend or JWT.
+    // ========================================================
 
-    /*
-     * ========================================================
-     * LOCK SENDER ACCOUNT
-     * ========================================================
-     */
+    const senderUserResult = await client.query(
+      `
+      SELECT
+        id,
+        full_name,
+        email,
+        phone,
+        date_of_birth,
+        address,
+        city,
+        state,
+        lga,
+        country,
+        status,
+        kyc_status,
+        kyc_tier,
+        is_verified
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [senderUserId]
+    );
+
+    if (senderUserResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+
+      return res.status(404).json({
+        success: false,
+        message: 'Sender account was not found.',
+      });
+    }
+
+    const senderUser = senderUserResult.rows[0];
+
+    if (senderUser.status !== 'active') {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is not active.',
+      });
+    }
+
+    const senderTier =
+      Number(senderUser.kyc_tier || 0);
+
+    const senderKycStatus =
+      String(senderUser.kyc_status || '')
+        .toLowerCase();
+
+    const senderVerified = [
+      'verified',
+      'approved',
+      'completed',
+    ].includes(senderKycStatus);
+
+    // ========================================================
+    // TIER 0 PROFILE COMPLETION
+    // ========================================================
+
+    if (!senderVerified || senderTier < 1) {
+      const missingFields =
+        getMissingProfileFields(senderUser);
+
+      if (missingFields.length > 0) {
+        await client.query('ROLLBACK');
+        transactionStarted = false;
+
+        return res.status(403).json({
+          success: false,
+          code: 'PROFILE_INCOMPLETE',
+          message:
+            'Please complete your personal information before making transactions.',
+          missing_fields: missingFields,
+        });
+      }
+
+      if (
+        String(senderUser.country || '')
+          .trim()
+          .toLowerCase() !== 'nigeria'
+      ) {
+        await client.query('ROLLBACK');
+        transactionStarted = false;
+
+        return res.status(403).json({
+          success: false,
+          code: 'NIGERIA_PROFILE_REQUIRED',
+          message:
+            'Your Tier 0 profile must have Nigeria as the country before making transactions.',
+        });
+      }
+    }
+
+    // ========================================================
+    // SENDER DAILY TRANSFER LIMIT
+    // ========================================================
+
+    const dailyLimit = getDailyTransferLimit(
+      senderUser.kyc_status,
+      senderUser.kyc_tier
+    );
+
+    // ========================================================
+    // LOCK SENDER PERSONAL NGN ACCOUNT
+    // ========================================================
 
     const senderAccountResult =
       await client.query(
-        `SELECT
+        `
+        SELECT
           id,
           user_id,
+          account_number,
+          account_type,
           currency,
           balance,
           status
-         FROM accounts
-         WHERE user_id = $1
-           AND status = 'active'
-         ORDER BY created_at ASC
-         LIMIT 1
-         FOR UPDATE`,
+        FROM accounts
+        WHERE user_id = $1
+          AND account_type = 'personal'
+          AND currency = 'NGN'
+          AND status = 'active'
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE
+        `,
         [senderUserId]
       );
 
-
-    if (
-      senderAccountResult.rows.length === 0
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
-
+    if (senderAccountResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       transactionStarted = false;
 
       return res.status(404).json({
         success: false,
         message:
-          'Active sender account not found',
+          'Active NGN personal sender account not found.',
       });
     }
-
 
     const senderAccount =
       senderAccountResult.rows[0];
 
-
-    /*
-     * ========================================================
-     * SENDER CURRENCY
-     * ========================================================
-     */
-
-    if (
-      String(
-        senderAccount.currency
-      ).toUpperCase() !== 'NGN'
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
-
-      transactionStarted = false;
-
-      return res.status(400).json({
-        success: false,
-        message:
-          'Zenimonies internal transfers currently support NGN only',
-      });
-    }
-
-
     const senderBalance =
-      Number(
-        senderAccount.balance
-      );
-
-
-    /*
-     * ========================================================
-     * BALANCE CHECK
-     * ========================================================
-     *
-     * Sender must have:
-     *
-     * transfer amount + fee
-     */
+      Number(senderAccount.balance);
 
     if (
-      senderBalance <
-      totalDebit
+      !Number.isFinite(senderBalance) ||
+      senderBalance < totalDebit
     ) {
-      await client.query(
-        'ROLLBACK'
-      );
-
+      await client.query('ROLLBACK');
       transactionStarted = false;
 
       return res.status(400).json({
         success: false,
+        code: 'INSUFFICIENT_BALANCE',
         message:
-          `Insufficient account balance. You need ₦${totalDebit.toLocaleString(
-            'en-NG',
-            {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }
-          )} including the transfer fee.`,
+          `Insufficient account balance. You need ₦${formatNaira(totalDebit)} including the transfer fee.`,
       });
     }
 
+    // ========================================================
+    // CHECK DAILY COMPLETED INTERNAL TRANSFERS
+    //
+    // Uses the Nigeria calendar day.
+    // Only completed outgoing internal transfers count.
+    // The transaction amount is counted, not the fee.
+    //
+    // Sender account row is locked above, serializing
+    // concurrent transfers from this account.
+    // ========================================================
 
-    /*
-     * ========================================================
-     * FIND RECIPIENT
-     * ========================================================
-     */
+    const dailyTotalResult =
+      await client.query(
+        `
+        SELECT
+          COALESCE(SUM(amount), 0) AS total
+        FROM transactions
+        WHERE account_id = $1
+          AND type = 'internal_transfer'
+          AND status = 'completed'
+          AND created_at >= (
+            date_trunc(
+              'day',
+              CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos'
+            ) AT TIME ZONE 'Africa/Lagos'
+          )
+          AND created_at < (
+            (
+              date_trunc(
+                'day',
+                CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos'
+              ) + INTERVAL '1 day'
+            ) AT TIME ZONE 'Africa/Lagos'
+          )
+        `,
+        [senderAccount.id]
+      );
+
+    const dailyTotal =
+      Number(dailyTotalResult.rows[0]?.total || 0);
+
+    const remainingDailyLimit =
+      Math.max(dailyLimit - dailyTotal, 0);
+
+    if (
+      transferAmount > remainingDailyLimit
+    ) {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+
+      return res.status(403).json({
+        success: false,
+        code: 'DAILY_TRANSFER_LIMIT_EXCEEDED',
+        message:
+          `This transfer exceeds your remaining daily transfer limit of ₦${formatNaira(remainingDailyLimit)}.`,
+        daily_transfer_limit: dailyLimit,
+        daily_transferred: dailyTotal,
+        remaining_daily_limit: remainingDailyLimit,
+        requested_amount: transferAmount,
+      });
+    }
+
+    // ========================================================
+    // FIND RECIPIENT
+    // ========================================================
 
     const recipientUserResult =
       await client.query(
-        `SELECT
+        `
+        SELECT
           id,
           full_name,
           phone,
           status,
-          is_verified
-         FROM users
-         WHERE phone = $1
-         LIMIT 1`,
+          is_verified,
+          kyc_status,
+          kyc_tier
+        FROM users
+        WHERE phone = $1
+        LIMIT 1
+        `,
         [cleanPhone]
       );
 
-
-    if (
-      recipientUserResult.rows.length === 0
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
-
+    if (recipientUserResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       transactionStarted = false;
 
       return res.status(404).json({
         success: false,
         message:
-          'No Zenimonies user was found with this phone number',
+          'No Zenimonies user was found with this phone number.',
       });
     }
-
 
     const recipientUser =
       recipientUserResult.rows[0];
 
-
-    /*
-     * ========================================================
-     * PREVENT SELF TRANSFER
-     * ========================================================
-     */
-
     if (
-      recipientUser.id ===
-      senderUserId
+      String(recipientUser.id) ===
+      String(senderUserId)
     ) {
-      await client.query(
-        'ROLLBACK'
-      );
-
+      await client.query('ROLLBACK');
       transactionStarted = false;
 
       return res.status(400).json({
         success: false,
         message:
-          'You cannot send money to your own account',
+          'You cannot send money to your own account.',
       });
     }
 
-
-    /*
-     * ========================================================
-     * RECIPIENT STATUS
-     * ========================================================
-     */
-
-    if (
-      recipientUser.status !==
-      'active'
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
-
+    if (recipientUser.status !== 'active') {
+      await client.query('ROLLBACK');
       transactionStarted = false;
 
       return res.status(400).json({
         success: false,
         message:
-          'Recipient Zenimonies account is not active',
+          'Recipient Zenimonies account is not active.',
       });
     }
 
-
-    /*
-     * ========================================================
-     * LOCK RECIPIENT ACCOUNT
-     * ========================================================
-     */
+    // ========================================================
+    // LOCK RECIPIENT PERSONAL NGN ACCOUNT
+    // ========================================================
 
     const recipientAccountResult =
       await client.query(
-        `SELECT
+        `
+        SELECT
           id,
           user_id,
+          account_number,
+          account_type,
           currency,
           balance,
           status
-         FROM accounts
-         WHERE user_id = $1
-           AND status = 'active'
-         ORDER BY created_at ASC
-         LIMIT 1
-         FOR UPDATE`,
+        FROM accounts
+        WHERE user_id = $1
+          AND account_type = 'personal'
+          AND currency = 'NGN'
+          AND status = 'active'
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE
+        `,
         [recipientUser.id]
       );
 
-
-    if (
-      recipientAccountResult.rows.length === 0
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
-
+    if (recipientAccountResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       transactionStarted = false;
 
       return res.status(404).json({
         success: false,
         message:
-          'Recipient does not have an active Zenimonies account',
+          'Recipient does not have an active NGN personal account.',
       });
     }
-
 
     const recipientAccount =
       recipientAccountResult.rows[0];
 
+    const recipientOldBalance =
+      Number(recipientAccount.balance);
 
-    /*
-     * ========================================================
-     * RECIPIENT CURRENCY
-     * ========================================================
-     */
-
-    if (
-      String(
-        recipientAccount.currency
-      ).toUpperCase() !== 'NGN'
-    ) {
-      await client.query(
-        'ROLLBACK'
-      );
-
+    if (!Number.isFinite(recipientOldBalance)) {
+      await client.query('ROLLBACK');
       transactionStarted = false;
 
-      return res.status(400).json({
+      return res.status(500).json({
         success: false,
         message:
-          'Recipient account currency is not supported',
+          'Unable to read recipient account balance.',
       });
     }
 
+    // ========================================================
+    // RECIPIENT ACCOUNT BALANCE CAP
+    // ========================================================
 
-    /*
-     * ========================================================
-     * CALCULATE NEW BALANCES
-     * ========================================================
-     */
-
-    const recipientOldBalance =
-      Number(
-        recipientAccount.balance
-      );
-
-    const senderNewBalance =
-      senderBalance -
-      totalDebit;
+    const recipientLimit = getAccountLimit(
+      recipientUser.kyc_status,
+      recipientUser.kyc_tier
+    );
 
     const recipientNewBalance =
-      recipientOldBalance +
-      transferAmount;
+      recipientOldBalance + transferAmount;
 
+    if (
+      recipientLimit !== null &&
+      recipientNewBalance > recipientLimit
+    ) {
+      const remainingCapacity = Math.max(
+        recipientLimit - recipientOldBalance,
+        0
+      );
 
-    /*
-     * ========================================================
-     * GENERATE REFERENCE
-     * ========================================================
-     */
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+
+      return res.status(403).json({
+        success: false,
+        code: 'RECIPIENT_ACCOUNT_LIMIT_EXCEEDED',
+        message:
+          'This transfer would exceed the recipient account balance limit.',
+        recipient_account_limit: recipientLimit,
+        recipient_current_balance: recipientOldBalance,
+        remaining_account_capacity: remainingCapacity,
+      });
+    }
+
+    // ========================================================
+    // CALCULATE NEW BALANCES
+    // ========================================================
+
+    const senderNewBalance =
+      senderBalance - totalDebit;
 
     const reference =
       generateReference();
 
+    const cleanNarration =
+      narration
+        ? String(narration).trim().slice(0, 200)
+        : '';
 
-    /*
-     * ========================================================
-     * UPDATE SENDER BALANCE
-     * ========================================================
-     */
+    const senderDescription =
+      cleanNarration ||
+      `Transfer to ${recipientUser.full_name}`;
+
+    const recipientDescription =
+      cleanNarration ||
+      `Transfer received from Zenimonies user`;
+
+    // ========================================================
+    // DEBIT SENDER
+    // ========================================================
 
     await client.query(
-      `UPDATE accounts
-       SET
-         balance = $1,
-         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2`,
+      `
+      UPDATE accounts
+      SET
+        balance = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      `,
       [
         senderNewBalance,
         senderAccount.id,
       ]
     );
 
-
-    /*
-     * ========================================================
-     * UPDATE RECIPIENT BALANCE
-     * ========================================================
-     */
+    // ========================================================
+    // CREDIT RECIPIENT
+    // ========================================================
 
     await client.query(
-      `UPDATE accounts
-       SET
-         balance = $1,
-         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2`,
+      `
+      UPDATE accounts
+      SET
+        balance = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      `,
       [
         recipientNewBalance,
         recipientAccount.id,
       ]
     );
 
-
-    /*
-     * ========================================================
-     * SENDER TRANSACTION
-     * ========================================================
-     *
-     * IMPORTANT:
-     *
-     * amount = money actually sent
-     *
-     * transaction_fee = Zenimonies fee
-     *
-     * balance_after = balance after BOTH amount + fee
-     *
-     * We intentionally do NOT create a separate
-     * "transfer_fee" customer transaction.
-     */
+    // ========================================================
+    // SENDER TRANSACTION
+    // ========================================================
 
     const senderTransactionResult =
       await client.query(
-        `INSERT INTO transactions (
+        `
+        INSERT INTO transactions (
           account_id,
           type,
           amount,
@@ -706,47 +812,32 @@ const transferToZenimoniesUser = async (
         )
         RETURNING
           id,
-          created_at`,
+          created_at
+        `,
         [
           senderAccount.id,
-
           transferAmount,
-
           reference,
-
-          narration
-            ? String(narration).trim()
-            : `Transfer to ${recipientUser.full_name}`,
-
+          senderDescription,
           senderBalance,
-
           senderNewBalance,
-
           transactionFee,
         ]
       );
 
-
     const senderTransaction =
       senderTransactionResult.rows[0];
 
-
-    /*
-     * ========================================================
-     * RECIPIENT TRANSACTION
-     * ========================================================
-     *
-     * Recipient receives the amount only.
-     *
-     * The sender's fee is NOT charged to recipient.
-     */
+    // ========================================================
+    // RECIPIENT TRANSACTION
+    // ========================================================
 
     const recipientReference =
       `${reference}-R`;
 
-
     await client.query(
-      `INSERT INTO transactions (
+      `
+      INSERT INTO transactions (
         account_id,
         type,
         amount,
@@ -768,36 +859,26 @@ const transferToZenimoniesUser = async (
         'completed',
         $5,
         $6,
-        $7
-      )`,
+        0
+      )
+      `,
       [
         recipientAccount.id,
-
         transferAmount,
-
         recipientReference,
-
-        narration
-  ? String(narration).trim()
-  : '',
-
+        recipientDescription,
         recipientOldBalance,
-
         recipientNewBalance,
-
-        0,
       ]
     );
 
-
-    /*
-     * ========================================================
-     * BANK TRANSFER RECORD
-     * ========================================================
-     */
+    // ========================================================
+    // BANK TRANSFER RECORD
+    // ========================================================
 
     await client.query(
-      `INSERT INTO bank_transfers (
+      `
+      INSERT INTO bank_transfers (
         account_id,
         recipient_name,
         recipient_account_number,
@@ -814,49 +895,36 @@ const transferToZenimoniesUser = async (
       VALUES (
         $1,
         $2,
+        NULL,
         $3,
+        'Zenimonies',
+        'ZENIMONIES',
         $4,
+        'NGN',
         $5,
         $6,
-        $7,
-        'NGN',
-        $8,
-        $9,
         'completed',
         CURRENT_TIMESTAMP
-      )`,
+      )
+      `,
       [
         senderAccount.id,
-
         recipientUser.full_name,
-
-        null,
-
         recipientUser.phone,
-
-        'Zenimonies',
-
-        'ZENIMONIES',
-
         transferAmount,
-
-        narration
-          ? String(narration).trim()
-          : `Zenimonies transfer to ${recipientUser.full_name}`,
-
+        cleanNarration ||
+          `Zenimonies transfer to ${recipientUser.full_name}`,
         reference,
       ]
     );
 
-
-    /*
-     * ========================================================
-     * RECIPIENT NOTIFICATION
-     * ========================================================
-     */
+    // ========================================================
+    // RECIPIENT NOTIFICATION
+    // ========================================================
 
     await client.query(
-      `INSERT INTO notifications (
+      `
+      INSERT INTO notifications (
         user_id,
         title,
         message,
@@ -869,129 +937,78 @@ const transferToZenimoniesUser = async (
         $3,
         $4,
         false
-      )`,
+      )
+      `,
       [
         recipientUser.id,
-
         'Money received',
-
-        `You received ₦${transferAmount.toLocaleString(
-          'en-NG',
-          {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }
-        )} from a Zenimonies user.`,
-
+        `You received ₦${formatNaira(transferAmount)} from a Zenimonies user.`,
         'transfer',
       ]
     );
 
+    // ========================================================
+    // COMMIT
+    // ========================================================
 
-    /*
-     * ========================================================
-     * COMMIT
-     * ========================================================
-     */
-
-    await client.query(
-      'COMMIT'
-    );
-
+    await client.query('COMMIT');
     transactionStarted = false;
 
-
-    /*
-     * ========================================================
-     * SUCCESS RESPONSE
-     * ========================================================
-     *
-     * created_at comes directly from PostgreSQL.
-     */
+    // ========================================================
+    // SUCCESS RESPONSE
+    // ========================================================
 
     return res.status(201).json({
       success: true,
-
       message:
-        'Money sent successfully to the Zenimonies user',
-
+        'Money sent successfully to the Zenimonies user.',
       transfer: {
-        id:
-          senderTransaction.id,
-
+        id: senderTransaction.id,
         reference,
-
-        recipient_name:
-          recipientUser.full_name,
-
-        recipient_phone:
-          recipientUser.phone,
-
-        recipient_bank:
-          'Zenimonies',
-
-        amount:
-          transferAmount,
-
-        transaction_fee:
-          transactionFee,
-
-        total_debit:
-          totalDebit,
-
-        currency:
-          'NGN',
-
-        status:
-          'completed',
-
-        balance_after:
-          senderNewBalance,
-
-        created_at:
-          senderTransaction.created_at,
+        recipient_name: recipientUser.full_name,
+        recipient_phone: recipientUser.phone,
+        recipient_bank: 'Zenimonies',
+        amount: transferAmount,
+        transaction_fee: transactionFee,
+        total_debit: totalDebit,
+        currency: 'NGN',
+        status: 'completed',
+        balance_after: senderNewBalance,
+        created_at: senderTransaction.created_at,
+      },
+      limits: {
+        daily_transfer_limit: dailyLimit,
+        daily_transferred:
+          dailyTotal + transferAmount,
+        remaining_daily_limit:
+          Math.max(
+            dailyLimit - dailyTotal - transferAmount,
+            0
+          ),
       },
     });
 
   } catch (error) {
-
     console.error(
       'Zenimonies internal transfer error:',
-      error
+      error?.message || error
     );
-
-
-    /*
-     * ========================================================
-     * ROLLBACK
-     * ========================================================
-     *
-     * Because the transfer is atomic, if anything fails
-     * before COMMIT, the sender balance, recipient balance,
-     * transaction records and notification are all rolled
-     * back together.
-     *
-     * Therefore we do NOT perform a second manual refund here.
-     */
 
     if (transactionStarted) {
       try {
-        await client.query(
-          'ROLLBACK'
-        );
+        await client.query('ROLLBACK');
       } catch (rollbackError) {
         console.error(
           'Internal transfer rollback error:',
-          rollbackError
+          rollbackError?.message || rollbackError
         );
       }
     }
 
-
     return res.status(500).json({
       success: false,
       message:
-        'Unable to complete Zenimonies transfer',
+        'Unable to complete Zenimonies transfer.',
     });
 
   } finally {
@@ -999,12 +1016,9 @@ const transferToZenimoniesUser = async (
   }
 };
 
-
-/*
- * ============================================================
- * EXPORTS
- * ============================================================
- */
+// ============================================================
+// EXPORTS
+// ============================================================
 
 module.exports = {
   findUserByPhone,
