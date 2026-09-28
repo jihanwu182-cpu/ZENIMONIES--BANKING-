@@ -2169,4 +2169,8 @@ module.exports = {
   submitTier2,
   submitTier3,
   getTierLimits,
+
+  // Dojah verification
+  startDojahVerification,
+  confirmDojahVerification,
 };
