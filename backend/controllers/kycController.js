@@ -1,7 +1,9 @@
 const pool = require('../config/database');
+const crypto = require('crypto');
 
 const {
   verifyBvn,
+  getDojahVerification,
 } = require('../services/dojahService');
 
 // ============================================================
