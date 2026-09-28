@@ -4,22 +4,21 @@ const API_BASE =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com/api';
 
-const DOJAH_APP_ID =
-  process.env.REACT_APP_DOJAH_APP_ID || '';
+const DOJAH_APP_ID = process.env.REACT_APP_DOJAH_APP_ID || '';
+const DOJAH_PUBLIC_KEY = process.env.REACT_APP_DOJAH_PUBLIC_KEY || '';
+const DOJAH_WIDGET_ID = process.env.REACT_APP_DOJAH_WIDGET_ID || '';
 
-const DOJAH_PUBLIC_KEY =
-  process.env.REACT_APP_DOJAH_PUBLIC_KEY || '';
-
-const DOJAH_WIDGET_ID =
-  process.env.REACT_APP_DOJAH_WIDGET_ID || '';
+type KycStatus =
+  | 'not submitted'
+  | 'pending'
+  | 'verified'
+  | 'rejected';
 
 type DojahWidgetOptions = {
   app_id: string;
   p_key: string;
   type: string;
-  config: {
-    widget_id: string;
-  };
+  config: { widget_id: string };
   reference_id: string;
   metadata?: Record<string, string>;
   onSuccess: (response: unknown) => void;
@@ -39,12 +38,6 @@ declare global {
     ) => DojahConnectInstance;
   }
 }
-
-type KycStatus =
-  | 'not submitted'
-  | 'pending'
-  | 'verified'
-  | 'rejected';
 
 type KycData = {
   status?: string;
@@ -79,16 +72,10 @@ type KycResponse = {
   message?: string;
   reference_id?: string;
   reference?: string;
-  user?: {
-    full_name?: string;
-    email?: string;
-    phone?: string;
-  };
   kyc?: KycData;
   data?: {
     reference_id?: string;
     reference?: string;
-    user?: KycResponse['user'];
     kyc?: KycData;
   };
 };
@@ -109,195 +96,460 @@ const GREEN = '#176B45';
 const DARK_GREEN = '#105536';
 
 const styles = `
-.zk-page{
-  min-height:100vh;
-  padding:20px 16px 45px;
-  background:#F5F7F5;
-  color:#172033;
-  font-family:Inter,-apple-system,BlinkMacSystemFont,
-  "Segoe UI",Roboto,Arial,sans-serif;
-  font-size:15px;
-  -webkit-font-smoothing:antialiased
+.zk-page {
+  min-height: 100vh;
+  padding: 18px 14px 35px;
+  background: #F5F7F5;
+  color: #172033;
+  font-family: Inter, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
 }
 
-.zk-container{
-  width:100%;
-  max-width:760px;
-  margin:0 auto
+.zk-container {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
 }
 
-.zk-hero{
-  position:relative;
-  overflow:hidden;
-  padding:24px 26px;
-  margin-bottom:20px;
-  color:#fff;
-  background:#176B45;
-  border-radius:16px;
-  box-shadow:0 5px 16px rgba(23,107,69,.10)
+/* Compact green header */
+
+.zk-hero {
+  padding: 19px 20px;
+  margin-bottom: 15px;
+  color: #fff;
+  background: ${GREEN};
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(23,107,69,.08);
 }
 
-.zk-brand{
-  margin-bottom:10px;
-  font-size:10px;
-  font-weight:800;
-  letter-spacing:1.5px;
-  opacity:.85
+.zk-brand {
+  margin-bottom: 8px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  opacity: .85;
 }
 
-.zk-hero h1{
-  position:relative;
-  z-index:1;
-  margin:0;
-  font-size:clamp(23px,4vw,30px);
-  font-weight:800;
-  line-height:1.25;
-  letter-spacing:-.5px
+.zk-hero h1 {
+  margin: 0;
+  font-size: clamp(22px, 4vw, 27px);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -.4px;
 }
 
-.zk-hero p{
-  position:relative;
-  z-index:1;
-  max-width:500px;
-  margin:10px 0 0;
-  color:#E3F4E9;
-  font-size:13px;
-  line-height:1.65
+.zk-hero p {
+  margin: 8px 0 0;
+  color: #E3F4E9;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
-.zk-hero-pills{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-  margin-top:14px
+.zk-hero-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
 }
 
-.zk-pill{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  padding:7px 11px;
-  color:#fff;
-  background:rgba(255,255,255,.12);
-  border:1px solid rgba(255,255,255,.2);
-  border-radius:999px;
-  font-size:11px;
-  font-weight:700
+.zk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  color: #fff;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
 }
 
-.zk-card{
-  padding:22px;
-  margin-bottom:18px;
-  background:#fff;
-  border:1px solid #E2EAE4;
-  border-radius:17px;
-  box-shadow:0 4px 18px rgba(23,32,51,.025)
+/* Small current account status card */
+
+.zk-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 15px;
+  margin-bottom: 15px;
+  background: #EAF5EE;
+  border: 1px solid #CDE5D5;
+  border-radius: 12px;
 }
 
-.zk-card-heading{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  margin-bottom:16px
+.zk-current-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
-.zk-number{
-  display:grid;
-  flex:0 0 38px;
-  width:38px;
-  height:38px;
-  place-items:center;
-  color:#176B45;
-  background:#E7F4EC;
-  border:1px solid #D2E9DA;
-  border-radius:12px;
-  font-size:15px;
-  font-weight:800
+.zk-current-icon {
+  display: grid;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  color: #fff;
+  background: ${GREEN};
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 800;
 }
 
-.zk-card h2{
-  margin:0;
-  color:#172033;
-  font-size:clamp(18px,3vw,22px);
-  font-weight:800;
-  line-height:1.3
+.zk-current-title {
+  color: #28553D;
+  font-size: 11px;
+  font-weight: 700;
 }
 
-.zk-card-heading p{
-  margin:5px 0 0;
-  color:#667085;
-  font-size:13px;
-  line-height:1.6
+.zk-current-subtitle {
+  margin-top: 3px;
+  color: #667568;
+  font-size: 10px;
 }
 
-.zk-dojah-button{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  width:100%;
-  min-height:44px;
-  padding:11px 16px;
-  margin:12px 0;
-  color:#fff;
-  background:#176B45;
-  border:1px solid #176B45;
-  border-radius:11px;
-  font:inherit;
-  font-size:13px;
-  font-weight:750;
-  cursor:pointer
+.zk-current-badge {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  color: #176B45;
+  background: #fff;
+  border: 1px solid #CDE5D5;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
 }
 
-.zk-dojah-button:hover:not(:disabled){
-  background:#105536
+/* Cards */
+
+.zk-card {
+  padding: 18px;
+  margin-bottom: 15px;
+  background: #fff;
+  border: 1px solid #E2EAE4;
+  border-radius: 15px;
+  box-shadow: 0 3px 12px rgba(23,32,51,.025);
 }
 
-.zk-dojah-button:disabled{
-  opacity:.5;
-  cursor:not-allowed
+.zk-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 13px;
 }
 
-.zk-note{
-  padding:13px 15px;
-  margin-top:14px;
-  color:#475467;
-  background:#F0F7F2;
-  border:1px solid #D9EADF;
-  border-radius:12px;
-  font-size:12px;
-  line-height:1.7
+.zk-number {
+  display: grid;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: ${GREEN};
+  background: #E7F4EC;
+  border: 1px solid #D2E9DA;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 800;
 }
 
-@media(max-width:600px){
-  .zk-page{
-    padding:14px 11px 35px
+.zk-card h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.zk-card-heading p {
+  margin: 4px 0 0;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Verification status badges */
+
+.zk-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  margin: 3px 0 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.zk-status.verified {
+  color: #176B45;
+  background: #E8F5ED;
+}
+
+.zk-status.pending {
+  color: #946200;
+  background: #FFF5D9;
+}
+
+.zk-status.rejected {
+  color: #B42318;
+  background: #FEECEB;
+}
+
+.zk-status.not-submitted {
+  color: #667085;
+  background: #F0F2F4;
+}
+
+/* Small limits panel */
+
+.zk-tier-limits {
+  padding: 12px 13px;
+  margin: 10px 0 15px;
+  background: #F7FAF8;
+  border: 1px solid #E1EAE3;
+  border-radius: 11px;
+}
+
+.zk-tier-limits h3 {
+  margin: 0 0 9px;
+  color: ${GREEN};
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.zk-tier-limit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid #E8EEE9;
+  font-size: 11px;
+}
+
+.zk-tier-limit-row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.zk-tier-limit-row span {
+  color: #667085;
+}
+
+.zk-tier-limit-row strong {
+  color: #172033;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* Forms */
+
+.zk-label {
+  display: block;
+  margin: 13px 0 6px;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.zk-input,
+.zk-select {
+  display: block;
+  width: 100%;
+  min-height: 43px;
+  padding: 10px 12px;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #D0D5DD;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.zk-input:focus,
+.zk-select:focus {
+  outline: 2px solid rgba(23,107,69,.15);
+  border-color: ${GREEN};
+}
+
+.zk-input:disabled,
+.zk-select:disabled {
+  background: #F2F4F5;
+  cursor: not-allowed;
+  opacity: .65;
+}
+
+.zk-help {
+  margin: 7px 0 10px;
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.zk-button,
+.zk-dojah-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 43px;
+  padding: 11px 15px;
+  margin-top: 14px;
+  color: #fff;
+  background: ${GREEN};
+  border: 1px solid ${GREEN};
+  border-radius: 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+
+.zk-button:hover:not(:disabled),
+.zk-dojah-button:hover:not(:disabled) {
+  background: ${DARK_GREEN};
+}
+
+.zk-button:disabled,
+.zk-dojah-button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+/* Informational messages */
+
+.zk-note {
+  padding: 12px 13px;
+  margin: 12px 0;
+  color: #475467;
+  background: #F0F7F2;
+  border: 1px solid #D9EADF;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.zk-alert {
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  color: #344054;
+  background: #F0F7F2;
+  border: 1px solid #D9EADF;
+  border-radius: 11px;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.zk-alert.error {
+  color: #912018;
+  background: #FEF3F2;
+  border-color: #FECDCA;
+}
+
+.zk-alert.success {
+  color: #176B45;
+  background: #ECFDF3;
+  border-color: #ABEFC6;
+}
+
+/* Tier 3 document choices */
+
+.zk-methods {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 9px 0 12px;
+}
+
+.zk-method {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  color: #344054;
+  background: #fff;
+  border: 1px solid #D0D5DD;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.zk-method strong {
+  color: #172033;
+  font-size: 12px;
+}
+
+.zk-method span {
+  color: #667085;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.zk-method.selected {
+  background: #F0F7F2;
+  border: 1px solid ${GREEN};
+}
+
+.zk-method:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.zk-footer {
+  padding: 12px 0;
+  color: #98A2B3;
+  text-align: center;
+  font-size: 10px;
+}
+
+@media (min-width: 540px) {
+  .zk-methods {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .zk-page {
+    padding: 12px 10px 28px;
   }
 
-  .zk-hero{
-    padding:20px 18px;
-    margin-bottom:15px;
-    border-radius:14px
+  .zk-hero {
+    padding: 18px 16px;
+    margin-bottom: 12px;
+    border-radius: 13px;
   }
 
-  .zk-hero h1{
-    font-size:25px
+  .zk-hero h1 {
+    font-size: 23px;
   }
 
-  .zk-card{
-    padding:18px 15px;
-    margin-bottom:15px;
-    border-radius:15px
+  .zk-card {
+    padding: 15px 13px;
+    margin-bottom: 12px;
+    border-radius: 13px;
   }
 
-  .zk-card h2{
-    font-size:19px
+  .zk-card h2 {
+    font-size: 17px;
   }
 
-  .zk-number{
-    flex-basis:35px;
-    width:35px;
-    height:35px;
-    border-radius:10px
+  .zk-current {
+    padding: 10px 11px;
+  }
+
+  .zk-current-badge {
+    font-size: 10px;
+    padding: 5px 8px;
   }
 }
 `;
@@ -328,8 +580,9 @@ const normalizeStatus = (
     .trim();
 
   if (
-    ['verified', 'approved', 'success', 'successful']
-      .includes(normalized)
+    ['verified', 'approved', 'success', 'successful'].includes(
+      normalized
+    )
   ) {
     return 'verified';
   }
@@ -378,14 +631,16 @@ const StatusBadge = ({
 const TierLimits = ({
   tier,
 }: {
-  tier: 0 | 1 | 2 | 3;
+  tier: 1 | 2 | 3;
 }) => (
   <div className="zk-tier-limits">
-    <h3>Limits unlocked at Tier {tier}</h3>
+    <h3>Tier {tier} account limits</h3>
+
     <div className="zk-tier-limit-row">
       <span>Maximum account balance</span>
       <strong>{money(TIER_LIMITS[tier].account)}</strong>
     </div>
+
     <div className="zk-tier-limit-row">
       <span>Daily transfer limit</span>
       <strong>{money(TIER_LIMITS[tier].daily)}</strong>
@@ -396,9 +651,8 @@ const TierLimits = ({
 const KYC: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-
   const [dojahLoading, setDojahLoading] = useState(false);
-  const [dojahReference, setDojahReference] = useState('');
+
   const [dojahScriptReady, setDojahScriptReady] = useState(
     typeof window !== 'undefined' &&
       typeof window.Connect === 'function'
@@ -409,20 +663,25 @@ const KYC: React.FC = () => {
     'error' | 'success' | 'info'
   >('info');
 
-  const [user, setUser] = useState<KycResponse['user']>({});
   const [kyc, setKyc] = useState<KycData>({});
 
   const [bvn, setBvn] = useState('');
-  const [documentType, setDocumentType] = useState('national_id');
+  const [documentType, setDocumentType] =
+    useState('national_id');
   const [documentNumber, setDocumentNumber] = useState('');
-  const [tier3Method, setTier3Method] = useState('bank_statement');
-  const [addressDocumentType, setAddressDocumentType] = useState('');
+  const [tier3Method, setTier3Method] =
+    useState('bank_statement');
+  const [addressDocumentType, setAddressDocumentType] =
+    useState('');
 
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
-  const [tier2Selfie, setTier2Selfie] = useState<File | null>(null);
-  const [tier3Selfie, setTier3Selfie] = useState<File | null>(null);
-  const [addressFile, setAddressFile] = useState<File | null>(null);
+  const [tier2Selfie, setTier2Selfie] =
+    useState<File | null>(null);
+  const [tier3Selfie, setTier3Selfie] =
+    useState<File | null>(null);
+  const [addressFile, setAddressFile] =
+    useState<File | null>(null);
 
   const frontRef = useRef<HTMLInputElement>(null);
   const backRef = useRef<HTMLInputElement>(null);
@@ -439,7 +698,7 @@ const KYC: React.FC = () => {
     Authorization: `Bearer ${token}`,
   });
 
-  // Load Dojah's official widget script.
+  // Load the official identity verification widget.
   useEffect(() => {
     if (typeof window.Connect === 'function') {
       setDojahScriptReady(true);
@@ -470,7 +729,9 @@ const KYC: React.FC = () => {
 
     const onError = () => {
       setDojahScriptReady(false);
-      setAlert('Unable to load the Dojah verification widget.');
+      setAlert(
+        'Unable to load secure verification. Please try again later.'
+      );
       setAlertType('error');
     };
 
@@ -511,7 +772,6 @@ const KYC: React.FC = () => {
       }
 
       const payload = result.data || result;
-      setUser(payload.user || {});
       setKyc(payload.kyc || {});
     } catch (error) {
       setAlert(
@@ -539,36 +799,15 @@ const KYC: React.FC = () => {
   );
 
   const tier3Status = normalizeStatus(
-    kyc.tier_3_verified === true ? true : kyc.tier_3_status
+    kyc.tier_3_verified === true
+      ? true
+      : kyc.tier_3_status
   );
-
-  const overallStatus = normalizeStatus(kyc.status);
 
   const approvedTier = Math.min(
     3,
     Math.max(0, Number(kyc.tier || 0))
   ) as 0 | 1 | 2 | 3;
-
-  const submittedTier = Number(kyc.submitted_tier || 0);
-
-  const accountLimit =
-    kyc.account_limit !== undefined
-      ? kyc.account_limit
-      : TIER_LIMITS[approvedTier].account;
-
-  const dailyLimit =
-    kyc.daily_transfer_limit !== undefined
-      ? kyc.daily_transfer_limit
-      : TIER_LIMITS[approvedTier].daily;
-
-  const dailyUsed = Number(kyc.daily_transfer_used || 0);
-
-  const dailyRemaining =
-    kyc.daily_transfer_remaining !== undefined
-      ? Number(kyc.daily_transfer_remaining)
-      : dailyLimit === null
-        ? null
-        : Math.max(0, Number(dailyLimit || 0) - dailyUsed);
 
   const missingFields =
     kyc.missing_profile_fields ||
@@ -576,7 +815,8 @@ const KYC: React.FC = () => {
     [];
 
   const canSubmitBvn =
-    bvnStatus !== 'pending' && bvnStatus !== 'verified';
+    bvnStatus !== 'pending' &&
+    bvnStatus !== 'verified';
 
   const canSubmitTier2 =
     bvnStatus === 'verified' &&
@@ -588,7 +828,8 @@ const KYC: React.FC = () => {
     tier3Status !== 'pending' &&
     tier3Status !== 'verified';
 
-  // Start a server-generated Dojah verification session.
+  // Start secure identity verification using a
+  // server-generated reference.
   const startDojahVerification = async () => {
     setAlert('');
 
@@ -604,7 +845,7 @@ const KYC: React.FC = () => {
       !DOJAH_WIDGET_ID
     ) {
       setAlert(
-        'Dojah is not configured. Please contact Zenimonies support.'
+        'Secure verification is not configured. Please contact Zenimonies support.'
       );
       setAlertType('error');
       return;
@@ -614,7 +855,7 @@ const KYC: React.FC = () => {
 
     if (!Connect) {
       setAlert(
-        'The Dojah widget is still loading. Please try again.'
+        'Secure verification is still loading. Please try again.'
       );
       setAlertType('error');
       return;
@@ -642,7 +883,7 @@ const KYC: React.FC = () => {
       if (!response.ok || result.success === false) {
         throw new Error(
           result.message ||
-            'Unable to start Dojah verification.'
+            'Unable to start secure verification.'
         );
       }
 
@@ -657,8 +898,6 @@ const KYC: React.FC = () => {
           'The server did not return a verification reference.'
         );
       }
-
-      setDojahReference(reference);
 
       const connect = new Connect({
         app_id: DOJAH_APP_ID,
@@ -709,7 +948,7 @@ const KYC: React.FC = () => {
 
             setAlert(
               confirmResult.message ||
-                'Dojah verification result received. Your account status will reflect the server-confirmed result.'
+                'Your verification result has been received. Your account status will reflect the server-confirmed result.'
             );
 
             setAlertType('success');
@@ -728,7 +967,7 @@ const KYC: React.FC = () => {
 
         onError: (_error: unknown) => {
           setAlert(
-            'Dojah verification could not be completed. Please try again.'
+            'Secure verification could not be completed. Please try again.'
           );
           setAlertType('error');
           setDojahLoading(false);
@@ -745,13 +984,14 @@ const KYC: React.FC = () => {
       setAlert(
         error instanceof Error
           ? error.message
-          : 'Unable to start Dojah verification.'
+          : 'Unable to start secure verification.'
       );
       setAlertType('error');
       setDojahLoading(false);
     }
   };
 
+  // Tier 1: BVN submission.
   const submitBvn = async (event: React.FormEvent) => {
     event.preventDefault();
     setAlert('');
@@ -785,7 +1025,9 @@ const KYC: React.FC = () => {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || 'BVN submission failed.');
+        throw new Error(
+          result.message || 'BVN submission failed.'
+        );
       }
 
       setAlert(
@@ -794,6 +1036,7 @@ const KYC: React.FC = () => {
       );
       setAlertType('success');
       setBvn('');
+
       await fetchStatus();
     } catch (error) {
       setAlert(
@@ -807,6 +1050,7 @@ const KYC: React.FC = () => {
     }
   };
 
+  // Tier 2: Manual identity document submission.
   const submitTier2 = async (event: React.FormEvent) => {
     event.preventDefault();
     setAlert('');
@@ -839,8 +1083,12 @@ const KYC: React.FC = () => {
     }
 
     const formData = new FormData();
+
     formData.append('document_type', documentType);
-    formData.append('document_number', documentNumber.trim());
+    formData.append(
+      'document_number',
+      documentNumber.trim()
+    );
     formData.append('document_front', frontFile);
 
     if (backFile) {
@@ -852,11 +1100,14 @@ const KYC: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE}/kyc/tier-2`, {
-        method: 'POST',
-        headers: requestHeaders(),
-        body: formData,
-      });
+      const response = await fetch(
+        `${API_BASE}/kyc/tier-2`,
+        {
+          method: 'POST',
+          headers: requestHeaders(),
+          body: formData,
+        }
+      );
 
       const result = await response.json();
 
@@ -896,24 +1147,31 @@ const KYC: React.FC = () => {
     }
   };
 
+  // Tier 3: Address verification.
   const submitTier3 = async (event: React.FormEvent) => {
     event.preventDefault();
     setAlert('');
 
     if (!addressDocumentType) {
-      setAlert('Please select the type of address document.');
+      setAlert(
+        'Please select the type of address document.'
+      );
       setAlertType('error');
       return;
     }
 
     if (!addressFile) {
-      setAlert('Please select your proof-of-address document.');
+      setAlert(
+        'Please select your proof-of-address document.'
+      );
       setAlertType('error');
       return;
     }
 
     if (addressFile.type !== 'application/pdf') {
-      setAlert('Please upload your proof of address as a PDF.');
+      setAlert(
+        'Please upload your proof of address as a PDF.'
+      );
       setAlertType('error');
       return;
     }
@@ -925,6 +1183,7 @@ const KYC: React.FC = () => {
     }
 
     const formData = new FormData();
+
     formData.append('tier_3_method', tier3Method);
     formData.append('tier_3_document', addressFile);
     formData.append('tier_3_selfie', tier3Selfie);
@@ -932,11 +1191,14 @@ const KYC: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${API_BASE}/kyc/tier-3`, {
-        method: 'POST',
-        headers: requestHeaders(),
-        body: formData,
-      });
+      const response = await fetch(
+        `${API_BASE}/kyc/tier-3`,
+        {
+          method: 'POST',
+          headers: requestHeaders(),
+          body: formData,
+        }
+      );
 
       const result = await response.json();
 
@@ -955,7 +1217,10 @@ const KYC: React.FC = () => {
       setAddressFile(null);
       setTier3Selfie(null);
 
-      if (addressRef.current) addressRef.current.value = '';
+      if (addressRef.current) {
+        addressRef.current.value = '';
+      }
+
       if (tier3SelfieRef.current) {
         tier3SelfieRef.current.value = '';
       }
@@ -973,39 +1238,65 @@ const KYC: React.FC = () => {
     }
   };
 
-  const statusRow = (
-    title: string,
-    description: string,
-    status: KycStatus
-  ) => (
-    <div className="zk-status-row" key={title}>
-      <div>
-        <strong>{title}</strong>
-        <small>{description}</small>
-      </div>
-      <StatusBadge status={status} />
-    </div>
-  );
-
   return (
     <div className="zk-page">
       <style>{styles}</style>
 
       <main className="zk-container">
+        {/* ZENIMONIES HEADER */}
+
         <section className="zk-hero">
-          <div className="zk-brand">ZENIMONIES BANKING</div>
+          <div className="zk-brand">
+            ZENIMONIES BANKING
+          </div>
+
           <h1>Identity Verification</h1>
+
           <p>
-            Verify your identity securely to access the account
-            features and transfer limits available to you.
+            Verify your identity securely to unlock additional
+            account features and transfer limits.
           </p>
+
           <div className="zk-hero-pills">
-            <span className="zk-pill">🔒 Secure verification</span>
             <span className="zk-pill">
-              Tier {approvedTier} approved
+              🔒 Secure verification
+            </span>
+
+            <span className="zk-pill">
+              Account security
             </span>
           </div>
         </section>
+
+        {/* SMALL GREEN STATUS CARD */}
+
+        {!loading && (
+          <section className="zk-current">
+            <div className="zk-current-left">
+              <div className="zk-current-icon">
+                ✓
+              </div>
+
+              <div>
+                <div className="zk-current-title">
+                  Account verification
+                </div>
+
+                <div className="zk-current-subtitle">
+                  Your current approved verification level
+                </div>
+              </div>
+            </div>
+
+            <div className="zk-current-badge">
+              {approvedTier === 0
+                ? 'Unverified'
+                : `Tier ${approvedTier}`}
+            </div>
+          </section>
+        )}
+
+        {/* ALERTS */}
 
         {alert && (
           <div
@@ -1028,111 +1319,39 @@ const KYC: React.FC = () => {
           </section>
         ) : (
           <>
-            <section className="zk-card">
-              <div className="zk-card-heading">
-                <div className="zk-number">✓</div>
-                <div>
-                  <h2>Current Verification</h2>
-                  <p>
-                    Your approved KYC level and account limits.
-                  </p>
-                </div>
-              </div>
-
-              <StatusBadge status={overallStatus} />
-
-              <div className="zk-grid">
-                <div className="zk-stat">
-                  <div className="zk-stat-label">Approved tier</div>
-                  <div className="zk-stat-value">
-                    {approvedTier}
-                  </div>
-                  <div className="zk-stat-sub">
-                    Submitted: Tier {submittedTier}
-                  </div>
-                </div>
-
-                <div className="zk-stat">
-                  <div className="zk-stat-label">Account limit</div>
-                  <div className="zk-stat-value">
-                    {money(accountLimit)}
-                  </div>
-                </div>
-
-                <div className="zk-stat">
-                  <div className="zk-stat-label">
-                    Daily transfer limit
-                  </div>
-                  <div className="zk-stat-value">
-                    {money(dailyLimit)}
-                  </div>
-                </div>
-
-                <div className="zk-stat">
-                  <div className="zk-stat-label">
-                    Daily transfers used
-                  </div>
-                  <div className="zk-stat-value">
-                    {money(dailyUsed)}
-                  </div>
-                </div>
-
-                <div className="zk-stat" style={{ gridColumn: '1 / -1' }}>
-                  <div className="zk-stat-label">
-                    Daily transfer remaining
-                  </div>
-                  <div className="zk-stat-value">
-                    {dailyRemaining === null
-                      ? 'Unlimited'
-                      : money(dailyRemaining)}
-                  </div>
-
-                  {dailyLimit !== null &&
-                    Number(dailyLimit) > 0 && (
-                      <div className="zk-progress">
-                        <div
-                          style={{
-                            width: `${Math.min(
-                              100,
-                              Math.max(
-                                0,
-                                (dailyUsed / Number(dailyLimit)) * 100
-                              )
-                            )}%`,
-                          }}
-                        />
-                      </div>
-                    )}
-                </div>
-              </div>
-
-              <TierLimits tier={0} />
-              <TierLimits tier={1} />
-              <TierLimits tier={2} />
-              <TierLimits tier={3} />
-            </section>
+            {/* MISSING PROFILE INFORMATION */}
 
             {missingFields.length > 0 && (
               <div className="zk-alert">
-                <strong>Complete your personal information</strong>
+                <strong>
+                  Complete your personal information
+                </strong>
+
                 <br />
-                Before submitting your BVN, update these missing
-                profile details:
+
+                Before submitting your BVN, update these
+                missing profile details:
+
                 <br />
+
                 {missingFields.join(', ')}
+
                 <br />
+
                 Open your profile and complete the missing
                 information before continuing.
               </div>
             )}
 
-            {/* TIER 1 */}
+            {/* TIER 1: BVN */}
 
             <section className="zk-card">
               <div className="zk-card-heading">
                 <div className="zk-number">1</div>
+
                 <div>
                   <h2>BVN Verification</h2>
+
                   <p>
                     Verify your Nigerian Bank Verification Number.
                   </p>
@@ -1140,6 +1359,7 @@ const KYC: React.FC = () => {
               </div>
 
               <StatusBadge status={bvnStatus} />
+
               <TierLimits tier={1} />
 
               {bvnStatus === 'rejected' &&
@@ -1151,9 +1371,13 @@ const KYC: React.FC = () => {
                 )}
 
               <form onSubmit={submitBvn}>
-                <label className="zk-label" htmlFor="zk-bvn">
+                <label
+                  className="zk-label"
+                  htmlFor="zk-bvn"
+                >
                   11-digit BVN
                 </label>
+
                 <input
                   id="zk-bvn"
                   className="zk-input"
@@ -1165,16 +1389,20 @@ const KYC: React.FC = () => {
                   value={bvn}
                   onChange={(event) =>
                     setBvn(
-                      event.target.value.replace(/\D/g, '').slice(0, 11)
+                      event.target.value
+                        .replace(/\D/g, '')
+                        .slice(0, 11)
                     )
                   }
-                  disabled={!canSubmitBvn || submitting}
+                  disabled={
+                    !canSubmitBvn || submitting
+                  }
                 />
 
                 <p className="zk-help">
-                  Your BVN is submitted securely for verification.
-                  It remains pending until the provider confirms
-                  the result.
+                  Your BVN is submitted securely for
+                  verification. It remains pending until
+                  the verification result is confirmed.
                 </p>
 
                 <button
@@ -1197,13 +1425,15 @@ const KYC: React.FC = () => {
               </form>
             </section>
 
-            {/* TIER 2 */}
+            {/* TIER 2: IDENTITY VERIFICATION */}
 
             <section className="zk-card">
               <div className="zk-card-heading">
                 <div className="zk-number">2</div>
+
                 <div>
                   <h2>Identity Verification</h2>
+
                   <p>
                     Government-issued ID and facial verification.
                   </p>
@@ -1211,6 +1441,7 @@ const KYC: React.FC = () => {
               </div>
 
               <StatusBadge status={idStatus} />
+
               <TierLimits tier={2} />
 
               {idStatus === 'rejected' &&
@@ -1223,38 +1454,54 @@ const KYC: React.FC = () => {
 
               {bvnStatus !== 'verified' && (
                 <div className="zk-note">
-                  Complete Tier 1 verification before submitting
-                  your identity documents.
+                  Complete Tier 1 verification before
+                  submitting your identity documents.
                 </div>
               )}
 
-              
-{/* ZENIMONIES SECURE IDENTITY VERIFICATION */}
+              {/* SECURE IDENTITY VERIFICATION */}
 
-<div className="zk-note">
-  <strong>Secure identity verification</strong>
-  <br />
-  Verify your identity and complete facial verification securely to upgrade your account.
-</div>
+              <div className="zk-note">
+                <strong>
+                  Secure identity verification
+                </strong>
 
-<button
-  type="button"
-  className="zk-dojah-button"
-  onClick={startDojahVerification}
-  disabled={
-    !canSubmitTier2 ||
-    submitting ||
-    dojahLoading ||
-    !dojahScriptReady
-  }
->
-  {dojahLoading
-    ? 'Starting secure verification...'
-    : !dojahScriptReady
-      ? 'Loading secure verification...'
-      : 'Verify my identity'}
-</button>
+                <br />
 
+                Verify your identity and complete facial
+                verification securely to upgrade your account.
+              </div>
+
+              <button
+                type="button"
+                className="zk-dojah-button"
+                onClick={startDojahVerification}
+                disabled={
+                  !canSubmitTier2 ||
+                  submitting ||
+                  dojahLoading ||
+                  !dojahScriptReady
+                }
+              >
+                {dojahLoading
+                  ? 'Starting secure verification...'
+                  : !dojahScriptReady
+                    ? 'Loading secure verification...'
+                    : 'Verify my identity'}
+              </button>
+
+              {/* ALTERNATIVE: MANUAL ID DOCUMENT UPLOAD */}
+
+              <div className="zk-note">
+                <strong>
+                  Alternative verification method
+                </strong>
+
+                <br />
+
+                You can also submit your government-issued
+                ID documents and selfie using the form below.
+              </div>
 
               <form onSubmit={submitTier2}>
                 <label
@@ -1271,17 +1518,29 @@ const KYC: React.FC = () => {
                   onChange={(event) =>
                     setDocumentType(event.target.value)
                   }
-                  disabled={!canSubmitTier2 || submitting}
+                  disabled={
+                    !canSubmitTier2 || submitting
+                  }
                 >
-                  <option value="national_id">National ID</option>
-                  <option value="nin">NIN slip</option>
+                  <option value="national_id">
+                    National ID
+                  </option>
+
+                  <option value="nin">
+                    NIN slip
+                  </option>
+
                   <option value="drivers_license">
                     Driver's licence
                   </option>
+
                   <option value="international_passport">
                     International passport
                   </option>
-                  <option value="voters_card">Voter's card</option>
+
+                  <option value="voters_card">
+                    Voter's card
+                  </option>
                 </select>
 
                 <label
@@ -1301,10 +1560,15 @@ const KYC: React.FC = () => {
                   onChange={(event) =>
                     setDocumentNumber(event.target.value)
                   }
-                  disabled={!canSubmitTier2 || submitting}
+                  disabled={
+                    !canSubmitTier2 || submitting
+                  }
                 />
 
-                <label className="zk-label" htmlFor="zk-front">
+                <label
+                  className="zk-label"
+                  htmlFor="zk-front"
+                >
                   Front of ID document *
                 </label>
 
@@ -1315,20 +1579,29 @@ const KYC: React.FC = () => {
                   type="file"
                   accept="image/jpeg,image/png,image/webp,application/pdf"
                   onChange={(event) =>
-                    setFrontFile(event.target.files?.[0] || null)
+                    setFrontFile(
+                      event.target.files?.[0] || null
+                    )
                   }
-                  disabled={!canSubmitTier2 || submitting}
+                  disabled={
+                    !canSubmitTier2 || submitting
+                  }
                 />
 
                 <p className="zk-help">
                   Upload a clear image or PDF of your ID.
                 </p>
 
-                {documentType !== 'international_passport' && (
+                {documentType !==
+                  'international_passport' && (
                   <>
-                    <label className="zk-label" htmlFor="zk-back">
+                    <label
+                      className="zk-label"
+                      htmlFor="zk-back"
+                    >
                       Back of ID document *
                     </label>
+
                     <input
                       ref={backRef}
                       id="zk-back"
@@ -1336,14 +1609,21 @@ const KYC: React.FC = () => {
                       type="file"
                       accept="image/jpeg,image/png,image/webp,application/pdf"
                       onChange={(event) =>
-                        setBackFile(event.target.files?.[0] || null)
+                        setBackFile(
+                          event.target.files?.[0] || null
+                        )
                       }
-                      disabled={!canSubmitTier2 || submitting}
+                      disabled={
+                        !canSubmitTier2 || submitting
+                      }
                     />
                   </>
                 )}
 
-                <label className="zk-label" htmlFor="zk-selfie">
+                <label
+                  className="zk-label"
+                  htmlFor="zk-selfie"
+                >
                   Facial verification selfie *
                 </label>
 
@@ -1354,9 +1634,13 @@ const KYC: React.FC = () => {
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   onChange={(event) =>
-                    setTier2Selfie(event.target.files?.[0] || null)
+                    setTier2Selfie(
+                      event.target.files?.[0] || null
+                    )
                   }
-                  disabled={!canSubmitTier2 || submitting}
+                  disabled={
+                    !canSubmitTier2 || submitting
+                  }
                 />
 
                 <p className="zk-help">
@@ -1368,13 +1652,15 @@ const KYC: React.FC = () => {
                   A selfie upload alone does not prove liveness.
                   Genuine live facial verification must be
                   confirmed through the integrated verification
-                  provider before approval.
+                  process before approval.
                 </div>
 
                 <button
                   className="zk-button"
                   type="submit"
-                  disabled={!canSubmitTier2 || submitting}
+                  disabled={
+                    !canSubmitTier2 || submitting
+                  }
                 >
                   {submitting
                     ? 'Submitting...'
@@ -1387,21 +1673,23 @@ const KYC: React.FC = () => {
               </form>
             </section>
 
-            {/* TIER 3 */}
+            {/* TIER 3: ADDRESS VERIFICATION */}
 
             <section className="zk-card">
               <div className="zk-card-heading">
                 <div className="zk-number">3</div>
+
                 <div>
                   <h2>Address Verification</h2>
+
                   <p>
-                    Submit proof of your Nigerian residential
-                    address.
+                    Submit proof of your residential address.
                   </p>
                 </div>
               </div>
 
               <StatusBadge status={tier3Status} />
+
               <TierLimits tier={3} />
 
               {tier3Status === 'rejected' &&
@@ -1414,8 +1702,8 @@ const KYC: React.FC = () => {
 
               {idStatus !== 'verified' && (
                 <div className="zk-note">
-                  Complete and verify Tier 2 before submitting
-                  Tier 3.
+                  Complete and verify Tier 2 before
+                  submitting Tier 3.
                 </div>
               )}
 
@@ -1457,9 +1745,12 @@ const KYC: React.FC = () => {
                         setTier3Method(method.value);
                         setAddressDocumentType('');
                       }}
-                      disabled={!canSubmitTier3 || submitting}
+                      disabled={
+                        !canSubmitTier3 || submitting
+                      }
                     >
                       <strong>{method.title}</strong>
+
                       <span>{method.description}</span>
                     </button>
                   ))}
@@ -1477,11 +1768,17 @@ const KYC: React.FC = () => {
                   className="zk-select"
                   value={addressDocumentType}
                   onChange={(event) =>
-                    setAddressDocumentType(event.target.value)
+                    setAddressDocumentType(
+                      event.target.value
+                    )
                   }
-                  disabled={!canSubmitTier3 || submitting}
+                  disabled={
+                    !canSubmitTier3 || submitting
+                  }
                 >
-                  <option value="">Select document type</option>
+                  <option value="">
+                    Select document type
+                  </option>
 
                   {tier3Method === 'bank_statement' && (
                     <option value="bank_statement">
@@ -1494,10 +1791,15 @@ const KYC: React.FC = () => {
                       <option value="electricity_bill">
                         Electricity bill
                       </option>
-                      <option value="water_bill">Water bill</option>
+
+                      <option value="water_bill">
+                        Water bill
+                      </option>
+
                       <option value="waste_bill">
                         Waste management bill
                       </option>
+
                       <option value="internet_bill">
                         Fixed-line or internet bill
                       </option>
@@ -1509,12 +1811,15 @@ const KYC: React.FC = () => {
                       <option value="tenancy_agreement">
                         Tenancy or rent agreement
                       </option>
+
                       <option value="property_tax">
                         Property tax or assessment document
                       </option>
+
                       <option value="government_letter">
                         Government-issued address letter
                       </option>
+
                       <option value="other_official">
                         Other official proof of address
                       </option>
@@ -1541,9 +1846,13 @@ const KYC: React.FC = () => {
                   type="file"
                   accept="application/pdf,.pdf"
                   onChange={(event) =>
-                    setAddressFile(event.target.files?.[0] || null)
+                    setAddressFile(
+                      event.target.files?.[0] || null
+                    )
                   }
-                  disabled={!canSubmitTier3 || submitting}
+                  disabled={
+                    !canSubmitTier3 || submitting
+                  }
                 />
 
                 <p className="zk-help">
@@ -1564,30 +1873,28 @@ const KYC: React.FC = () => {
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   onChange={(event) =>
-                    setTier3Selfie(event.target.files?.[0] || null)
+                    setTier3Selfie(
+                      event.target.files?.[0] || null
+                    )
                   }
-                  disabled={!canSubmitTier3 || submitting}
+                  disabled={
+                    !canSubmitTier3 || submitting
+                  }
                 />
 
                 <div className="zk-note">
-                  A static selfie upload is not a genuine liveness
-                  check. Live facial verification must be completed
-                  through an integrated verification process
-                  before approval.
-                </div>
-
-                <div className="zk-note">
-                  The existing backend receives the verification
-                  method and uploaded PDF. The selected document
-                  subtype is not sent to the current endpoint.
-                  Backend changes are required before it can be
-                  used for automated checks.
+                  A static selfie upload is not a genuine
+                  liveness check. Live facial verification
+                  must be completed through an integrated
+                  verification process before approval.
                 </div>
 
                 <button
                   className="zk-button"
                   type="submit"
-                  disabled={!canSubmitTier3 || submitting}
+                  disabled={
+                    !canSubmitTier3 || submitting
+                  }
                 >
                   {submitting
                     ? 'Submitting...'
@@ -1598,38 +1905,6 @@ const KYC: React.FC = () => {
                         : 'Submit Proof of Address'}
                 </button>
               </form>
-            </section>
-
-            {/* VERIFICATION SUMMARY */}
-
-            <section className="zk-card">
-              <div className="zk-card-heading">
-                <div className="zk-number">✓</div>
-                <div>
-                  <h2>Verification Status</h2>
-                  <p>
-                    Your identity verification progress.
-                  </p>
-                </div>
-              </div>
-
-              {statusRow(
-                'Tier 1 — BVN',
-                'Bank Verification Number',
-                bvnStatus
-              )}
-
-              {statusRow(
-                'Tier 2 — Identity',
-                'Government-issued ID and facial checks',
-                idStatus
-              )}
-
-              {statusRow(
-                'Tier 3 — Address',
-                'Proof of Nigerian residential address',
-                tier3Status
-              )}
             </section>
           </>
         )}
