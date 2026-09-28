@@ -1228,37 +1228,33 @@ const KYC: React.FC = () => {
                 </div>
               )}
 
-              {/* DOJAH LIVE VERIFICATION */}
+              
+{/* ZENIMONIES SECURE IDENTITY VERIFICATION */}
 
-              <div className="zk-note">
-                <strong>Dojah secure verification</strong>
-                <br />
-                Complete the identity and facial verification
-                process using the secure Dojah widget.
-              </div>
+<div className="zk-note">
+  <strong>Secure identity verification</strong>
+  <br />
+  Verify your identity and complete facial verification securely to upgrade your account.
+</div>
 
-              <button
-                type="button"
-                className="zk-dojah-button"
-                onClick={startDojahVerification}
-                disabled={
-                  !canSubmitTier2 ||
-                  submitting ||
-                  dojahLoading ||
-                  !dojahScriptReady
-                }
-              >
-                {dojahLoading
-                  ? 'Connecting to Dojah...'
-                  : !dojahScriptReady
-                    ? 'Loading secure verification...'
-                    : 'Start Dojah Facial Verification'}
-              </button>
+<button
+  type="button"
+  className="zk-dojah-button"
+  onClick={startDojahVerification}
+  disabled={
+    !canSubmitTier2 ||
+    submitting ||
+    dojahLoading ||
+    !dojahScriptReady
+  }
+>
+  {dojahLoading
+    ? 'Starting secure verification...'
+    : !dojahScriptReady
+      ? 'Loading secure verification...'
+      : 'Verify my identity'}
+</button>
 
-              {dojahReference && (
-                <p className="zk-help">
-                  Verification reference: {dojahReference}
-                </p>
               )}
 
               <form onSubmit={submitTier2}>
