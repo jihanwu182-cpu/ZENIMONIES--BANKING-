@@ -1840,7 +1840,323 @@ const submitTier3 = async (req, res) => {
     client.release();
   }
 };
+// ============================================================
+// DOJAH WIDGET SESSION
+// START VERIFICATION
+//
+// POST /api/kyc/dojah/start
+//
+// The reference is generated on the backend.
+// The frontend must never choose another user's reference.
+// ============================================================
 
+const startDojahVerification = async (req, res) => {
+  const userId =
+    req.user?.id ||
+    req.userId ||
+    req.user?.userId;
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const userResult = await client.query(
+      `
+      SELECT id, id_verified
+      FROM users
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [userId]
+    );
+
+    if (!userResult.rows.length) {
+      await client.query('ROLLBACK');
+
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.',
+      });
+    }
+
+    if (userResult.rows[0].id_verified === true) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        message: 'Your identity is already verified.',
+      });
+    }
+
+    const existing = await client.query(
+      `
+      SELECT id, id_verification_status
+      FROM kyc_records
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [userId]
+    );
+
+    const record = existing.rows[0];
+
+    if (
+      record &&
+      normalizeKycStatus(
+        record.id_verification_status
+      ) === 'verified'
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        message: 'Your identity is already verified.',
+      });
+    }
+
+    if (
+      record &&
+      normalizeKycStatus(
+        record.id_verification_status
+      ) === 'pending'
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        message:
+          'An identity verification is already pending.',
+      });
+    }
+
+    const referenceId =
+      `zen_${crypto.randomUUID()}`;
+
+    let kycRecordId;
+
+    if (record) {
+      kycRecordId = record.id;
+
+      await client.query(
+        `
+        UPDATE kyc_records
+        SET
+          dojah_reference = $1,
+          dojah_verification_type = 'identity',
+          dojah_started_at = CURRENT_TIMESTAMP,
+          dojah_checked_at = NULL,
+          id_verification_status = 'pending',
+          liveness_status = 'pending',
+          id_rejection_reason = NULL,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        `,
+        [referenceId, kycRecordId]
+      );
+    } else {
+      const inserted = await client.query(
+        `
+        INSERT INTO kyc_records (
+          user_id,
+          dojah_reference,
+          dojah_verification_type,
+          dojah_started_at,
+          id_verification_status,
+          liveness_status,
+          bvn_verification_status,
+          tier_3_verification_status,
+          verification_status
+        )
+        VALUES (
+          $1, $2, 'identity',
+          CURRENT_TIMESTAMP,
+          'pending', 'pending',
+          'not_verified', 'not_verified',
+          'pending'
+        )
+        RETURNING id
+        `,
+        [userId, referenceId]
+      );
+
+      kycRecordId = inserted.rows[0].id;
+    }
+
+    await client.query(
+      `
+      UPDATE users
+      SET
+        kyc_status = 'pending',
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      `,
+      [userId]
+    );
+
+    await client.query(
+      `
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description
+      )
+      VALUES ($1, $2, $3)
+      `,
+      [
+        userId,
+        'dojah_verification_started',
+        'A Dojah identity verification session was initiated.',
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      success: true,
+      reference_id: referenceId,
+      kyc_record_id: kycRecordId,
+      status: 'pending',
+      message:
+        'Verification session created. Continue with the Dojah widget.',
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
+    console.error(
+      'Start Dojah verification failed:',
+      error.message
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Unable to start identity verification.',
+    });
+  } finally {
+    client.release();
+  }
+};
+
+// ============================================================
+// DOJAH WIDGET VERIFICATION
+// CONFIRM / FETCH PROVIDER RESULT
+//
+// POST /api/kyc/dojah/confirm
+//
+// The server uses the logged-in user's stored reference.
+// It does not trust a reference supplied by the browser.
+// ============================================================
+
+const confirmDojahVerification = async (req, res) => {
+  const userId =
+    req.user?.id ||
+    req.userId ||
+    req.user?.userId;
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        dojah_reference,
+        dojah_verification_type,
+        id_verification_status,
+        liveness_status
+      FROM kyc_records
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    const record = result.rows[0];
+
+    if (
+      !record ||
+      !record.dojah_reference ||
+      record.dojah_verification_type !== 'identity'
+    ) {
+      return res.status(404).json({
+        success: false,
+        message:
+          'No active Dojah verification session was found.',
+      });
+    }
+
+    const dojahResult =
+      await getDojahVerification(
+        record.dojah_reference
+      );
+
+    if (!dojahResult.success) {
+      return res.status(502).json({
+        success: false,
+        status: 'pending',
+        message:
+          'We could not retrieve the verification result from Dojah. Please try again.',
+      });
+    }
+
+    // Record that a server-side provider check was made.
+    await pool.query(
+      `
+      UPDATE kyc_records
+      SET dojah_checked_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND user_id = $2
+      `,
+      [record.id, userId]
+    );
+
+    // Do not expose the full Dojah response because it may
+    // contain identity information or other sensitive data.
+    //
+    // Do not mark the customer verified from the widget
+    // callback or an unvalidated provider response.
+    //
+    // The exact approved response fields must be mapped
+    // before we update verified flags or account limits.
+
+    return res.status(200).json({
+      success: true,
+      status: 'pending',
+      verified: false,
+      message:
+        'Dojah verification result retrieved. Verification remains pending until the provider result is validated.',
+    });
+  } catch (error) {
+    console.error(
+      'Confirm Dojah verification failed:',
+      error.message
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Unable to confirm Dojah verification.',
+    });
+  }
+};
 // ============================================================
 // EXPORTS
 // ============================================================
