@@ -928,7 +928,26 @@ ALTER TABLE kyc_records
 ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
 NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
+-- ============================================================
+-- DOJAH KYC SESSION REFERENCES
+-- ============================================================
 
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS dojah_reference VARCHAR(150);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS dojah_verification_type VARCHAR(30);
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS dojah_started_at TIMESTAMP;
+
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS dojah_checked_at TIMESTAMP;
+
+CREATE UNIQUE INDEX IF NOT EXISTS
+idx_kyc_dojah_reference_unique
+ON kyc_records (dojah_reference)
+WHERE dojah_reference IS NOT NULL;
 -- ============================================================
 -- ACCOUNT COMPATIBILITY
 -- ============================================================
