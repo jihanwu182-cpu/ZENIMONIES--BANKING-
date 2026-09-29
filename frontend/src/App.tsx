@@ -608,8 +608,9 @@ const App: React.FC = () => {
          />
 
           <Route
-            path="/other-bills"
+            path="/bills/other"
             element={<OtherBills />}
+         />
          />
 
           <Route
