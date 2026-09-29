@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 type Service = {
   id: string;
@@ -8,68 +9,74 @@ type Service = {
   icon: string;
 };
 
+const SERVICES: Service[] = [
+  {
+    id: 'gift-cards',
+    name: 'Gift Cards',
+    description: 'Buy and sell digital gift cards',
+    icon: '🎁',
+  },
+  {
+    id: 'online-shopping',
+    name: 'Online Shopping',
+    description: 'Shop and pay online',
+    icon: '🛍️',
+  },
+  {
+    id: 'government',
+    name: 'Government Payments',
+    description: 'Government fees and payments',
+    icon: '🏛️',
+  },
+  {
+    id: 'transport',
+    name: 'Transport',
+    description: 'Transport tickets and fares',
+    icon: '🚌',
+  },
+  {
+    id: 'travel',
+    name: 'Travel',
+    description: 'Travel and flight bookings',
+    icon: '✈️',
+  },
+  {
+    id: 'aid-donations',
+    name: 'Aid, Grants & Donations',
+    description: 'Donations and eligible aid services',
+    icon: '❤️',
+  },
+  {
+    id: 'solar',
+    name: 'Solar',
+    description: 'Solar equipment and energy services',
+    icon: '☀️',
+  },
+  {
+    id: 'education',
+    name: 'Education',
+    description: 'Educational payments and services',
+    icon: '🎓',
+  },
+  {
+    id: 'insurance',
+    name: 'Insurance',
+    description: 'Insurance products and payments',
+    icon: '🛡️',
+  },
+];
+
 const OtherBills: React.FC = () => {
+  const navigate = useNavigate();
   const [selectedService, setSelectedService] =
     useState<Service | null>(null);
 
-  const services: Service[] = [
-    {
-      id: 'gift-cards',
-      name: 'Gift Cards',
-      description: 'Buy and sell digital gift cards',
-      icon: '🎁',
-    },
-    {
-      id: 'online-shopping',
-      name: 'Online Shopping',
-      description: 'Shop and pay online',
-      icon: '🛍️',
-    },
-    {
-      id: 'government',
-      name: 'Government Payments',
-      description: 'Government fees and payments',
-      icon: '🏛️',
-    },
-    {
-      id: 'transport',
-      name: 'Transport',
-      description: 'Transport tickets and fares',
-      icon: '🚌',
-    },
-    {
-      id: 'travel',
-      name: 'Travel',
-      description: 'Travel and flight bookings',
-      icon: '✈️',
-    },
-    {
-      id: 'aid-donations',
-      name: 'Aid, Grants & Donations',
-      description: 'Donations and eligible aid services',
-      icon: '❤️',
-    },
-    {
-      id: 'solar',
-      name: 'Solar',
-      description: 'Solar equipment and energy services',
-      icon: '☀️',
-    },
-    {
-      id: 'education',
-      name: 'Education',
-      description: 'Educational payments and services',
-      icon: '🎓',
-    },
-    {
-      id: 'insurance',
-      name: 'Insurance',
-      description: 'Insurance products and payments',
-      icon: '🛡️',
-    },
-  ];
-
   const handleServiceClick = (service: Service) => {
+    if (service.id === 'gift-cards') {
+      navigate('/gift-cards');
+      return;
+    }
+
     setSelectedService(service);
   };
 
@@ -90,7 +97,6 @@ const OtherBills: React.FC = () => {
           margin: '0 auto',
         }}
       >
-        {/* Header */}
         <div
           style={{
             display: 'flex',
@@ -101,7 +107,7 @@ const OtherBills: React.FC = () => {
         >
           <button
             type="button"
-            onClick={() => window.history.back()}
+            onClick={() => navigate(-1)}
             aria-label="Go back"
             style={{
               width: '42px',
@@ -142,7 +148,6 @@ const OtherBills: React.FC = () => {
           </div>
         </div>
 
-        {/* Small green banner */}
         <div
           style={{
             background:
@@ -169,9 +174,7 @@ const OtherBills: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            <span role="img" aria-label="Services">
-              💳
-            </span>
+            💳
           </div>
 
           <div>
@@ -198,7 +201,6 @@ const OtherBills: React.FC = () => {
           </div>
         </div>
 
-        {/* Section heading */}
         <div
           style={{
             display: 'flex',
@@ -228,11 +230,10 @@ const OtherBills: React.FC = () => {
               borderRadius: '20px',
             }}
           >
-            {services.length} Services
+            {SERVICES.length} Services
           </span>
         </div>
 
-        {/* Service cards */}
         <div
           style={{
             display: 'grid',
@@ -241,13 +242,11 @@ const OtherBills: React.FC = () => {
             gap: '13px',
           }}
         >
-          {services.map((service) => (
+          {SERVICES.map((service) => (
             <button
               key={service.id}
               type="button"
-              onClick={() =>
-                handleServiceClick(service)
-              }
+              onClick={() => handleServiceClick(service)}
               style={{
                 background: '#ffffff',
                 border: '1px solid #e4ece6',
@@ -261,7 +260,6 @@ const OtherBills: React.FC = () => {
                 cursor: 'pointer',
                 boxShadow:
                   '0 3px 12px rgba(20, 92, 57, 0.035)',
-                transition: 'transform 0.15s ease',
               }}
             >
               <div
@@ -277,9 +275,7 @@ const OtherBills: React.FC = () => {
                   marginBottom: '14px',
                 }}
               >
-                <span role="img" aria-label={service.name}>
-                  {service.icon}
-                </span>
+                {service.icon}
               </div>
 
               <div
@@ -318,7 +314,6 @@ const OtherBills: React.FC = () => {
           ))}
         </div>
 
-        {/* Selected service notice */}
         {selectedService && (
           <div
             role="status"
@@ -369,9 +364,7 @@ const OtherBills: React.FC = () => {
 
             <button
               type="button"
-              onClick={() =>
-                setSelectedService(null)
-              }
+              onClick={() => setSelectedService(null)}
               style={{
                 width: '100%',
                 height: '44px',
@@ -389,7 +382,6 @@ const OtherBills: React.FC = () => {
           </div>
         )}
 
-        {/* Footer */}
         <div
           style={{
             textAlign: 'center',
