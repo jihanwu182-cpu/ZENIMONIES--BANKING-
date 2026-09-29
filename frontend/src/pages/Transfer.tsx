@@ -1653,7 +1653,9 @@ const Transfer: React.FC = () => {
               </span>
             </div>
           )}
-
+              
+           </>
+          )}
         </section>
       </main>
     </div>
