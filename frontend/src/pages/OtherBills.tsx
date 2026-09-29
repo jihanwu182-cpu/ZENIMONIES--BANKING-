@@ -1,0 +1,421 @@
+
+import React, { useState } from 'react';
+
+type Service = {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+};
+
+const OtherBills: React.FC = () => {
+  const [selectedService, setSelectedService] =
+    useState<Service | null>(null);
+
+  const services: Service[] = [
+    {
+      id: 'gift-cards',
+      name: 'Gift Cards',
+      description: 'Buy and sell digital gift cards',
+      icon: '🎁',
+    },
+    {
+      id: 'online-shopping',
+      name: 'Online Shopping',
+      description: 'Shop and pay online',
+      icon: '🛍️',
+    },
+    {
+      id: 'government',
+      name: 'Government Payments',
+      description: 'Government fees and payments',
+      icon: '🏛️',
+    },
+    {
+      id: 'transport',
+      name: 'Transport',
+      description: 'Transport tickets and fares',
+      icon: '🚌',
+    },
+    {
+      id: 'travel',
+      name: 'Travel',
+      description: 'Travel and flight bookings',
+      icon: '✈️',
+    },
+    {
+      id: 'aid-donations',
+      name: 'Aid, Grants & Donations',
+      description: 'Donations and eligible aid services',
+      icon: '❤️',
+    },
+    {
+      id: 'solar',
+      name: 'Solar',
+      description: 'Solar equipment and energy services',
+      icon: '☀️',
+    },
+    {
+      id: 'education',
+      name: 'Education',
+      description: 'Educational payments and services',
+      icon: '🎓',
+    },
+    {
+      id: 'insurance',
+      name: 'Insurance',
+      description: 'Insurance products and payments',
+      icon: '🛡️',
+    },
+  ];
+
+  const handleServiceClick = (service: Service) => {
+    setSelectedService(service);
+  };
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: '#f5f8f6',
+        padding: '24px 16px',
+        boxSizing: 'border-box',
+        fontFamily:
+          "'Inter', 'Segoe UI', Arial, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: '600px',
+          margin: '0 auto',
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            marginBottom: '25px',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            aria-label="Go back"
+            style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '12px',
+              border: '1px solid #e0e9e3',
+              background: '#ffffff',
+              color: '#145c39',
+              fontSize: '22px',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            ←
+          </button>
+
+          <div>
+            <h1
+              style={{
+                margin: 0,
+                color: '#145c39',
+                fontSize: '22px',
+                fontWeight: 800,
+              }}
+            >
+              Other Bills & Services
+            </h1>
+
+            <p
+              style={{
+                margin: '5px 0 0',
+                color: '#748078',
+                fontSize: '13px',
+              }}
+            >
+              More services, all in one place
+            </p>
+          </div>
+        </div>
+
+        {/* Small green banner */}
+        <div
+          style={{
+            background:
+              'linear-gradient(135deg, #176b43, #104d32)',
+            borderRadius: '16px',
+            padding: '18px',
+            marginBottom: '25px',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+          }}
+        >
+          <div
+            style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: '12px',
+              background: 'rgba(255,255,255,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '24px',
+              flexShrink: 0,
+            }}
+          >
+            <span role="img" aria-label="Services">
+              💳
+            </span>
+          </div>
+
+          <div>
+            <div
+              style={{
+                fontSize: '15px',
+                fontWeight: 800,
+                marginBottom: '5px',
+              }}
+            >
+              ZENIMONIES Services
+            </div>
+
+            <div
+              style={{
+                fontSize: '12px',
+                color: '#d9eee2',
+                lineHeight: 1.6,
+              }}
+            >
+              Explore more ways to pay, shop,
+              travel and manage your everyday needs.
+            </div>
+          </div>
+        </div>
+
+        {/* Section heading */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '15px',
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              color: '#193b2a',
+              fontSize: '17px',
+              fontWeight: 800,
+            }}
+          >
+            Available Categories
+          </h2>
+
+          <span
+            style={{
+              background: '#e5f3e9',
+              color: '#176b43',
+              fontSize: '12px',
+              fontWeight: 700,
+              padding: '6px 10px',
+              borderRadius: '20px',
+            }}
+          >
+            {services.length} Services
+          </span>
+        </div>
+
+        {/* Service cards */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns:
+              'repeat(2, minmax(0, 1fr))',
+            gap: '13px',
+          }}
+        >
+          {services.map((service) => (
+            <button
+              key={service.id}
+              type="button"
+              onClick={() =>
+                handleServiceClick(service)
+              }
+              style={{
+                background: '#ffffff',
+                border: '1px solid #e4ece6',
+                borderRadius: '16px',
+                padding: '18px 14px',
+                minHeight: '150px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                textAlign: 'left',
+                cursor: 'pointer',
+                boxShadow:
+                  '0 3px 12px rgba(20, 92, 57, 0.035)',
+                transition: 'transform 0.15s ease',
+              }}
+            >
+              <div
+                style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '13px',
+                  background: '#eaf5ed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '24px',
+                  marginBottom: '14px',
+                }}
+              >
+                <span role="img" aria-label={service.name}>
+                  {service.icon}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  color: '#193b2a',
+                  fontSize: '14px',
+                  fontWeight: 800,
+                  lineHeight: 1.4,
+                  marginBottom: '6px',
+                }}
+              >
+                {service.name}
+              </div>
+
+              <div
+                style={{
+                  color: '#7b857e',
+                  fontSize: '12px',
+                  lineHeight: 1.5,
+                }}
+              >
+                {service.description}
+              </div>
+
+              <div
+                style={{
+                  color: '#176b43',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  marginTop: '12px',
+                }}
+              >
+                Explore →
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Selected service notice */}
+        {selectedService && (
+          <div
+            role="status"
+            style={{
+              marginTop: '22px',
+              padding: '17px',
+              borderRadius: '14px',
+              background: '#ffffff',
+              border: '1px solid #dcece1',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '10px',
+              }}
+            >
+              <span style={{ fontSize: '23px' }}>
+                {selectedService.icon}
+              </span>
+
+              <strong
+                style={{
+                  color: '#145c39',
+                  fontSize: '15px',
+                }}
+              >
+                {selectedService.name}
+              </strong>
+            </div>
+
+            <p
+              style={{
+                color: '#68786d',
+                fontSize: '13px',
+                lineHeight: 1.7,
+                margin: '0 0 15px',
+              }}
+            >
+              This service is being prepared for
+              ZENIMONIES. Provider integration and
+              payment functionality will be available
+              once the required service provider is
+              connected.
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedService(null)
+              }
+              style={{
+                width: '100%',
+                height: '44px',
+                border: 'none',
+                borderRadius: '11px',
+                background: '#176b43',
+                color: '#ffffff',
+                fontSize: '14px',
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              Close
+            </button>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div
+          style={{
+            textAlign: 'center',
+            marginTop: '28px',
+            paddingBottom: '20px',
+            color: '#89958d',
+            fontSize: '12px',
+            lineHeight: 1.7,
+          }}
+        >
+          <div
+            style={{
+              color: '#176b43',
+              fontWeight: 800,
+              letterSpacing: '1px',
+              marginBottom: '5px',
+            }}
+          >
+            ZENIMONIES
+          </div>
+
+          Secure banking for your everyday needs.
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default OtherBills;
