@@ -1034,12 +1034,81 @@ const transferToZenimoniesUser = async (req, res) => {
   }
 };
 
+ // ============================================================
+ // GET RECENT INTERNAL TRANSFER RECIPIENTS
+ // GET /api/internal-transfers/recent
+ // ============================================================
+
+const getRecentRecipients = async (req, res) => {
+  try {
+    const userId =
+      req.user?.id ||
+      req.user?.userId ||
+      req.user?.user_id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required.',
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT DISTINCT ON (bt.recipient_phone)
+        bt.recipient_name AS full_name,
+        bt.recipient_phone AS phone,
+        bt.completed_at,
+        bt.reference
+      FROM bank_transfers bt
+      INNER JOIN accounts a
+        ON a.id = bt.account_id
+      WHERE a.user_id = $1
+        AND a.account_type = 'personal'
+        AND a.currency = 'NGN'
+        AND bt.recipient_bank_name = 'Zenimonies'
+        AND bt.recipient_phone IS NOT NULL
+        AND TRIM(bt.recipient_phone) <> ''
+        AND bt.status = 'completed'
+      ORDER BY
+        bt.recipient_phone,
+        bt.completed_at DESC NULLS LAST,
+        bt.reference DESC
+      `,
+      [userId]
+    );
+
+    const recipients = result.rows
+      .filter((recipient) => recipient.phone)
+      .slice(0, 10);
+
+    return res.status(200).json({
+      success: true,
+      recipients,
+    });
+
+  } catch (error) {
+    console.error(
+      'Get recent internal recipients error:',
+      error?.message || error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to load recent recipients.',
+    });
+  }
+};
+
 // ============================================================
 // EXPORTS
 // ============================================================
+
 
 module.exports = {
   findUserByPhone,
   transferToZenimoniesUser,
   calculateTransferFee,
+  getRecentRecipients,
 };
+
