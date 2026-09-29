@@ -15,6 +15,8 @@ const { initializeDatabase } = database;
 const authRoutes = require('./routes/auth');
 const accountRoutes = require('./routes/account');
 const billsRoutes = require('./routes/bills');
+const internetBillsRoutes =
+  require('./routes/internetBills');
 const transferRoutes = require('./routes/transfer');
 const dataRoutes = require('./routes/data');
 const airtimeRoutes = require('./routes/airtime');
@@ -186,6 +188,14 @@ app.use(
 app.use(
   '/api/bills',
   billsRoutes
+);
+// ============================================================
+// INTERNET BILLS
+// ============================================================
+
+app.use(
+  '/api/internet-bills',
+  internetBillsRoutes
 );
 
 // ============================================================
