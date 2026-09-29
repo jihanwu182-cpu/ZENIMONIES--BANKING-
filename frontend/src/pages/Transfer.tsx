@@ -3,8 +3,6 @@ import React, {
   useState,
 } from 'react';
 
-import BeneficiaryTabs from '../components/BeneficiaryTabs.tsx';
-
 import {
   Link,
   useNavigate,
