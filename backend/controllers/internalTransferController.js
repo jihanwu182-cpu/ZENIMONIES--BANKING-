@@ -1035,9 +1035,9 @@ const transferToZenimoniesUser = async (req, res) => {
 };
 
  // ============================================================
- // GET RECENT INTERNAL TRANSFER RECIPIENTS
- // GET /api/internal-transfers/recent
- // ============================================================
+// GET RECENT INTERNAL TRANSFER RECIPIENTS
+// GET /api/internal-transfers/recent
+// ============================================================
 
 const getRecentRecipients = async (req, res) => {
   try {
@@ -1055,36 +1055,56 @@ const getRecentRecipients = async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT DISTINCT ON (bt.recipient_phone)
-        bt.recipient_name AS full_name,
-        bt.recipient_phone AS phone,
-        bt.completed_at,
-        bt.reference
-      FROM bank_transfers bt
-      INNER JOIN accounts a
-        ON a.id = bt.account_id
-      WHERE a.user_id = $1
-        AND a.account_type = 'personal'
-        AND a.currency = 'NGN'
-        AND bt.recipient_bank_name = 'Zenimonies'
-        AND bt.recipient_phone IS NOT NULL
-        AND TRIM(bt.recipient_phone) <> ''
-        AND bt.status = 'completed'
+      WITH ranked_recipients AS (
+        SELECT
+          bt.recipient_name AS full_name,
+          bt.recipient_phone AS phone,
+          bt.completed_at,
+          bt.reference,
+
+          ROW_NUMBER() OVER (
+            PARTITION BY bt.recipient_phone
+            ORDER BY
+              bt.completed_at DESC NULLS LAST,
+              bt.reference DESC
+          ) AS recipient_rank
+
+        FROM bank_transfers bt
+
+        INNER JOIN accounts a
+          ON a.id = bt.account_id
+
+        WHERE a.user_id = $1
+          AND a.account_type = 'personal'
+          AND a.currency = 'NGN'
+          AND bt.recipient_bank_name = 'Zenimonies'
+          AND bt.status = 'completed'
+          AND bt.recipient_phone IS NOT NULL
+          AND TRIM(bt.recipient_phone) <> ''
+      )
+
+      SELECT
+        full_name,
+        phone,
+        completed_at,
+        reference
+
+      FROM ranked_recipients
+
+      WHERE recipient_rank = 1
+
       ORDER BY
-        bt.recipient_phone,
-        bt.completed_at DESC NULLS LAST,
-        bt.reference DESC
+        completed_at DESC NULLS LAST,
+        reference DESC
+
+      LIMIT 10
       `,
       [userId]
     );
 
-    const recipients = result.rows
-      .filter((recipient) => recipient.phone)
-      .slice(0, 10);
-
     return res.status(200).json({
       success: true,
-      recipients,
+      recipients: result.rows,
     });
 
   } catch (error) {
@@ -1111,4 +1131,3 @@ module.exports = {
   calculateTransferFee,
   getRecentRecipients,
 };
-
