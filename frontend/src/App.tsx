@@ -61,6 +61,7 @@ import Airtime from './pages/Airtime.tsx';
 import Data from './pages/Data.tsx';
 import TVSubscription from './pages/TVSubscription.tsx';
 import Bills from './pages/Bills.tsx';
+import InternetBills from './pages/InternetBills.tsx';
 import Electricity from './pages/Electricity.tsx';
 import ElectricityVerification from './pages/ElectricityVerification.tsx';
 import ElectricityPaymentConfirmation from './pages/ElectricityPaymentConfirmation.tsx';
@@ -599,6 +600,11 @@ const App: React.FC = () => {
             path="/bills"
             element={<Bills />}
           />
+
+          <Route
+            path="/bills/internet"
+            element={<InternetBills />}
+         />
 
           <Route
             path="/electricity"
