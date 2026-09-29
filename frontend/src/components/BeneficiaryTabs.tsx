@@ -24,9 +24,16 @@ interface BeneficiaryTabsProps {
   ) => void;
 }
 
-const API_URL =
-  process.env.REACT_APP_API_URL ||
-  'https://zenimonies-banking.onrender.com';
+const API_BASE =
+  (
+    process.env.REACT_APP_API_URL ||
+    'https://zenimonies-banking.onrender.com/api'
+  ).replace(/\/+$/, '');
+
+const BENEFICIARIES_URL =
+  API_BASE.endsWith('/api')
+    ? `${API_BASE}/beneficiaries`
+    : `${API_BASE}/api/beneficiaries`;
 
 const BeneficiaryTabs: React.FC<
   BeneficiaryTabsProps
@@ -108,7 +115,7 @@ const BeneficiaryTabs: React.FC<
           }
 
           const response = await fetch(
-            `${API_URL}/api/beneficiaries`,
+                 BENEFICIARIES_URL,
             {
               method: 'GET',
               headers: {
