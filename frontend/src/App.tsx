@@ -53,6 +53,7 @@ import TransferConfirmation from './pages/TransferConfirmation.tsx';
 import TransactionReceipt from './pages/TransactionReceipt.tsx';
 import Statement from './pages/Statement.tsx';
 import BusinessTransactions from './pages/BusinessTransactions.tsx';
+import Beneficiaries from './pages/Beneficiaries.tsx';
 
 // ==================== PAYMENTS ====================
 
@@ -541,6 +542,10 @@ const App: React.FC = () => {
             path="/statement"
             element={<Statement />}
           />
+          <Route
+           path="/beneficiaries"
+           element={<Beneficiaries />}
+         />
 
           {/* ================= WALLET ================= */}
 
