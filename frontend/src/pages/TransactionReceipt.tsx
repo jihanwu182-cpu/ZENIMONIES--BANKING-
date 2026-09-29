@@ -99,7 +99,41 @@ const TransactionReceipt: React.FC = () => {
     location.state?.transaction as
       | Transaction
       | undefined;
+  
+  // ============================================================
+// GET REGISTERED NAME OF LOGGED-IN USER
+// ============================================================
 
+const getLoggedInUserName = (): string => {
+  try {
+    const storedUser = localStorage.getItem(
+      'zenimonies_user'
+    );
+
+    if (!storedUser) {
+      return '';
+    }
+
+    const user = JSON.parse(storedUser);
+
+    return (
+      user?.full_name ||
+      user?.fullName ||
+      user?.name ||
+      user?.user?.full_name ||
+      user?.user?.fullName ||
+      user?.user?.name ||
+      ''
+    );
+  } catch (error) {
+    console.error(
+      'Unable to retrieve registered sender name:',
+      error
+    );
+
+    return '';
+  }
+};
   /*
    * ============================================================
    * RECEIPT UNAVAILABLE
@@ -402,19 +436,38 @@ const TransactionReceipt: React.FC = () => {
         : COLORS.warning;
 
   /*
-   * ============================================================
-   * SENDER NAME
-   * ============================================================
-   *
-   * For received transfers, prefer the backend's real sender.
-   */
+ * ============================================================
+ * SENDER NAME
+ * ============================================================
+ *
+ * Outgoing transfer:
+ * Use the sender name from the transaction record.
+ * If unavailable, use the authenticated user's registered name.
+ *
+ * Incoming transfer:
+ * Use the actual sender's name from the transaction record.
+ * Never substitute the logged-in receiver's name.
+ *
+ * Sender account number is not displayed.
+ */
 
-  const senderName =
-    transaction.sender_name ||
-    transaction.transfer_sender_name ||
-    transaction.sender_full_name ||
-    transaction.sender ||
-    '';
+const transactionSenderName =
+  transaction.sender_name ||
+  transaction.transfer_sender_name ||
+  transaction.sender_full_name ||
+  transaction.sender ||
+  '';
+
+const loggedInUserName =
+  getLoggedInUserName();
+
+const senderName =
+  transactionSenderName ||
+  (
+    isIncoming
+      ? ''
+      : loggedInUserName
+  );
 
   /*
    * ============================================================
