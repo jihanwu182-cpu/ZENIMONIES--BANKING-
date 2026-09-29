@@ -3,6 +3,8 @@ import React, {
   useState,
 } from 'react';
 
+import BeneficiaryTabs from '../components/BeneficiaryTabs.tsx';
+
 import {
   Link,
   useNavigate,
@@ -1032,6 +1034,15 @@ const Transfer: React.FC = () => {
                 : 'Verify'}
             </button>
           </div>
+          
+          {/* RECENT / SAVED BENEFICIARIES */}
+
+<div style={styles.beneficiaryArea}>
+  <BeneficiaryTabs
+    recipientType="zenimonies"
+    onSelect={handleBeneficiarySelect}
+  />
+</div>
 
 
           {/* ==================================================
