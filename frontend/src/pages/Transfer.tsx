@@ -1202,7 +1202,6 @@ const Transfer: React.FC = () => {
                     )
                   )}
                 </div>
-              )}
 
               {/* ==================================================
                   SAVED BENEFICIARIES
