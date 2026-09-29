@@ -1035,27 +1035,23 @@ const Transfer: React.FC = () => {
             </button>
           </div>
 
-          {/* ==================================================
-              BEFORE VERIFICATION
-              
-              Recent/Saved appears immediately
-              after the phone verification field.
-              ================================================== */}
+    {/* ==================================================
+    RECENT / SAVED BENEFICIARIES
 
-          {!recipient && (
-            <div
-              style={
-                styles.beneficiaryArea
-              }
-            >
-              <BeneficiaryTabs
-                recipientType="zenimonies"
-                onSelect={
-                  handleBeneficiarySelect
-                }
-              />
-            </div>
-          )}
+    Recent is displayed by default.
+    Saved Beneficiary appears only when
+    the user taps its tab.
+
+    Keep this section mounted so the
+    selected tab does not reset.
+    ================================================== */}
+
+<div style={styles.beneficiaryArea}>
+  <BeneficiaryTabs
+    recipientType="zenimonies"
+    onSelect={handleBeneficiarySelect}
+  />
+</div>
 
           {/* ==================================================
               VERIFIED RECIPIENT
@@ -1365,28 +1361,6 @@ const Transfer: React.FC = () => {
                   ›
                 </span>
               </button>
-
-              {/* ==================================================
-                  RECENT / SAVED
-                  
-                  AFTER VERIFICATION THIS MOVES
-                  TO THE BOTTOM.
-                  ================================================== */}
-
-              <div
-                style={
-                  styles.bottomBeneficiaryArea
-                }
-              >
-                <BeneficiaryTabs
-                  recipientType="zenimonies"
-                  onSelect={
-                    handleBeneficiarySelect
-                  }
-                />
-              </div>
-            </>
-          )}
 
           {/* ==================================================
               TRANSACTION PIN DIALOG
