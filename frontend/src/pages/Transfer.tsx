@@ -1010,317 +1010,6 @@ const Transfer: React.FC = () => {
             </div>
           )}
 
-          
-          {/* ==================================================
-              RECIPIENT PHONE NUMBER — FIRST
-              ================================================== */}
-
-          <label
-            htmlFor="phone"
-            style={styles.label}
-          >
-            Recipient Phone Number
-          </label>
-
-          <div style={styles.verifyRow}>
-            <input
-              id="phone"
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              value={phone}
-              onChange={handlePhoneChange}
-              placeholder="e.g. 08012345678"
-              disabled={checking || sending}
-              style={styles.input}
-            />
-
-            <button
-              type="button"
-              onClick={verifyRecipient}
-              disabled={checking || sending}
-              style={{
-                ...styles.verifyButton,
-                opacity:
-                  checking || sending
-                    ? 0.65
-                    : 1,
-              }}
-            >
-              {checking
-                ? 'Checking...'
-                : 'Verify'}
-            </button>
-          </div>
-
-          {/* ==================================================
-              RECENT RECIPIENTS — BELOW PHONE VERIFICATION
-              ================================================== */}
-
-          {!recipient && (
-            <div style={styles.recentSection}>
-              <div style={styles.recentHeader}>
-                <div>
-                  <h2 style={styles.recentTitle}>
-                    Recent Recipients
-                  </h2>
-
-                  <p style={styles.recentSubtitle}>
-                    Quickly send money to people
-                    you've transferred to before.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    void loadRecentRecipients();
-                  }}
-                  disabled={loadingRecentRecipients}
-                  style={styles.refreshButton}
-                  title="Refresh recent recipients"
-                >
-                  {loadingRecentRecipients
-                    ? '...'
-                    : '↻'}
-                </button>
-              </div>
-
-              {loadingRecentRecipients &&
-                recentRecipients.length === 0 && (
-                  <div style={styles.recentEmpty}>
-                    <div style={styles.loadingDot} />
-                    Loading recent recipients...
-                  </div>
-                )}
-
-              {recentRecipientsError && (
-                <div
-                  style={styles.recentError}
-                  role="alert"
-                >
-                  <span>
-                    {recentRecipientsError}
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void loadRecentRecipients();
-                    }}
-                    style={styles.retryButton}
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-
-              {!loadingRecentRecipients &&
-                !recentRecipientsError &&
-                recentRecipients.length === 0 && (
-                  <div style={styles.recentEmpty}>
-                    <div style={styles.emptyIcon}>
-                      ↗
-                    </div>
-
-                    <strong style={styles.emptyTitle}>
-                      No recent recipients yet
-                    </strong>
-
-                    <span style={styles.emptyText}>
-                      Your successful Zenimonies
-                      transfers will appear here.
-                    </span>
-                  </div>
-                )}
-
-              {recentRecipients.length > 0 && (
-                <div style={styles.recentList}>
-                  {recentRecipients.map(
-                    (item, index) => (
-                      <button
-                        key={
-                          item.phone ||
-                          item.reference ||
-                          index
-                        }
-                        type="button"
-                        onClick={() => {
-                          void selectRecentRecipient(
-                            item
-                          );
-                        }}
-                        disabled={
-                          checking || sending
-                        }
-                        style={styles.recentItem}
-                      >
-                        <div style={styles.recentAvatar}>
-                          {item.full_name
-                            ? item.full_name
-                                .charAt(0)
-                                .toUpperCase()
-                            : 'Z'}
-                        </div>
-
-                        <div style={styles.recentInfo}>
-                          <strong
-                            style={styles.recentName}
-                          >
-                            {item.full_name ||
-                              'Zenimonies User'}
-                          </strong>
-
-                          <span
-                            style={styles.recentPhone}
-                          >
-                            {item.phone}
-                          </span>
-
-                          {item.completed_at && (
-                            <span
-                              style={styles.recentDate}
-                            >
-                              {new Date(
-                                item.completed_at
-                              ).toLocaleDateString(
-                                'en-NG',
-                                {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric',
-                                }
-                              )}
-                            </span>
-                          )}
-                        </div>
-
-                        <span style={styles.recentArrow}>
-                          ›
-                        </span>
-                      </button>
-                    )
-                  )}
-                </div>
-
-              {/* ==================================================
-                  SAVED BENEFICIARIES
-                  ================================================== */}
-
-              <div style={styles.savedSection}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSavedBeneficiaries(
-                      (previous) => !previous
-                    );
-                  }}
-                  style={styles.savedToggle}
-                  aria-expanded={
-                    showSavedBeneficiaries
-                  }
-                >
-                  <div style={styles.savedToggleLeft}>
-                    <div style={styles.savedIcon}>
-                      ♧
-                    </div>
-
-                    <div>
-                      <strong style={styles.savedTitle}>
-                        Saved Beneficiaries
-                      </strong>
-
-                      <span style={styles.savedSubtitle}>
-                        Your saved recipients
-                      </span>
-                    </div>
-                  </div>
-
-                  <span style={styles.savedChevron}>
-                    {showSavedBeneficiaries
-                      ? '−'
-                      : '+'}
-                  </span>
-                </button>
-
-                {showSavedBeneficiaries && (
-                  <div style={styles.savedContent}>
-                    <BeneficiaryTabs
-                      recipientType="zenimonies"
-                      onSelect={(
-                        beneficiary: SavedBeneficiary
-                      ) => {
-                        void selectSavedBeneficiary(
-                          beneficiary
-                        );
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-                          
-
-              {/* ==================================================
-                  SAVED BENEFICIARIES
-                  ================================================== */}
-
-              <div style={styles.savedSection}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSavedBeneficiaries(
-                      (previous) => !previous
-                    );
-                  }}
-                  style={styles.savedToggle}
-                  aria-expanded={
-                    showSavedBeneficiaries
-                  }
-                >
-                  <div style={styles.savedToggleLeft}>
-                    <div style={styles.savedIcon}>
-                      ♧
-                    </div>
-
-                    <div>
-                      <strong style={styles.savedTitle}>
-                        Saved Beneficiaries
-                      </strong>
-
-                      <span style={styles.savedSubtitle}>
-                        Your saved recipients
-                      </span>
-                    </div>
-                  </div>
-
-                  <span style={styles.savedChevron}>
-                    {showSavedBeneficiaries
-                      ? '−'
-                      : '+'}
-                  </span>
-                </button>
-
-                {showSavedBeneficiaries && (
-                  <div style={styles.savedContent}>
-                    <BeneficiaryTabs
-                      recipientType="zenimonies"
-                      onSelect={(
-                        beneficiary: SavedBeneficiary
-                      ) => {
-                        void selectSavedBeneficiary(
-                          beneficiary
-                        );
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* ==================================================
               PHONE
               ================================================== */}
@@ -1735,6 +1424,196 @@ const Transfer: React.FC = () => {
               </div>
             </>
           )}
+          
+          {/* ==================================================
+              RECENT RECIPIENTS
+              ================================================== */}
+
+          <div style={styles.recentSection}>
+            <div style={styles.recentHeader}>
+              <div>
+                <h2 style={styles.recentTitle}>
+                  Recent Recipients
+                </h2>
+
+                <p style={styles.recentSubtitle}>
+                  Quickly send money to people you've
+                  transferred to before.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  void loadRecentRecipients();
+                }}
+                disabled={loadingRecentRecipients}
+                style={styles.refreshButton}
+                title="Refresh recent recipients"
+              >
+                {loadingRecentRecipients ? '...' : '↻'}
+              </button>
+            </div>
+
+            {loadingRecentRecipients &&
+              recentRecipients.length === 0 && (
+                <div style={styles.recentEmpty}>
+                  <div style={styles.loadingDot} />
+                  Loading recent recipients...
+                </div>
+              )}
+
+            {recentRecipientsError && (
+              <div
+                style={styles.recentError}
+                role="alert"
+              >
+                <span>{recentRecipientsError}</span>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    void loadRecentRecipients();
+                  }}
+                  style={styles.retryButton}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {!loadingRecentRecipients &&
+              !recentRecipientsError &&
+              recentRecipients.length === 0 && (
+                <div style={styles.recentEmpty}>
+                  <div style={styles.emptyIcon}>
+                    ↗
+                  </div>
+
+                  <strong style={styles.emptyTitle}>
+                    No recent recipients yet
+                  </strong>
+
+                  <span style={styles.emptyText}>
+                    Your successful Zenimonies transfers
+                    will appear here.
+                  </span>
+                </div>
+              )}
+
+            {recentRecipients.length > 0 && (
+              <div style={styles.recentList}>
+                {recentRecipients.map(
+                  (item, index) => (
+                    <button
+                      key={
+                        item.phone ||
+                        item.reference ||
+                        index
+                      }
+                      type="button"
+                      onClick={() => {
+                        void selectRecentRecipient(item);
+                      }}
+                      disabled={checking || sending}
+                      style={styles.recentItem}
+                    >
+                      <div style={styles.recentAvatar}>
+                        {item.full_name
+                          ? item.full_name
+                              .charAt(0)
+                              .toUpperCase()
+                          : 'Z'}
+                      </div>
+
+                      <div style={styles.recentInfo}>
+                        <strong style={styles.recentName}>
+                          {item.full_name ||
+                            'Zenimonies User'}
+                        </strong>
+
+                        <span style={styles.recentPhone}>
+                          {item.phone}
+                        </span>
+
+                        {item.completed_at && (
+                          <span style={styles.recentDate}>
+                            {new Date(
+                              item.completed_at
+                            ).toLocaleDateString(
+                              'en-NG',
+                              {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              }
+                            )}
+                          </span>
+                        )}
+                      </div>
+
+                      <span style={styles.recentArrow}>
+                        ›
+                      </span>
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+
+            {/* ==================================================
+                SAVED BENEFICIARIES
+                ================================================== */}
+
+            <div style={styles.savedSection}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSavedBeneficiaries(
+                    (previous) => !previous
+                  );
+                }}
+                style={styles.savedToggle}
+                aria-expanded={showSavedBeneficiaries}
+              >
+                <div style={styles.savedToggleLeft}>
+                  <div style={styles.savedIcon}>
+                    ♧
+                  </div>
+
+                  <div>
+                    <strong style={styles.savedTitle}>
+                      Saved Beneficiaries
+                    </strong>
+
+                    <span style={styles.savedSubtitle}>
+                      Your saved recipients
+                    </span>
+                  </div>
+                </div>
+
+                <span style={styles.savedChevron}>
+                  {showSavedBeneficiaries ? '−' : '+'}
+                </span>
+              </button>
+
+              {showSavedBeneficiaries && (
+                <div style={styles.savedContent}>
+                  <BeneficiaryTabs
+                    recipientType="zenimonies"
+                    onSelect={(
+                      beneficiary: SavedBeneficiary
+                    ) => {
+                      void selectSavedBeneficiary(
+                        beneficiary
+                      );
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
         </section>
       </main>
     </div>
