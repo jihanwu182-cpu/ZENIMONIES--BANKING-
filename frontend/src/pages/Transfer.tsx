@@ -387,63 +387,6 @@ const Transfer: React.FC = () => {
         cleanPhone
       );
     };
-
-  /*
-   * ==========================================================
-   * SELECT RECENT / SAVED BENEFICIARY
-   * ==========================================================
-   */
-
-  const handleBeneficiarySelect = async (
-    beneficiary: any
-  ) => {
-    if (
-      beneficiary.recipient_type !==
-      'zenimonies'
-    ) {
-      return;
-    }
-
-    if (
-      !beneficiary.recipient_phone
-    ) {
-      return;
-    }
-
-    const beneficiaryPhone =
-      beneficiary.recipient_phone;
-
-    /*
-     * Put the beneficiary phone
-     * into the input immediately.
-     */
-
-    setPhone(
-      beneficiaryPhone
-    );
-
-    setAmount('');
-    setNarration('');
-
-    setSuccess('');
-    setError('');
-    setReference('');
-    setBalanceAfter(null);
-    setRecipientAccountNumber('');
-
-    /*
-     * Verify the beneficiary again
-     * through the backend.
-     *
-     * This keeps the recipient
-     * verification authoritative.
-     */
-
-    await verifyPhoneNumber(
-      beneficiaryPhone
-    );
-  };
-
   /*
    * ==========================================================
    * PHONE INPUT CHANGE
