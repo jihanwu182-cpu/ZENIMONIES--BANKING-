@@ -1,8 +1,10 @@
+
 const express = require('express');
 
 const {
   findUserByPhone,
   transferToZenimoniesUser,
+  getRecentRecipients,
 } = require('../controllers/internalTransferController');
 
 const {
@@ -27,7 +29,21 @@ router.get(
 );
 
 /*
+ * Get recent successful internal transfer recipients.
+ *
+ * GET:
+ * /api/internal-transfers/recent
+ */
+router.get(
+  '/recent',
+  authenticateToken,
+  getRecentRecipients
+);
+
+/*
  * Send money to another Zenimonies user.
+ *
+ * Transaction PIN middleware remains enabled.
  *
  * POST:
  * /api/internal-transfers
