@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,12 +15,6 @@ const BILL_OPTIONS: BillOption[] = [
     description: 'Pay prepaid and postpaid electricity bills',
     icon: '⚡',
     path: '/electricity',
-  },
-  {
-    title: 'TV Subscription',
-    description: 'Pay your cable and TV subscriptions',
-    icon: '📺',
-    path: '/bills/tv',
   },
   {
     title: 'Internet',
