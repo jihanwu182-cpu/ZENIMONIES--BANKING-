@@ -1010,8 +1010,51 @@ const Transfer: React.FC = () => {
             </div>
           )}
 
+          
           {/* ==================================================
-              RECENT RECIPIENTS
+              RECIPIENT PHONE NUMBER — FIRST
+              ================================================== */}
+
+          <label
+            htmlFor="phone"
+            style={styles.label}
+          >
+            Recipient Phone Number
+          </label>
+
+          <div style={styles.verifyRow}>
+            <input
+              id="phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              value={phone}
+              onChange={handlePhoneChange}
+              placeholder="e.g. 08012345678"
+              disabled={checking || sending}
+              style={styles.input}
+            />
+
+            <button
+              type="button"
+              onClick={verifyRecipient}
+              disabled={checking || sending}
+              style={{
+                ...styles.verifyButton,
+                opacity:
+                  checking || sending
+                    ? 0.65
+                    : 1,
+              }}
+            >
+              {checking
+                ? 'Checking...'
+                : 'Verify'}
+            </button>
+          </div>
+
+          {/* ==================================================
+              RECENT RECIPIENTS — BELOW PHONE VERIFICATION
               ================================================== */}
 
           {!recipient && (
@@ -1160,6 +1203,66 @@ const Transfer: React.FC = () => {
                   )}
                 </div>
               )}
+
+              {/* ==================================================
+                  SAVED BENEFICIARIES
+                  ================================================== */}
+
+              <div style={styles.savedSection}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSavedBeneficiaries(
+                      (previous) => !previous
+                    );
+                  }}
+                  style={styles.savedToggle}
+                  aria-expanded={
+                    showSavedBeneficiaries
+                  }
+                >
+                  <div style={styles.savedToggleLeft}>
+                    <div style={styles.savedIcon}>
+                      ♧
+                    </div>
+
+                    <div>
+                      <strong style={styles.savedTitle}>
+                        Saved Beneficiaries
+                      </strong>
+
+                      <span style={styles.savedSubtitle}>
+                        Your saved recipients
+                      </span>
+                    </div>
+                  </div>
+
+                  <span style={styles.savedChevron}>
+                    {showSavedBeneficiaries
+                      ? '−'
+                      : '+'}
+                  </span>
+                </button>
+
+                {showSavedBeneficiaries && (
+                  <div style={styles.savedContent}>
+                    <BeneficiaryTabs
+                      recipientType="zenimonies"
+                      onSelect={(
+                        beneficiary: SavedBeneficiary
+                      ) => {
+                        void selectSavedBeneficiary(
+                          beneficiary
+                        );
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+                          
 
               {/* ==================================================
                   SAVED BENEFICIARIES
