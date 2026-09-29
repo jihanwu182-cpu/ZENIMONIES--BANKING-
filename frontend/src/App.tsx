@@ -611,7 +611,6 @@ const App: React.FC = () => {
             path="/bills/other"
             element={<OtherBills />}
          />
-         />
 
           <Route
             path="/electricity"
