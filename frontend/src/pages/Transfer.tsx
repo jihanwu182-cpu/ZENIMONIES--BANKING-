@@ -1034,16 +1034,6 @@ const Transfer: React.FC = () => {
                 : 'Verify'}
             </button>
           </div>
-          
-          {/* RECENT / SAVED BENEFICIARIES */}
-
-<div style={styles.beneficiaryArea}>
-  <BeneficiaryTabs
-    recipientType="zenimonies"
-    onSelect={handleBeneficiarySelect}
-  />
-</div>
-
 
           {/* ==================================================
               VERIFIED RECIPIENT
