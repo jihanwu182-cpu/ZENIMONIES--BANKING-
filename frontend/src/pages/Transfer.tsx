@@ -3,8 +3,6 @@ import React, {
   useState,
 } from 'react';
 
-import BeneficiaryTabs from '../components/BeneficiaryTabs.tsx';
-
 import {
   Link,
   useNavigate,
@@ -1035,23 +1033,6 @@ const Transfer: React.FC = () => {
             </button>
           </div>
 
-    {/* ==================================================
-    RECENT / SAVED BENEFICIARIES
-
-    Recent is displayed by default.
-    Saved Beneficiary appears only when
-    the user taps its tab.
-
-    Keep this section mounted so the
-    selected tab does not reset.
-    ================================================== */}
-
-<div style={styles.beneficiaryArea}>
-  <BeneficiaryTabs
-    recipientType="zenimonies"
-    onSelect={handleBeneficiarySelect}
-  />
-</div>
 
           {/* ==================================================
               VERIFIED RECIPIENT
