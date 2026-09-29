@@ -59,6 +59,7 @@ import Beneficiaries from './pages/Beneficiaries.tsx';
 
 import Airtime from './pages/Airtime.tsx';
 import Data from './pages/Data.tsx';
+import OtherBills from './pages/OtherBills.tsx';
 import TVSubscription from './pages/TVSubscription.tsx';
 import Bills from './pages/Bills.tsx';
 import InternetBills from './pages/InternetBills.tsx';
@@ -604,6 +605,11 @@ const App: React.FC = () => {
           <Route
             path="/bills/internet"
             element={<InternetBills />}
+         />
+
+          <Route
+            path="/other-bills"
+            element={<OtherBills />}
          />
 
           <Route
