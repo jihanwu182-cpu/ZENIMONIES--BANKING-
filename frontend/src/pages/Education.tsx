@@ -34,6 +34,11 @@ type PurchaseResult = {
   message?: string;
 };
 
+type PurchasedItem = {
+  serialNumber: string;
+  pin: string;
+};
+
 type Tab = {
   id: EducationService;
   title: string;
@@ -74,18 +79,126 @@ const cleanPhone = (value: string) =>
 const cleanProfileId = (value: string) =>
   value.replace(/\s/g, '').slice(0, 30);
 
+/**
+ * VTpass can return multiple WAEC PINs inside one string.
+ *
+ * Example:
+ * Serial No:XXXX,pin:123456|Serial No:YYYY,pin:789012
+ *
+ * This helper converts that response into separate PIN cards.
+ */
+const parsePurchasedCodes = (
+  purchasedCode?: string | null,
+  tokens?: unknown[]
+): PurchasedItem[] => {
+  const items: PurchasedItem[] = [];
+
+  if (purchasedCode) {
+    const matches = purchasedCode.matchAll(
+      /Serial\s*No\s*:\s*([^,|]+)\s*,\s*pin\s*:\s*([^|]+)/gi
+    );
+
+    for (const match of matches) {
+      const serialNumber =
+        String(match[1] || '').trim();
+
+      const pin =
+        String(match[2] || '')
+          .trim()
+          .replace(/\s+/g, '');
+
+      if (serialNumber && pin) {
+        items.push({
+          serialNumber,
+          pin,
+        });
+      }
+    }
+
+    /**
+     * If the provider returns a simple single code
+     * instead of the Serial No / PIN format.
+     */
+    if (
+      items.length === 0 &&
+      purchasedCode.trim()
+    ) {
+      items.push({
+        serialNumber: '',
+        pin: purchasedCode.trim(),
+      });
+    }
+  }
+
+  /**
+   * Also support provider token arrays.
+   */
+  if (Array.isArray(tokens)) {
+    tokens.forEach((token: any) => {
+      if (!token) return;
+
+      const serialNumber =
+        String(
+          token?.serialNumber ||
+            token?.serial_no ||
+            token?.serial ||
+            token?.SerialNo ||
+            ''
+        ).trim();
+
+      const pin =
+        String(
+          token?.pin ||
+            token?.Pin ||
+            token?.token ||
+            token?.code ||
+            ''
+        )
+          .trim()
+          .replace(/\s+/g, '');
+
+      if (serialNumber || pin) {
+        items.push({
+          serialNumber,
+          pin,
+        });
+      }
+    });
+  }
+
+  /**
+   * Remove accidental duplicates.
+   */
+  return items.filter(
+    (item, index, array) =>
+      index ===
+      array.findIndex(
+        (other) =>
+          other.serialNumber ===
+            item.serialNumber &&
+          other.pin === item.pin
+      )
+  );
+};
+
 const Education: React.FC = () => {
   const navigate = useNavigate();
 
   const [activeService, setActiveService] =
-    useState<EducationService>('waec-registration');
+    useState<EducationService>(
+      'waec-registration'
+    );
 
-  const [plans, setPlans] = useState<EducationPlan[]>([]);
+  const [plans, setPlans] = useState<
+    EducationPlan[]
+  >([]);
+
   const [selectedPlan, setSelectedPlan] =
     useState<EducationPlan | null>(null);
 
   const [phone, setPhone] = useState('');
-  const [profileId, setProfileId] = useState('');
+  const [profileId, setProfileId] =
+    useState('');
 
   const [loadingPlans, setLoadingPlans] =
     useState(false);
@@ -117,6 +230,9 @@ const Education: React.FC = () => {
   const [purchaseResult, setPurchaseResult] =
     useState<PurchaseResult | null>(null);
 
+  const [copiedPinIndex, setCopiedPinIndex] =
+    useState<number | null>(null);
+
   const activeTab = useMemo(
     () =>
       TABS.find(
@@ -124,6 +240,17 @@ const Education: React.FC = () => {
       ) || TABS[0],
     [activeService]
   );
+
+  const purchasedItems =
+    parsePurchasedCodes(
+      purchaseResult?.purchasedCode,
+      purchaseResult?.tokens
+    );
+
+  const isCompleted =
+    purchaseResult?.status ===
+      'completed' ||
+    purchaseResult?.success === true;
 
   const loadPlans = async (
     service: EducationService
@@ -136,6 +263,7 @@ const Education: React.FC = () => {
     setJambVerified(false);
     setJambCustomerName('');
     setPurchaseResult(null);
+    setCopiedPinIndex(null);
 
     try {
       const token = getToken();
@@ -153,16 +281,21 @@ const Education: React.FC = () => {
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
-      if (!response.ok || !data?.success) {
+      if (
+        !response.ok ||
+        !data?.success
+      ) {
         throw new Error(
           data?.message ||
             'Unable to load education plans.'
         );
       }
 
-      const loadedPlans: EducationPlan[] =
+      const loadedPlans:
+        EducationPlan[] =
         Array.isArray(data?.plans)
           ? data.plans
               .filter(
@@ -190,7 +323,9 @@ const Education: React.FC = () => {
 
       setPlans(loadedPlans);
 
-      if (loadedPlans.length === 0) {
+      if (
+        loadedPlans.length === 0
+      ) {
         setMessage(
           'No education plans are currently available.'
         );
@@ -226,6 +361,7 @@ const Education: React.FC = () => {
     setJambVerified(false);
     setJambCustomerName('');
     setPurchaseResult(null);
+    setCopiedPinIndex(null);
     setError('');
     setMessage('');
   };
@@ -239,6 +375,7 @@ const Education: React.FC = () => {
     setError('');
     setMessage('');
     setPurchaseResult(null);
+    setCopiedPinIndex(null);
 
     if (activeService === 'jamb') {
       setJambVerified(false);
@@ -286,9 +423,13 @@ const Education: React.FC = () => {
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
-      if (!response.ok || !data?.success) {
+      if (
+        !response.ok ||
+        !data?.success
+      ) {
         throw new Error(
           data?.message ||
             'Unable to verify your JAMB Profile ID.'
@@ -296,6 +437,7 @@ const Education: React.FC = () => {
       }
 
       setJambVerified(true);
+
       setJambCustomerName(
         data?.customerName || ''
       );
@@ -338,7 +480,9 @@ const Education: React.FC = () => {
       return false;
     }
 
-    if (activeService === 'jamb') {
+    if (
+      activeService === 'jamb'
+    ) {
       if (!profileId.trim()) {
         setError(
           'Enter your JAMB Profile ID.'
@@ -368,6 +512,7 @@ const Education: React.FC = () => {
     setError('');
     setMessage('');
     setPurchaseResult(null);
+    setCopiedPinIndex(null);
 
     if (!validateBeforePurchase()) {
       return;
@@ -378,7 +523,10 @@ const Education: React.FC = () => {
     try {
       const token = getToken();
 
-      const body: Record<string, any> = {
+      const body: Record<
+        string,
+        any
+      > = {
         service: activeService,
         variation_code:
           selectedPlan!.variation_code,
@@ -388,7 +536,9 @@ const Education: React.FC = () => {
         quantity: 1,
       };
 
-      if (activeService === 'jamb') {
+      if (
+        activeService === 'jamb'
+      ) {
         body.profile_id =
           profileId.trim();
       }
@@ -399,7 +549,8 @@ const Education: React.FC = () => {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
+            'Content-Type':
+              'application/json',
           },
           body: JSON.stringify(body),
         }
@@ -455,6 +606,28 @@ const Education: React.FC = () => {
     }
   };
 
+  const copyPin = async (
+    pin: string,
+    index: number
+  ) => {
+    try {
+      await navigator.clipboard.writeText(
+        pin
+      );
+
+      setCopiedPinIndex(index);
+
+      setTimeout(() => {
+        setCopiedPinIndex(null);
+      }, 2000);
+    } catch (error) {
+      console.error(
+        'Unable to copy PIN:',
+        error
+      );
+    }
+  };
+
   const resetPurchase = () => {
     setSelectedPlan(null);
     setPhone('');
@@ -463,31 +636,28 @@ const Education: React.FC = () => {
     setJambVerified(false);
     setJambCustomerName('');
     setPurchaseResult(null);
+    setCopiedPinIndex(null);
     setMessage('');
     setError('');
   };
-
-  const isCompleted =
-    purchaseResult?.status ===
-      'completed' ||
-    purchaseResult?.success === true;
 
   return (
     <div
       style={{
         minHeight: '100vh',
         background: '#f6faf7',
-        padding: '20px 16px 40px',
+        padding:
+          '20px 16px 40px',
         boxSizing: 'border-box',
       }}
     >
-      {/* HEADER */}
       <div
         style={{
           maxWidth: 720,
           margin: '0 auto',
         }}
       >
+        {/* HEADER */}
         <div
           style={{
             display: 'flex',
@@ -498,12 +668,15 @@ const Education: React.FC = () => {
         >
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() =>
+              navigate(-1)
+            }
             style={{
               width: 42,
               height: 42,
               borderRadius: 14,
-              border: '1px solid #dce9df',
+              border:
+                '1px solid #dce9df',
               background: '#ffffff',
               color: '#176b3a',
               fontSize: 22,
@@ -520,7 +693,8 @@ const Education: React.FC = () => {
                 fontWeight: 700,
                 color: '#159447',
                 letterSpacing: 1,
-                textTransform: 'uppercase',
+                textTransform:
+                  'uppercase',
               }}
             >
               ZENIMONIES
@@ -528,7 +702,8 @@ const Education: React.FC = () => {
 
             <h1
               style={{
-                margin: '2px 0 0',
+                margin:
+                  '2px 0 0',
                 fontSize: 26,
                 color: '#173d29',
                 fontWeight: 800,
@@ -539,7 +714,7 @@ const Education: React.FC = () => {
           </div>
         </div>
 
-        {/* INTRO CARD */}
+        {/* INTRO */}
         <div
           style={{
             background:
@@ -578,9 +753,10 @@ const Education: React.FC = () => {
               opacity: 0.92,
             }}
           >
-            Purchase supported examination
-            PINs securely from your ZENIMONIES
-            wallet.
+            Purchase supported
+            examination PINs
+            securely from your
+            ZENIMONIES wallet.
           </div>
         </div>
 
@@ -596,7 +772,8 @@ const Education: React.FC = () => {
         >
           {TABS.map((tab) => {
             const active =
-              activeService === tab.id;
+              activeService ===
+              tab.id;
 
             return (
               <button
@@ -618,7 +795,8 @@ const Education: React.FC = () => {
                     ? '#176b3a'
                     : '#52645a',
                   borderRadius: 16,
-                  padding: '13px 8px',
+                  padding:
+                    '13px 8px',
                   cursor: 'pointer',
                   minHeight: 76,
                 }}
@@ -633,9 +811,13 @@ const Education: React.FC = () => {
                   {tab.id ===
                     'waec-registration' &&
                     'WAEC'}
-                  {tab.id === 'waec' &&
+
+                  {tab.id ===
+                    'waec' &&
                     'WAEC'}
-                  {tab.id === 'jamb' &&
+
+                  {tab.id ===
+                    'jamb' &&
                     'JAMB'}
                 </div>
 
@@ -648,9 +830,13 @@ const Education: React.FC = () => {
                   {tab.id ===
                     'waec-registration' &&
                     'Registration'}
-                  {tab.id === 'waec' &&
+
+                  {tab.id ===
+                    'waec' &&
                     'Result Checker'}
-                  {tab.id === 'jamb' &&
+
+                  {tab.id ===
+                    'jamb' &&
                     'PIN'}
                 </div>
               </button>
@@ -664,7 +850,8 @@ const Education: React.FC = () => {
             background: '#ffffff',
             borderRadius: 20,
             padding: 18,
-            border: '1px solid #e0ebe3',
+            border:
+              '1px solid #e0ebe3',
             marginBottom: 16,
           }}
         >
@@ -694,7 +881,6 @@ const Education: React.FC = () => {
             </div>
           </div>
 
-          {/* PLAN LIST */}
           <div>
             <div
               style={{
@@ -716,107 +902,124 @@ const Education: React.FC = () => {
                   fontSize: 14,
                 }}
               >
-                Loading available plans...
+                Loading available
+                plans...
               </div>
             ) : plans.length === 0 ? (
               <div
                 style={{
                   padding: 18,
                   borderRadius: 14,
-                  background: '#f7faf8',
+                  background:
+                    '#f7faf8',
                   color: '#718078',
                   fontSize: 14,
                   textAlign: 'center',
                 }}
               >
-                No plans available right now.
+                No plans available
+                right now.
               </div>
             ) : (
               <div
                 style={{
                   display: 'flex',
-                  flexDirection: 'column',
+                  flexDirection:
+                    'column',
                   gap: 9,
                 }}
               >
-                {plans.map((plan) => {
-                  const selected =
-                    selectedPlan
-                      ?.variation_code ===
-                    plan.variation_code;
+                {plans.map(
+                  (plan) => {
+                    const selected =
+                      selectedPlan
+                        ?.variation_code ===
+                      plan.variation_code;
 
-                  return (
-                    <button
-                      key={
-                        plan.variation_code
-                      }
-                      type="button"
-                      onClick={() =>
-                        handleSelectPlan(
-                          plan
-                        )
-                      }
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        border: selected
-                          ? '1.5px solid #159447'
-                          : '1px solid #dfe9e2',
-                        background:
-                          selected
-                            ? '#effaf3'
-                            : '#ffffff',
-                        borderRadius: 15,
-                        padding: 14,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        justifyContent:
-                          'space-between',
-                        alignItems: 'center',
-                        gap: 12,
-                      }}
-                    >
-                      <div>
+                    return (
+                      <button
+                        key={
+                          plan.variation_code
+                        }
+                        type="button"
+                        onClick={() =>
+                          handleSelectPlan(
+                            plan
+                          )
+                        }
+                        style={{
+                          width: '100%',
+                          textAlign:
+                            'left',
+                          border:
+                            selected
+                              ? '1.5px solid #159447'
+                              : '1px solid #dfe9e2',
+                          background:
+                            selected
+                              ? '#effaf3'
+                              : '#ffffff',
+                          borderRadius: 15,
+                          padding: 14,
+                          cursor:
+                            'pointer',
+                          display:
+                            'flex',
+                          justifyContent:
+                            'space-between',
+                          alignItems:
+                            'center',
+                          gap: 12,
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{
+                              fontSize: 14,
+                              fontWeight:
+                                700,
+                              color:
+                                '#24382c',
+                            }}
+                          >
+                            {
+                              plan.name
+                            }
+                          </div>
+
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color:
+                                '#7a887f',
+                              marginTop: 4,
+                            }}
+                          >
+                            {
+                              plan.variation_code
+                            }
+                          </div>
+                        </div>
+
                         <div
                           style={{
                             fontSize: 14,
-                            fontWeight: 700,
+                            fontWeight:
+                              800,
                             color:
-                              '#24382c',
+                              '#159447',
+                            whiteSpace:
+                              'nowrap',
                           }}
                         >
-                          {plan.name}
+                          {formatNaira(
+                            plan.amount
+                          )}
                         </div>
-
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color:
-                              '#7a887f',
-                            marginTop: 4,
-                          }}
-                        >
-                          {plan.variation_code}
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 800,
-                          color:
-                            '#159447',
-                          whiteSpace:
-                            'nowrap',
-                        }}
-                      >
-                        {formatNaira(
-                          plan.amount
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  }
+                )}
               </div>
             )}
           </div>
@@ -852,14 +1055,15 @@ const Education: React.FC = () => {
                 marginBottom: 18,
               }}
             >
-              Complete the details below to
-              continue.
+              Complete the details
+              below to continue.
             </div>
 
             {/* SELECTED PLAN */}
             <div
               style={{
-                background: '#f3faf5',
+                background:
+                  '#f3faf5',
                 borderRadius: 14,
                 padding: 14,
                 marginBottom: 16,
@@ -873,7 +1077,8 @@ const Education: React.FC = () => {
                 <div
                   style={{
                     fontSize: 12,
-                    color: '#718078',
+                    color:
+                      '#718078',
                   }}
                 >
                   Selected plan
@@ -883,19 +1088,25 @@ const Education: React.FC = () => {
                   style={{
                     marginTop: 3,
                     fontSize: 14,
-                    fontWeight: 700,
-                    color: '#173d29',
+                    fontWeight:
+                      700,
+                    color:
+                      '#173d29',
                   }}
                 >
-                  {selectedPlan.name}
+                  {
+                    selectedPlan.name
+                  }
                 </div>
               </div>
 
               <div
                 style={{
                   fontSize: 15,
-                  fontWeight: 800,
-                  color: '#159447',
+                  fontWeight:
+                    800,
+                  color:
+                    '#159447',
                 }}
               >
                 {formatNaira(
@@ -905,14 +1116,18 @@ const Education: React.FC = () => {
             </div>
 
             {/* JAMB PROFILE */}
-            {activeService === 'jamb' && (
+            {activeService ===
+              'jamb' && (
               <>
                 <label
                   style={{
-                    display: 'block',
+                    display:
+                      'block',
                     fontSize: 13,
-                    fontWeight: 700,
-                    color: '#41554a',
+                    fontWeight:
+                      700,
+                    color:
+                      '#41554a',
                     marginBottom: 7,
                   }}
                 >
@@ -920,15 +1135,27 @@ const Education: React.FC = () => {
                 </label>
 
                 <input
-                  value={profileId}
-                  onChange={(event) => {
+                  value={
+                    profileId
+                  }
+                  onChange={(
+                    event
+                  ) => {
                     setProfileId(
                       cleanProfileId(
-                        event.target.value
+                        event
+                          .target
+                          .value
                       )
                     );
-                    setJambVerified(false);
-                    setJambCustomerName('');
+
+                    setJambVerified(
+                      false
+                    );
+
+                    setJambCustomerName(
+                      ''
+                    );
                   }}
                   placeholder="Enter JAMB Profile ID"
                   disabled={
@@ -936,18 +1163,23 @@ const Education: React.FC = () => {
                     processing
                   }
                   style={{
-                    width: '100%',
+                    width:
+                      '100%',
                     boxSizing:
                       'border-box',
                     padding:
                       '13px 14px',
-                    borderRadius: 13,
+                    borderRadius:
+                      13,
                     border:
                       '1px solid #d7e4da',
-                    outline: 'none',
+                    outline:
+                      'none',
                     fontSize: 14,
-                    color: '#24382c',
-                    marginBottom: 9,
+                    color:
+                      '#24382c',
+                    marginBottom:
+                      9,
                   }}
                 />
 
@@ -962,24 +1194,30 @@ const Education: React.FC = () => {
                     !profileId.trim()
                   }
                   style={{
-                    width: '100%',
-                    border: 'none',
-                    borderRadius: 13,
+                    width:
+                      '100%',
+                    border:
+                      'none',
+                    borderRadius:
+                      13,
                     padding: 13,
                     background:
                       verifyingJamb ||
                       !profileId.trim()
                         ? '#b8c9bd'
                         : '#176b3a',
-                    color: '#ffffff',
+                    color:
+                      '#ffffff',
                     fontSize: 14,
-                    fontWeight: 700,
+                    fontWeight:
+                      700,
                     cursor:
                       verifyingJamb ||
                       !profileId.trim()
                         ? 'not-allowed'
                         : 'pointer',
-                    marginBottom: 10,
+                    marginBottom:
+                      10,
                   }}
                 >
                   {verifyingJamb
@@ -993,12 +1231,15 @@ const Education: React.FC = () => {
                   <div
                     style={{
                       padding: 12,
-                      borderRadius: 12,
+                      borderRadius:
+                        12,
                       background:
                         '#eaf8ef',
-                      color: '#176b3a',
+                      color:
+                        '#176b3a',
                       fontSize: 13,
-                      marginBottom: 16,
+                      marginBottom:
+                        16,
                     }}
                   >
                     <strong>
@@ -1011,7 +1252,9 @@ const Education: React.FC = () => {
                           marginTop: 4,
                         }}
                       >
-                        {jambCustomerName}
+                        {
+                          jambCustomerName
+                        }
                       </div>
                     )}
                   </div>
@@ -1022,10 +1265,13 @@ const Education: React.FC = () => {
             {/* PHONE */}
             <label
               style={{
-                display: 'block',
+                display:
+                  'block',
                 fontSize: 13,
-                fontWeight: 700,
-                color: '#41554a',
+                fontWeight:
+                  700,
+                color:
+                  '#41554a',
                 marginBottom: 7,
               }}
             >
@@ -1035,39 +1281,52 @@ const Education: React.FC = () => {
             <input
               type="tel"
               value={phone}
-              onChange={(event) =>
+              onChange={(
+                event
+              ) =>
                 setPhone(
                   cleanPhone(
-                    event.target.value
+                    event.target
+                      .value
                   )
                 )
               }
               placeholder="08012345678"
               maxLength={11}
-              disabled={processing}
+              disabled={
+                processing
+              }
               style={{
-                width: '100%',
+                width:
+                  '100%',
                 boxSizing:
                   'border-box',
                 padding:
                   '13px 14px',
-                borderRadius: 13,
+                borderRadius:
+                  13,
                 border:
                   '1px solid #d7e4da',
-                outline: 'none',
+                outline:
+                  'none',
                 fontSize: 14,
-                color: '#24382c',
-                marginBottom: 16,
+                color:
+                  '#24382c',
+                marginBottom:
+                  16,
               }}
             />
 
             {/* TRANSACTION PIN */}
             <label
               style={{
-                display: 'block',
+                display:
+                  'block',
                 fontSize: 13,
-                fontWeight: 700,
-                color: '#41554a',
+                fontWeight:
+                  700,
+                color:
+                  '#41554a',
                 marginBottom: 7,
               }}
             >
@@ -1076,8 +1335,10 @@ const Education: React.FC = () => {
 
             <div
               style={{
-                position: 'relative',
-                marginBottom: 16,
+                position:
+                  'relative',
+                marginBottom:
+                  16,
               }}
             >
               <input
@@ -1089,9 +1350,12 @@ const Education: React.FC = () => {
                 value={
                   transactionPin
                 }
-                onChange={(event) =>
+                onChange={(
+                  event
+                ) =>
                   setTransactionPin(
-                    event.target.value
+                    event.target
+                      .value
                       .replace(
                         /\D/g,
                         ''
@@ -1105,20 +1369,27 @@ const Education: React.FC = () => {
                 placeholder="Enter PIN"
                 inputMode="numeric"
                 maxLength={6}
-                disabled={processing}
+                disabled={
+                  processing
+                }
                 style={{
-                  width: '100%',
+                  width:
+                    '100%',
                   boxSizing:
                     'border-box',
                   padding:
                     '13px 50px 13px 14px',
-                  borderRadius: 13,
+                  borderRadius:
+                    13,
                   border:
                     '1px solid #d7e4da',
-                  outline: 'none',
+                  outline:
+                    'none',
                   fontSize: 15,
-                  letterSpacing: 4,
-                  color: '#24382c',
+                  letterSpacing:
+                    4,
+                  color:
+                    '#24382c',
                 }}
               />
 
@@ -1137,14 +1408,19 @@ const Education: React.FC = () => {
                   top: 7,
                   height: 34,
                   minWidth: 42,
-                  border: 'none',
-                  borderRadius: 9,
+                  border:
+                    'none',
+                  borderRadius:
+                    9,
                   background:
                     '#edf5ef',
-                  color: '#176b3a',
-                  cursor: 'pointer',
+                  color:
+                    '#176b3a',
+                  cursor:
+                    'pointer',
                   fontSize: 12,
-                  fontWeight: 700,
+                  fontWeight:
+                    700,
                 }}
               >
                 {showPin
@@ -1153,25 +1429,32 @@ const Education: React.FC = () => {
               </button>
             </div>
 
-            {/* PURCHASE BUTTON */}
+            {/* PURCHASE */}
             <button
               type="button"
               onClick={
                 handlePurchase
               }
-              disabled={processing}
+              disabled={
+                processing
+              }
               style={{
-                width: '100%',
-                border: 'none',
-                borderRadius: 14,
+                width:
+                  '100%',
+                border:
+                  'none',
+                borderRadius:
+                  14,
                 padding: 15,
                 background:
                   processing
                     ? '#aabdb0'
                     : '#159447',
-                color: '#ffffff',
+                color:
+                  '#ffffff',
                 fontSize: 15,
-                fontWeight: 800,
+                fontWeight:
+                  800,
                 cursor:
                   processing
                     ? 'not-allowed'
@@ -1193,12 +1476,15 @@ const Education: React.FC = () => {
             style={{
               padding: 14,
               borderRadius: 14,
-              background: '#fff3f2',
+              background:
+                '#fff3f2',
               border:
                 '1px solid #f0d2cf',
-              color: '#b42318',
+              color:
+                '#b42318',
               fontSize: 13,
-              marginBottom: 14,
+              marginBottom:
+                14,
             }}
           >
             {error}
@@ -1206,29 +1492,35 @@ const Education: React.FC = () => {
         )}
 
         {/* MESSAGE */}
-        {message && !error && (
-          <div
-            style={{
-              padding: 14,
-              borderRadius: 14,
-              background: '#eaf8ef',
-              border:
-                '1px solid #ccebd6',
-              color: '#176b3a',
-              fontSize: 13,
-              marginBottom: 14,
-            }}
-          >
-            {message}
-          </div>
-        )}
+        {message &&
+          !error && (
+            <div
+              style={{
+                padding: 14,
+                borderRadius: 14,
+                background:
+                  '#eaf8ef',
+                border:
+                  '1px solid #ccebd6',
+                color:
+                  '#176b3a',
+                fontSize: 13,
+                marginBottom:
+                  14,
+              }}
+            >
+              {message}
+            </div>
+          )}
 
         {/* SUCCESS / RESULT */}
         {purchaseResult && (
           <div
             style={{
-              background: '#ffffff',
-              borderRadius: 20,
+              background:
+                '#ffffff',
+              borderRadius:
+                20,
               padding: 20,
               border:
                 '1px solid #dce9df',
@@ -1238,20 +1530,24 @@ const Education: React.FC = () => {
           >
             <div
               style={{
-                textAlign: 'center',
-                marginBottom: 18,
+                textAlign:
+                  'center',
+                marginBottom:
+                  18,
               }}
             >
               <div
                 style={{
                   width: 58,
                   height: 58,
-                  borderRadius: '50%',
+                  borderRadius:
+                    '50%',
                   background:
                     isCompleted
                       ? '#e7f7ed'
                       : '#fff7e6',
-                  display: 'flex',
+                  display:
+                    'flex',
                   alignItems:
                     'center',
                   justifyContent:
@@ -1269,7 +1565,8 @@ const Education: React.FC = () => {
               <div
                 style={{
                   fontSize: 19,
-                  fontWeight: 800,
+                  fontWeight:
+                    800,
                   color:
                     isCompleted
                       ? '#176b3a'
@@ -1284,34 +1581,35 @@ const Education: React.FC = () => {
               <div
                 style={{
                   fontSize: 13,
-                  color: '#718078',
+                  color:
+                    '#718078',
                   marginTop: 5,
                 }}
               >
-                {purchaseResult.message}
+                {
+                  purchaseResult.message
+                }
               </div>
             </div>
 
-            {/* PURCHASED PIN */}
-            {purchaseResult
-              .purchasedCode && (
+            {/* PURCHASED PIN(S) */}
+            {purchasedItems.length >
+              0 && (
               <div
                 style={{
-                  background:
-                    '#f1faf4',
-                  border:
-                    '1px solid #cdebd7',
-                  borderRadius: 16,
-                  padding: 18,
-                  textAlign: 'center',
-                  marginBottom: 14,
+                  marginBottom:
+                    16,
                 }}
               >
                 <div
                   style={{
-                    fontSize: 12,
-                    color: '#718078',
-                    marginBottom: 8,
+                    fontSize: 15,
+                    fontWeight:
+                      800,
+                    color:
+                      '#176b3a',
+                    marginBottom:
+                      10,
                   }}
                 >
                   Your PIN / Code
@@ -1319,27 +1617,172 @@ const Education: React.FC = () => {
 
                 <div
                   style={{
-                    fontSize: 24,
-                    fontWeight: 900,
-                    color: '#176b3a',
-                    letterSpacing: 1,
-                    wordBreak:
-                      'break-word',
+                    display:
+                      'flex',
+                    flexDirection:
+                      'column',
+                    gap: 10,
                   }}
                 >
-                  {
-                    purchaseResult.purchasedCode
-                  }
+                  {purchasedItems.map(
+                    (
+                      item,
+                      index
+                    ) => (
+                      <div
+                        key={`${item.serialNumber}-${item.pin}-${index}`}
+                        style={{
+                          background:
+                            '#f1faf4',
+                          border:
+                            '1px solid #cdebd7',
+                          borderRadius:
+                            16,
+                          padding: 15,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight:
+                              800,
+                            color:
+                              '#718078',
+                            marginBottom:
+                              10,
+                          }}
+                        >
+                          PIN{' '}
+                          {index +
+                            1}
+                        </div>
+
+                        {item.serialNumber && (
+                          <div
+                            style={{
+                              marginBottom:
+                                10,
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color:
+                                  '#718078',
+                                marginBottom:
+                                  3,
+                              }}
+                            >
+                              Serial Number
+                            </div>
+
+                            <div
+                              style={{
+                                fontSize: 15,
+                                fontWeight:
+                                  800,
+                                color:
+                                  '#24382c',
+                                wordBreak:
+                                  'break-all',
+                              }}
+                            >
+                              {
+                                item.serialNumber
+                              }
+                            </div>
+                          </div>
+                        )}
+
+                        <div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color:
+                                '#718078',
+                              marginBottom:
+                                3,
+                            }}
+                          >
+                            PIN
+                          </div>
+
+                          <div
+                            style={{
+                              display:
+                                'flex',
+                              alignItems:
+                                'center',
+                              gap: 10,
+                            }}
+                          >
+                            <div
+                              style={{
+                                flex: 1,
+                                fontSize: 19,
+                                fontWeight:
+                                  900,
+                                color:
+                                  '#176b3a',
+                                letterSpacing:
+                                  1,
+                                wordBreak:
+                                  'break-all',
+                              }}
+                            >
+                              {
+                                item.pin
+                              }
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                copyPin(
+                                  item.pin,
+                                  index
+                                )
+                              }
+                              style={{
+                                border:
+                                  'none',
+                                borderRadius:
+                                  10,
+                                background:
+                                  '#176b3a',
+                                color:
+                                  '#ffffff',
+                                padding:
+                                  '9px 12px',
+                                fontSize: 12,
+                                fontWeight:
+                                  800,
+                                cursor:
+                                  'pointer',
+                                whiteSpace:
+                                  'nowrap',
+                              }}
+                            >
+                              {copiedPinIndex ===
+                              index
+                                ? 'Copied ✓'
+                                : 'Copy'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
             )}
 
             {/* CUSTOMER */}
-            {purchaseResult
-              .customerName && (
+            {purchaseResult.customerName && (
               <div
                 style={{
-                  display: 'flex',
+                  display:
+                    'flex',
                   justifyContent:
                     'space-between',
                   padding:
@@ -1372,10 +1815,12 @@ const Education: React.FC = () => {
             )}
 
             {/* AMOUNT */}
-            {purchaseResult.amount && (
+            {purchaseResult.amount !==
+              undefined && (
               <div
                 style={{
-                  display: 'flex',
+                  display:
+                    'flex',
                   justifyContent:
                     'space-between',
                   padding:
@@ -1422,7 +1867,8 @@ const Education: React.FC = () => {
                   style={{
                     color:
                       '#718078',
-                    marginBottom: 3,
+                    marginBottom:
+                      3,
                   }}
                 >
                   Reference
@@ -1432,7 +1878,8 @@ const Education: React.FC = () => {
                   style={{
                     color:
                       '#24382c',
-                    fontWeight: 700,
+                    fontWeight:
+                      700,
                     wordBreak:
                       'break-all',
                   }}
@@ -1450,17 +1897,22 @@ const Education: React.FC = () => {
                 resetPurchase
               }
               style={{
-                width: '100%',
+                width:
+                  '100%',
                 marginTop: 12,
                 border:
                   '1px solid #cfe1d4',
                 background:
                   '#ffffff',
-                color: '#176b3a',
-                borderRadius: 13,
+                color:
+                  '#176b3a',
+                borderRadius:
+                  13,
                 padding: 13,
-                fontWeight: 700,
-                cursor: 'pointer',
+                fontWeight:
+                  700,
+                cursor:
+                  'pointer',
               }}
             >
               Make another purchase
