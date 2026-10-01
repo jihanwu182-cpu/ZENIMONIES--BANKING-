@@ -54,6 +54,7 @@ import TransactionReceipt from './pages/TransactionReceipt.tsx';
 import Statement from './pages/Statement.tsx';
 import BusinessTransactions from './pages/BusinessTransactions.tsx';
 import Beneficiaries from './pages/Beneficiaries.tsx';
+import Wallet from './pages/Wallet.tsx';
 
 // ==================== PAYMENTS ====================
 
@@ -554,14 +555,8 @@ const App: React.FC = () => {
 
           <Route
             path="/wallet"
-            element={
-              <ServicePage
-                title="Wallet"
-                icon="◈"
-                description="Manage your Zenimonies wallet and available funds."
-              />
-            }
-          />
+            element={<Wallet />}
+         />
 
           {/* ================= VIRTUAL CARD ================= */}
 
