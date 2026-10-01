@@ -260,8 +260,7 @@ const [spendSaveMessage, setSpendSaveMessage] =
 
 const [spendSaveError, setSpendSaveError] =
   useState('');
-  const [spendSaveError, setSpendSaveError] = 
-    useState('');
+  
 // ==========================================================
 // LOAD SPEND + SAVE SETTINGS
 // ==========================================================
