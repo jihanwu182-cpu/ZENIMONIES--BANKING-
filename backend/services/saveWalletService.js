@@ -5,21 +5,21 @@ const crypto = require('crypto');
 // ZENIMONIES SAVE WALLET SERVICE
 // ============================================================
 //
-// This service manages the flexible Save Wallet.
-//
-// It supports:
+// Supports:
 // - Get/create Save Wallet
-// - Spend & Save settings
-// - Manual saving
-// - Withdrawal back to main account
-// - Automatic Spend & Save credits
+// - Spend + Save settings
+// - Manual Save
+// - Withdraw to Main Account
+// - Automatic Spend + Save after eligible successful transfer
 //
 // IMPORTANT:
-// The main account remains in accounts.balance.
-// Save Wallet money is stored separately in save_wallets.balance.
-//
-// All money-changing operations use PostgreSQL transactions
-// and row locks.
+// - Main Account money stays in accounts.balance.
+// - Save Wallet money stays in save_wallets.balance.
+// - Setting a Spend + Save amount NEVER moves money.
+// - Automatic saving happens ONLY when applySpendSave()
+//   is called by a successful eligible transfer.
+// - Money-changing operations use PostgreSQL transactions
+//   and row locks.
 // ============================================================
 
 
@@ -28,7 +28,10 @@ const crypto = require('crypto');
 // ============================================================
 
 function createReference(prefix) {
-    return `${prefix}-${Date.now()}-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
+    return `${prefix}-${Date.now()}-${crypto
+        .randomBytes(6)
+        .toString('hex')
+        .toUpperCase()}`;
 }
 
 
@@ -43,11 +46,16 @@ function toMoney(value) {
 }
 
 
-function requirePositiveAmount(value, fieldName = 'Amount') {
+function requirePositiveAmount(
+    value,
+    fieldName = 'Amount'
+) {
     const amount = toMoney(value);
 
     if (amount <= 0) {
-        throw new Error(`${fieldName} must be greater than ₦0.00.`);
+        throw new Error(
+            `${fieldName} must be greater than ₦0.00.`
+        );
     }
 
     return amount;
@@ -58,9 +66,14 @@ function requirePositiveAmount(value, fieldName = 'Amount') {
 // GET OR CREATE SAVE WALLET
 // ============================================================
 
-async function getOrCreateSaveWallet(userId, accountId) {
+async function getOrCreateSaveWallet(
+    userId,
+    accountId
+) {
     if (!userId || !accountId) {
-        throw new Error('User and account are required.');
+        throw new Error(
+            'User and account are required.'
+        );
     }
 
     const client = await pool.connect();
@@ -68,61 +81,49 @@ async function getOrCreateSaveWallet(userId, accountId) {
     try {
         await client.query('BEGIN');
 
-        // Make sure the account belongs to the user.
-        const accountResult = await client.query(
-            `
-            SELECT id, user_id, currency, balance, status
-            FROM accounts
-            WHERE id = $1
-              AND user_id = $2
-            FOR UPDATE
-            `,
-            [accountId, userId]
-        );
+        // Verify account belongs to user.
+        const accountResult =
+            await client.query(
+                `
+                SELECT
+                    id,
+                    user_id,
+                    currency,
+                    balance,
+                    status
+                FROM accounts
+                WHERE id = $1
+                  AND user_id = $2
+                FOR UPDATE
+                `,
+                [accountId, userId]
+            );
 
         if (accountResult.rowCount === 0) {
-            throw new Error('Account not found.');
+            throw new Error(
+                'Account not found.'
+            );
         }
 
-        const account = accountResult.rows[0];
+        const account =
+            accountResult.rows[0];
 
         if (account.currency !== 'NGN') {
-            throw new Error('Save Wallet currently supports NGN only.');
+            throw new Error(
+                'Save Wallet currently supports NGN only.'
+            );
         }
 
         if (account.status !== 'active') {
-            throw new Error('Account is not active.');
+            throw new Error(
+                'Account is not active.'
+            );
         }
 
-        let walletResult = await client.query(
-            `
-            SELECT
-                id,
-                user_id,
-                account_id,
-                currency,
-                balance,
-                spend_save_enabled,
-                spend_save_amount,
-                created_at,
-                updated_at
-            FROM save_wallets
-            WHERE account_id = $1
-            FOR UPDATE
-            `,
-            [accountId]
-        );
-
-        if (walletResult.rowCount === 0) {
-            walletResult = await client.query(
+        let walletResult =
+            await client.query(
                 `
-                INSERT INTO save_wallets (
-                    user_id,
-                    account_id,
-                    currency
-                )
-                VALUES ($1, $2, 'NGN')
-                RETURNING
+                SELECT
                     id,
                     user_id,
                     account_id,
@@ -132,16 +133,51 @@ async function getOrCreateSaveWallet(userId, accountId) {
                     spend_save_amount,
                     created_at,
                     updated_at
+                FROM save_wallets
+                WHERE account_id = $1
+                FOR UPDATE
                 `,
-                [userId, accountId]
+                [accountId]
             );
+
+        // Create wallet if it does not exist.
+        if (walletResult.rowCount === 0) {
+            walletResult =
+                await client.query(
+                    `
+                    INSERT INTO save_wallets (
+                        user_id,
+                        account_id,
+                        currency
+                    )
+                    VALUES (
+                        $1,
+                        $2,
+                        'NGN'
+                    )
+                    RETURNING
+                        id,
+                        user_id,
+                        account_id,
+                        currency,
+                        balance,
+                        spend_save_enabled,
+                        spend_save_amount,
+                        created_at,
+                        updated_at
+                    `,
+                    [userId, accountId]
+                );
         }
 
         await client.query('COMMIT');
 
         return walletResult.rows[0];
     } catch (error) {
-        await client.query('ROLLBACK');
+        await client.query(
+            'ROLLBACK'
+        );
+
         throw error;
     } finally {
         client.release();
@@ -153,9 +189,14 @@ async function getOrCreateSaveWallet(userId, accountId) {
 // GET SAVE WALLET
 // ============================================================
 
-async function getSaveWallet(userId, accountId) {
+async function getSaveWallet(
+    userId,
+    accountId
+) {
     if (!userId || !accountId) {
-        throw new Error('User and account are required.');
+        throw new Error(
+            'User and account are required.'
+        );
     }
 
     const result = await pool.query(
@@ -178,7 +219,10 @@ async function getSaveWallet(userId, accountId) {
     );
 
     if (result.rowCount === 0) {
-        return getOrCreateSaveWallet(userId, accountId);
+        return getOrCreateSaveWallet(
+            userId,
+            accountId
+        );
     }
 
     return result.rows[0];
@@ -186,15 +230,32 @@ async function getSaveWallet(userId, accountId) {
 
 
 // ============================================================
-// UPDATE SPEND & SAVE SETTINGS
+// UPDATE SPEND + SAVE SETTINGS
 // ============================================================
 //
-// Customer can:
-// - Enable Spend & Save with any positive amount
-// - Disable it
+// IMPORTANT:
 //
-// We do NOT hard-code ₦1,000 or ₦5,000.
+// The configured amount is independent of the ON/OFF switch.
 //
+// Example:
+//
+// Customer sets ₦2,000 while OFF:
+//
+// Spend + Save = OFF
+// Amount = ₦2,000
+// Wallet balance = unchanged
+//
+// Customer later turns ON:
+//
+// Spend + Save = ON
+// Amount = ₦2,000
+// Wallet balance = unchanged
+//
+// Only a successful eligible transfer will trigger
+// applySpendSave() and actually move ₦2,000 into the wallet.
+//
+// Turning Spend + Save OFF does NOT erase the configured
+// amount.
 // ============================================================
 
 async function updateSpendSaveSettings({
@@ -204,7 +265,9 @@ async function updateSpendSaveSettings({
     amount
 }) {
     if (!userId || !accountId) {
-        throw new Error('User and account are required.');
+        throw new Error(
+            'User and account are required.'
+        );
     }
 
     const client = await pool.connect();
@@ -212,85 +275,173 @@ async function updateSpendSaveSettings({
     try {
         await client.query('BEGIN');
 
-        const accountResult = await client.query(
-            `
-            SELECT id, user_id, currency, status
-            FROM accounts
-            WHERE id = $1
-              AND user_id = $2
-            FOR UPDATE
-            `,
-            [accountId, userId]
-        );
+        // ----------------------------------------------------
+        // Verify customer's account.
+        // ----------------------------------------------------
+
+        const accountResult =
+            await client.query(
+                `
+                SELECT
+                    id,
+                    user_id,
+                    currency,
+                    status
+                FROM accounts
+                WHERE id = $1
+                  AND user_id = $2
+                FOR UPDATE
+                `,
+                [accountId, userId]
+            );
 
         if (accountResult.rowCount === 0) {
-            throw new Error('Account not found.');
-        }
-
-        const account = accountResult.rows[0];
-
-        if (account.currency !== 'NGN') {
-            throw new Error('Spend & Save currently supports NGN only.');
-        }
-
-        if (account.status !== 'active') {
-            throw new Error('Account is not active.');
-        }
-
-        let saveAmount = 0;
-
-        if (enabled) {
-            saveAmount = requirePositiveAmount(
-                amount,
-                'Spend & Save amount'
+            throw new Error(
+                'Account not found.'
             );
         }
 
-        const walletResult = await client.query(
-            `
-            INSERT INTO save_wallets (
-                user_id,
-                account_id,
-                currency,
-                spend_save_enabled,
-                spend_save_amount
-            )
-            VALUES (
-                $1,
-                $2,
-                'NGN',
-                $3,
-                $4
-            )
-            ON CONFLICT (account_id)
-            DO UPDATE SET
-                spend_save_enabled = EXCLUDED.spend_save_enabled,
-                spend_save_amount = EXCLUDED.spend_save_amount,
-                updated_at = CURRENT_TIMESTAMP
-            RETURNING
-                id,
-                user_id,
-                account_id,
-                currency,
-                balance,
-                spend_save_enabled,
-                spend_save_amount,
-                created_at,
-                updated_at
-            `,
-            [
-                userId,
-                accountId,
-                Boolean(enabled),
-                saveAmount
-            ]
-        );
+        const account =
+            accountResult.rows[0];
+
+        if (account.currency !== 'NGN') {
+            throw new Error(
+                'Spend & Save currently supports NGN only.'
+            );
+        }
+
+        if (account.status !== 'active') {
+            throw new Error(
+                'Account is not active.'
+            );
+        }
+
+        // ----------------------------------------------------
+        // Get existing wallet.
+        // ----------------------------------------------------
+
+        const existingWalletResult =
+            await client.query(
+                `
+                SELECT
+                    id,
+                    spend_save_enabled,
+                    spend_save_amount
+                FROM save_wallets
+                WHERE account_id = $1
+                  AND user_id = $2
+                FOR UPDATE
+                `,
+                [accountId, userId]
+            );
+
+        const existingAmount =
+            existingWalletResult.rowCount > 0
+                ? Number(
+                      existingWalletResult
+                          .rows[0]
+                          .spend_save_amount
+                  )
+                : 0;
+
+        // ----------------------------------------------------
+        // Preserve existing configured amount unless the
+        // customer supplies a new positive amount.
+        // ----------------------------------------------------
+
+        let saveAmount =
+            existingAmount;
+
+        if (
+            amount !== undefined &&
+            amount !== null &&
+            String(amount).trim() !== ''
+        ) {
+            const suppliedAmount =
+                toMoney(amount);
+
+            if (suppliedAmount > 0) {
+                saveAmount =
+                    suppliedAmount;
+            } else if (enabled) {
+                throw new Error(
+                    'Spend & Save amount must be greater than ₦0.00.'
+                );
+            }
+        }
+
+        // ----------------------------------------------------
+        // Cannot turn ON without an amount.
+        // ----------------------------------------------------
+
+        if (
+            Boolean(enabled) &&
+            saveAmount <= 0
+        ) {
+            throw new Error(
+                'Enter the amount you want to save before turning Spend + Save on.'
+            );
+        }
+
+        // ----------------------------------------------------
+        // Create or update wallet.
+        // ----------------------------------------------------
+
+        const walletResult =
+            await client.query(
+                `
+                INSERT INTO save_wallets (
+                    user_id,
+                    account_id,
+                    currency,
+                    spend_save_enabled,
+                    spend_save_amount
+                )
+                VALUES (
+                    $1,
+                    $2,
+                    'NGN',
+                    $3,
+                    $4
+                )
+                ON CONFLICT (account_id)
+                DO UPDATE SET
+                    spend_save_enabled =
+                        EXCLUDED.spend_save_enabled,
+
+                    spend_save_amount =
+                        EXCLUDED.spend_save_amount,
+
+                    updated_at =
+                        CURRENT_TIMESTAMP
+
+                RETURNING
+                    id,
+                    user_id,
+                    account_id,
+                    currency,
+                    balance,
+                    spend_save_enabled,
+                    spend_save_amount,
+                    created_at,
+                    updated_at
+                `,
+                [
+                    userId,
+                    accountId,
+                    Boolean(enabled),
+                    saveAmount
+                ]
+            );
 
         await client.query('COMMIT');
 
         return walletResult.rows[0];
     } catch (error) {
-        await client.query('ROLLBACK');
+        await client.query(
+            'ROLLBACK'
+        );
+
         throw error;
     } finally {
         client.release();
@@ -308,6 +459,8 @@ async function updateSpendSaveSettings({
 // Save Wallet
 //     + amount
 //
+// This happens ONLY when the customer explicitly presses
+// the Save button.
 // ============================================================
 
 async function saveMoney({
@@ -317,45 +470,62 @@ async function saveMoney({
     description = 'Money saved manually',
     reference = null
 }) {
-    const saveAmount = requirePositiveAmount(amount, 'Save amount');
+    const saveAmount =
+        requirePositiveAmount(
+            amount,
+            'Save amount'
+        );
 
-    const client = await pool.connect();
+    const client =
+        await pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // Lock main account first.
-        const accountResult = await client.query(
-            `
-            SELECT
-                id,
-                user_id,
-                currency,
-                balance,
-                status
-            FROM accounts
-            WHERE id = $1
-              AND user_id = $2
-            FOR UPDATE
-            `,
-            [accountId, userId]
-        );
+        // ----------------------------------------------------
+        // Lock main account.
+        // ----------------------------------------------------
+
+        const accountResult =
+            await client.query(
+                `
+                SELECT
+                    id,
+                    user_id,
+                    currency,
+                    balance,
+                    status
+                FROM accounts
+                WHERE id = $1
+                  AND user_id = $2
+                FOR UPDATE
+                `,
+                [accountId, userId]
+            );
 
         if (accountResult.rowCount === 0) {
-            throw new Error('Account not found.');
+            throw new Error(
+                'Account not found.'
+            );
         }
 
-        const account = accountResult.rows[0];
+        const account =
+            accountResult.rows[0];
 
         if (account.status !== 'active') {
-            throw new Error('Account is not active.');
+            throw new Error(
+                'Account is not active.'
+            );
         }
 
         if (account.currency !== 'NGN') {
-            throw new Error('Save Wallet currently supports NGN only.');
+            throw new Error(
+                'Save Wallet currently supports NGN only.'
+            );
         }
 
-        const currentBalance = Number(account.balance);
+        const currentBalance =
+            Number(account.balance);
 
         if (currentBalance < saveAmount) {
             throw new Error(
@@ -363,40 +533,57 @@ async function saveMoney({
             );
         }
 
-        // Get/create wallet while transaction is open.
-        let walletResult = await client.query(
-            `
-            SELECT *
-            FROM save_wallets
-            WHERE account_id = $1
-            FOR UPDATE
-            `,
-            [accountId]
-        );
+        // ----------------------------------------------------
+        // Get/create wallet.
+        // ----------------------------------------------------
+
+        let walletResult =
+            await client.query(
+                `
+                SELECT *
+                FROM save_wallets
+                WHERE account_id = $1
+                FOR UPDATE
+                `,
+                [accountId]
+            );
 
         if (walletResult.rowCount === 0) {
-            walletResult = await client.query(
-                `
-                INSERT INTO save_wallets (
-                    user_id,
-                    account_id,
-                    currency
-                )
-                VALUES ($1, $2, 'NGN')
-                RETURNING *
-                `,
-                [userId, accountId]
-            );
+            walletResult =
+                await client.query(
+                    `
+                    INSERT INTO save_wallets (
+                        user_id,
+                        account_id,
+                        currency
+                    )
+                    VALUES (
+                        $1,
+                        $2,
+                        'NGN'
+                    )
+                    RETURNING *
+                    `,
+                    [userId, accountId]
+                );
         }
 
-        const wallet = walletResult.rows[0];
+        const wallet =
+            walletResult.rows[0];
 
-        const walletBefore = Number(wallet.balance);
-        const walletAfter = walletBefore + saveAmount;
+        const walletBefore =
+            Number(wallet.balance);
 
-        const accountAfter = currentBalance - saveAmount;
+        const walletAfter =
+            walletBefore + saveAmount;
 
-        // Debit main account.
+        const accountAfter =
+            currentBalance - saveAmount;
+
+        // ----------------------------------------------------
+        // Debit Main Account.
+        // ----------------------------------------------------
+
         await client.query(
             `
             UPDATE accounts
@@ -412,9 +599,13 @@ async function saveMoney({
         );
 
         const transactionReference =
-            reference || createReference('ZMSAVE');
+            reference ||
+            createReference('ZMSAVE');
 
-        // Record Save Wallet transaction.
+        // ----------------------------------------------------
+        // Record wallet transaction.
+        // ----------------------------------------------------
+
         await client.query(
             `
             INSERT INTO save_wallet_transactions (
@@ -456,7 +647,10 @@ async function saveMoney({
             ]
         );
 
+        // ----------------------------------------------------
         // Credit Save Wallet.
+        // ----------------------------------------------------
+
         await client.query(
             `
             UPDATE save_wallets
@@ -475,13 +669,20 @@ async function saveMoney({
 
         return {
             success: true,
-            reference: transactionReference,
-            savedAmount: saveAmount,
-            accountBalance: accountAfter,
-            walletBalance: walletAfter
+            reference:
+                transactionReference,
+            savedAmount:
+                saveAmount,
+            accountBalance:
+                accountAfter,
+            walletBalance:
+                walletAfter
         };
     } catch (error) {
-        await client.query('ROLLBACK');
+        await client.query(
+            'ROLLBACK'
+        );
+
         throw error;
     } finally {
         client.release();
@@ -500,7 +701,7 @@ async function saveMoney({
 //     + amount
 //
 // This is NOT a bank withdrawal.
-// It returns money to the customer's own main account.
+// It returns the customer's own money to the Main Account.
 // ============================================================
 
 async function withdrawFromSaveWallet({
@@ -510,78 +711,112 @@ async function withdrawFromSaveWallet({
     description = 'Save Wallet withdrawal',
     reference = null
 }) {
-    const withdrawalAmount = requirePositiveAmount(
-        amount,
-        'Withdrawal amount'
-    );
+    const withdrawalAmount =
+        requirePositiveAmount(
+            amount,
+            'Withdrawal amount'
+        );
 
-    const client = await pool.connect();
+    const client =
+        await pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // Lock account first.
-        const accountResult = await client.query(
-            `
-            SELECT
-                id,
-                user_id,
-                currency,
-                balance,
-                status
-            FROM accounts
-            WHERE id = $1
-              AND user_id = $2
-            FOR UPDATE
-            `,
-            [accountId, userId]
-        );
+        // ----------------------------------------------------
+        // Lock main account.
+        // ----------------------------------------------------
+
+        const accountResult =
+            await client.query(
+                `
+                SELECT
+                    id,
+                    user_id,
+                    currency,
+                    balance,
+                    status
+                FROM accounts
+                WHERE id = $1
+                  AND user_id = $2
+                FOR UPDATE
+                `,
+                [accountId, userId]
+            );
 
         if (accountResult.rowCount === 0) {
-            throw new Error('Account not found.');
+            throw new Error(
+                'Account not found.'
+            );
         }
 
-        const account = accountResult.rows[0];
+        const account =
+            accountResult.rows[0];
 
         if (account.status !== 'active') {
-            throw new Error('Account is not active.');
+            throw new Error(
+                'Account is not active.'
+            );
         }
 
         if (account.currency !== 'NGN') {
-            throw new Error('Save Wallet currently supports NGN only.');
+            throw new Error(
+                'Save Wallet currently supports NGN only.'
+            );
         }
 
-        const walletResult = await client.query(
-            `
-            SELECT *
-            FROM save_wallets
-            WHERE account_id = $1
-              AND user_id = $2
-            FOR UPDATE
-            `,
-            [accountId, userId]
-        );
+        // ----------------------------------------------------
+        // Lock Save Wallet.
+        // ----------------------------------------------------
+
+        const walletResult =
+            await client.query(
+                `
+                SELECT *
+                FROM save_wallets
+                WHERE account_id = $1
+                  AND user_id = $2
+                FOR UPDATE
+                `,
+                [accountId, userId]
+            );
 
         if (walletResult.rowCount === 0) {
-            throw new Error('Save Wallet not found.');
+            throw new Error(
+                'Save Wallet not found.'
+            );
         }
 
-        const wallet = walletResult.rows[0];
+        const wallet =
+            walletResult.rows[0];
 
-        const walletBefore = Number(wallet.balance);
+        const walletBefore =
+            Number(wallet.balance);
 
-        if (walletBefore < withdrawalAmount) {
+        if (
+            walletBefore <
+            withdrawalAmount
+        ) {
             throw new Error(
                 'Insufficient Save Wallet balance.'
             );
         }
 
-        const walletAfter = walletBefore - withdrawalAmount;
+        const walletAfter =
+            walletBefore -
+            withdrawalAmount;
 
-        const accountBefore = Number(account.balance);
-        const accountAfter = accountBefore + withdrawalAmount;
+        const accountBefore =
+            Number(account.balance);
 
-        // Credit main account.
+        const accountAfter =
+            accountBefore +
+            withdrawalAmount;
+
+        // ----------------------------------------------------
+        // Credit Main Account.
+        // ----------------------------------------------------
+
         await client.query(
             `
             UPDATE accounts
@@ -597,9 +832,13 @@ async function withdrawFromSaveWallet({
         );
 
         const transactionReference =
-            reference || createReference('ZMWITH');
+            reference ||
+            createReference('ZMWITH');
 
-        // Record wallet transaction.
+        // ----------------------------------------------------
+        // Record withdrawal.
+        // ----------------------------------------------------
+
         await client.query(
             `
             INSERT INTO save_wallet_transactions (
@@ -641,7 +880,10 @@ async function withdrawFromSaveWallet({
             ]
         );
 
+        // ----------------------------------------------------
         // Update Save Wallet.
+        // ----------------------------------------------------
+
         await client.query(
             `
             UPDATE save_wallets
@@ -660,13 +902,20 @@ async function withdrawFromSaveWallet({
 
         return {
             success: true,
-            reference: transactionReference,
-            withdrawnAmount: withdrawalAmount,
-            accountBalance: accountAfter,
-            walletBalance: walletAfter
+            reference:
+                transactionReference,
+            withdrawnAmount:
+                withdrawalAmount,
+            accountBalance:
+                accountAfter,
+            walletBalance:
+                walletAfter
         };
     } catch (error) {
-        await client.query('ROLLBACK');
+        await client.query(
+            'ROLLBACK'
+        );
+
         throw error;
     } finally {
         client.release();
@@ -675,40 +924,64 @@ async function withdrawFromSaveWallet({
 
 
 // ============================================================
-// GET SPEND & SAVE SETTINGS
+// GET SPEND + SAVE SETTINGS
 // ============================================================
 
-async function getSpendSaveSettings(userId, accountId) {
-    const wallet = await getSaveWallet(userId, accountId);
+async function getSpendSaveSettings(
+    userId,
+    accountId
+) {
+    const wallet =
+        await getSaveWallet(
+            userId,
+            accountId
+        );
 
     return {
-        enabled: Boolean(wallet.spend_save_enabled),
-        amount: Number(wallet.spend_save_amount)
+        enabled:
+            Boolean(
+                wallet.spend_save_enabled
+            ),
+
+        amount:
+            Number(
+                wallet.spend_save_amount
+            )
     };
 }
 
 
 // ============================================================
-// APPLY AUTOMATIC SPEND & SAVE
+// APPLY AUTOMATIC SPEND + SAVE
 // ============================================================
 //
 // IMPORTANT:
 //
-// This function is intended to be called INSIDE the SAME
-// PostgreSQL transaction as the successful transfer.
+// This function MUST be called from the SAME PostgreSQL
+// transaction as the successful eligible transfer.
 //
-// It does NOT debit the main account.
+// It does NOT debit accounts.balance.
 //
-// The transfer service should calculate:
+// The transfer logic must make sure the sender has enough
+// money for:
 //
 // transfer amount
-// + save amount
-// + applicable fee
+// + Spend + Save amount
+// + applicable transfer fee
 //
-// and debit the main account accordingly.
+// Example:
 //
-// This function only credits the Save Wallet.
+// Transfer       = ₦10,000
+// Spend + Save   = ₦2,000
+// Fee            = ₦56
 //
+// Total sender debit = ₦12,056
+//
+// Recipient receives = ₦10,000
+// Save Wallet        = ₦2,000
+//
+// If the transfer fails or rolls back, the Spend + Save
+// credit also rolls back.
 // ============================================================
 
 async function applySpendSave({
@@ -725,26 +998,34 @@ async function applySpendSave({
     }
 
     if (!userId || !accountId) {
-        throw new Error('User and account are required.');
+        throw new Error(
+            'User and account are required.'
+        );
     }
 
     if (!transferReference) {
-        throw new Error('Transfer reference is required.');
+        throw new Error(
+            'Transfer reference is required.'
+        );
     }
 
-    // Lock wallet.
-    let walletResult = await client.query(
-        `
-        SELECT *
-        FROM save_wallets
-        WHERE account_id = $1
-          AND user_id = $2
-        FOR UPDATE
-        `,
-        [accountId, userId]
-    );
+    // --------------------------------------------------------
+    // Lock Save Wallet.
+    // --------------------------------------------------------
 
-    // No wallet means Spend & Save has never been configured.
+    const walletResult =
+        await client.query(
+            `
+            SELECT *
+            FROM save_wallets
+            WHERE account_id = $1
+              AND user_id = $2
+            FOR UPDATE
+            `,
+            [accountId, userId]
+        );
+
+    // No wallet = Spend + Save has never been configured.
     if (walletResult.rowCount === 0) {
         return {
             applied: false,
@@ -752,8 +1033,10 @@ async function applySpendSave({
         };
     }
 
-    const wallet = walletResult.rows[0];
+    const wallet =
+        walletResult.rows[0];
 
+    // Spend + Save is OFF.
     if (!wallet.spend_save_enabled) {
         return {
             applied: false,
@@ -761,49 +1044,73 @@ async function applySpendSave({
         };
     }
 
-    const saveAmount = Number(wallet.spend_save_amount);
+    const saveAmount =
+        Number(
+            wallet.spend_save_amount
+        );
 
-    if (!Number.isFinite(saveAmount) || saveAmount <= 0) {
+    // Invalid/empty amount.
+    if (
+        !Number.isFinite(saveAmount) ||
+        saveAmount <= 0
+    ) {
         return {
             applied: false,
             amount: 0
         };
     }
 
-    // Idempotency:
-    // If this transfer has already created a Spend & Save
-    // transaction, do not save again.
-    const existingResult = await client.query(
-        `
-        SELECT id, amount
-        FROM save_wallet_transactions
-        WHERE wallet_id = $1
-          AND type = 'spend_save'
-          AND description = $2
-        LIMIT 1
-        `,
-        [
-            wallet.id,
-            `Spend & Save for transfer ${transferReference}`
-        ]
-    );
+    // --------------------------------------------------------
+    // Idempotency protection.
+    //
+    // Do not save twice for the same transfer.
+    // --------------------------------------------------------
+
+    const description =
+        `Spend + Save for transfer ${transferReference}`;
+
+    const existingResult =
+        await client.query(
+            `
+            SELECT
+                id,
+                amount
+            FROM save_wallet_transactions
+            WHERE wallet_id = $1
+              AND type = 'spend_save'
+              AND description = $2
+            LIMIT 1
+            `,
+            [
+                wallet.id,
+                description
+            ]
+        );
 
     if (existingResult.rowCount > 0) {
         return {
             applied: true,
-            amount: Number(existingResult.rows[0].amount),
+            amount:
+                Number(
+                    existingResult.rows[0]
+                        .amount
+                ),
             alreadyApplied: true
         };
     }
 
-    const walletBefore = Number(wallet.balance);
-    const walletAfter = walletBefore + saveAmount;
+    // --------------------------------------------------------
+    // Credit Save Wallet.
+    // --------------------------------------------------------
+
+    const walletBefore =
+        Number(wallet.balance);
+
+    const walletAfter =
+        walletBefore + saveAmount;
 
     const reference =
         createReference('ZMSPEND');
-
-    const description =
-        `Spend & Save for transfer ${transferReference}`;
 
     await client.query(
         `
