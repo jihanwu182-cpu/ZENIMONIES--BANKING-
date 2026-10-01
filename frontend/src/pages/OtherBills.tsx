@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -68,19 +67,36 @@ const SERVICES: Service[] = [
 
 const OtherBills: React.FC = () => {
   const navigate = useNavigate();
+
   const [selectedService, setSelectedService] =
     useState<Service | null>(null);
 
-  const handleServiceClick = (service: Service) => {
-  if (service.id === 'gift-cards') {
-    navigate('/gift-cards');
-    return;
-  }
+  const handleServiceClick = (
+    service: Service
+  ) => {
+    // ======================================================
+    // ACTIVE SERVICES
+    // ======================================================
 
-  if (service.id === 'education') {
-    navigate('/education');
-    return;
-  }
+    if (service.id === 'gift-cards') {
+      navigate('/gift-cards');
+      return;
+    }
+
+    if (service.id === 'education') {
+      navigate('/education');
+      return;
+    }
+
+    if (service.id === 'insurance') {
+      navigate('/insurance');
+      return;
+    }
+
+    // ======================================================
+    // SERVICES NOT YET CONNECTED
+    // ======================================================
+
     setSelectedService(service);
   };
 
@@ -101,6 +117,10 @@ const OtherBills: React.FC = () => {
           margin: '0 auto',
         }}
       >
+        {/* ==================================================
+            HEADER
+        ================================================== */}
+
         <div
           style={{
             display: 'flex',
@@ -117,7 +137,8 @@ const OtherBills: React.FC = () => {
               width: '42px',
               height: '42px',
               borderRadius: '12px',
-              border: '1px solid #e0e9e3',
+              border:
+                '1px solid #e0e9e3',
               background: '#ffffff',
               color: '#145c39',
               fontSize: '22px',
@@ -142,7 +163,8 @@ const OtherBills: React.FC = () => {
 
             <p
               style={{
-                margin: '5px 0 0',
+                margin:
+                  '5px 0 0',
                 color: '#748078',
                 fontSize: '13px',
               }}
@@ -151,6 +173,10 @@ const OtherBills: React.FC = () => {
             </p>
           </div>
         </div>
+
+        {/* ==================================================
+            ZENIMONIES BANNER
+        ================================================== */}
 
         <div
           style={{
@@ -170,7 +196,8 @@ const OtherBills: React.FC = () => {
               width: '46px',
               height: '46px',
               borderRadius: '12px',
-              background: 'rgba(255,255,255,0.15)',
+              background:
+                'rgba(255,255,255,0.15)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -205,6 +232,10 @@ const OtherBills: React.FC = () => {
           </div>
         </div>
 
+        {/* ==================================================
+            SECTION TITLE
+        ================================================== */}
+
         <div
           style={{
             display: 'flex',
@@ -238,6 +269,10 @@ const OtherBills: React.FC = () => {
           </span>
         </div>
 
+        {/* ==================================================
+            SERVICES GRID
+        ================================================== */}
+
         <div
           style={{
             display: 'grid',
@@ -246,77 +281,115 @@ const OtherBills: React.FC = () => {
             gap: '13px',
           }}
         >
-          {SERVICES.map((service) => (
-            <button
-              key={service.id}
-              type="button"
-              onClick={() => handleServiceClick(service)}
-              style={{
-                background: '#ffffff',
-                border: '1px solid #e4ece6',
-                borderRadius: '16px',
-                padding: '18px 14px',
-                minHeight: '150px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-                textAlign: 'left',
-                cursor: 'pointer',
-                boxShadow:
-                  '0 3px 12px rgba(20, 92, 57, 0.035)',
-              }}
-            >
-              <div
+          {SERVICES.map(
+            (service) => (
+              <button
+                key={service.id}
+                type="button"
+                onClick={() =>
+                  handleServiceClick(
+                    service
+                  )
+                }
                 style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '13px',
-                  background: '#eaf5ed',
+                  background:
+                    '#ffffff',
+                  border:
+                    '1px solid #e4ece6',
+                  borderRadius: '16px',
+                  padding:
+                    '18px 14px',
+                  minHeight:
+                    '150px',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '24px',
-                  marginBottom: '14px',
+                  flexDirection:
+                    'column',
+                  alignItems:
+                    'flex-start',
+                  textAlign:
+                    'left',
+                  cursor:
+                    'pointer',
+                  boxShadow:
+                    '0 3px 12px rgba(20, 92, 57, 0.035)',
                 }}
               >
-                {service.icon}
-              </div>
+                <div
+                  style={{
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '13px',
+                    background:
+                      '#eaf5ed',
+                    display:
+                      'flex',
+                    alignItems:
+                      'center',
+                    justifyContent:
+                      'center',
+                    fontSize:
+                      '24px',
+                    marginBottom:
+                      '14px',
+                  }}
+                >
+                  {service.icon}
+                </div>
 
-              <div
-                style={{
-                  color: '#193b2a',
-                  fontSize: '14px',
-                  fontWeight: 800,
-                  lineHeight: 1.4,
-                  marginBottom: '6px',
-                }}
-              >
-                {service.name}
-              </div>
+                <div
+                  style={{
+                    color:
+                      '#193b2a',
+                    fontSize:
+                      '14px',
+                    fontWeight:
+                      800,
+                    lineHeight:
+                      1.4,
+                    marginBottom:
+                      '6px',
+                  }}
+                >
+                  {service.name}
+                </div>
 
-              <div
-                style={{
-                  color: '#7b857e',
-                  fontSize: '12px',
-                  lineHeight: 1.5,
-                }}
-              >
-                {service.description}
-              </div>
+                <div
+                  style={{
+                    color:
+                      '#7b857e',
+                    fontSize:
+                      '12px',
+                    lineHeight:
+                      1.5,
+                  }}
+                >
+                  {
+                    service.description
+                  }
+                </div>
 
-              <div
-                style={{
-                  color: '#176b43',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  marginTop: '12px',
-                }}
-              >
-                Explore →
-              </div>
-            </button>
-          ))}
+                <div
+                  style={{
+                    color:
+                      '#176b43',
+                    fontSize:
+                      '12px',
+                    fontWeight:
+                      700,
+                    marginTop:
+                      '12px',
+                  }}
+                >
+                  Explore →
+                </div>
+              </button>
+            )
+          )}
         </div>
+
+        {/* ==================================================
+            UNCONNECTED SERVICE MESSAGE
+        ================================================== */}
 
         {selectedService && (
           <div
@@ -326,7 +399,8 @@ const OtherBills: React.FC = () => {
               padding: '17px',
               borderRadius: '14px',
               background: '#ffffff',
-              border: '1px solid #dcece1',
+              border:
+                '1px solid #dcece1',
             }}
           >
             <div
@@ -337,54 +411,84 @@ const OtherBills: React.FC = () => {
                 marginBottom: '10px',
               }}
             >
-              <span style={{ fontSize: '23px' }}>
-                {selectedService.icon}
+              <span
+                style={{
+                  fontSize: '23px',
+                }}
+              >
+                {
+                  selectedService.icon
+                }
               </span>
 
               <strong
                 style={{
-                  color: '#145c39',
-                  fontSize: '15px',
+                  color:
+                    '#145c39',
+                  fontSize:
+                    '15px',
                 }}
               >
-                {selectedService.name}
+                {
+                  selectedService.name
+                }
               </strong>
             </div>
 
             <p
               style={{
-                color: '#68786d',
-                fontSize: '13px',
-                lineHeight: 1.7,
-                margin: '0 0 15px',
+                color:
+                  '#68786d',
+                fontSize:
+                  '13px',
+                lineHeight:
+                  1.7,
+                margin:
+                  '0 0 15px',
               }}
             >
-              This service is being prepared for
-              ZENIMONIES. Provider integration and
-              payment functionality will be available
-              once the required service provider is
-              connected.
+              This service is being
+              prepared for
+              ZENIMONIES. Provider
+              integration and payment
+              functionality will be
+              available once the
+              required service provider
+              is connected.
             </p>
 
             <button
               type="button"
-              onClick={() => setSelectedService(null)}
+              onClick={() =>
+                setSelectedService(
+                  null
+                )
+              }
               style={{
                 width: '100%',
                 height: '44px',
                 border: 'none',
                 borderRadius: '11px',
-                background: '#176b43',
-                color: '#ffffff',
-                fontSize: '14px',
-                fontWeight: 800,
-                cursor: 'pointer',
+                background:
+                  '#176b43',
+                color:
+                  '#ffffff',
+                fontSize:
+                  '14px',
+                fontWeight:
+                  800,
+                cursor:
+                  'pointer',
               }}
             >
               Close
             </button>
           </div>
         )}
+
+        {/* ==================================================
+            FOOTER
+        ================================================== */}
 
         <div
           style={{
