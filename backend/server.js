@@ -36,6 +36,8 @@ const beneficiaryRoutes = require('./routes/beneficiaryRoutes');
 const savingsRoutes = require('./routes/savingsRoutes');
 const saveWalletRoutes =
     require('./routes/saveWalletRoutes');
+const educationRoutes =
+  require('./routes/education');
 const statementRoutes = require('./routes/statementRoutes');
 const posRoutes = require('./routes/posRoutes');
 const smsPreferencesRoutes = require('./routes/smsPreferences');
@@ -204,6 +206,10 @@ app.use(
   internetBillsRoutes
 );
 
+app.use(
+  '/api/education',
+  educationRoutes
+);
 // ============================================================
 // BENEFICIARIES
 // ============================================================
