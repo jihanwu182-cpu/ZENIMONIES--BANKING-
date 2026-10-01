@@ -814,16 +814,15 @@ const purchase = async (
         amount,
         phone,
         additionalFields:
-          serviceId ===
-          EDUCATION_SERVICE_IDS.WAEC_RESULT
-            ? {
-                quantity:
-                  Number(
-                    req.body?.quantity ||
-                    1
-                  ),
-              }
-            : {},
+  serviceId === EDUCATION_SERVICE_IDS.WAEC_RESULT ||
+  serviceId === EDUCATION_SERVICE_IDS.WAEC_REGISTRATION
+    ? {
+        quantity: Math.max(
+          1,
+          Number(req.body?.quantity || 1)
+        ),
+      }
+    : {},
       });
   } catch (error) {
     console.error(
