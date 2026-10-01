@@ -1738,6 +1738,194 @@ CREATE UNIQUE INDEX IF NOT EXISTS
 idx_savings_maturity_transaction_reference
 ON savings_plans (maturity_transaction_reference)
 WHERE maturity_transaction_reference IS NOT NULL;
+
+-- ============================================================
+-- ZENIMONIES SAVE WALLET
+-- ============================================================
+--
+-- This is the customer's flexible Save Wallet.
+--
+-- IMPORTANT:
+-- This is NOT the existing savings_plans table.
+--
+-- savings_plans = fixed-duration savings/maturity product
+-- save_wallets  = flexible customer wallet
+--
+-- The Save Wallet is funded by:
+-- 1. Manual "Save Money"
+-- 2. Spend & Save automatic savings
+--
+-- Money can be withdrawn from the Save Wallet back into
+-- the customer's main account.
+-- ============================================================
+
+
+-- ============================================================
+-- SAVE WALLETS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS save_wallets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    account_id UUID NOT NULL
+        REFERENCES accounts(id)
+        ON DELETE CASCADE,
+
+    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
+
+    balance NUMERIC(18,2) NOT NULL DEFAULT 0.00,
+
+    -- ========================================================
+    -- SPEND & SAVE
+    -- ========================================================
+
+    spend_save_enabled BOOLEAN NOT NULL DEFAULT false,
+
+    spend_save_amount NUMERIC(18,2) NOT NULL DEFAULT 0.00,
+
+    created_at TIMESTAMPTZ NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMPTZ NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    -- One Save Wallet per account
+    CONSTRAINT save_wallets_one_per_account
+        UNIQUE (account_id),
+
+    -- One Save Wallet per user
+    CONSTRAINT save_wallets_one_per_user
+        UNIQUE (user_id),
+
+    -- Wallet balance cannot be negative
+    CONSTRAINT save_wallets_balance_check
+        CHECK (balance >= 0.00),
+
+    -- Save amount cannot be negative
+    CONSTRAINT save_wallets_spend_save_amount_check
+        CHECK (spend_save_amount >= 0.00),
+
+    -- Save Wallet currently supports NGN
+    CONSTRAINT save_wallets_currency_check
+        CHECK (currency = 'NGN')
+);
+
+
+-- ============================================================
+-- SAVE WALLET TRANSACTIONS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS save_wallet_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    wallet_id UUID NOT NULL
+        REFERENCES save_wallets(id)
+        ON DELETE CASCADE,
+
+    user_id UUID NOT NULL
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    account_id UUID NOT NULL
+        REFERENCES accounts(id)
+        ON DELETE CASCADE,
+
+    type VARCHAR(40) NOT NULL,
+
+    direction VARCHAR(10) NOT NULL,
+
+    amount NUMERIC(18,2) NOT NULL,
+
+    currency VARCHAR(10) NOT NULL DEFAULT 'NGN',
+
+    reference VARCHAR(100) NOT NULL UNIQUE,
+
+    description TEXT,
+
+    balance_before NUMERIC(18,2) NOT NULL,
+
+    balance_after NUMERIC(18,2) NOT NULL,
+
+    related_transaction_id UUID
+        REFERENCES transactions(id)
+        ON DELETE SET NULL,
+
+    created_at TIMESTAMPTZ NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    -- ========================================================
+    -- VALIDATION
+    -- ========================================================
+
+    CONSTRAINT save_wallet_transaction_amount_check
+        CHECK (amount > 0.00),
+
+    CONSTRAINT save_wallet_transaction_direction_check
+        CHECK (
+            direction IN (
+                'credit',
+                'debit'
+            )
+        ),
+
+    CONSTRAINT save_wallet_transaction_type_check
+        CHECK (
+            type IN (
+                'manual_save',
+                'spend_save',
+                'withdrawal',
+                'reversal',
+                'adjustment'
+            )
+        ),
+
+    CONSTRAINT save_wallet_transaction_balance_before_check
+        CHECK (balance_before >= 0.00),
+
+    CONSTRAINT save_wallet_transaction_balance_after_check
+        CHECK (balance_after >= 0.00),
+
+    CONSTRAINT save_wallet_transaction_currency_check
+        CHECK (currency = 'NGN')
+);
+
+
+-- ============================================================
+-- INDEXES
+-- ============================================================
+
+CREATE INDEX IF NOT EXISTS idx_save_wallets_user_id
+ON save_wallets(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_save_wallets_account_id
+ON save_wallets(account_id);
+
+CREATE INDEX IF NOT EXISTS idx_save_wallet_transactions_wallet
+ON save_wallet_transactions(wallet_id);
+
+CREATE INDEX IF NOT EXISTS idx_save_wallet_transactions_user
+ON save_wallet_transactions(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_save_wallet_transactions_account
+ON save_wallet_transactions(account_id);
+
+CREATE INDEX IF NOT EXISTS idx_save_wallet_transactions_created
+ON save_wallet_transactions(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_save_wallet_transactions_type
+ON save_wallet_transactions(type);
+
+CREATE INDEX IF NOT EXISTS idx_save_wallet_transactions_reference
+ON save_wallet_transactions(reference);
+
+
+-- ============================================================
+-- END SAVE WALLET
+-- ============================================================
 -- ============================================================
 -- END OF ZENIMONIES DATABASE SCHEMA
 -- ============================================================
