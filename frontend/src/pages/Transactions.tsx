@@ -88,6 +88,12 @@ interface Transaction {
   transaction_fee?: number;
 
   total_debit?: number;
+  
+  direction?: 'credit' | 'debit';
+
+  wallet_id?: string;
+
+  account_id?: string;
 
   sender_name?: string;
 
@@ -216,9 +222,19 @@ const Transactions: React.FC = () => {
   };
 
 
-  /*
+    /*
    * ==========================================================
    * LOAD TRANSACTIONS
+   * ==========================================================
+   *
+   * Loads:
+   *
+   * 1. Main Account transactions
+   * 2. Save Wallet Spend + Save transactions
+   *
+   * Spend + Save is kept as a SEPARATE transaction-history
+   * entry. It is NOT added to the transfer amount.
+   *
    * ==========================================================
    */
 
@@ -242,8 +258,17 @@ const Transactions: React.FC = () => {
         return;
       }
 
-      const response =
-        await axios.get(
+      /*
+       * ------------------------------------------------------
+       * LOAD BOTH HISTORIES
+       * ------------------------------------------------------
+       */
+
+      const [
+        accountResponse,
+        saveWalletResponse,
+      ] = await Promise.all([
+        axios.get(
           `${API_URL}/api/account/transactions`,
           {
             headers: {
@@ -251,28 +276,144 @@ const Transactions: React.FC = () => {
                 `Bearer ${token}`,
             },
           }
-        );
+        ),
 
-      const data =
-        response.data;
+        axios.get(
+          `${API_URL}/api/wallet/transactions`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        ),
+      ]);
+
+      /*
+       * ------------------------------------------------------
+       * MAIN ACCOUNT TRANSACTIONS
+       * ------------------------------------------------------
+       */
+
+      const accountData =
+        accountResponse.data;
+
+      let accountTransactions: Transaction[] = [];
 
       if (
-        Array.isArray(data)
-      ) {
-        setTransactions(
-          data
-        );
-      } else if (
         Array.isArray(
-          data?.transactions
+          accountData
         )
       ) {
-        setTransactions(
-          data.transactions
-        );
-      } else {
-        setTransactions([]);
+        accountTransactions =
+          accountData;
+      } else if (
+        Array.isArray(
+          accountData?.transactions
+        )
+      ) {
+        accountTransactions =
+          accountData.transactions;
       }
+
+      /*
+       * ------------------------------------------------------
+       * SAVE WALLET TRANSACTIONS
+       * ------------------------------------------------------
+       */
+
+      const saveWalletData =
+        saveWalletResponse.data;
+
+      let saveWalletTransactions: any[] = [];
+
+      if (
+        Array.isArray(
+          saveWalletData
+        )
+      ) {
+        saveWalletTransactions =
+          saveWalletData;
+      } else if (
+        Array.isArray(
+          saveWalletData?.transactions
+        )
+      ) {
+        saveWalletTransactions =
+          saveWalletData.transactions;
+      }
+
+      /*
+       * ------------------------------------------------------
+       * CONVERT SPEND + SAVE RECORDS
+       * INTO NORMAL TRANSACTION HISTORY RECORDS
+       * ------------------------------------------------------
+       */
+
+      const spendSaveTransactions: Transaction[] =
+        saveWalletTransactions
+          .filter(
+            (walletTransaction) =>
+              String(
+                walletTransaction?.type ||
+                ''
+              ).toLowerCase() ===
+              'spend_save'
+          )
+          .map(
+            (walletTransaction) => ({
+              id:
+                `save-${String(
+                  walletTransaction.id
+                )}`,
+
+              type:
+                'spend_save',
+
+              amount:
+                Number(
+                  walletTransaction.amount ||
+                  0
+                ),
+
+              currency:
+                walletTransaction.currency ||
+                'NGN',
+
+              reference:
+                walletTransaction.reference,
+
+              description:
+                walletTransaction.description ||
+                'Spend + Save',
+
+              status:
+                'successful',
+
+              created_at:
+                walletTransaction.created_at,
+
+              direction:
+                'credit',
+
+              wallet_id:
+                walletTransaction.wallet_id,
+
+              account_id:
+                walletTransaction.account_id,
+            })
+          );
+
+      /*
+       * ------------------------------------------------------
+       * MERGE
+       * ------------------------------------------------------
+       */
+
+      setTransactions([
+        ...accountTransactions,
+        ...spendSaveTransactions,
+      ]);
 
     } catch (err: any) {
       console.error(
@@ -310,11 +451,6 @@ const Transactions: React.FC = () => {
       setRefreshing(false);
     }
   };
-
-
-  useEffect(() => {
-    loadTransactions();
-  }, []);
 
 
   /*
@@ -517,6 +653,12 @@ const Transactions: React.FC = () => {
         ''
       ).toLowerCase();
 
+        if (
+      getType(transaction) ===
+      'spend_save'
+    ) {
+      return true;
+    }
 
     if (
       type ===
@@ -578,7 +720,7 @@ const Transactions: React.FC = () => {
    * ==========================================================
    */
 
-  const getCategory = (
+    const getCategory = (
     transaction: Transaction
   ) => {
     const type =
@@ -590,6 +732,21 @@ const Transactions: React.FC = () => {
         ''
       ).toLowerCase();
 
+    /*
+     * --------------------------------------------------------
+     * SAVINGS
+     * --------------------------------------------------------
+     */
+
+    if (
+      type === 'spend_save' ||
+      type.includes('saving') ||
+      type.includes('save_wallet') ||
+      description.includes('spend + save') ||
+      description.includes('save wallet')
+    ) {
+      return 'savings';
+    }
 
     if (
       type.includes('deposit') ||
@@ -600,7 +757,6 @@ const Transactions: React.FC = () => {
       return 'deposits';
     }
 
-
     if (
       type.includes('transfer') ||
       type.includes('bank') ||
@@ -610,13 +766,11 @@ const Transactions: React.FC = () => {
       return 'transfers';
     }
 
-
     if (
       type.includes('airtime')
     ) {
       return 'airtime';
     }
-
 
     if (
       type.includes('data')
@@ -624,14 +778,12 @@ const Transactions: React.FC = () => {
       return 'data';
     }
 
-
     if (
       type.includes('bill') ||
       description.includes('bill')
     ) {
       return 'bills';
     }
-
 
     return 'other';
   };
@@ -643,7 +795,7 @@ const Transactions: React.FC = () => {
    * ==========================================================
    */
 
-  const getCategoryLabel = (
+    const getCategoryLabel = (
     transaction: Transaction
   ) => {
     const category =
@@ -657,6 +809,9 @@ const Transactions: React.FC = () => {
 
       case 'transfers':
         return 'Transfer';
+
+      case 'savings':
+        return 'Savings';
 
       case 'airtime':
         return 'Airtime';
@@ -1964,6 +2119,10 @@ const Transactions: React.FC = () => {
 
                 <MenuItem value="transfers">
                   Transfers
+                </MenuItem>
+                
+                 <MenuItem value="savings">
+                   Savings
                 </MenuItem>
 
                 <MenuItem value="airtime">
