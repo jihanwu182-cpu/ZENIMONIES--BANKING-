@@ -72,11 +72,15 @@ const OtherBills: React.FC = () => {
     useState<Service | null>(null);
 
   const handleServiceClick = (service: Service) => {
-    if (service.id === 'gift-cards') {
-      navigate('/gift-cards');
-      return;
-    }
+  if (service.id === 'gift-cards') {
+    navigate('/gift-cards');
+    return;
+  }
 
+  if (service.id === 'education') {
+    navigate('/education');
+    return;
+  }
     setSelectedService(service);
   };
 
