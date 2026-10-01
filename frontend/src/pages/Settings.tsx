@@ -238,6 +238,187 @@ const [smsPreferencesError, setSmsPreferencesError] =
       ''
     );
   };
+
+  // ==========================================================
+// SPEND + SAVE SETTINGS
+// ==========================================================
+
+const [spendSaveEnabled, setSpendSaveEnabled] =
+  useState(false);
+
+const [spendSaveAmount, setSpendSaveAmount] =
+  useState('');
+
+const [spendSaveLoading, setSpendSaveLoading] =
+  useState(false);
+
+const [spendSaveSaving, setSpendSaveSaving] =
+  useState(false);
+
+const [spendSaveMessage, setSpendSaveMessage] =
+  useState('');
+
+const [spendSaveError, setSpendSaveError] =
+  useState('');
+  const [spendSaveError, setSpendSaveError] = useState('');
+
+// ==========================================================
+// LOAD SPEND + SAVE SETTINGS
+// ==========================================================
+
+const loadSpendSaveSettings = async () => {
+  const token = getToken();
+
+  if (!token) {
+    setSpendSaveError(
+      'Your session has expired. Please log in again.'
+    );
+    return;
+  }
+
+  setSpendSaveLoading(true);
+  setSpendSaveError('');
+  setSpendSaveMessage('');
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/wallet/settings`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      }
+    );
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message ||
+          'Unable to load Spend + Save settings.'
+      );
+    }
+
+    const settings =
+      data?.settings &&
+      typeof data.settings === 'object'
+        ? data.settings
+        : data;
+
+    setSpendSaveEnabled(
+      settings?.spendSaveEnabled === true ||
+      settings?.spend_save_enabled === true
+    );
+
+    const configuredAmount =
+      settings?.spendSaveAmount ??
+      settings?.spend_save_amount ??
+      0;
+
+    setSpendSaveAmount(
+      Number(configuredAmount) > 0
+        ? String(configuredAmount)
+        : ''
+    );
+  } catch (error) {
+    setSpendSaveError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to load Spend + Save settings.'
+    );
+  } finally {
+    setSpendSaveLoading(false);
+  }
+};
+  // ==========================================================
+// SAVE SPEND + SAVE SETTINGS
+// ==========================================================
+
+const handleSaveSpendSaveSettings = async () => {
+  const amount = Number(spendSaveAmount);
+
+  setSpendSaveMessage('');
+  setSpendSaveError('');
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    setSpendSaveError(
+      'Enter a valid positive amount to save.'
+    );
+    return;
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    setSpendSaveError(
+      'Your session has expired. Please log in again.'
+    );
+    return;
+  }
+
+  setSpendSaveSaving(true);
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/wallet/settings`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          enabled: spendSaveEnabled,
+          amount,
+        }),
+      }
+    );
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message ||
+          'Unable to save Spend + Save settings.'
+      );
+    }
+
+    const wallet = data?.wallet || {};
+
+    const savedAmount =
+      wallet?.spendSaveAmount ??
+      wallet?.spend_save_amount ??
+      amount;
+
+    const savedEnabled =
+      wallet?.spendSaveEnabled ??
+      wallet?.spend_save_enabled ??
+      spendSaveEnabled;
+
+    setSpendSaveAmount(
+      Number(savedAmount) > 0
+        ? String(savedAmount)
+        : ''
+    );
+
+    setSpendSaveEnabled(Boolean(savedEnabled));
+
+    setSpendSaveMessage(
+      'Spend + Save settings saved successfully.'
+    );
+  } catch (error) {
+    setSpendSaveError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to save Spend + Save settings.'
+    );
+  } finally {
+    setSpendSaveSaving(false);
+  }
+};
 // ==========================================================
 // LOAD SMS PREFERENCES FROM BACKEND
 // ==========================================================
@@ -545,7 +726,11 @@ const openSection = (section: string) => {
 
   if (section === 'SMS Alert Settings') {
     loadSmsPreferences();
+
   }
+  if (section === 'Saving Settings') {
+  loadSpendSaveSettings();
+ }
 };
 
   // ==========================================================
