@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 
-const API_URL = 'https://zenimonies-banking.onrender.com';
+const API_URL =
+  'https://zenimonies-banking.onrender.com';
 
 interface DepositAccount {
   account_number?: string;
@@ -31,7 +32,8 @@ const Deposit: React.FC = () => {
   const [deposits, setDeposits] =
     useState<Deposit[]>([]);
 
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] =
+    useState('');
 
   const [method, setMethod] =
     useState('paystack');
@@ -48,10 +50,6 @@ const Deposit: React.FC = () => {
   const [message, setMessage] =
     useState('');
 
-  // ============================================================
-  // TOKEN
-  // ============================================================
-
   const getToken = (): string | null => {
     return (
       localStorage.getItem(
@@ -60,10 +58,6 @@ const Deposit: React.FC = () => {
       localStorage.getItem('token')
     );
   };
-
-  // ============================================================
-  // LOAD DEPOSIT INFORMATION
-  // ============================================================
 
   const loadDepositInformation =
     async () => {
@@ -74,7 +68,7 @@ const Deposit: React.FC = () => {
 
       if (!token) {
         setError(
-          'Please log in again to view your deposit information.'
+          'Please log in again to view your funding information.'
         );
 
         setLoading(false);
@@ -82,10 +76,6 @@ const Deposit: React.FC = () => {
       }
 
       try {
-        // ======================================================
-        // LOAD REAL BANK DEPOSIT ACCOUNT
-        // ======================================================
-
         try {
           const accountResponse =
             await axios.get(
@@ -103,7 +93,7 @@ const Deposit: React.FC = () => {
           ) {
             setDepositAccount(
               accountResponse.data
-                .deposit_account ||
+                ?.deposit_account ||
                 null
             );
           } else {
@@ -111,8 +101,8 @@ const Deposit: React.FC = () => {
           }
         } catch (accountError: any) {
           if (
-            accountError?.response
-              ?.status === 401
+            accountError?.response?.status ===
+            401
           ) {
             setError(
               'Your authentication session has expired. Please log in again.'
@@ -127,10 +117,6 @@ const Deposit: React.FC = () => {
           }
         }
 
-        // ======================================================
-        // LOAD DEPOSIT HISTORY
-        // ======================================================
-
         try {
           const historyResponse =
             await axios.get(
@@ -144,20 +130,19 @@ const Deposit: React.FC = () => {
             );
 
           if (
-            historyResponse.data
-              ?.success
+            historyResponse.data?.success
           ) {
             setDeposits(
               historyResponse.data
-                .deposits || []
+                ?.deposits || []
             );
           } else {
             setDeposits([]);
           }
         } catch (historyError: any) {
           if (
-            historyError?.response
-              ?.status === 401
+            historyError?.response?.status ===
+            401
           ) {
             setError(
               'Your authentication session has expired. Please log in again.'
@@ -171,71 +156,21 @@ const Deposit: React.FC = () => {
         }
       } catch (err) {
         console.error(
-          'Load deposit information error:',
+          'Load funding information error:',
           err
         );
 
         setError(
-          'Unable to load deposit information. Please try again.'
+          'Unable to load funding information. Please try again.'
         );
       } finally {
         setLoading(false);
       }
     };
 
-  // ============================================================
-  // INITIAL LOAD
-  // ============================================================
-
   useEffect(() => {
     loadDepositInformation();
   }, []);
-
-  // ============================================================
-  // CREATE BANK TRANSFER DEPOSIT
-  // ============================================================
-
-  const createBankTransferDeposit =
-    async (
-      numericAmount: number,
-      token: string
-    ) => {
-      const response =
-        await axios.post(
-          `${API_URL}/api/deposits`,
-          {
-            amount:
-              numericAmount,
-
-            payment_method:
-              'bank_transfer',
-          },
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-
-              'Content-Type':
-                'application/json',
-            },
-          }
-        );
-
-      if (
-        !response.data?.success
-      ) {
-        throw new Error(
-          response.data?.message ||
-          'Unable to create bank transfer deposit.'
-        );
-      }
-
-      return response.data;
-    };
-
-  // ============================================================
-  // INITIALIZE PAYSTACK PAYMENT
-  // ============================================================
 
   const initializePaystackPayment =
     async (
@@ -253,7 +188,6 @@ const Deposit: React.FC = () => {
             headers: {
               Authorization:
                 `Bearer ${token}`,
-
               'Content-Type':
                 'application/json',
             },
@@ -265,7 +199,7 @@ const Deposit: React.FC = () => {
       ) {
         throw new Error(
           response.data?.message ||
-          'Unable to initialize Paystack payment.'
+            'Unable to initialize payment.'
         );
       }
 
@@ -273,20 +207,50 @@ const Deposit: React.FC = () => {
         response.data?.payment
           ?.authorization_url;
 
-      if (
-        !authorizationUrl
-      ) {
+      if (!authorizationUrl) {
         throw new Error(
-          'Paystack did not return a payment checkout URL.'
+          'Payment checkout URL was not returned.'
         );
       }
 
       return response.data;
     };
 
-  // ============================================================
-  // SUBMIT DEPOSIT
-  // ============================================================
+  const createBankTransferDeposit =
+    async (
+      numericAmount: number,
+      token: string
+    ) => {
+      const response =
+        await axios.post(
+          `${API_URL}/api/deposits`,
+          {
+            amount:
+              numericAmount,
+            payment_method:
+              'bank_transfer',
+          },
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+              'Content-Type':
+                'application/json',
+            },
+          }
+        );
+
+      if (
+        !response.data?.success
+      ) {
+        throw new Error(
+          response.data?.message ||
+            'Unable to create bank transfer deposit.'
+        );
+      }
+
+      return response.data;
+    };
 
   const handleCreateDeposit =
     async (
@@ -330,23 +294,9 @@ const Deposit: React.FC = () => {
         return;
       }
 
-      if (
-        method !== 'bank_transfer' &&
-        method !== 'paystack'
-      ) {
-        setError(
-          'Please select a valid payment method.'
-        );
-        return;
-      }
-
       setSubmitting(true);
 
       try {
-        // ======================================================
-        // PAYSTACK
-        // ======================================================
-
         if (
           method === 'paystack'
         ) {
@@ -356,41 +306,22 @@ const Deposit: React.FC = () => {
               token
             );
 
-          const authorizationUrl =
+          window.location.href =
             response.payment
               ?.authorization_url;
-
-          /*
-           * IMPORTANT:
-           *
-           * We redirect to Paystack.
-           *
-           * We DO NOT change the user's balance here.
-           *
-           * The Paystack webhook is responsible for
-           * confirming and crediting the deposit.
-           */
-
-          window.location.href =
-            authorizationUrl;
 
           return;
         }
 
-        // ======================================================
-        // BANK TRANSFER
-        // ======================================================
-
         if (
-          method ===
-          'bank_transfer'
+          method === 'bank_transfer'
         ) {
           if (
             !depositAccount
               ?.account_number
           ) {
             setError(
-              'A dedicated bank deposit account is not available yet. Bank Transfer funding cannot be used until an official bank account is provisioned.'
+              'Your dedicated bank deposit account is not available yet.'
             );
 
             return;
@@ -424,7 +355,7 @@ const Deposit: React.FC = () => {
         }
       } catch (err: any) {
         console.error(
-          'Deposit payment error:',
+          'Funding error:',
           err
         );
 
@@ -440,17 +371,13 @@ const Deposit: React.FC = () => {
             err?.response?.data
               ?.message ||
               err?.message ||
-              'Unable to process the deposit. Please try again.'
+              'Unable to process your funding request.'
           );
         }
       } finally {
         setSubmitting(false);
       }
     };
-
-  // ============================================================
-  // FORMAT AMOUNT
-  // ============================================================
 
   const formatAmount = (
     value: string | number,
@@ -467,27 +394,17 @@ const Deposit: React.FC = () => {
       return `${currency} 0.00`;
     }
 
-    try {
-      return new Intl.NumberFormat(
-        'en-NG',
-        {
-          style: 'currency',
-          currency,
-          minimumFractionDigits: 2,
-        }
-      ).format(
-        numericAmount
-      );
-    } catch {
-      return `${currency} ${numericAmount.toFixed(
-        2
-      )}`;
-    }
+    return new Intl.NumberFormat(
+      'en-NG',
+      {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 2,
+      }
+    ).format(
+      numericAmount
+    );
   };
-
-  // ============================================================
-  // FORMAT DATE
-  // ============================================================
 
   const formatDate = (
     date: string
@@ -507,50 +424,42 @@ const Deposit: React.FC = () => {
     }
   };
 
-  // ============================================================
-  // STATUS STYLE
-  // ============================================================
-
   const getStatusStyle = (
     status: string
   ) => {
-    const normalizedStatus =
+    const normalized =
       String(status || '')
         .toLowerCase();
 
     if (
-      normalizedStatus ===
+      normalized ===
         'successful' ||
-      normalizedStatus ===
+      normalized ===
         'completed'
     ) {
       return {
-        background: '#ecfdf3',
-        color: '#027a48',
+        background: '#eaf8ef',
+        color: '#08783e',
       };
     }
 
     if (
-      normalizedStatus ===
+      normalized ===
         'failed' ||
-      normalizedStatus ===
+      normalized ===
         'rejected'
     ) {
       return {
-        background: '#fee4e2',
+        background: '#fff1f0',
         color: '#b42318',
       };
     }
 
     return {
-      background: '#fffaeb',
-      color: '#b54708',
+      background: '#fff8e8',
+      color: '#9a6700',
     };
   };
-
-  // ============================================================
-  // COPY BANK ACCOUNT
-  // ============================================================
 
   const copyAccountNumber =
     async () => {
@@ -567,117 +476,159 @@ const Deposit: React.FC = () => {
         );
 
         setMessage(
-          'Account number copied successfully.'
+          'Account number copied.'
         );
 
-        window.setTimeout(() => {
+        setTimeout(() => {
           setMessage('');
-        }, 3000);
+        }, 2500);
       } catch {
         setError(
-          'Unable to copy account number. Please copy it manually.'
+          'Unable to copy the account number.'
         );
       }
     };
-
-  // ============================================================
-  // UI
-  // ============================================================
 
   return (
     <div
       style={{
         minHeight: '100vh',
-        background: '#f5f7fb',
-        padding: '24px',
+        background: '#f5faf7',
+        padding:
+          '20px 14px 40px',
+        boxSizing:
+          'border-box',
       }}
     >
       <div
         style={{
-          maxWidth: '800px',
-          margin: '0 auto',
+          maxWidth: 720,
+          margin:
+            '0 auto',
         }}
       >
 
-        {/* BACK */}
+        {/* HEADER */}
 
-        <Link
-          to="/"
+        <div
           style={{
             display:
-              'inline-block',
+              'flex',
+            alignItems:
+              'center',
+            gap: 12,
             marginBottom:
-              '20px',
-            color: '#0b5cff',
-            fontWeight: 600,
-            textDecoration:
-              'none',
+              20,
           }}
         >
-          ← Back to Dashboard
-        </Link>
+          <Link
+            to="/"
+            style={{
+              textDecoration:
+                'none',
+              color:
+                '#08783e',
+              fontSize:
+                14,
+              fontWeight:
+                800,
+            }}
+          >
+            ← Back to Dashboard
+          </Link>
+        </div>
 
-        {/* ====================================================
-            MAIN CARD
-        ==================================================== */}
+        {/* MAIN */}
 
         <div
           style={{
             background:
               '#ffffff',
             borderRadius:
-              '18px',
+              24,
             padding:
-              '30px',
+              '24px 18px',
+            border:
+              '1px solid #dcebe1',
             boxShadow:
-              '0 8px 30px rgba(0, 0, 0, 0.08)',
-            marginBottom:
-              '24px',
+              '0 10px 30px rgba(17, 75, 42, 0.06)',
           }}
         >
 
-          <h1
+          <div
             style={{
-              marginTop: 0,
               marginBottom:
-                '8px',
+                24,
             }}
           >
-            Fund Your Account
-          </h1>
+            <div
+              style={{
+                color:
+                  '#08783e',
+                fontSize:
+                  12,
+                fontWeight:
+                  800,
+                letterSpacing:
+                  1.5,
+                textTransform:
+                  'uppercase',
+              }}
+            >
+              ZENIMONIES
+            </div>
 
-          <p
-            style={{
-              color:
-                '#667085',
-              marginTop: 0,
-              marginBottom:
-                '28px',
-              lineHeight:
-                1.6,
-            }}
-          >
-            Add money to your
-            Zenimonies account
-            securely.
-          </p>
+            <h1
+              style={{
+                margin:
+                  '4px 0 6px',
+                color:
+                  '#163c29',
+                fontSize:
+                  32,
+                fontWeight:
+                  850,
+              }}
+            >
+              Fund Your Account
+            </h1>
 
-          {/* ERROR */}
+            <p
+              style={{
+                margin: 0,
+                color:
+                  '#718078',
+                fontSize:
+                  15,
+                lineHeight:
+                  1.6,
+              }}
+            >
+              Add money to your
+              ZENIMONIES account
+              securely.
+            </p>
+          </div>
+
+          {/* MESSAGES */}
 
           {error && (
             <div
-              role="alert"
               style={{
-                padding:
-                  '14px',
                 marginBottom:
-                  '20px',
+                  16,
+                padding:
+                  14,
                 borderRadius:
-                  '10px',
+                  14,
                 background:
-                  '#fee4e2',
+                  '#fff1f0',
+                border:
+                  '1px solid #f3d2cf',
                 color:
                   '#b42318',
+                fontSize:
+                  13,
                 lineHeight:
                   1.5,
               }}
@@ -686,54 +637,55 @@ const Deposit: React.FC = () => {
             </div>
           )}
 
-          {/* SUCCESS */}
-
           {message && (
             <div
-              role="status"
               style={{
-                padding:
-                  '14px',
                 marginBottom:
-                  '20px',
+                  16,
+                padding:
+                  14,
                 borderRadius:
-                  '10px',
+                  14,
                 background:
-                  '#ecfdf3',
+                  '#eaf8ef',
+                border:
+                  '1px solid #ccebd6',
                 color:
-                  '#027a48',
-                lineHeight:
-                  1.5,
+                  '#08783e',
+                fontSize:
+                  13,
+                fontWeight:
+                  600,
               }}
             >
               {message}
             </div>
           )}
 
-          {/* ==================================================
-              BANK DEPOSIT ACCOUNT
-          ================================================== */}
+          {/* BANK ACCOUNT */}
 
-          <div
+          <section
             style={{
-              marginBottom:
-                '30px',
-              padding:
-                '22px',
-              borderRadius:
-                '14px',
               border:
-                '1px solid #d0d5dd',
+                '1px solid #dcebe1',
+              borderRadius:
+                20,
+              padding:
+                18,
               background:
-                '#fafbff',
+                '#fbfefc',
+              marginBottom:
+                22,
             }}
           >
-
             <h2
               style={{
-                margin: 0,
+                margin:
+                  '0 0 5px',
+                color:
+                  '#163c29',
                 fontSize:
-                  '20px',
+                  20,
               }}
             >
               Bank Deposit Account
@@ -742,213 +694,195 @@ const Deposit: React.FC = () => {
             <p
               style={{
                 margin:
-                  '6px 0 18px 0',
+                  '0 0 16px',
                 color:
-                  '#667085',
+                  '#718078',
                 fontSize:
-                  '14px',
+                  13,
                 lineHeight:
-                  1.5,
+                  1.55,
               }}
             >
               Your dedicated bank
               deposit account will
-              appear here once it has
-              been officially provisioned.
+              appear here once it
+              has been officially
+              provisioned.
             </p>
 
             {loading ? (
               <div
                 style={{
                   padding:
-                    '20px 0',
+                    18,
                   textAlign:
                     'center',
                   color:
-                    '#667085',
+                    '#718078',
                 }}
               >
-                Checking deposit
-                account status...
+                Checking account
+                availability...
               </div>
             ) : depositAccount
               ?.account_number ? (
               <>
                 <div
                   style={{
-                    display:
-                      'grid',
-                    gap:
-                      '16px',
+                    background:
+                      '#eaf8ef',
+                    borderRadius:
+                      16,
+                    padding:
+                      16,
+                    marginBottom:
+                      12,
                   }}
                 >
+                  <div
+                    style={{
+                      fontSize:
+                        12,
+                      color:
+                        '#718078',
+                      marginBottom:
+                        4,
+                    }}
+                  >
+                    Bank
+                  </div>
 
-                  <div>
-                    <div
+                  <strong
+                    style={{
+                      color:
+                        '#163c29',
+                    }}
+                  >
+                    {depositAccount.bank_name ||
+                      '—'}
+                  </strong>
+
+                  <div
+                    style={{
+                      marginTop:
+                        14,
+                      fontSize:
+                        12,
+                      color:
+                        '#718078',
+                      marginBottom:
+                        4,
+                    }}
+                  >
+                    Account Name
+                  </div>
+
+                  <strong
+                    style={{
+                      color:
+                        '#163c29',
+                    }}
+                  >
+                    {depositAccount.account_name ||
+                      '—'}
+                  </strong>
+
+                  <div
+                    style={{
+                      marginTop:
+                        14,
+                      fontSize:
+                        12,
+                      color:
+                        '#718078',
+                      marginBottom:
+                        4,
+                    }}
+                  >
+                    Account Number
+                  </div>
+
+                  <div
+                    style={{
+                      display:
+                        'flex',
+                      alignItems:
+                        'center',
+                      gap: 10,
+                    }}
+                  >
+                    <strong
                       style={{
                         color:
-                          '#667085',
+                          '#08783e',
                         fontSize:
-                          '13px',
-                        marginBottom:
-                          '5px',
+                          21,
+                        letterSpacing:
+                          1,
                       }}
                     >
-                      Bank
-                    </div>
-
-                    <strong>
-                      {depositAccount.bank_name ||
-                        '—'}
+                      {
+                        depositAccount.account_number
+                      }
                     </strong>
-                  </div>
 
-                  <div>
-                    <div
+                    <button
+                      type="button"
+                      onClick={
+                        copyAccountNumber
+                      }
                       style={{
+                        border:
+                          'none',
+                        borderRadius:
+                          10,
+                        background:
+                          '#08783e',
                         color:
-                          '#667085',
-                        fontSize:
-                          '13px',
-                        marginBottom:
-                          '5px',
+                          '#ffffff',
+                        padding:
+                          '8px 11px',
+                        fontWeight:
+                          700,
+                        cursor:
+                          'pointer',
                       }}
                     >
-                      Account Name
-                    </div>
-
-                    <strong>
-                      {depositAccount.account_name ||
-                        '—'}
-                    </strong>
+                      Copy
+                    </button>
                   </div>
-
-                  <div>
-                    <div
-                      style={{
-                        color:
-                          '#667085',
-                        fontSize:
-                          '13px',
-                        marginBottom:
-                          '5px',
-                      }}
-                    >
-                      Bank Account Number
-                    </div>
-
-                    <div
-                      style={{
-                        display:
-                          'flex',
-                        alignItems:
-                          'center',
-                        gap:
-                          '10px',
-                        flexWrap:
-                          'wrap',
-                      }}
-                    >
-
-                      <strong
-                        style={{
-                          fontSize:
-                            '24px',
-                          letterSpacing:
-                            '2px',
-                        }}
-                      >
-                        {
-                          depositAccount.account_number
-                        }
-                      </strong>
-
-                      <button
-                        type="button"
-                        onClick={
-                          copyAccountNumber
-                        }
-                        style={{
-                          border:
-                            'none',
-                          borderRadius:
-                            '8px',
-                          padding:
-                            '8px 12px',
-                          background:
-                            '#eef4ff',
-                          color:
-                            '#0b5cff',
-                          fontWeight:
-                            600,
-                          cursor:
-                            'pointer',
-                        }}
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div
-                      style={{
-                        color:
-                          '#667085',
-                        fontSize:
-                          '13px',
-                        marginBottom:
-                          '5px',
-                      }}
-                    >
-                      Currency
-                    </div>
-
-                    <strong>
-                      {depositAccount.currency ||
-                        'NGN'}
-                    </strong>
-                  </div>
-
                 </div>
 
                 <div
                   style={{
-                    marginTop:
-                      '22px',
-                    padding:
-                      '15px',
-                    borderRadius:
-                      '10px',
-                    background:
-                      '#ecfdf3',
                     color:
-                      '#027a48',
+                      '#08783e',
+                    fontSize:
+                      13,
                     lineHeight:
-                      1.6,
+                      1.5,
                   }}
                 >
-                  <strong>
-                    Deposit account active.
-                  </strong>{' '}
                   Use only the official
-                  bank details shown above.
+                  bank details displayed
+                  above.
                 </div>
-
               </>
             ) : (
               <div
                 style={{
-                  padding:
-                    '20px',
-                  borderRadius:
-                    '10px',
                   background:
-                    '#fffaeb',
+                    '#fff8e8',
+                  borderRadius:
+                    16,
+                  padding:
+                    18,
                   color:
-                    '#7a2e0b',
-                  lineHeight:
-                    1.6,
+                    '#7a3418',
+                  fontSize:
+                    14,
+                    lineHeight:
+                      1.65,
                 }}
               >
                 <strong>
@@ -958,7 +892,7 @@ const Deposit: React.FC = () => {
 
                 <br />
 
-                Your Zenimonies account
+                Your ZENIMONIES account
                 exists, but a dedicated
                 bank deposit account has
                 not yet been provisioned.
@@ -968,69 +902,65 @@ const Deposit: React.FC = () => {
 
                 Do not transfer money to
                 an account claiming to
-                belong to Zenimonies unless
-                the official bank details
-                appear above.
+                belong to ZENIMONIES
+                unless the official bank
+                details appear above.
               </div>
             )}
-          </div>
+          </section>
 
-          {/* ==================================================
-              ACCOUNT NOTICE
-          ================================================== */}
+          {/* NOTICE */}
 
           <div
             style={{
-              marginBottom:
-                '30px',
-              padding:
-                '16px',
-              borderRadius:
-                '10px',
               background:
-                '#f8faff',
+                '#f3f8f5',
+              borderRadius:
+                15,
+              padding:
+                15,
               color:
-                '#475467',
+                '#506158',
               fontSize:
-                '14px',
+                13,
               lineHeight:
                 1.6,
+              marginBottom:
+                24,
             }}
           >
-            <strong>
-              Important
-            </strong>
-
-            <br />
-
-            Your Zenimonies balance is
-            updated only after the payment
-            provider confirms a successful
-            payment. Starting a deposit
-            request does not add money to
-            your balance.
+            <strong
+              style={{
+                color:
+                  '#163c29',
+              }}
+            >
+              Important:
+            </strong>{' '}
+            Your balance is updated
+            only after the payment
+            provider confirms a
+            successful payment.
           </div>
 
-          {/* ==================================================
-              START DEPOSIT
-          ================================================== */}
+          {/* START DEPOSIT */}
 
-          <div
+          <section
             style={{
               borderTop:
-                '1px solid #eaecf0',
+                '1px solid #e5eee8',
               paddingTop:
-                '25px',
+                24,
             }}
           >
-
             <h2
               style={{
-                marginTop: 0,
-                marginBottom:
-                  '8px',
+                margin:
+                  '0 0 6px',
+                color:
+                  '#163c29',
                 fontSize:
-                  '20px',
+                  22,
               }}
             >
               Start a Deposit
@@ -1038,14 +968,16 @@ const Deposit: React.FC = () => {
 
             <p
               style={{
+                margin:
+                  '0 0 20px',
                 color:
-                  '#667085',
-                lineHeight:
-                  1.6,
+                  '#718078',
+                fontSize:
+                  14,
               }}
             >
-              Choose how you want to
-              fund your account.
+              Choose how you want
+              to fund your account.
             </p>
 
             <form
@@ -1054,26 +986,29 @@ const Deposit: React.FC = () => {
               }
             >
 
-              {/* AMOUNT */}
-
               <label
-                htmlFor="amount"
+                htmlFor="deposit-amount"
                 style={{
                   display:
                     'block',
-                  marginBottom:
-                    '8px',
+                  color:
+                    '#405449',
                   fontWeight:
-                    600,
+                    700,
+                  fontSize:
+                    14,
+                  marginBottom:
+                    8,
                 }}
               >
                 Amount (NGN)
               </label>
 
               <input
-                id="amount"
+                id="deposit-amount"
                 type="number"
                 min="1"
+                max="5000000"
                 step="0.01"
                 value={amount}
                 onChange={event =>
@@ -1091,36 +1026,44 @@ const Deposit: React.FC = () => {
                   boxSizing:
                     'border-box',
                   padding:
-                    '14px',
-                  marginBottom:
-                    '20px',
-                  border:
-                    '1px solid #d0d5dd',
+                    '15px',
                   borderRadius:
-                    '10px',
+                    13,
+                  border:
+                    '1px solid #d5e3da',
+                  outline:
+                    'none',
                   fontSize:
-                    '16px',
+                    16,
+                  marginBottom:
+                    18,
+                  color:
+                    '#163c29',
+                  background:
+                    '#ffffff',
                 }}
               />
 
-              {/* METHOD */}
-
               <label
-                htmlFor="method"
+                htmlFor="payment-method"
                 style={{
                   display:
                     'block',
-                  marginBottom:
-                    '8px',
+                  color:
+                    '#405449',
                   fontWeight:
-                    600,
+                    700,
+                  fontSize:
+                    14,
+                  marginBottom:
+                    8,
                 }}
               >
                 Payment Method
               </label>
 
               <select
-                id="method"
+                id="payment-method"
                 value={method}
                 onChange={event =>
                   setMethod(
@@ -1136,20 +1079,23 @@ const Deposit: React.FC = () => {
                   boxSizing:
                     'border-box',
                   padding:
-                    '14px',
-                  marginBottom:
-                    '20px',
-                  border:
-                    '1px solid #d0d5dd',
+                    '15px',
                   borderRadius:
-                    '10px',
+                    13,
+                  border:
+                    '1px solid #d5e3da',
+                  outline:
+                    'none',
+                  fontSize:
+                    16,
                   background:
                     '#ffffff',
-                  fontSize:
-                    '16px',
+                  marginBottom:
+                    18,
+                  color:
+                    '#163c29',
                 }}
               >
-
                 <option value="paystack">
                   Paystack
                 </option>
@@ -1157,29 +1103,26 @@ const Deposit: React.FC = () => {
                 <option value="bank_transfer">
                   Bank Transfer
                 </option>
-
               </select>
-
-              {/* PAYSTACK INFORMATION */}
 
               {method ===
                 'paystack' && (
                 <div
                   style={{
-                    marginBottom:
-                      '20px',
-                    padding:
-                      '14px',
-                    borderRadius:
-                      '10px',
                     background:
-                      '#eef4ff',
+                      '#eaf8ef',
+                    borderRadius:
+                      14,
+                    padding:
+                      15,
+                    marginBottom:
+                      18,
                     color:
-                      '#344054',
+                      '#176b3a',
                     fontSize:
-                      '14px',
+                      13,
                     lineHeight:
-                      1.6,
+                      1.55,
                   }}
                 >
                   You will be securely
@@ -1189,130 +1132,108 @@ const Deposit: React.FC = () => {
                 </div>
               )}
 
-              {/* BANK TRANSFER INFORMATION */}
-
               {method ===
                 'bank_transfer' && (
                 <div
                   style={{
-                    marginBottom:
-                      '20px',
-                    padding:
-                      '14px',
-                    borderRadius:
-                      '10px',
                     background:
                       depositAccount
                         ?.account_number
-                        ? '#ecfdf3'
-                        : '#fffaeb',
+                        ? '#eaf8ef'
+                        : '#fff8e8',
+                    borderRadius:
+                      14,
+                    padding:
+                      15,
+                    marginBottom:
+                      18,
                     color:
                       depositAccount
                         ?.account_number
-                        ? '#027a48'
-                        : '#7a2e0b',
+                        ? '#176b3a'
+                        : '#7a3418',
                     fontSize:
-                      '14px',
+                      13,
                     lineHeight:
-                      1.6,
+                      1.55,
                   }}
                 >
                   {depositAccount
-                    ?.account_number ? (
-                    <>
-                      Transfer the
-                      money only to
-                      the official bank
-                      account shown
-                      above.
-                    </>
-                  ) : (
-                    <>
-                      Bank Transfer is
-                      currently
-                      unavailable because
-                      your dedicated bank
-                      deposit account has
-                      not been provisioned.
-                    </>
-                  )}
+                    ?.account_number
+                    ? 'Transfer the money only to the official bank account shown above.'
+                    : 'Bank Transfer is unavailable until your dedicated bank deposit account is provisioned.'}
                 </div>
               )}
-
-              {/* SUBMIT */}
 
               <button
                 type="submit"
                 disabled={
                   submitting ||
-                  (
-                    method ===
-                      'bank_transfer' &&
+                  (method ===
+                    'bank_transfer' &&
                     !depositAccount
-                      ?.account_number
-                  )
+                      ?.account_number)
                 }
                 style={{
                   width:
                     '100%',
-                  padding:
-                    '15px',
                   border:
                     'none',
                   borderRadius:
-                    '10px',
+                    14,
+                  padding:
+                    '16px',
                   background:
-                    '#0b5cff',
+                    submitting
+                      ? '#9bb9a7'
+                      : '#159447',
                   color:
                     '#ffffff',
                   fontSize:
-                    '16px',
+                    16,
                   fontWeight:
-                    700,
+                    800,
                   cursor:
                     submitting
                       ? 'not-allowed'
                       : 'pointer',
-                  opacity:
-                    submitting
-                      ? 0.7
-                      : 1,
                 }}
               >
                 {submitting
                   ? 'Processing...'
                   : method ===
-                      'paystack'
-                    ? 'Continue to Paystack'
-                    : 'Create Bank Transfer Deposit'}
+                    'paystack'
+                  ? 'Continue to Paystack'
+                  : 'Create Bank Transfer Deposit'}
               </button>
-
             </form>
-          </div>
+          </section>
         </div>
 
-        {/* ====================================================
-            DEPOSIT HISTORY
-        ==================================================== */}
+        {/* DEPOSIT HISTORY */}
 
         <div
           style={{
             background:
               '#ffffff',
             borderRadius:
-              '18px',
+              22,
             padding:
-              '30px',
-            boxShadow:
-              '0 8px 30px rgba(0, 0, 0, 0.08)',
+              20,
+            border:
+              '1px solid #dcebe1',
+            marginTop:
+              18,
           }}
         >
-
           <h2
             style={{
-              marginTop: 0,
-              marginBottom:
-                '8px',
+              margin:
+                '0 0 5px',
+              color:
+                '#163c29',
+              fontSize:
+                22,
             }}
           >
             Deposit History
@@ -1320,11 +1241,12 @@ const Deposit: React.FC = () => {
 
           <p
             style={{
+              margin:
+                '0 0 18px',
               color:
-                '#667085',
-              marginTop: 0,
-              marginBottom:
-                '20px',
+                '#718078',
+                fontSize:
+                  14,
             }}
           >
             Your recent account
@@ -1335,15 +1257,17 @@ const Deposit: React.FC = () => {
             <div
               style={{
                 padding:
-                  '25px',
+                  20,
                 textAlign:
                   'center',
                 border:
-                  '1px dashed #d0d5dd',
+                  '1px dashed #d5e3da',
                 borderRadius:
-                  '12px',
+                  14,
                 color:
-                  '#667085',
+                  '#718078',
+                fontSize:
+                  14,
               }}
             >
               No deposits yet.
@@ -1352,9 +1276,10 @@ const Deposit: React.FC = () => {
             <div
               style={{
                 display:
-                  'grid',
-                gap:
-                  '12px',
+                  'flex',
+                flexDirection:
+                  'column',
+                gap: 10,
               }}
             >
               {deposits.map(
@@ -1370,31 +1295,33 @@ const Deposit: React.FC = () => {
                         deposit.id
                       }
                       style={{
-                        border:
-                          '1px solid #eaecf0',
-                        borderRadius:
-                          '12px',
                         padding:
-                          '16px',
+                          15,
+                        border:
+                          '1px solid #e3ece6',
+                        borderRadius:
+                          15,
                       }}
                     >
-
                       <div
                         style={{
                           display:
                             'flex',
                           justifyContent:
                             'space-between',
+                          gap: 10,
                           alignItems:
                             'center',
-                          gap:
-                            '12px',
-                          marginBottom:
-                            '8px',
                         }}
                       >
-
-                        <strong>
+                        <strong
+                          style={{
+                            color:
+                              '#163c29',
+                            fontSize:
+                              16,
+                          }}
+                        >
                           {formatAmount(
                             deposit.amount,
                             deposit.currency
@@ -1407,27 +1334,29 @@ const Deposit: React.FC = () => {
                             padding:
                               '5px 9px',
                             borderRadius:
-                              '20px',
+                              20,
                             fontSize:
-                              '12px',
+                              11,
                             fontWeight:
-                              600,
+                              700,
                           }}
                         >
-                          {deposit.status}
+                          {
+                            deposit.status
+                          }
                         </span>
-
                       </div>
 
                       <div
                         style={{
                           color:
-                            '#667085',
+                            '#718078',
                           fontSize:
-                            '13px',
+                            12,
+                          marginTop:
+                            8,
                         }}
                       >
-                        Method:{' '}
                         {deposit.payment_method ||
                           '—'}
                       </div>
@@ -1435,32 +1364,35 @@ const Deposit: React.FC = () => {
                       <div
                         style={{
                           color:
-                            '#667085',
+                            '#718078',
                           fontSize:
-                            '13px',
+                            12,
                           marginTop:
-                            '5px',
+                            4,
+                          wordBreak:
+                            'break-all',
                         }}
                       >
-                        Reference:{' '}
-                        {deposit.reference}
+                        Ref:{' '}
+                        {
+                          deposit.reference
+                        }
                       </div>
 
                       <div
                         style={{
                           color:
-                            '#98a2b3',
+                            '#98a49d',
                           fontSize:
-                            '12px',
+                            11,
                           marginTop:
-                            '5px',
+                            5,
                         }}
                       >
                         {formatDate(
                           deposit.created_at
                         )}
                       </div>
-
                     </div>
                   );
                 }
@@ -1469,24 +1401,21 @@ const Deposit: React.FC = () => {
           )}
         </div>
 
-        {/* FOOTER */}
-
         <div
           style={{
             textAlign:
               'center',
-            color:
-              '#98a2b3',
-            fontSize:
-              '13px',
             marginTop:
-              '24px',
+              22,
+            color:
+              '#8a9990',
+            fontSize:
+              12,
           }}
         >
-          Zenimonies • Secure
-          account funding
+          ZENIMONIES • Secure
+          Account Funding
         </div>
-
       </div>
     </div>
   );
