@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+ const crypto = require('crypto');
 
 // ============================================================
 // ZENIMONIES BANKING
@@ -57,11 +57,29 @@ const getVtpassHeaders = () => {
 const generateRequestId = () => {
   const now = new Date();
 
-  const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(now.getUTCDate()).padStart(2, '0');
-  const hour = String(now.getUTCHours()).padStart(2, '0');
-  const minute = String(now.getUTCMinutes()).padStart(2, '0');
+  const lagosTime = new Intl.DateTimeFormat(
+    'en-GB',
+    {
+      timeZone: 'Africa/Lagos',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }
+  ).formatToParts(now);
+
+  const getPart = (type) =>
+    lagosTime.find(
+      (part) => part.type === type
+    )?.value || '';
+
+  const year = getPart('year');
+  const month = getPart('month');
+  const day = getPart('day');
+  const hour = getPart('hour');
+  const minute = getPart('minute');
 
   const randomPart = crypto
     .randomBytes(6)
