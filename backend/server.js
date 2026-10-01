@@ -38,6 +38,7 @@ const saveWalletRoutes =
     require('./routes/saveWalletRoutes');
 const educationRoutes =
   require('./routes/education');
+const insuranceRoutes = require('./routes/insurance');
 const statementRoutes = require('./routes/statementRoutes');
 const posRoutes = require('./routes/posRoutes');
 const smsPreferencesRoutes = require('./routes/smsPreferences');
@@ -210,6 +211,10 @@ app.use(
   '/api/education',
   educationRoutes
 );
+app.use(
+  '/api/insurance', 
+    insuranceRoutes
+  );
 // ============================================================
 // BENEFICIARIES
 // ============================================================
