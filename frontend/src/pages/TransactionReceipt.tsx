@@ -481,36 +481,46 @@ const senderName =
     '';
 
   /*
-   * ============================================================
-   * TOTAL DEBIT
-   * ============================================================
-   */
+ * ============================================================
+ * TOTAL DEBIT SHOWN ON TRANSFER RECEIPT
+ * ============================================================
+ *
+ * IMPORTANT:
+ *
+ * Spend + Save is NOT part of the transfer receipt.
+ *
+ * The receipt represents only:
+ *
+ * Transfer Amount + Transfer Fee
+ *
+ * Example:
+ *
+ * Transfer Amount = ₦1,000
+ * Transfer Fee    = ₦20
+ *
+ * Receipt Total   = ₦1,020
+ *
+ * If Spend + Save = ₦200, that money is moved separately
+ * into the sender's Save Wallet and must NOT appear in
+ * the transfer receipt.
+ *
+ * The actual Main Account balance may decrease by ₦1,220,
+ * but this receipt only represents the ₦1,020 transfer debit.
+ */
 
-  let totalDebited =
-    Math.abs(numericAmount);
+let totalDebited =
+  Math.abs(numericAmount);
 
-  if (
-    isTransfer &&
-    !isIncoming
-  ) {
-    if (
-      Number.isFinite(
-        numericTotalDebit
-      ) &&
-      numericTotalDebit > 0
-    ) {
-      totalDebited =
-        Math.abs(
-          numericTotalDebit
-        );
-    } else {
-      totalDebited =
-        Math.abs(
-          numericAmount +
-            numericFee
-        );
-    }
-  }
+if (
+  isTransfer &&
+  !isIncoming
+) {
+  totalDebited =
+    Math.abs(
+      numericAmount +
+        numericFee
+    );
+}
 
   /*
    * ============================================================
