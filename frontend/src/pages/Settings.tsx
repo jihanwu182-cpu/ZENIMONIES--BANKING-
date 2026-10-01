@@ -2510,87 +2510,131 @@ const openSection = (section: string) => {
                 </div>
               </div>
             )}
+{/* =================================================
+    SAVING SETTINGS
+================================================= */}
 
-            {/* =================================================
-                SAVING SETTINGS
-            ================================================= */}
+{activeSection === 'Saving Settings' && (
+  <div style={{ marginTop: 20 }}>
 
-            {activeSection ===
-              'Saving Settings' && (
-              <div
-                style={{
-                  marginTop: 20,
-                }}
-              >
-                <div
-                  style={
-                    styles.infoBox
-                  }
-                >
-                  <strong>
-                    SafeBox
-                  </strong>
+    <div style={styles.infoBox}>
+      <strong>Spend + Save</strong>
 
-                  <p
-                    style={
-                      styles.infoText
-                    }
-                  >
-                    Set an amount you want to save regularly
-                    in your Zenimonies SafeBox.
-                  </p>
-                </div>
+      <p style={styles.infoText}>
+        Choose a fixed amount that will be moved into
+        your Save Wallet only after an eligible
+        successful transfer.
+      </p>
+    </div>
 
-                <label
-                  style={styles.label}
-                >
-                  Saving Amount
-                </label>
+    <label style={styles.label}>
+      Amount To Save
+    </label>
 
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="₦0.00"
-                  style={styles.input}
-                />
+    <input
+      type="number"
+      min="0.01"
+      step="0.01"
+      value={spendSaveAmount}
+      onChange={(event) => {
+        setSpendSaveAmount(event.target.value);
+        setSpendSaveMessage('');
+        setSpendSaveError('');
+      }}
+      placeholder="₦2,000.00"
+      style={styles.input}
+    />
 
-                <label
-                  style={styles.label}
-                >
-                  Saving Frequency
-                </label>
+    <ToggleRow
+      title="Spend + Save"
+      description={
+        spendSaveEnabled
+          ? 'ON — the selected amount will be saved after each eligible successful transfer.'
+          : 'OFF — no money will be saved automatically.'
+      }
+      enabled={spendSaveEnabled}
+      onChange={(value) => {
+        setSpendSaveEnabled(value);
+        setSpendSaveMessage('');
+        setSpendSaveError('');
+      }}
+    />
 
-                <select
-                  style={styles.input}
-                >
-                  <option value="daily">
-                    Daily
-                  </option>
+    {spendSaveError && (
+      <div
+        role="alert"
+        style={{
+          marginTop: 15,
+          background: '#fff1f1',
+          border: '1px solid #f3d3d0',
+          color: '#b42318',
+          borderRadius: 12,
+          padding: 12,
+          fontSize: 12,
+        }}
+      >
+        {spendSaveError}
+      </div>
+    )}
 
-                  <option value="weekly">
-                    Weekly
-                  </option>
+    {spendSaveMessage && (
+      <div
+        role="status"
+        style={{
+          marginTop: 15,
+          background: '#effbf5',
+          border: '1px solid #d9eee3',
+          color: '#12633f',
+          borderRadius: 12,
+          padding: 12,
+          fontSize: 12,
+        }}
+      >
+        {spendSaveMessage}
+      </div>
+    )}
 
-                  <option value="monthly">
-                    Monthly
-                  </option>
-                </select>
+    <div
+      style={{
+        marginTop: 15,
+        padding: 12,
+        borderRadius: 12,
+        background: '#f7faf8',
+        color: '#6f7d76',
+        fontSize: 11,
+        lineHeight: 1.55,
+      }}
+    >
+      <strong style={{ color: '#34443c' }}>
+        Important
+      </strong>
 
-                <button
-                  type="button"
-                  style={
-                    styles.primaryButton
-                  }
-                  onClick={() =>
-                    alert(
-                      'SafeBox saving settings will be connected to the backend next.'
-                    )
-                  }
-                >
-                  Save Settings
-                </button>
-              </div>
-            )}
+      <br />
+
+      Setting an amount or turning Spend + Save on
+      does not move money. Saving happens only after
+      an eligible successful transfer.
+    </div>
+
+    <button
+      type="button"
+      style={{
+        ...styles.primaryButton,
+        opacity: spendSaveSaving ? 0.65 : 1,
+      }}
+      disabled={
+        spendSaveSaving ||
+        spendSaveLoading
+      }
+      onClick={handleSaveSpendSaveSettings}
+    >
+      {spendSaveSaving
+        ? 'Saving Settings…'
+        : 'Save Changes'}
+    </button>
+
+  </div>
+)}
 
             {/* =================================================
                 SECURITY QUESTION
