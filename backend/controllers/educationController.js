@@ -1218,58 +1218,504 @@ const requery = async (
   req,
   res
 ) => {
+  const userId = getUserId(req);
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
+
+  const requestId = cleanString(
+    req.body?.request_id ||
+    req.body?.requestId
+  );
+
+  if (!requestId) {
+    return res.status(400).json({
+      success: false,
+      code: 'REQUEST_ID_REQUIRED',
+      message: 'VTpass request ID is required.',
+    });
+  }
+
   try {
-    const userId =
-      getUserId(req);
-    if (!userId) {
-      return res.status(401).json({
+    // ========================================================
+    // STEP 1
+    // FIND THE CUSTOMER'S EDUCATION PAYMENT
+    // ========================================================
+
+    const paymentResult = await pool.query(
+      `
+      SELECT
+        bp.id,
+        bp.account_id,
+        bp.amount,
+        bp.currency,
+        bp.reference,
+        bp.status,
+        bp.provider_request_id,
+        bp.provider_reference,
+        bp.biller_name,
+        bp.customer_reference
+      FROM bill_payments bp
+      INNER JOIN accounts a
+        ON a.id = bp.account_id
+      WHERE bp.provider_request_id = $1
+        AND a.user_id = $2
+        AND bp.category = 'education'
+      LIMIT 1
+      `,
+      [
+        requestId,
+        userId,
+      ]
+    );
+
+    if (
+      paymentResult.rows.length === 0
+    ) {
+      return res.status(404).json({
         success: false,
+        code: 'EDUCATION_PAYMENT_NOT_FOUND',
         message:
-          'Authentication required.',
+          'Education payment could not be found.',
       });
     }
-    const requestId =
-      cleanString(
-        req.body?.request_id ||
-        req.body?.requestId
-      );
-    if (!requestId) {
-      return res.status(400).json({
-        success: false,
-        code:
-          'REQUEST_ID_REQUIRED',
+
+    const payment =
+      paymentResult.rows[0];
+
+    // ========================================================
+    // STEP 2
+    // IF ALREADY FINALIZED, DO NOT PROCESS IT AGAIN
+    //
+    // This protects against duplicate refunds.
+    // ========================================================
+
+    if (
+      payment.status === 'completed'
+    ) {
+      return res.status(200).json({
+        success: true,
+        status: 'completed',
+        requestId,
+        reference: payment.reference,
+        providerReference:
+          payment.provider_reference ||
+          requestId,
         message:
-          'VTpass request ID is required.',
+          'This education payment has already been completed.',
       });
     }
+
+    if (
+      payment.status === 'failed'
+    ) {
+      return res.status(200).json({
+        success: true,
+        status: 'failed',
+        requestId,
+        reference: payment.reference,
+        providerReference:
+          payment.provider_reference ||
+          requestId,
+        message:
+          'This education payment has already been marked as failed.',
+      });
+    }
+
+    // ========================================================
+    // STEP 3
+    // ASK VTPASS FOR THE CURRENT STATUS
+    // ========================================================
+
     const providerResponse =
       await requeryEducationTransaction(
         requestId
       );
+
     const providerStatus =
       getEducationProviderStatus(
         providerResponse
       );
-    return res.status(200).json({
-      success: true,
-      status:
-        providerStatus,
-      requestId,
-      providerReference:
-        getProviderReference(
+
+    const providerReference =
+      getProviderReference(
+        providerResponse,
+        requestId
+      );
+
+    const providerMessage =
+      getProviderMessage(
+        providerResponse
+      );
+
+    const purchasedCode =
+      extractPurchasedCode(
+        providerResponse
+      );
+
+    const tokens =
+      extractTokens(
+        providerResponse
+      );
+
+    // ========================================================
+    // STILL PENDING
+    // ========================================================
+
+    if (
+      providerStatus === 'pending'
+    ) {
+      await pool.query(
+        `
+        UPDATE bill_payments
+        SET
+          provider_reference = $1,
+          provider_response = $2,
+          status = 'pending'
+        WHERE id = $3
+          AND status = 'pending'
+        `,
+        [
+          providerReference,
           providerResponse,
-          requestId
-        ),
-      purchasedCode:
-        extractPurchasedCode(
-          providerResponse
-        ),
-      tokens:
-        extractTokens(
-          providerResponse
-        ),
-      providerResponse,
-    });
+          payment.id,
+        ]
+      );
+
+      return res.status(200).json({
+        success: true,
+        status: 'pending',
+        requestId,
+        reference: payment.reference,
+        providerReference,
+        purchasedCode,
+        tokens,
+        providerResponse,
+        message:
+          'The education payment is still being processed.',
+      });
+    }
+
+    // ========================================================
+    // COMPLETED
+    // ========================================================
+
+    if (
+      providerStatus === 'completed'
+    ) {
+      await pool.query(
+        `
+        UPDATE bill_payments
+        SET
+          provider_reference = $1,
+          provider_response = $2,
+          status = 'completed',
+          completed_at = CURRENT_TIMESTAMP
+        WHERE id = $3
+          AND status = 'pending'
+        `,
+        [
+          providerReference,
+          providerResponse,
+          payment.id,
+        ]
+      );
+
+      await pool.query(
+        `
+        UPDATE transactions
+        SET
+          status = 'completed'
+        WHERE reference = $1
+          AND status = 'pending'
+        `,
+        [payment.reference]
+      );
+
+      return res.status(200).json({
+        success: true,
+        status: 'completed',
+        requestId,
+        reference: payment.reference,
+        providerReference,
+        purchasedCode,
+        tokens,
+        providerResponse,
+        message:
+          'Education payment completed successfully.',
+      });
+    }
+
+    // ========================================================
+    // PROVIDER FAILED
+    //
+    // Refund the customer's wallet.
+    // ========================================================
+
+    const client =
+      await pool.connect();
+
+    try {
+      await client.query(
+        'BEGIN'
+      );
+
+      // ------------------------------------------------------
+      // LOCK PAYMENT
+      //
+      // Prevents two simultaneous requeries from both
+      // issuing a refund.
+      // ------------------------------------------------------
+
+      const lockedPaymentResult =
+        await client.query(
+          `
+          SELECT
+            id,
+            account_id,
+            amount,
+            currency,
+            reference,
+            status,
+            biller_name
+          FROM bill_payments
+          WHERE id = $1
+          FOR UPDATE
+          `,
+          [payment.id]
+        );
+
+      if (
+        lockedPaymentResult.rows.length === 0
+      ) {
+        throw new Error(
+          'Education payment disappeared during requery.'
+        );
+      }
+
+      const lockedPayment =
+        lockedPaymentResult.rows[0];
+
+      // ------------------------------------------------------
+      // ALREADY FINALIZED BY ANOTHER PROCESS
+      // ------------------------------------------------------
+
+      if (
+        lockedPayment.status !==
+        'pending'
+      ) {
+        await client.query(
+          'COMMIT'
+        );
+
+        return res.status(200).json({
+          success: true,
+          status:
+            lockedPayment.status,
+          requestId,
+          reference:
+            lockedPayment.reference,
+          message:
+            'This education payment has already been finalized.',
+        });
+      }
+
+      // ------------------------------------------------------
+      // LOCK CUSTOMER ACCOUNT
+      // ------------------------------------------------------
+
+      const accountResult =
+        await client.query(
+          `
+          SELECT
+            id,
+            balance
+          FROM accounts
+          WHERE id = $1
+          FOR UPDATE
+          `,
+          [lockedPayment.account_id]
+        );
+
+      if (
+        accountResult.rows.length === 0
+      ) {
+        throw new Error(
+          'Customer account not found during education refund.'
+        );
+      }
+
+      const currentBalance =
+        Number(
+          accountResult.rows[0].balance
+        );
+
+      const refundAmount =
+        Number(
+          lockedPayment.amount
+        );
+
+      if (
+        !Number.isFinite(
+          refundAmount
+        ) ||
+        refundAmount <= 0
+      ) {
+        throw new Error(
+          'Invalid education refund amount.'
+        );
+      }
+
+      const refundedBalance =
+        currentBalance +
+        refundAmount;
+
+      // ------------------------------------------------------
+      // REFUND WALLET
+      // ------------------------------------------------------
+
+      await client.query(
+        `
+        UPDATE accounts
+        SET
+          balance = $1,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        `,
+        [
+          refundedBalance,
+          lockedPayment.account_id,
+        ]
+      );
+
+      // ------------------------------------------------------
+      // MARK BILL PAYMENT FAILED
+      // ------------------------------------------------------
+
+      await client.query(
+        `
+        UPDATE bill_payments
+        SET
+          provider_reference = $1,
+          provider_response = $2,
+          status = 'failed',
+          failure_reason = $3
+        WHERE id = $4
+          AND status = 'pending'
+        `,
+        [
+          providerReference,
+          providerResponse,
+          providerMessage ||
+            'VTpass rejected the education payment.',
+          lockedPayment.id,
+        ]
+      );
+
+      // ------------------------------------------------------
+      // MARK ORIGINAL TRANSACTION FAILED
+      // ------------------------------------------------------
+
+      await client.query(
+        `
+        UPDATE transactions
+        SET
+          status = 'failed'
+        WHERE reference = $1
+          AND status = 'pending'
+        `,
+        [lockedPayment.reference]
+      );
+
+      // ------------------------------------------------------
+      // CREATE REFUND TRANSACTION
+      // ------------------------------------------------------
+
+      await client.query(
+        `
+        INSERT INTO transactions (
+          account_id,
+          type,
+          amount,
+          currency,
+          reference,
+          description,
+          status,
+          balance_before,
+          balance_after
+        )
+        VALUES (
+          $1,
+          'education_refund',
+          $2,
+          $3,
+          $4,
+          $5,
+          'completed',
+          $6,
+          $7
+        )
+        `,
+        [
+          lockedPayment.account_id,
+          refundAmount,
+          lockedPayment.currency ||
+            'NGN',
+          `${lockedPayment.reference}-REFUND`,
+          `Refund for failed ${lockedPayment.biller_name || 'education payment'}`,
+          currentBalance,
+          refundedBalance,
+        ]
+      );
+
+      await client.query(
+        'COMMIT'
+      );
+
+      return res.status(200).json({
+        success: true,
+        status: 'failed',
+        refunded: true,
+        requestId,
+        reference:
+          lockedPayment.reference,
+        providerReference,
+        refundAmount,
+        purchasedCode,
+        tokens,
+        message:
+          providerMessage ||
+          'Education payment failed and your wallet has been refunded.',
+      });
+    } catch (refundError) {
+      try {
+        await client.query(
+          'ROLLBACK'
+        );
+      } catch (_) {}
+
+      console.error(
+        'Education requery refund error:',
+        refundError?.message ||
+          'Unknown error'
+      );
+
+      return res.status(500).json({
+        success: false,
+        code:
+          'EDUCATION_REFUND_PENDING',
+        reference:
+          payment.reference,
+        message:
+          'The education provider rejected the payment, but the wallet refund requires reconciliation. Please contact support with the transaction reference.',
+      });
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error(
       'Education transaction requery error:',
@@ -1277,6 +1723,7 @@ const requery = async (
         error?.message ||
         'Unknown error'
     );
+
     return res.status(
       error?.code ===
         'VTPASS_TIMEOUT'
@@ -1293,6 +1740,7 @@ const requery = async (
     });
   }
 };
+
 // ============================================================
 // EXPORTS
 // ============================================================
