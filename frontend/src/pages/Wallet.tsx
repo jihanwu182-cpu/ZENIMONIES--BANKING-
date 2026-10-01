@@ -1239,7 +1239,6 @@ const Wallet: React.FC = () => {
                  color:
                 '#008C68 !important',
              },
-              },
           }}
         >
           <Tab label="Details" />
