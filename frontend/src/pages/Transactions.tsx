@@ -223,109 +223,118 @@ const Transactions: React.FC = () => {
 
 
     /*
-   * ==========================================================
-   * LOAD TRANSACTIONS
-   * ==========================================================
-   *
-   * Loads:
-   *
-   * 1. Main Account transactions
-   * 2. Save Wallet Spend + Save transactions
-   *
-   * Spend + Save is kept as a SEPARATE transaction-history
-   * entry. It is NOT added to the transfer amount.
-   *
-   * ==========================================================
-   */
+ * ==========================================================
+ * LOAD TRANSACTIONS
+ * ==========================================================
+ *
+ * Loads:
+ *
+ * 1. Main Account transactions
+ * 2. Save Wallet Spend + Save transactions
+ *
+ * IMPORTANT:
+ *
+ * Save Wallet history must NEVER prevent the normal
+ * Transaction History from loading.
+ *
+ * If the Save Wallet endpoint fails or times out,
+ * the Main Account transaction history will still load.
+ *
+ * ==========================================================
+ */
 
-  const loadTransactions = async (
-    showRefresh = false
-  ) => {
+const loadTransactions = async (
+  showRefresh = false
+) => {
+  try {
+    if (showRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    setError('');
+
+    const token =
+      getToken();
+
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    /*
+     * ======================================================
+     * LOAD MAIN ACCOUNT TRANSACTIONS
+     * ======================================================
+     *
+     * This is the primary transaction history.
+     */
+
+    const accountResponse =
+      await axios.get(
+        `${API_URL}/api/account/transactions`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+
+          timeout: 10000,
+        }
+      );
+
+    const accountData =
+      accountResponse.data;
+
+    let accountTransactions: Transaction[] =
+      [];
+
+    if (
+      Array.isArray(
+        accountData
+      )
+    ) {
+      accountTransactions =
+        accountData;
+    } else if (
+      Array.isArray(
+        accountData?.transactions
+      )
+    ) {
+      accountTransactions =
+        accountData.transactions;
+    }
+
+    /*
+     * ======================================================
+     * LOAD SAVE WALLET TRANSACTIONS
+     * ======================================================
+     *
+     * This request is OPTIONAL.
+     *
+     * If it fails, we keep the normal account history.
+     */
+
+    let saveWalletTransactions: any[] =
+      [];
+
     try {
-      if (showRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      setError('');
-
-      const token =
-        getToken();
-
-      if (!token) {
-        navigate('/login');
-        return;
-      }
-
-      /*
-       * ------------------------------------------------------
-       * LOAD BOTH HISTORIES
-       * ------------------------------------------------------
-       */
-
-      const [
-        accountResponse,
-        saveWalletResponse,
-      ] = await Promise.all([
-        axios.get(
-          `${API_URL}/api/account/transactions`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        ),
-
-        axios.get(
+      const saveWalletResponse =
+        await axios.get(
           `${API_URL}/api/wallet/transactions`,
           {
             headers: {
               Authorization:
                 `Bearer ${token}`,
             },
+
+            timeout: 8000,
           }
-        ),
-      ]);
-
-      /*
-       * ------------------------------------------------------
-       * MAIN ACCOUNT TRANSACTIONS
-       * ------------------------------------------------------
-       */
-
-      const accountData =
-        accountResponse.data;
-
-      let accountTransactions: Transaction[] = [];
-
-      if (
-        Array.isArray(
-          accountData
-        )
-      ) {
-        accountTransactions =
-          accountData;
-      } else if (
-        Array.isArray(
-          accountData?.transactions
-        )
-      ) {
-        accountTransactions =
-          accountData.transactions;
-      }
-
-      /*
-       * ------------------------------------------------------
-       * SAVE WALLET TRANSACTIONS
-       * ------------------------------------------------------
-       */
+        );
 
       const saveWalletData =
         saveWalletResponse.data;
-
-      let saveWalletTransactions: any[] = [];
 
       if (
         Array.isArray(
@@ -343,114 +352,138 @@ const Transactions: React.FC = () => {
           saveWalletData.transactions;
       }
 
+    } catch (
+      saveWalletError
+    ) {
       /*
-       * ------------------------------------------------------
-       * CONVERT SPEND + SAVE RECORDS
-       * INTO NORMAL TRANSACTION HISTORY RECORDS
-       * ------------------------------------------------------
+       * ----------------------------------------------------
+       * SAVE WALLET HISTORY FAILED
+       * ----------------------------------------------------
+       *
+       * Do NOT break the whole Transaction History page.
        */
 
-      const spendSaveTransactions: Transaction[] =
-        saveWalletTransactions
-          .filter(
-            (walletTransaction) =>
-              String(
-                walletTransaction?.type ||
-                ''
-              ).toLowerCase() ===
-              'spend_save'
-          )
-          .map(
-            (walletTransaction) => ({
-              id:
-                `save-${String(
-                  walletTransaction.id
-                )}`,
-
-              type:
-                'spend_save',
-
-              amount:
-                Number(
-                  walletTransaction.amount ||
-                  0
-                ),
-
-              currency:
-                walletTransaction.currency ||
-                'NGN',
-
-              reference:
-                walletTransaction.reference,
-
-              description:
-                walletTransaction.description ||
-                'Spend + Save',
-
-              status:
-                'successful',
-
-              created_at:
-                walletTransaction.created_at,
-
-              direction:
-                'credit',
-
-              wallet_id:
-                walletTransaction.wallet_id,
-
-              account_id:
-                walletTransaction.account_id,
-            })
-          );
-
-      /*
-       * ------------------------------------------------------
-       * MERGE
-       * ------------------------------------------------------
-       */
-
-      setTransactions([
-        ...accountTransactions,
-        ...spendSaveTransactions,
-      ]);
-
-    } catch (err: any) {
-      console.error(
-        'Failed to load transactions:',
-        err
+      console.warn(
+        'Save Wallet transactions could not be loaded:',
+        saveWalletError
       );
 
-      if (
-        err?.response?.status ===
-        401
-      ) {
-        localStorage.removeItem(
-          'zenimonies_token'
-        );
-
-        localStorage.removeItem(
-          'token'
-        );
-
-        localStorage.removeItem(
-          'access_token'
-        );
-
-        navigate('/login');
-        return;
-      }
-
-      setError(
-        err?.response?.data?.message ||
-        'Unable to load your transaction history.'
-      );
-
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      saveWalletTransactions =
+        [];
     }
-  };
+
+    /*
+     * ======================================================
+     * CONVERT SPEND + SAVE RECORDS
+     * ======================================================
+     *
+     * Spend + Save appears as a separate transaction-history
+     * entry.
+     *
+     * It does NOT change the transfer transaction amount.
+     */
+
+    const spendSaveTransactions: Transaction[] =
+      saveWalletTransactions
+        .filter(
+          (walletTransaction) =>
+            String(
+              walletTransaction?.type ||
+              ''
+            ).toLowerCase() ===
+            'spend_save'
+        )
+        .map(
+          (walletTransaction) => ({
+            id:
+              `save-${String(
+                walletTransaction.id
+              )}`,
+
+            type:
+              'spend_save',
+
+            amount:
+              Number(
+                walletTransaction.amount ||
+                0
+              ),
+
+            currency:
+              walletTransaction.currency ||
+              'NGN',
+
+            reference:
+              walletTransaction.reference,
+
+            description:
+              walletTransaction.description ||
+              'Spend + Save',
+
+            status:
+              'successful',
+
+            created_at:
+              walletTransaction.created_at,
+
+            direction:
+              'credit',
+
+            wallet_id:
+              walletTransaction.wallet_id,
+
+            account_id:
+              walletTransaction.account_id,
+          })
+        );
+
+    /*
+     * ======================================================
+     * MERGE
+     * ======================================================
+     */
+
+    setTransactions([
+      ...accountTransactions,
+      ...spendSaveTransactions,
+    ]);
+
+  } catch (err: any) {
+    console.error(
+      'Failed to load transactions:',
+      err
+    );
+
+    if (
+      err?.response?.status ===
+      401
+    ) {
+      localStorage.removeItem(
+        'zenimonies_token'
+      );
+
+      localStorage.removeItem(
+        'token'
+      );
+
+      localStorage.removeItem(
+        'access_token'
+      );
+
+      navigate('/login');
+      return;
+    }
+
+    setError(
+      err?.response?.data?.message ||
+      'Unable to load your transaction history.'
+    );
+
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+};
 
 
   /*
