@@ -933,11 +933,8 @@ const Wallet: React.FC = () => {
                   fontWeight: 700,
                 }}
               >
-                {spendSaveEnabled &&
-                Number(spendSaveAmount) > 0
-                  ? formatMoney(
-                      spendSaveAmount
-                    )
+                {Number(spendSaveAmount) > 0
+                ? formatMoney(spendSaveAmount)
                   : 'Not set'}
               </Typography>
             </Box>
