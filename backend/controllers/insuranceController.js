@@ -3,6 +3,7 @@ const pool = require('../config/database');
 
 const {
   INSURANCE_SERVICE_IDS,
+  generateRequestId,
   getInsurancePlans,
   getMotorInsuranceOptions,
   getMotorInsuranceLgas,
@@ -24,6 +25,14 @@ const {
 // - bill_payments
 // - transactions
 // - VTpass
+//
+// IMPORTANT:
+// - Wallet is debited before provider payment.
+// - VTpass request ID is saved before provider call.
+// - Provider timeout does NOT automatically refund.
+// - Pending payments can be requeried.
+// - Confirmed provider failure refunds the wallet.
+// - Refunds are protected against duplication.
 // ============================================================
 
 
@@ -94,6 +103,7 @@ const getProviderMessage = (
   providerResponse
 ) => {
   return (
+    providerResponse?.responseDescription ||
     providerResponse?.response_description ||
     providerResponse?.message ||
     providerResponse?.content?.transactions
@@ -106,6 +116,7 @@ const extractPurchasedCode = (
   providerResponse
 ) => {
   return (
+    providerResponse?.purchasedCode ||
     providerResponse?.purchased_code ||
     providerResponse?.Pin ||
     providerResponse?.pin ||
@@ -119,13 +130,21 @@ const extractCertificateUrl = (
   providerResponse
 ) => {
   return (
-    providerResponse?.certUrl ||
     providerResponse?.certificateUrl ||
+    providerResponse?.certUrl ||
     providerResponse?.content?.certUrl ||
     providerResponse?.content?.certificateUrl ||
     providerResponse?.content?.transactions
       ?.certUrl ||
     null
+  );
+};
+
+const bodyValueMissing = (value) => {
+  return (
+    value === undefined ||
+    value === null ||
+    String(value).trim() === ''
   );
 };
 
@@ -139,11 +158,10 @@ const extractCertificateUrl = (
 
 const getPlans = async (req, res) => {
   try {
-    const serviceID =
-      cleanString(
-        req.query?.serviceID ||
-        req.query?.service
-      );
+    const serviceID = cleanString(
+      req.query?.serviceID ||
+      req.query?.service
+    );
 
     if (!serviceID) {
       return res.status(400).json({
@@ -217,12 +235,16 @@ const getPlans = async (req, res) => {
     return res.status(200).json({
       success: true,
       serviceID,
+
       serviceName:
         getInsuranceServiceName(
           serviceID
         ),
+
       plans,
+
       data: plans,
+
       responseDescription:
         result?.responseDescription ||
         null,
@@ -239,6 +261,7 @@ const getPlans = async (req, res) => {
       code:
         error?.code ||
         'INSURANCE_PLANS_ERROR',
+
       message:
         error?.message ||
         'Unable to load insurance plans.',
@@ -263,8 +286,10 @@ const getMotorOptions = async (
 
     return res.status(200).json({
       success: true,
+
       message:
         'Motor insurance options loaded successfully.',
+
       data: result,
     });
   } catch (error) {
@@ -276,6 +301,7 @@ const getMotorOptions = async (
 
     return res.status(500).json({
       success: false,
+
       message:
         error?.message ||
         'Unable to load motor insurance options.',
@@ -295,10 +321,9 @@ const getMotorLgas = async (
   res
 ) => {
   try {
-    const stateCode =
-      cleanString(
-        req.params?.stateCode
-      );
+    const stateCode = cleanString(
+      req.params?.stateCode
+    );
 
     if (!stateCode) {
       return res.status(400).json({
@@ -315,8 +340,10 @@ const getMotorLgas = async (
 
     return res.status(200).json({
       success: true,
+
       message:
         'LGAs loaded successfully.',
+
       data: result,
     });
   } catch (error) {
@@ -328,6 +355,7 @@ const getMotorLgas = async (
 
     return res.status(500).json({
       success: false,
+
       message:
         error?.message ||
         'Unable to load LGAs.',
@@ -367,8 +395,10 @@ const getMotorModels = async (
 
     return res.status(200).json({
       success: true,
+
       message:
         'Vehicle models loaded successfully.',
+
       data: result,
     });
   } catch (error) {
@@ -380,6 +410,7 @@ const getMotorModels = async (
 
     return res.status(500).json({
       success: false,
+
       message:
         error?.message ||
         'Unable to load vehicle models.',
@@ -411,6 +442,10 @@ const purchase = async (
     });
   }
 
+  // ==========================================================
+  // SERVICE
+  // ==========================================================
+
   const serviceID =
     cleanString(
       req.body?.serviceID ||
@@ -441,6 +476,10 @@ const purchase = async (
         'Unsupported insurance service.',
     });
   }
+
+  // ==========================================================
+  // PLAN
+  // ==========================================================
 
   const variationCode =
     cleanString(
@@ -476,7 +515,6 @@ const purchase = async (
         'Enter a valid Nigerian phone number.',
     });
   }
-
 
   // ==========================================================
   // MOTOR INSURANCE VALIDATION
@@ -557,7 +595,6 @@ const purchase = async (
     }
   }
 
-
   // ==========================================================
   // PERSONAL ACCIDENT VALIDATION
   // ==========================================================
@@ -615,8 +652,26 @@ const purchase = async (
         });
       }
     }
-  }
 
+    const nextKinPhone =
+      cleanPhoneNumber(
+        req.body?.next_kin_phone
+      );
+
+    if (
+      !isValidPhoneNumber(
+        nextKinPhone
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        code:
+          'INVALID_NEXT_OF_KIN_PHONE',
+        message:
+          'Enter a valid Nigerian next of kin phone number.',
+      });
+    }
+  }
 
   // ==========================================================
   // GET LIVE VTpass PLAN
@@ -694,7 +749,6 @@ const purchase = async (
     });
   }
 
-
   // ==========================================================
   // LOCAL REFERENCE
   // ==========================================================
@@ -706,7 +760,6 @@ const purchase = async (
     getInsuranceServiceName(
       serviceID
     );
-
 
   // ==========================================================
   // CUSTOMER REFERENCE
@@ -720,7 +773,6 @@ const purchase = async (
       req.body?.Insured_Name
     );
 
-
   // ==========================================================
   // CUSTOMER NAME
   // ==========================================================
@@ -732,6 +784,16 @@ const purchase = async (
       req.body?.next_kin_name
     ) || null;
 
+  // ==========================================================
+  // GENERATE VTpass REQUEST ID NOW
+  //
+  // We generate it before the provider call and save it
+  // in bill_payments so a timeout/pending payment can
+  // always be requeried later.
+  // ==========================================================
+
+  const providerRequestId =
+    generateRequestId();
 
   // ==========================================================
   // STEP 1
@@ -832,7 +894,6 @@ const purchase = async (
     const balanceAfter =
       balance - amount;
 
-
     // ========================================================
     // CREATE PENDING BILL PAYMENT
     // ========================================================
@@ -863,7 +924,7 @@ const purchase = async (
           $5,
           'NGN',
           $6,
-          NULL,
+          $7,
           'pending'
         )
         RETURNING id
@@ -875,12 +936,12 @@ const purchase = async (
           customerName,
           amount,
           reference,
+          providerRequestId,
         ]
       );
 
     billPaymentId =
       paymentResult.rows[0].id;
-
 
     // ========================================================
     // DEBIT WALLET
@@ -899,7 +960,6 @@ const purchase = async (
         account.id,
       ]
     );
-
 
     // ========================================================
     // CENTRAL TRANSACTION
@@ -967,7 +1027,6 @@ const purchase = async (
     client.release();
   }
 
-
   // ==========================================================
   // STEP 2
   // SEND PAYMENT TO VTPASS
@@ -987,6 +1046,9 @@ const purchase = async (
       phone,
 
       amount,
+
+      request_id:
+        providerRequestId,
     };
 
     // Internal ZENIMONIES field.
@@ -1004,27 +1066,33 @@ const purchase = async (
     );
 
     /*
-     * Network/timeout errors must NOT automatically
-     * refund because VTpass may have processed the
-     * transaction.
+     * IMPORTANT:
      *
-     * Leave it pending for requery.
+     * We DO NOT refund automatically here.
+     *
+     * VTpass may have received and processed
+     * the request even if our connection timed out.
+     *
+     * The request ID has already been stored in
+     * bill_payments, so the transaction can be
+     * requeried safely.
      */
 
     return res.status(202).json({
       success: true,
       status: 'pending',
       reference,
+      request_id:
+        providerRequestId,
       message:
         'Your insurance payment is being processed. We are checking the provider status.',
     });
   }
 
-
   const providerReference =
     getProviderReference(
       providerResult,
-      providerResult?.requestId
+      providerRequestId
     );
 
   const providerMessage =
@@ -1044,7 +1112,6 @@ const purchase = async (
     extractCertificateUrl(
       providerResult
     );
-
 
   // ==========================================================
   // STEP 3
@@ -1066,9 +1133,10 @@ const purchase = async (
           status = 'completed',
           completed_at = CURRENT_TIMESTAMP
         WHERE id = $4
+          AND status = 'pending'
         `,
         [
-          providerResult.requestId,
+          providerRequestId,
           providerReference,
           providerResult.raw ||
             providerResult.content ||
@@ -1090,7 +1158,7 @@ const purchase = async (
     } catch (error) {
       /*
        * VTpass has already processed the insurance.
-       * Never automatically refund here.
+       * NEVER automatically refund here.
        */
 
       console.error(
@@ -1103,6 +1171,8 @@ const purchase = async (
         success: true,
         status: 'pending',
         reference,
+        request_id:
+          providerRequestId,
         message:
           'The insurance payment was processed by the provider and is being finalized in your account.',
       });
@@ -1113,25 +1183,31 @@ const purchase = async (
       status: 'successful',
       reference,
       providerReference,
+      request_id:
+        providerRequestId,
       serviceID,
       serviceName,
       variationCode,
       amount,
+
       transaction_id:
         providerResult.transactionId ||
         null,
+
       purchased_code:
         purchasedCode,
+
       certificate_url:
         certificateUrl,
+
       data:
         providerResult.content ||
         null,
+
       message:
         'Insurance payment successful.',
     });
   }
-
 
   // ==========================================================
   // STEP 4
@@ -1152,9 +1228,10 @@ const purchase = async (
           provider_response = $3,
           status = 'pending'
         WHERE id = $4
+          AND status = 'pending'
         `,
         [
-          providerResult.requestId,
+          providerRequestId,
           providerReference,
           providerResult.raw ||
             providerResult.content ||
@@ -1175,13 +1252,14 @@ const purchase = async (
       status: 'pending',
       reference,
       providerReference,
+
       request_id:
-        providerResult.requestId,
+        providerRequestId,
+
       message:
         'Your insurance payment is being processed. Please check your transaction history for the final status.',
     });
   }
-
 
   // ==========================================================
   // STEP 5
@@ -1198,7 +1276,66 @@ const purchase = async (
       'BEGIN'
     );
 
-    const lockedAccount =
+    // ========================================================
+    // LOCK PAYMENT
+    // ========================================================
+
+    const lockedPaymentResult =
+      await refundClient.query(
+        `
+        SELECT
+          id,
+          account_id,
+          amount,
+          currency,
+          reference,
+          status
+        FROM bill_payments
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [billPaymentId]
+      );
+
+    if (
+      lockedPaymentResult.rows.length === 0
+    ) {
+      throw new Error(
+        'Insurance payment not found during refund.'
+      );
+    }
+
+    const lockedPayment =
+      lockedPaymentResult.rows[0];
+
+    // ========================================================
+    // DUPLICATE REFUND PROTECTION
+    // ========================================================
+
+    if (
+      lockedPayment.status !==
+      'pending'
+    ) {
+      await refundClient.query(
+        'COMMIT'
+      );
+
+      return res.status(200).json({
+        success: true,
+        status:
+          lockedPayment.status,
+        reference:
+          lockedPayment.reference,
+        message:
+          'This insurance payment has already been finalized.',
+      });
+    }
+
+    // ========================================================
+    // LOCK ACCOUNT
+    // ========================================================
+
+    const lockedAccountResult =
       await refundClient.query(
         `
         SELECT
@@ -1208,11 +1345,11 @@ const purchase = async (
         WHERE id = $1
         FOR UPDATE
         `,
-        [account.id]
+        [lockedPayment.account_id]
       );
 
     if (
-      lockedAccount.rows.length === 0
+      lockedAccountResult.rows.length === 0
     ) {
       throw new Error(
         'Account not found during insurance refund.'
@@ -1221,12 +1358,28 @@ const purchase = async (
 
     const currentBalance =
       Number(
-        lockedAccount.rows[0].balance
+        lockedAccountResult.rows[0].balance
       );
 
-    const refundedBalance =
-      currentBalance + amount;
+    const refundAmount =
+      Number(
+        lockedPayment.amount
+      );
 
+    if (
+      !Number.isFinite(
+        refundAmount
+      ) ||
+      refundAmount <= 0
+    ) {
+      throw new Error(
+        'Invalid insurance refund amount.'
+      );
+    }
+
+    const refundedBalance =
+      currentBalance +
+      refundAmount;
 
     // ========================================================
     // REFUND WALLET
@@ -1242,10 +1395,9 @@ const purchase = async (
       `,
       [
         refundedBalance,
-        account.id,
+        lockedPayment.account_id,
       ]
     );
-
 
     // ========================================================
     // MARK BILL PAYMENT FAILED
@@ -1264,17 +1416,18 @@ const purchase = async (
         AND status = 'pending'
       `,
       [
-        providerResult.requestId,
+        providerRequestId,
         providerReference,
         providerResult.raw ||
           providerResult.content ||
           providerResult,
+
         providerMessage ||
           'VTpass rejected the insurance payment.',
+
         billPaymentId,
       ]
     );
-
 
     // ========================================================
     // MARK ORIGINAL TRANSACTION FAILED
@@ -1291,9 +1444,8 @@ const purchase = async (
       [reference]
     );
 
-
     // ========================================================
-    // CREATE REFUND TRANSACTION
+    // REFUND TRANSACTION
     // ========================================================
 
     await refundClient.query(
@@ -1322,11 +1474,18 @@ const purchase = async (
       )
       `,
       [
-        account.id,
-        amount,
+        lockedPayment.account_id,
+
+        refundAmount,
+
+        'NGN',
+
         `${reference}-REFUND`,
+
         `Refund for failed ${serviceName}`,
+
         currentBalance,
+
         refundedBalance,
       ]
     );
@@ -1340,10 +1499,14 @@ const purchase = async (
       status: 'failed',
       refunded: true,
       reference,
+      providerReference,
+      request_id:
+        providerRequestId,
       serviceID,
       serviceName,
       variationCode,
       amount,
+
       message:
         providerMessage ||
         'Insurance payment failed. Your wallet has been refunded.',
@@ -1365,7 +1528,12 @@ const purchase = async (
       success: false,
       code:
         'INSURANCE_REFUND_PENDING',
+
       reference,
+
+      request_id:
+        providerRequestId,
+
       message:
         'The insurance provider rejected the payment, but the wallet refund requires reconciliation. Please contact support with the transaction reference.',
     });
@@ -1460,7 +1628,6 @@ const requery = async (
     const payment =
       paymentResult.rows[0];
 
-
     // ========================================================
     // ALREADY COMPLETED
     // ========================================================
@@ -1472,17 +1639,20 @@ const requery = async (
       return res.status(200).json({
         success: true,
         status: 'completed',
+
         requestId,
+
         reference:
           payment.reference,
+
         providerReference:
           payment.provider_reference ||
           requestId,
+
         message:
           'This insurance payment has already been completed.',
       });
     }
-
 
     // ========================================================
     // ALREADY FAILED
@@ -1494,17 +1664,20 @@ const requery = async (
       return res.status(200).json({
         success: true,
         status: 'failed',
+
         requestId,
+
         reference:
           payment.reference,
+
         providerReference:
           payment.provider_reference ||
           requestId,
+
         message:
           'This insurance payment has already been finalized as failed.',
       });
     }
-
 
     // ========================================================
     // REQUERY VTpass
@@ -1522,16 +1695,21 @@ const requery = async (
 
     const providerMessage =
       providerResult?.responseDescription ||
-      null;
+      getProviderMessage(
+        providerResult
+      );
 
     const purchasedCode =
       providerResult?.purchasedCode ||
-      null;
+      extractPurchasedCode(
+        providerResult
+      );
 
     const certificateUrl =
       providerResult?.certificateUrl ||
-      null;
-
+      extractCertificateUrl(
+        providerResult
+      );
 
     // ========================================================
     // STILL PENDING
@@ -1553,9 +1731,11 @@ const requery = async (
         `,
         [
           providerReference,
+
           providerResult.raw ||
             providerResult.content ||
             providerResult,
+
           payment.id,
         ]
       );
@@ -1563,15 +1743,18 @@ const requery = async (
       return res.status(200).json({
         success: true,
         status: 'pending',
+
         requestId,
+
         reference:
           payment.reference,
+
         providerReference,
+
         message:
           'The insurance payment is still being processed.',
       });
     }
-
 
     // ========================================================
     // COMPLETED
@@ -1594,9 +1777,11 @@ const requery = async (
         `,
         [
           providerReference,
+
           providerResult.raw ||
             providerResult.content ||
             providerResult,
+
           payment.id,
         ]
       );
@@ -1615,19 +1800,24 @@ const requery = async (
       return res.status(200).json({
         success: true,
         status: 'completed',
+
         requestId,
+
         reference:
           payment.reference,
+
         providerReference,
+
         purchased_code:
           purchasedCode,
+
         certificate_url:
           certificateUrl,
+
         message:
           'Insurance payment completed successfully.',
       });
     }
-
 
     // ========================================================
     // PROVIDER FAILED
@@ -1643,9 +1833,9 @@ const requery = async (
         'BEGIN'
       );
 
-      // ------------------------------------------------------
+      // ======================================================
       // LOCK PAYMENT
-      // ------------------------------------------------------
+      // ======================================================
 
       const lockedPaymentResult =
         await client.query(
@@ -1676,9 +1866,9 @@ const requery = async (
       const lockedPayment =
         lockedPaymentResult.rows[0];
 
-      // ------------------------------------------------------
-      // PROTECT AGAINST DUPLICATE REFUNDS
-      // ------------------------------------------------------
+      // ======================================================
+      // DUPLICATE REFUND PROTECTION
+      // ======================================================
 
       if (
         lockedPayment.status !==
@@ -1690,19 +1880,23 @@ const requery = async (
 
         return res.status(200).json({
           success: true,
+
           status:
             lockedPayment.status,
+
           requestId,
+
           reference:
             lockedPayment.reference,
+
           message:
             'This insurance payment has already been finalized.',
         });
       }
 
-      // ------------------------------------------------------
+      // ======================================================
       // LOCK ACCOUNT
-      // ------------------------------------------------------
+      // ======================================================
 
       const accountResult =
         await client.query(
@@ -1750,10 +1944,9 @@ const requery = async (
         currentBalance +
         refundAmount;
 
-
-      // ------------------------------------------------------
+      // ======================================================
       // REFUND ACCOUNT
-      // ------------------------------------------------------
+      // ======================================================
 
       await client.query(
         `
@@ -1769,10 +1962,9 @@ const requery = async (
         ]
       );
 
-
-      // ------------------------------------------------------
+      // ======================================================
       // MARK PAYMENT FAILED
-      // ------------------------------------------------------
+      // ======================================================
 
       await client.query(
         `
@@ -1787,19 +1979,21 @@ const requery = async (
         `,
         [
           providerReference,
+
           providerResult.raw ||
             providerResult.content ||
             providerResult,
+
           providerMessage ||
             'VTpass rejected the insurance payment.',
+
           lockedPayment.id,
         ]
       );
 
-
-      // ------------------------------------------------------
+      // ======================================================
       // MARK ORIGINAL TRANSACTION FAILED
-      // ------------------------------------------------------
+      // ======================================================
 
       await client.query(
         `
@@ -1812,10 +2006,9 @@ const requery = async (
         [lockedPayment.reference]
       );
 
-
-      // ------------------------------------------------------
-      // REFUND TRANSACTION
-      // ------------------------------------------------------
+      // ======================================================
+      // CREATE REFUND TRANSACTION
+      // ======================================================
 
       await client.query(
         `
@@ -1844,12 +2037,21 @@ const requery = async (
         `,
         [
           lockedPayment.account_id,
+
           refundAmount,
+
           lockedPayment.currency ||
             'NGN',
+
           `${lockedPayment.reference}-REFUND`,
-          `Refund for failed ${lockedPayment.biller_name || 'insurance payment'}`,
+
+          `Refund for failed ${
+            lockedPayment.biller_name ||
+            'insurance payment'
+          }`,
+
           currentBalance,
+
           refundedBalance,
         ]
       );
@@ -1862,11 +2064,16 @@ const requery = async (
         success: true,
         status: 'failed',
         refunded: true,
+
         requestId,
+
         reference:
           lockedPayment.reference,
+
         providerReference,
+
         refundAmount,
+
         message:
           providerMessage ||
           'Insurance payment failed and your wallet has been refunded.',
@@ -1888,8 +2095,12 @@ const requery = async (
         success: false,
         code:
           'INSURANCE_REFUND_PENDING',
+
         reference:
           payment.reference,
+
+        requestId,
+
         message:
           'The insurance provider rejected the payment, but the wallet refund requires reconciliation. Please contact support with the transaction reference.',
       });
@@ -1905,28 +2116,17 @@ const requery = async (
 
     return res.status(502).json({
       success: false,
+
       code:
         error?.code ||
         'INSURANCE_REQUERY_FAILED',
+
       message:
         error?.message ||
         'Unable to check the insurance payment status.',
     });
   }
 };
-
-
-// ============================================================
-// HELPER
-// ============================================================
-
-function bodyValueMissing(value) {
-  return (
-    value === undefined ||
-    value === null ||
-    String(value).trim() === ''
-  );
-}
 
 
 // ============================================================
