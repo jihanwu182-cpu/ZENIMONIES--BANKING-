@@ -424,7 +424,8 @@ const loadTransactions = async (
               'successful',
 
             created_at:
-              walletTransaction.created_at,
+             walletTransaction.created_at ||
+             walletTransaction.createdAt,
 
             direction:
               'credit',
