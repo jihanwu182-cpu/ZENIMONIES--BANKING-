@@ -275,11 +275,22 @@ const verifyJamb = async (
           'JAMB Profile ID is required.',
       });
     }
-    const result =
-      await verifyJambProfile({
-        profileId,
-        service: 'jamb',
-      });
+    const variationCode =
+  req.body?.variation_code ||
+  req.body?.variationCode;
+
+if (!variationCode) {
+  return res.status(400).json({
+    success: false,
+    message: 'JAMB variation code is required',
+  });
+}
+
+const result = await verifyJambProfile({
+  profileId,
+  variationCode,
+  service: 'jamb',
+});
     const providerResponse =
       result.response;
     const customerName =
@@ -531,10 +542,11 @@ const purchase = async (
   ) {
     try {
       jambVerification =
-        await verifyJambProfile({
-          profileId,
-          service: 'jamb',
-        });
+       await verifyJambProfile({
+        profileId,
+       variationCode,
+       service: 'jamb',
+     });
     } catch (error) {
       console.error(
         'JAMB purchase profile verification error:',
