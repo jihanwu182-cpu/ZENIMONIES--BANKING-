@@ -26,25 +26,49 @@ import {
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import SendRoundedIcon from '@mui/icons-material/SendRounded';
+import SavingsRoundedIcon from '@mui/icons-material/SavingsRounded';
+import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 
 import { useNavigate } from 'react-router-dom';
+
+/*
+ * ============================================================
+ * API
+ * ============================================================
+ */
 
 const API_URL =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com';
 
+/*
+ * ============================================================
+ * WALLET TYPE
+ * ============================================================
+ */
+
 type Wallet = {
   id: string;
+
   balance: number | string;
+
   currency: string;
 
   spendSaveEnabled?: boolean;
+
   spendSaveAmount?: number | string;
 
   spend_save_enabled?: boolean;
+
   spend_save_amount?: number | string;
 };
+
+/*
+ * ============================================================
+ * WALLET TRANSACTION TYPE
+ * ============================================================
+ */
 
 type WalletTransaction = {
   id: string;
@@ -54,8 +78,7 @@ type WalletTransaction = {
     | 'spend_save'
     | 'withdrawal'
     | 'reversal'
-    | 'adjustment'
-    | 'send';
+    | 'adjustment';
 
   direction: 'credit' | 'debit';
 
@@ -68,48 +91,89 @@ type WalletTransaction = {
   description?: string | null;
 
   balanceBefore?: number | string;
+
   balanceAfter?: number | string;
 
   balance_before?: number | string;
+
   balance_after?: number | string;
 
   createdAt?: string;
+
   created_at?: string;
 };
 
+/*
+ * ============================================================
+ * TOKEN
+ * ============================================================
+ */
+
 const getToken = () =>
-  localStorage.getItem('zenimonies_token');
+  localStorage.getItem(
+    'zenimonies_token'
+  );
+
+/*
+ * ============================================================
+ * MONEY FORMAT
+ * ============================================================
+ */
 
 const formatMoney = (
   value: number | string
 ) => {
-  const amount = Number(value || 0);
+  const amount =
+    Number(value || 0);
 
-  return new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency: 'NGN',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  return new Intl.NumberFormat(
+    'en-NG',
+    {
+      style: 'currency',
+      currency: 'NGN',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  ).format(amount);
 };
+
+/*
+ * ============================================================
+ * DATE FORMAT
+ * ============================================================
+ */
 
 const formatDate = (
   date: string
 ) => {
-  const parsed = new Date(date);
+  const parsed =
+    new Date(date);
 
-  if (Number.isNaN(parsed.getTime())) {
+  if (
+    Number.isNaN(
+      parsed.getTime()
+    )
+  ) {
     return date;
   }
 
-  return parsed.toLocaleString('en-NG', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return parsed.toLocaleString(
+    'en-NG',
+    {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }
+  );
 };
+
+/*
+ * ============================================================
+ * API ERROR
+ * ============================================================
+ */
 
 const getErrorMessage = async (
   response: Response
@@ -127,6 +191,12 @@ const getErrorMessage = async (
     return 'Something went wrong. Please try again.';
   }
 };
+
+/*
+ * ============================================================
+ * TRANSACTION LABEL
+ * ============================================================
+ */
 
 const getTransactionLabel = (
   type: WalletTransaction['type']
@@ -147,189 +217,237 @@ const getTransactionLabel = (
     case 'adjustment':
       return 'Wallet Adjustment';
 
-    case 'send':
-      return 'Money Sent';
-
     default:
-      return 'Wallet Transaction';
+      return 'Savings Activity';
   }
 };
 
+/*
+ * ============================================================
+ * COMPONENT
+ * ============================================================
+ */
+
 const Wallet: React.FC = () => {
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
-  // ==========================================================
-  // WALLET
-  // ==========================================================
+  /*
+   * ==========================================================
+   * WALLET STATE
+   * ==========================================================
+   */
 
-  const [wallet, setWallet] =
-    useState<Wallet | null>(null);
-
-  const [transactions, setTransactions] =
-    useState<WalletTransaction[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [activeTab, setActiveTab] =
-    useState(0);
-
-  // ==========================================================
-  // SAVE
-  // ==========================================================
-
-  const [saveDialogOpen, setSaveDialogOpen] =
-    useState(false);
-
-  const [saveAmount, setSaveAmount] =
-    useState('');
-
-  const [saving, setSaving] =
-    useState(false);
-
-  // ==========================================================
-  // WITHDRAW
-  // ==========================================================
-
-  const [withdrawDialogOpen, setWithdrawDialogOpen] =
-    useState(false);
-
-  const [withdrawAmount, setWithdrawAmount] =
-    useState('');
-
-  const [withdrawing, setWithdrawing] =
-    useState(false);
-
-  // ==========================================================
-  // SEND
-  // ==========================================================
-
-  const [sendDialogOpen, setSendDialogOpen] =
-    useState(false);
-
-  const [sendRecipient, setSendRecipient] =
-    useState('');
-
-  const [sendAmount, setSendAmount] =
-    useState('');
-
-  const [sendDescription, setSendDescription] =
-    useState('');
-
-  const [sending, setSending] =
-    useState(false);
-
-  // ==========================================================
-  // NOTIFICATIONS
-  // ==========================================================
-
-  const [error, setError] =
-    useState('');
-
-  const [success, setSuccess] =
-    useState('');
-
-  const token = getToken();
-
-  const authHeaders = useMemo(
-    () => ({
-      Authorization:
-        `Bearer ${token || ''}`,
-
-      'Content-Type':
-        'application/json',
-    }),
-    [token]
+  const [
+    wallet,
+    setWallet,
+  ] = useState<Wallet | null>(
+    null
   );
 
-  // ==========================================================
-  // LOAD WALLET
-  // ==========================================================
+  const [
+    transactions,
+    setTransactions,
+  ] = useState<
+    WalletTransaction[]
+  >([]);
 
-  const loadWallet = async () => {
-    if (!token) {
-      setError(
-        'Your session has expired. Please sign in again.'
-      );
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-      setLoading(false);
+  const [
+    activeTab,
+    setActiveTab,
+  ] = useState(0);
 
-      return;
-    }
+  /*
+   * ==========================================================
+   * SAVE STATE
+   * ==========================================================
+   */
 
-    try {
-      setLoading(true);
+  const [
+    saveDialogOpen,
+    setSaveDialogOpen,
+  ] = useState(false);
 
-      const [
-        walletResponse,
-        transactionsResponse,
-      ] = await Promise.all([
-        fetch(
-          `${API_URL}/api/wallet`,
-          {
-            method: 'GET',
-            headers: authHeaders,
-          }
-        ),
+  const [
+    saveAmount,
+    setSaveAmount,
+  ] = useState('');
 
-        fetch(
-          `${API_URL}/api/wallet/transactions`,
-          {
-            method: 'GET',
-            headers: authHeaders,
-          }
-        ),
-      ]);
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
 
-      if (!walletResponse.ok) {
-        throw new Error(
-          await getErrorMessage(
-            walletResponse
-          )
+  /*
+   * ==========================================================
+   * WITHDRAW STATE
+   * ==========================================================
+   */
+
+  const [
+    withdrawDialogOpen,
+    setWithdrawDialogOpen,
+  ] = useState(false);
+
+  const [
+    withdrawAmount,
+    setWithdrawAmount,
+  ] = useState('');
+
+  const [
+    withdrawing,
+    setWithdrawing,
+  ] = useState(false);
+
+  /*
+   * ==========================================================
+   * NOTIFICATIONS
+   * ==========================================================
+   */
+
+  const [
+    error,
+    setError,
+  ] = useState('');
+
+  const [
+    success,
+    setSuccess,
+  ] = useState('');
+
+  /*
+   * ==========================================================
+   * TOKEN / AUTH
+   * ==========================================================
+   */
+
+  const token =
+    getToken();
+
+  const authHeaders =
+    useMemo(
+      () => ({
+        Authorization:
+          `Bearer ${token || ''}`,
+
+        'Content-Type':
+          'application/json',
+      }),
+      [token]
+    );
+
+  /*
+   * ==========================================================
+   * LOAD ZENIMONIES SAVE
+   * ==========================================================
+   */
+
+  const loadWallet =
+    async () => {
+      if (!token) {
+        setError(
+          'Your session has expired. Please sign in again.'
         );
+
+        setLoading(false);
+
+        return;
       }
 
-      if (!transactionsResponse.ok) {
-        throw new Error(
-          await getErrorMessage(
-            transactionsResponse
-          )
+      try {
+        setLoading(true);
+
+        const [
+          walletResponse,
+          transactionsResponse,
+        ] = await Promise.all([
+          fetch(
+            `${API_URL}/api/wallet`,
+            {
+              method: 'GET',
+              headers:
+                authHeaders,
+            }
+          ),
+
+          fetch(
+            `${API_URL}/api/wallet/transactions`,
+            {
+              method: 'GET',
+              headers:
+                authHeaders,
+            }
+          ),
+        ]);
+
+        if (
+          !walletResponse.ok
+        ) {
+          throw new Error(
+            await getErrorMessage(
+              walletResponse
+            )
+          );
+        }
+
+        if (
+          !transactionsResponse.ok
+        ) {
+          throw new Error(
+            await getErrorMessage(
+              transactionsResponse
+            )
+          );
+        }
+
+        const walletData =
+          await walletResponse.json();
+
+        const transactionData =
+          await transactionsResponse.json();
+
+        const walletResult =
+          walletData?.wallet ||
+          walletData;
+
+        const transactionResult =
+          transactionData?.transactions ||
+          transactionData?.data ||
+          [];
+
+        setWallet(
+          walletResult
         );
+
+        setTransactions(
+          Array.isArray(
+            transactionResult
+          )
+            ? transactionResult
+            : []
+        );
+      } catch (
+        err: any
+      ) {
+        setError(
+          err?.message ||
+            'Unable to load ZENIMONIES Save.'
+        );
+      } finally {
+        setLoading(false);
       }
+    };
 
-      const walletData =
-        await walletResponse.json();
-
-      const transactionData =
-        await transactionsResponse.json();
-
-      const walletResult =
-        walletData?.wallet ||
-        walletData;
-
-      const transactionResult =
-        transactionData?.transactions ||
-        transactionData?.data ||
-        [];
-
-      setWallet(walletResult);
-
-      setTransactions(
-        Array.isArray(
-          transactionResult
-        )
-          ? transactionResult
-          : []
-      );
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          'Unable to load your Save Wallet.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  /*
+   * ==========================================================
+   * LOAD ON PAGE OPEN
+   * ==========================================================
+   */
 
   useEffect(() => {
     loadWallet();
@@ -337,290 +455,232 @@ const Wallet: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ==========================================================
-  // SAVE MONEY
-  // ==========================================================
+  /*
+   * ==========================================================
+   * SAVE MONEY
+   * ==========================================================
+   */
 
-  const handleSaveMoney = async () => {
-    const amount =
-      Number(saveAmount);
+  const handleSaveMoney =
+    async () => {
+      const amount =
+        Number(saveAmount);
 
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0
-    ) {
-      setError(
-        'Enter a valid amount to save.'
-      );
-
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError('');
-
-      const response =
-        await fetch(
-          `${API_URL}/api/wallet/save`,
-          {
-            method: 'POST',
-
-            headers:
-              authHeaders,
-
-            body: JSON.stringify({
-              amount,
-
-              description:
-                'Manual Save Money',
-            }),
-          }
+      if (
+        !Number.isFinite(
+          amount
+        ) ||
+        amount <= 0
+      ) {
+        setError(
+          'Enter a valid amount to save.'
         );
 
-      if (!response.ok) {
-        throw new Error(
-          await getErrorMessage(
-            response
-          )
-        );
+        return;
       }
 
-      setSaveAmount('');
+      try {
+        setSaving(true);
 
-      setSaveDialogOpen(false);
+        setError('');
 
-      setSuccess(
-        `${formatMoney(
+        const response =
+          await fetch(
+            `${API_URL}/api/wallet/save`,
+            {
+              method: 'POST',
+
+              headers:
+                authHeaders,
+
+              body:
+                JSON.stringify({
+                  amount,
+
+                  description:
+                    'Manual Save Money',
+                }),
+            }
+          );
+
+        if (
+          !response.ok
+        ) {
+          throw new Error(
+            await getErrorMessage(
+              response
+            )
+          );
+        }
+
+        setSaveAmount('');
+
+        setSaveDialogOpen(
+          false
+        );
+
+        setSuccess(
+          `${formatMoney(
+            amount
+          )} saved successfully.`
+        );
+
+        await loadWallet();
+      } catch (
+        err: any
+      ) {
+        setError(
+          err?.message ||
+            'Unable to save money right now.'
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  /*
+   * ==========================================================
+   * WITHDRAW TO MAIN ACCOUNT
+   * ==========================================================
+   */
+
+  const handleWithdraw =
+    async () => {
+      const amount =
+        Number(
+          withdrawAmount
+        );
+
+      if (
+        !Number.isFinite(
           amount
-        )} saved successfully.`
-      );
-
-      await loadWallet();
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          'Unable to save money right now.'
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // ==========================================================
-  // WITHDRAW TO MAIN ACCOUNT
-  // ==========================================================
-
-  const handleWithdraw = async () => {
-    const amount =
-      Number(withdrawAmount);
-
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0
-    ) {
-      setError(
-        'Enter a valid amount to withdraw.'
-      );
-
-      return;
-    }
-
-    const balance =
-      Number(
-        wallet?.balance || 0
-      );
-
-    if (amount > balance) {
-      setError(
-        'The withdrawal amount is greater than your Save Wallet balance.'
-      );
-
-      return;
-    }
-
-    try {
-      setWithdrawing(true);
-      setError('');
-
-      const response =
-        await fetch(
-          `${API_URL}/api/wallet/withdraw`,
-          {
-            method: 'POST',
-
-            headers:
-              authHeaders,
-
-            body: JSON.stringify({
-              amount,
-
-              description:
-                'Withdrawal to Main Account',
-            }),
-          }
+        ) ||
+        amount <= 0
+      ) {
+        setError(
+          'Enter a valid amount to withdraw.'
         );
 
-      if (!response.ok) {
-        throw new Error(
-          await getErrorMessage(
-            response
-          )
-        );
+        return;
       }
 
-      setWithdrawAmount('');
-
-      setWithdrawDialogOpen(false);
-
-      setSuccess(
-        `${formatMoney(
-          amount
-        )} moved to your Main Account.`
-      );
-
-      await loadWallet();
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          'Unable to withdraw from your Save Wallet.'
-      );
-    } finally {
-      setWithdrawing(false);
-    }
-  };
-
-  // ==========================================================
-  // SEND FROM SAVE WALLET
-  // ==========================================================
-
-  const handleSendMoney = async () => {
-    const recipient =
-      sendRecipient.trim();
-
-    const amount =
-      Number(sendAmount);
-
-    if (!recipient) {
-      setError(
-        'Enter the recipient phone number or account number.'
-      );
-
-      return;
-    }
-
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0
-    ) {
-      setError(
-        'Enter a valid amount to send.'
-      );
-
-      return;
-    }
-
-    const balance =
-      Number(
-        wallet?.balance || 0
-      );
-
-    if (amount > balance) {
-      setError(
-        'The send amount is greater than your Save Wallet balance.'
-      );
-
-      return;
-    }
-
-    try {
-      setSending(true);
-      setError('');
-
-      const response =
-        await fetch(
-          `${API_URL}/api/wallet/send`,
-          {
-            method: 'POST',
-
-            headers:
-              authHeaders,
-
-            body: JSON.stringify({
-              recipient,
-
-              amount,
-
-              description:
-                sendDescription.trim() ||
-                'Save Wallet transfer',
-            }),
-          }
+      const balance =
+        Number(
+          wallet?.balance || 0
         );
 
-      if (!response.ok) {
-        throw new Error(
-          await getErrorMessage(
-            response
-          )
+      if (
+        amount > balance
+      ) {
+        setError(
+          'The withdrawal amount is greater than your ZENIMONIES Save balance.'
         );
+
+        return;
       }
 
-      setSendRecipient('');
-      setSendAmount('');
-      setSendDescription('');
+      try {
+        setWithdrawing(true);
 
-      setSendDialogOpen(false);
+        setError('');
 
-      setSuccess(
-        `${formatMoney(
-          amount
-        )} sent successfully.`
-      );
+        const response =
+          await fetch(
+            `${API_URL}/api/wallet/withdraw`,
+            {
+              method: 'POST',
 
-      await loadWallet();
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          'Unable to send money from your Save Wallet.'
-      );
-    } finally {
-      setSending(false);
-    }
-  };
+              headers:
+                authHeaders,
 
-  // ==========================================================
-  // LOADING
-  // ==========================================================
+              body:
+                JSON.stringify({
+                  amount,
+
+                  description:
+                    'Withdrawal to Main Account',
+                }),
+            }
+          );
+
+        if (
+          !response.ok
+        ) {
+          throw new Error(
+            await getErrorMessage(
+              response
+            )
+          );
+        }
+
+        setWithdrawAmount('');
+
+        setWithdrawDialogOpen(
+          false
+        );
+
+        setSuccess(
+          `${formatMoney(
+            amount
+          )} moved to your Main Account.`
+        );
+
+        await loadWallet();
+      } catch (
+        err: any
+      ) {
+        setError(
+          err?.message ||
+            'Unable to withdraw from ZENIMONIES Save.'
+        );
+      } finally {
+        setWithdrawing(
+          false
+        );
+      }
+    };
+
+  /*
+   * ==========================================================
+   * LOADING
+   * ==========================================================
+   */
 
   if (loading) {
     return (
       <Box
         sx={{
-          minHeight: '70vh',
+          minHeight:
+            '70vh',
 
-          display: 'flex',
+          display:
+            'flex',
 
           alignItems:
             'center',
 
           justifyContent:
             'center',
+
+          background:
+            '#FFFFFF',
         }}
       >
         <CircularProgress
           sx={{
             color:
-              '#087443',
+              '#008C68',
           }}
         />
       </Box>
     );
   }
 
-  // ==========================================================
-  // PAGE
-  // ==========================================================
+  /*
+   * ==========================================================
+   * PAGE
+   * ==========================================================
+   */
 
   return (
     <Box
@@ -628,8 +688,8 @@ const Wallet: React.FC = () => {
         minHeight:
           '100vh',
 
-        backgroundColor:
-          '#FFFFFF',
+        background:
+          'linear-gradient(180deg, #F1FBF7 0%, #FFFFFF 300px)',
 
         width:
           '100%',
@@ -641,7 +701,7 @@ const Wallet: React.FC = () => {
           'auto',
 
         px: {
-          xs: 2.5,
+          xs: 2,
           sm: 3,
         },
 
@@ -671,70 +731,421 @@ const Wallet: React.FC = () => {
             'space-between',
 
           mb:
-            3,
+            2.5,
         }}
       >
+
         <IconButton
           onClick={() =>
             navigate(-1)
           }
           sx={{
             width:
-              54,
+              46,
 
             height:
-              54,
+              46,
 
-            backgroundColor:
-              '#FAFAFA',
-
-            boxShadow:
-              '0 8px 25px rgba(0,0,0,0.06)',
-
-            '&:hover': {
-              backgroundColor:
-                '#F3F3F3',
-            },
-          }}
-        >
-          <ArrowBackRoundedIcon
-            sx={{
-              fontSize:
-                32,
-
-              color:
-                '#171717',
-            }}
-          />
-        </IconButton>
-
-        <Typography
-          sx={{
-            fontSize: {
-              xs: 25,
-              sm: 28,
-            },
-
-            fontWeight:
-              800,
+            background:
+              '#FFFFFF',
 
             color:
-              '#111111',
+              '#063F31',
 
-            letterSpacing:
-              '-0.7px',
+            border:
+              '1px solid #E2EEE9',
+
+            boxShadow:
+              '0 7px 22px rgba(0,80,55,0.07)',
+
+            '&:hover': {
+              background:
+                '#F5FBF8',
+            },
           }}
         >
-          Save Wallet
-        </Typography>
+          <ArrowBackRoundedIcon />
+        </IconButton>
+
+
+        <Box
+          sx={{
+            textAlign:
+              'center',
+
+            flex:
+              1,
+
+            px:
+              1,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: {
+                xs: 22,
+                sm: 26,
+              },
+
+              fontWeight:
+                900,
+
+              color:
+                '#063F31',
+
+              letterSpacing:
+                '-0.7px',
+            }}
+          >
+            ZENIMONIES
+          </Typography>
+
+          <Typography
+            sx={{
+              fontSize: {
+                xs: 16,
+                sm: 18,
+              },
+
+              fontWeight:
+                800,
+
+              color:
+                '#008C68',
+
+              mt:
+                -0.2,
+            }}
+          >
+            Save
+          </Typography>
+        </Box>
+
 
         <Box
           sx={{
             width:
-              54,
+              46,
           }}
         />
+
       </Box>
+
+
+      {/* =====================================================
+          BRAND SUBTITLE
+      ===================================================== */}
+
+      <Box
+        sx={{
+          textAlign:
+            'center',
+
+          mb:
+            2.5,
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize:
+              12,
+
+            color:
+              '#718078',
+
+            lineHeight:
+              1.6,
+          }}
+        >
+          Build your savings while you
+          use ZENIMONIES.
+        </Typography>
+      </Box>
+
+
+      {/* =====================================================
+          SAVE BALANCE CARD
+      ===================================================== */}
+
+      <Box
+        sx={{
+          borderRadius:
+            4,
+
+          background:
+            'linear-gradient(135deg, #063F31 0%, #087A4B 55%, #00A875 100%)',
+
+          color:
+            '#FFFFFF',
+
+          p: {
+            xs: 2.2,
+            sm: 2.8,
+          },
+
+          boxShadow:
+            '0 18px 38px rgba(0,105,76,0.18)',
+
+          mb:
+            2.2,
+
+          position:
+            'relative',
+
+          overflow:
+            'hidden',
+        }}
+      >
+
+        <Box
+          sx={{
+            position:
+              'absolute',
+
+            width:
+              150,
+
+            height:
+              150,
+
+            borderRadius:
+              '50%',
+
+            background:
+              'rgba(255,255,255,0.07)',
+
+            right:
+              -60,
+
+            top:
+              -65,
+          }}
+        />
+
+        <Box
+          sx={{
+            position:
+              'absolute',
+
+            width:
+              90,
+
+            height:
+              90,
+
+            borderRadius:
+              '50%',
+
+            background:
+              'rgba(255,255,255,0.05)',
+
+            left:
+              -40,
+
+            bottom:
+              -35,
+          }}
+        />
+
+
+        <Box
+          sx={{
+            position:
+              'relative',
+
+            zIndex:
+              1,
+          }}
+        >
+
+          <Box
+            sx={{
+              display:
+                'flex',
+
+              alignItems:
+                'center',
+
+              justifyContent:
+                'space-between',
+
+              mb:
+                2,
+            }}
+          >
+
+            <Box
+              sx={{
+                display:
+                  'flex',
+
+                alignItems:
+                  'center',
+
+                gap:
+                  1,
+              }}
+            >
+
+              <Box
+                sx={{
+                  width:
+                    40,
+
+                  height:
+                    40,
+
+                  borderRadius:
+                    2.5,
+
+                  background:
+                    'rgba(255,255,255,0.13)',
+
+                  display:
+                    'flex',
+
+                  alignItems:
+                    'center',
+
+                  justifyContent:
+                    'center',
+                }}
+              >
+                <SavingsRoundedIcon
+                  sx={{
+                    fontSize:
+                      23,
+
+                    color:
+                      '#FFFFFF',
+                  }}
+                />
+              </Box>
+
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize:
+                      12,
+
+                    opacity:
+                      0.76,
+
+                    fontWeight:
+                      700,
+                  }}
+                >
+                  ZENIMONIES
+                </Typography>
+
+                <Typography
+                  sx={{
+                    fontSize:
+                      16,
+
+                    fontWeight:
+                      900,
+                  }}
+                >
+                  Save Balance
+                </Typography>
+              </Box>
+
+            </Box>
+
+
+            <AutoAwesomeRoundedIcon
+              sx={{
+                fontSize:
+                  23,
+
+                opacity:
+                  0.75,
+              }}
+            />
+
+          </Box>
+
+
+          <Typography
+            sx={{
+              fontSize:
+                11,
+
+              opacity:
+                0.72,
+
+              mb:
+                0.3,
+            }}
+          >
+            Available savings
+          </Typography>
+
+
+          <Typography
+            sx={{
+              fontSize: {
+                xs: 34,
+                sm: 40,
+              },
+
+              fontWeight:
+                900,
+
+              letterSpacing:
+                '-1px',
+            }}
+          >
+            {formatMoney(
+              wallet?.balance ||
+                0
+            )}
+          </Typography>
+
+
+          <Box
+            sx={{
+              mt:
+                1.8,
+
+              display:
+                'flex',
+
+              alignItems:
+                'center',
+
+              gap:
+                0.7,
+            }}
+          >
+            <CheckCircleRoundedIcon
+              sx={{
+                fontSize:
+                  15,
+
+                color:
+                  '#B9F2D2',
+              }}
+            />
+
+            <Typography
+              sx={{
+                fontSize:
+                  10.5,
+
+                opacity:
+                  0.76,
+              }}
+            >
+              Securely separated from your
+              Main Account
+            </Typography>
+          </Box>
+
+        </Box>
+      </Box>
+
 
       {/* =====================================================
           TABS
@@ -742,17 +1153,20 @@ const Wallet: React.FC = () => {
 
       <Box
         sx={{
-          backgroundColor:
-            '#EEEEF0',
+          background:
+            '#EAF5F1',
 
           borderRadius:
-            5,
+            3.5,
 
           p:
-            0.4,
+            0.45,
 
           mb:
-            5,
+            2.5,
+
+          border:
+            '1px solid #DCECE6',
         }}
       >
         <Tabs
@@ -774,10 +1188,13 @@ const Wallet: React.FC = () => {
                 '100%',
 
               borderRadius:
-                5,
+                3,
 
-              backgroundColor:
+              background:
                 '#FFFFFF',
+
+              boxShadow:
+                '0 3px 12px rgba(0,80,55,0.08)',
 
               zIndex:
                 0,
@@ -805,13 +1222,13 @@ const Wallet: React.FC = () => {
                   'none',
 
                 fontSize:
-                  18,
+                  13,
 
                 fontWeight:
-                  700,
+                  800,
 
                 color:
-                  '#777777',
+                  '#718078',
 
                 zIndex:
                   2,
@@ -820,15 +1237,16 @@ const Wallet: React.FC = () => {
             '& .Mui-selected':
               {
                 color:
-                  '#078B4A',
+                  '#008C68',
               },
           }}
         >
           <Tab label="Details" />
 
-          <Tab label="History" />
+          <Tab label="Savings History" />
         </Tabs>
       </Box>
+
 
       {/* =====================================================
           DETAILS
@@ -836,121 +1254,126 @@ const Wallet: React.FC = () => {
 
       {activeTab === 0 && (
         <>
-          {/* FEATURE CARD */}
+
+          {/* FEATURE MESSAGE */}
 
           <Box
             sx={{
-              height:
-                175,
-
               borderRadius:
-                4,
+                3.5,
 
-              backgroundColor:
-                '#DFF9E9',
+              background:
+                '#FFFFFF',
 
-              display:
-                'flex',
+              border:
+                '1px solid #E0ECE7',
 
-              alignItems:
-                'center',
-
-              justifyContent:
-                'center',
+              p:
+                2,
 
               mb:
-                4,
+                2,
+
+              boxShadow:
+                '0 7px 24px rgba(20,50,40,0.05)',
             }}
           >
-            <Typography
+
+            <Box
               sx={{
-                fontSize:
-                  95,
+                display:
+                  'flex',
 
-                lineHeight:
-                  1,
+                alignItems:
+                  'center',
 
-                fontWeight:
-                  500,
-
-                color:
-                  '#67CF8D',
+                gap:
+                  1.2,
               }}
             >
-              ₦
-            </Typography>
-          </Box>
 
-          {/* BALANCE */}
-
-          <Box
-            sx={{
-              textAlign:
-                'center',
-
-              mb:
-                4,
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize:
-                  16,
-
-                color:
-                  '#999999',
-
-                mb:
-                  0.5,
-              }}
-            >
               <Box
-                component="span"
                 sx={{
+                  width:
+                    48,
+
+                  height:
+                    48,
+
+                  minWidth:
+                    48,
+
+                  borderRadius:
+                    2.5,
+
+                  background:
+                    '#E8F8F1',
+
                   color:
-                    '#67CF8D',
+                    '#008C68',
 
-                  fontWeight:
-                    800,
+                  display:
+                    'flex',
 
-                  mr:
-                    0.8,
+                  alignItems:
+                    'center',
+
+                  justifyContent:
+                    'center',
                 }}
               >
-                ₦
+                <SavingsRoundedIcon
+                  sx={{
+                    fontSize:
+                      27,
+                  }}
+                />
               </Box>
 
-              Save Wallet
-            </Typography>
 
-            <Typography
-              sx={{
-                fontSize:
-                  {
-                    xs: 42,
-                    sm: 46,
-                  },
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize:
+                      15,
 
-                fontWeight:
-                  800,
+                    fontWeight:
+                      900,
 
-                color:
-                  '#111111',
+                    color:
+                      '#18332A',
+                  }}
+                >
+                  Save for what matters
+                </Typography>
 
-                letterSpacing:
-                  '-1.5px',
-              }}
-            >
-              {formatMoney(
-                wallet?.balance ||
-                  0
-              )}
-            </Typography>
+                <Typography
+                  sx={{
+                    fontSize:
+                      11.5,
+
+                    color:
+                      '#718078',
+
+                    mt:
+                      0.25,
+
+                    lineHeight:
+                      1.5,
+                  }}
+                >
+                  Save manually or let Spend +
+                  Save grow your savings
+                  automatically.
+                </Typography>
+              </Box>
+
+            </Box>
+
           </Box>
 
-          {/* =================================================
-              ACTIONS
-          ================================================= */}
+
+          {/* ACTIONS */}
 
           <Box
             sx={{
@@ -963,14 +1386,14 @@ const Wallet: React.FC = () => {
                     '1fr 1fr',
 
                   sm:
-                    'repeat(3, 1fr)',
+                    'repeat(2, 1fr)',
                 },
 
               gap:
                 1.5,
 
               mb:
-                5,
+                2,
             }}
           >
 
@@ -985,10 +1408,10 @@ const Wallet: React.FC = () => {
               }
               sx={{
                 minHeight:
-                  82,
+                  105,
 
                 borderRadius:
-                  2.5,
+                  3,
 
                 display:
                   'flex',
@@ -1005,8 +1428,26 @@ const Wallet: React.FC = () => {
                 cursor:
                   'pointer',
 
+                background:
+                  '#FFFFFF',
+
+                border:
+                  '1px solid #E0ECE7',
+
                 boxShadow:
-                  '0 7px 25px rgba(0,0,0,0.07)',
+                  '0 7px 24px rgba(20,50,40,0.05)',
+
+                transition:
+                  '0.18s ease',
+
+                '&:hover':
+                  {
+                    borderColor:
+                      '#B7DCCF',
+
+                    transform:
+                      'translateY(-1px)',
+                  },
 
                 '&:active':
                   {
@@ -1015,19 +1456,20 @@ const Wallet: React.FC = () => {
                   },
               }}
             >
+
               <Box
                 sx={{
                   width:
-                    40,
+                    44,
 
                   height:
-                    40,
+                    44,
 
                   borderRadius:
                     '50%',
 
-                  backgroundColor:
-                    '#6AD392',
+                  background:
+                    '#008C68',
 
                   display:
                     'flex',
@@ -1039,7 +1481,7 @@ const Wallet: React.FC = () => {
                     'center',
 
                   mb:
-                    0.7,
+                    0.8,
                 }}
               >
                 <AddRoundedIcon
@@ -1048,7 +1490,7 @@ const Wallet: React.FC = () => {
                       '#FFFFFF',
 
                     fontSize:
-                      24,
+                      25,
                   }}
                 />
               </Box>
@@ -1056,120 +1498,20 @@ const Wallet: React.FC = () => {
               <Typography
                 sx={{
                   color:
-                    '#55C884',
+                    '#087A4B',
 
                   fontWeight:
-                    800,
+                    900,
 
                   fontSize:
-                    16,
+                    14,
                 }}
               >
-                Save
+                Save Money
               </Typography>
+
             </Paper>
 
-            {/* SEND */}
-
-            <Paper
-              elevation={0}
-              onClick={() =>
-                setSendDialogOpen(
-                  true
-                )
-              }
-              sx={{
-                minHeight:
-                  82,
-
-                borderRadius:
-                  2.5,
-
-                display:
-                  'flex',
-
-                flexDirection:
-                  'column',
-
-                alignItems:
-                  'center',
-
-                justifyContent:
-                  'center',
-
-                cursor:
-                  Number(
-                    wallet?.balance ||
-                      0
-                  ) > 0
-                    ? 'pointer'
-                    : 'default',
-
-                opacity:
-                  Number(
-                    wallet?.balance ||
-                      0
-                  ) > 0
-                    ? 1
-                    : 0.55,
-
-                boxShadow:
-                  '0 7px 25px rgba(0,0,0,0.07)',
-              }}
-            >
-              <Box
-                sx={{
-                  width:
-                    40,
-
-                  height:
-                    40,
-
-                  borderRadius:
-                    '50%',
-
-                  backgroundColor:
-                    '#B9EED0',
-
-                  display:
-                    'flex',
-
-                  alignItems:
-                    'center',
-
-                  justifyContent:
-                    'center',
-
-                  mb:
-                    0.7,
-                }}
-              >
-                <SendRoundedIcon
-                  sx={{
-                    color:
-                      '#FFFFFF',
-
-                    fontSize:
-                      21,
-                  }}
-                />
-              </Box>
-
-              <Typography
-                sx={{
-                  color:
-                    '#55C884',
-
-                  fontWeight:
-                    800,
-
-                  fontSize:
-                    16,
-                }}
-              >
-                Send
-              </Typography>
-            </Paper>
 
             {/* WITHDRAW */}
 
@@ -1189,10 +1531,10 @@ const Wallet: React.FC = () => {
               }}
               sx={{
                 minHeight:
-                  82,
+                  105,
 
                 borderRadius:
-                  2.5,
+                  3,
 
                 display:
                   'flex',
@@ -1222,23 +1564,47 @@ const Wallet: React.FC = () => {
                     ? 1
                     : 0.55,
 
+                background:
+                  '#FFFFFF',
+
+                border:
+                  '1px solid #E0ECE7',
+
                 boxShadow:
-                  '0 7px 25px rgba(0,0,0,0.07)',
+                  '0 7px 24px rgba(20,50,40,0.05)',
+
+                transition:
+                  '0.18s ease',
+
+                '&:hover':
+                  Number(
+                    wallet?.balance ||
+                      0
+                  ) > 0
+                    ? {
+                        borderColor:
+                          '#B7DCCF',
+
+                        transform:
+                          'translateY(-1px)',
+                      }
+                    : {},
               }}
             >
+
               <Box
                 sx={{
                   width:
-                    40,
+                    44,
 
                   height:
-                    40,
+                    44,
 
                   borderRadius:
                     '50%',
 
-                  backgroundColor:
-                    '#B9EED0',
+                  background:
+                    '#E2F5ED',
 
                   display:
                     'flex',
@@ -1250,16 +1616,16 @@ const Wallet: React.FC = () => {
                     'center',
 
                   mb:
-                    0.7,
+                    0.8,
                 }}
               >
                 <RemoveRoundedIcon
                   sx={{
                     color:
-                      '#FFFFFF',
+                      '#008C68',
 
                     fontSize:
-                      23,
+                      25,
                   }}
                 />
               </Box>
@@ -1267,83 +1633,261 @@ const Wallet: React.FC = () => {
               <Typography
                 sx={{
                   color:
-                    '#55C884',
+                    '#087A4B',
 
                   fontWeight:
-                    800,
+                    900,
 
                   fontSize:
-                    16,
+                    14,
                 }}
               >
                 Withdraw
               </Typography>
+
             </Paper>
+
           </Box>
+
+
+          {/* SPEND + SAVE INFORMATION */}
+
+          <Box
+            sx={{
+              borderRadius:
+                3.5,
+
+              background:
+                'linear-gradient(135deg, #F0FBF6, #FFFFFF)',
+
+              border:
+                '1px solid #DCEDE6',
+
+              p:
+                2,
+
+              mb:
+                2,
+            }}
+          >
+
+            <Box
+              sx={{
+                display:
+                  'flex',
+
+                justifyContent:
+                  'space-between',
+
+                alignItems:
+                  'flex-start',
+
+                gap:
+                  1,
+              }}
+            >
+
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize:
+                      14,
+
+                    fontWeight:
+                      900,
+
+                    color:
+                      '#18332A',
+                  }}
+                >
+                  Spend + Save
+                </Typography>
+
+                <Typography
+                  sx={{
+                    fontSize:
+                      11.5,
+
+                    color:
+                      '#718078',
+
+                    mt:
+                      0.45,
+
+                    lineHeight:
+                      1.6,
+                  }}
+                >
+                  Automatically add your
+                  selected savings amount when
+                  an eligible transfer succeeds.
+                </Typography>
+              </Box>
+
+
+              <Box
+                sx={{
+                  px:
+                    1,
+
+                  py:
+                    0.5,
+
+                  borderRadius:
+                    2,
+
+                  background:
+                    wallet?.spendSaveEnabled ||
+                    wallet?.spend_save_enabled
+                      ? '#DDF6EA'
+                      : '#F0F3F1',
+
+                  color:
+                    wallet?.spendSaveEnabled ||
+                    wallet?.spend_save_enabled
+                      ? '#087A4B'
+                      : '#718078',
+
+                  fontSize:
+                    10,
+
+                  fontWeight:
+                    900,
+
+                  whiteSpace:
+                    'nowrap',
+                }}
+              >
+                {wallet?.spendSaveEnabled ||
+                wallet?.spend_save_enabled
+                  ? 'ON'
+                  : 'OFF'}
+              </Box>
+
+            </Box>
+
+
+            {(wallet?.spendSaveEnabled ||
+              wallet?.spend_save_enabled) &&
+              Number(
+                wallet?.spendSaveAmount ||
+                  wallet?.spend_save_amount ||
+                  0
+              ) > 0 && (
+                <Box
+                  sx={{
+                    mt:
+                      1.3,
+
+                    pt:
+                      1.2,
+
+                    borderTop:
+                      '1px solid #DCEDE6',
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize:
+                        10.5,
+
+                      color:
+                        '#718078',
+                    }}
+                  >
+                    Amount saved per eligible
+                    transfer
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      fontSize:
+                        17,
+
+                      fontWeight:
+                        900,
+
+                      color:
+                        '#008C68',
+
+                      mt:
+                        0.2,
+                    }}
+                  >
+                    {formatMoney(
+                      wallet?.spendSaveAmount ||
+                        wallet?.spend_save_amount ||
+                        0
+                    )}
+                  </Typography>
+                </Box>
+              )}
+
+          </Box>
+
 
           {/* INFORMATION */}
 
           <Box
             sx={{
-              px:
-                0.8,
+              borderRadius:
+                3,
+
+              background:
+                '#FFFFFF',
+
+              border:
+                '1px solid #E4ECE8',
+
+              p:
+                1.8,
             }}
           >
-            <Box
+
+            <Typography
               sx={{
-                backgroundColor:
-                  '#F7FAF8',
+                fontSize:
+                  13,
 
-                border:
-                  '1px solid #E5EEE9',
+                fontWeight:
+                  900,
 
-                borderRadius:
-                  3,
+                color:
+                  '#34443C',
 
-                p:
-                  2,
+                mb:
+                  0.6,
               }}
             >
-              <Typography
-                sx={{
-                  fontSize:
-                    15,
+              About ZENIMONIES Save
+            </Typography>
 
-                  fontWeight:
-                    800,
+            <Typography
+              sx={{
+                fontSize:
+                  11.5,
 
-                  color:
-                    '#34443C',
+                color:
+                  '#718078',
 
-                  mb:
-                    0.7,
-                }}
-              >
-                Your Save Wallet
-              </Typography>
+                lineHeight:
+                  1.65,
+              }}
+            >
+              ZENIMONIES Save keeps your
+              savings separate from your Main
+              Account. You can save money
+              manually, use Spend + Save for
+              automatic savings, and withdraw
+              your savings back to your Main
+              Account whenever you need them.
+            </Typography>
 
-              <Typography
-                sx={{
-                  fontSize:
-                    12,
-
-                  color:
-                    '#718078',
-
-                  lineHeight:
-                    1.6,
-                }}
-              >
-                Save money from your Main
-                Account, send money to another
-                Zenimonies customer, or move
-                your savings back to your Main
-                Account.
-              </Typography>
-            </Box>
           </Box>
+
         </>
       )}
+
 
       {/* =====================================================
           HISTORY
@@ -1351,54 +1895,181 @@ const Wallet: React.FC = () => {
 
       {activeTab === 1 && (
         <Box>
-          <Typography
+
+          <Box
             sx={{
-              fontSize:
-                22,
+              display:
+                'flex',
 
-              fontWeight:
-                800,
+              alignItems:
+                'center',
 
-              color:
-                '#111111',
+              justifyContent:
+                'space-between',
 
               mb:
-                2,
+                1.8,
             }}
           >
-            Savings History
-          </Typography>
+
+            <Box>
+              <Typography
+                sx={{
+                  fontSize:
+                    21,
+
+                  fontWeight:
+                    900,
+
+                  color:
+                    '#18332A',
+                }}
+              >
+                Savings History
+              </Typography>
+
+              <Typography
+                sx={{
+                  fontSize:
+                    11,
+
+                  color:
+                    '#8A9590',
+
+                  mt:
+                    0.25,
+                }}
+              >
+                Your ZENIMONIES Save activity
+              </Typography>
+            </Box>
+
+
+            <SavingsRoundedIcon
+              sx={{
+                color:
+                  '#008C68',
+
+                fontSize:
+                  27,
+              }}
+            />
+
+          </Box>
+
 
           {transactions.length ===
           0 ? (
             <Box
               sx={{
                 py:
-                  8,
+                  7,
 
                 textAlign:
                   'center',
+
+                borderRadius:
+                  3.5,
+
+                background:
+                  '#FFFFFF',
+
+                border:
+                  '1px solid #E4ECE8',
               }}
             >
+
+              <Box
+                sx={{
+                  width:
+                    58,
+
+                  height:
+                    58,
+
+                  borderRadius:
+                    '50%',
+
+                  background:
+                    '#E8F8F1',
+
+                  color:
+                    '#008C68',
+
+                  display:
+                    'flex',
+
+                  alignItems:
+                    'center',
+
+                  justifyContent:
+                    'center',
+
+                  mx:
+                    'auto',
+
+                  mb:
+                    1.3,
+                }}
+              >
+                <SavingsRoundedIcon />
+              </Box>
+
               <Typography
                 sx={{
                   color:
-                    '#777777',
+                    '#34443C',
 
                   fontSize:
-                    16,
+                    15,
+
+                  fontWeight:
+                    800,
                 }}
               >
                 No savings activity yet.
               </Typography>
+
+              <Typography
+                sx={{
+                  color:
+                    '#8A9590',
+
+                  fontSize:
+                    11.5,
+
+                  mt:
+                    0.5,
+                }}
+              >
+                Your savings activity will
+                appear here.
+              </Typography>
+
             </Box>
           ) : (
-            <Box>
+            <Box
+              sx={{
+                background:
+                  '#FFFFFF',
+
+                border:
+                  '1px solid #E4ECE8',
+
+                borderRadius:
+                  3.5,
+
+                px:
+                  1.5,
+              }}
+            >
+
               {transactions.map(
                 (
                   transaction,
                   index
                 ) => {
+
                   const credit =
                     transaction.direction ===
                     'credit';
@@ -1414,6 +2085,7 @@ const Wallet: React.FC = () => {
                         transaction.id
                       }
                     >
+
                       <Box
                         sx={{
                           display:
@@ -1426,9 +2098,10 @@ const Wallet: React.FC = () => {
                             'space-between',
 
                           py:
-                            2,
+                            1.7,
                         }}
                       >
+
                         <Box
                           sx={{
                             display:
@@ -1439,23 +2112,27 @@ const Wallet: React.FC = () => {
 
                             minWidth:
                               0,
+
+                            flex:
+                              1,
                           }}
                         >
+
                           <Box
                             sx={{
                               width:
-                                42,
+                                43,
 
                               height:
-                                42,
+                                43,
 
                               borderRadius:
                                 '50%',
 
-                              backgroundColor:
+                              background:
                                 credit
-                                  ? '#E1F8EA'
-                                  : '#F4F4F4',
+                                  ? '#E4F8EC'
+                                  : '#F0F3F1',
 
                               display:
                                 'flex',
@@ -1467,28 +2144,31 @@ const Wallet: React.FC = () => {
                                 'center',
 
                               mr:
-                                1.5,
+                                1.3,
 
                               flexShrink:
                                 0,
                             }}
                           >
+
                             {credit ? (
                               <AddRoundedIcon
                                 sx={{
                                   color:
-                                    '#65CF8D',
+                                    '#008C68',
                                 }}
                               />
                             ) : (
                               <RemoveRoundedIcon
                                 sx={{
                                   color:
-                                    '#999999',
+                                    '#68756F',
                                 }}
                               />
                             )}
+
                           </Box>
+
 
                           <Box
                             sx={{
@@ -1496,13 +2176,26 @@ const Wallet: React.FC = () => {
                                 0,
                             }}
                           >
+
                             <Typography
                               sx={{
                                 fontWeight:
-                                  700,
+                                  800,
 
                                 fontSize:
-                                  15,
+                                  13.5,
+
+                                color:
+                                  '#25352E',
+
+                                overflow:
+                                  'hidden',
+
+                                textOverflow:
+                                  'ellipsis',
+
+                                whiteSpace:
+                                  'nowrap',
                               }}
                             >
                               {getTransactionLabel(
@@ -1510,16 +2203,26 @@ const Wallet: React.FC = () => {
                               )}
                             </Typography>
 
+
                             <Typography
                               sx={{
                                 color:
-                                  '#999999',
+                                  '#8A9590',
 
                                 fontSize:
-                                  12,
+                                  10.5,
 
                                 mt:
-                                  0.3,
+                                  0.35,
+
+                                overflow:
+                                  'hidden',
+
+                                textOverflow:
+                                  'ellipsis',
+
+                                whiteSpace:
+                                  'nowrap',
                               }}
                             >
                               {transactionDate
@@ -1528,51 +2231,61 @@ const Wallet: React.FC = () => {
                                   )
                                 : 'Date unavailable'}
                             </Typography>
+
                           </Box>
+
                         </Box>
+
 
                         <Typography
                           sx={{
                             fontWeight:
-                              800,
+                              900,
 
                             color:
                               credit
-                                ? '#58C886'
-                                : '#777777',
+                                ? '#008C68'
+                                : '#59645F',
 
                             fontSize:
-                              15,
+                              13.5,
 
                             whiteSpace:
                               'nowrap',
 
                             ml:
-                              2,
+                              1.5,
                           }}
                         >
                           {credit
                             ? '+'
-                            : '-'}
+                            : '−'}
+
                           {formatMoney(
                             transaction.amount
                           )}
                         </Typography>
+
                       </Box>
+
 
                       {index <
                         transactions.length -
                           1 && (
                         <Divider />
                       )}
+
                     </Box>
                   );
                 }
               )}
+
             </Box>
           )}
+
         </Box>
       )}
+
 
       {/* =====================================================
           SAVE DIALOG
@@ -1596,35 +2309,48 @@ const Wallet: React.FC = () => {
               4,
 
             p:
-              1,
+              0.8,
           },
         }}
       >
+
         <DialogTitle
           sx={{
             fontWeight:
-              800,
+              900,
 
             fontSize:
-              24,
+              23,
+
+            color:
+              '#18332A',
           }}
         >
           Save Money
         </DialogTitle>
 
+
         <DialogContent>
+
           <Typography
             sx={{
               color:
-                '#888888',
+                '#718078',
+
+              fontSize:
+                12,
+
+              lineHeight:
+                1.6,
 
               mb:
                 2,
             }}
           >
-            Move money from your Main
-            Account into your Save Wallet.
+            Move money from your Main Account
+            into ZENIMONIES Save.
           </Typography>
+
 
           <TextField
             fullWidth
@@ -1635,10 +2361,10 @@ const Wallet: React.FC = () => {
               saveAmount
             }
             onChange={(
-              e
+              event
             ) =>
               setSaveAmount(
-                e.target.value
+                event.target.value
               )
             }
             inputProps={{
@@ -1649,7 +2375,9 @@ const Wallet: React.FC = () => {
                 '0.01',
             }}
           />
+
         </DialogContent>
+
 
         <DialogActions
           sx={{
@@ -1657,6 +2385,7 @@ const Wallet: React.FC = () => {
               2,
           }}
         >
+
           <Button
             onClick={() =>
               setSaveDialogOpen(
@@ -1671,11 +2400,15 @@ const Wallet: React.FC = () => {
                 'none',
 
               color:
-                '#777777',
+                '#718078',
+
+              fontWeight:
+                700,
             }}
           >
             Cancel
           </Button>
+
 
           <Button
             variant="contained"
@@ -1690,17 +2423,24 @@ const Wallet: React.FC = () => {
                 'none',
 
               borderRadius:
-                2,
+                2.5,
 
-              backgroundColor:
-                '#087443',
+              minWidth:
+                100,
+
+              background:
+                '#008C68',
+
+              fontWeight:
+                800,
 
               '&:hover': {
-                backgroundColor:
-                  '#066139',
+                background:
+                  '#007858',
               },
             }}
           >
+
             {saving ? (
               <CircularProgress
                 size={
@@ -1714,230 +2454,13 @@ const Wallet: React.FC = () => {
             ) : (
               'Save'
             )}
+
           </Button>
+
         </DialogActions>
+
       </Dialog>
 
-      {/* =====================================================
-          SEND DIALOG
-      ===================================================== */}
-
-      <Dialog
-        open={
-          sendDialogOpen
-        }
-        onClose={() =>
-          !sending &&
-          setSendDialogOpen(
-            false
-          )
-        }
-        fullWidth
-        maxWidth="xs"
-        PaperProps={{
-          sx: {
-            borderRadius:
-              4,
-
-            p:
-              1,
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            fontWeight:
-              800,
-
-            fontSize:
-              24,
-          }}
-        >
-          Send Money
-        </DialogTitle>
-
-        <DialogContent>
-          <Typography
-            sx={{
-              color:
-                '#888888',
-
-              mb:
-                2.5,
-            }}
-          >
-            Send money directly from your
-            Save Wallet to another Zenimonies
-            customer.
-          </Typography>
-
-          <TextField
-            fullWidth
-            autoFocus
-            label="Recipient"
-            placeholder="Phone number or account number"
-            value={
-              sendRecipient
-            }
-            onChange={(
-              e
-            ) =>
-              setSendRecipient(
-                e.target.value
-              )
-            }
-            sx={{
-              mb:
-                2,
-            }}
-          />
-
-          <TextField
-            fullWidth
-            label="Amount"
-            type="number"
-            value={
-              sendAmount
-            }
-            onChange={(
-              e
-            ) =>
-              setSendAmount(
-                e.target.value
-              )
-            }
-            inputProps={{
-              min:
-                0,
-
-              step:
-                '0.01',
-            }}
-            sx={{
-              mb:
-                2,
-            }}
-          />
-
-          <TextField
-            fullWidth
-            label="Description (optional)"
-            placeholder="What is this payment for?"
-            value={
-              sendDescription
-            }
-            onChange={(
-              e
-            ) =>
-              setSendDescription(
-                e.target.value
-              )
-            }
-          />
-
-          <Box
-            sx={{
-              mt:
-                2,
-
-              p:
-                1.5,
-
-              borderRadius:
-                2,
-
-              backgroundColor:
-                '#F7FAF8',
-
-              border:
-                '1px solid #E5EEE9',
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize:
-                  11,
-
-                color:
-                  '#718078',
-
-                lineHeight:
-                  1.55,
-              }}
-            >
-              This sends money from your Save
-              Wallet to the recipient's
-              Zenimonies Main Account.
-            </Typography>
-          </Box>
-        </DialogContent>
-
-        <DialogActions
-          sx={{
-            p:
-              2,
-          }}
-        >
-          <Button
-            onClick={() =>
-              setSendDialogOpen(
-                false
-              )
-            }
-            disabled={
-              sending
-            }
-            sx={{
-              textTransform:
-                'none',
-
-              color:
-                '#777777',
-            }}
-          >
-            Cancel
-          </Button>
-
-          <Button
-            variant="contained"
-            onClick={
-              handleSendMoney
-            }
-            disabled={
-              sending
-            }
-            sx={{
-              textTransform:
-                'none',
-
-              borderRadius:
-                2,
-
-              backgroundColor:
-                '#087443',
-
-              '&:hover': {
-                backgroundColor:
-                  '#066139',
-              },
-            }}
-          >
-            {sending ? (
-              <CircularProgress
-                size={
-                  21
-                }
-                sx={{
-                  color:
-                    '#FFFFFF',
-                }}
-              />
-            ) : (
-              'Send Money'
-            )}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* =====================================================
           WITHDRAW DIALOG
@@ -1961,57 +2484,103 @@ const Wallet: React.FC = () => {
               4,
 
             p:
-              1,
+              0.8,
           },
         }}
       >
+
         <DialogTitle
           sx={{
             fontWeight:
-              800,
+              900,
 
             fontSize:
-              24,
+              23,
+
+            color:
+              '#18332A',
           }}
         >
-          Withdraw
+          Withdraw Savings
         </DialogTitle>
 
+
         <DialogContent>
+
           <Typography
             sx={{
               color:
-                '#888888',
+                '#718078',
+
+              fontSize:
+                12,
+
+              lineHeight:
+                1.6,
 
               mb:
-                2,
+                1.8,
             }}
           >
-            Move money from your Save Wallet
+            Move money from ZENIMONIES Save
             back to your Main Account.
           </Typography>
 
-          <Typography
-            sx={{
-              fontSize:
-                13,
 
-              color:
-                '#777777',
+          <Box
+            sx={{
+              background:
+                '#F0FAF6',
+
+              border:
+                '1px solid #DCEDE6',
+
+              borderRadius:
+                2.5,
+
+              p:
+                1.4,
 
               mb:
-                1.5,
+                1.8,
             }}
           >
-            Available:{' '}
 
-            <strong>
+            <Typography
+              sx={{
+                fontSize:
+                  10.5,
+
+                color:
+                  '#718078',
+              }}
+            >
+              Available savings
+            </Typography>
+
+            <Typography
+              sx={{
+                fontSize:
+                  17,
+
+                fontWeight:
+                  900,
+
+                color:
+                  '#008C68',
+
+                mt:
+                  0.2,
+              }}
+            >
               {formatMoney(
                 wallet?.balance ||
                   0
               )}
-            </strong>
-          </Typography>
+            </Typography>
+
+          </Box>
+
 
           <TextField
             fullWidth
@@ -2022,10 +2591,10 @@ const Wallet: React.FC = () => {
               withdrawAmount
             }
             onChange={(
-              e
+              event
             ) =>
               setWithdrawAmount(
-                e.target.value
+                event.target.value
               )
             }
             inputProps={{
@@ -2036,7 +2605,9 @@ const Wallet: React.FC = () => {
                 '0.01',
             }}
           />
+
         </DialogContent>
+
 
         <DialogActions
           sx={{
@@ -2044,6 +2615,7 @@ const Wallet: React.FC = () => {
               2,
           }}
         >
+
           <Button
             onClick={() =>
               setWithdrawDialogOpen(
@@ -2058,11 +2630,15 @@ const Wallet: React.FC = () => {
                 'none',
 
               color:
-                '#777777',
+                '#718078',
+
+              fontWeight:
+                700,
             }}
           >
             Cancel
           </Button>
+
 
           <Button
             variant="contained"
@@ -2077,17 +2653,24 @@ const Wallet: React.FC = () => {
                 'none',
 
               borderRadius:
-                2,
+                2.5,
 
-              backgroundColor:
-                '#087443',
+              minWidth:
+                110,
+
+              background:
+                '#008C68',
+
+              fontWeight:
+                800,
 
               '&:hover': {
-                backgroundColor:
-                  '#066139',
+                background:
+                  '#007858',
               },
             }}
           >
+
             {withdrawing ? (
               <CircularProgress
                 size={
@@ -2101,12 +2684,16 @@ const Wallet: React.FC = () => {
             ) : (
               'Withdraw'
             )}
+
           </Button>
+
         </DialogActions>
+
       </Dialog>
 
+
       {/* =====================================================
-          NOTIFICATIONS
+          ERROR NOTIFICATION
       ===================================================== */}
 
       <Snackbar
@@ -2127,6 +2714,7 @@ const Wallet: React.FC = () => {
             'center',
         }}
       >
+
         <Alert
           severity="error"
           onClose={() =>
@@ -2142,7 +2730,13 @@ const Wallet: React.FC = () => {
         >
           {error}
         </Alert>
+
       </Snackbar>
+
+
+      {/* =====================================================
+          SUCCESS NOTIFICATION
+      ===================================================== */}
 
       <Snackbar
         open={
@@ -2162,6 +2756,7 @@ const Wallet: React.FC = () => {
             'center',
         }}
       >
+
         <Alert
           severity="success"
           onClose={() =>
@@ -2177,7 +2772,9 @@ const Wallet: React.FC = () => {
         >
           {success}
         </Alert>
+
       </Snackbar>
+
     </Box>
   );
 };
