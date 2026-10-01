@@ -7,6 +7,16 @@ const {
 // ZENIMONIES BANKING
 // EDUCATION PAYMENT SERVICE
 // VTpass
+//
+// Supported:
+// - WAEC Registration PIN
+// - WAEC Result Checker PIN
+// - JAMB PIN
+// ============================================================
+
+
+// ============================================================
+// VTPASS CONFIGURATION
 // ============================================================
 
 const VTPASS_BASE_URL =
@@ -40,28 +50,37 @@ const EDUCATION_SERVICE_IDS = {
 
 
 // ============================================================
-// CONFIGURATION
+// CONFIGURATION VALIDATION
 // ============================================================
 
 const validateConfig = () => {
   const missing = [];
 
   if (!VTPASS_API_KEY) {
-    missing.push('VTPASS_API_KEY');
+    missing.push(
+      'VTPASS_API_KEY'
+    );
   }
 
   if (!VTPASS_PUBLIC_KEY) {
-    missing.push('VTPASS_PUBLIC_KEY');
+    missing.push(
+      'VTPASS_PUBLIC_KEY'
+    );
   }
 
   if (!VTPASS_SECRET_KEY) {
-    missing.push('VTPASS_SECRET_KEY');
+    missing.push(
+      'VTPASS_SECRET_KEY'
+    );
   }
 
   if (missing.length > 0) {
-    const error = new Error(
-      `Missing VTpass environment variables: ${missing.join(', ')}`
-    );
+    const error =
+      new Error(
+        `Missing VTpass environment variables: ${missing.join(
+          ', '
+        )}`
+      );
 
     error.code =
       'VTPASS_CONFIGURATION_ERROR';
@@ -107,7 +126,10 @@ const normalizeEducationService = (
       EDUCATION_SERVICE_IDS.JAMB,
   };
 
-  return serviceMap[value] || null;
+  return (
+    serviceMap[value] ||
+    null
+  );
 };
 
 
@@ -124,9 +146,10 @@ const getEducationServiceId = (
     );
 
   if (!serviceId) {
-    const error = new Error(
-      'Unsupported education service.'
-    );
+    const error =
+      new Error(
+        'Unsupported education service.'
+      );
 
     error.code =
       'UNSUPPORTED_EDUCATION_SERVICE';
@@ -159,10 +182,12 @@ const vtpassRequest = async ({
 
 
   // ----------------------------------------------------------
-  // GET
+  // GET AUTHENTICATION
   // ----------------------------------------------------------
 
-  if (method === 'GET') {
+  if (
+    method === 'GET'
+  ) {
     headers['api-key'] =
       VTPASS_API_KEY;
 
@@ -172,10 +197,12 @@ const vtpassRequest = async ({
 
 
   // ----------------------------------------------------------
-  // POST
+  // POST AUTHENTICATION
   // ----------------------------------------------------------
 
-  if (method === 'POST') {
+  if (
+    method === 'POST'
+  ) {
     headers['api-key'] =
       VTPASS_API_KEY;
 
@@ -207,7 +234,9 @@ const vtpassRequest = async ({
 
           body:
             body !== null
-              ? JSON.stringify(body)
+              ? JSON.stringify(
+                  body
+                )
               : undefined,
 
           signal:
@@ -258,7 +287,6 @@ const vtpassRequest = async ({
     return data;
 
   } catch (error) {
-
     if (
       error?.name ===
       'AbortError'
@@ -277,7 +305,9 @@ const vtpassRequest = async ({
     throw error;
 
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(
+      timeout
+    );
   }
 };
 
@@ -285,16 +315,20 @@ const vtpassRequest = async ({
 // ============================================================
 // GET EDUCATION VARIATIONS
 //
-// Used for services that have selectable products/options.
+// GET:
+// /api/service-variations?serviceID=waec-registration
 //
-// Example:
+// GET:
+// /api/service-variations?serviceID=waec
 //
-// GET /api/education/variations?service=waec-registration
+// GET:
+// /api/service-variations?serviceID=jamb
 // ============================================================
 
 const getEducationVariations =
-  async (service) => {
-
+  async (
+    service
+  ) => {
     const serviceId =
       getEducationServiceId(
         service
@@ -314,8 +348,12 @@ const getEducationVariations =
 
 
     const variations =
-      result?.content?.variations ||
-      result?.content?.varations ||
+      result
+        ?.content
+        ?.variations ||
+      result
+        ?.content
+        ?.varations ||
       [];
 
 
@@ -326,7 +364,8 @@ const getEducationVariations =
       variations,
 
       responseDescription:
-        result?.response_description ||
+        result
+          ?.response_description ||
         null,
 
       raw:
@@ -338,15 +377,22 @@ const getEducationVariations =
 // ============================================================
 // VERIFY JAMB PROFILE
 //
-// VTpass requires JAMB profile verification before vending
-// a JAMB PIN.
+// VTpass requires:
 //
-// We keep this separate from the actual purchase.
+// billersCode = JAMB Profile ID
+// serviceID   = jamb
+// type        = selected variation code
+//
+// Example:
+//
+// type = utme-mock
+// type = utme-no-mock
 // ============================================================
 
 const verifyJambProfile =
   async ({
     profileId,
+    variationCode,
     service = 'jamb',
   }) => {
 
@@ -360,9 +406,10 @@ const verifyJambProfile =
       serviceId !==
       EDUCATION_SERVICE_IDS.JAMB
     ) {
-      const error = new Error(
-        'JAMB profile verification is only available for JAMB.'
-      );
+      const error =
+        new Error(
+          'JAMB profile verification is only available for JAMB.'
+        );
 
       error.code =
         'INVALID_JAMB_SERVICE';
@@ -374,17 +421,38 @@ const verifyJambProfile =
     const cleanProfileId =
       String(
         profileId || ''
-      )
-        .trim();
+      ).trim();
 
 
     if (!cleanProfileId) {
-      const error = new Error(
-        'JAMB Profile ID is required.'
-      );
+      const error =
+        new Error(
+          'JAMB Profile ID is required.'
+        );
 
       error.code =
         'JAMB_PROFILE_ID_REQUIRED';
+
+      throw error;
+    }
+
+
+    const cleanVariationCode =
+      String(
+        variationCode || ''
+      ).trim();
+
+
+    if (
+      !cleanVariationCode
+    ) {
+      const error =
+        new Error(
+          'JAMB variation code is required for profile verification.'
+        );
+
+      error.code =
+        'JAMB_VARIATION_REQUIRED';
 
       throw error;
     }
@@ -413,7 +481,7 @@ const verifyJambProfile =
             cleanProfileId,
 
           type:
-            'jamb',
+            cleanVariationCode,
         },
       });
 
@@ -427,6 +495,9 @@ const verifyJambProfile =
       profileId:
         cleanProfileId,
 
+      variationCode:
+        cleanVariationCode,
+
       response:
         result,
     };
@@ -436,19 +507,25 @@ const verifyJambProfile =
 // ============================================================
 // PURCHASE EDUCATION PRODUCT
 //
-// This is the common purchase method for:
-// - WAEC Registration
-// - WAEC Result Checker
-// - JAMB PIN
+// WAEC:
+// - variation_code
+// - phone
+// - amount optional
 //
-// The controller will decide what fields are required for
-// each product.
+// JAMB:
+// - variation_code
+// - billersCode (Profile ID)
+// - phone
+// - amount optional
+//
+// Additional fields such as quantity can be supplied through
+// additionalFields.
 // ============================================================
 
 const purchaseEducation =
   async ({
     service,
-    billersCode,
+    billersCode = null,
     variationCode = null,
     amount,
     phone,
@@ -461,20 +538,22 @@ const purchaseEducation =
       );
 
 
-    const cleanBillersCode =
+    const cleanVariationCode =
       String(
-        billersCode || ''
-      )
-        .trim();
+        variationCode || ''
+      ).trim();
 
 
-    if (!cleanBillersCode) {
-      const error = new Error(
-        'Education customer reference is required.'
-      );
+    if (
+      !cleanVariationCode
+    ) {
+      const error =
+        new Error(
+          'Education variation code is required.'
+        );
 
       error.code =
-        'EDUCATION_BILLERS_CODE_REQUIRED';
+        'EDUCATION_VARIATION_REQUIRED';
 
       throw error;
     }
@@ -490,9 +569,10 @@ const purchaseEducation =
       ) ||
       numericAmount <= 0
     ) {
-      const error = new Error(
-        'A valid education payment amount is required.'
-      );
+      const error =
+        new Error(
+          'A valid education payment amount is required.'
+        );
 
       error.code =
         'INVALID_EDUCATION_AMOUNT';
@@ -510,14 +590,15 @@ const purchaseEducation =
 
 
     if (
-      cleanPhone &&
+      !cleanPhone ||
       !/^0\d{10}$/.test(
         cleanPhone
       )
     ) {
-      const error = new Error(
-        'A valid Nigerian phone number is required.'
-      );
+      const error =
+        new Error(
+          'A valid Nigerian phone number is required.'
+        );
 
       error.code =
         'INVALID_PHONE_NUMBER';
@@ -526,9 +607,45 @@ const purchaseEducation =
     }
 
 
+    // --------------------------------------------------------
+    // JAMB REQUIRES PROFILE ID
+    // --------------------------------------------------------
+
+    let cleanBillersCode =
+      null;
+
+
+    if (
+      serviceId ===
+      EDUCATION_SERVICE_IDS.JAMB
+    ) {
+      cleanBillersCode =
+        String(
+          billersCode || ''
+        ).trim();
+
+
+      if (!cleanBillersCode) {
+        const error =
+          new Error(
+            'JAMB Profile ID is required.'
+          );
+
+        error.code =
+          'JAMB_PROFILE_ID_REQUIRED';
+
+        throw error;
+      }
+    }
+
+
     const requestId =
       generateRequestId();
 
+
+    // ========================================================
+    // BASE PAYLOAD
+    // ========================================================
 
     const payload = {
       request_id:
@@ -537,48 +654,44 @@ const purchaseEducation =
       serviceID:
         serviceId,
 
-      billersCode:
-        cleanBillersCode,
+      variation_code:
+        cleanVariationCode,
 
       amount:
         numericAmount,
+
+      phone:
+        cleanPhone,
     };
 
 
-    // --------------------------------------------------------
-    // VARIATION CODE
-    // --------------------------------------------------------
+    // ========================================================
+    // JAMB PROFILE ID
+    // ========================================================
 
-    if (variationCode) {
-      payload.variation_code =
-        String(
-          variationCode
-        );
+    if (
+      serviceId ===
+      EDUCATION_SERVICE_IDS.JAMB
+    ) {
+      payload.billersCode =
+        cleanBillersCode;
     }
 
 
-    // --------------------------------------------------------
-    // PHONE
-    // --------------------------------------------------------
-
-    if (cleanPhone) {
-      payload.phone =
-        cleanPhone;
-    }
-
-
-    // --------------------------------------------------------
+    // ========================================================
     // ADDITIONAL PROVIDER FIELDS
     //
-    // These are deliberately added only when supplied.
-    // This keeps the service flexible for VTpass products
-    // that require extra fields.
-    // --------------------------------------------------------
+    // Examples:
+    // quantity
+    // ========================================================
 
     if (
       additionalFields &&
       typeof additionalFields ===
-        'object'
+        'object' &&
+      !Array.isArray(
+        additionalFields
+      )
     ) {
       Object.assign(
         payload,
@@ -586,6 +699,10 @@ const purchaseEducation =
       );
     }
 
+
+    // ========================================================
+    // SEND TO VTPASS
+    // ========================================================
 
     const result =
       await vtpassRequest({
@@ -610,11 +727,7 @@ const purchaseEducation =
         cleanBillersCode,
 
       variationCode:
-        variationCode
-          ? String(
-              variationCode
-            )
-          : null,
+        cleanVariationCode,
 
       amount:
         numericAmount,
@@ -630,17 +743,24 @@ const purchaseEducation =
 
 // ============================================================
 // REQUERY EDUCATION TRANSACTION
-//
-// Used when VTpass returns pending/unclear status.
 // ============================================================
 
 const requeryEducationTransaction =
-  async (requestId) => {
+  async (
+    requestId
+  ) => {
 
-    if (!requestId) {
-      const error = new Error(
-        'VTpass request ID is required.'
-      );
+    const cleanRequestId =
+      String(
+        requestId || ''
+      ).trim();
+
+
+    if (!cleanRequestId) {
+      const error =
+        new Error(
+          'VTpass request ID is required.'
+        );
 
       error.code =
         'REQUEST_ID_REQUIRED';
@@ -658,9 +778,7 @@ const requeryEducationTransaction =
 
       body: {
         request_id:
-          String(
-            requestId
-          ),
+          cleanRequestId,
       },
     });
   };
@@ -671,12 +789,15 @@ const requeryEducationTransaction =
 // ============================================================
 
 const getEducationProviderStatus =
-  (providerResponse) => {
+  (
+    providerResponse
+  ) => {
 
     const code =
       String(
         providerResponse?.code ||
-          providerResponse?.response_code ||
+          providerResponse
+            ?.response_code ||
           ''
       ).trim();
 
