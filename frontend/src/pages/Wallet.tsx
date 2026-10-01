@@ -3,15 +3,28 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
-  FormControlLabel,
+  IconButton,
+  Paper,
+  Snackbar,
   Switch,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
+
+import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
+import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+
+import { useNavigate } from 'react-router-dom';
 
 const API_URL =
   process.env.REACT_APP_API_URL ||
@@ -27,7 +40,12 @@ type Wallet = {
 
 type WalletTransaction = {
   id: string;
-  type: 'manual_save' | 'spend_save' | 'withdrawal' | 'reversal' | 'adjustment';
+  type:
+    | 'manual_save'
+    | 'spend_save'
+    | 'withdrawal'
+    | 'reversal'
+    | 'adjustment';
   direction: 'credit' | 'debit';
   amount: number | string;
   currency: string;
@@ -38,7 +56,8 @@ type WalletTransaction = {
   created_at: string;
 };
 
-const getToken = () => localStorage.getItem('zenimonies_token');
+const getToken = () =>
+  localStorage.getItem('zenimonies_token');
 
 const formatMoney = (value: number | string) => {
   const amount = Number(value || 0);
@@ -49,52 +68,6 @@ const formatMoney = (value: number | string) => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
-};
-
-const getErrorMessage = async (response: Response) => {
-  try {
-    const data = await response.json();
-
-    return (
-      data?.message ||
-      data?.error ||
-      'Something went wrong. Please try again.'
-    );
-  } catch {
-    return 'Something went wrong. Please try again.';
-  }
-};
-
-const getTransactionLabel = (type: WalletTransaction['type']) => {
-  switch (type) {
-    case 'manual_save':
-      return 'Money Saved';
-
-    case 'spend_save':
-      return 'Spend & Save';
-
-    case 'withdrawal':
-      return 'Withdrawn to Main Account';
-
-    case 'reversal':
-      return 'Savings Reversal';
-
-    case 'adjustment':
-      return 'Wallet Adjustment';
-
-    default:
-      return 'Wallet Transaction';
-  }
-};
-
-const getTransactionDescription = (
-  transaction: WalletTransaction
-) => {
-  if (transaction.description) {
-    return transaction.description;
-  }
-
-  return getTransactionLabel(transaction.type);
 };
 
 const formatDate = (date: string) => {
@@ -113,26 +86,95 @@ const formatDate = (date: string) => {
   });
 };
 
+const getErrorMessage = async (
+  response: Response
+) => {
+  try {
+    const data = await response.json();
+
+    return (
+      data?.message ||
+      data?.error ||
+      'Something went wrong. Please try again.'
+    );
+  } catch {
+    return 'Something went wrong. Please try again.';
+  }
+};
+
+const getTransactionLabel = (
+  type: WalletTransaction['type']
+) => {
+  switch (type) {
+    case 'manual_save':
+      return 'Money Saved';
+
+    case 'spend_save':
+      return 'Spend + Save';
+
+    case 'withdrawal':
+      return 'Withdrawn';
+
+    case 'reversal':
+      return 'Savings Reversal';
+
+    case 'adjustment':
+      return 'Wallet Adjustment';
+
+    default:
+      return 'Wallet Transaction';
+  }
+};
+
 const Wallet: React.FC = () => {
-  const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const navigate = useNavigate();
+
+  const [wallet, setWallet] =
+    useState<Wallet | null>(null);
+
+  const [transactions, setTransactions] =
+    useState<WalletTransaction[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [withdrawing, setWithdrawing] = useState(false);
-  const [updatingSettings, setUpdatingSettings] = useState(false);
 
-  const [saveAmount, setSaveAmount] = useState('');
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [spendSaveAmount, setSpendSaveAmount] = useState('');
+  const [activeTab, setActiveTab] =
+    useState(0);
 
-  const [saveDescription, setSaveDescription] = useState('');
-  const [withdrawDescription, setWithdrawDescription] = useState('');
+  const [saveDialogOpen, setSaveDialogOpen] =
+    useState(false);
 
-  const [spendSaveEnabled, setSpendSaveEnabled] = useState(false);
+  const [withdrawDialogOpen, setWithdrawDialogOpen] =
+    useState(false);
 
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [editDialogOpen, setEditDialogOpen] =
+    useState(false);
+
+  const [saveAmount, setSaveAmount] =
+    useState('');
+
+  const [withdrawAmount, setWithdrawAmount] =
+    useState('');
+
+  const [spendSaveAmount, setSpendSaveAmount] =
+    useState('');
+
+  const [spendSaveEnabled, setSpendSaveEnabled] =
+    useState(false);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [withdrawing, setWithdrawing] =
+    useState(false);
+
+  const [updatingSettings, setUpdatingSettings] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  const [success, setSuccess] =
+    useState('');
 
   const token = getToken();
 
@@ -146,60 +188,82 @@ const Wallet: React.FC = () => {
 
   const loadWallet = async () => {
     if (!token) {
-      setError('Your session has expired. Please sign in again.');
+      setError(
+        'Your session has expired. Please sign in again.'
+      );
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
-      setError('');
 
-      const [walletResponse, transactionsResponse] =
-        await Promise.all([
-          fetch(`${API_URL}/api/wallet`, {
+      const [
+        walletResponse,
+        transactionsResponse,
+      ] = await Promise.all([
+        fetch(`${API_URL}/api/wallet`, {
+          method: 'GET',
+          headers: authHeaders,
+        }),
+
+        fetch(
+          `${API_URL}/api/wallet/transactions`,
+          {
             method: 'GET',
             headers: authHeaders,
-          }),
-          fetch(`${API_URL}/api/wallet/transactions`, {
-            method: 'GET',
-            headers: authHeaders,
-          }),
-        ]);
+          }
+        ),
+      ]);
 
       if (!walletResponse.ok) {
-        throw new Error(await getErrorMessage(walletResponse));
+        throw new Error(
+          await getErrorMessage(walletResponse)
+        );
       }
 
       if (!transactionsResponse.ok) {
-        throw new Error(await getErrorMessage(transactionsResponse));
+        throw new Error(
+          await getErrorMessage(
+            transactionsResponse
+          )
+        );
       }
 
-      const walletData = await walletResponse.json();
-      const transactionData = await transactionsResponse.json();
+      const walletData =
+        await walletResponse.json();
+
+      const transactionData =
+        await transactionsResponse.json();
 
       const walletResult =
-        walletData?.wallet || walletData;
+        walletData?.wallet ||
+        walletData;
 
-      const transactionsResult =
+      const transactionResult =
         transactionData?.transactions ||
         transactionData?.data ||
         [];
 
       setWallet(walletResult);
+
       setTransactions(
-        Array.isArray(transactionsResult)
-          ? transactionsResult
+        Array.isArray(transactionResult)
+          ? transactionResult
           : []
       );
 
       setSpendSaveEnabled(
-        Boolean(walletResult?.spend_save_enabled)
+        Boolean(
+          walletResult?.spend_save_enabled
+        )
       );
 
       setSpendSaveAmount(
         walletResult?.spend_save_amount
-          ? String(walletResult.spend_save_amount)
+          ? String(
+              walletResult.spend_save_amount
+            )
           : ''
       );
     } catch (err: any) {
@@ -214,26 +278,23 @@ const Wallet: React.FC = () => {
 
   useEffect(() => {
     loadWallet();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const clearMessages = () => {
-    setError('');
-    setSuccess('');
-  };
-
   const handleSaveMoney = async () => {
-    clearMessages();
-
     const amount = Number(saveAmount);
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      setError('Enter a valid amount to save.');
+      setError(
+        'Enter a valid amount to save.'
+      );
       return;
     }
 
     try {
       setSaving(true);
+      setError('');
 
       const response = await fetch(
         `${API_URL}/api/wallet/save`,
@@ -242,9 +303,7 @@ const Wallet: React.FC = () => {
           headers: authHeaders,
           body: JSON.stringify({
             amount,
-            description:
-              saveDescription.trim() ||
-              'Manual Save Money',
+            description: 'Manual Save Money',
           }),
         }
       );
@@ -256,10 +315,12 @@ const Wallet: React.FC = () => {
       }
 
       setSaveAmount('');
-      setSaveDescription('');
+      setSaveDialogOpen(false);
 
       setSuccess(
-        `${formatMoney(amount)} has been moved to your Save Wallet.`
+        `${formatMoney(
+          amount
+        )} saved successfully.`
       );
 
       await loadWallet();
@@ -274,20 +335,20 @@ const Wallet: React.FC = () => {
   };
 
   const handleWithdraw = async () => {
-    clearMessages();
-
     const amount = Number(withdrawAmount);
 
     if (!Number.isFinite(amount) || amount <= 0) {
-      setError('Enter a valid amount to withdraw.');
+      setError(
+        'Enter a valid amount to withdraw.'
+      );
       return;
     }
 
-    const walletBalance = Number(
+    const balance = Number(
       wallet?.balance || 0
     );
 
-    if (amount > walletBalance) {
+    if (amount > balance) {
       setError(
         'The withdrawal amount is greater than your Save Wallet balance.'
       );
@@ -296,6 +357,7 @@ const Wallet: React.FC = () => {
 
     try {
       setWithdrawing(true);
+      setError('');
 
       const response = await fetch(
         `${API_URL}/api/wallet/withdraw`,
@@ -305,7 +367,6 @@ const Wallet: React.FC = () => {
           body: JSON.stringify({
             amount,
             description:
-              withdrawDescription.trim() ||
               'Withdrawal to Main Account',
           }),
         }
@@ -318,10 +379,12 @@ const Wallet: React.FC = () => {
       }
 
       setWithdrawAmount('');
-      setWithdrawDescription('');
+      setWithdrawDialogOpen(false);
 
       setSuccess(
-        `${formatMoney(amount)} has been moved back to your Main Account.`
+        `${formatMoney(
+          amount
+        )} moved to your Main Account.`
       );
 
       await loadWallet();
@@ -338,23 +401,25 @@ const Wallet: React.FC = () => {
   const handleSpendSaveToggle = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    clearMessages();
-
-    const enabled = event.target.checked;
+    const enabled =
+      event.target.checked;
 
     if (enabled) {
-      const amount = Number(spendSaveAmount);
+      const amount =
+        Number(spendSaveAmount);
 
-      if (!Number.isFinite(amount) || amount <= 0) {
-        setError(
-          'Enter the amount you want to automatically save before turning Spend & Save on.'
-        );
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        setEditDialogOpen(true);
         return;
       }
     }
 
     try {
       setUpdatingSettings(true);
+      setError('');
 
       const response = await fetch(
         `${API_URL}/api/wallet/settings`,
@@ -363,7 +428,9 @@ const Wallet: React.FC = () => {
           headers: authHeaders,
           body: JSON.stringify({
             enabled,
-            amount: Number(spendSaveAmount || 0),
+            amount: Number(
+              spendSaveAmount || 0
+            ),
           }),
         }
       );
@@ -378,37 +445,38 @@ const Wallet: React.FC = () => {
 
       setSuccess(
         enabled
-          ? `Spend & Save is now on. ${formatMoney(
-              Number(spendSaveAmount)
-            )} will be saved on each eligible successful transfer.`
-          : 'Spend & Save has been turned off.'
+          ? 'Spend + Save is now on.'
+          : 'Spend + Save has been turned off.'
       );
 
       await loadWallet();
     } catch (err: any) {
       setError(
         err?.message ||
-          'Unable to update Spend & Save.'
+          'Unable to update Spend + Save.'
       );
     } finally {
       setUpdatingSettings(false);
     }
   };
 
-  const handleSpendSaveAmount = async () => {
-    clearMessages();
+  const handleUpdateSpendSave = async () => {
+    const amount =
+      Number(spendSaveAmount);
 
-    const amount = Number(spendSaveAmount);
-
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
       setError(
-        'Enter a valid positive amount for Spend & Save.'
+        'Enter a valid positive amount.'
       );
       return;
     }
 
     try {
       setUpdatingSettings(true);
+      setError('');
 
       const response = await fetch(
         `${API_URL}/api/wallet/settings`,
@@ -428,8 +496,10 @@ const Wallet: React.FC = () => {
         );
       }
 
+      setEditDialogOpen(false);
+
       setSuccess(
-        `Spend & Save amount updated to ${formatMoney(
+        `Amount updated to ${formatMoney(
           amount
         )}.`
       );
@@ -438,7 +508,7 @@ const Wallet: React.FC = () => {
     } catch (err: any) {
       setError(
         err?.message ||
-          'Unable to update your savings amount.'
+          'Unable to update Spend + Save.'
       );
     } finally {
       setUpdatingSettings(false);
@@ -455,7 +525,9 @@ const Wallet: React.FC = () => {
           justifyContent: 'center',
         }}
       >
-        <CircularProgress />
+        <CircularProgress
+          sx={{ color: '#087443' }}
+        />
       </Box>
     );
   }
@@ -463,576 +535,969 @@ const Wallet: React.FC = () => {
   return (
     <Box
       sx={{
+        minHeight: '100vh',
+        backgroundColor: '#FFFFFF',
         width: '100%',
-        maxWidth: 900,
+        maxWidth: 560,
         mx: 'auto',
-        px: { xs: 2, sm: 3 },
-        py: { xs: 2, sm: 4 },
+        px: { xs: 2.5, sm: 3 },
+        pt: { xs: 2, sm: 3 },
+        pb: 5,
       }}
     >
       {/* HEADER */}
-      <Box sx={{ mb: 3 }}>
-        <Typography
-          variant="h4"
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          mb: 3,
+        }}
+      >
+        <IconButton
+          onClick={() => navigate(-1)}
           sx={{
-            fontWeight: 700,
-            color: '#1B1B1B',
-            fontSize: {
-              xs: '1.7rem',
-              sm: '2rem',
+            width: 54,
+            height: 54,
+            backgroundColor: '#FAFAFA',
+            boxShadow:
+              '0 8px 25px rgba(0,0,0,0.06)',
+            '&:hover': {
+              backgroundColor: '#F3F3F3',
             },
           }}
         >
-          Save Wallet
-        </Typography>
+          <ArrowBackRoundedIcon
+            sx={{
+              fontSize: 32,
+              color: '#171717',
+            }}
+          />
+        </IconButton>
 
         <Typography
-          variant="body2"
           sx={{
-            color: '#777',
-            mt: 0.5,
+            fontSize: {
+              xs: 25,
+              sm: 28,
+            },
+            fontWeight: 800,
+            color: '#111111',
+            letterSpacing: '-0.7px',
           }}
         >
-          Save money separately while keeping your
-          Main Account available for everyday spending.
+          Spend + Save
         </Typography>
+
+        <Box sx={{ width: 54 }} />
       </Box>
 
-      {/* ALERTS */}
-      {error && (
-        <Alert
-          severity="error"
-          onClose={() => setError('')}
-          sx={{ mb: 2 }}
-        >
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert
-          severity="success"
-          onClose={() => setSuccess('')}
-          sx={{ mb: 2 }}
-        >
-          {success}
-        </Alert>
-      )}
-
-      {/* BALANCE CARD */}
-      <Card
-        elevation={0}
+      {/* TABS */}
+      <Box
         sx={{
-          borderRadius: 3,
-          background:
-            'linear-gradient(135deg, #087443 0%, #0A8F55 100%)',
-          color: '#fff',
-          mb: 3,
-          overflow: 'hidden',
+          backgroundColor: '#EEEEF0',
+          borderRadius: 5,
+          p: 0.4,
+          mb: 7,
         }}
       >
-        <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
-          <Typography
-            sx={{
-              fontSize: '0.9rem',
-              opacity: 0.9,
-              mb: 1,
-            }}
-          >
-            Saved Balance
-          </Typography>
-
-          <Typography
-            sx={{
-              fontSize: {
-                xs: '2rem',
-                sm: '2.4rem',
-              },
+        <Tabs
+          value={activeTab}
+          onChange={(_, value) =>
+            setActiveTab(value)
+          }
+          variant="fullWidth"
+          TabIndicatorProps={{
+            sx: {
+              height: '100%',
+              borderRadius: 5,
+              backgroundColor: '#FFFFFF',
+              zIndex: 0,
+            },
+          }}
+          sx={{
+            minHeight: 46,
+            '& .MuiTabs-flexContainer': {
+              position: 'relative',
+              zIndex: 1,
+            },
+            '& .MuiTab-root': {
+              minHeight: 44,
+              textTransform: 'none',
+              fontSize: 18,
               fontWeight: 700,
-              letterSpacing: '-0.5px',
-            }}
-          >
-            {formatMoney(wallet?.balance || 0)}
-          </Typography>
+              color: '#777777',
+              zIndex: 2,
+            },
+            '& .Mui-selected': {
+              color: '#3F2075',
+            },
+          }}
+        >
+          <Tab label="Details" />
+          <Tab label="History" />
+        </Tabs>
+      </Box>
 
-          <Typography
+      {/* DETAILS */}
+      {activeTab === 0 && (
+        <>
+          {/* SOFT GREEN FEATURE CARD */}
+          <Box
             sx={{
-              fontSize: '0.8rem',
-              opacity: 0.85,
-              mt: 1,
+              height: 205,
+              borderRadius: 4,
+              backgroundColor: '#DFF9E9',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mb: 4,
             }}
           >
-            Your money is kept separately from your
-            Main Account.
-          </Typography>
-        </CardContent>
-      </Card>
+            <Typography
+              sx={{
+                fontSize: 105,
+                lineHeight: 1,
+                fontWeight: 500,
+                color: '#67CF8D',
+                letterSpacing: '-10px',
+              }}
+            >
+              ₦
+            </Typography>
+          </Box>
 
-      {/* SAVE / WITHDRAW */}
-      <Card
-        elevation={0}
-        sx={{
-          border: '1px solid #E8E8E8',
-          borderRadius: 3,
-          mb: 3,
-        }}
-      >
-        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-          <Typography
-            variant="h6"
+          {/* BALANCE */}
+          <Box
             sx={{
-              fontWeight: 700,
-              mb: 0.5,
+              textAlign: 'center',
+              mb: 4,
             }}
           >
-            Manage your savings
-          </Typography>
+            <Typography
+              sx={{
+                fontSize: 16,
+                color: '#999999',
+                mb: 0.5,
+              }}
+            >
+              <Box
+                component="span"
+                sx={{
+                  color: '#67CF8D',
+                  fontWeight: 800,
+                  mr: 0.8,
+                }}
+              >
+                ₦
+              </Box>
+              Save Wallet
+            </Typography>
 
-          <Typography
-            variant="body2"
-            sx={{
-              color: '#777',
-              mb: 2.5,
-            }}
-          >
-            Move money between your Main Account and
-            Save Wallet.
-          </Typography>
+            <Typography
+              sx={{
+                fontSize: {
+                  xs: 42,
+                  sm: 46,
+                },
+                fontWeight: 800,
+                color: '#111111',
+                letterSpacing: '-1.5px',
+              }}
+            >
+              {formatMoney(
+                wallet?.balance || 0
+              )}
+            </Typography>
+          </Box>
 
+          {/* ACTION BUTTONS */}
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: '1fr 1fr',
-              },
+              gridTemplateColumns: '1fr 1fr',
               gap: 2,
+              mb: 5,
             }}
           >
-            {/* SAVE MONEY */}
-            <Box>
-              <Typography
+            <Paper
+              elevation={0}
+              onClick={() =>
+                setSaveDialogOpen(true)
+              }
+              sx={{
+                height: 82,
+                borderRadius: 2.5,
+                display: 'flex',
+                alignItems: 'center',
+                px: 2.5,
+                cursor: 'pointer',
+                boxShadow:
+                  '0 7px 25px rgba(0,0,0,0.07)',
+                '&:active': {
+                  transform: 'scale(0.98)',
+                },
+              }}
+            >
+              <Box
                 sx={{
-                  fontWeight: 600,
-                  mb: 1,
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  backgroundColor: '#6AD392',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mr: 1.5,
                 }}
               >
-                Save Money
+                <AddRoundedIcon
+                  sx={{
+                    color: '#FFFFFF',
+                    fontSize: 24,
+                  }}
+                />
+              </Box>
+
+              <Typography
+                sx={{
+                  color: '#55C884',
+                  fontWeight: 800,
+                  fontSize: 18,
+                }}
+              >
+                Save
               </Typography>
+            </Paper>
 
-              <TextField
-                fullWidth
-                label="Amount"
-                type="number"
-                value={saveAmount}
-                onChange={(e) =>
-                  setSaveAmount(e.target.value)
-                }
-                inputProps={{
-                  min: 0,
-                  step: '0.01',
-                }}
-                sx={{ mb: 1.5 }}
-              />
-
-              <TextField
-                fullWidth
-                label="Description (optional)"
-                value={saveDescription}
-                onChange={(e) =>
-                  setSaveDescription(e.target.value)
-                }
-                sx={{ mb: 1.5 }}
-              />
-
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={handleSaveMoney}
-                disabled={saving}
+            <Paper
+              elevation={0}
+              onClick={() =>
+                setWithdrawDialogOpen(true)
+              }
+              sx={{
+                height: 82,
+                borderRadius: 2.5,
+                display: 'flex',
+                alignItems: 'center',
+                px: 2.5,
+                cursor:
+                  Number(wallet?.balance || 0) >
+                  0
+                    ? 'pointer'
+                    : 'default',
+                opacity:
+                  Number(wallet?.balance || 0) >
+                  0
+                    ? 1
+                    : 0.55,
+                boxShadow:
+                  '0 7px 25px rgba(0,0,0,0.07)',
+              }}
+            >
+              <Box
                 sx={{
-                  py: 1.2,
-                  borderRadius: 2,
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  backgroundColor: '#087443',
-                  '&:hover': {
-                    backgroundColor: '#066139',
-                  },
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  backgroundColor: '#B9EED0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mr: 1.5,
                 }}
               >
-                {saving ? (
-                  <CircularProgress
-                    size={22}
-                    sx={{ color: '#fff' }}
-                  />
-                ) : (
-                  'Save Money'
-                )}
-              </Button>
-            </Box>
+                <RemoveRoundedIcon
+                  sx={{
+                    color: '#FFFFFF',
+                    fontSize: 23,
+                  }}
+                />
+              </Box>
 
-            {/* WITHDRAW */}
-            <Box>
               <Typography
                 sx={{
-                  fontWeight: 600,
-                  mb: 1,
+                  color: '#9ADDB7',
+                  fontWeight: 800,
+                  fontSize: 18,
                 }}
               >
                 Withdraw
               </Typography>
+            </Paper>
+          </Box>
 
-              <TextField
-                fullWidth
-                label="Amount"
-                type="number"
-                value={withdrawAmount}
-                onChange={(e) =>
-                  setWithdrawAmount(e.target.value)
+          {/* SPEND + SAVE */}
+          <Box sx={{ px: 0.8 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 2,
+              }}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    color: '#3F2075',
+                    fontSize: 22,
+                    fontWeight: 800,
+                  }}
+                >
+                  Spend + Save
+                </Typography>
+
+                <Typography
+                  sx={{
+                    color: '#929292',
+                    fontSize: 14,
+                    mt: 0.4,
+                  }}
+                >
+                  {spendSaveEnabled
+                    ? 'Automatically saving on eligible transfers.'
+                    : 'Turn on your Spend + Save.'}
+                </Typography>
+              </Box>
+
+              <Switch
+                checked={spendSaveEnabled}
+                onChange={
+                  handleSpendSaveToggle
                 }
-                inputProps={{
-                  min: 0,
-                  step: '0.01',
-                }}
-                sx={{ mb: 1.5 }}
-              />
-
-              <TextField
-                fullWidth
-                label="Description (optional)"
-                value={withdrawDescription}
-                onChange={(e) =>
-                  setWithdrawDescription(e.target.value)
-                }
-                sx={{ mb: 1.5 }}
-              />
-
-              <Button
-                fullWidth
-                variant="outlined"
-                onClick={handleWithdraw}
-                disabled={withdrawing}
+                disabled={updatingSettings}
                 sx={{
-                  py: 1.2,
-                  borderRadius: 2,
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  color: '#087443',
-                  borderColor: '#087443',
-                  '&:hover': {
-                    borderColor: '#066139',
-                    backgroundColor: '#F2FAF6',
+                  width: 66,
+                  height: 40,
+                  p: 0,
+
+                  '& .MuiSwitch-switchBase': {
+                    p: '4px',
+                    '&.Mui-checked': {
+                      transform:
+                        'translateX(26px)',
+                      color: '#FFFFFF',
+
+                      '& + .MuiSwitch-track': {
+                        opacity: 1,
+                        backgroundColor:
+                          '#6AD392',
+                      },
+                    },
+                  },
+
+                  '& .MuiSwitch-thumb': {
+                    width: 32,
+                    height: 32,
+                    boxShadow:
+                      '0 2px 6px rgba(0,0,0,0.15)',
+                  },
+
+                  '& .MuiSwitch-track': {
+                    borderRadius: 20,
+                    backgroundColor:
+                      '#C9C9CD',
+                    opacity: 1,
                   },
                 }}
-              >
-                {withdrawing ? (
-                  <CircularProgress
-                    size={22}
-                    sx={{ color: '#087443' }}
-                  />
-                ) : (
-                  'Withdraw to Main Account'
-                )}
-              </Button>
+              />
             </Box>
-          </Box>
-        </CardContent>
-      </Card>
 
-      {/* SPEND & SAVE */}
-      <Card
-        elevation={0}
-        sx={{
-          border: '1px solid #E8E8E8',
-          borderRadius: 3,
-          mb: 3,
-        }}
-      >
-        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: {
-                xs: 'flex-start',
-                sm: 'center',
-              },
-              gap: 2,
-              flexDirection: {
-                xs: 'column',
-                sm: 'row',
-              },
-            }}
-          >
-            <Box>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                py: 3,
+                mt: 2,
+                borderBottom:
+                  '1px solid #E5E5E5',
+              }}
+            >
               <Typography
-                variant="h6"
-                sx={{ fontWeight: 700 }}
-              >
-                Spend & Save
-              </Typography>
-
-              <Typography
-                variant="body2"
                 sx={{
-                  color: '#777',
-                  mt: 0.5,
+                  color: '#999999',
+                  fontSize: 17,
                 }}
               >
-                Automatically save a fixed amount when
-                you make an eligible successful transfer.
+                Amount To Save
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: spendSaveEnabled
+                    ? '#60CA8A'
+                    : '#A8A8A8',
+                  fontSize: 17,
+                  fontWeight: 700,
+                }}
+              >
+                {spendSaveEnabled &&
+                Number(spendSaveAmount) > 0
+                  ? formatMoney(
+                      spendSaveAmount
+                    )
+                  : 'Not set'}
               </Typography>
             </Box>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={spendSaveEnabled}
-                  onChange={handleSpendSaveToggle}
-                  disabled={updatingSettings}
-                  sx={{
-                    '& .MuiSwitch-switchBase.Mui-checked': {
-                      color: '#087443',
-                    },
-                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track':
-                      {
-                        backgroundColor: '#087443',
-                      },
-                  }}
-                />
-              }
-              label={
-                spendSaveEnabled
-                  ? 'On'
-                  : 'Off'
-              }
-            />
-          </Box>
-
-          <Divider sx={{ my: 2.5 }} />
-
-          <Typography
-            sx={{
-              fontWeight: 600,
-              mb: 1,
-            }}
-          >
-            Amount to save per eligible transfer
-          </Typography>
-
-          <Box
-            sx={{
-              display: 'flex',
-              gap: 1.5,
-              flexDirection: {
-                xs: 'column',
-                sm: 'row',
-              },
-            }}
-          >
-            <TextField
-              fullWidth
-              label="Save amount"
-              type="number"
-              value={spendSaveAmount}
-              onChange={(e) =>
-                setSpendSaveAmount(e.target.value)
-              }
-              inputProps={{
-                min: 0,
-                step: '0.01',
-              }}
-              helperText="Enter any positive fixed amount."
-            />
-
             <Button
-              variant="contained"
-              onClick={handleSpendSaveAmount}
-              disabled={updatingSettings}
+              fullWidth
+              startIcon={
+                <EditRoundedIcon />
+              }
+              onClick={() =>
+                setEditDialogOpen(true)
+              }
               sx={{
-                minWidth: {
-                  xs: '100%',
-                  sm: 150,
-                },
-                borderRadius: 2,
+                mt: 2.5,
+                py: 1.5,
+                borderRadius: 2.5,
                 textTransform: 'none',
                 fontWeight: 700,
-                backgroundColor: '#087443',
+                color: '#3F2075',
+                backgroundColor: '#F8F5FC',
                 '&:hover': {
-                  backgroundColor: '#066139',
+                  backgroundColor: '#F1EBF8',
                 },
               }}
             >
-              {updatingSettings ? (
-                <CircularProgress
-                  size={22}
-                  sx={{ color: '#fff' }}
-                />
-              ) : (
-                'Set Amount'
-              )}
+              Edit Spend + Save
             </Button>
           </Box>
-
-          {spendSaveEnabled && (
-            <Alert
-              severity="success"
-              sx={{ mt: 2 }}
-            >
-              Spend & Save is active.{' '}
-              {formatMoney(
-                Number(spendSaveAmount || 0)
-              )}{' '}
-              will be saved on each eligible successful
-              transfer.
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
+        </>
+      )}
 
       {/* HISTORY */}
-      <Card
-        elevation={0}
-        sx={{
-          border: '1px solid #E8E8E8',
-          borderRadius: 3,
-        }}
-      >
-        <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+      {activeTab === 1 && (
+        <Box>
           <Typography
-            variant="h6"
             sx={{
-              fontWeight: 700,
-              mb: 0.5,
+              fontSize: 22,
+              fontWeight: 800,
+              color: '#111111',
+              mb: 2,
             }}
           >
             Savings History
           </Typography>
 
-          <Typography
-            variant="body2"
-            sx={{
-              color: '#777',
-              mb: 2,
-            }}
-          >
-            Your Save Wallet activity.
-          </Typography>
-
           {transactions.length === 0 ? (
             <Box
               sx={{
-                py: 5,
+                py: 8,
                 textAlign: 'center',
               }}
             >
               <Typography
                 sx={{
-                  fontWeight: 600,
-                  color: '#555',
+                  color: '#777777',
+                  fontSize: 16,
                 }}
               >
-                No savings yet
-              </Typography>
-
-              <Typography
-                variant="body2"
-                sx={{
-                  color: '#888',
-                  mt: 0.5,
-                }}
-              >
-                Your savings activity will appear here.
+                No savings activity yet.
               </Typography>
             </Box>
           ) : (
             <Box>
-              {transactions.map((transaction, index) => {
-                const isCredit =
-                  transaction.direction === 'credit';
+              {transactions.map(
+                (transaction, index) => {
+                  const credit =
+                    transaction.direction ===
+                    'credit';
 
-                return (
-                  <Box
-                    key={transaction.id}
-                    sx={{
-                      py: 2,
-                      borderBottom:
-                        index === transactions.length - 1
-                          ? 'none'
-                          : '1px solid #EEEEEE',
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent:
-                          'space-between',
-                        alignItems: 'flex-start',
-                        gap: 2,
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography
+                  return (
+                    <Box key={transaction.id}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent:
+                            'space-between',
+                          py: 2,
+                        }}
+                      >
+                        <Box
                           sx={{
-                            fontWeight: 600,
-                            color: '#222',
+                            display: 'flex',
+                            alignItems: 'center',
+                            minWidth: 0,
                           }}
                         >
-                          {getTransactionLabel(
-                            transaction.type
-                          )}
-                        </Typography>
+                          <Box
+                            sx={{
+                              width: 42,
+                              height: 42,
+                              borderRadius: '50%',
+                              backgroundColor:
+                                credit
+                                  ? '#E1F8EA'
+                                  : '#F4F4F4',
+                              display: 'flex',
+                              alignItems:
+                                'center',
+                              justifyContent:
+                                'center',
+                              mr: 1.5,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {credit ? (
+                              <AddRoundedIcon
+                                sx={{
+                                  color:
+                                    '#65CF8D',
+                                }}
+                              />
+                            ) : (
+                              <RemoveRoundedIcon
+                                sx={{
+                                  color:
+                                    '#999999',
+                                }}
+                              />
+                            )}
+                          </Box>
+
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography
+                              sx={{
+                                fontWeight: 700,
+                                fontSize: 15,
+                              }}
+                            >
+                              {getTransactionLabel(
+                                transaction.type
+                              )}
+                            </Typography>
+
+                            <Typography
+                              sx={{
+                                color: '#999999',
+                                fontSize: 12,
+                                mt: 0.3,
+                              }}
+                            >
+                              {formatDate(
+                                transaction.created_at
+                              )}
+                            </Typography>
+                          </Box>
+                        </Box>
 
                         <Typography
-                          variant="body2"
                           sx={{
-                            color: '#777',
-                            mt: 0.3,
-                            wordBreak: 'break-word',
+                            fontWeight: 800,
+                            color: credit
+                              ? '#58C886'
+                              : '#777777',
+                            fontSize: 15,
+                            whiteSpace:
+                              'nowrap',
+                            ml: 2,
                           }}
                         >
-                          {getTransactionDescription(
-                            transaction
-                          )}
-                        </Typography>
-
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            color: '#999',
-                            display: 'block',
-                            mt: 0.5,
-                          }}
-                        >
-                          {formatDate(
-                            transaction.created_at
+                          {credit ? '+' : '-'}
+                          {formatMoney(
+                            transaction.amount
                           )}
                         </Typography>
                       </Box>
 
-                      <Typography
-                        sx={{
-                          fontWeight: 700,
-                          whiteSpace: 'nowrap',
-                          color: isCredit
-                            ? '#087443'
-                            : '#C62828',
-                        }}
-                      >
-                        {isCredit ? '+' : '-'}
-                        {formatMoney(
-                          transaction.amount
-                        )}
-                      </Typography>
+                      {index <
+                        transactions.length -
+                          1 && (
+                        <Divider />
+                      )}
                     </Box>
-                  </Box>
-                );
-              })}
+                  );
+                }
+              )}
             </Box>
           )}
-        </CardContent>
-      </Card>
+        </Box>
+      )}
+
+      {/* SAVE DIALOG */}
+      <Dialog
+        open={saveDialogOpen}
+        onClose={() =>
+          !saving &&
+          setSaveDialogOpen(false)
+        }
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            p: 1,
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 800,
+            fontSize: 24,
+          }}
+        >
+          Save Money
+        </DialogTitle>
+
+        <DialogContent>
+          <Typography
+            sx={{
+              color: '#888888',
+              mb: 2,
+            }}
+          >
+            Move money from your Main Account
+            into your Save Wallet.
+          </Typography>
+
+          <TextField
+            fullWidth
+            autoFocus
+            label="Amount"
+            type="number"
+            value={saveAmount}
+            onChange={(e) =>
+              setSaveAmount(e.target.value)
+            }
+            inputProps={{
+              min: 0,
+              step: '0.01',
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={() =>
+              setSaveDialogOpen(false)
+            }
+            disabled={saving}
+            sx={{
+              textTransform: 'none',
+              color: '#777777',
+            }}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={handleSaveMoney}
+            disabled={saving}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              backgroundColor: '#087443',
+              '&:hover': {
+                backgroundColor: '#066139',
+              },
+            }}
+          >
+            {saving ? (
+              <CircularProgress
+                size={21}
+                sx={{ color: '#FFFFFF' }}
+              />
+            ) : (
+              'Save'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* WITHDRAW DIALOG */}
+      <Dialog
+        open={withdrawDialogOpen}
+        onClose={() =>
+          !withdrawing &&
+          setWithdrawDialogOpen(false)
+        }
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            p: 1,
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 800,
+            fontSize: 24,
+          }}
+        >
+          Withdraw
+        </DialogTitle>
+
+        <DialogContent>
+          <Typography
+            sx={{
+              color: '#888888',
+              mb: 2,
+            }}
+          >
+            Move money from your Save Wallet
+            back to your Main Account.
+          </Typography>
+
+          <Typography
+            sx={{
+              fontSize: 13,
+              color: '#777777',
+              mb: 1.5,
+            }}
+          >
+            Available:{' '}
+            <strong>
+              {formatMoney(
+                wallet?.balance || 0
+              )}
+            </strong>
+          </Typography>
+
+          <TextField
+            fullWidth
+            autoFocus
+            label="Amount"
+            type="number"
+            value={withdrawAmount}
+            onChange={(e) =>
+              setWithdrawAmount(
+                e.target.value
+              )
+            }
+            inputProps={{
+              min: 0,
+              step: '0.01',
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={() =>
+              setWithdrawDialogOpen(false)
+            }
+            disabled={withdrawing}
+            sx={{
+              textTransform: 'none',
+              color: '#777777',
+            }}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={handleWithdraw}
+            disabled={withdrawing}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              backgroundColor: '#087443',
+              '&:hover': {
+                backgroundColor: '#066139',
+              },
+            }}
+          >
+            {withdrawing ? (
+              <CircularProgress
+                size={21}
+                sx={{ color: '#FFFFFF' }}
+              />
+            ) : (
+              'Withdraw'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* EDIT SPEND + SAVE */}
+      <Dialog
+        open={editDialogOpen}
+        onClose={() =>
+          !updatingSettings &&
+          setEditDialogOpen(false)
+        }
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            p: 1,
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 800,
+            fontSize: 24,
+          }}
+        >
+          Spend + Save
+        </DialogTitle>
+
+        <DialogContent>
+          <Typography
+            sx={{
+              color: '#888888',
+              mb: 2.5,
+            }}
+          >
+            Choose the fixed amount you want
+            to automatically save whenever
+            you make an eligible successful
+            transfer.
+          </Typography>
+
+          <TextField
+            fullWidth
+            autoFocus
+            label="Amount To Save"
+            type="number"
+            value={spendSaveAmount}
+            onChange={(e) =>
+              setSpendSaveAmount(
+                e.target.value
+              )
+            }
+            inputProps={{
+              min: 0,
+              step: '0.01',
+            }}
+            sx={{ mb: 2 }}
+          />
+
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent:
+                'space-between',
+              p: 1.5,
+              borderRadius: 2,
+              backgroundColor: '#F7F7F7',
+            }}
+          >
+            <Typography
+              sx={{
+                fontWeight: 700,
+              }}
+            >
+              Spend + Save
+            </Typography>
+
+            <Switch
+              checked={spendSaveEnabled}
+              onChange={(e) =>
+                setSpendSaveEnabled(
+                  e.target.checked
+                )
+              }
+              sx={{
+                '& .MuiSwitch-switchBase.Mui-checked':
+                  {
+                    color: '#67CF8D',
+                  },
+                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track':
+                  {
+                    backgroundColor:
+                      '#67CF8D',
+                  },
+              }}
+            />
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={() =>
+              setEditDialogOpen(false)
+            }
+            disabled={updatingSettings}
+            sx={{
+              textTransform: 'none',
+              color: '#777777',
+            }}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={
+              handleUpdateSpendSave
+            }
+            disabled={updatingSettings}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              backgroundColor: '#087443',
+              '&:hover': {
+                backgroundColor: '#066139',
+              },
+            }}
+          >
+            {updatingSettings ? (
+              <CircularProgress
+                size={21}
+                sx={{ color: '#FFFFFF' }}
+              />
+            ) : (
+              'Save Changes'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* NOTIFICATIONS */}
+      <Snackbar
+        open={Boolean(error)}
+        autoHideDuration={5000}
+        onClose={() => setError('')}
+        anchorOrigin={{
+          vertical: 'top',
+          horizontal: 'center',
+        }}
+      >
+        <Alert
+          severity="error"
+          onClose={() => setError('')}
+          sx={{
+            borderRadius: 2,
+            width: '100%',
+          }}
+        >
+          {error}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={Boolean(success)}
+        autoHideDuration={3500}
+        onClose={() => setSuccess('')}
+        anchorOrigin={{
+          vertical: 'top',
+          horizontal: 'center',
+        }}
+      >
+        <Alert
+          severity="success"
+          onClose={() => setSuccess('')}
+          sx={{
+            borderRadius: 2,
+            width: '100%',
+          }}
+        >
+          {success}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
