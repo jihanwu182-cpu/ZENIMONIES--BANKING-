@@ -34,6 +34,8 @@ const passcodeRoutes = require('./routes/passcode');
 const transactionPinRoutes = require('./routes/transactionPin');
 const beneficiaryRoutes = require('./routes/beneficiaryRoutes');
 const savingsRoutes = require('./routes/savingsRoutes');
+const saveWalletRoutes =
+    require('./routes/saveWalletRoutes');
 const statementRoutes = require('./routes/statementRoutes');
 const posRoutes = require('./routes/posRoutes');
 const smsPreferencesRoutes = require('./routes/smsPreferences');
@@ -180,6 +182,10 @@ app.use('/api/pos', posRoutes);
 app.use(
   '/api/businesses',
   businessRoutes
+);
+app.use(
+    '/api/wallet',
+    saveWalletRoutes
 );
 // ============================================================
 // BILL PAYMENTS
