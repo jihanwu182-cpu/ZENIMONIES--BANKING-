@@ -1,6 +1,9 @@
-
 const crypto = require('crypto');
 const pool = require('../config/database');
+
+const {
+  applySpendSave,
+} = require('../services/saveWalletService');
 
 // ============================================================
 // ZENIMONIES BANKING
@@ -321,11 +324,12 @@ const transferToZenimoniesUser = async (req, res) => {
       });
     }
 
+    // ========================================================
+    // TRANSFER FEE
+    // ========================================================
+
     const transactionFee =
       calculateTransferFee(transferAmount);
-
-    const totalDebit =
-      transferAmount + transactionFee;
 
     // ========================================================
     // START DATABASE TRANSACTION
@@ -336,9 +340,6 @@ const transferToZenimoniesUser = async (req, res) => {
 
     // ========================================================
     // LOCK AND LOAD SENDER PROFILE
-    //
-    // Tier and profile information come from PostgreSQL.
-    // Never trust tier values from the frontend or JWT.
     // ========================================================
 
     const senderUserResult = await client.query(
@@ -492,38 +493,112 @@ const transferToZenimoniesUser = async (req, res) => {
     const senderBalance =
       Number(senderAccount.balance);
 
-    if (
-      !Number.isFinite(senderBalance) ||
-      senderBalance < totalDebit
-    ) {
+    if (!Number.isFinite(senderBalance)) {
       await client.query('ROLLBACK');
       transactionStarted = false;
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'Unable to read sender account balance.',
+      });
+    }
+
+    // ========================================================
+    // SPEND & SAVE SETTINGS
+    // ========================================================
+    //
+    // Read the sender's Save Wallet setting inside the SAME
+    // PostgreSQL transaction.
+    //
+    // If Spend & Save is disabled or not configured,
+    // save amount remains ₦0.00.
+    //
+    // ========================================================
+
+    let spendSaveAmount = 0;
+
+    const spendSaveWalletResult =
+      await client.query(
+        `
+        SELECT
+          id,
+          balance,
+          spend_save_enabled,
+          spend_save_amount
+        FROM save_wallets
+        WHERE account_id = $1
+          AND user_id = $2
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [
+          senderAccount.id,
+          senderUserId,
+        ]
+      );
+
+    if (spendSaveWalletResult.rowCount > 0) {
+      const spendSaveWallet =
+        spendSaveWalletResult.rows[0];
+
+      if (spendSaveWallet.spend_save_enabled) {
+        const configuredAmount =
+          Number(
+            spendSaveWallet.spend_save_amount
+          );
+
+        if (
+          Number.isFinite(configuredAmount) &&
+          configuredAmount > 0
+        ) {
+          spendSaveAmount =
+            Math.round(configuredAmount * 100) / 100;
+        }
+      }
+    }
+
+    // ========================================================
+    // TOTAL REQUIRED FROM SENDER
+    // ========================================================
+    //
+    // Transfer amount
+    // + transfer fee
+    // + Spend & Save amount
+    //
+    // ========================================================
+
+    const totalDebit =
+      transferAmount +
+      transactionFee +
+      spendSaveAmount;
+
+    if (senderBalance < totalDebit) {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+
+      let message =
+        `Insufficient account balance. You need ₦${formatNaira(totalDebit)}.`;
+
+      if (spendSaveAmount > 0) {
+        message +=
+          ` This includes ₦${formatNaira(spendSaveAmount)} for Spend & Save.`;
+      }
 
       return res.status(400).json({
         success: false,
         code: 'INSUFFICIENT_BALANCE',
-        message:
-          `Insufficient account balance. You need ₦${formatNaira(totalDebit)} including the transfer fee.`,
+        message,
+        transfer_amount: transferAmount,
+        transaction_fee: transactionFee,
+        spend_save_amount: spendSaveAmount,
+        total_debit: totalDebit,
+        available_balance: senderBalance,
       });
     }
 
-        // ========================================================
+    // ========================================================
     // SHARED DAILY TRANSFER LIMIT
-    //
-    // Counts outgoing internal and external transfers
-    // against one shared Nigeria calendar-day limit.
-    //
-    // Internal transfers:
-    //   completed only
-    //
-    // External transfers:
-    //   pending, processing, and completed
-    //
-    // Failed external transfers are excluded.
-    // Incoming transfers and duplicate bank_transfers
-    // records are excluded.
-    //
-    // Amount only is counted, excluding fees.
     // ========================================================
 
     const dailyTotalResult = await client.query(
@@ -566,10 +641,15 @@ const transferToZenimoniesUser = async (req, res) => {
     );
 
     const dailyTotal =
-      Number(dailyTotalResult.rows[0]?.total || 0);
+      Number(
+        dailyTotalResult.rows[0]?.total || 0
+      );
 
     const remainingDailyLimit =
-      Math.max(dailyLimit - dailyTotal, 0);
+      Math.max(
+        dailyLimit - dailyTotal,
+        0
+      );
 
     if (transferAmount > remainingDailyLimit) {
       await client.query('ROLLBACK');
@@ -582,7 +662,8 @@ const transferToZenimoniesUser = async (req, res) => {
           `This transfer exceeds your remaining daily transfer limit of ₦${formatNaira(remainingDailyLimit)}.`,
         daily_transfer_limit: dailyLimit,
         daily_transferred: dailyTotal,
-        remaining_daily_limit: remainingDailyLimit,
+        remaining_daily_limit:
+          remainingDailyLimit,
         requested_amount: transferAmount,
       });
     }
@@ -732,9 +813,12 @@ const transferToZenimoniesUser = async (req, res) => {
         code: 'RECIPIENT_ACCOUNT_LIMIT_EXCEEDED',
         message:
           'This transfer would exceed the recipient account balance limit.',
-        recipient_account_limit: recipientLimit,
-        recipient_current_balance: recipientOldBalance,
-        remaining_account_capacity: remainingCapacity,
+        recipient_account_limit:
+          recipientLimit,
+        recipient_current_balance:
+          recipientOldBalance,
+        remaining_account_capacity:
+          remainingCapacity,
       });
     }
 
@@ -937,6 +1021,40 @@ const transferToZenimoniesUser = async (req, res) => {
     );
 
     // ========================================================
+    // APPLY SPEND & SAVE
+    // ========================================================
+    //
+    // IMPORTANT:
+    // This happens BEFORE COMMIT and uses the SAME client.
+    //
+    // Therefore:
+    //
+    // Transfer succeeds + Save succeeds = COMMIT
+    //
+    // Transfer succeeds + Save fails = ROLLBACK
+    //
+    // Transfer fails = ROLLBACK
+    //
+    // ========================================================
+
+    let spendSaveResult = {
+      applied: false,
+      amount: 0,
+    };
+
+    if (spendSaveAmount > 0) {
+      spendSaveResult =
+        await applySpendSave({
+          client,
+          userId: senderUserId,
+          accountId: senderAccount.id,
+          relatedTransactionId:
+            senderTransaction.id,
+          transferReference: reference,
+        });
+    }
+
+    // ========================================================
     // RECIPIENT NOTIFICATION
     // ========================================================
 
@@ -978,29 +1096,49 @@ const transferToZenimoniesUser = async (req, res) => {
 
     return res.status(201).json({
       success: true,
+
       message:
         'Money sent successfully to the Zenimonies user.',
+
       transfer: {
         id: senderTransaction.id,
         reference,
-        recipient_name: recipientUser.full_name,
-        recipient_phone: recipientUser.phone,
-        recipient_bank: 'Zenimonies',
-        amount: transferAmount,
-        transaction_fee: transactionFee,
-        total_debit: totalDebit,
-        currency: 'NGN',
-        status: 'completed',
-        balance_after: senderNewBalance,
-        created_at: senderTransaction.created_at,
+        recipient_name:
+          recipientUser.full_name,
+        recipient_phone:
+          recipientUser.phone,
+        recipient_bank:
+          'Zenimonies',
+        amount:
+          transferAmount,
+        transaction_fee:
+          transactionFee,
+        spend_save_amount:
+          spendSaveResult.amount || 0,
+        total_debit:
+          totalDebit,
+        currency:
+          'NGN',
+        status:
+          'completed',
+        balance_after:
+          senderNewBalance,
+        created_at:
+          senderTransaction.created_at,
       },
+
       limits: {
-        daily_transfer_limit: dailyLimit,
+        daily_transfer_limit:
+          dailyLimit,
+
         daily_transferred:
           dailyTotal + transferAmount,
+
         remaining_daily_limit:
           Math.max(
-            dailyLimit - dailyTotal - transferAmount,
+            dailyLimit -
+              dailyTotal -
+              transferAmount,
             0
           ),
       },
@@ -1018,7 +1156,8 @@ const transferToZenimoniesUser = async (req, res) => {
       } catch (rollbackError) {
         console.error(
           'Internal transfer rollback error:',
-          rollbackError?.message || rollbackError
+          rollbackError?.message ||
+            rollbackError
         );
       }
     }
@@ -1034,7 +1173,7 @@ const transferToZenimoniesUser = async (req, res) => {
   }
 };
 
- // ============================================================
+// ============================================================
 // GET RECENT INTERNAL TRANSFER RECIPIENTS
 // GET /api/internal-transfers/recent
 // ============================================================
@@ -1115,7 +1254,8 @@ const getRecentRecipients = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: 'Unable to load recent recipients.',
+      message:
+        'Unable to load recent recipients.',
     });
   }
 };
@@ -1123,7 +1263,6 @@ const getRecentRecipients = async (req, res) => {
 // ============================================================
 // EXPORTS
 // ============================================================
-
 
 module.exports = {
   findUserByPhone,
