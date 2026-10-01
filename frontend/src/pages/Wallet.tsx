@@ -1234,10 +1234,11 @@ const Wallet: React.FC = () => {
                   2,
               },
 
-            '& .Mui-selected':
+            '& .MuiTab-root.Mui-selected':
               {
-                color:
-                  '#008C68',
+                 color:
+                '#008C68 !important',
+             },
               },
           }}
         >
