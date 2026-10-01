@@ -69,6 +69,7 @@ import Electricity from './pages/Electricity.tsx';
 import ElectricityVerification from './pages/ElectricityVerification.tsx';
 import ElectricityPaymentConfirmation from './pages/ElectricityPaymentConfirmation.tsx';
 import Betting from './pages/Betting.tsx';
+import Education from './pages/Education.tsx';
 
 // ==================== OTHER SERVICES ====================
 
@@ -627,6 +628,11 @@ const App: React.FC = () => {
             path="/electricity/payment-confirmation"
             element={<ElectricityPaymentConfirmation />}
           />
+
+          <Route
+            path="/education"
+            element={<Education />}
+         />
 
           {/* ================= BETTING ================= */}
 
