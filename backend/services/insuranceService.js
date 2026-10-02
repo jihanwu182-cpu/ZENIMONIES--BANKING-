@@ -329,45 +329,153 @@ const getMotorInsuranceLgas =
     }
 
     const cleanStateCode =
-      String(
-        stateCode
-      ).trim();
+      String(stateCode).trim();
+
+    const endpoint =
+      `/api/universal-insurance/options/lga/${encodeURIComponent(
+        cleanStateCode
+      )}`;
+
+    console.log(
+      '============================================================'
+    );
+
+    console.log(
+      'ZENIMONIES INSURANCE LGA REQUEST'
+    );
+
+    console.log(
+      'VTPASS BASE URL:',
+      VTPASS_BASE_URL
+    );
+
+    console.log(
+      'STATE CODE:',
+      cleanStateCode
+    );
+
+    console.log(
+      'VTPASS LGA ENDPOINT:',
+      endpoint
+    );
+
+    console.log(
+      '============================================================'
+    );
 
     const data =
       await vtpassRequest(
-        `/api/universal-insurance/options/lga/${encodeURIComponent(
-          cleanStateCode
-        )}`,
+        endpoint,
         {
           method: 'GET',
         }
       );
 
-    const lgas =
-      extractArray(
+    console.log(
+      'ZENIMONIES VTpass LGA RAW RESPONSE:',
+      JSON.stringify(
         data,
-        [
-          'lgas',
-          'LGAs',
-          'localGovernmentAreas',
-          'local_government_areas',
-        ]
-      );
+        null,
+        2
+      )
+    );
 
     // --------------------------------------------------------
-    // IMPORTANT
-    // VTpass documents LGA response as:
+    // VTpass documented response:
     //
-    // content: [
-    //   {
-    //     LGACode: "770",
-    //     LGAName: "Aba",
-    //     StateCode: "1"
-    //   }
-    // ]
-    //
-    // We return ONLY the array to the controller/frontend.
+    // {
+    //   "response_description": "000",
+    //   "content": [
+    //     {
+    //       "LGACode": "770",
+    //       "LGAName": "Aba",
+    //       "StateCode": "1"
+    //     }
+    //   ]
+    // }
     // --------------------------------------------------------
+
+    let lgas = [];
+
+    if (
+      Array.isArray(
+        data?.content
+      )
+    ) {
+      lgas =
+        data.content;
+    } else if (
+      Array.isArray(
+        data?.data
+      )
+    ) {
+      lgas =
+        data.data;
+    } else if (
+      Array.isArray(
+        data
+      )
+    ) {
+      lgas =
+        data;
+    } else if (
+      Array.isArray(
+        data?.content?.lgas
+      )
+    ) {
+      lgas =
+        data.content.lgas;
+    } else if (
+      Array.isArray(
+        data?.content?.LGAs
+      )
+    ) {
+      lgas =
+        data.content.LGAs;
+    } else if (
+      Array.isArray(
+        data?.lgas
+      )
+    ) {
+      lgas =
+        data.lgas;
+    }
+
+    console.log(
+      'ZENIMONIES LGA COUNT:',
+      lgas.length
+    );
+
+    // --------------------------------------------------------
+    // If VTpass returned an unexpected response, do NOT
+    // silently return an empty array.
+    // --------------------------------------------------------
+
+    if (
+      !Array.isArray(lgas)
+    ) {
+      throw new Error(
+        'VTpass returned an invalid LGA response.'
+      );
+    }
+
+    if (
+      lgas.length === 0
+    ) {
+      console.error(
+        'ZENIMONIES WARNING: VTpass returned ZERO LGAs for state:',
+        cleanStateCode
+      );
+
+      console.error(
+        'ZENIMONIES VTpass response:',
+        JSON.stringify(
+          data,
+          null,
+          2
+        )
+      );
+    }
 
     return lgas;
   };
