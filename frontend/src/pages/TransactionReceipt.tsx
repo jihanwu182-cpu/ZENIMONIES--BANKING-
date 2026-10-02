@@ -1,4 +1,5 @@
 import React, {
+  useEffect,
   useRef,
   useState,
 } from 'react';
@@ -14,6 +15,8 @@ import {
   ArrowBackRounded,
   DownloadRounded,
   ShareRounded,
+  RefreshRounded,
+  DescriptionRounded,
 } from '@mui/icons-material';
 
 import {
@@ -85,6 +88,10 @@ const COLORS = {
   warning: '#A76500',
 };
 
+const API_URL =
+  process.env.REACT_APP_API_URL ||
+  'https://zenimonies-banking.onrender.com/api';
+
 const TransactionReceipt: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -92,48 +99,69 @@ const TransactionReceipt: React.FC = () => {
   const receiptRef =
     useRef<HTMLDivElement>(null);
 
+  const requeryTimerRef =
+    useRef<ReturnType<typeof setInterval> | null>(
+      null
+    );
+
+  const requeryAttemptsRef =
+    useRef(0);
+
   const [pdfLoading, setPdfLoading] =
     useState(false);
+
+  const [requerying, setRequerying] =
+    useState(false);
+
+  const [liveStatus, setLiveStatus] =
+    useState<string>('');
+
+  const [certificateUrl, setCertificateUrl] =
+    useState<string>('');
+
+  const [requeryMessage, setRequeryMessage] =
+    useState<string>('');
 
   const transaction =
     location.state?.transaction as
       | Transaction
       | undefined;
-  
+
   // ============================================================
-// GET REGISTERED NAME OF LOGGED-IN USER
-// ============================================================
+  // GET REGISTERED NAME OF LOGGED-IN USER
+  // ============================================================
 
-const getLoggedInUserName = (): string => {
-  try {
-    const storedUser = localStorage.getItem(
-      'zenimonies_user'
-    );
+  const getLoggedInUserName = (): string => {
+    try {
+      const storedUser = localStorage.getItem(
+        'zenimonies_user'
+      );
 
-    if (!storedUser) {
+      if (!storedUser) {
+        return '';
+      }
+
+      const user = JSON.parse(storedUser);
+
+      return (
+        user?.full_name ||
+        user?.fullName ||
+        user?.name ||
+        user?.user?.full_name ||
+        user?.user?.fullName ||
+        user?.user?.name ||
+        ''
+      );
+    } catch (error) {
+      console.error(
+        'Unable to retrieve registered sender name:',
+        error
+      );
+
       return '';
     }
+  };
 
-    const user = JSON.parse(storedUser);
-
-    return (
-      user?.full_name ||
-      user?.fullName ||
-      user?.name ||
-      user?.user?.full_name ||
-      user?.user?.fullName ||
-      user?.user?.name ||
-      ''
-    );
-  } catch (error) {
-    console.error(
-      'Unable to retrieve registered sender name:',
-      error
-    );
-
-    return '';
-  }
-};
   /*
    * ============================================================
    * RECEIPT UNAVAILABLE
@@ -363,9 +391,391 @@ const getLoggedInUserName = (): string => {
     rawDescription.includes('transfer');
 
   /*
-   * IMPORTANT:
-   * Incoming transfers are determined from the backend
-   * transaction type/category/description.
+   * ============================================================
+   * INSURANCE DETECTION
+   * ============================================================
+   */
+
+  const isInsurance =
+    rawType.includes('insurance') ||
+    String(
+      transaction.category || ''
+    )
+      .toLowerCase()
+      .includes('insurance') ||
+    rawDescription.includes('insurance') ||
+    reference
+      .toUpperCase()
+      .startsWith('ZINS-');
+
+  /*
+   * ============================================================
+   * INITIAL STATUS
+   * ============================================================
+   */
+
+  const rawTransactionStatus =
+    String(
+      transaction.status || ''
+    )
+      .trim()
+      .toLowerCase();
+
+  /*
+   * ============================================================
+   * INSURANCE REQUERY
+   * ============================================================
+   *
+   * The backend accepts the visible ZENIMONIES reference:
+   *
+   * ZINS-XXXXXXXX
+   *
+   * We do NOT need the VTpass request ID in the frontend.
+   */
+
+  const clearRequeryTimer = () => {
+    if (requeryTimerRef.current) {
+      clearInterval(
+        requeryTimerRef.current
+      );
+
+      requeryTimerRef.current = null;
+    }
+  };
+
+  const checkInsuranceStatus =
+    async (
+      manual = false
+    ): Promise<{
+      status: string;
+      certificateUrl?: string;
+    } | null> => {
+      if (
+        !isInsurance ||
+        !reference
+      ) {
+        return null;
+      }
+
+      if (manual) {
+        setRequerying(true);
+      }
+
+      try {
+        const token =
+          localStorage.getItem(
+            'zenimonies_token'
+          );
+
+        const response =
+          await fetch(
+            `${API_URL}/insurance/requery`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                ...(token
+                  ? {
+                      Authorization:
+                        `Bearer ${token}`,
+                    }
+                  : {}),
+              },
+
+              body: JSON.stringify({
+                reference,
+              }),
+            }
+          );
+
+        let result: any = null;
+
+        try {
+          result =
+            await response.json();
+        } catch {
+          result = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            result?.message ||
+              result?.error ||
+              'Unable to check insurance status.'
+          );
+        }
+
+        const providerStatus =
+          String(
+            result?.status ||
+              result?.data?.status ||
+              ''
+          )
+            .trim()
+            .toLowerCase();
+
+        const certificate =
+          result?.certificate_url ||
+          result?.certificateUrl ||
+          result?.data?.certificate_url ||
+          result?.data?.certificateUrl ||
+          '';
+
+        if (certificate) {
+          setCertificateUrl(
+            String(certificate)
+          );
+        }
+
+        if (providerStatus) {
+          setLiveStatus(
+            providerStatus
+          );
+        }
+
+        if (
+          providerStatus ===
+            'completed' ||
+          providerStatus ===
+            'successful' ||
+          providerStatus ===
+            'success'
+        ) {
+          setLiveStatus(
+            'completed'
+          );
+
+          setRequeryMessage(
+            'Insurance payment confirmed successfully.'
+          );
+
+          clearRequeryTimer();
+
+          return {
+            status: 'completed',
+            certificateUrl:
+              certificate
+                ? String(certificate)
+                : undefined,
+          };
+        }
+
+        if (
+          providerStatus ===
+            'failed' ||
+          providerStatus ===
+            'failure' ||
+          providerStatus ===
+            'reversed' ||
+          providerStatus ===
+            'cancelled' ||
+          providerStatus ===
+            'canceled'
+        ) {
+          setLiveStatus(
+            'failed'
+          );
+
+          setRequeryMessage(
+            'The insurance payment was not completed. Your account will be handled according to the transaction reversal process.'
+          );
+
+          clearRequeryTimer();
+
+          return {
+            status: 'failed',
+          };
+        }
+
+        if (
+          providerStatus ===
+            'pending' ||
+          providerStatus ===
+            'processing' ||
+          !providerStatus
+        ) {
+          setLiveStatus(
+            'pending'
+          );
+
+          if (manual) {
+            setRequeryMessage(
+              'The insurance provider has not confirmed the transaction yet. Please check again shortly.'
+            );
+          }
+
+          return {
+            status: 'pending',
+          };
+        }
+
+        return {
+          status:
+            providerStatus,
+        };
+      } catch (error) {
+        console.error(
+          'ZENIMONIES insurance requery error:',
+          error
+        );
+
+        if (manual) {
+          setRequeryMessage(
+            error instanceof Error
+              ? error.message
+              : 'Unable to check the insurance status right now.'
+          );
+        }
+
+        return null;
+      } finally {
+        if (manual) {
+          setRequerying(false);
+        }
+      }
+    };
+
+  /*
+   * ============================================================
+   * AUTOMATIC INSURANCE STATUS CHECK
+   * ============================================================
+   *
+   * Only pending insurance transactions are checked.
+   *
+   * Maximum:
+   * 6 automatic checks
+   *
+   * Interval:
+   * 5 seconds
+   *
+   * This prevents endless requests.
+   */
+
+  useEffect(() => {
+    if (!isInsurance) {
+      return;
+    }
+
+    const status =
+      liveStatus ||
+      rawTransactionStatus;
+
+    const pending =
+      status === '' ||
+      status === 'pending' ||
+      status === 'processing' ||
+      status === 'initiated';
+
+    if (
+      !pending ||
+      !reference
+    ) {
+      return;
+    }
+
+    requeryAttemptsRef.current = 0;
+
+    /*
+     * First check immediately.
+     */
+    checkInsuranceStatus(false);
+
+    /*
+     * Then check every 5 seconds.
+     */
+    requeryTimerRef.current =
+      setInterval(async () => {
+        requeryAttemptsRef.current += 1;
+
+        if (
+          requeryAttemptsRef.current >
+          6
+        ) {
+          clearRequeryTimer();
+          return;
+        }
+
+        const result =
+          await checkInsuranceStatus(
+            false
+          );
+
+        if (
+          result?.status ===
+            'completed' ||
+          result?.status ===
+            'failed'
+        ) {
+          clearRequeryTimer();
+        }
+      }, 5000);
+
+    return () => {
+      clearRequeryTimer();
+    };
+
+    // We intentionally only initialise
+    // this watcher once for the receipt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /*
+   * ============================================================
+   * LIVE STATUS
+   * ============================================================
+   */
+
+  const effectiveStatus =
+    (
+      isInsurance &&
+      liveStatus
+    )
+      ? liveStatus
+      : rawTransactionStatus;
+
+  const isSuccessful = [
+    'successful',
+    'completed',
+    'success',
+    'delivered',
+  ].includes(
+    effectiveStatus
+  );
+
+  const isFailed = [
+    'failed',
+    'failure',
+    'reversed',
+    'cancelled',
+    'canceled',
+  ].includes(
+    effectiveStatus
+  );
+
+  const isPending =
+    !isSuccessful &&
+    !isFailed;
+
+  const shortStatus =
+    isSuccessful
+      ? 'Successful'
+      : isFailed
+        ? 'Failed'
+        : 'Pending';
+
+  const statusColor =
+    isSuccessful
+      ? COLORS.success
+      : isFailed
+        ? COLORS.danger
+        : COLORS.warning;
+
+  /*
+   * ============================================================
+   * INCOMING TRANSFER
+   * ============================================================
    */
 
   const isIncoming =
@@ -395,79 +805,27 @@ const getLoggedInUserName = (): string => {
 
   /*
    * ============================================================
-   * STATUS
+   * SENDER NAME
    * ============================================================
    */
 
-  const rawStatus =
-    String(
-      transaction.status || ''
-    )
-      .trim()
-      .toLowerCase();
+  const transactionSenderName =
+    transaction.sender_name ||
+    transaction.transfer_sender_name ||
+    transaction.sender_full_name ||
+    transaction.sender ||
+    '';
 
-  const isSuccessful = [
-    'successful',
-    'completed',
-    'success',
-    'delivered',
-  ].includes(rawStatus);
+  const loggedInUserName =
+    getLoggedInUserName();
 
-  const isFailed = [
-    'failed',
-    'failure',
-    'reversed',
-    'cancelled',
-    'canceled',
-  ].includes(rawStatus);
-
-  const shortStatus =
-    isSuccessful
-      ? 'Successful'
-      : isFailed
-        ? 'Failed'
-        : 'Pending';
-
-  const statusColor =
-    isSuccessful
-      ? COLORS.success
-      : isFailed
-        ? COLORS.danger
-        : COLORS.warning;
-
-  /*
- * ============================================================
- * SENDER NAME
- * ============================================================
- *
- * Outgoing transfer:
- * Use the sender name from the transaction record.
- * If unavailable, use the authenticated user's registered name.
- *
- * Incoming transfer:
- * Use the actual sender's name from the transaction record.
- * Never substitute the logged-in receiver's name.
- *
- * Sender account number is not displayed.
- */
-
-const transactionSenderName =
-  transaction.sender_name ||
-  transaction.transfer_sender_name ||
-  transaction.sender_full_name ||
-  transaction.sender ||
-  '';
-
-const loggedInUserName =
-  getLoggedInUserName();
-
-const senderName =
-  transactionSenderName ||
-  (
-    isIncoming
-      ? ''
-      : loggedInUserName
-  );
+  const senderName =
+    transactionSenderName ||
+    (
+      isIncoming
+        ? ''
+        : loggedInUserName
+    );
 
   /*
    * ============================================================
@@ -481,46 +839,24 @@ const senderName =
     '';
 
   /*
- * ============================================================
- * TOTAL DEBIT SHOWN ON TRANSFER RECEIPT
- * ============================================================
- *
- * IMPORTANT:
- *
- * Spend + Save is NOT part of the transfer receipt.
- *
- * The receipt represents only:
- *
- * Transfer Amount + Transfer Fee
- *
- * Example:
- *
- * Transfer Amount = ₦1,000
- * Transfer Fee    = ₦20
- *
- * Receipt Total   = ₦1,020
- *
- * If Spend + Save = ₦200, that money is moved separately
- * into the sender's Save Wallet and must NOT appear in
- * the transfer receipt.
- *
- * The actual Main Account balance may decrease by ₦1,220,
- * but this receipt only represents the ₦1,020 transfer debit.
- */
+   * ============================================================
+   * TOTAL DEBIT SHOWN ON TRANSFER RECEIPT
+   * ============================================================
+   */
 
-let totalDebited =
-  Math.abs(numericAmount);
+  let totalDebited =
+    Math.abs(numericAmount);
 
-if (
-  isTransfer &&
-  !isIncoming
-) {
-  totalDebited =
-    Math.abs(
-      numericAmount +
-        numericFee
-    );
-}
+  if (
+    isTransfer &&
+    !isIncoming
+  ) {
+    totalDebited =
+      Math.abs(
+        numericAmount +
+          numericFee
+      );
+  }
 
   /*
    * ============================================================
@@ -705,13 +1041,6 @@ if (
             files: [file],
           });
         } else {
-          /*
-           * Receiver should not receive a
-           * download option in the UI.
-           *
-           * If native sharing is unavailable,
-           * use the browser share API if available.
-           */
           if (
             navigator.share
           ) {
@@ -791,13 +1120,6 @@ if (
               pb: 1.8,
             }}
           >
-            {/*
-             * Logo image can be inserted here once the
-             * official ZENIMONIES logo asset is available.
-             *
-             * For now the official brand wordmark is used.
-             */}
-
             <Typography
               sx={{
                 color: COLORS.primary,
@@ -821,6 +1143,163 @@ if (
               Transaction Receipt
             </Typography>
           </Box>
+
+          {/* ====================================================
+              INSURANCE STATUS PANEL
+          ==================================================== */}
+
+          {isInsurance && (
+            <Box
+              className="no-print"
+              sx={{
+                mx: 2,
+                mb: 1.5,
+                p: 1.5,
+                borderRadius: 2,
+                bgcolor:
+                  isSuccessful
+                    ? 'rgba(8,127,91,0.08)'
+                    : isFailed
+                      ? 'rgba(198,40,40,0.07)'
+                      : 'rgba(167,101,0,0.08)',
+                border:
+                  `1px solid ${
+                    isSuccessful
+                      ? 'rgba(8,127,91,0.18)'
+                      : isFailed
+                        ? 'rgba(198,40,40,0.18)'
+                        : 'rgba(167,101,0,0.18)'
+                  }`,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: statusColor,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  mb: 0.5,
+                }}
+              >
+                Insurance Status
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: COLORS.text,
+                  fontSize: 11.5,
+                  lineHeight: 1.5,
+                }}
+              >
+                {isSuccessful
+                  ? 'Your insurance payment has been confirmed.'
+                  : isFailed
+                    ? 'The insurance transaction was not completed.'
+                    : 'Your insurance payment is waiting for provider confirmation.'}
+              </Typography>
+
+              {requeryMessage && (
+                <Typography
+                  sx={{
+                    mt: 0.8,
+                    color: COLORS.muted,
+                    fontSize: 10.5,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {requeryMessage}
+                </Typography>
+              )}
+
+              {isPending && (
+                <Button
+                  fullWidth
+                  variant="contained"
+                  startIcon={
+                    <RefreshRounded
+                      sx={{
+                        animation:
+                          requerying
+                            ? 'spin 1s linear infinite'
+                            : 'none',
+                        '@keyframes spin': {
+                          from: {
+                            transform:
+                              'rotate(0deg)',
+                          },
+                          to: {
+                            transform:
+                              'rotate(360deg)',
+                          },
+                        },
+                      }}
+                    />
+                  }
+                  onClick={() =>
+                    checkInsuranceStatus(
+                      true
+                    )
+                  }
+                  disabled={
+                    requerying
+                  }
+                  sx={{
+                    mt: 1.2,
+                    minHeight: 42,
+                    bgcolor:
+                      COLORS.primary,
+                    borderRadius: 1.8,
+                    fontWeight: 800,
+                    textTransform:
+                      'none',
+                    fontSize: 12,
+                    '&:hover': {
+                      bgcolor:
+                        COLORS.dark,
+                    },
+                  }}
+                >
+                  {requerying
+                    ? 'Checking Status...'
+                    : 'Check Status Now'}
+                </Button>
+              )}
+
+              {isSuccessful &&
+                certificateUrl && (
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    startIcon={
+                      <DescriptionRounded />
+                    }
+                    onClick={() =>
+                      window.open(
+                        certificateUrl,
+                        '_blank',
+                        'noopener,noreferrer'
+                      )
+                    }
+                    sx={{
+                      mt: 1.2,
+                      minHeight: 42,
+                      bgcolor:
+                        COLORS.primary,
+                      borderRadius: 1.8,
+                      fontWeight: 800,
+                      textTransform:
+                        'none',
+                      fontSize: 12,
+                      '&:hover': {
+                        bgcolor:
+                          COLORS.dark,
+                      },
+                    }}
+                  >
+                    View Insurance Certificate
+                  </Button>
+                )}
+            </Box>
+          )}
 
           {/* ====================================================
               RECEIVER RECEIPT
@@ -887,22 +1366,22 @@ if (
                 />
 
                 {transaction.description &&
-               transaction.description.trim() &&
-              transaction.description.trim() !==
-             'Money received from Zenimonies user' &&
-               !transaction.description
-                 .trim()
-               .startsWith(
-               'You received ₦'
-                 ) && (
-               <ReceiptRow
-                label="Narration"
-                  value={
-                 transaction.description.trim()
-              }
-              last
-            />
-            )}
+                  transaction.description.trim() &&
+                  transaction.description.trim() !==
+                    'Money received from Zenimonies user' &&
+                  !transaction.description
+                    .trim()
+                    .startsWith(
+                      'You received ₦'
+                    ) && (
+                    <ReceiptRow
+                      label="Narration"
+                      value={
+                        transaction.description.trim()
+                      }
+                      last
+                    />
+                  )}
               </>
             )}
 
