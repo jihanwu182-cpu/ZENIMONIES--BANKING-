@@ -127,21 +127,25 @@ const TransactionReceipt: React.FC = () => {
       | Transaction
       | undefined;
 
-  // ============================================================
-  // GET REGISTERED NAME OF LOGGED-IN USER
-  // ============================================================
+  /*
+   * ============================================================
+   * GET REGISTERED NAME
+   * ============================================================
+   */
 
   const getLoggedInUserName = (): string => {
     try {
-      const storedUser = localStorage.getItem(
-        'zenimonies_user'
-      );
+      const storedUser =
+        localStorage.getItem(
+          'zenimonies_user'
+        );
 
       if (!storedUser) {
         return '';
       }
 
-      const user = JSON.parse(storedUser);
+      const user =
+        JSON.parse(storedUser);
 
       return (
         user?.full_name ||
@@ -161,6 +165,317 @@ const TransactionReceipt: React.FC = () => {
       return '';
     }
   };
+
+  /*
+   * ============================================================
+   * AUTOMATIC INSURANCE STATUS CHECK
+   *
+   * IMPORTANT:
+   * This Hook is BEFORE the conditional receipt return.
+   * Therefore React always calls Hooks in the same order.
+   * ============================================================
+   */
+
+  useEffect(() => {
+    const currentTransaction =
+      location.state?.transaction as
+        | Transaction
+        | undefined;
+
+    if (!currentTransaction) {
+      return;
+    }
+
+    const currentReference =
+      currentTransaction.reference ||
+      currentTransaction.transaction_reference ||
+      '';
+
+    const currentType =
+      String(
+        currentTransaction.transaction_type ||
+          currentTransaction.type ||
+          currentTransaction.category ||
+          ''
+      ).toLowerCase();
+
+    const currentDescription =
+      String(
+        currentTransaction.description ||
+          ''
+      ).toLowerCase();
+
+    const currentCategory =
+      String(
+        currentTransaction.category ||
+          ''
+      ).toLowerCase();
+
+    const currentIsInsurance =
+      currentType.includes('insurance') ||
+      currentCategory.includes('insurance') ||
+      currentDescription.includes('insurance') ||
+      String(currentReference)
+        .toUpperCase()
+        .startsWith('ZINS-');
+
+    const currentStatus =
+      String(
+        currentTransaction.status ||
+          ''
+      )
+        .trim()
+        .toLowerCase();
+
+    const pendingInsurance =
+      currentIsInsurance &&
+      Boolean(currentReference) &&
+      (
+        currentStatus === '' ||
+        currentStatus === 'pending' ||
+        currentStatus === 'processing' ||
+        currentStatus === 'initiated'
+      );
+
+    if (!pendingInsurance) {
+      return;
+    }
+
+    let attempts = 0;
+    let cancelled = false;
+
+    const checkStatus =
+      async () => {
+        if (cancelled) {
+          return;
+        }
+
+        try {
+          const token =
+            localStorage.getItem(
+              'zenimonies_token'
+            );
+
+          const response =
+            await fetch(
+              `${API_URL}/insurance/requery`,
+              {
+                method: 'POST',
+
+                headers: {
+                  'Content-Type':
+                    'application/json',
+
+                  ...(token
+                    ? {
+                        Authorization:
+                          `Bearer ${token}`,
+                      }
+                    : {}),
+                },
+
+                body: JSON.stringify({
+                  reference:
+                    currentReference,
+                }),
+              }
+            );
+
+          let result: any = null;
+
+          try {
+            result =
+              await response.json();
+          } catch {
+            result = null;
+          }
+
+          if (!response.ok) {
+            console.error(
+              'Insurance requery failed:',
+              result
+            );
+
+            return;
+          }
+
+          const providerStatus =
+            String(
+              result?.status ||
+                result?.data?.status ||
+                ''
+            )
+              .trim()
+              .toLowerCase();
+
+          const certificate =
+            result?.certificate_url ||
+            result?.certificateUrl ||
+            result?.data?.certificate_url ||
+            result?.data?.certificateUrl ||
+            '';
+
+          if (cancelled) {
+            return;
+          }
+
+          if (certificate) {
+            setCertificateUrl(
+              String(certificate)
+            );
+          }
+
+          if (providerStatus) {
+            setLiveStatus(
+              providerStatus
+            );
+          }
+
+          /*
+           * SUCCESS
+           */
+
+          if (
+            providerStatus ===
+              'completed' ||
+            providerStatus ===
+              'successful' ||
+            providerStatus ===
+              'success'
+          ) {
+            setLiveStatus(
+              'completed'
+            );
+
+            setRequeryMessage(
+              'Insurance payment confirmed successfully.'
+            );
+
+            if (
+              requeryTimerRef.current
+            ) {
+              clearInterval(
+                requeryTimerRef.current
+              );
+
+              requeryTimerRef.current =
+                null;
+            }
+
+            return;
+          }
+
+          /*
+           * FAILED
+           */
+
+          if (
+            providerStatus ===
+              'failed' ||
+            providerStatus ===
+              'failure' ||
+            providerStatus ===
+              'reversed' ||
+            providerStatus ===
+              'cancelled' ||
+            providerStatus ===
+              'canceled'
+          ) {
+            setLiveStatus(
+              'failed'
+            );
+
+            setRequeryMessage(
+              'The insurance transaction was not completed.'
+            );
+
+            if (
+              requeryTimerRef.current
+            ) {
+              clearInterval(
+                requeryTimerRef.current
+              );
+
+              requeryTimerRef.current =
+                null;
+            }
+
+            return;
+          }
+
+          /*
+           * STILL PENDING
+           */
+
+          if (
+            providerStatus ===
+              'pending' ||
+            providerStatus ===
+              'processing' ||
+            !providerStatus
+          ) {
+            setLiveStatus(
+              'pending'
+            );
+          }
+        } catch (error) {
+          console.error(
+            'ZENIMONIES insurance automatic requery error:',
+            error
+          );
+        }
+      };
+
+    /*
+     * First check immediately.
+     */
+
+    checkStatus();
+
+    /*
+     * Then check every 5 seconds.
+     */
+
+    requeryTimerRef.current =
+      setInterval(
+        async () => {
+          attempts += 1;
+
+          if (attempts > 6) {
+            if (
+              requeryTimerRef.current
+            ) {
+              clearInterval(
+                requeryTimerRef.current
+              );
+
+              requeryTimerRef.current =
+                null;
+            }
+
+            return;
+          }
+
+          await checkStatus();
+        },
+        5000
+      );
+
+    return () => {
+      cancelled = true;
+
+      if (
+        requeryTimerRef.current
+      ) {
+        clearInterval(
+          requeryTimerRef.current
+        );
+
+        requeryTimerRef.current =
+          null;
+      }
+    };
+  }, [location.state]);
 
   /*
    * ============================================================
@@ -218,7 +533,9 @@ const TransactionReceipt: React.FC = () => {
               <ArrowBackRounded />
             }
             onClick={() =>
-              navigate('/transactions')
+              navigate(
+                '/transactions'
+              )
             }
             sx={{
               bgcolor: COLORS.primary,
@@ -244,7 +561,9 @@ const TransactionReceipt: React.FC = () => {
    */
 
   const numericAmount =
-    Number(transaction.amount ?? 0);
+    Number(
+      transaction.amount ?? 0
+    );
 
   const numericFee =
     Number(
@@ -254,11 +573,14 @@ const TransactionReceipt: React.FC = () => {
     );
 
   const numericTotalDebit =
-    Number(transaction.total_debit ?? 0);
+    Number(
+      transaction.total_debit ?? 0
+    );
 
   const currency =
     String(
-      transaction.currency || 'NGN'
+      transaction.currency ||
+        'NGN'
     ).toUpperCase();
 
   /*
@@ -321,7 +643,8 @@ const TransactionReceipt: React.FC = () => {
       return null;
     }
 
-    const parsed = new Date(value);
+    const parsed =
+      new Date(value);
 
     if (
       Number.isNaN(
@@ -335,11 +658,15 @@ const TransactionReceipt: React.FC = () => {
   };
 
   const parsedDate =
-    getDateObject(transactionDate);
+    getDateObject(
+      transactionDate
+    );
 
   const formatDate = () => {
     if (!parsedDate) {
-      return transactionDate || '';
+      return (
+        transactionDate || ''
+      );
     }
 
     return parsedDate.toLocaleDateString(
@@ -383,12 +710,17 @@ const TransactionReceipt: React.FC = () => {
 
   const rawDescription =
     String(
-      transaction.description || ''
+      transaction.description ||
+        ''
     ).toLowerCase();
 
   const isTransfer =
-    rawType.includes('transfer') ||
-    rawDescription.includes('transfer');
+    rawType.includes(
+      'transfer'
+    ) ||
+    rawDescription.includes(
+      'transfer'
+    );
 
   /*
    * ============================================================
@@ -397,335 +729,35 @@ const TransactionReceipt: React.FC = () => {
    */
 
   const isInsurance =
-    rawType.includes('insurance') ||
+    rawType.includes(
+      'insurance'
+    ) ||
     String(
-      transaction.category || ''
+      transaction.category ||
+        ''
     )
       .toLowerCase()
       .includes('insurance') ||
-    rawDescription.includes('insurance') ||
+    rawDescription.includes(
+      'insurance'
+    ) ||
     reference
       .toUpperCase()
       .startsWith('ZINS-');
 
   /*
    * ============================================================
-   * INITIAL STATUS
+   * STATUS
    * ============================================================
    */
 
   const rawTransactionStatus =
     String(
-      transaction.status || ''
+      transaction.status ||
+        ''
     )
       .trim()
       .toLowerCase();
-
-  /*
-   * ============================================================
-   * INSURANCE REQUERY
-   * ============================================================
-   *
-   * The backend accepts the visible ZENIMONIES reference:
-   *
-   * ZINS-XXXXXXXX
-   *
-   * We do NOT need the VTpass request ID in the frontend.
-   */
-
-  const clearRequeryTimer = () => {
-    if (requeryTimerRef.current) {
-      clearInterval(
-        requeryTimerRef.current
-      );
-
-      requeryTimerRef.current = null;
-    }
-  };
-
-  const checkInsuranceStatus =
-    async (
-      manual = false
-    ): Promise<{
-      status: string;
-      certificateUrl?: string;
-    } | null> => {
-      if (
-        !isInsurance ||
-        !reference
-      ) {
-        return null;
-      }
-
-      if (manual) {
-        setRequerying(true);
-      }
-
-      try {
-        const token =
-          localStorage.getItem(
-            'zenimonies_token'
-          );
-
-        const response =
-          await fetch(
-            `${API_URL}/insurance/requery`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type':
-                  'application/json',
-
-                ...(token
-                  ? {
-                      Authorization:
-                        `Bearer ${token}`,
-                    }
-                  : {}),
-              },
-
-              body: JSON.stringify({
-                reference,
-              }),
-            }
-          );
-
-        let result: any = null;
-
-        try {
-          result =
-            await response.json();
-        } catch {
-          result = null;
-        }
-
-        if (!response.ok) {
-          throw new Error(
-            result?.message ||
-              result?.error ||
-              'Unable to check insurance status.'
-          );
-        }
-
-        const providerStatus =
-          String(
-            result?.status ||
-              result?.data?.status ||
-              ''
-          )
-            .trim()
-            .toLowerCase();
-
-        const certificate =
-          result?.certificate_url ||
-          result?.certificateUrl ||
-          result?.data?.certificate_url ||
-          result?.data?.certificateUrl ||
-          '';
-
-        if (certificate) {
-          setCertificateUrl(
-            String(certificate)
-          );
-        }
-
-        if (providerStatus) {
-          setLiveStatus(
-            providerStatus
-          );
-        }
-
-        if (
-          providerStatus ===
-            'completed' ||
-          providerStatus ===
-            'successful' ||
-          providerStatus ===
-            'success'
-        ) {
-          setLiveStatus(
-            'completed'
-          );
-
-          setRequeryMessage(
-            'Insurance payment confirmed successfully.'
-          );
-
-          clearRequeryTimer();
-
-          return {
-            status: 'completed',
-            certificateUrl:
-              certificate
-                ? String(certificate)
-                : undefined,
-          };
-        }
-
-        if (
-          providerStatus ===
-            'failed' ||
-          providerStatus ===
-            'failure' ||
-          providerStatus ===
-            'reversed' ||
-          providerStatus ===
-            'cancelled' ||
-          providerStatus ===
-            'canceled'
-        ) {
-          setLiveStatus(
-            'failed'
-          );
-
-          setRequeryMessage(
-            'The insurance payment was not completed. Your account will be handled according to the transaction reversal process.'
-          );
-
-          clearRequeryTimer();
-
-          return {
-            status: 'failed',
-          };
-        }
-
-        if (
-          providerStatus ===
-            'pending' ||
-          providerStatus ===
-            'processing' ||
-          !providerStatus
-        ) {
-          setLiveStatus(
-            'pending'
-          );
-
-          if (manual) {
-            setRequeryMessage(
-              'The insurance provider has not confirmed the transaction yet. Please check again shortly.'
-            );
-          }
-
-          return {
-            status: 'pending',
-          };
-        }
-
-        return {
-          status:
-            providerStatus,
-        };
-      } catch (error) {
-        console.error(
-          'ZENIMONIES insurance requery error:',
-          error
-        );
-
-        if (manual) {
-          setRequeryMessage(
-            error instanceof Error
-              ? error.message
-              : 'Unable to check the insurance status right now.'
-          );
-        }
-
-        return null;
-      } finally {
-        if (manual) {
-          setRequerying(false);
-        }
-      }
-    };
-
-  /*
-   * ============================================================
-   * AUTOMATIC INSURANCE STATUS CHECK
-   * ============================================================
-   *
-   * Only pending insurance transactions are checked.
-   *
-   * Maximum:
-   * 6 automatic checks
-   *
-   * Interval:
-   * 5 seconds
-   *
-   * This prevents endless requests.
-   */
-
-  useEffect(() => {
-    if (!isInsurance) {
-      return;
-    }
-
-    const status =
-      liveStatus ||
-      rawTransactionStatus;
-
-    const pending =
-      status === '' ||
-      status === 'pending' ||
-      status === 'processing' ||
-      status === 'initiated';
-
-    if (
-      !pending ||
-      !reference
-    ) {
-      return;
-    }
-
-    requeryAttemptsRef.current = 0;
-
-    /*
-     * First check immediately.
-     */
-    checkInsuranceStatus(false);
-
-    /*
-     * Then check every 5 seconds.
-     */
-    requeryTimerRef.current =
-      setInterval(async () => {
-        requeryAttemptsRef.current += 1;
-
-        if (
-          requeryAttemptsRef.current >
-          6
-        ) {
-          clearRequeryTimer();
-          return;
-        }
-
-        const result =
-          await checkInsuranceStatus(
-            false
-          );
-
-        if (
-          result?.status ===
-            'completed' ||
-          result?.status ===
-            'failed'
-        ) {
-          clearRequeryTimer();
-        }
-      }, 5000);
-
-    return () => {
-      clearRequeryTimer();
-    };
-
-    // We intentionally only initialise
-    // this watcher once for the receipt.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /*
-   * ============================================================
-   * LIVE STATUS
-   * ============================================================
-   */
 
   const effectiveStatus =
     (
@@ -774,6 +806,245 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
+   * CLEAR REQUERY TIMER
+   * ============================================================
+   */
+
+  const clearRequeryTimer = () => {
+    if (
+      requeryTimerRef.current
+    ) {
+      clearInterval(
+        requeryTimerRef.current
+      );
+
+      requeryTimerRef.current =
+        null;
+    }
+  };
+
+  /*
+   * ============================================================
+   * MANUAL INSURANCE REQUERY
+   * ============================================================
+   */
+
+  const checkInsuranceStatus =
+    async (
+      manual = false
+    ): Promise<{
+      status: string;
+      certificateUrl?: string;
+    } | null> => {
+      if (
+        !isInsurance ||
+        !reference
+      ) {
+        return null;
+      }
+
+      if (manual) {
+        setRequerying(true);
+        setRequeryMessage('');
+      }
+
+      try {
+        const token =
+          localStorage.getItem(
+            'zenimonies_token'
+          );
+
+        const response =
+          await fetch(
+            `${API_URL}/insurance/requery`,
+            {
+              method: 'POST',
+
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                ...(token
+                  ? {
+                      Authorization:
+                        `Bearer ${token}`,
+                    }
+                  : {}),
+              },
+
+              body: JSON.stringify({
+                reference,
+              }),
+            }
+          );
+
+        let result: any =
+          null;
+
+        try {
+          result =
+            await response.json();
+        } catch {
+          result = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            result?.message ||
+              result?.error ||
+              'Unable to check insurance status.'
+          );
+        }
+
+        const providerStatus =
+          String(
+            result?.status ||
+              result?.data?.status ||
+              ''
+          )
+            .trim()
+            .toLowerCase();
+
+        const certificate =
+          result?.certificate_url ||
+          result?.certificateUrl ||
+          result?.data?.certificate_url ||
+          result?.data?.certificateUrl ||
+          '';
+
+        if (certificate) {
+          setCertificateUrl(
+            String(certificate)
+          );
+        }
+
+        if (providerStatus) {
+          setLiveStatus(
+            providerStatus
+          );
+        }
+
+        /*
+         * SUCCESS
+         */
+
+        if (
+          providerStatus ===
+            'completed' ||
+          providerStatus ===
+            'successful' ||
+          providerStatus ===
+            'success'
+        ) {
+          setLiveStatus(
+            'completed'
+          );
+
+          setRequeryMessage(
+            'Insurance payment confirmed successfully.'
+          );
+
+          clearRequeryTimer();
+
+          return {
+            status:
+              'completed',
+            certificateUrl:
+              certificate
+                ? String(
+                    certificate
+                  )
+                : undefined,
+          };
+        }
+
+        /*
+         * FAILED
+         */
+
+        if (
+          providerStatus ===
+            'failed' ||
+          providerStatus ===
+            'failure' ||
+          providerStatus ===
+            'reversed' ||
+          providerStatus ===
+            'cancelled' ||
+          providerStatus ===
+            'canceled'
+        ) {
+          setLiveStatus(
+            'failed'
+          );
+
+          setRequeryMessage(
+            'The insurance transaction was not completed.'
+          );
+
+          clearRequeryTimer();
+
+          return {
+            status:
+              'failed',
+          };
+        }
+
+        /*
+         * STILL PENDING
+         */
+
+        if (
+          providerStatus ===
+            'pending' ||
+          providerStatus ===
+            'processing' ||
+          !providerStatus
+        ) {
+          setLiveStatus(
+            'pending'
+          );
+
+          if (manual) {
+            setRequeryMessage(
+              'The insurance provider has not confirmed the transaction yet. Please check again shortly.'
+            );
+          }
+
+          return {
+            status:
+              'pending',
+          };
+        }
+
+        return {
+          status:
+            providerStatus,
+        };
+      } catch (error) {
+        console.error(
+          'ZENIMONIES insurance requery error:',
+          error
+        );
+
+        if (manual) {
+          setRequeryMessage(
+            error instanceof Error
+              ? error.message
+              : 'Unable to check the insurance status right now.'
+          );
+        }
+
+        return null;
+      } finally {
+        if (manual) {
+          setRequerying(false);
+        }
+      }
+    };
+
+  /*
+   * ============================================================
    * INCOMING TRANSFER
    * ============================================================
    */
@@ -791,8 +1062,10 @@ const TransactionReceipt: React.FC = () => {
     rawType.includes(
       'received'
     ) ||
-    transaction.category === 'credit' ||
-    transaction.category === 'incoming' ||
+    transaction.category ===
+      'credit' ||
+    transaction.category ===
+      'incoming' ||
     rawDescription.includes(
       'money received'
     ) ||
@@ -840,12 +1113,16 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * TOTAL DEBIT SHOWN ON TRANSFER RECEIPT
+   * TOTAL DEBIT
    * ============================================================
+   *
+   * Spend + Save is NOT included.
    */
 
   let totalDebited =
-    Math.abs(numericAmount);
+    Math.abs(
+      numericAmount
+    );
 
   if (
     isTransfer &&
@@ -905,7 +1182,9 @@ const TransactionReceipt: React.FC = () => {
 
   const createReceiptPDF =
     async () => {
-      if (!receiptRef.current) {
+      if (
+        !receiptRef.current
+      ) {
         throw new Error(
           'Receipt unavailable.'
         );
@@ -966,8 +1245,6 @@ const TransactionReceipt: React.FC = () => {
   /*
    * ============================================================
    * DOWNLOAD
-   *
-   * ONLY THE SENDER CAN DOWNLOAD.
    * ============================================================
    */
 
@@ -1003,8 +1280,6 @@ const TransactionReceipt: React.FC = () => {
   /*
    * ============================================================
    * SHARE
-   *
-   * BOTH SENDER AND RECEIVER CAN SHARE.
    * ============================================================
    */
 
@@ -1024,7 +1299,8 @@ const TransactionReceipt: React.FC = () => {
             [blob],
             getFileName(),
             {
-              type: 'application/pdf',
+              type:
+                'application/pdf',
             }
           );
 
@@ -1040,23 +1316,21 @@ const TransactionReceipt: React.FC = () => {
               'ZENIMONIES Transaction Receipt',
             files: [file],
           });
+        } else if (
+          navigator.share
+        ) {
+          await navigator.share({
+            title:
+              'ZENIMONIES Transaction Receipt',
+            text:
+              reference
+                ? `ZENIMONIES transaction receipt: ${reference}`
+                : 'ZENIMONIES transaction receipt',
+          });
         } else {
-          if (
-            navigator.share
-          ) {
-            await navigator.share({
-              title:
-                'ZENIMONIES Transaction Receipt',
-              text:
-                reference
-                  ? `ZENIMONIES transaction receipt: ${reference}`
-                  : 'ZENIMONIES transaction receipt',
-            });
-          } else {
-            alert(
-              'Sharing is not available on this device.'
-            );
-          }
+          alert(
+            'Sharing is not available on this device.'
+          );
         }
       } catch (error) {
         console.error(
@@ -1079,7 +1353,8 @@ const TransactionReceipt: React.FC = () => {
       className="receipt-page"
       sx={{
         minHeight: '100vh',
-        bgcolor: COLORS.background,
+        bgcolor:
+          COLORS.background,
         px: 1.5,
         py: 2,
       }}
@@ -1100,7 +1375,8 @@ const TransactionReceipt: React.FC = () => {
           ref={receiptRef}
           className="receipt-document"
           sx={{
-            bgcolor: COLORS.white,
+            bgcolor:
+              COLORS.white,
             borderRadius: 2.5,
             overflow: 'hidden',
             border:
@@ -1109,7 +1385,7 @@ const TransactionReceipt: React.FC = () => {
         >
 
           {/* ====================================================
-              ZENIMONIES LOGO AREA
+              LOGO
           ==================================================== */}
 
           <Box
@@ -1122,7 +1398,8 @@ const TransactionReceipt: React.FC = () => {
           >
             <Typography
               sx={{
-                color: COLORS.primary,
+                color:
+                  COLORS.primary,
                 fontSize: 23,
                 fontWeight: 900,
                 letterSpacing: 2,
@@ -1135,7 +1412,8 @@ const TransactionReceipt: React.FC = () => {
             <Typography
               sx={{
                 mt: 1,
-                color: COLORS.text,
+                color:
+                  COLORS.text,
                 fontSize: 17,
                 fontWeight: 800,
               }}
@@ -1156,12 +1434,14 @@ const TransactionReceipt: React.FC = () => {
                 mb: 1.5,
                 p: 1.5,
                 borderRadius: 2,
+
                 bgcolor:
                   isSuccessful
                     ? 'rgba(8,127,91,0.08)'
                     : isFailed
                       ? 'rgba(198,40,40,0.07)'
                       : 'rgba(167,101,0,0.08)',
+
                 border:
                   `1px solid ${
                     isSuccessful
@@ -1174,7 +1454,8 @@ const TransactionReceipt: React.FC = () => {
             >
               <Typography
                 sx={{
-                  color: statusColor,
+                  color:
+                    statusColor,
                   fontSize: 12,
                   fontWeight: 900,
                   mb: 0.5,
@@ -1185,7 +1466,8 @@ const TransactionReceipt: React.FC = () => {
 
               <Typography
                 sx={{
-                  color: COLORS.text,
+                  color:
+                    COLORS.text,
                   fontSize: 11.5,
                   lineHeight: 1.5,
                 }}
@@ -1201,7 +1483,8 @@ const TransactionReceipt: React.FC = () => {
                 <Typography
                   sx={{
                     mt: 0.8,
-                    color: COLORS.muted,
+                    color:
+                      COLORS.muted,
                     fontSize: 10.5,
                     lineHeight: 1.45,
                   }}
@@ -1221,11 +1504,13 @@ const TransactionReceipt: React.FC = () => {
                           requerying
                             ? 'spin 1s linear infinite'
                             : 'none',
+
                         '@keyframes spin': {
                           from: {
                             transform:
                               'rotate(0deg)',
                           },
+
                           to: {
                             transform:
                               'rotate(360deg)',
@@ -1252,6 +1537,7 @@ const TransactionReceipt: React.FC = () => {
                     textTransform:
                       'none',
                     fontSize: 12,
+
                     '&:hover': {
                       bgcolor:
                         COLORS.dark,
@@ -1289,6 +1575,7 @@ const TransactionReceipt: React.FC = () => {
                       textTransform:
                         'none',
                       fontSize: 12,
+
                       '&:hover': {
                         bgcolor:
                           COLORS.dark,
@@ -1302,7 +1589,7 @@ const TransactionReceipt: React.FC = () => {
           )}
 
           {/* ====================================================
-              RECEIVER RECEIPT
+              INCOMING TRANSFER
           ==================================================== */}
 
           {isTransfer &&
@@ -1311,28 +1598,36 @@ const TransactionReceipt: React.FC = () => {
                 {senderName && (
                   <ReceiptRow
                     label="Sender"
-                    value={senderName}
+                    value={
+                      senderName
+                    }
                   />
                 )}
 
                 {transactionDate && (
                   <ReceiptRow
                     label="Date"
-                    value={formatDate()}
+                    value={
+                      formatDate()
+                    }
                   />
                 )}
 
                 {formatTime() && (
                   <ReceiptRow
                     label="Time"
-                    value={formatTime()}
+                    value={
+                      formatTime()
+                    }
                   />
                 )}
 
                 {reference && (
                   <ReferenceRow
                     label="Reference"
-                    value={reference}
+                    value={
+                      reference
+                    }
                     onCopy={
                       copyReference
                     }
@@ -1348,7 +1643,9 @@ const TransactionReceipt: React.FC = () => {
 
                 <ReceiptRow
                   label="Status"
-                  value={shortStatus}
+                  value={
+                    shortStatus
+                  }
                   valueColor={
                     statusColor
                   }
@@ -1360,7 +1657,7 @@ const TransactionReceipt: React.FC = () => {
                   last={
                     !Boolean(
                       transaction.description &&
-                      transaction.description.trim()
+                        transaction.description.trim()
                     )
                   }
                 />
@@ -1386,7 +1683,7 @@ const TransactionReceipt: React.FC = () => {
             )}
 
           {/* ====================================================
-              SENDER RECEIPT
+              OUTGOING TRANSFER
           ==================================================== */}
 
           {isTransfer &&
@@ -1414,7 +1711,9 @@ const TransactionReceipt: React.FC = () => {
                 {senderName && (
                   <ReceiptRow
                     label="Sender"
-                    value={senderName}
+                    value={
+                      senderName
+                    }
                   />
                 )}
 
@@ -1449,7 +1748,9 @@ const TransactionReceipt: React.FC = () => {
                 {reference && (
                   <ReferenceRow
                     label="Transaction Reference"
-                    value={reference}
+                    value={
+                      reference
+                    }
                     onCopy={
                       copyReference
                     }
@@ -1474,7 +1775,7 @@ const TransactionReceipt: React.FC = () => {
             )}
 
           {/* ====================================================
-              NON-TRANSFER TRANSACTIONS
+              NON-TRANSFER TRANSACTION
           ==================================================== */}
 
           {!isTransfer && (
@@ -1517,7 +1818,9 @@ const TransactionReceipt: React.FC = () => {
               {reference && (
                 <ReferenceRow
                   label="Transaction Reference"
-                  value={reference}
+                  value={
+                    reference
+                  }
                   onCopy={
                     copyReference
                   }
@@ -1551,7 +1854,8 @@ const TransactionReceipt: React.FC = () => {
                 `1px solid ${COLORS.border}`,
               px: 2,
               py: 1.5,
-              textAlign: 'center',
+              textAlign:
+                'center',
             }}
           >
             <Typography
@@ -1580,9 +1884,9 @@ const TransactionReceipt: React.FC = () => {
           }}
         >
 
-          {/* ----------------------------------------------------
-              SENDER ONLY — DOWNLOAD
-          ---------------------------------------------------- */}
+          {/* ====================================================
+              DOWNLOAD — SENDER ONLY
+          ==================================================== */}
 
           {!isIncoming && (
             <Button
@@ -1594,7 +1898,9 @@ const TransactionReceipt: React.FC = () => {
               onClick={
                 handleDownloadPDF
               }
-              disabled={pdfLoading}
+              disabled={
+                pdfLoading
+              }
               sx={{
                 minHeight: 46,
                 bgcolor:
@@ -1603,6 +1909,7 @@ const TransactionReceipt: React.FC = () => {
                 fontWeight: 800,
                 textTransform:
                   'none',
+
                 '&:hover': {
                   bgcolor:
                     COLORS.dark,
@@ -1615,9 +1922,9 @@ const TransactionReceipt: React.FC = () => {
             </Button>
           )}
 
-          {/* ----------------------------------------------------
-              BOTH — SHARE
-          ---------------------------------------------------- */}
+          {/* ====================================================
+              SHARE — BOTH
+          ==================================================== */}
 
           <Button
             fullWidth
@@ -1632,7 +1939,9 @@ const TransactionReceipt: React.FC = () => {
             onClick={
               handleSharePDF
             }
-            disabled={pdfLoading}
+            disabled={
+              pdfLoading
+            }
             sx={{
               minHeight: 46,
               bgcolor:
@@ -1649,6 +1958,7 @@ const TransactionReceipt: React.FC = () => {
               fontWeight: 800,
               textTransform:
                 'none',
+
               '&:hover': {
                 bgcolor:
                   isIncoming
@@ -1662,9 +1972,9 @@ const TransactionReceipt: React.FC = () => {
               : 'Share Receipt'}
           </Button>
 
-          {/* ----------------------------------------------------
-              BOTH — BACK
-          ---------------------------------------------------- */}
+          {/* ====================================================
+              BACK
+          ==================================================== */}
 
           <Button
             fullWidth
@@ -1677,7 +1987,9 @@ const TransactionReceipt: React.FC = () => {
                 '/transactions'
               )
             }
-            disabled={pdfLoading}
+            disabled={
+              pdfLoading
+            }
             sx={{
               minHeight: 44,
               borderColor:
@@ -1788,7 +2100,8 @@ const ReceiptRow: React.FC<
               COLORS.primary,
             fontSize: 10.5,
             fontWeight: 800,
-            flex: '0 0 43%',
+            flex:
+              '0 0 43%',
           }}
         >
           {label}
@@ -1801,8 +2114,10 @@ const ReceiptRow: React.FC<
               COLORS.text,
             fontSize: 10.8,
             fontWeight: 750,
-            textAlign: 'left',
-            flex: '1 1 auto',
+            textAlign:
+              'left',
+            flex:
+              '1 1 auto',
             wordBreak:
               'break-word',
           }}
@@ -1854,7 +2169,8 @@ const ReferenceRow: React.FC<
               COLORS.primary,
             fontSize: 10.5,
             fontWeight: 800,
-            flex: '0 0 43%',
+            flex:
+              '0 0 43%',
           }}
         >
           {label}
@@ -1862,7 +2178,8 @@ const ReferenceRow: React.FC<
 
         <Box
           sx={{
-            flex: '1 1 auto',
+            flex:
+              '1 1 auto',
             minWidth: 0,
           }}
         >
@@ -1872,7 +2189,8 @@ const ReferenceRow: React.FC<
                 COLORS.text,
               fontSize: 9.5,
               fontWeight: 750,
-              lineHeight: 1.35,
+              lineHeight:
+                1.35,
               wordBreak:
                 'break-all',
             }}
@@ -1883,7 +2201,9 @@ const ReferenceRow: React.FC<
           <Button
             className="no-print"
             size="small"
-            onClick={onCopy}
+            onClick={
+              onCopy
+            }
             sx={{
               minWidth: 0,
               p: 0,
