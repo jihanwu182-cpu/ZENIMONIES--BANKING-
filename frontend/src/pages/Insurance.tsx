@@ -716,69 +716,102 @@ const Insurance: React.FC = () => {
   // ==========================================================
 
   const loadLgas =
-    async (
-      stateCode: string
-    ) => {
-      if (!stateCode) {
-        setLgas([]);
-        return;
-      }
+  async (
+    stateCode: string
+  ) => {
+    if (!stateCode) {
+      setLgas([]);
+      return;
+    }
 
-      try {
-        setLoadingLgas(
-          true
+    try {
+      setLoadingLgas(true);
+      setError('');
+
+      const token = getToken();
+
+      const url =
+        `${API_URL}/insurance/motor/lga/${encodeURIComponent(
+          stateCode
+        )}`;
+
+      console.log(
+        'ZENIMONIES LGA REQUEST:',
+        url
+      );
+
+      const response =
+        await fetch(
+          url,
+          {
+            method: 'GET',
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+              'Content-Type':
+                'application/json',
+            },
+          }
         );
 
-        setError('');
+      const result =
+        await response.json();
 
-        const token =
-          getToken();
+      console.log(
+        'ZENIMONIES LGA STATUS:',
+        response.status
+      );
 
-        const response =
-          await fetch(
-            `${API_URL}/insurance/motor/lga/${encodeURIComponent(
-              stateCode
-            )}`,
-            {
-              method: 'GET',
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
-                'Content-Type':
-                  'application/json',
-              },
-            }
-          );
+      console.log(
+        'ZENIMONIES LGA RESPONSE:',
+        result
+      );
 
-        const result =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            result.message ||
-              'Unable to load LGAs.'
-          );
-        }
-
-        setLgas(
-          normalizeLgas(
-            result.data || []
-          )
-        );
-      } catch (err: any) {
-        setLgas([]);
-
-        setError(
-          err?.message ||
-            'Unable to load LGAs.'
-        );
-      } finally {
-        setLoadingLgas(
-          false
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+            `Unable to load LGAs. HTTP ${response.status}`
         );
       }
-    };
 
+      // Accept all expected backend response shapes.
+      const returnedLgas =
+        Array.isArray(result)
+          ? result
+          : Array.isArray(result?.data)
+          ? result.data
+          : Array.isArray(result?.data?.content)
+          ? result.data.content
+          : Array.isArray(result?.content)
+          ? result.content
+          : [];
+
+      console.log(
+        'ZENIMONIES LGA COUNT:',
+        returnedLgas.length
+      );
+
+      setLgas(
+        normalizeLgas(
+          returnedLgas
+        )
+      );
+    } catch (err: any) {
+      console.error(
+        'ZENIMONIES LGA ERROR:',
+        err
+      );
+
+      setLgas([]);
+
+      setError(
+        err?.message ||
+          'Unable to load LGAs.'
+      );
+    } finally {
+      setLoadingLgas(false);
+    }
+  };
   // ==========================================================
   // INITIAL DATA
   // ==========================================================
