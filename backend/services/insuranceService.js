@@ -1,4 +1,4 @@
- const crypto = require('crypto');
+const crypto = require('crypto');
 
 // ============================================================
 // ZENIMONIES BANKING
@@ -46,12 +46,6 @@ const getVtpassHeaders = () => {
 
 // ============================================================
 // REQUEST ID
-// ============================================================
-//
-// VTpass requires the first 12 characters to represent
-// YYYYMMDDHHmm.
-//
-// We append random characters to make the request unique.
 // ============================================================
 
 const generateRequestId = () => {
@@ -113,11 +107,14 @@ const vtpassRequest = async (
   let data;
 
   try {
-    data = text ? JSON.parse(text) : {};
+    data = text
+      ? JSON.parse(text)
+      : {};
   } catch {
     data = {
       response_description:
-        text || 'Invalid response from VTpass.',
+        text ||
+        'Invalid response from VTpass.',
     };
   }
 
@@ -128,13 +125,75 @@ const vtpassRequest = async (
         `VTpass request failed with status ${response.status}.`
     );
 
-    error.status = response.status;
-    error.response = data;
+    error.status =
+      response.status;
+
+    error.response =
+      data;
 
     throw error;
   }
 
   return data;
+};
+
+// ============================================================
+// NORMALIZE VTpass ARRAY RESPONSE
+// ============================================================
+
+const extractArray = (
+  response,
+  possibleKeys = []
+) => {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  if (
+    Array.isArray(
+      response?.content
+    )
+  ) {
+    return response.content;
+  }
+
+  if (
+    Array.isArray(
+      response?.data
+    )
+  ) {
+    return response.data;
+  }
+
+  for (
+    const key of possibleKeys
+  ) {
+    if (
+      Array.isArray(
+        response?.content?.[key]
+      )
+    ) {
+      return response.content[key];
+    }
+
+    if (
+      Array.isArray(
+        response?.data?.[key]
+      )
+    ) {
+      return response.data[key];
+    }
+
+    if (
+      Array.isArray(
+        response?.[key]
+      )
+    ) {
+      return response[key];
+    }
+  }
+
+  return [];
 };
 
 // ============================================================
@@ -154,28 +213,39 @@ const getInsurancePlans = async (
     );
   }
 
-  const data = await vtpassRequest(
-    `/api/service-variations?serviceID=${encodeURIComponent(
-      serviceID
-    )}`,
-    {
-      method: 'GET',
-    }
-  );
+  const data =
+    await vtpassRequest(
+      `/api/service-variations?serviceID=${encodeURIComponent(
+        serviceID
+      )}`,
+      {
+        method: 'GET',
+      }
+    );
 
   const variations =
-    data?.content?.variations ||
-    data?.variations ||
-    [];
+    extractArray(
+      data,
+      [
+        'variations',
+        'varations',
+      ]
+    );
 
   return {
-    responseCode: data?.code || null,
+    responseCode:
+      data?.code ||
+      null,
+
     responseDescription:
-      data?.response_description || null,
+      data?.response_description ||
+      null,
+
     content: {
       serviceID,
       variations,
     },
+
     raw: data,
   };
 };
@@ -184,278 +254,341 @@ const getInsurancePlans = async (
 // GET MOTOR INSURANCE OPTIONS
 // ============================================================
 
-const getMotorInsuranceOptions = async () => {
-  const [
-    colors,
-    engineCapacities,
-    states,
-    brands,
-  ] = await Promise.all([
-    vtpassRequest(
-      '/api/universal-insurance/options/color',
-      {
-        method: 'GET',
-      }
-    ),
+const getMotorInsuranceOptions =
+  async () => {
+    const [
+      colors,
+      engineCapacities,
+      states,
+      brands,
+    ] = await Promise.all([
+      vtpassRequest(
+        '/api/universal-insurance/options/color',
+        {
+          method: 'GET',
+        }
+      ),
 
-    vtpassRequest(
-      '/api/universal-insurance/options/engine-capacity',
-      {
-        method: 'GET',
-      }
-    ),
+      vtpassRequest(
+        '/api/universal-insurance/options/engine-capacity',
+        {
+          method: 'GET',
+        }
+      ),
 
-    vtpassRequest(
-      '/api/universal-insurance/options/state',
-      {
-        method: 'GET',
-      }
-    ),
+      vtpassRequest(
+        '/api/universal-insurance/options/state',
+        {
+          method: 'GET',
+        }
+      ),
 
-    vtpassRequest(
-      '/api/universal-insurance/options/brand',
-      {
-        method: 'GET',
-      }
-    ),
-  ]);
+      vtpassRequest(
+        '/api/universal-insurance/options/brand',
+        {
+          method: 'GET',
+        }
+      ),
+    ]);
 
-  return {
-    colors:
-      colors?.content ||
-      colors?.data ||
-      colors ||
-      [],
+    return {
+      colors:
+        extractArray(
+          colors
+        ),
 
-    engineCapacities:
-      engineCapacities?.content ||
-      engineCapacities?.data ||
-      engineCapacities ||
-      [],
+      engineCapacities:
+        extractArray(
+          engineCapacities
+        ),
 
-    states:
-      states?.content ||
-      states?.data ||
-      states ||
-      [],
+      states:
+        extractArray(
+          states
+        ),
 
-    brands:
-      brands?.content ||
-      brands?.data ||
-      brands ||
-      [],
+      brands:
+        extractArray(
+          brands
+        ),
+    };
   };
-};
 
 // ============================================================
-// GET LGAs
+// GET LOCAL GOVERNMENT AREAS
 // ============================================================
 
-const getMotorInsuranceLgas = async (
-  stateCode
-) => {
-  if (!stateCode) {
-    throw new Error(
-      'State code is required.'
-    );
-  }
-
-  const data = await vtpassRequest(
-    `/api/universal-insurance/options/lga/${encodeURIComponent(
-      stateCode
-    )}`,
-    {
-      method: 'GET',
+const getMotorInsuranceLgas =
+  async (
+    stateCode
+  ) => {
+    if (!stateCode) {
+      throw new Error(
+        'State code is required.'
+      );
     }
-  );
 
-  return (
-    data?.content ||
-    data?.data ||
-    data ||
-    []
-  );
-};
+    const cleanStateCode =
+      String(
+        stateCode
+      ).trim();
+
+    const data =
+      await vtpassRequest(
+        `/api/universal-insurance/options/lga/${encodeURIComponent(
+          cleanStateCode
+        )}`,
+        {
+          method: 'GET',
+        }
+      );
+
+    const lgas =
+      extractArray(
+        data,
+        [
+          'lgas',
+          'LGAs',
+          'localGovernmentAreas',
+          'local_government_areas',
+        ]
+      );
+
+    // --------------------------------------------------------
+    // IMPORTANT
+    // VTpass documents LGA response as:
+    //
+    // content: [
+    //   {
+    //     LGACode: "770",
+    //     LGAName: "Aba",
+    //     StateCode: "1"
+    //   }
+    // ]
+    //
+    // We return ONLY the array to the controller/frontend.
+    // --------------------------------------------------------
+
+    return lgas;
+  };
 
 // ============================================================
 // GET VEHICLE MODELS
 // ============================================================
 
-const getMotorInsuranceModels = async (
-  vehicleMakeCode
-) => {
-  if (!vehicleMakeCode) {
-    throw new Error(
-      'Vehicle make code is required.'
-    );
-  }
-
-  const data = await vtpassRequest(
-    `/api/universal-insurance/options/model/${encodeURIComponent(
-      vehicleMakeCode
-    )}`,
-    {
-      method: 'GET',
+const getMotorInsuranceModels =
+  async (
+    vehicleMakeCode
+  ) => {
+    if (!vehicleMakeCode) {
+      throw new Error(
+        'Vehicle make code is required.'
+      );
     }
-  );
 
-  return (
-    data?.content ||
-    data?.data ||
-    data ||
-    []
-  );
-};
+    const data =
+      await vtpassRequest(
+        `/api/universal-insurance/options/model/${encodeURIComponent(
+          vehicleMakeCode
+        )}`,
+        {
+          method: 'GET',
+        }
+      );
+
+    return extractArray(
+      data,
+      [
+        'models',
+        'vehicleModels',
+      ]
+    );
+  };
 
 // ============================================================
 // PURCHASE INSURANCE
 // ============================================================
 
-const purchaseInsurance = async (
-  payload
-) => {
-  if (!payload || typeof payload !== 'object') {
-    throw new Error(
-      'Insurance purchase payload is required.'
-    );
-  }
-
-  if (!payload.serviceID) {
-    throw new Error(
-      'Insurance service ID is required.'
-    );
-  }
-
-  if (!payload.variation_code) {
-    throw new Error(
-      'Insurance variation code is required.'
-    );
-  }
-
-  const requestId =
-    payload.request_id ||
-    generateRequestId();
-
-  const vtpassPayload = {
-    ...payload,
-    request_id: requestId,
-  };
-
-  delete vtpassPayload.transaction_pin;
-
-  const data = await vtpassRequest(
-    '/api/pay',
-    {
-      method: 'POST',
-      body: JSON.stringify(
-        vtpassPayload
-      ),
+const purchaseInsurance =
+  async (
+    payload
+  ) => {
+    if (
+      !payload ||
+      typeof payload !==
+        'object'
+    ) {
+      throw new Error(
+        'Insurance purchase payload is required.'
+      );
     }
-  );
 
-  return {
-    requestId,
-    responseCode:
-      data?.code ||
-      data?.response_code ||
-      null,
+    if (!payload.serviceID) {
+      throw new Error(
+        'Insurance service ID is required.'
+      );
+    }
 
-    responseDescription:
-      data?.response_description ||
-      null,
+    if (
+      !payload.variation_code
+    ) {
+      throw new Error(
+        'Insurance variation code is required.'
+      );
+    }
 
-    status:
-      data?.code === '000'
-        ? 'successful'
-        : data?.code === '099'
-        ? 'pending'
-        : 'failed',
+    const requestId =
+      payload.request_id ||
+      generateRequestId();
 
-    transactionId:
-      data?.content?.transactions?.transactionId ||
-      data?.content?.transactionId ||
-      null,
+    const vtpassPayload = {
+      ...payload,
+      request_id:
+        requestId,
+    };
 
-    purchasedCode:
-      data?.content?.transactions?.purchased_code ||
-      data?.content?.purchased_code ||
-      null,
+    delete vtpassPayload.transaction_pin;
 
-    certificateUrl:
-      data?.content?.transactions?.certUrl ||
-      data?.content?.certUrl ||
-      null,
+    const data =
+      await vtpassRequest(
+        '/api/pay',
+        {
+          method: 'POST',
+          body: JSON.stringify(
+            vtpassPayload
+          ),
+        }
+      );
 
-    content:
-      data?.content || null,
+    return {
+      requestId,
 
-    raw: data,
+      responseCode:
+        data?.code ||
+        data?.response_code ||
+        null,
+
+      responseDescription:
+        data?.response_description ||
+        null,
+
+      status:
+        data?.code === '000'
+          ? 'successful'
+          : data?.code === '099'
+          ? 'pending'
+          : 'failed',
+
+      transactionId:
+        data?.content
+          ?.transactions
+          ?.transactionId ||
+        data?.content
+          ?.transactionId ||
+        null,
+
+      purchasedCode:
+        data?.purchased_code ||
+        data?.content
+          ?.transactions
+          ?.purchased_code ||
+        data?.content
+          ?.purchased_code ||
+        null,
+
+      certificateUrl:
+        data?.content
+          ?.transactions
+          ?.certUrl ||
+        data?.content
+          ?.certUrl ||
+        null,
+
+      content:
+        data?.content ||
+        null,
+
+      raw: data,
+    };
   };
-};
 
 // ============================================================
-// REQUERY INSURANCE TRANSACTION
+// REQUERY INSURANCE
 // ============================================================
 
-const requeryInsurance = async (
-  requestId
-) => {
-  if (!requestId) {
-    throw new Error(
-      'Request ID is required for requery.'
-    );
-  }
-
-  const data = await vtpassRequest(
-    '/api/requery',
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        request_id: requestId,
-      }),
+const requeryInsurance =
+  async (
+    requestId
+  ) => {
+    if (!requestId) {
+      throw new Error(
+        'Request ID is required for requery.'
+      );
     }
-  );
 
-  return {
-    requestId,
+    const data =
+      await vtpassRequest(
+        '/api/requery',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            request_id:
+              requestId,
+          }),
+        }
+      );
 
-    responseCode:
-      data?.code ||
-      data?.response_code ||
-      null,
+    return {
+      requestId,
 
-    responseDescription:
-      data?.response_description ||
-      null,
+      responseCode:
+        data?.code ||
+        data?.response_code ||
+        null,
 
-    status:
-      data?.code === '000'
-        ? 'successful'
-        : data?.code === '099'
-        ? 'pending'
-        : 'failed',
+      responseDescription:
+        data?.response_description ||
+        null,
 
-    transactionId:
-      data?.content?.transactions?.transactionId ||
-      data?.content?.transactionId ||
-      null,
+      status:
+        data?.code === '000'
+          ? 'successful'
+          : data?.code === '099'
+          ? 'pending'
+          : 'failed',
 
-    purchasedCode:
-      data?.content?.transactions?.purchased_code ||
-      data?.content?.purchased_code ||
-      null,
+      transactionId:
+        data?.content
+          ?.transactions
+          ?.transactionId ||
+        data?.content
+          ?.transactionId ||
+        null,
 
-    certificateUrl:
-      data?.content?.transactions?.certUrl ||
-      data?.content?.certUrl ||
-      null,
+      purchasedCode:
+        data?.purchased_code ||
+        data?.content
+          ?.transactions
+          ?.purchased_code ||
+        data?.content
+          ?.purchased_code ||
+        null,
 
-    content:
-      data?.content || null,
+      certificateUrl:
+        data?.content
+          ?.transactions
+          ?.certUrl ||
+        data?.content
+          ?.certUrl ||
+        null,
 
-    raw: data,
+      content:
+        data?.content ||
+        null,
+
+      raw: data,
+    };
   };
-};
 
 // ============================================================
 // EXPORTS
