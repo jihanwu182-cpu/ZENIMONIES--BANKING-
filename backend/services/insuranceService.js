@@ -16,7 +16,8 @@ const VTPASS_BASE_URL =
 
 const INSURANCE_SERVICE_IDS = {
   MOTOR: 'ui-insure',
-  PERSONAL_ACCIDENT: 'personal-accident-insurance',
+  PERSONAL_ACCIDENT:
+    'personal-accident-insurance',
 };
 
 // ============================================================
@@ -24,8 +25,11 @@ const INSURANCE_SERVICE_IDS = {
 // ============================================================
 
 const getVtpassHeaders = () => {
-  const apiKey = process.env.VTPASS_API_KEY;
-  const secretKey = process.env.VTPASS_SECRET_KEY;
+  const apiKey =
+    process.env.VTPASS_API_KEY;
+
+  const secretKey =
+    process.env.VTPASS_SECRET_KEY;
 
   if (!apiKey || !secretKey) {
     throw new Error(
@@ -33,14 +37,20 @@ const getVtpassHeaders = () => {
     );
   }
 
-  const authorization = Buffer.from(
-    `${apiKey}:${secretKey}`
-  ).toString('base64');
+  const authorization =
+    Buffer.from(
+      `${apiKey}:${secretKey}`
+    ).toString('base64');
 
   return {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-    Authorization: `Basic ${authorization}`,
+    'Content-Type':
+      'application/json',
+
+    Accept:
+      'application/json',
+
+    Authorization:
+      `Basic ${authorization}`,
   };
 };
 
@@ -51,34 +61,51 @@ const getVtpassHeaders = () => {
 const generateRequestId = () => {
   const now = new Date();
 
-  const lagosTime = new Intl.DateTimeFormat(
-    'en-GB',
-    {
-      timeZone: 'Africa/Lagos',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }
-  ).formatToParts(now);
+  const lagosTime =
+    new Intl.DateTimeFormat(
+      'en-GB',
+      {
+        timeZone:
+          'Africa/Lagos',
 
-  const getPart = (type) =>
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+
+        hour12: false,
+      }
+    ).formatToParts(now);
+
+  const getPart = (
+    type
+  ) =>
     lagosTime.find(
-      (part) => part.type === type
+      (part) =>
+        part.type === type
     )?.value || '';
 
-  const year = getPart('year');
-  const month = getPart('month');
-  const day = getPart('day');
-  const hour = getPart('hour');
-  const minute = getPart('minute');
+  const year =
+    getPart('year');
 
-  const randomPart = crypto
-    .randomBytes(6)
-    .toString('hex')
-    .toUpperCase();
+  const month =
+    getPart('month');
+
+  const day =
+    getPart('day');
+
+  const hour =
+    getPart('hour');
+
+  const minute =
+    getPart('minute');
+
+  const randomPart =
+    crypto
+      .randomBytes(6)
+      .toString('hex')
+      .toUpperCase();
 
   return `${year}${month}${day}${hour}${minute}${randomPart}`;
 };
@@ -91,25 +118,29 @@ const vtpassRequest = async (
   endpoint,
   options = {}
 ) => {
-  const response = await fetch(
-    `${VTPASS_BASE_URL}${endpoint}`,
-    {
-      ...options,
-      headers: {
-        ...getVtpassHeaders(),
-        ...(options.headers || {}),
-      },
-    }
-  );
+  const response =
+    await fetch(
+      `${VTPASS_BASE_URL}${endpoint}`,
+      {
+        ...options,
 
-  const text = await response.text();
+        headers: {
+          ...getVtpassHeaders(),
+          ...(options.headers || {}),
+        },
+      }
+    );
+
+  const text =
+    await response.text();
 
   let data;
 
   try {
-    data = text
-      ? JSON.parse(text)
-      : {};
+    data =
+      text
+        ? JSON.parse(text)
+        : {};
   } catch {
     data = {
       response_description:
@@ -119,11 +150,12 @@ const vtpassRequest = async (
   }
 
   if (!response.ok) {
-    const error = new Error(
-      data?.response_description ||
-        data?.message ||
-        `VTpass request failed with status ${response.status}.`
-    );
+    const error =
+      new Error(
+        data?.response_description ||
+          data?.message ||
+          `VTpass request failed with status ${response.status}.`
+      );
 
     error.status =
       response.status;
@@ -140,15 +172,34 @@ const vtpassRequest = async (
 // ============================================================
 // NORMALIZE VTpass ARRAY RESPONSE
 // ============================================================
+//
+// VTpass normally documents:
+//
+// content: [ ... ]
+//
+// But some sandbox insurance option responses currently
+// return:
+//
+// content: {
+//   headers: {},
+//   original: [ ... ]
+// }
+//
+// We support both formats.
+//
 
 const extractArray = (
   response,
   possibleKeys = []
 ) => {
-  if (Array.isArray(response)) {
+  // Response itself is an array.
+  if (
+    Array.isArray(response)
+  ) {
     return response;
   }
 
+  // Standard VTpass format.
   if (
     Array.isArray(
       response?.content
@@ -157,6 +208,16 @@ const extractArray = (
     return response.content;
   }
 
+  // Current sandbox insurance format.
+  if (
+    Array.isArray(
+      response?.content?.original
+    )
+  ) {
+    return response.content.original;
+  }
+
+  // Some responses may use data.
   if (
     Array.isArray(
       response?.data
@@ -165,6 +226,16 @@ const extractArray = (
     return response.data;
   }
 
+  // Some responses may use data.original.
+  if (
+    Array.isArray(
+      response?.data?.original
+    )
+  ) {
+    return response.data.original;
+  }
+
+  // Named arrays.
   for (
     const key of possibleKeys
   ) {
@@ -178,10 +249,26 @@ const extractArray = (
 
     if (
       Array.isArray(
+        response?.content?.original?.[key]
+      )
+    ) {
+      return response.content.original[key];
+    }
+
+    if (
+      Array.isArray(
         response?.data?.[key]
       )
     ) {
       return response.data[key];
+    }
+
+    if (
+      Array.isArray(
+        response?.data?.original?.[key]
+      )
+    ) {
+      return response.data.original[key];
     }
 
     if (
@@ -200,55 +287,59 @@ const extractArray = (
 // GET INSURANCE PLANS
 // ============================================================
 
-const getInsurancePlans = async (
-  serviceID
-) => {
-  if (
-    !Object.values(
-      INSURANCE_SERVICE_IDS
-    ).includes(serviceID)
-  ) {
-    throw new Error(
-      'Unsupported insurance service.'
-    );
-  }
-
-  const data =
-    await vtpassRequest(
-      `/api/service-variations?serviceID=${encodeURIComponent(
+const getInsurancePlans =
+  async (
+    serviceID
+  ) => {
+    if (
+      !Object.values(
+        INSURANCE_SERVICE_IDS
+      ).includes(
         serviceID
-      )}`,
-      {
-        method: 'GET',
-      }
-    );
+      )
+    ) {
+      throw new Error(
+        'Unsupported insurance service.'
+      );
+    }
 
-  const variations =
-    extractArray(
-      data,
-      [
-        'variations',
-        'varations',
-      ]
-    );
+    const data =
+      await vtpassRequest(
+        `/api/service-variations?serviceID=${encodeURIComponent(
+          serviceID
+        )}`,
+        {
+          method: 'GET',
+        }
+      );
 
-  return {
-    responseCode:
-      data?.code ||
-      null,
+    const variations =
+      extractArray(
+        data,
+        [
+          'variations',
+          'varations',
+        ]
+      );
 
-    responseDescription:
-      data?.response_description ||
-      null,
+    return {
+      responseCode:
+        data?.code ||
+        null,
 
-    content: {
-      serviceID,
-      variations,
-    },
+      responseDescription:
+        data?.response_description ||
+        null,
 
-    raw: data,
+      content: {
+        serviceID,
+        variations,
+      },
+
+      raw:
+        data,
+    };
   };
-};
 
 // ============================================================
 // GET MOTOR INSURANCE OPTIONS
@@ -261,56 +352,114 @@ const getMotorInsuranceOptions =
       engineCapacities,
       states,
       brands,
-    ] = await Promise.all([
-      vtpassRequest(
-        '/api/universal-insurance/options/color',
-        {
-          method: 'GET',
-        }
-      ),
+    ] =
+      await Promise.all([
+        vtpassRequest(
+          '/api/universal-insurance/options/color',
+          {
+            method:
+              'GET',
+          }
+        ),
 
-      vtpassRequest(
-        '/api/universal-insurance/options/engine-capacity',
-        {
-          method: 'GET',
-        }
-      ),
+        vtpassRequest(
+          '/api/universal-insurance/options/engine-capacity',
+          {
+            method:
+              'GET',
+          }
+        ),
 
-      vtpassRequest(
-        '/api/universal-insurance/options/state',
-        {
-          method: 'GET',
-        }
-      ),
+        vtpassRequest(
+          '/api/universal-insurance/options/state',
+          {
+            method:
+              'GET',
+          }
+        ),
 
-      vtpassRequest(
-        '/api/universal-insurance/options/brand',
-        {
-          method: 'GET',
-        }
-      ),
-    ]);
+        vtpassRequest(
+          '/api/universal-insurance/options/brand',
+          {
+            method:
+              'GET',
+          }
+        ),
+      ]);
+
+    const normalizedColors =
+      extractArray(
+        colors
+      );
+
+    const normalizedEngineCapacities =
+      extractArray(
+        engineCapacities
+      );
+
+    const normalizedStates =
+      extractArray(
+        states
+      );
+
+    const normalizedBrands =
+      extractArray(
+        brands
+      );
+
+    console.log(
+      'ZENIMONIES INSURANCE OPTIONS:',
+      {
+        colors:
+          normalizedColors.length,
+
+        engineCapacities:
+          normalizedEngineCapacities.length,
+
+        states:
+          normalizedStates.length,
+
+        brands:
+          normalizedBrands.length,
+      }
+    );
+
+    // Helpful diagnostic so we can verify
+    // the actual StateCode/StateName pair
+    // returned by VTpass.
+    const deltaState =
+      normalizedStates.find(
+        (state) =>
+          String(
+            state?.StateName ||
+              ''
+          ).toLowerCase() ===
+          'delta'
+      );
+
+    if (deltaState) {
+      console.log(
+        'ZENIMONIES DELTA STATE FROM VTpass:',
+        JSON.stringify(
+          deltaState,
+          null,
+          2
+        )
+      );
+    }
 
     return {
       colors:
-        extractArray(
-          colors
-        ),
+        normalizedColors,
 
       engineCapacities:
-        extractArray(
-          engineCapacities
-        ),
+        normalizedEngineCapacities,
 
       states:
-        extractArray(
-          states
-        ),
+        normalizedStates,
 
       brands:
-        extractArray(
-          brands
-        ),
+        normalizedBrands,
     };
   };
 
@@ -329,7 +478,9 @@ const getMotorInsuranceLgas =
     }
 
     const cleanStateCode =
-      String(stateCode).trim();
+      String(
+        stateCode
+      ).trim();
 
     const endpoint =
       `/api/universal-insurance/options/lga/${encodeURIComponent(
@@ -367,7 +518,8 @@ const getMotorInsuranceLgas =
       await vtpassRequest(
         endpoint,
         {
-          method: 'GET',
+          method:
+            'GET',
         }
       );
 
@@ -380,100 +532,54 @@ const getMotorInsuranceLgas =
       )
     );
 
-    // --------------------------------------------------------
-    // VTpass documented response:
+    // ========================================================
+    // IMPORTANT
     //
-    // {
-    //   "response_description": "000",
-    //   "content": [
-    //     {
-    //       "LGACode": "770",
-    //       "LGAName": "Aba",
-    //       "StateCode": "1"
-    //     }
-    //   ]
+    // Standard documented VTpass response:
+    //
+    // content: [...]
+    //
+    // Current sandbox response observed:
+    //
+    // content: {
+    //   headers: {},
+    //   original: [...]
     // }
-    // --------------------------------------------------------
+    //
+    // extractArray() supports both.
+    // ========================================================
 
-    let lgas = [];
-
-    if (
-      Array.isArray(
-        data?.content
-      )
-    ) {
-      lgas =
-        data.content;
-    } else if (
-      Array.isArray(
-        data?.data
-      )
-    ) {
-      lgas =
-        data.data;
-    } else if (
-      Array.isArray(
-        data
-      )
-    ) {
-      lgas =
-        data;
-    } else if (
-      Array.isArray(
-        data?.content?.lgas
-      )
-    ) {
-      lgas =
-        data.content.lgas;
-    } else if (
-      Array.isArray(
-        data?.content?.LGAs
-      )
-    ) {
-      lgas =
-        data.content.LGAs;
-    } else if (
-      Array.isArray(
-        data?.lgas
-      )
-    ) {
-      lgas =
-        data.lgas;
-    }
+    const lgas =
+      extractArray(
+        data,
+        [
+          'lgas',
+          'LGAs',
+          'localGovernmentAreas',
+          'local_government_areas',
+        ]
+      );
 
     console.log(
       'ZENIMONIES LGA COUNT:',
       lgas.length
     );
 
-    // --------------------------------------------------------
-    // If VTpass returned an unexpected response, do NOT
-    // silently return an empty array.
-    // --------------------------------------------------------
-
     if (
-      !Array.isArray(lgas)
+      lgas.length > 0
     ) {
-      throw new Error(
-        'VTpass returned an invalid LGA response.'
-      );
-    }
-
-    if (
-      lgas.length === 0
-    ) {
-      console.error(
-        'ZENIMONIES WARNING: VTpass returned ZERO LGAs for state:',
-        cleanStateCode
-      );
-
-      console.error(
-        'ZENIMONIES VTpass response:',
+      console.log(
+        'ZENIMONIES FIRST LGA:',
         JSON.stringify(
-          data,
+          lgas[0],
           null,
           2
         )
+      );
+    } else {
+      console.warn(
+        'ZENIMONIES WARNING: VTpass returned ZERO LGAs for state:',
+        cleanStateCode
       );
     }
 
@@ -500,17 +606,26 @@ const getMotorInsuranceModels =
           vehicleMakeCode
         )}`,
         {
-          method: 'GET',
+          method:
+            'GET',
         }
       );
 
-    return extractArray(
-      data,
-      [
-        'models',
-        'vehicleModels',
-      ]
+    const models =
+      extractArray(
+        data,
+        [
+          'models',
+          'vehicleModels',
+        ]
+      );
+
+    console.log(
+      'ZENIMONIES VEHICLE MODEL COUNT:',
+      models.length
     );
+
+    return models;
   };
 
 // ============================================================
@@ -531,7 +646,9 @@ const purchaseInsurance =
       );
     }
 
-    if (!payload.serviceID) {
+    if (
+      !payload.serviceID
+    ) {
       throw new Error(
         'Insurance service ID is required.'
       );
@@ -549,22 +666,29 @@ const purchaseInsurance =
       payload.request_id ||
       generateRequestId();
 
-    const vtpassPayload = {
-      ...payload,
-      request_id:
-        requestId,
-    };
+    const vtpassPayload =
+      {
+        ...payload,
 
+        request_id:
+          requestId,
+      };
+
+    // Never send the user's
+    // transaction PIN to VTpass.
     delete vtpassPayload.transaction_pin;
 
     const data =
       await vtpassRequest(
         '/api/pay',
         {
-          method: 'POST',
-          body: JSON.stringify(
-            vtpassPayload
-          ),
+          method:
+            'POST',
+
+          body:
+            JSON.stringify(
+              vtpassPayload
+            ),
         }
       );
 
@@ -581,9 +705,11 @@ const purchaseInsurance =
         null,
 
       status:
-        data?.code === '000'
+        data?.code ===
+        '000'
           ? 'successful'
-          : data?.code === '099'
+          : data?.code ===
+            '099'
           ? 'pending'
           : 'failed',
 
@@ -605,6 +731,7 @@ const purchaseInsurance =
         null,
 
       certificateUrl:
+        data?.certUrl ||
         data?.content
           ?.transactions
           ?.certUrl ||
@@ -616,7 +743,8 @@ const purchaseInsurance =
         data?.content ||
         null,
 
-      raw: data,
+      raw:
+        data,
     };
   };
 
@@ -638,11 +766,14 @@ const requeryInsurance =
       await vtpassRequest(
         '/api/requery',
         {
-          method: 'POST',
-          body: JSON.stringify({
-            request_id:
-              requestId,
-          }),
+          method:
+            'POST',
+
+          body:
+            JSON.stringify({
+              request_id:
+                requestId,
+            }),
         }
       );
 
@@ -659,9 +790,11 @@ const requeryInsurance =
         null,
 
       status:
-        data?.code === '000'
+        data?.code ===
+        '000'
           ? 'successful'
-          : data?.code === '099'
+          : data?.code ===
+            '099'
           ? 'pending'
           : 'failed',
 
@@ -683,6 +816,7 @@ const requeryInsurance =
         null,
 
       certificateUrl:
+        data?.certUrl ||
         data?.content
           ?.transactions
           ?.certUrl ||
@@ -694,7 +828,8 @@ const requeryInsurance =
         data?.content ||
         null,
 
-      raw: data,
+      raw:
+        data,
     };
   };
 
