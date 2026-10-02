@@ -1547,6 +1547,13 @@ const purchase = async (
 // REQUERY INSURANCE PAYMENT
 //
 // POST /api/insurance/requery
+//
+// Accepts either:
+// - request_id
+// - ZENIMONIES transaction reference
+//
+// The frontend can safely send the ZENIMONIES reference.
+// The backend finds the stored VTpass request ID.
 // ============================================================
 
 const requery = async (
@@ -1564,25 +1571,43 @@ const requery = async (
     });
   }
 
-  const requestId =
+  // ==========================================================
+  // ACCEPT EITHER VTpass REQUEST ID OR ZENIMONIES REFERENCE
+  // ==========================================================
+
+  const suppliedRequestId =
     cleanString(
       req.body?.request_id ||
       req.body?.requestId
     );
 
-  if (!requestId) {
+  const suppliedReference =
+    cleanString(
+      req.body?.reference ||
+      req.body?.transaction_reference ||
+      req.body?.transactionReference
+    );
+
+  if (
+    !suppliedRequestId &&
+    !suppliedReference
+  ) {
     return res.status(400).json({
       success: false,
       code:
-        'REQUEST_ID_REQUIRED',
+        'REQUEST_OR_REFERENCE_REQUIRED',
       message:
-        'VTpass request ID is required.',
+        'Insurance request ID or transaction reference is required.',
     });
   }
 
   try {
     // ========================================================
-    // FIND CUSTOMER PAYMENT
+    // FIND CUSTOMER INSURANCE PAYMENT
+    //
+    // We verify the account belongs to the authenticated user.
+    // This prevents one customer from requeried another
+    // customer's insurance transaction.
     // ========================================================
 
     const paymentResult =
@@ -1602,14 +1627,26 @@ const requery = async (
         FROM bill_payments bp
         INNER JOIN accounts a
           ON a.id = bp.account_id
-        WHERE bp.provider_request_id = $1
-          AND a.user_id = $2
+        WHERE
+          a.user_id = $1
           AND bp.category = 'insurance'
+          AND (
+            (
+              $2 <> ''
+              AND bp.provider_request_id = $2
+            )
+            OR
+            (
+              $3 <> ''
+              AND bp.reference = $3
+            )
+          )
         LIMIT 1
         `,
         [
-          requestId,
           userId,
+          suppliedRequestId,
+          suppliedReference,
         ]
       );
 
@@ -1629,6 +1666,25 @@ const requery = async (
       paymentResult.rows[0];
 
     // ========================================================
+    // USE THE STORED VTPASS REQUEST ID
+    // ========================================================
+
+    const requestId =
+      payment.provider_request_id ||
+      suppliedRequestId ||
+      null;
+
+    if (!requestId) {
+      return res.status(500).json({
+        success: false,
+        code:
+          'INSURANCE_REQUEST_ID_MISSING',
+        message:
+          'The VTpass request ID for this insurance payment is missing.',
+      });
+    }
+
+    // ========================================================
     // ALREADY COMPLETED
     // ========================================================
 
@@ -1638,7 +1694,9 @@ const requery = async (
     ) {
       return res.status(200).json({
         success: true,
-        status: 'completed',
+
+        status:
+          'completed',
 
         requestId,
 
@@ -1659,11 +1717,14 @@ const requery = async (
     // ========================================================
 
     if (
-      payment.status === 'failed'
+      payment.status ===
+      'failed'
     ) {
       return res.status(200).json({
         success: true,
-        status: 'failed',
+
+        status:
+          'failed',
 
         requestId,
 
@@ -1680,8 +1741,30 @@ const requery = async (
     }
 
     // ========================================================
-    // REQUERY VTpass
+    // REQUERY VTPASS
     // ========================================================
+
+    console.log(
+      '============================================================'
+    );
+
+    console.log(
+      'ZENIMONIES INSURANCE REQUERY'
+    );
+
+    console.log(
+      'ZENIMONIES REFERENCE:',
+      payment.reference
+    );
+
+    console.log(
+      'VTPASS REQUEST ID:',
+      requestId
+    );
+
+    console.log(
+      '============================================================'
+    );
 
     const providerResult =
       await requeryInsurance(
@@ -1712,7 +1795,7 @@ const requery = async (
       );
 
     // ========================================================
-    // STILL PENDING
+    // PROVIDER STILL PENDING
     // ========================================================
 
     if (
@@ -1742,7 +1825,9 @@ const requery = async (
 
       return res.status(200).json({
         success: true,
-        status: 'pending',
+
+        status:
+          'pending',
 
         requestId,
 
@@ -1752,12 +1837,12 @@ const requery = async (
         providerReference,
 
         message:
-          'The insurance payment is still being processed.',
+          'The insurance payment is still being processed by the provider.',
       });
     }
 
     // ========================================================
-    // COMPLETED
+    // PROVIDER SUCCESSFUL
     // ========================================================
 
     if (
@@ -1768,14 +1853,17 @@ const requery = async (
         `
         UPDATE bill_payments
         SET
-          provider_reference = $1,
-          provider_response = $2,
+          provider_request_id = $1,
+          provider_reference = $2,
+          provider_response = $3,
           status = 'completed',
           completed_at = CURRENT_TIMESTAMP
-        WHERE id = $3
+        WHERE id = $4
           AND status = 'pending'
         `,
         [
+          requestId,
+
           providerReference,
 
           providerResult.raw ||
@@ -1794,12 +1882,21 @@ const requery = async (
         WHERE reference = $1
           AND status = 'pending'
         `,
-        [payment.reference]
+        [
+          payment.reference,
+        ]
+      );
+
+      console.log(
+        'ZENIMONIES INSURANCE REQUERY SUCCESS:',
+        payment.reference
       );
 
       return res.status(200).json({
         success: true,
-        status: 'completed',
+
+        status:
+          'completed',
 
         requestId,
 
@@ -1822,7 +1919,9 @@ const requery = async (
     // ========================================================
     // PROVIDER FAILED
     //
-    // REFUND SAFELY
+    // IMPORTANT:
+    // Refund is performed atomically and protected against
+    // duplicate refunds.
     // ========================================================
 
     const client =
@@ -1852,7 +1951,9 @@ const requery = async (
           WHERE id = $1
           FOR UPDATE
           `,
-          [payment.id]
+          [
+            payment.id,
+          ]
         );
 
       if (
@@ -1895,7 +1996,7 @@ const requery = async (
       }
 
       // ======================================================
-      // LOCK ACCOUNT
+      // LOCK CUSTOMER ACCOUNT
       // ======================================================
 
       const accountResult =
@@ -1908,7 +2009,9 @@ const requery = async (
           WHERE id = $1
           FOR UPDATE
           `,
-          [lockedPayment.account_id]
+          [
+            lockedPayment.account_id,
+          ]
         );
 
       if (
@@ -1945,7 +2048,7 @@ const requery = async (
         refundAmount;
 
       // ======================================================
-      // REFUND ACCOUNT
+      // REFUND WALLET
       // ======================================================
 
       await client.query(
@@ -1963,7 +2066,7 @@ const requery = async (
       );
 
       // ======================================================
-      // MARK PAYMENT FAILED
+      // MARK BILL PAYMENT FAILED
       // ======================================================
 
       await client.query(
@@ -2003,7 +2106,9 @@ const requery = async (
         WHERE reference = $1
           AND status = 'pending'
         `,
-        [lockedPayment.reference]
+        [
+          lockedPayment.reference,
+        ]
       );
 
       // ======================================================
@@ -2060,10 +2165,20 @@ const requery = async (
         'COMMIT'
       );
 
+      console.log(
+        'ZENIMONIES INSURANCE REFUNDED:',
+        lockedPayment.reference,
+        refundAmount
+      );
+
       return res.status(200).json({
         success: true,
-        status: 'failed',
-        refunded: true,
+
+        status:
+          'failed',
+
+        refunded:
+          true,
 
         requestId,
 
@@ -2093,6 +2208,7 @@ const requery = async (
 
       return res.status(500).json({
         success: false,
+
         code:
           'INSURANCE_REFUND_PENDING',
 
@@ -2127,8 +2243,6 @@ const requery = async (
     });
   }
 };
-
-
 // ============================================================
 // EXPORTS
 // ============================================================
