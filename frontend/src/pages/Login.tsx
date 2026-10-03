@@ -177,14 +177,14 @@ function saveAuthenticatedSession(
   );
 
   sessionStorage.setItem(
-  'zenimonies_token',
-  token
-);
+    'zenimonies_token',
+    token
+  );
 
-sessionStorage.setItem(
-  'token',
-  token
-);
+  sessionStorage.setItem(
+    'token',
+    token
+  );
 
   if (data.user) {
     localStorage.setItem(
@@ -202,44 +202,218 @@ sessionStorage.setItem(
 }
 
 // ============================================================
-// ICONS
+// ZENIMONIES LOGO
 // ============================================================
 
-const LogoMark: React.FC = () => (
+const ZenimoniesLogo: React.FC = () => (
   <div
     style={{
-      width: '76px',
-      height: '76px',
-      borderRadius: '22px',
-      background:
-        'linear-gradient(145deg, #147254, #07513d)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      boxShadow:
-        '0 12px 28px rgba(8, 81, 61, 0.20)',
+      textAlign: 'center',
+      userSelect: 'none',
     }}
   >
-    <span
+    <div
       style={{
-        color: '#ffffff',
-        fontFamily:
-          'Georgia, "Times New Roman", serif',
-        fontSize: '53px',
-        fontWeight: 700,
+        color: '#08784f',
+        fontSize: '42px',
+        fontWeight: 900,
+        letterSpacing: '-2.5px',
         lineHeight: 1,
-        fontStyle: 'italic',
+        fontFamily:
+          'Arial, Helvetica, sans-serif',
       }}
     >
-      Z
-    </span>
+      Zenimonies
+    </div>
+
+    <div
+      style={{
+        marginTop: '9px',
+        color: '#416c5c',
+        fontSize: '13px',
+        fontWeight: 800,
+        letterSpacing: '7px',
+        paddingLeft: '7px',
+      }}
+    >
+      BANKING
+    </div>
   </div>
 );
 
+// ============================================================
+// LOGIN ILLUSTRATION
+// ============================================================
+
+const LoginIllustration: React.FC = () => (
+  <div
+    style={{
+      width: '190px',
+      height: '190px',
+      margin: '0 auto',
+      position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}
+  >
+    <svg
+      width="190"
+      height="190"
+      viewBox="0 0 190 190"
+      fill="none"
+      aria-hidden="true"
+    >
+      {/* Soft background */}
+      <circle
+        cx="95"
+        cy="95"
+        r="75"
+        fill="#EDF9F3"
+      />
+
+      {/* Decorative marks */}
+      <path
+        d="M30 70L22 63"
+        stroke="#79D5AB"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+
+      <path
+        d="M28 96H17"
+        stroke="#79D5AB"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+
+      <path
+        d="M31 121L23 128"
+        stroke="#79D5AB"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+
+      <path
+        d="M160 60L168 52"
+        stroke="#79D5AB"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+
+      <path
+        d="M164 87H175"
+        stroke="#79D5AB"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+
+      {/* Phone */}
+      <rect
+        x="55"
+        y="29"
+        width="78"
+        height="132"
+        rx="19"
+        fill="#FFFFFF"
+        stroke="#08784F"
+        strokeWidth="7"
+      />
+
+      {/* Phone speaker */}
+      <rect
+        x="80"
+        y="38"
+        width="28"
+        height="5"
+        rx="2.5"
+        fill="#9DDBBB"
+      />
+
+      {/* Login card */}
+      <rect
+        x="69"
+        y="66"
+        width="58"
+        height="53"
+        rx="12"
+        fill="#0A9A55"
+      />
+
+      {/* Dots */}
+      <circle
+        cx="84"
+        cy="86"
+        r="4"
+        fill="#FFFFFF"
+      />
+
+      <circle
+        cx="98"
+        cy="86"
+        r="4"
+        fill="#FFFFFF"
+      />
+
+      <circle
+        cx="112"
+        cy="86"
+        r="4"
+        fill="#FFFFFF"
+      />
+
+      {/* Speech tail */}
+      <path
+        d="M82 119L82 132L96 119H82Z"
+        fill="#0A9A55"
+      />
+
+      {/* Bottom phone button */}
+      <circle
+        cx="94"
+        cy="148"
+        r="6"
+        fill="#D7F0E3"
+      />
+
+      {/* Security shield */}
+      <path
+        d="M137 104L160 113V132C160 148 150 157 137 162C124 157 114 148 114 132V113L137 104Z"
+        fill="#0A9A55"
+      />
+
+      <path
+        d="M137 115L148 119V131C148 139 144 144 137 148C130 144 126 139 126 131V119L137 115Z"
+        fill="#FFFFFF"
+      />
+
+      <rect
+        x="132"
+        y="129"
+        width="10"
+        height="9"
+        rx="2"
+        fill="#0A9A55"
+      />
+
+      <path
+        d="M134 129V126C134 124.34 135.34 123 137 123C138.66 123 140 124.34 140 126V129"
+        stroke="#0A9A55"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  </div>
+);
+
+// ============================================================
+// ICONS
+// ============================================================
+
 const EmailIcon: React.FC = () => (
   <svg
-    width="22"
-    height="22"
+    width="21"
+    height="21"
     viewBox="0 0 24 24"
     fill="none"
     aria-hidden="true"
@@ -266,8 +440,8 @@ const EmailIcon: React.FC = () => (
 
 const LockIcon: React.FC = () => (
   <svg
-    width="22"
-    height="22"
+    width="21"
+    height="21"
     viewBox="0 0 24 24"
     fill="none"
     aria-hidden="true"
@@ -304,8 +478,8 @@ const EyeIcon: React.FC<{
   visible,
 }) => (
   <svg
-    width="22"
-    height="22"
+    width="21"
+    height="21"
     viewBox="0 0 24 24"
     fill="none"
     aria-hidden="true"
@@ -355,8 +529,8 @@ const EyeIcon: React.FC<{
 
 const FingerprintIcon: React.FC = () => (
   <svg
-    width="32"
-    height="32"
+    width="28"
+    height="28"
     viewBox="0 0 32 32"
     fill="none"
     aria-hidden="true"
@@ -414,8 +588,8 @@ const FingerprintIcon: React.FC = () => (
 
 const ShieldIcon: React.FC = () => (
   <svg
-    width="18"
-    height="18"
+    width="19"
+    height="19"
     viewBox="0 0 24 24"
     fill="none"
     aria-hidden="true"
@@ -433,42 +607,6 @@ const ShieldIcon: React.FC = () => (
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const GlobeIcon: React.FC = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    aria-hidden="true"
-  >
-    <circle
-      cx="12"
-      cy="12"
-      r="9"
-      stroke="currentColor"
-      strokeWidth="1.7"
-    />
-
-    <path
-      d="M3 12H21"
-      stroke="currentColor"
-      strokeWidth="1.7"
-    />
-
-    <path
-      d="M12 3C14.4 5.4 15.5 8.5 15.5 12C15.5 15.5 14.4 18.6 12 21"
-      stroke="currentColor"
-      strokeWidth="1.7"
-    />
-
-    <path
-      d="M12 3C9.6 5.4 8.5 8.5 8.5 12C8.5 15.5 9.6 18.6 12 21"
-      stroke="currentColor"
-      strokeWidth="1.7"
     />
   </svg>
 );
@@ -740,10 +878,6 @@ const Login: React.FC = () => {
           true
         );
 
-        // ======================================================
-        // 1. REQUEST PASSKEY OPTIONS
-        // ======================================================
-
         const optionsResponse =
           await fetch(
             `${API_URL}/api/passkey/login/options`,
@@ -809,10 +943,6 @@ const Login: React.FC = () => {
           );
         }
 
-        // ======================================================
-        // 2. DEVICE AUTHENTICATION
-        // ======================================================
-
         let authenticationResponse;
 
         try {
@@ -839,10 +969,6 @@ const Login: React.FC = () => {
 
           throw browserError;
         }
-
-        // ======================================================
-        // 3. BACKEND VERIFICATION
-        // ======================================================
 
         const verifyResponse =
           await fetch(
@@ -877,10 +1003,6 @@ const Login: React.FC = () => {
             'The Zenimonies server returned an invalid authentication response.'
           );
         }
-
-        // ======================================================
-        // 4. FAILURE
-        // ======================================================
 
         if (
           !verifyResponse.ok ||
@@ -957,104 +1079,79 @@ const Login: React.FC = () => {
           return;
         }
 
-        // ======================================================
-        // 5. SUCCESS
-        // ======================================================
-
         const responseData =
-  verifyData.data ||
-  verifyData;
+          verifyData.data ||
+          verifyData;
 
-const token =
-  responseData.token;
+        const token =
+          responseData.token;
 
-if (!token) {
-  throw new Error(
-    'Passkey login succeeded but no authentication token was returned.'
-  );
-}
+        if (!token) {
+          throw new Error(
+            'Passkey login succeeded but no authentication token was returned.'
+          );
+        }
 
-/*
- * ==========================================================
- * SAVE PASSKEY AUTHENTICATION SESSION
- * ==========================================================
- */
+        saveAuthenticatedSession({
+          token,
+          user:
+            responseData.user,
+          accounts:
+            responseData.accounts,
+        });
 
-saveAuthenticatedSession({
-  token,
-  user:
-    responseData.user,
-  accounts:
-    responseData.accounts,
-});
+        const localZenimoniesToken =
+          localStorage.getItem(
+            'zenimonies_token'
+          );
 
-/*
- * ==========================================================
- * VERIFY AUTHENTICATION STORAGE
- * ==========================================================
- *
- * We only check whether a token exists.
- * The actual token is NEVER displayed or logged.
- */
+        const localToken =
+          localStorage.getItem(
+            'token'
+          );
 
-const localZenimoniesToken =
-  localStorage.getItem(
-    'zenimonies_token'
-  );
+        const sessionZenimoniesToken =
+          sessionStorage.getItem(
+            'zenimonies_token'
+          );
 
-const localToken =
-  localStorage.getItem(
-    'token'
-  );
+        const sessionToken =
+          sessionStorage.getItem(
+            'token'
+          );
 
-const sessionZenimoniesToken =
-  sessionStorage.getItem(
-    'zenimonies_token'
-  );
+        console.log(
+          'ZENIMONIES Passkey storage check:',
+          {
+            localZenimoniesToken:
+              Boolean(
+                localZenimoniesToken
+              ),
+            localToken:
+              Boolean(localToken),
+            sessionZenimoniesToken:
+              Boolean(
+                sessionZenimoniesToken
+              ),
+            sessionToken:
+              Boolean(sessionToken),
+          }
+        );
 
-const sessionToken =
-  sessionStorage.getItem(
-    'token'
-  );
+        if (
+          !localZenimoniesToken &&
+          !localToken &&
+          !sessionZenimoniesToken &&
+          !sessionToken
+        ) {
+          throw new Error(
+            'Passkey login succeeded, but the secure authentication session could not be stored on this device. Please use password login.'
+          );
+        }
 
-console.log(
-  '========== ZENIMONIES PASSKEY STORAGE CHECK =========='
-);
-
-console.log(
-  'localStorage zenimonies_token:',
-  Boolean(localZenimoniesToken)
-);
-
-console.log(
-  'localStorage token:',
-  Boolean(localToken)
-);
-
-console.log(
-  'sessionStorage zenimonies_token:',
-  Boolean(sessionZenimoniesToken)
-);
-
-console.log(
-  'sessionStorage token:',
-  Boolean(sessionToken)
-);
-
-if (
-  !localZenimoniesToken &&
-  !localToken &&
-  !sessionZenimoniesToken &&
-  !sessionToken
-) {
-  throw new Error(
-    'Passkey login succeeded, but the secure authentication session could not be stored on this device. Please use password login.'
-  );
-}
-
-setPasskeyFailures(
-  0
-);
+        setPasskeyFailures(
+          0
+        );
 
         setPasskeyFallback(
           false
@@ -1120,12 +1217,9 @@ setPasskeyFailures(
         width: '100%',
         boxSizing: 'border-box',
         padding:
-          '32px 16px 22px',
-        display: 'flex',
-        justifyContent:
-          'center',
+          '26px 16px 32px',
         background:
-          'linear-gradient(145deg, #f2f8f5 0%, #f8fbfa 45%, #edf6f2 100%)',
+          '#F0F9F5',
         fontFamily:
           'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
@@ -1133,402 +1227,133 @@ setPasskeyFailures(
       <div
         style={{
           width: '100%',
-          maxWidth: '470px',
+          maxWidth: '500px',
+          margin: '0 auto',
         }}
       >
-        {/* =====================================================
-            BRAND
-            ===================================================== */}
-
-        <div
-          style={{
-            textAlign: 'center',
-            marginBottom: '25px',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent:
-                'center',
-              marginBottom:
-                '12px',
-            }}
-          >
-            <LogoMark />
-          </div>
-
-          <div
-            style={{
-              color: '#10261f',
-              fontFamily:
-                'Georgia, "Times New Roman", serif',
-              fontSize: '36px',
-              fontWeight: 700,
-              letterSpacing:
-                '-1.4px',
-              lineHeight: 1.05,
-            }}
-          >
-            Zenimonies
-          </div>
-
-          <div
-            style={{
-              marginTop: '8px',
-              color: '#667872',
-              fontSize: '12px',
-              fontWeight: 800,
-              letterSpacing:
-                '3px',
-            }}
-          >
-            SECURE MONEY. SIMPLY.
-          </div>
-        </div>
-
-        {/* =====================================================
-            WELCOME
-            ===================================================== */}
-
-        <div
-          style={{
-            textAlign: 'center',
-            marginBottom: '28px',
-          }}
-        >
-          <h1
-            style={{
-              margin: 0,
-              color: '#10261f',
-              fontSize: '31px',
-              lineHeight: 1.15,
-              fontWeight: 800,
-              letterSpacing:
-                '-0.8px',
-            }}
-          >
-            Welcome back
-          </h1>
-
-          <p
-            style={{
-              maxWidth: '390px',
-              margin:
-                '8px auto 0',
-              color: '#697a74',
-              fontSize: '16px',
-              lineHeight: 1.45,
-            }}
-          >
-            Sign in securely to continue to
-            your Zenimonies account.
-          </p>
-        </div>
-
-        {/* =====================================================
-            MAIN CARD
-            ===================================================== */}
+        {/* ====================================================
+            MAIN WHITE CARD
+            ==================================================== */}
 
         <div
           style={{
             background:
-              'rgba(255,255,255,0.94)',
+              '#FFFFFF',
             border:
-              '1px solid rgba(15, 92, 70, 0.10)',
-            borderRadius: '27px',
+              '1px solid #DDEDE5',
+            borderRadius:
+              '30px',
             padding:
-              '30px 22px 25px',
+              '42px 28px 30px',
             boxShadow:
-              '0 18px 50px rgba(25, 60, 48, 0.08)',
-            backdropFilter:
-              'blur(10px)',
+              '0 10px 35px rgba(15, 85, 60, 0.06)',
+            boxSizing:
+              'border-box',
           }}
         >
-          {/* ===================================================
+          {/* ==================================================
+              BRAND
+              ================================================== */}
+
+          <ZenimoniesLogo />
+
+          {/* ==================================================
+              ILLUSTRATION
+              ================================================== */}
+
+          <div
+            style={{
+              marginTop:
+                '22px',
+              marginBottom:
+                '5px',
+            }}
+          >
+            <LoginIllustration />
+          </div>
+
+          {/* ==================================================
+              TITLE
+              ================================================== */}
+
+          <div
+            style={{
+              textAlign:
+                'center',
+              marginBottom:
+                '27px',
+            }}
+          >
+            <h1
+              style={{
+                margin: 0,
+                color:
+                  '#073F2D',
+                fontSize:
+                  '31px',
+                fontWeight:
+                  900,
+                letterSpacing:
+                  '-1px',
+                lineHeight:
+                  1.15,
+              }}
+            >
+              Welcome Back
+            </h1>
+
+            <p
+              style={{
+                margin:
+                  '10px auto 0',
+                maxWidth:
+                  '390px',
+                color:
+                  '#58766A',
+                fontSize:
+                  '16px',
+                lineHeight:
+                  1.45,
+              }}
+            >
+              Sign in securely to your
+              Zenimonies account.
+            </p>
+          </div>
+
+          {/* ==================================================
               ERROR
-              =================================================== */}
+              ================================================== */}
 
           {error && (
             <div
               role="alert"
               style={{
-                display: 'flex',
-                alignItems:
-                  'flex-start',
-                gap: '10px',
-                padding:
-                  '13px 14px',
                 marginBottom:
                   '18px',
+                padding:
+                  '13px 14px',
                 borderRadius:
                   '13px',
                 background:
-                  '#fff2f1',
+                  '#FFF4F3',
                 border:
-                  '1px solid #ffd1cd',
+                  '1px solid #FFD5D1',
                 color:
-                  '#b42318',
-                fontSize: '13px',
-                lineHeight: 1.45,
+                  '#B42318',
+                fontSize:
+                  '13px',
+                lineHeight:
+                  1.45,
               }}
             >
-              <span
-                style={{
-                  fontWeight: 900,
-                  fontSize: '17px',
-                }}
-              >
-                !
-              </span>
-
-              <span>
-                {error}
-              </span>
+              {error}
             </div>
           )}
 
-          {/* ===================================================
-              EMAIL
-              =================================================== */}
-
-          <label
-            htmlFor="email"
-            style={{
-              display: 'block',
-              marginBottom:
-                '8px',
-              color:
-                '#17332a',
-              fontSize: '14px',
-              fontWeight: 750,
-            }}
-          >
-            Email address
-          </label>
-
-          <div
-            style={{
-              position:
-                'relative',
-              marginBottom:
-                '21px',
-            }}
-          >
-            <div
-              style={{
-                position:
-                  'absolute',
-                left: '16px',
-                top: '50%',
-                transform:
-                  'translateY(-50%)',
-                color:
-                  '#83918c',
-                pointerEvents:
-                  'none',
-                display: 'flex',
-              }}
-            >
-              <EmailIcon />
-            </div>
-
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(event) =>
-                setEmail(
-                  event.target.value
-                )
-              }
-              placeholder="you@example.com"
-              autoComplete="username"
-              disabled={busy}
-              style={{
-                boxSizing:
-                  'border-box',
-                width: '100%',
-                height: '54px',
-                padding:
-                  '0 15px 0 50px',
-                border:
-                  '1px solid #d5dfdb',
-                borderRadius:
-                  '14px',
-                outline: 'none',
-                background:
-                  '#ffffff',
-                color:
-                  '#17241f',
-                fontSize:
-                  '15px',
-              }}
-            />
-          </div>
-
-          {/* ===================================================
-              PASSWORD LABEL
-              =================================================== */}
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems:
-                'center',
-              justifyContent:
-                'space-between',
-              marginBottom:
-                '8px',
-            }}
-          >
-            <label
-              htmlFor="password"
-              style={{
-                color:
-                  '#17332a',
-                fontSize: '14px',
-                fontWeight: 750,
-              }}
-            >
-              Password
-            </label>
-
-            <Link
-              to="/forgot-password"
-              style={{
-                color:
-                  '#0f6a50',
-                fontSize:
-                  '13px',
-                fontWeight:
-                  750,
-                textDecoration:
-                  'none',
-              }}
-            >
-              Forgot password?
-            </Link>
-          </div>
-
-          {/* ===================================================
-              PASSWORD INPUT
-              =================================================== */}
-
-          <div
-            style={{
-              position:
-                'relative',
-            }}
-          >
-            <div
-              style={{
-                position:
-                  'absolute',
-                left: '16px',
-                top: '50%',
-                transform:
-                  'translateY(-50%)',
-                color:
-                  '#83918c',
-                pointerEvents:
-                  'none',
-                display: 'flex',
-              }}
-            >
-              <LockIcon />
-            </div>
-
-            <input
-              id="password"
-              type={
-                showPassword
-                  ? 'text'
-                  : 'password'
-              }
-              value={password}
-              onChange={(event) =>
-                setPassword(
-                  event.target.value
-                )
-              }
-              placeholder="Enter your password"
-              autoComplete="current-password"
-              disabled={busy}
-              style={{
-                boxSizing:
-                  'border-box',
-                width: '100%',
-                height: '54px',
-                padding:
-                  '0 52px 0 50px',
-                border:
-                  '1px solid #d5dfdb',
-                borderRadius:
-                  '14px',
-                outline: 'none',
-                background:
-                  '#ffffff',
-                color:
-                  '#17241f',
-                fontSize:
-                  '15px',
-              }}
-            />
-
-            <button
-              type="button"
-              onClick={() =>
-                setShowPassword(
-                  (previous) =>
-                    !previous
-                )
-              }
-              disabled={busy}
-              aria-label={
-                showPassword
-                  ? 'Hide password'
-                  : 'Show password'
-              }
-              style={{
-                position:
-                  'absolute',
-                right: '10px',
-                top: '50%',
-                transform:
-                  'translateY(-50%)',
-                width: '36px',
-                height: '36px',
-                display: 'flex',
-                alignItems:
-                  'center',
-                justifyContent:
-                  'center',
-                border: 'none',
-                borderRadius:
-                  '9px',
-                background:
-                  'transparent',
-                color:
-                  '#788681',
-                cursor:
-                  busy
-                    ? 'not-allowed'
-                    : 'pointer',
-                padding: 0,
-              }}
-            >
-              <EyeIcon
-                visible={
-                  showPassword
-                }
-              />
-            </button>
-          </div>
-
-          {/* ===================================================
-              PRIMARY SIGN IN
-              =================================================== */}
+          {/* ==================================================
+              FORM
+              ================================================== */}
 
           <form
             onSubmit={
@@ -1536,28 +1361,301 @@ setPasskeyFailures(
             }
             noValidate
           >
+            {/* =================================================
+                EMAIL
+                ================================================= */}
+
+            <label
+              htmlFor="email"
+              style={{
+                display:
+                  'block',
+                marginBottom:
+                  '8px',
+                color:
+                  '#173F31',
+                fontSize:
+                  '15px',
+                fontWeight:
+                  800,
+              }}
+            >
+              Email address
+            </label>
+
+            <div
+              style={{
+                position:
+                  'relative',
+                marginBottom:
+                  '19px',
+              }}
+            >
+              <div
+                style={{
+                  position:
+                    'absolute',
+                  left:
+                    '16px',
+                  top:
+                    '50%',
+                  transform:
+                    'translateY(-50%)',
+                  color:
+                    '#78968A',
+                  display:
+                    'flex',
+                  pointerEvents:
+                    'none',
+                }}
+              >
+                <EmailIcon />
+              </div>
+
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(
+                  event
+                ) =>
+                  setEmail(
+                    event.target
+                      .value
+                  )
+                }
+                placeholder="Enter your email address"
+                autoComplete="username"
+                disabled={busy}
+                style={{
+                  boxSizing:
+                    'border-box',
+                  width:
+                    '100%',
+                  height:
+                    '56px',
+                  padding:
+                    '0 16px 0 49px',
+                  border:
+                    '1.5px solid #D6E5DE',
+                  borderRadius:
+                    '15px',
+                  outline:
+                    'none',
+                  background:
+                    '#FFFFFF',
+                  color:
+                    '#17352B',
+                  fontSize:
+                    '15px',
+                }}
+              />
+            </div>
+
+            {/* =================================================
+                PASSWORD
+                ================================================= */}
+
+            <div
+              style={{
+                display:
+                  'flex',
+                justifyContent:
+                  'space-between',
+                alignItems:
+                  'center',
+                marginBottom:
+                  '8px',
+              }}
+            >
+              <label
+                htmlFor="password"
+                style={{
+                  color:
+                    '#173F31',
+                  fontSize:
+                    '15px',
+                  fontWeight:
+                    800,
+                }}
+              >
+                Password
+              </label>
+
+              <Link
+                to="/forgot-password"
+                style={{
+                  color:
+                    '#08784F',
+                  fontSize:
+                    '13px',
+                  fontWeight:
+                    800,
+                  textDecoration:
+                    'none',
+                }}
+              >
+                Forgot password?
+              </Link>
+            </div>
+
+            <div
+              style={{
+                position:
+                  'relative',
+              }}
+            >
+              <div
+                style={{
+                  position:
+                    'absolute',
+                  left:
+                    '16px',
+                  top:
+                    '50%',
+                  transform:
+                    'translateY(-50%)',
+                  color:
+                    '#78968A',
+                  display:
+                    'flex',
+                  pointerEvents:
+                    'none',
+                }}
+              >
+                <LockIcon />
+              </div>
+
+              <input
+                id="password"
+                type={
+                  showPassword
+                    ? 'text'
+                    : 'password'
+                }
+                value={password}
+                onChange={(
+                  event
+                ) =>
+                  setPassword(
+                    event.target
+                      .value
+                  )
+                }
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                disabled={busy}
+                style={{
+                  boxSizing:
+                    'border-box',
+                  width:
+                    '100%',
+                  height:
+                    '56px',
+                  padding:
+                    '0 52px 0 49px',
+                  border:
+                    '1.5px solid #D6E5DE',
+                  borderRadius:
+                    '15px',
+                  outline:
+                    'none',
+                  background:
+                    '#FFFFFF',
+                  color:
+                    '#17352B',
+                  fontSize:
+                    '15px',
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowPassword(
+                    (
+                      previous
+                    ) =>
+                      !previous
+                  )
+                }
+                disabled={busy}
+                aria-label={
+                  showPassword
+                    ? 'Hide password'
+                    : 'Show password'
+                }
+                style={{
+                  position:
+                    'absolute',
+                  right:
+                    '10px',
+                  top:
+                    '50%',
+                  transform:
+                    'translateY(-50%)',
+                  width:
+                    '38px',
+                  height:
+                    '38px',
+                  border:
+                    'none',
+                  borderRadius:
+                    '9px',
+                  background:
+                    'transparent',
+                  color:
+                    '#78968A',
+                  display:
+                    'flex',
+                  alignItems:
+                    'center',
+                  justifyContent:
+                    'center',
+                  padding:
+                    0,
+                  cursor:
+                    busy
+                      ? 'not-allowed'
+                      : 'pointer',
+                }}
+              >
+                <EyeIcon
+                  visible={
+                    showPassword
+                  }
+                />
+              </button>
+            </div>
+
+            {/* =================================================
+                SIGN IN
+                ================================================= */}
+
             <button
               type="submit"
               disabled={busy}
               style={{
-                width: '100%',
-                height: '55px',
+                width:
+                  '100%',
+                height:
+                  '58px',
                 marginTop:
-                  '17px',
-                border: 'none',
+                  '20px',
+                border:
+                  'none',
                 borderRadius:
                   '15px',
                 background:
                   busy
-                    ? '#dfe8e4'
-                    : '#12362c',
+                    ? '#A9BEB5'
+                    : '#078B50',
                 color:
-                  busy
-                    ? '#71817b'
-                    : '#ffffff',
+                  '#FFFFFF',
                 fontSize:
                   '16px',
-                fontWeight: 800,
+                fontWeight:
+                  900,
                 cursor:
                   busy
                     ? 'not-allowed'
@@ -1565,70 +1663,72 @@ setPasskeyFailures(
                 boxShadow:
                   busy
                     ? 'none'
-                    : '0 9px 22px rgba(18, 54, 44, 0.16)',
+                    : '0 8px 18px rgba(7, 139, 80, 0.18)',
               }}
             >
               {loading
                 ? 'Signing in...'
-                : 'Sign in'}
+                : 'Sign In'}
             </button>
           </form>
 
-          {/* ===================================================
-              PASSKEY DIVIDER
-              =================================================== */}
+          {/* ==================================================
+              PASSKEY
+              ================================================== */}
 
           {!passkeyFallback && (
             <>
               <div
                 style={{
-                  display: 'flex',
+                  display:
+                    'flex',
                   alignItems:
                     'center',
-                  gap: '12px',
+                  gap:
+                    '12px',
                   margin:
                     '23px 0 17px',
                 }}
               >
                 <div
                   style={{
-                    flex: 1,
-                    height: '1px',
+                    flex:
+                      1,
+                    height:
+                      '1px',
                     background:
-                      '#dce5e1',
+                      '#E0EBE5',
                   }}
                 />
 
                 <span
                   style={{
                     color:
-                      '#87948f',
+                      '#82958D',
                     fontSize:
-                      '11px',
+                      '10px',
                     fontWeight:
-                      800,
+                      900,
                     letterSpacing:
                       '1px',
                     whiteSpace:
                       'nowrap',
                   }}
                 >
-                  OR SIGN IN WITH PASSKEY
+                  OR USE PASSKEY
                 </span>
 
                 <div
                   style={{
-                    flex: 1,
-                    height: '1px',
+                    flex:
+                      1,
+                    height:
+                      '1px',
                     background:
-                      '#dce5e1',
+                      '#E0EBE5',
                   }}
                 />
               </div>
-
-              {/* =================================================
-                  PASSKEY BUTTON
-                  ================================================= */}
 
               <button
                 type="button"
@@ -1637,37 +1737,40 @@ setPasskeyFailures(
                 }
                 disabled={busy}
                 style={{
-                  width: '100%',
+                  width:
+                    '100%',
                   minHeight:
                     '56px',
                   padding:
-                    '0 16px',
-                  display: 'flex',
+                    '0 15px',
+                  display:
+                    'flex',
                   alignItems:
                     'center',
                   justifyContent:
                     'center',
-                  gap: '13px',
+                  gap:
+                    '11px',
                   border:
-                    '1px solid #b9d9cf',
+                    '1.5px solid #BBDDCF',
                   borderRadius:
                     '15px',
                   background:
-                    busy
-                      ? '#f0f6f3'
-                      : '#f3faf7',
+                    '#F0FAF5',
                   color:
-                    '#0d674e',
+                    '#08784F',
                   fontSize:
-                    '15px',
+                    '14px',
                   fontWeight:
-                    800,
+                    850,
                   cursor:
                     busy
                       ? 'not-allowed'
                       : 'pointer',
                   opacity:
-                    busy ? 0.7 : 1,
+                    busy
+                      ? 0.7
+                      : 1,
                 }}
               >
                 <FingerprintIcon />
@@ -1677,42 +1780,24 @@ setPasskeyFailures(
                     ? 'Authenticating...'
                     : 'Continue with Passkey'}
                 </span>
-
-                <span
-                  style={{
-                    marginLeft:
-                      'auto',
-                    fontSize:
-                      '25px',
-                    fontWeight:
-                      400,
-                    lineHeight: 1,
-                  }}
-                >
-                  ›
-                </span>
               </button>
-
-              {/* =================================================
-                  PASSKEY DESCRIPTION
-                  ================================================= */}
 
               <div
                 style={{
-                  display: 'flex',
+                  display:
+                    'flex',
                   alignItems:
                     'center',
                   justifyContent:
                     'center',
-                  gap: '8px',
+                  gap:
+                    '7px',
                   marginTop:
-                    '12px',
+                    '11px',
                   color:
-                    '#74837d',
+                    '#6E857A',
                   fontSize:
-                    '12px',
-                  lineHeight:
-                    1.4,
+                    '11px',
                   textAlign:
                     'center',
                 }}
@@ -1728,12 +1813,12 @@ setPasskeyFailures(
               {passkeyFailures > 0 && (
                 <div
                   style={{
-                    textAlign:
-                      'center',
                     marginTop:
                       '9px',
+                    textAlign:
+                      'center',
                     color:
-                      '#a15c00',
+                      '#A15C00',
                     fontSize:
                       '12px',
                     fontWeight:
@@ -1748,25 +1833,25 @@ setPasskeyFailures(
             </>
           )}
 
-          {/* ===================================================
-              PASSWORD FALLBACK MESSAGE
-              =================================================== */}
+          {/* ==================================================
+              PASSKEY FALLBACK
+              ================================================== */}
 
           {passkeyFallback && (
             <div
               style={{
                 marginTop:
-                  '17px',
+                  '18px',
                 padding:
                   '13px',
                 borderRadius:
                   '13px',
                 background:
-                  '#f4f7f5',
+                  '#F2F7F4',
                 border:
-                  '1px solid #e0e8e4',
+                  '1px solid #DCE8E2',
                 color:
-                  '#52625c',
+                  '#526B60',
                 fontSize:
                   '12px',
                 lineHeight:
@@ -1782,18 +1867,18 @@ setPasskeyFailures(
             </div>
           )}
 
-          {/* ===================================================
-              CREATE ACCOUNT
-              =================================================== */}
+          {/* ==================================================
+              REGISTER
+              ================================================== */}
 
           <div
             style={{
               marginTop:
-                '25px',
+                '24px',
               paddingTop:
-                '21px',
+                '20px',
               borderTop:
-                '1px solid #e8eeeb',
+                '1px solid #E7EFEB',
               textAlign:
                 'center',
             }}
@@ -1801,23 +1886,23 @@ setPasskeyFailures(
             <span
               style={{
                 color:
-                  '#74827d',
+                  '#6F8279',
                 fontSize:
                   '13px',
               }}
             >
-              New to Zenimonies?
+              Don't have a Zenimonies account?
             </span>{' '}
 
             <Link
               to="/register"
               style={{
                 color:
-                  '#0d674e',
+                  '#08784F',
                 fontSize:
                   '13px',
                 fontWeight:
-                  800,
+                  900,
                 textDecoration:
                   'none',
               }}
@@ -1825,88 +1910,79 @@ setPasskeyFailures(
               Create an account
             </Link>
           </div>
-        </div>
 
-        {/* =====================================================
-            SECURITY FOOTER
-            ===================================================== */}
+          {/* ==================================================
+              SECURITY NOTICE
+              ================================================== */}
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems:
-              'center',
-            justifyContent:
-              'space-between',
-            gap: '10px',
-            marginTop:
-              '20px',
-            padding:
-              '0 5px',
-            color:
-              '#71817b',
-            fontSize:
-              '10px',
-          }}
-        >
           <div
             style={{
-              display: 'flex',
+              marginTop:
+                '25px',
+              padding:
+                '16px 14px',
+              display:
+                'flex',
               alignItems:
-                'center',
-              gap: '5px',
-            }}
-          >
-            <ShieldIcon />
-            <span>
-              Your data is protected
-            </span>
-          </div>
-
-          <div
-            style={{
-              width: '1px',
-              height: '17px',
+                'flex-start',
+              gap:
+                '12px',
+              borderRadius:
+                '17px',
               background:
-                '#cbd7d2',
-            }}
-          />
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems:
-                'center',
-              gap: '5px',
+                '#EFFAF5',
+              color:
+                '#456B5B',
             }}
           >
-            <LockIcon />
-            <span>
-              Secure access
-            </span>
-          </div>
+            <div
+              style={{
+                width:
+                  '42px',
+                height:
+                  '42px',
+                minWidth:
+                  '42px',
+                borderRadius:
+                  '50%',
+                background:
+                  '#D7F3E5',
+                display:
+                  'flex',
+                alignItems:
+                  'center',
+                justifyContent:
+                  'center',
+                color:
+                  '#08784F',
+              }}
+            >
+              <ShieldIcon />
+            </div>
 
-          <div
-            style={{
-              width: '1px',
-              height: '17px',
-              background:
-                '#cbd7d2',
-            }}
-          />
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems:
-                'center',
-              gap: '5px',
-            }}
-          >
-            <GlobeIcon />
-            <span>
-              Global access
-            </span>
+            <div
+              style={{
+                fontSize:
+                  '12px',
+                lineHeight:
+                  1.5,
+              }}
+            >
+              <strong
+                style={{
+                  color:
+                    '#155B43',
+                }}
+              >
+                Security notice:
+              </strong>{' '}
+              Never share your password,
+              OTP or Passkey information
+              with anyone. Zenimonies will
+              never ask you to send your
+              security credentials to another
+              person.
+            </div>
           </div>
         </div>
       </div>
