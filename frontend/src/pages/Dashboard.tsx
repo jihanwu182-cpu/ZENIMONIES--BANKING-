@@ -937,6 +937,18 @@ const Dashboard: React.FC = () => {
             <path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1-2 2-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.6v.2h-2.8v-.2a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1-2-2 .1-.1A1.7 1.7 0 007 15a1.7 1.7 0 00-1.6-1H5v-2.8h.2a1.7 1.7 0 001.6-1A1.7 1.7 0 006.5 8.3l-.1-.1 2-2 .1.1a1.7 1.7 0 001.9.3 1.7 1.7 0 001-1.6v-.2h2.8V5a1.7 1.7 0 001 1.6 1.7 1.7 0 001.9-.3l.1-.1 2 2-.1.1a1.7 1.7 0 00-.3 1.9 1.7 1.7 0 001.6 1h.2V14h-.2a1.7 1.7 0 00-1.6 1z" />
           </svg>
         );
+      case 'help':
+       return (
+    <svg {...common}>
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+      />
+      <path d="M9.5 9a2.5 2.5 0 015 0c0 1.8-2.5 2-2.5 3.5" />
+      <path d="M12 16h.01" />
+    </svg>
+  );
 
       default:
         return null;
@@ -950,82 +962,84 @@ const Dashboard: React.FC = () => {
   return (
     <div style={styles.page}>
 
-      {/* ======================================================
-          HEADER
-      ====================================================== */}
+ {/* ======================================================
+    HEADER
+====================================================== */}
 
-      <header style={styles.header}>
+<header style={styles.header}>
 
-        <div style={styles.brandArea}>
+  <div style={styles.brandArea}>
 
-          <div style={styles.logo}>
-            Z
-          </div>
+    <div style={styles.logo}>
+      Z
+    </div>
 
-          <div>
-            <div style={styles.brandName}>
-              Zenimonies
-            </div>
+    <div>
+      <div style={styles.brandName}>
+        Zenimonies
+      </div>
 
-            <div style={styles.brandSubtitle}>
-              DIGITAL BANKING
-            </div>
-          </div>
+      <div style={styles.brandSubtitle}>
+        DIGITAL BANKING
+      </div>
+    </div>
 
-        </div>
+  </div>
 
-        <div style={styles.headerRight}>
+  <div style={styles.headerRight}>
 
-  {/* NOTIFICATIONS */}
+    {/* NOTIFICATIONS */}
 
-  <button
-    type="button"
-    aria-label="Notifications"
-    style={styles.notificationButton}
-    onClick={() => navigate('/notifications')}
-  >
-    <Icon name="bell" size={24} />
+    <button
+      type="button"
+      aria-label="Notifications"
+      style={styles.notificationButton}
+      onClick={() => navigate('/notifications')}
+    >
+      <Icon name="bell" size={24} />
 
-    {unreadNotificationCount > 0 && (
-      <span
-        style={{
-          position: 'absolute',
-          top: '3px',
-          right: '3px',
-          minWidth: '17px',
-          height: '17px',
-          padding: '0 4px',
-          borderRadius: '999px',
-          background: '#e11d48',
-          color: '#ffffff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '9px',
-          fontWeight: 800,
-          border: '2px solid #ffffff',
-          boxSizing: 'border-box',
-        }}
-      >
-        {unreadNotificationCount > 99
-          ? '99+'
-          : unreadNotificationCount}
-      </span>
-    )}
-  </button>
+      {unreadNotificationCount > 0 && (
+        <span
+          style={{
+            position: 'absolute',
+            top: '3px',
+            right: '3px',
+            minWidth: '17px',
+            height: '17px',
+            padding: '0 4px',
+            borderRadius: '999px',
+            background: '#e11d48',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '9px',
+            fontWeight: 800,
+            border: '2px solid #ffffff',
+            boxSizing: 'border-box',
+          }}
+        >
+          {unreadNotificationCount > 99
+            ? '99+'
+            : unreadNotificationCount}
+        </span>
+      )}
+    </button>
 
-  {/* HELP CENTER */}
+    {/* HELP CENTER */}
 
-  <button
-    type="button"
-    aria-label="Help Center"
-    style={styles.notificationButton}
-    onClick={() => navigate('/help-center')}
-  >
-    <Icon name="help" size={24} />
-  </button>
+    <button
+      type="button"
+      aria-label="Help Center"
+      style={styles.notificationButton}
+      onClick={() => navigate('/help-center')}
+    >
+      <Icon name="help" size={24} />
+    </button>
 
-</div>
+  </div>
+
+</header>
       
       {/* ======================================================
           MAIN
