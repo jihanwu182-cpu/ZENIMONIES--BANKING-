@@ -17,6 +17,7 @@ import {
   ShareRounded,
   RefreshRounded,
   DescriptionRounded,
+  ContentCopyRounded,
 } from '@mui/icons-material';
 
 import {
@@ -72,6 +73,32 @@ interface Transaction {
   date?: string;
   timestamp?: string;
 
+  /*
+   * ============================================================
+   * ELECTRICITY
+   * ============================================================
+   */
+
+  electricity_token?: string;
+  units?: number | string;
+  meter_number?: string;
+  meter_type?: string;
+  biller_name?: string;
+  customer_name?: string;
+  verification_status?: string;
+  tariff_class?: string;
+  provider_reference?: string;
+  provider_response_message?: string;
+
+  /*
+   * ============================================================
+   * INSURANCE
+   * ============================================================
+   */
+
+  certificate_url?: string;
+  certificateUrl?: string;
+
   [key: string]: any;
 }
 
@@ -103,9 +130,6 @@ const TransactionReceipt: React.FC = () => {
     useRef<ReturnType<typeof setInterval> | null>(
       null
     );
-
-  const requeryAttemptsRef =
-    useRef(0);
 
   const [pdfLoading, setPdfLoading] =
     useState(false);
@@ -169,370 +193,211 @@ const TransactionReceipt: React.FC = () => {
   /*
    * ============================================================
    * AUTOMATIC INSURANCE STATUS CHECK
-   *
-   * IMPORTANT:
-   * This Hook is BEFORE the conditional receipt return.
-   * Therefore React always calls Hooks in the same order.
    * ============================================================
    */
 
   useEffect(() => {
-  const currentTransaction =
-    location.state?.transaction as
-      | Transaction
-      | undefined;
+    const currentTransaction =
+      location.state?.transaction as
+        | Transaction
+        | undefined;
 
-  if (!currentTransaction) {
-    return;
-  }
+    if (!currentTransaction) {
+      return;
+    }
 
-  const currentReference =
-    currentTransaction.reference ||
-    currentTransaction.transaction_reference ||
-    '';
+    const currentReference =
+      currentTransaction.reference ||
+      currentTransaction.transaction_reference ||
+      '';
 
-  const currentType =
-    String(
-      currentTransaction.transaction_type ||
-        currentTransaction.type ||
-        currentTransaction.category ||
-        ''
-    ).toLowerCase();
+    const currentType =
+      String(
+        currentTransaction.transaction_type ||
+          currentTransaction.type ||
+          currentTransaction.category ||
+          ''
+      ).toLowerCase();
 
-  const currentDescription =
-    String(
-      currentTransaction.description || ''
-    ).toLowerCase();
+    const currentDescription =
+      String(
+        currentTransaction.description || ''
+      ).toLowerCase();
 
-  const currentCategory =
-    String(
-      currentTransaction.category || ''
-    ).toLowerCase();
+    const currentCategory =
+      String(
+        currentTransaction.category || ''
+      ).toLowerCase();
 
-  const currentIsInsurance =
-    currentType.includes('insurance') ||
-    currentCategory.includes('insurance') ||
-    currentDescription.includes('insurance') ||
-    String(currentReference)
-      .toUpperCase()
-      .startsWith('ZINS-');
+    const currentIsInsurance =
+      currentType.includes('insurance') ||
+      currentCategory.includes('insurance') ||
+      currentDescription.includes('insurance') ||
+      String(currentReference)
+        .toUpperCase()
+        .startsWith('ZINS-');
 
-  if (
-    !currentIsInsurance ||
-    !currentReference
-  ) {
-    return;
-  }
+    if (
+      !currentIsInsurance ||
+      !currentReference
+    ) {
+      return;
+    }
 
-  const currentStatus =
-    String(
-      currentTransaction.status || ''
-    )
-      .trim()
-      .toLowerCase();
+    const currentStatus =
+      String(
+        currentTransaction.status || ''
+      )
+        .trim()
+        .toLowerCase();
 
-  /*
-   * ============================================================
-   * IMPORTANT
-   *
-   * We now requery BOTH:
-   *
-   * 1. Pending insurance transactions
-   * 2. Completed/successful insurance transactions that do not
-   *    already have a certificate URL
-   *
-   * This allows an already-completed transaction to retrieve the
-   * certificate URL stored by the backend.
-   * ============================================================
-   */
+    const isPending =
+      currentStatus === '' ||
+      currentStatus === 'pending' ||
+      currentStatus === 'processing' ||
+      currentStatus === 'initiated';
 
-  const isPending =
-    currentStatus === '' ||
-    currentStatus === 'pending' ||
-    currentStatus === 'processing' ||
-    currentStatus === 'initiated';
+    const isAlreadySuccessful =
+      currentStatus === 'completed' ||
+      currentStatus === 'successful' ||
+      currentStatus === 'success';
 
-  const isAlreadySuccessful =
-    currentStatus === 'completed' ||
-    currentStatus === 'successful' ||
-    currentStatus === 'success';
+    const existingCertificate =
+      currentTransaction.certificate_url ||
+      currentTransaction.certificateUrl ||
+      '';
 
-  /*
-   * If the transaction is already completed and the transaction
-   * itself already contains a certificate URL, there is nothing
-   * else to retrieve.
-   */
+    if (
+      isAlreadySuccessful &&
+      existingCertificate
+    ) {
+      setCertificateUrl(
+        String(existingCertificate)
+      );
 
-  const existingCertificate =
-    currentTransaction.certificate_url ||
-    currentTransaction.certificateUrl ||
-    '';
+      setLiveStatus('completed');
 
-  if (
-    isAlreadySuccessful &&
-    existingCertificate
-  ) {
-    setCertificateUrl(
-      String(existingCertificate)
-    );
+      setRequeryMessage(
+        'Insurance payment confirmed successfully.'
+      );
 
-    setLiveStatus('completed');
+      return;
+    }
 
-    setRequeryMessage(
-      'Insurance payment confirmed successfully.'
-    );
+    let attempts = 0;
+    let cancelled = false;
 
-    return;
-  }
-
-  let attempts = 0;
-  let cancelled = false;
-
-  const checkStatus =
-    async () => {
-      if (cancelled) {
-        return;
-      }
-
-      try {
-        const token =
-          localStorage.getItem(
-            'zenimonies_token'
-          );
-
-        const response =
-          await fetch(
-            `${API_URL}/insurance/requery`,
-            {
-              method: 'POST',
-
-              headers: {
-                'Content-Type':
-                  'application/json',
-
-                ...(token
-                  ? {
-                      Authorization:
-                        `Bearer ${token}`,
-                    }
-                  : {}),
-              },
-
-              body: JSON.stringify({
-                reference:
-                  currentReference,
-              }),
-            }
-          );
-
-        let result: any = null;
-
-        try {
-          result =
-            await response.json();
-        } catch {
-          result = null;
-        }
-
-        if (!response.ok) {
-          console.error(
-            'Insurance requery failed:',
-            result
-          );
-
-          return;
-        }
-
-        /*
-         * ========================================================
-         * STATUS
-         * ========================================================
-         */
-
-        const providerStatus =
-          String(
-            result?.status ||
-              result?.data?.status ||
-              ''
-          )
-            .trim()
-            .toLowerCase();
-
-        /*
-         * ========================================================
-         * CERTIFICATE
-         *
-         * Backend may return it in any of these supported
-         * locations.
-         * ========================================================
-         */
-
-        const certificate =
-          result?.certificate_url ||
-          result?.certificateUrl ||
-          result?.data?.certificate_url ||
-          result?.data?.certificateUrl ||
-          result?.data?.certUrl ||
-          result?.certUrl ||
-          '';
-
+    const checkStatus =
+      async () => {
         if (cancelled) {
           return;
         }
 
-        if (certificate) {
-          setCertificateUrl(
-            String(certificate)
-          );
-        }
+        try {
+          const token =
+            localStorage.getItem(
+              'zenimonies_token'
+            );
 
-        if (providerStatus) {
-          setLiveStatus(
-            providerStatus
-          );
-        }
+          const response =
+            await fetch(
+              `${API_URL}/insurance/requery`,
+              {
+                method: 'POST',
 
-        /*
-         * ========================================================
-         * SUCCESS
-         * ========================================================
-         */
+                headers: {
+                  'Content-Type':
+                    'application/json',
 
-        if (
-          providerStatus ===
-            'completed' ||
-          providerStatus ===
-            'successful' ||
-          providerStatus ===
-            'success'
-        ) {
-          setLiveStatus(
-            'completed'
-          );
+                  ...(token
+                    ? {
+                        Authorization:
+                          `Bearer ${token}`,
+                      }
+                    : {}),
+                },
+
+                body: JSON.stringify({
+                  reference:
+                    currentReference,
+                }),
+              }
+            );
+
+          let result: any = null;
+
+          try {
+            result =
+              await response.json();
+          } catch {
+            result = null;
+          }
+
+          if (!response.ok) {
+            console.error(
+              'Insurance requery failed:',
+              result
+            );
+
+            return;
+          }
+
+          const providerStatus =
+            String(
+              result?.status ||
+                result?.data?.status ||
+                ''
+            )
+              .trim()
+              .toLowerCase();
+
+          const certificate =
+            result?.certificate_url ||
+            result?.certificateUrl ||
+            result?.data?.certificate_url ||
+            result?.data?.certificateUrl ||
+            result?.data?.certUrl ||
+            result?.certUrl ||
+            '';
+
+          if (cancelled) {
+            return;
+          }
 
           if (certificate) {
-            setRequeryMessage(
-              'Insurance payment confirmed successfully. Your insurance certificate is ready.'
-            );
-          } else {
-            setRequeryMessage(
-              'Insurance payment confirmed successfully. The insurance certificate is not available from the provider yet.'
+            setCertificateUrl(
+              String(certificate)
             );
           }
 
-          /*
-           * Once completed, stop polling.
-           */
+          if (providerStatus) {
+            setLiveStatus(
+              providerStatus
+            );
+          }
 
           if (
-            requeryTimerRef.current
+            providerStatus ===
+              'completed' ||
+            providerStatus ===
+              'successful' ||
+            providerStatus ===
+              'success'
           ) {
-            clearInterval(
-              requeryTimerRef.current
+            setLiveStatus(
+              'completed'
             );
 
-            requeryTimerRef.current =
-              null;
-          }
+            if (certificate) {
+              setRequeryMessage(
+                'Insurance payment confirmed successfully. Your insurance certificate is ready.'
+              );
+            } else {
+              setRequeryMessage(
+                'Insurance payment confirmed successfully. The insurance certificate is not available from the provider yet.'
+              );
+            }
 
-          return;
-        }
-
-        /*
-         * ========================================================
-         * FAILED
-         * ========================================================
-         */
-
-        if (
-          providerStatus ===
-            'failed' ||
-          providerStatus ===
-            'failure' ||
-          providerStatus ===
-            'reversed' ||
-          providerStatus ===
-            'cancelled' ||
-          providerStatus ===
-            'canceled'
-        ) {
-          setLiveStatus(
-            'failed'
-          );
-
-          setRequeryMessage(
-            'The insurance transaction was not completed.'
-          );
-
-          if (
-            requeryTimerRef.current
-          ) {
-            clearInterval(
-              requeryTimerRef.current
-            );
-
-            requeryTimerRef.current =
-              null;
-          }
-
-          return;
-        }
-
-        /*
-         * ========================================================
-         * STILL PENDING
-         * ========================================================
-         */
-
-        if (
-          providerStatus ===
-            'pending' ||
-          providerStatus ===
-            'processing' ||
-          !providerStatus
-        ) {
-          setLiveStatus(
-            'pending'
-          );
-        }
-      } catch (error) {
-        console.error(
-          'ZENIMONIES insurance automatic requery error:',
-          error
-        );
-      }
-    };
-
-  /*
-   * ============================================================
-   * FIRST CHECK
-   *
-   * This runs immediately even if the transaction was already
-   * completed.
-   * ============================================================
-   */
-
-  checkStatus();
-
-  /*
-   * ============================================================
-   * POLLING
-   *
-   * Only continue polling when the original transaction was
-   * pending.
-   *
-   * A completed transaction gets one immediate requery so that
-   * we can retrieve its certificate.
-   * ============================================================
-   */
-
-  if (isPending) {
-    requeryTimerRef.current =
-      setInterval(
-        async () => {
-          attempts += 1;
-
-          if (attempts > 6) {
             if (
               requeryTimerRef.current
             ) {
@@ -547,28 +412,104 @@ const TransactionReceipt: React.FC = () => {
             return;
           }
 
-          await checkStatus();
-        },
-        5000
-      );
-  }
+          if (
+            providerStatus ===
+              'failed' ||
+            providerStatus ===
+              'failure' ||
+            providerStatus ===
+              'reversed' ||
+            providerStatus ===
+              'cancelled' ||
+            providerStatus ===
+              'canceled'
+          ) {
+            setLiveStatus(
+              'failed'
+            );
 
-  return () => {
-    cancelled = true;
+            setRequeryMessage(
+              'The insurance transaction was not completed.'
+            );
 
-    if (
-      requeryTimerRef.current
-    ) {
-      clearInterval(
-        requeryTimerRef.current
-      );
+            if (
+              requeryTimerRef.current
+            ) {
+              clearInterval(
+                requeryTimerRef.current
+              );
 
+              requeryTimerRef.current =
+                null;
+            }
+
+            return;
+          }
+
+          if (
+            providerStatus ===
+              'pending' ||
+            providerStatus ===
+              'processing' ||
+            !providerStatus
+          ) {
+            setLiveStatus(
+              'pending'
+            );
+          }
+        } catch (error) {
+          console.error(
+            'ZENIMONIES insurance automatic requery error:',
+            error
+          );
+        }
+      };
+
+    checkStatus();
+
+    if (isPending) {
       requeryTimerRef.current =
-        null;
+        setInterval(
+          async () => {
+            attempts += 1;
+
+            if (attempts > 6) {
+              if (
+                requeryTimerRef.current
+              ) {
+                clearInterval(
+                  requeryTimerRef.current
+                );
+
+                requeryTimerRef.current =
+                  null;
+              }
+
+              return;
+            }
+
+            await checkStatus();
+          },
+          5000
+        );
     }
-  };
-}, [location.state]);
-          
+
+    return () => {
+      cancelled = true;
+
+      if (
+        requeryTimerRef.current
+      ) {
+        clearInterval(
+          requeryTimerRef.current
+        );
+
+        requeryTimerRef.current =
+          null;
+      }
+    };
+  }, [location.state]);
+
   /*
    * ============================================================
    * RECEIPT UNAVAILABLE
@@ -806,6 +747,12 @@ const TransactionReceipt: React.FC = () => {
         ''
     ).toLowerCase();
 
+  const rawCategory =
+    String(
+      transaction.category ||
+        ''
+    ).toLowerCase();
+
   const isTransfer =
     rawType.includes(
       'transfer'
@@ -813,6 +760,88 @@ const TransactionReceipt: React.FC = () => {
     rawDescription.includes(
       'transfer'
     );
+
+  /*
+   * ============================================================
+   * ELECTRICITY DETECTION
+   * ============================================================
+   */
+
+  const isElectricity =
+    rawType.includes(
+      'electricity'
+    ) ||
+    rawCategory.includes(
+      'electricity'
+    ) ||
+    rawDescription.includes(
+      'electricity'
+    ) ||
+    String(reference)
+      .toUpperCase()
+      .startsWith('ZEL-') ||
+    Boolean(
+      transaction.electricity_token ||
+      transaction.meter_number ||
+      transaction.units
+    );
+
+  /*
+   * ============================================================
+   * ELECTRICITY VALUES
+   * ============================================================
+   */
+
+  const electricityToken =
+    String(
+      transaction.electricity_token ||
+        transaction.token ||
+        transaction.prepaid_token ||
+        ''
+    ).trim();
+
+  const electricityUnits =
+    transaction.units ??
+    transaction.kwh ??
+    transaction.unit ??
+    '';
+
+  const electricityMeterNumber =
+    String(
+      transaction.meter_number ||
+        transaction.customer_reference ||
+        transaction.customer_number ||
+        ''
+    ).trim();
+
+  const electricityMeterType =
+    String(
+      transaction.meter_type ||
+        ''
+    )
+      .trim()
+      .toLowerCase();
+
+  const electricityBiller =
+    String(
+      transaction.biller_name ||
+        transaction.disco_name ||
+        transaction.provider ||
+        ''
+    ).trim();
+
+  const electricityCustomerName =
+    String(
+      transaction.customer_name ||
+        transaction.verified_customer_name ||
+        ''
+    ).trim();
+
+  const electricityTariff =
+    String(
+      transaction.tariff_class ||
+        ''
+    ).trim();
 
   /*
    * ============================================================
@@ -824,12 +853,9 @@ const TransactionReceipt: React.FC = () => {
     rawType.includes(
       'insurance'
     ) ||
-    String(
-      transaction.category ||
-        ''
-    )
-      .toLowerCase()
-      .includes('insurance') ||
+    rawCategory.includes(
+      'insurance'
+    ) ||
     rawDescription.includes(
       'insurance'
     ) ||
@@ -1016,10 +1042,6 @@ const TransactionReceipt: React.FC = () => {
           );
         }
 
-        /*
-         * SUCCESS
-         */
-
         if (
           providerStatus ===
             'completed' ||
@@ -1050,10 +1072,6 @@ const TransactionReceipt: React.FC = () => {
           };
         }
 
-        /*
-         * FAILED
-         */
-
         if (
           providerStatus ===
             'failed' ||
@@ -1081,10 +1099,6 @@ const TransactionReceipt: React.FC = () => {
               'failed',
           };
         }
-
-        /*
-         * STILL PENDING
-         */
 
         if (
           providerStatus ===
@@ -1207,8 +1221,6 @@ const TransactionReceipt: React.FC = () => {
    * ============================================================
    * TOTAL DEBIT
    * ============================================================
-   *
-   * Spend + Save is NOT included.
    */
 
   let totalDebited =
@@ -1681,6 +1693,222 @@ const TransactionReceipt: React.FC = () => {
           )}
 
           {/* ====================================================
+              ELECTRICITY PAYMENT
+          ==================================================== */}
+
+          {isElectricity && (
+            <Box
+              sx={{
+                mx: 2,
+                mb: 1.5,
+                borderRadius: 2.2,
+                overflow: 'hidden',
+                border:
+                  `1px solid ${COLORS.border}`,
+                background:
+                  '#FAFCFB',
+              }}
+            >
+              <Box
+                sx={{
+                  px: 1.6,
+                  py: 1.25,
+                  background:
+                    'rgba(8,127,91,0.07)',
+                  borderBottom:
+                    `1px solid ${COLORS.border}`,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color:
+                      COLORS.primary,
+                    fontSize: 12,
+                    fontWeight: 900,
+                  }}
+                >
+                  Electricity Payment
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.25,
+                    color:
+                      COLORS.muted,
+                    fontSize: 10,
+                  }}
+                >
+                  Electricity purchase details
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  py: 0.2,
+                }}
+              >
+                {electricityBiller && (
+                  <ReceiptRow
+                    label="DisCo"
+                    value={
+                      electricityBiller
+                    }
+                  />
+                )}
+
+                {electricityCustomerName && (
+                  <ReceiptRow
+                    label="Customer"
+                    value={
+                      electricityCustomerName
+                    }
+                  />
+                )}
+
+                {electricityMeterNumber && (
+                  <ReceiptRow
+                    label="Meter Number"
+                    value={
+                      electricityMeterNumber
+                    }
+                  />
+                )}
+
+                {electricityMeterType && (
+                  <ReceiptRow
+                    label="Meter Type"
+                    value={
+                      electricityMeterType
+                        .charAt(0)
+                        .toUpperCase() +
+                      electricityMeterType.slice(
+                        1
+                      )
+                    }
+                  />
+                )}
+
+                {electricityUnits !==
+                  '' &&
+                  electricityUnits !==
+                    null &&
+                  electricityUnits !==
+                    undefined && (
+                    <ReceiptRow
+                      label="Units"
+                      value={`${electricityUnits} kWh`}
+                    />
+                  )}
+
+                {electricityTariff && (
+                  <ReceiptRow
+                    label="Tariff Class"
+                    value={
+                      electricityTariff
+                    }
+                  />
+                )}
+
+                {electricityToken && (
+                  <Box
+                    sx={{
+                      mx: 2,
+                      py: 1.3,
+                      borderTop:
+                        `1px solid ${COLORS.border}`,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color:
+                          COLORS.primary,
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        mb: 0.65,
+                      }}
+                    >
+                      Electricity Token
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        background:
+                          '#EAF7F3',
+                        border:
+                          '1px solid #CBE8DD',
+                        borderRadius: 1.8,
+                        px: 1.2,
+                        py: 1,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color:
+                            COLORS.text,
+                          fontSize: 14,
+                          fontWeight: 900,
+                          letterSpacing:
+                            1.1,
+                          textAlign:
+                            'center',
+                          wordBreak:
+                            'break-word',
+                        }}
+                      >
+                        {electricityToken}
+                      </Typography>
+                    </Box>
+
+                    <Button
+                      className="no-print"
+                      size="small"
+                      startIcon={
+                        <ContentCopyRounded
+                          sx={{
+                            fontSize: 13,
+                          }}
+                        />
+                      }
+                      onClick={
+                        async () => {
+                          try {
+                            await navigator.clipboard.writeText(
+                              electricityToken
+                            );
+
+                            alert(
+                              'Electricity token copied.'
+                            );
+                          } catch {
+                            alert(
+                              'Unable to copy electricity token.'
+                            );
+                          }
+                        }
+                      }
+                      sx={{
+                        display:
+                          'flex',
+                        mx: 'auto',
+                        mt: 0.5,
+                        minWidth: 0,
+                        color:
+                          COLORS.primary,
+                        fontSize: 9,
+                        fontWeight: 800,
+                        textTransform:
+                          'none',
+                      }}
+                    >
+                      Copy token
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            </Box>
+          )}
+
+          {/* ====================================================
               INCOMING TRANSFER
           ==================================================== */}
 
@@ -1882,11 +2110,13 @@ const TransactionReceipt: React.FC = () => {
               <ReceiptRow
                 label="Transaction Type"
                 value={
-                  String(
-                    transaction.transaction_type ||
-                      transaction.type ||
-                      'TRANSACTION'
-                  ).toUpperCase()
+                  isElectricity
+                    ? 'ELECTRICITY PAYMENT'
+                    : String(
+                        transaction.transaction_type ||
+                          transaction.type ||
+                          'TRANSACTION'
+                      ).toUpperCase()
                 }
               />
 
@@ -1976,10 +2206,6 @@ const TransactionReceipt: React.FC = () => {
           }}
         >
 
-          {/* ====================================================
-              DOWNLOAD — SENDER ONLY
-          ==================================================== */}
-
           {!isIncoming && (
             <Button
               fullWidth
@@ -2013,10 +2239,6 @@ const TransactionReceipt: React.FC = () => {
                 : 'Download PDF'}
             </Button>
           )}
-
-          {/* ====================================================
-              SHARE — BOTH
-          ==================================================== */}
 
           <Button
             fullWidth
@@ -2063,10 +2285,6 @@ const TransactionReceipt: React.FC = () => {
               ? 'Preparing...'
               : 'Share Receipt'}
           </Button>
-
-          {/* ====================================================
-              BACK
-          ==================================================== */}
 
           <Button
             fullWidth
