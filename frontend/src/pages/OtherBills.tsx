@@ -65,6 +65,11 @@ const SERVICES: Service[] = [
   },
 ];
 
+const ACTIVE_SERVICE_IDS = new Set([
+  'gift-cards',
+  'education',
+]);
+
 const OtherBills: React.FC = () => {
   const navigate = useNavigate();
 
@@ -88,13 +93,11 @@ const OtherBills: React.FC = () => {
       return;
     }
 
-    if (service.id === 'insurance') {
-      navigate('/insurance');
-      return;
-    }
-
     // ======================================================
-    // SERVICES NOT YET CONNECTED
+    // ALL OTHER SERVICES
+    // ======================================================
+    // These services are intentionally marked Coming Soon.
+    // No provider payment flow is opened.
     // ======================================================
 
     setSelectedService(service);
@@ -137,8 +140,7 @@ const OtherBills: React.FC = () => {
               width: '42px',
               height: '42px',
               borderRadius: '12px',
-              border:
-                '1px solid #e0e9e3',
+              border: '1px solid #e0e9e3',
               background: '#ffffff',
               color: '#145c39',
               fontSize: '22px',
@@ -163,8 +165,7 @@ const OtherBills: React.FC = () => {
 
             <p
               style={{
-                margin:
-                  '5px 0 0',
+                margin: '5px 0 0',
                 color: '#748078',
                 fontSize: '13px',
               }}
@@ -226,8 +227,8 @@ const OtherBills: React.FC = () => {
                 lineHeight: 1.6,
               }}
             >
-              Explore more ways to pay, shop,
-              travel and manage your everyday needs.
+              Explore more ways to pay and
+              manage your everyday needs.
             </div>
           </div>
         </div>
@@ -282,113 +283,145 @@ const OtherBills: React.FC = () => {
           }}
         >
           {SERVICES.map(
-            (service) => (
-              <button
-                key={service.id}
-                type="button"
-                onClick={() =>
-                  handleServiceClick(
-                    service
-                  )
-                }
-                style={{
-                  background:
-                    '#ffffff',
-                  border:
-                    '1px solid #e4ece6',
-                  borderRadius: '16px',
-                  padding:
-                    '18px 14px',
-                  minHeight:
-                    '150px',
-                  display: 'flex',
-                  flexDirection:
-                    'column',
-                  alignItems:
-                    'flex-start',
-                  textAlign:
-                    'left',
-                  cursor:
-                    'pointer',
-                  boxShadow:
-                    '0 3px 12px rgba(20, 92, 57, 0.035)',
-                }}
-              >
-                <div
-                  style={{
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '13px',
-                    background:
-                      '#eaf5ed',
-                    display:
-                      'flex',
-                    alignItems:
-                      'center',
-                    justifyContent:
-                      'center',
-                    fontSize:
-                      '24px',
-                    marginBottom:
-                      '14px',
-                  }}
-                >
-                  {service.icon}
-                </div>
+            (service) => {
+              const isActive =
+                ACTIVE_SERVICE_IDS.has(
+                  service.id
+                );
 
-                <div
-                  style={{
-                    color:
-                      '#193b2a',
-                    fontSize:
-                      '14px',
-                    fontWeight:
-                      800,
-                    lineHeight:
-                      1.4,
-                    marginBottom:
-                      '6px',
-                  }}
-                >
-                  {service.name}
-                </div>
-
-                <div
-                  style={{
-                    color:
-                      '#7b857e',
-                    fontSize:
-                      '12px',
-                    lineHeight:
-                      1.5,
-                  }}
-                >
-                  {
-                    service.description
+              return (
+                <button
+                  key={service.id}
+                  type="button"
+                  onClick={() =>
+                    handleServiceClick(
+                      service
+                    )
                   }
-                </div>
-
-                <div
                   style={{
-                    color:
-                      '#176b43',
-                    fontSize:
-                      '12px',
-                    fontWeight:
-                      700,
-                    marginTop:
-                      '12px',
+                    position: 'relative',
+                    background: '#ffffff',
+                    border:
+                      '1px solid #e4ece6',
+                    borderRadius: '16px',
+                    padding: '18px 14px',
+                    minHeight: '150px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-start',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    boxShadow:
+                      '0 3px 12px rgba(20, 92, 57, 0.035)',
                   }}
                 >
-                  Explore →
-                </div>
-              </button>
-            )
+                  {/* ==================================================
+                      STATUS BADGE
+                  ================================================== */}
+
+                  {!isActive && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '12px',
+                        right: '10px',
+                        background: '#f1f4f2',
+                        color: '#718078',
+                        fontSize: '9px',
+                        fontWeight: 800,
+                        padding:
+                          '5px 7px',
+                        borderRadius:
+                          '8px',
+                        letterSpacing:
+                          '0.2px',
+                      }}
+                    >
+                      COMING SOON
+                    </div>
+                  )}
+
+                  {/* ==================================================
+                      ICON
+                  ================================================== */}
+
+                  <div
+                    style={{
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '13px',
+                      background:
+                        '#eaf5ed',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '24px',
+                      marginBottom: '14px',
+                    }}
+                  >
+                    {service.icon}
+                  </div>
+
+                  {/* ==================================================
+                      NAME
+                  ================================================== */}
+
+                  <div
+                    style={{
+                      color: '#193b2a',
+                      fontSize: '14px',
+                      fontWeight: 800,
+                      lineHeight: 1.4,
+                      marginBottom: '6px',
+                      paddingRight:
+                        isActive
+                          ? '0'
+                          : '55px',
+                    }}
+                  >
+                    {service.name}
+                  </div>
+
+                  {/* ==================================================
+                      DESCRIPTION
+                  ================================================== */}
+
+                  <div
+                    style={{
+                      color: '#7b857e',
+                      fontSize: '12px',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {service.description}
+                  </div>
+
+                  {/* ==================================================
+                      ACTION
+                  ================================================== */}
+
+                  <div
+                    style={{
+                      color: isActive
+                        ? '#176b43'
+                        : '#8a968f',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      marginTop: '12px',
+                    }}
+                  >
+                    {isActive
+                      ? 'Explore →'
+                      : 'Coming Soon'}
+                  </div>
+                </button>
+              );
+            }
           )}
         </div>
 
         {/* ==================================================
-            UNCONNECTED SERVICE MESSAGE
+            COMING SOON MESSAGE
         ================================================== */}
 
         {selectedService && (
@@ -401,6 +434,8 @@ const OtherBills: React.FC = () => {
               background: '#ffffff',
               border:
                 '1px solid #dcece1',
+              boxShadow:
+                '0 3px 12px rgba(20, 92, 57, 0.035)',
             }}
           >
             <div
@@ -416,69 +451,65 @@ const OtherBills: React.FC = () => {
                   fontSize: '23px',
                 }}
               >
-                {
-                  selectedService.icon
-                }
+                {selectedService.icon}
               </span>
 
-              <strong
-                style={{
-                  color:
-                    '#145c39',
-                  fontSize:
-                    '15px',
-                }}
-              >
-                {
-                  selectedService.name
-                }
-              </strong>
+              <div>
+                <strong
+                  style={{
+                    color: '#145c39',
+                    fontSize: '15px',
+                  }}
+                >
+                  {selectedService.name}
+                </strong>
+
+                <div
+                  style={{
+                    marginTop: '3px',
+                    color: '#8a968f',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    letterSpacing:
+                      '0.5px',
+                  }}
+                >
+                  COMING SOON
+                </div>
+              </div>
             </div>
 
             <p
               style={{
-                color:
-                  '#68786d',
-                fontSize:
-                  '13px',
-                lineHeight:
-                  1.7,
-                margin:
-                  '0 0 15px',
+                color: '#68786d',
+                fontSize: '13px',
+                lineHeight: 1.7,
+                margin: '0 0 15px',
               }}
             >
-              This service is being
-              prepared for
-              ZENIMONIES. Provider
-              integration and payment
-              functionality will be
-              available once the
-              required service provider
-              is connected.
+              This service is coming soon
+              to ZENIMONIES. We are
+              working on the required
+              provider integration before
+              making it available to
+              customers.
             </p>
 
             <button
               type="button"
               onClick={() =>
-                setSelectedService(
-                  null
-                )
+                setSelectedService(null)
               }
               style={{
                 width: '100%',
                 height: '44px',
                 border: 'none',
                 borderRadius: '11px',
-                background:
-                  '#176b43',
-                color:
-                  '#ffffff',
-                fontSize:
-                  '14px',
-                fontWeight:
-                  800,
-                cursor:
-                  'pointer',
+                background: '#176b43',
+                color: '#ffffff',
+                fontSize: '14px',
+                fontWeight: 800,
+                cursor: 'pointer',
               }}
             >
               Close
