@@ -437,7 +437,149 @@ const loadTransactions = async (
               walletTransaction.account_id,
           })
         );
+        /*
+ * ======================================================
+ * LOAD ELECTRICITY RECONCILIATION
+ * ======================================================
+ *
+ * Electricity receipts contain additional provider
+ * information such as token and units. These records
+ * are merged into the matching main transaction using
+ * the transaction reference.
+ */
 
+let electricityPayments: any[] = [];
+
+try {
+  const electricityResponse =
+    await axios.get(
+      `${API_URL}/api/bills/electricity/reconciliation`,
+      {
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+        },
+
+        timeout: 8000,
+      }
+    );
+
+  const electricityData =
+    electricityResponse.data;
+
+  if (
+    Array.isArray(
+      electricityData
+    )
+  ) {
+    electricityPayments =
+      electricityData;
+  } else if (
+    Array.isArray(
+      electricityData?.payments
+    )
+  ) {
+    electricityPayments =
+      electricityData.payments;
+  }
+} catch (electricityError) {
+  /*
+   * Electricity reconciliation is supplementary.
+   * It must never prevent normal transaction history
+   * from loading.
+   */
+  console.warn(
+    'Electricity reconciliation could not be loaded:',
+    electricityError
+  );
+
+  electricityPayments = [];
+}
+
+/*
+ * ======================================================
+ * MERGE ELECTRICITY DETAILS
+ * ======================================================
+ */
+
+const electricityByReference =
+  new Map<string, any>();
+
+electricityPayments.forEach(
+  (payment) => {
+    const paymentReference =
+      String(
+        payment?.reference ||
+        payment?.transaction_reference ||
+        ''
+      ).trim();
+
+    if (paymentReference) {
+      electricityByReference.set(
+        paymentReference,
+        payment
+      );
+    }
+  }
+);
+
+const enrichedAccountTransactions =
+  accountTransactions.map(
+    (transaction) => {
+      const transactionReference =
+        String(
+          transaction?.reference ||
+          transaction?.transaction_reference ||
+          ''
+        ).trim();
+
+      const electricity =
+        transactionReference
+          ? electricityByReference.get(
+              transactionReference
+            )
+          : undefined;
+
+      if (!electricity) {
+        return transaction;
+      }
+
+      return {
+        ...transaction,
+
+        electricity_token:
+          electricity.electricity_token,
+
+        units:
+          electricity.units,
+
+        meter_number:
+          electricity.meter_number,
+
+        meter_type:
+          electricity.meter_type,
+
+        biller_name:
+          electricity.biller_name,
+
+        customer_name:
+          electricity.customer_name,
+
+        verification_status:
+          electricity.verification_status,
+
+        tariff_class:
+          electricity.tariff_class,
+
+        provider_response_message:
+          electricity.provider_response_message,
+
+        provider_reference:
+          transaction.provider_reference ||
+          electricity.provider_reference,
+      };
+    }
+  );
     /*
      * ======================================================
      * MERGE
