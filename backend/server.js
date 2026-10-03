@@ -38,6 +38,7 @@ const saveWalletRoutes =
     require('./routes/saveWalletRoutes');
 const educationRoutes =
   require('./routes/education');
+const bettingRoutes = require('./routes/betting');
 const insuranceRoutes = require('./routes/insurance');
 const statementRoutes = require('./routes/statementRoutes');
 const posRoutes = require('./routes/posRoutes');
@@ -258,6 +259,10 @@ app.use(
   airtimeRoutes
 );
 
+app.use(
+  '/api/betting', 
+  bettingRoutes
+);
 // ============================================================
 // TV SUBSCRIPTION
 // ============================================================
