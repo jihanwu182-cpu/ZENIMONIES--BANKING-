@@ -5,7 +5,7 @@ const pool = require('../config/database');
 /**
  * ============================================================
  * ZENIMONIES — SOGO WEBHOOK CONTROLLER
- * Version: 2026-10-03-v3
+ * Version: 2026-10-03-v4
  *
  * Handles:
  * - transaction.completed
@@ -14,11 +14,21 @@ const pool = require('../config/database');
  * - transaction.cancelled
  * - transaction.refunded
  *
- * Electricity:
+ * Supports:
+ * - Electricity
+ * - Betting
+ *
+ * ELECTRICITY:
  * - Saves electricity token when available
  * - Saves electricity units/kWh when available
- * - In LIVE mode, retrieves the completed transaction from
- *   Sogo when sensitive delivery data is omitted from webhook
+ * - Retrieves completed transaction in LIVE mode when
+ *   sensitive delivery information is omitted
+ *
+ * BETTING:
+ * - Marks funding completed when Sogo completes it
+ * - Keeps processing transactions processing
+ * - Automatically refunds failed/cancelled/refunded funding
+ * - Prevents duplicate refunds
  *
  * IMPORTANT:
  * Sandbox transactions are not persisted by Sogo.
@@ -32,6 +42,12 @@ const SOGO_API_BASE_URL =
 
 const SOGO_API_KEY =
   process.env.SOGO_API_KEY;
+
+/**
+ * ============================================================
+ * GENERIC HELPER
+ * ============================================================
+ */
 
 const firstValue = (...values) => {
   for (const value of values) {
@@ -245,7 +261,7 @@ const extractTransaction = (
 
 /**
  * ============================================================
- * EXTRACT PROVIDER REFERENCE
+ * PROVIDER REFERENCE
  * ============================================================
  */
 
@@ -271,7 +287,7 @@ const extractProviderReference = (
 
 /**
  * ============================================================
- * EXTRACT PROVIDER MESSAGE
+ * PROVIDER MESSAGE
  * ============================================================
  */
 
@@ -294,7 +310,7 @@ const extractProviderMessage = (
 
 /**
  * ============================================================
- * EXTRACT STATUS
+ * PROVIDER STATUS
  * ============================================================
  */
 
@@ -333,16 +349,7 @@ const extractProviderStatus = (
 
 /**
  * ============================================================
- * LIVE TRANSACTION LOOKUP
- * ============================================================
- *
- * Sogo documents that sensitive electricity tokens are omitted
- * from webhook payloads and should be retrieved from the
- * transaction lookup endpoint.
- *
- * IMPORTANT:
- * Sandbox transactions are not persisted and lookup returns
- * 404, so this is ONLY attempted against a non-sandbox base URL.
+ * LIVE SOGO TRANSACTION LOOKUP
  * ============================================================
  */
 
@@ -359,7 +366,9 @@ const fetchSogoTransaction = async (
   const isSandbox =
     SOGO_API_BASE_URL
       .toLowerCase()
-      .includes('sandbox.sogo.africa');
+      .includes(
+        'sandbox.sogo.africa'
+      );
 
   if (isSandbox) {
     console.log(
@@ -387,7 +396,6 @@ const fetchSogoTransaction = async (
             Accept:
               'application/json',
           },
-
           timeout: 30000,
         }
       );
@@ -606,7 +614,7 @@ const handleSogoWebhook = async (
 
     /**
      * --------------------------------------------------------
-     * 8. REFERENCE
+     * 8. PROVIDER REFERENCE
      * --------------------------------------------------------
      */
 
@@ -619,7 +627,7 @@ const handleSogoWebhook = async (
 
     /**
      * --------------------------------------------------------
-     * 9. MESSAGE
+     * 9. PROVIDER MESSAGE
      * --------------------------------------------------------
      */
 
@@ -632,7 +640,7 @@ const handleSogoWebhook = async (
 
     /**
      * --------------------------------------------------------
-     * 10. TOKEN + UNITS FROM WEBHOOK
+     * 10. ELECTRICITY DATA
      * --------------------------------------------------------
      */
 
@@ -654,19 +662,6 @@ const handleSogoWebhook = async (
     console.log(
       '📌 Provider status:',
       normalizedStatus
-    );
-
-    console.log(
-      '📌 Electricity token:',
-      electricityToken
-        ? '[PRESENT]'
-        : '[NOT PRESENT]'
-    );
-
-    console.log(
-      '📌 Electricity units:',
-      units ||
-        '[NOT PRESENT]'
     );
 
     /**
@@ -723,6 +718,9 @@ const handleSogoWebhook = async (
      * --------------------------------------------------------
      * 13. FIND LOCAL PAYMENT
      * --------------------------------------------------------
+     *
+     * We include category so Betting and Electricity can be
+     * handled differently without affecting each other.
      */
 
     const billResult =
@@ -731,6 +729,9 @@ const handleSogoWebhook = async (
         SELECT
           id,
           account_id,
+          category,
+          amount,
+          reference,
           status,
           provider_reference,
           provider_response,
@@ -764,36 +765,521 @@ const handleSogoWebhook = async (
     const bill =
       billResult.rows[0];
 
+    const isBetting =
+      String(
+        bill.category || ''
+      ).toLowerCase() ===
+      'betting';
+
+    const isElectricity =
+      String(
+        bill.category || ''
+      ).toLowerCase() ===
+      'electricity';
+
     console.log(
       '✅ Local bill payment found:',
       bill.id
     );
 
+    console.log(
+      '📂 Bill category:',
+      bill.category
+    );
+
     /**
-     * --------------------------------------------------------
-     * 14. COMPLETED
-     * --------------------------------------------------------
+     * ========================================================
+     * BETTING — COMPLETED
+     * ========================================================
      */
 
     if (
-      event ===
-        'transaction.completed' ||
-      normalizedStatus ===
-        'completed'
+      isBetting &&
+      (
+        event ===
+          'transaction.completed' ||
+        normalizedStatus ===
+          'completed'
+      )
     ) {
       console.log(
-        '🎉 SOGO TRANSACTION COMPLETED'
+        '🎉 BETTING FUNDING COMPLETED'
+      );
+
+      await pool.query(
+        `
+        UPDATE bill_payments
+        SET
+          status = 'completed',
+          provider_response = $1,
+          provider_response_message = $2,
+          completed_at =
+            COALESCE(
+              completed_at,
+              CURRENT_TIMESTAMP
+            )
+        WHERE id = $3
+        `,
+        [
+          JSON.stringify(
+            payload
+          ),
+          providerMessage,
+          bill.id,
+        ]
+      );
+
+      await pool.query(
+        `
+        UPDATE transactions
+        SET
+          status = 'completed'
+        WHERE reference = $1
+        `,
+        [
+          bill.reference,
+        ]
+      );
+
+      console.log(
+        '✅ Betting transaction marked completed'
+      );
+
+      return res.status(200).json({
+        success: true,
+        message:
+          'Betting transaction completed',
+      });
+    }
+
+    /**
+     * ========================================================
+     * BETTING — PROCESSING
+     * ========================================================
+     */
+
+    if (
+      isBetting &&
+      (
+        event ===
+          'transaction.processing' ||
+        normalizedStatus ===
+          'processing' ||
+        normalizedStatus ===
+          'pending'
+      )
+    ) {
+      console.log(
+        '⏳ BETTING FUNDING STILL PROCESSING'
+      );
+
+      await pool.query(
+        `
+        UPDATE bill_payments
+        SET
+          status = 'processing',
+          provider_response = $1,
+          provider_response_message = $2
+        WHERE id = $3
+        `,
+        [
+          JSON.stringify(
+            payload
+          ),
+          providerMessage,
+          bill.id,
+        ]
+      );
+
+      return res.status(200).json({
+        success: true,
+        message:
+          'Betting transaction still processing',
+      });
+    }
+
+    /**
+     * ========================================================
+     * BETTING — FAILED / CANCELLED / REFUNDED
+     * ========================================================
+     *
+     * Money is refunded here.
+     *
+     * The refund is protected by checking the existing local
+     * status inside a database transaction.
+     *
+     * Only a locally "processing" betting payment can trigger
+     * the automatic refund.
+     *
+     * This prevents duplicate refunds if Sogo retries the same
+     * webhook.
+     */
+
+    if (
+      isBetting &&
+      (
+        event ===
+          'transaction.failed' ||
+        event ===
+          'transaction.cancelled' ||
+        event ===
+          'transaction.refunded' ||
+        normalizedStatus ===
+          'failed' ||
+        normalizedStatus ===
+          'cancelled' ||
+        normalizedStatus ===
+          'refunded'
+      )
+    ) {
+      console.log(
+        '↩️ BETTING FUNDING REQUIRES REFUND'
+      );
+
+      const client =
+        await pool.connect();
+
+      try {
+        await client.query(
+          'BEGIN'
+        );
+
+        /**
+         * ------------------------------------------------------
+         * Lock the bill payment.
+         * ------------------------------------------------------
+         */
+
+        const lockedBillResult =
+          await client.query(
+            `
+            SELECT
+              id,
+              account_id,
+              amount,
+              reference,
+              category,
+              status
+            FROM bill_payments
+            WHERE id = $1
+            FOR UPDATE
+            `,
+            [
+              bill.id,
+            ]
+          );
+
+        if (
+          lockedBillResult.rows.length ===
+          0
+        ) {
+          await client.query(
+            'ROLLBACK'
+          );
+
+          return res.status(200).json({
+            success: true,
+            message:
+              'Betting payment no longer exists',
+          });
+        }
+
+        const lockedBill =
+          lockedBillResult.rows[0];
+
+        /**
+         * ------------------------------------------------------
+         * If it has already been refunded, do nothing.
+         * ------------------------------------------------------
+         */
+
+        if (
+          lockedBill.status ===
+            'refunded'
+        ) {
+          await client.query(
+            'COMMIT'
+          );
+
+          console.log(
+            'ℹ️ Betting refund already processed — duplicate webhook ignored'
+          );
+
+          return res.status(200).json({
+            success: true,
+            message:
+              'Betting refund already processed',
+          });
+        }
+
+        /**
+         * ------------------------------------------------------
+         * If it is already completed, do not blindly refund.
+         *
+         * A completed transaction must be handled through a
+         * proper provider refund/reversal flow rather than
+         * treating a later webhook as a fresh failure.
+         * ------------------------------------------------------
+         */
+
+        if (
+          lockedBill.status ===
+            'completed'
+        ) {
+          await client.query(
+            `
+            UPDATE bill_payments
+            SET
+              provider_response = $1,
+              provider_response_message = $2
+            WHERE id = $3
+            `,
+            [
+              JSON.stringify(
+                payload
+              ),
+              providerMessage,
+              lockedBill.id,
+            ]
+          );
+
+          await client.query(
+            'COMMIT'
+          );
+
+          console.warn(
+            '⚠️ Betting payment was already completed; automatic duplicate refund was prevented.'
+          );
+
+          return res.status(200).json({
+            success: true,
+            message:
+              'Completed betting payment preserved',
+          });
+        }
+
+        /**
+         * ------------------------------------------------------
+         * Lock the customer's account.
+         * ------------------------------------------------------
+         */
+
+        const accountResult =
+          await client.query(
+            `
+            SELECT
+              id,
+              balance
+            FROM accounts
+            WHERE id = $1
+            FOR UPDATE
+            `,
+            [
+              lockedBill.account_id,
+            ]
+          );
+
+        if (
+          accountResult.rows.length ===
+          0
+        ) {
+          throw new Error(
+            'Customer account not found during betting refund'
+          );
+        }
+
+        const account =
+          accountResult.rows[0];
+
+        const refundAmount =
+          Number(
+            lockedBill.amount
+          );
+
+        const currentBalance =
+          Number(
+            account.balance
+          );
+
+        const newBalance =
+          currentBalance +
+          refundAmount;
+
+        /**
+         * ------------------------------------------------------
+         * Refund the customer's main account.
+         * ------------------------------------------------------
+         */
+
+        await client.query(
+          `
+          UPDATE accounts
+          SET
+            balance = $1
+          WHERE id = $2
+          `,
+          [
+            newBalance,
+            lockedBill.account_id,
+          ]
+        );
+
+        /**
+         * ------------------------------------------------------
+         * Create refund transaction.
+         *
+         * IMPORTANT:
+         * This is an audit record and is never deleted.
+         * ------------------------------------------------------
+         */
+
+        const refundReference =
+          `ZBET-REFUND-${Date.now()}-${crypto
+            .randomBytes(5)
+            .toString('hex')
+            .toUpperCase()}`;
+
+        await client.query(
+          `
+          INSERT INTO transactions (
+            account_id,
+            type,
+            amount,
+            reference,
+            description,
+            status
+          )
+          VALUES (
+            $1,
+            'betting_refund',
+            $2,
+            $3,
+            $4,
+            'completed'
+          )
+          `,
+          [
+            lockedBill.account_id,
+            refundAmount,
+            refundReference,
+            `Betting funding refund - ${lockedBill.reference}`,
+          ]
+        );
+
+        /**
+         * ------------------------------------------------------
+         * Mark original payment refunded.
+         * ------------------------------------------------------
+         */
+
+        await client.query(
+          `
+          UPDATE bill_payments
+          SET
+            status = 'refunded',
+            provider_response = $1,
+            provider_response_message = $2,
+            completed_at =
+              COALESCE(
+                completed_at,
+                CURRENT_TIMESTAMP
+              )
+          WHERE id = $3
+          `,
+          [
+            JSON.stringify(
+              payload
+            ),
+            providerMessage ||
+              'Betting funding refunded by provider',
+            lockedBill.id,
+          ]
+        );
+
+        /**
+         * ------------------------------------------------------
+         * Mark original transaction refunded.
+         * ------------------------------------------------------
+         */
+
+        await client.query(
+          `
+          UPDATE transactions
+          SET
+            status = 'refunded'
+          WHERE reference = $1
+          `,
+          [
+            lockedBill.reference,
+          ]
+        );
+
+        await client.query(
+          'COMMIT'
+        );
+
+        console.log(
+          '💰 BETTING REFUND COMPLETED'
+        );
+
+        console.log(
+          '💵 Refund amount:',
+          refundAmount
+        );
+
+        console.log(
+          '🧾 Refund reference:',
+          refundReference
+        );
+
+        return res.status(200).json({
+          success: true,
+          message:
+            'Betting transaction refunded successfully',
+          refundReference,
+        });
+      } catch (error) {
+        try {
+          await client.query(
+            'ROLLBACK'
+          );
+        } catch (_) {}
+
+        console.error(
+          '❌ BETTING REFUND ERROR:',
+          error
+        );
+
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
+    /**
+     * ========================================================
+     * ELECTRICITY — COMPLETED
+     * ========================================================
+     */
+
+    if (
+      isElectricity &&
+      (
+        event ===
+          'transaction.completed' ||
+        normalizedStatus ===
+          'completed'
+      )
+    ) {
+      console.log(
+        '🎉 ELECTRICITY TRANSACTION COMPLETED'
       );
 
       /**
-       * ------------------------------------------------------
-       * IMPORTANT:
+       * Sogo may omit sensitive electricity delivery data
+       * from the webhook.
        *
-       * Sogo's webhook may intentionally omit sensitive
-       * electricity token data.
-       *
-       * In LIVE mode, retrieve the completed transaction.
-       * ------------------------------------------------------
+       * In LIVE mode, retrieve it from the transaction API.
        */
 
       if (
@@ -841,129 +1327,97 @@ const handleSogoWebhook = async (
         }
       }
 
-      /**
-       * ------------------------------------------------------
-       * SAVE COMPLETED PAYMENT
-       * ------------------------------------------------------
-       */
+      await pool.query(
+        `
+        UPDATE bill_payments
+        SET
+          status = 'completed',
 
-      const updateResult =
-        await pool.query(
-          `
-          UPDATE bill_payments
-          SET
-            status = 'completed',
-
-            provider_response =
-              COALESCE(
-                provider_response,
-                $1
-              ),
-
-            provider_response_message =
-              COALESCE(
-                provider_response_message,
-                $2
-              ),
-
-            electricity_token =
-              COALESCE(
-                electricity_token,
-                $3
-              ),
-
-            units =
-              COALESCE(
-                units,
-                $4
-              ),
-
-            completed_at =
-              COALESCE(
-                completed_at,
-                CURRENT_TIMESTAMP
-              )
-
-          WHERE id = $5
-
-          RETURNING
-            id,
-            status,
-            electricity_token,
-            units
-          `,
-          [
-            JSON.stringify(
-              payload
+          provider_response =
+            COALESCE(
+              provider_response,
+              $1
             ),
-            providerMessage,
-            electricityToken,
-            units,
-            bill.id,
-          ]
-        );
 
-      /**
-       * ------------------------------------------------------
-       * UPDATE MAIN TRANSACTION
-       * ------------------------------------------------------
-       */
+          provider_response_message =
+            COALESCE(
+              provider_response_message,
+              $2
+            ),
+
+          electricity_token =
+            COALESCE(
+              electricity_token,
+              $3
+            ),
+
+          units =
+            COALESCE(
+              units,
+              $4
+            ),
+
+          completed_at =
+            COALESCE(
+              completed_at,
+              CURRENT_TIMESTAMP
+            )
+
+        WHERE id = $5
+        `,
+        [
+          JSON.stringify(
+            payload
+          ),
+          providerMessage,
+          electricityToken,
+          units,
+          bill.id,
+        ]
+      );
 
       await pool.query(
         `
         UPDATE transactions
         SET
           status = 'completed'
-        WHERE reference = (
-          SELECT reference
-          FROM bill_payments
-          WHERE id = $1
-        )
+        WHERE reference = $1
         `,
-        [bill.id]
+        [
+          bill.reference,
+        ]
       );
 
       console.log(
         '✅ Local electricity payment marked completed'
       );
 
-      console.log(
-        '🎟️ Token saved:',
-        updateResult.rows[0]
-          ?.electricity_token
-          ? 'YES'
-          : 'NO'
-      );
-
-      console.log(
-        '⚡ Units saved:',
-        updateResult.rows[0]
-          ?.units || 'NO'
-      );
-
       return res.status(200).json({
         success: true,
         message:
-          'Webhook processed successfully',
+          'Electricity transaction completed',
       });
     }
 
     /**
-     * --------------------------------------------------------
-     * 15. PROCESSING
-     * --------------------------------------------------------
+     * ========================================================
+     * ELECTRICITY — PROCESSING
+     * ========================================================
      */
 
     if (
-      event ===
-        'transaction.processing' ||
-      normalizedStatus ===
-        'processing' ||
-      normalizedStatus ===
-        'pending'
+      isElectricity &&
+      (
+        event ===
+          'transaction.processing' ||
+        normalizedStatus ===
+          'processing' ||
+        normalizedStatus ===
+          'pending'
+      )
     ) {
       console.log(
-        '⏳ Sogo transaction still processing'
+        '⏳ ELECTRICITY TRANSACTION STILL PROCESSING'
       );
 
       await pool.query(
@@ -998,24 +1452,33 @@ const handleSogoWebhook = async (
       return res.status(200).json({
         success: true,
         message:
-          'Transaction still processing',
+          'Electricity transaction still processing',
       });
     }
 
     /**
-     * --------------------------------------------------------
-     * 16. FAILED
-     * --------------------------------------------------------
+     * ========================================================
+     * ELECTRICITY — FAILED
+     * ========================================================
+     *
+     * Electricity's existing purchase flow handles definitive
+     * provider failures/refunds.
+     *
+     * We only record the webhook result here.
+     * ========================================================
      */
 
     if (
-      event ===
-        'transaction.failed' ||
-      normalizedStatus ===
-        'failed'
+      isElectricity &&
+      (
+        event ===
+          'transaction.failed' ||
+        normalizedStatus ===
+          'failed'
+      )
     ) {
       console.log(
-        '❌ Sogo transaction failed'
+        '❌ ELECTRICITY TRANSACTION FAILED'
       );
 
       await pool.query(
@@ -1052,36 +1515,37 @@ const handleSogoWebhook = async (
         UPDATE transactions
         SET
           status = 'failed'
-        WHERE reference = (
-          SELECT reference
-          FROM bill_payments
-          WHERE id = $1
-        )
+        WHERE reference = $1
         `,
-        [bill.id]
+        [
+          bill.reference,
+        ]
       );
 
       return res.status(200).json({
         success: true,
         message:
-          'Failed transaction recorded',
+          'Electricity failed transaction recorded',
       });
     }
 
     /**
-     * --------------------------------------------------------
-     * 17. CANCELLED
-     * --------------------------------------------------------
+     * ========================================================
+     * ELECTRICITY — CANCELLED
+     * ========================================================
      */
 
     if (
-      event ===
-        'transaction.cancelled' ||
-      normalizedStatus ===
-        'cancelled'
+      isElectricity &&
+      (
+        event ===
+          'transaction.cancelled' ||
+        normalizedStatus ===
+          'cancelled'
+      )
     ) {
       console.log(
-        '🚫 Sogo transaction cancelled'
+        '🚫 ELECTRICITY TRANSACTION CANCELLED'
       );
 
       await pool.query(
@@ -1118,36 +1582,37 @@ const handleSogoWebhook = async (
         UPDATE transactions
         SET
           status = 'cancelled'
-        WHERE reference = (
-          SELECT reference
-          FROM bill_payments
-          WHERE id = $1
-        )
+        WHERE reference = $1
         `,
-        [bill.id]
+        [
+          bill.reference,
+        ]
       );
 
       return res.status(200).json({
         success: true,
         message:
-          'Cancelled transaction recorded',
+          'Electricity cancelled transaction recorded',
       });
     }
 
     /**
-     * --------------------------------------------------------
-     * 18. REFUNDED
-     * --------------------------------------------------------
+     * ========================================================
+     * ELECTRICITY — REFUNDED
+     * ========================================================
      */
 
     if (
-      event ===
-        'transaction.refunded' ||
-      normalizedStatus ===
-        'refunded'
+      isElectricity &&
+      (
+        event ===
+          'transaction.refunded' ||
+        normalizedStatus ===
+          'refunded'
+      )
     ) {
       console.log(
-        '↩️ Sogo transaction refunded'
+        '↩️ ELECTRICITY TRANSACTION REFUNDED'
       );
 
       await pool.query(
@@ -1184,26 +1649,24 @@ const handleSogoWebhook = async (
         UPDATE transactions
         SET
           status = 'refunded'
-        WHERE reference = (
-          SELECT reference
-          FROM bill_payments
-          WHERE id = $1
-        )
+        WHERE reference = $1
         `,
-        [bill.id]
+        [
+          bill.reference,
+        ]
       );
 
       return res.status(200).json({
         success: true,
         message:
-          'Refunded transaction recorded',
+          'Electricity refunded transaction recorded',
       });
     }
 
     /**
-     * --------------------------------------------------------
-     * 19. UNKNOWN STATUS
-     * --------------------------------------------------------
+     * ========================================================
+     * UNKNOWN / FALLBACK
+     * ========================================================
      */
 
     console.log(
