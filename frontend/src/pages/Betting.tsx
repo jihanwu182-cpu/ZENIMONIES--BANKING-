@@ -8,8 +8,9 @@ import { Link } from 'react-router-dom';
 type BettingProvider = {
   slug: string;
   name: string;
-  icon: string;
   description: string;
+  logoUrl?: string;
+  domain?: string;
 };
 
 type Step =
@@ -23,80 +24,105 @@ const API_BASE =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com/api';
 
+/* ============================================================
+   COMPLETE SOGO BETTING PROVIDER FALLBACK
+   ============================================================ */
+
 const FALLBACK_PROVIDERS: BettingProvider[] = [
-  {
-    slug: 'sportybet',
-    name: 'SportyBet',
-    icon: '⚽',
-    description: 'Fund your SportyBet account',
-  },
   {
     slug: 'bet9ja',
     name: 'Bet9ja',
-    icon: '🟢',
     description: 'Fund your Bet9ja account',
+    domain: 'bet9ja.com',
   },
   {
     slug: 'betway',
     name: 'Betway',
-    icon: '🔵',
     description: 'Fund your Betway account',
+    domain: 'betway.com.ng',
+  },
+  {
+    slug: 'sportybet',
+    name: 'SportyBet',
+    description: 'Fund your SportyBet account',
+    domain: 'sportybet.com',
   },
   {
     slug: '1xbet',
     name: '1xBet',
-    icon: '🟠',
     description: 'Fund your 1xBet account',
+    domain: '1xbet.ng',
+  },
+  {
+    slug: 'bangbet',
+    name: 'BangBet',
+    description: 'Fund your BangBet account',
+    domain: 'bangbet.com',
   },
   {
     slug: 'betking',
     name: 'BetKing',
-    icon: '🔴',
     description: 'Fund your BetKing account',
+    domain: 'betking.com',
+  },
+  {
+    slug: 'betland',
+    name: 'Betland',
+    description: 'Fund your Betland account',
+    domain: 'betland.com',
+  },
+  {
+    slug: 'betlion',
+    name: 'BetLion',
+    description: 'Fund your BetLion account',
+    domain: 'betlion.com',
+  },
+  {
+    slug: 'cloudbet',
+    name: 'Cloudbet',
+    description: 'Fund your Cloudbet account',
+    domain: 'cloudbet.com',
+  },
+  {
+    slug: 'livescorebet',
+    name: 'LiveScore Bet',
+    description: 'Fund your LiveScore Bet account',
+    domain: 'livescorebet.com',
+  },
+  {
+    slug: 'merrybet',
+    name: 'Merrybet',
+    description: 'Fund your Merrybet account',
+    domain: 'merrybet.com',
+  },
+  {
+    slug: 'naijabet',
+    name: 'NaijaBet',
+    description: 'Fund your NaijaBet account',
+    domain: 'naijabet.com',
+  },
+  {
+    slug: 'nairabet',
+    name: 'NairaBet',
+    description: 'Fund your NairaBet account',
+    domain: 'nairabet.com',
+  },
+  {
+    slug: 'supabet',
+    name: 'Supabet',
+    description: 'Fund your Supabet account',
+    domain: 'supabet.com',
   },
 ];
 
-const providerIcons: Record<string, string> = {
-  sport: '⚽',
-  bet9ja: '🟢',
-  betway: '🔵',
-  '1xbet': '🟠',
-  betking: '🔴',
-  bangbet: '🟣',
-  betland: '🟡',
-  betlion: '🦁',
-  cloudbet: '☁️',
-  livescore: '📊',
-  merrybet: '🎯',
-  naijabet: '🇳🇬',
-  nairabet: '💚',
-  supabet: '⭐',
-};
-
-const getProviderIcon = (
-  nameOrSlug: string
-) => {
-  const value =
-    nameOrSlug
-      .toLowerCase()
-      .replace(/\s+/g, '');
-
-  const match = Object.keys(
-    providerIcons
-  ).find((key) =>
-    value.includes(key)
-  );
-
-  return match
-    ? providerIcons[match]
-    : '⚽';
-};
+/* ============================================================
+   HELPERS
+   ============================================================ */
 
 const formatAmount = (
   value: string | number
 ) => {
-  const numeric =
-    Number(value) || 0;
+  const numeric = Number(value) || 0;
 
   return numeric.toLocaleString(
     'en-NG',
@@ -127,71 +153,226 @@ const getErrorMessage = (
     data?.message ||
     data?.error ||
     data?.details ||
+    data?.data?.message ||
     fallback
   );
 };
+
+const createFaviconUrl = (
+  domain?: string
+) => {
+  if (!domain) {
+    return '';
+  }
+
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(
+    domain
+  )}&sz=128`;
+};
+
+const getProviderDomain = (
+  slug: string
+) => {
+  const provider =
+    FALLBACK_PROVIDERS.find(
+      (item) =>
+        item.slug.toLowerCase() ===
+        slug.toLowerCase()
+    );
+
+  return provider?.domain || '';
+};
+
+/* ============================================================
+   PROVIDER LOGO
+   ============================================================ */
+
+const ProviderLogo: React.FC<{
+  provider: BettingProvider;
+  large?: boolean;
+}> = ({
+  provider,
+  large = false,
+}) => {
+  const [failed, setFailed] =
+    useState(false);
+
+  const domain =
+    provider.domain ||
+    getProviderDomain(
+      provider.slug
+    );
+
+  const logo =
+    provider.logoUrl ||
+    createFaviconUrl(domain);
+
+  const initials =
+    provider.name
+      .replace(/[^a-zA-Z0-9 ]/g, '')
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) =>
+        word.charAt(0).toUpperCase()
+      )
+      .join('');
+
+  return (
+    <div
+      style={{
+        ...styles.providerLogo,
+        ...(large
+          ? styles.providerLogoLarge
+          : {}),
+      }}
+    >
+      {!failed && logo ? (
+        <img
+          src={logo}
+          alt={`${provider.name} logo`}
+          onError={() =>
+            setFailed(true)
+          }
+          style={styles.logoImage}
+        />
+      ) : (
+        <span
+          style={
+            styles.logoInitials
+          }
+        >
+          {initials || 'B'}
+        </span>
+      )}
+    </div>
+  );
+};
+
+/* ============================================================
+   NORMALIZE PROVIDERS FROM SOGO
+   ============================================================ */
 
 const normalizeProviders = (
   payload: any
 ): BettingProvider[] => {
   const providers =
-    payload?.data?.betting?.providers ||
+    payload?.data?.betting
+      ?.providers ||
     payload?.betting?.providers ||
     payload?.data?.providers ||
     payload?.providers ||
+    (Array.isArray(
+      payload?.data?.betting
+    )
+      ? payload.data.betting
+      : null) ||
     [];
 
   if (!Array.isArray(providers)) {
     return [];
   }
 
-  return providers
-    .map(
-      (
-        provider: any,
-        index: number
-      ) => {
-        const slug = String(
-          provider?.slug ||
-            provider?.provider ||
-            provider?.id ||
-            provider?.code ||
-            ''
-        ).trim();
+  const normalized =
+    providers
+      .map(
+        (
+          provider: any
+        ) => {
+          const slug =
+            String(
+              provider?.slug ||
+                provider?.provider ||
+                provider?.id ||
+                provider?.code ||
+                ''
+            ).trim();
 
-        const name = String(
-          provider?.name ||
-            provider?.display_name ||
-            provider?.displayName ||
-            provider?.label ||
-            slug ||
-            `Betting Provider ${
-              index + 1
-            }`
-        ).trim();
+          const name =
+            String(
+              provider?.name ||
+                provider?.display_name ||
+                provider?.displayName ||
+                provider?.label ||
+                slug ||
+                ''
+            ).trim();
 
-        if (!slug) {
-          return null;
+          if (!slug) {
+            return null;
+          }
+
+          const fallback =
+            FALLBACK_PROVIDERS.find(
+              (item) =>
+                item.slug.toLowerCase() ===
+                slug.toLowerCase()
+            );
+
+          const logoUrl =
+            provider?.logo_url ||
+            provider?.logoUrl ||
+            provider?.logo ||
+            provider?.icon_url ||
+            provider?.iconUrl ||
+            provider?.image_url ||
+            provider?.imageUrl ||
+            fallback?.logoUrl;
+
+          const domain =
+            provider?.domain ||
+            provider?.website ||
+            fallback?.domain ||
+            getProviderDomain(
+              slug
+            );
+
+          return {
+            slug,
+            name:
+              name ||
+              fallback?.name ||
+              slug,
+            description:
+              `Fund your ${
+                name ||
+                fallback?.name ||
+                slug
+              } account`,
+            logoUrl,
+            domain,
+          };
         }
+      )
+      .filter(
+        (
+          provider: BettingProvider | null
+        ): provider is BettingProvider =>
+          Boolean(provider)
+      );
 
-        return {
-          slug,
-          name,
-          icon: getProviderIcon(
-            `${name} ${slug}`
-          ),
-          description:
-            `Fund your ${name} account`,
-        };
+  /* Remove duplicate providers */
+  const seen =
+    new Set<string>();
+
+  return normalized.filter(
+    (provider) => {
+      const key =
+        provider.slug.toLowerCase();
+
+      if (seen.has(key)) {
+        return false;
       }
-    )
-    .filter(
-      (
-        provider: BettingProvider | null
-      ): provider is BettingProvider =>
-        Boolean(provider)
-    );
+
+      seen.add(key);
+      return true;
+    }
+  );
 };
+
+/* ============================================================
+   VERIFICATION NAME
+   ============================================================ */
 
 const extractVerificationName = (
   payload: any
@@ -209,20 +390,32 @@ const extractVerificationName = (
     payload?.verification?.username ||
     payload?.verification?.customerName ||
     payload?.verification?.customer_name ||
+    payload?.verification?.name ||
     ''
   );
 };
 
+/* ============================================================
+   MAIN COMPONENT
+   ============================================================ */
+
 const Betting: React.FC = () => {
-  const [providers, setProviders] =
-    useState<BettingProvider[]>(
-      []
-    );
+  const [
+    providers,
+    setProviders,
+  ] = useState<
+    BettingProvider[]
+  >([]);
 
   const [
     loadingProviders,
     setLoadingProviders,
   ] = useState(true);
+
+  const [
+    providerSearch,
+    setProviderSearch,
+  ] = useState('');
 
   const [
     selectedProvider,
@@ -297,11 +490,9 @@ const Betting: React.FC = () => {
     '10000',
   ];
 
-  /**
-   * ==========================================================
-   * LOAD PROVIDERS
-   * ==========================================================
-   */
+  /* ==========================================================
+     LOAD PROVIDERS
+     ========================================================== */
 
   useEffect(() => {
     let mounted = true;
@@ -357,8 +548,7 @@ const Betting: React.FC = () => {
 
           if (
             mounted &&
-            liveProviders.length >
-              0
+            liveProviders.length > 0
           ) {
             setProviders(
               liveProviders
@@ -366,18 +556,11 @@ const Betting: React.FC = () => {
           } else if (
             mounted
           ) {
-            /*
-             * We keep a small fallback list so the page does
-             * not become blank if the provider catalog is
-             * temporarily unavailable.
-             *
-             * Actual funding still goes through our backend.
-             */
             setProviders(
               FALLBACK_PROVIDERS
             );
           }
-        } catch (loadError: any) {
+        } catch (loadError) {
           console.error(
             'Betting providers error:',
             loadError
@@ -404,11 +587,38 @@ const Betting: React.FC = () => {
     };
   }, []);
 
-  /**
-   * ==========================================================
-   * SELECT PROVIDER
-   * ==========================================================
-   */
+  /* ==========================================================
+     FILTER PROVIDERS
+     ========================================================== */
+
+  const filteredProviders =
+    useMemo(() => {
+      const search =
+        providerSearch
+          .trim()
+          .toLowerCase();
+
+      if (!search) {
+        return providers;
+      }
+
+      return providers.filter(
+        (provider) =>
+          provider.name
+            .toLowerCase()
+            .includes(search) ||
+          provider.slug
+            .toLowerCase()
+            .includes(search)
+      );
+    }, [
+      providers,
+      providerSearch,
+    ]);
+
+  /* ==========================================================
+     SELECT PROVIDER
+     ========================================================== */
 
   const selectProvider = (
     provider: BettingProvider
@@ -423,20 +633,17 @@ const Betting: React.FC = () => {
     setVerificationError('');
     setVerifiedCustomerName('');
     setTransactionPin('');
+    setProviderSearch('');
     setStep('details');
   };
 
-  /**
-   * ==========================================================
-   * VERIFY BETTING ACCOUNT
-   * ==========================================================
-   */
+  /* ==========================================================
+     VERIFY BETTING ACCOUNT
+     ========================================================== */
 
   const verifyBettingAccount =
     async () => {
-      setVerificationError(
-        ''
-      );
+      setVerificationError('');
 
       const identifier =
         accountIdentifier.trim();
@@ -469,6 +676,14 @@ const Betting: React.FC = () => {
           );
         }
 
+        /*
+         * IMPORTANT:
+         * We send both accountId and account_id.
+         *
+         * account_id is the provider/API naming.
+         * accountId is retained for compatibility
+         * with our current backend controller.
+         */
         const response =
           await fetch(
             `${API_BASE}/betting/verify`,
@@ -485,7 +700,11 @@ const Betting: React.FC = () => {
               body: JSON.stringify({
                 provider:
                   selectedProvider.slug,
+
                 accountId:
+                  identifier,
+
+                account_id:
                   identifier,
               }),
             }
@@ -541,11 +760,9 @@ const Betting: React.FC = () => {
       }
     };
 
-  /**
-   * ==========================================================
-   * CONTINUE FROM DETAILS
-   * ==========================================================
-   */
+  /* ==========================================================
+     CONTINUE
+     ========================================================== */
 
   const handleContinue =
     async (
@@ -556,9 +773,10 @@ const Betting: React.FC = () => {
       setError('');
       setVerificationError('');
 
-      if (
-        !accountIdentifier.trim()
-      ) {
+      const identifier =
+        accountIdentifier.trim();
+
+      if (!identifier) {
         setError(
           'Please enter your betting account ID, username or phone number.'
         );
@@ -582,8 +800,7 @@ const Betting: React.FC = () => {
       }
 
       if (
-        numericAmount >
-        500000
+        numericAmount > 500000
       ) {
         setError(
           'The maximum betting funding amount is ₦500,000.'
@@ -601,23 +818,15 @@ const Betting: React.FC = () => {
       setStep('review');
     };
 
-  /**
-   * ==========================================================
-   * OPEN PIN MODAL
-   * ==========================================================
-   */
+  /* ==========================================================
+     PIN MODAL
+     ========================================================== */
 
   const openPinModal = () => {
     setError('');
     setTransactionPin('');
     setShowPinModal(true);
   };
-
-  /**
-   * ==========================================================
-   * CLOSE PIN MODAL
-   * ==========================================================
-   */
 
   const closePinModal = () => {
     if (submitting) {
@@ -628,11 +837,9 @@ const Betting: React.FC = () => {
     setTransactionPin('');
   };
 
-  /**
-   * ==========================================================
-   * FUND BETTING ACCOUNT
-   * ==========================================================
-   */
+  /* ==========================================================
+     FUND BETTING ACCOUNT
+     ========================================================== */
 
   const confirmFunding =
     async () => {
@@ -682,6 +889,9 @@ const Betting: React.FC = () => {
           );
         }
 
+        const identifier =
+          accountIdentifier.trim();
+
         const response =
           await fetch(
             `${API_BASE}/betting/fund`,
@@ -698,10 +908,16 @@ const Betting: React.FC = () => {
               body: JSON.stringify({
                 provider:
                   selectedProvider.slug,
+
                 accountId:
-                  accountIdentifier.trim(),
+                  identifier,
+
+                account_id:
+                  identifier,
+
                 amount:
                   numericAmount,
+
                 transactionPin,
               }),
             }
@@ -748,7 +964,8 @@ const Betting: React.FC = () => {
           data?.reference ||
           data?.data?.reference ||
           data?.transactionReference ||
-          data?.data?.transactionReference ||
+          data?.data
+            ?.transactionReference ||
           '';
 
         setSuccessReference(
@@ -762,11 +979,6 @@ const Betting: React.FC = () => {
         setShowPinModal(false);
         setTransactionPin('');
 
-        /*
-         * Sogo normally processes bill funding asynchronously.
-         * 202 means the funding request has been accepted and
-         * is still processing.
-         */
         if (
           response.status ===
             202 ||
@@ -801,11 +1013,9 @@ const Betting: React.FC = () => {
       }
     };
 
-  /**
-   * ==========================================================
-   * BACK
-   * ==========================================================
-   */
+  /* ==========================================================
+     BACK
+     ========================================================== */
 
   const goBack = () => {
     if (submitting) {
@@ -843,11 +1053,9 @@ const Betting: React.FC = () => {
     }
   };
 
-  /**
-   * ==========================================================
-   * RESET
-   * ==========================================================
-   */
+  /* ==========================================================
+     RESET
+     ========================================================== */
 
   const resetFlow = () => {
     setSelectedProvider(
@@ -863,6 +1071,7 @@ const Betting: React.FC = () => {
     setSubmitting(false);
     setSuccessReference('');
     setProcessingReference('');
+    setProviderSearch('');
     setStep('providers');
   };
 
@@ -873,12 +1082,13 @@ const Betting: React.FC = () => {
       [amount]
     );
 
+  /* ==========================================================
+     RENDER
+     ========================================================== */
+
   return (
     <div style={styles.page}>
-      {/* ======================================================
-          HEADER
-      ====================================================== */}
-
+      {/* HEADER */}
       <header style={styles.header}>
         <Link
           to="/"
@@ -923,10 +1133,7 @@ const Betting: React.FC = () => {
           ← Back to Dashboard
         </Link>
 
-        {/* ====================================================
-            TITLE
-        ==================================================== */}
-
+        {/* INTRO */}
         <section style={styles.intro}>
           <div
             style={
@@ -964,7 +1171,7 @@ const Betting: React.FC = () => {
         </section>
 
         {/* ====================================================
-            STEP 1 — PROVIDERS
+            PROVIDERS
         ==================================================== */}
 
         {step ===
@@ -989,6 +1196,41 @@ const Betting: React.FC = () => {
               you want to fund.
             </p>
 
+            {!loadingProviders && (
+              <div
+                style={
+                  styles.searchBox
+                }
+              >
+                <span
+                  style={
+                    styles.searchIcon
+                  }
+                >
+                  ⌕
+                </span>
+
+                <input
+                  type="text"
+                  value={
+                    providerSearch
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setProviderSearch(
+                      event.target
+                        .value
+                    )
+                  }
+                  placeholder="Search betting app"
+                  style={
+                    styles.searchInput
+                  }
+                />
+              </div>
+            )}
+
             {loadingProviders ? (
               <div
                 style={
@@ -1006,13 +1248,28 @@ const Betting: React.FC = () => {
                   providers...
                 </span>
               </div>
+            ) : filteredProviders.length ===
+              0 ? (
+              <div
+                style={
+                  styles.emptyBox
+                }
+              >
+                <strong>
+                  No betting app found
+                </strong>
+
+                <span>
+                  Try another search.
+                </span>
+              </div>
             ) : (
               <div
                 style={
-                  styles.providerList
+                  styles.providerGrid
                 }
               >
-                {providers.map(
+                {filteredProviders.map(
                   (
                     provider
                   ) => (
@@ -1030,15 +1287,11 @@ const Betting: React.FC = () => {
                         styles.providerButton
                       }
                     >
-                      <div
-                        style={
-                          styles.providerIcon
+                      <ProviderLogo
+                        provider={
+                          provider
                         }
-                      >
-                        {
-                          provider.icon
-                        }
-                      </div>
+                      />
 
                       <div
                         style={
@@ -1080,6 +1333,21 @@ const Betting: React.FC = () => {
             )}
 
             <div
+              style={styles.providerCount}
+            >
+              <span>
+                {providers.length}{' '}
+                supported betting
+                platforms
+              </span>
+
+              <span>
+                Secure account
+                verification
+              </span>
+            </div>
+
+            <div
               style={styles.notice}
             >
               <span
@@ -1111,7 +1379,7 @@ const Betting: React.FC = () => {
         )}
 
         {/* ====================================================
-            STEP 2 — DETAILS
+            DETAILS
         ==================================================== */}
 
         {step ===
@@ -1136,15 +1404,12 @@ const Betting: React.FC = () => {
                   styles.selectedProvider
                 }
               >
-                <div
-                  style={
-                    styles.providerIconLarge
+                <ProviderLogo
+                  provider={
+                    selectedProvider
                   }
-                >
-                  {
-                    selectedProvider.icon
-                  }
-                </div>
+                  large
+                />
 
                 <div>
                   <div
@@ -1212,12 +1477,15 @@ const Betting: React.FC = () => {
                   }
                   onChange={(
                     event
-                  ) =>
+                  ) => {
                     setAccountIdentifier(
-                      event.target
-                        .value
-                    )
-                  }
+                      event.target.value
+                    );
+                    setError('');
+                    setVerificationError(
+                      ''
+                    );
+                  }}
                   placeholder="Enter your betting account details"
                   style={
                     styles.input
@@ -1348,7 +1616,7 @@ const Betting: React.FC = () => {
           )}
 
         {/* ====================================================
-            STEP 3 — REVIEW
+            REVIEW
         ==================================================== */}
 
         {step ===
@@ -1546,7 +1814,7 @@ const Betting: React.FC = () => {
           )}
 
         {/* ====================================================
-            STEP 4 — PROCESSING
+            PROCESSING
         ==================================================== */}
 
         {step ===
@@ -1682,7 +1950,7 @@ const Betting: React.FC = () => {
         )}
 
         {/* ====================================================
-            STEP 5 — SUCCESS
+            SUCCESS
         ==================================================== */}
 
         {step ===
@@ -1794,9 +2062,7 @@ const Betting: React.FC = () => {
           </section>
         )}
 
-        {/* ====================================================
-            INFORMATION
-        ==================================================== */}
+        {/* INFORMATION */}
 
         <section
           style={styles.infoCard}
@@ -1833,7 +2099,7 @@ const Betting: React.FC = () => {
       </main>
 
       {/* ======================================================
-          TRANSACTION PIN MODAL
+          PIN MODAL
       ====================================================== */}
 
       {showPinModal && (
@@ -2048,11 +2314,9 @@ const Betting: React.FC = () => {
   );
 };
 
-/**
- * ============================================================
- * STYLES
- * ============================================================
- */
+/* ============================================================
+   STYLES
+   ============================================================ */
 
 const styles: Record<
   string,
@@ -2201,6 +2465,36 @@ const styles: Record<
     lineHeight: 1.5,
   },
 
+  searchBox: {
+    height: 46,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '0 13px',
+    marginBottom: 13,
+    border:
+      '1px solid #d8e5df',
+    borderRadius: 12,
+    background: '#ffffff',
+    boxSizing: 'border-box',
+  },
+
+  searchIcon: {
+    color: '#087c43',
+    fontSize: 20,
+    fontWeight: 700,
+  },
+
+  searchInput: {
+    width: '100%',
+    height: '100%',
+    border: 'none',
+    outline: 'none',
+    fontSize: 13,
+    color: '#172b22',
+    background: 'transparent',
+  },
+
   loadingBox: {
     minHeight: 120,
     display: 'flex',
@@ -2221,59 +2515,106 @@ const styles: Record<
     borderRadius: '50%',
   },
 
-  providerList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 9,
+  providerGrid: {
+    display: 'grid',
+    gridTemplateColumns:
+      'repeat(2, minmax(0, 1fr))',
+    gap: 10,
   },
 
   providerButton: {
     width: '100%',
+    minHeight: 82,
     border:
       '1px solid #dcebe4',
     background: '#f8fcfa',
     borderRadius: 15,
-    padding: 12,
+    padding: 11,
     display: 'flex',
     alignItems: 'center',
-    gap: 11,
+    gap: 10,
     textAlign: 'left',
     cursor: 'pointer',
+    boxSizing: 'border-box',
   },
 
-  providerIcon: {
-    width: 45,
-    height: 45,
+  providerLogo: {
+    width: 46,
+    height: 46,
     flexShrink: 0,
     borderRadius: 13,
-    background: '#e1f6eb',
+    background: '#ffffff',
+    border:
+      '1px solid #e0ebe6',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 21,
+    overflow: 'hidden',
+  },
+
+  providerLogoLarge: {
+    width: 52,
+    height: 52,
+    borderRadius: 15,
+  },
+
+  logoImage: {
+    width: '72%',
+    height: '72%',
+    objectFit: 'contain',
+  },
+
+  logoInitials: {
+    color: '#087c43',
+    fontSize: 13,
+    fontWeight: 800,
   },
 
   providerText: {
     display: 'flex',
     flexDirection: 'column',
     minWidth: 0,
+    flex: 1,
   },
 
   providerName: {
     color: '#172b22',
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 1.2,
   },
 
   providerDescription: {
-    marginTop: 3,
+    marginTop: 4,
     color: '#75827d',
-    fontSize: 11.5,
+    fontSize: 10.5,
+    lineHeight: 1.25,
   },
 
   arrow: {
-    marginLeft: 'auto',
     color: '#078b4a',
-    fontSize: 24,
+    fontSize: 23,
+    lineHeight: 1,
+  },
+
+  providerCount: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 13,
+    color: '#7b8882',
+    fontSize: 10.5,
+  },
+
+  emptyBox: {
+    padding: 25,
+    textAlign: 'center',
+    borderRadius: 13,
+    background: '#f7faf8',
+    color: '#66756e',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 5,
+    fontSize: 12,
   },
 
   notice: {
@@ -2329,17 +2670,6 @@ const styles: Record<
     background: '#f5fbf8',
     border:
       '1px solid #dcebe4',
-  },
-
-  providerIconLarge: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    background: '#e1f6eb',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 22,
   },
 
   selectedLabel: {
