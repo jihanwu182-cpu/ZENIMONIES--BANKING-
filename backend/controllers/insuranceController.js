@@ -1764,28 +1764,78 @@ const requery = async (
     // ========================================================
 
     if (
-      payment.status ===
-      'completed'
-    ) {
-      return res.status(200).json({
-        success: true,
+  payment.status ===
+  'completed'
+) {
+  let storedProviderResponse =
+    payment.provider_response;
 
-        status:
-          'completed',
-
-        requestId,
-
-        reference:
-          payment.reference,
-
-        providerReference:
-          payment.provider_reference ||
-          requestId,
-
-        message:
-          'This insurance payment has already been completed.',
-      });
+  if (
+    typeof storedProviderResponse ===
+    'string'
+  ) {
+    try {
+      storedProviderResponse =
+        JSON.parse(
+          storedProviderResponse
+        );
+    } catch {
+      storedProviderResponse =
+        null;
     }
+  }
+
+  const storedCertificateUrl =
+    storedProviderResponse?.certUrl ||
+    storedProviderResponse?.certificateUrl ||
+    storedProviderResponse?.certificate_url ||
+    storedProviderResponse?.content?.certUrl ||
+    storedProviderResponse?.content?.certificateUrl ||
+    storedProviderResponse?.content?.certificate_url ||
+    storedProviderResponse?.content?.transactions?.certUrl ||
+    storedProviderResponse?.content?.transactions?.certificateUrl ||
+    storedProviderResponse?.content?.transactions?.certificate_url ||
+    null;
+
+  console.log(
+    'ZENIMONIES COMPLETED INSURANCE CERTIFICATE:',
+    {
+      reference:
+        payment.reference,
+      certificateUrl:
+        storedCertificateUrl,
+    }
+  );
+
+  return res.status(200).json({
+    success: true,
+
+    status:
+      'completed',
+
+    requestId,
+
+    reference:
+      payment.reference,
+
+    providerReference:
+      payment.provider_reference ||
+      requestId,
+
+    certificate_url:
+      storedCertificateUrl,
+
+    data: {
+      certificate_url:
+        storedCertificateUrl,
+    },
+
+    message:
+      storedCertificateUrl
+        ? 'Insurance payment completed and certificate available.'
+        : 'This insurance payment has already been completed.',
+  });
+}
 
     // ========================================================
     // ALREADY FAILED
