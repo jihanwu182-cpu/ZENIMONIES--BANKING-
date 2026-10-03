@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 import {
@@ -77,21 +76,34 @@ import Insurance from './pages/Insurance.tsx';
 import VirtualCard from './pages/VirtualCard.tsx';
 import Savings from './pages/Savings.tsx';
 import Notifications from './pages/Notifications.tsx';
-
-// IMPORTANT:
-// Import the real business services page.
-// Do not declare another component with this name below.
-
 import BusinessServicePage from './pages/BusinessServicePage.tsx';
 
 // ==================== ADMIN ====================
 
+import AdminLogin from './pages/AdminLogin.tsx';
 import Admin from './pages/AdminDashboard.tsx';
 import AirtimeReconciliation from './pages/AirtimeReconciliation.tsx';
 
 // ==================== SESSION ====================
 
 import SessionGuard from './components/SessionGuard.tsx';
+
+// ============================================================
+// ADMIN ROUTE GUARD
+// IMPORTANT:
+// Admin routes are intentionally OUTSIDE SessionGuard.
+// Customer sessions must never redirect the Admin area.
+// ============================================================
+
+const AdminRoute: React.FC = () => {
+  const adminToken = localStorage.getItem('adminToken');
+
+  if (!adminToken) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  return <Admin />;
+};
 
 // ============================================================
 // GENERAL SERVICE PAGE
@@ -122,8 +134,6 @@ const ServicePage: React.FC<ServicePageProps> = ({
         paddingBottom: '40px',
       }}
     >
-      {/* HEADER */}
-
       <header
         style={{
           background: '#ffffff',
@@ -206,8 +216,6 @@ const ServicePage: React.FC<ServicePageProps> = ({
           </Link>
         </div>
       </header>
-
-      {/* CONTENT */}
 
       <main
         style={{
@@ -360,6 +368,39 @@ const ServicePage: React.FC<ServicePageProps> = ({
 const App: React.FC = () => {
   return (
     <BrowserRouter>
+
+      {/* ======================================================
+          ADMIN APPLICATION
+          OUTSIDE CUSTOMER SESSION GUARD
+          ====================================================== */}
+
+      <Routes>
+        <Route
+          path="/admin/login"
+          element={<AdminLogin />}
+        />
+
+        <Route
+          path="/admin"
+          element={
+            <Navigate
+              to="/admin/dashboard"
+              replace
+            />
+          }
+        />
+
+        <Route
+          path="/admin/dashboard"
+          element={<AdminRoute />}
+        />
+      </Routes>
+
+      {/* ======================================================
+          CUSTOMER APPLICATION
+          PROTECTED BY EXISTING SESSION GUARD
+          ====================================================== */}
+
       <SessionGuard>
         <Routes>
 
@@ -421,30 +462,15 @@ const App: React.FC = () => {
             element={<BusinessDashboard />}
           />
 
-          {/* Business-specific transaction history */}
-
           <Route
             path="/business/:id/transactions"
             element={<BusinessTransactions />}
           />
 
-          {/* 
-            Business services route.
-
-            This renders the imported BusinessServicePage.tsx.
-            The business ID and selected section are supplied
-            through the URL parameters.
-
-            Example:
-            /business/your-business-id/statements
-          */}
-
           <Route
             path="/business/:id/:section"
             element={<BusinessServicePage />}
           />
-
-          {/* Business account landing */}
 
           <Route
             path="/business/:id"
@@ -466,18 +492,6 @@ const App: React.FC = () => {
           <Route
             path="/notifications"
             element={<Notifications />}
-          />
-
-          {/* ================= ADMIN ================= */}
-
-          <Route
-            path="/admin"
-            element={<Admin />}
-          />
-
-          <Route
-            path="/airtime-reconciliation"
-            element={<AirtimeReconciliation />}
           />
 
           {/* ================= ACCOUNT ================= */}
@@ -548,17 +562,18 @@ const App: React.FC = () => {
             path="/statement"
             element={<Statement />}
           />
+
           <Route
-           path="/beneficiaries"
-           element={<Beneficiaries />}
-         />
+            path="/beneficiaries"
+            element={<Beneficiaries />}
+          />
 
           {/* ================= WALLET ================= */}
 
           <Route
             path="/wallet"
             element={<Wallet />}
-         />
+          />
 
           {/* ================= VIRTUAL CARD ================= */}
 
@@ -603,12 +618,12 @@ const App: React.FC = () => {
           <Route
             path="/bills/internet"
             element={<InternetBills />}
-         />
+          />
 
           <Route
             path="/bills/other"
             element={<OtherBills />}
-         />
+          />
 
           <Route
             path="/gift-cards"
@@ -633,11 +648,12 @@ const App: React.FC = () => {
           <Route
             path="/education"
             element={<Education />}
-         />
+          />
 
-          <Route path="/insurance" 
-            element={<Insurance />}     
-         />
+          <Route
+            path="/insurance"
+            element={<Insurance />}
+          />
 
           {/* ================= BETTING ================= */}
 
@@ -677,6 +693,13 @@ const App: React.FC = () => {
             }
           />
 
+          {/* ================= AIRTIME RECONCILIATION ================= */}
+
+          <Route
+            path="/airtime-reconciliation"
+            element={<AirtimeReconciliation />}
+          />
+
           {/* ================= FALLBACK ================= */}
 
           <Route
@@ -691,6 +714,7 @@ const App: React.FC = () => {
 
         </Routes>
       </SessionGuard>
+
     </BrowserRouter>
   );
 };
