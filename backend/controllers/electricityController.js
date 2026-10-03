@@ -5,10 +5,17 @@ const pool = require('../config/database');
 /**
  * ============================================================
  * ZENIMONIES — ELECTRICITY CONTROLLER
- * Version: 2026-09-23-v7
+ * Version: 2026-10-03-v8
  *
- * Uses the existing bill_payments table.
- * Does NOT require provider_webhook_response.
+ * Electricity payments through Sogo.
+ *
+ * IMPORTANT:
+ * - Uses existing bill_payments table.
+ * - Does NOT require provider_webhook_response.
+ * - Supports Sogo asynchronous transactions.
+ * - Attempts a Sogo transaction lookup when token/units are
+ *   missing from the initial purchase response.
+ * - Sandbox transaction lookup is intentionally skipped.
  * ============================================================
  */
 
@@ -34,6 +41,12 @@ const SOGO_DISCO_SLUGS = {
   YEDC: 'yedc',
 };
 
+/**
+ * ============================================================
+ * GENERIC VALUE HELPER
+ * ============================================================
+ */
+
 const firstValue = (...values) => {
   for (const value of values) {
     if (
@@ -49,9 +62,11 @@ const firstValue = (...values) => {
 };
 
 /**
- * Extract electricity token from all known/possible
- * Sogo response locations.
+ * ============================================================
+ * EXTRACT ELECTRICITY TOKEN
+ * ============================================================
  */
+
 const extractElectricityToken = (payload) => {
   return firstValue(
     payload?.token,
@@ -70,9 +85,11 @@ const extractElectricityToken = (payload) => {
     payload?.data?.details?.electricity_token,
     payload?.data?.details?.token_code,
     payload?.data?.details?.prepaid_token,
+    payload?.data?.details?.prepaid_token_code,
 
     payload?.data?.receipt?.token,
     payload?.data?.receipt?.electricity_token,
+    payload?.data?.receipt?.prepaid_token,
 
     payload?.transaction?.token,
     payload?.transaction?.electricity_token,
@@ -82,21 +99,37 @@ const extractElectricityToken = (payload) => {
 
     payload?.transaction?.details?.token,
     payload?.transaction?.details?.electricity_token,
+    payload?.transaction?.details?.token_code,
+    payload?.transaction?.details?.prepaid_token,
 
     payload?.object?.token,
     payload?.object?.electricity_token,
+    payload?.object?.prepaid_token,
 
     payload?.metadata?.token,
     payload?.metadata?.electricity_token,
+    payload?.metadata?.prepaid_token,
 
     payload?.data?.metadata?.token,
-    payload?.data?.metadata?.electricity_token
+    payload?.data?.metadata?.electricity_token,
+    payload?.data?.metadata?.prepaid_token,
+
+    payload?.delivery?.token,
+    payload?.delivery?.electricity_token,
+    payload?.delivery?.prepaid_token,
+
+    payload?.data?.delivery?.token,
+    payload?.data?.delivery?.electricity_token,
+    payload?.data?.delivery?.prepaid_token
   );
 };
 
 /**
- * Extract electricity units / kWh.
+ * ============================================================
+ * EXTRACT ELECTRICITY UNITS / KWH
+ * ============================================================
  */
+
 const extractUnits = (payload) => {
   return firstValue(
     payload?.units,
@@ -117,13 +150,36 @@ const extractUnits = (payload) => {
 
     payload?.transaction?.details?.units,
     payload?.transaction?.details?.unit,
-    payload?.transaction?.details?.kwh
+    payload?.transaction?.details?.kwh,
+
+    payload?.object?.units,
+    payload?.object?.unit,
+    payload?.object?.kwh,
+
+    payload?.metadata?.units,
+    payload?.metadata?.unit,
+    payload?.metadata?.kwh,
+
+    payload?.data?.metadata?.units,
+    payload?.data?.metadata?.unit,
+    payload?.data?.metadata?.kwh,
+
+    payload?.delivery?.units,
+    payload?.delivery?.unit,
+    payload?.delivery?.kwh,
+
+    payload?.data?.delivery?.units,
+    payload?.data?.delivery?.unit,
+    payload?.data?.delivery?.kwh
   );
 };
 
 /**
- * Extract provider transaction object.
+ * ============================================================
+ * EXTRACT PROVIDER DATA
+ * ============================================================
  */
+
 const extractProviderData = (response) => {
   if (!response) {
     return {};
@@ -141,16 +197,25 @@ const extractProviderData = (response) => {
 };
 
 /**
- * Normalize provider status.
+ * ============================================================
+ * EXTRACT PROVIDER STATUS
+ * ============================================================
  */
-const extractProviderStatus = (providerData, rawResponse) => {
+
+const extractProviderStatus = (
+  providerData,
+  rawResponse
+) => {
   const rawStatus = firstValue(
     providerData?.status,
     rawResponse?.status,
     rawResponse?.data?.status
   );
 
-  if (rawStatus && typeof rawStatus === 'object') {
+  if (
+    rawStatus &&
+    typeof rawStatus === 'object'
+  ) {
     return String(
       firstValue(
         rawStatus?.value,
@@ -162,14 +227,19 @@ const extractProviderStatus = (providerData, rawResponse) => {
       .toLowerCase();
   }
 
-  return String(rawStatus || '')
+  return String(
+    rawStatus || ''
+  )
     .trim()
     .toLowerCase();
 };
 
 /**
- * Extract provider reference.
+ * ============================================================
+ * EXTRACT PROVIDER REFERENCE
+ * ============================================================
  */
+
 const extractProviderReference = (
   providerData,
   rawResponse
@@ -185,28 +255,31 @@ const extractProviderReference = (
 
     rawResponse?.data?.reference,
     rawResponse?.data?.provider_reference,
+    rawResponse?.data?.providerReference,
 
-    rawResponse?.transaction?.reference
+    rawResponse?.transaction?.reference,
+    rawResponse?.transaction?.provider_reference,
+
+    rawResponse?.object?.reference
   );
 };
 
 /**
- * Extract provider message.
+ * ============================================================
+ * EXTRACT PROVIDER MESSAGE
+ * ============================================================
  */
+
 const extractProviderMessage = (
   providerData,
   rawResponse
 ) => {
   return firstValue(
-    // Prefer Sogo's actual message first
     rawResponse?.message,
-
     rawResponse?.data?.message,
 
-    // Then transaction-level message
     providerData?.message,
 
-    // Description is only a fallback
     rawResponse?.description,
     rawResponse?.data?.description,
     providerData?.description
@@ -215,10 +288,102 @@ const extractProviderMessage = (
 
 /**
  * ============================================================
+ * SOGO TRANSACTION LOOKUP
+ *
+ * Used when the initial purchase response does not contain
+ * sensitive delivery information such as electricity token.
+ *
+ * Sandbox is intentionally skipped because sandbox transaction
+ * records may not be available through the transaction lookup.
+ * ============================================================
+ */
+
+const fetchSogoTransaction = async (
+  providerReference
+) => {
+  if (!providerReference) {
+    return null;
+  }
+
+  const baseUrl =
+    String(
+      SOGO_API_BASE_URL || ''
+    ).trim();
+
+  /**
+   * Do not attempt transaction lookup against Sandbox.
+   */
+  if (
+    baseUrl
+      .toLowerCase()
+      .includes('sandbox.sogo.africa')
+  ) {
+    console.log(
+      'ℹ️ Sogo transaction lookup skipped in Sandbox'
+    );
+
+    return null;
+  }
+
+  if (!SOGO_API_KEY) {
+    console.warn(
+      '⚠️ SOGO_API_KEY missing; cannot perform transaction lookup'
+    );
+
+    return null;
+  }
+
+  try {
+    console.log(
+      '🔎 Looking up completed Sogo transaction:',
+      providerReference
+    );
+
+    const response =
+      await axios.get(
+        `${baseUrl}/transactions/${encodeURIComponent(
+          providerReference
+        )}`,
+        {
+          headers: {
+            Authorization:
+              `Bearer ${SOGO_API_KEY}`,
+
+            'Content-Type':
+              'application/json',
+          },
+
+          timeout: 30000,
+        }
+      );
+
+    console.log(
+      '✅ Sogo transaction lookup successful'
+    );
+
+    return response?.data || null;
+
+  } catch (error) {
+    console.warn(
+      '⚠️ Sogo transaction lookup failed:',
+      error?.response?.status ||
+        error?.message
+    );
+
+    return null;
+  }
+};
+
+/**
+ * ============================================================
  * PURCHASE ELECTRICITY
  * ============================================================
  */
-const purchaseElectricity = async (req, res) => {
+
+const purchaseElectricity = async (
+  req,
+  res
+) => {
   const userId =
     req.user?.id ||
     req.user?.user_id;
@@ -231,7 +396,7 @@ const purchaseElectricity = async (req, res) => {
   } = req.body || {};
 
   console.log(
-    '🔥 ZENIMONIES ELECTRICITY CONTROLLER V7 REACHED 🔥'
+    '🔥 ZENIMONIES ELECTRICITY CONTROLLER V8 REACHED 🔥'
   );
 
   /**
@@ -239,10 +404,12 @@ const purchaseElectricity = async (req, res) => {
    * BASIC AUTHENTICATION
    * ----------------------------------------------------------
    */
+
   if (!userId) {
     return res.status(401).json({
       success: false,
-      message: 'Authentication required',
+      message:
+        'Authentication required',
     });
   }
 
@@ -251,6 +418,7 @@ const purchaseElectricity = async (req, res) => {
    * ENVIRONMENT CHECK
    * ----------------------------------------------------------
    */
+
   if (!SOGO_API_KEY) {
     console.error(
       '❌ SOGO_API_KEY is missing'
@@ -258,7 +426,8 @@ const purchaseElectricity = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: 'Electricity provider is not configured',
+      message:
+        'Electricity provider is not configured',
     });
   }
 
@@ -267,18 +436,22 @@ const purchaseElectricity = async (req, res) => {
    * VALIDATE PROVIDER
    * ----------------------------------------------------------
    */
+
   const normalizedProvider =
     String(provider || '')
       .trim()
       .toUpperCase();
 
   const discoSlug =
-    SOGO_DISCO_SLUGS[normalizedProvider];
+    SOGO_DISCO_SLUGS[
+      normalizedProvider
+    ];
 
   if (!discoSlug) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid electricity provider',
+      message:
+        'Invalid electricity provider',
     });
   }
 
@@ -287,19 +460,24 @@ const purchaseElectricity = async (req, res) => {
    * VALIDATE METER TYPE
    * ----------------------------------------------------------
    */
+
   const normalizedMeterType =
     String(meter_type || '')
       .trim()
       .toLowerCase();
 
   if (
-    !['prepaid', 'postpaid'].includes(
+    ![
+      'prepaid',
+      'postpaid',
+    ].includes(
       normalizedMeterType
     )
   ) {
     return res.status(400).json({
       success: false,
-      message: 'Meter type must be prepaid or postpaid',
+      message:
+        'Meter type must be prepaid or postpaid',
     });
   }
 
@@ -308,6 +486,7 @@ const purchaseElectricity = async (req, res) => {
    * VALIDATE METER NUMBER
    * ----------------------------------------------------------
    */
+
   const normalizedMeterNumber =
     String(meter_number || '')
       .trim();
@@ -319,7 +498,8 @@ const purchaseElectricity = async (req, res) => {
   ) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid meter/account number',
+      message:
+        'Invalid meter/account number',
     });
   }
 
@@ -328,20 +508,26 @@ const purchaseElectricity = async (req, res) => {
    * VALIDATE AMOUNT
    * ----------------------------------------------------------
    */
+
   const numericAmount =
     Number(amount);
 
   if (
-    !Number.isFinite(numericAmount) ||
+    !Number.isFinite(
+      numericAmount
+    ) ||
     numericAmount <= 0
   ) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid electricity amount',
+      message:
+        'Invalid electricity amount',
     });
   }
 
-  if (numericAmount > 1000000) {
+  if (
+    numericAmount > 1000000
+  ) {
     return res.status(400).json({
       success: false,
       message:
@@ -351,9 +537,10 @@ const purchaseElectricity = async (req, res) => {
 
   /**
    * ----------------------------------------------------------
-   * STEP 1 — VERIFY METER FIRST
+   * STEP 1 — VERIFY METER
    * ----------------------------------------------------------
    */
+
   let verification;
 
   try {
@@ -362,23 +549,31 @@ const purchaseElectricity = async (req, res) => {
       normalizedMeterNumber
     );
 
-    const verifyResponse = await axios.post(
-      `${SOGO_API_BASE_URL}/bills/electricity/verify-meter`,
-      {
-        disco_slug: discoSlug,
-        meter_number: normalizedMeterNumber,
-        meter_type: normalizedMeterType,
-      },
-      {
-        headers: {
-          Authorization:
-            `Bearer ${SOGO_API_KEY}`,
-          'Content-Type':
-            'application/json',
+    const verifyResponse =
+      await axios.post(
+        `${SOGO_API_BASE_URL}/bills/electricity/verify-meter`,
+        {
+          disco_slug:
+            discoSlug,
+
+          meter_number:
+            normalizedMeterNumber,
+
+          meter_type:
+            normalizedMeterType,
         },
-        timeout: 30000,
-      }
-    );
+        {
+          headers: {
+            Authorization:
+              `Bearer ${SOGO_API_KEY}`,
+
+            'Content-Type':
+              'application/json',
+          },
+
+          timeout: 30000,
+        }
+      );
 
     verification =
       verifyResponse?.data;
@@ -401,11 +596,14 @@ const purchaseElectricity = async (req, res) => {
         : 502
     ).json({
       success: false,
+
       message:
         error?.response?.data?.message ||
         'Unable to verify electricity meter',
+
       provider_response:
-        error?.response?.data || null,
+        error?.response?.data ||
+        null,
     });
   }
 
@@ -414,6 +612,7 @@ const purchaseElectricity = async (req, res) => {
    * EXTRACT VERIFIED CUSTOMER INFORMATION
    * ----------------------------------------------------------
    */
+
   const verificationData =
     verification?.data ||
     verification?.transaction ||
@@ -455,6 +654,7 @@ const purchaseElectricity = async (req, res) => {
    * DATABASE TRANSACTION
    * ----------------------------------------------------------
    */
+
   const client =
     await pool.connect();
 
@@ -468,10 +668,9 @@ const purchaseElectricity = async (req, res) => {
     );
 
     /**
-     * --------------------------------------------------------
      * LOCK USER ACCOUNT
-     * --------------------------------------------------------
      */
+
     const accountResult =
       await client.query(
         `
@@ -513,10 +712,9 @@ const purchaseElectricity = async (req, res) => {
       Number(account.balance);
 
     /**
-     * --------------------------------------------------------
      * CHECK BALANCE
-     * --------------------------------------------------------
      */
+
     if (
       !Number.isFinite(balance) ||
       balance < numericAmount
@@ -533,10 +731,9 @@ const purchaseElectricity = async (req, res) => {
     }
 
     /**
-     * --------------------------------------------------------
      * CREATE REFERENCES
-     * --------------------------------------------------------
      */
+
     transactionReference =
       `ZEL-${Date.now()}-${crypto
         .randomBytes(4)
@@ -547,10 +744,9 @@ const purchaseElectricity = async (req, res) => {
       crypto.randomUUID();
 
     /**
-     * --------------------------------------------------------
      * FIND ELECTRICITY BILLER
-     * --------------------------------------------------------
      */
+
     const billerResult =
       await client.query(
         `
@@ -566,13 +762,13 @@ const purchaseElectricity = async (req, res) => {
       );
 
     const biller =
-      billerResult.rows[0] || null;
+      billerResult.rows[0] ||
+      null;
 
     /**
-     * --------------------------------------------------------
-     * CREATE PENDING/PROCESSING BILL
-     * --------------------------------------------------------
+     * CREATE BILL PAYMENT
      */
+
     const billResult =
       await client.query(
         `
@@ -637,10 +833,9 @@ const purchaseElectricity = async (req, res) => {
       billResult.rows[0].id;
 
     /**
-     * --------------------------------------------------------
      * DEBIT CUSTOMER
-     * --------------------------------------------------------
      */
+
     await client.query(
       `
       UPDATE accounts
@@ -656,10 +851,9 @@ const purchaseElectricity = async (req, res) => {
     );
 
     /**
-     * --------------------------------------------------------
      * CREATE TRANSACTION RECORD
-     * --------------------------------------------------------
      */
+
     await client.query(
       `
       INSERT INTO transactions (
@@ -714,6 +908,7 @@ const purchaseElectricity = async (req, res) => {
       message:
         'Unable to create electricity payment',
     });
+
   } finally {
     client.release();
   }
@@ -723,6 +918,7 @@ const purchaseElectricity = async (req, res) => {
    * STEP 2 — PURCHASE THROUGH SOGO
    * ----------------------------------------------------------
    */
+
   let purchaseResult;
 
   try {
@@ -734,12 +930,17 @@ const purchaseElectricity = async (req, res) => {
       await axios.post(
         `${SOGO_API_BASE_URL}/bills/electricity`,
         {
-          disco_slug: discoSlug,
+          disco_slug:
+            discoSlug,
+
           meter_number:
             normalizedMeterNumber,
+
           meter_type:
             normalizedMeterType,
-          amount: numericAmount,
+
+          amount:
+            numericAmount,
         },
         {
           headers: {
@@ -766,13 +967,12 @@ const purchaseElectricity = async (req, res) => {
 
   } catch (error) {
     /**
-     * --------------------------------------------------------
-     * NETWORK/TIMEOUT CASE
-     * --------------------------------------------------------
+     * DO NOT REFUND HERE.
      *
-     * We DO NOT refund here because the request may have
-     * reached Sogo and could still complete.
+     * The request may have reached Sogo and could still
+     * complete asynchronously.
      */
+
     console.error(
       '⚠️ Sogo electricity request/network error:',
       error?.message
@@ -781,10 +981,13 @@ const purchaseElectricity = async (req, res) => {
     return res.status(202).json({
       success: true,
       processing: true,
+
       message:
         'Your electricity payment is being processed. Please do not submit it again.',
+
       reference:
         transactionReference,
+
       provider_request_id:
         idempotencyKey,
     });
@@ -792,38 +995,39 @@ const purchaseElectricity = async (req, res) => {
 
   /**
    * ----------------------------------------------------------
-   * STEP 3 — NORMALIZE SOGO RESPONSE
+   * STEP 3 — NORMALIZE INITIAL SOGO RESPONSE
    * ----------------------------------------------------------
    */
-  const providerData =
+
+  let providerData =
     extractProviderData(
       purchaseResult
     );
 
-  const providerStatus =
+  let providerStatus =
     extractProviderStatus(
       providerData,
       purchaseResult
     );
 
-  const providerReference =
+  let providerReference =
     extractProviderReference(
       providerData,
       purchaseResult
     );
 
-  const providerMessage =
+  let providerMessage =
     extractProviderMessage(
       providerData,
       purchaseResult
     );
 
-  const electricityToken =
+  let electricityToken =
     extractElectricityToken(
       purchaseResult
     );
 
-  const units =
+  let units =
     extractUnits(
       purchaseResult
     );
@@ -847,14 +1051,128 @@ const purchaseElectricity = async (req, res) => {
 
   console.log(
     '📌 Electricity units:',
-    units || '[NOT PRESENT]'
+    units !== null &&
+    units !== undefined &&
+    units !== ''
+      ? units
+      : '[NOT PRESENT]'
   );
 
   /**
    * ----------------------------------------------------------
-   * STEP 4 — COMPLETED
+   * STEP 4 — LIVE TRANSACTION LOOKUP
+   *
+   * If Sogo says the transaction is completed but the initial
+   * response does not contain the token/units, retrieve the
+   * completed transaction from Sogo.
    * ----------------------------------------------------------
    */
+
+  if (
+    (
+      providerStatus === 'completed' ||
+      providerStatus === 'success' ||
+      providerStatus === 'successful'
+    ) &&
+    providerReference &&
+    (
+      !electricityToken ||
+      units === null ||
+      units === undefined ||
+      units === ''
+    )
+  ) {
+    console.log(
+      '🔎 Token/units missing from initial response. Attempting Sogo transaction lookup...'
+    );
+
+    const lookupResult =
+      await fetchSogoTransaction(
+        providerReference
+      );
+
+    if (lookupResult) {
+      const lookupData =
+        extractProviderData(
+          lookupResult
+        );
+
+      const lookupToken =
+        extractElectricityToken(
+          lookupResult
+        ) ||
+        extractElectricityToken(
+          lookupData
+        );
+
+      const lookupUnits =
+        extractUnits(
+          lookupResult
+        ) ??
+        extractUnits(
+          lookupData
+        );
+
+      const lookupStatus =
+        extractProviderStatus(
+          lookupData,
+          lookupResult
+        );
+
+      const lookupMessage =
+        extractProviderMessage(
+          lookupData,
+          lookupResult
+        );
+
+      if (lookupToken) {
+        electricityToken =
+          lookupToken;
+      }
+
+      if (
+        lookupUnits !== null &&
+        lookupUnits !== undefined &&
+        lookupUnits !== ''
+      ) {
+        units =
+          lookupUnits;
+      }
+
+      if (lookupStatus) {
+        providerStatus =
+          lookupStatus;
+      }
+
+      if (lookupMessage) {
+        providerMessage =
+          lookupMessage;
+      }
+
+      console.log(
+        '📌 Sogo lookup token:',
+        electricityToken
+          ? '[PRESENT]'
+          : '[NOT PRESENT]'
+      );
+
+      console.log(
+        '📌 Sogo lookup units:',
+        units !== null &&
+        units !== undefined &&
+        units !== ''
+          ? units
+          : '[NOT PRESENT]'
+      );
+    }
+  }
+
+  /**
+   * ----------------------------------------------------------
+   * STEP 5 — COMPLETED
+   * ----------------------------------------------------------
+   */
+
   if (
     providerStatus === 'completed' ||
     providerStatus === 'success' ||
@@ -875,12 +1193,17 @@ const purchaseElectricity = async (req, res) => {
       `,
       [
         providerReference,
+
         JSON.stringify(
           purchaseResult
         ),
+
         providerMessage,
+
         electricityToken,
+
         units,
+
         localBillId,
       ]
     );
@@ -901,27 +1224,40 @@ const purchaseElectricity = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      status: 'completed',
+
+      status:
+        'completed',
+
       message:
         providerMessage ||
         'Electricity payment successful',
+
       reference:
         transactionReference,
+
       provider_reference:
         providerReference,
+
       electricity_token:
         electricityToken,
+
       token:
         electricityToken,
+
       units,
+
       customer_name:
         customerName,
+
       customer_address:
         customerAddress,
+
       meter_number:
         normalizedMeterNumber,
+
       meter_type:
         normalizedMeterType,
+
       provider:
         normalizedProvider,
     });
@@ -929,9 +1265,10 @@ const purchaseElectricity = async (req, res) => {
 
   /**
    * ----------------------------------------------------------
-   * STEP 5 — PROCESSING
+   * STEP 6 — PROCESSING
    * ----------------------------------------------------------
    */
+
   if (
     providerStatus === 'processing' ||
     providerStatus === 'pending'
@@ -941,17 +1278,29 @@ const purchaseElectricity = async (req, res) => {
       UPDATE bill_payments
       SET
         status = 'processing',
-        provider_reference = COALESCE($1, provider_reference),
+        provider_reference =
+          COALESCE($1, provider_reference),
         provider_response = $2,
-        provider_response_message = $3
-      WHERE id = $4
+        provider_response_message = $3,
+        electricity_token =
+          COALESCE($4, electricity_token),
+        units =
+          COALESCE($5, units)
+      WHERE id = $6
       `,
       [
         providerReference,
+
         JSON.stringify(
           purchaseResult
         ),
+
         providerMessage,
+
+        electricityToken,
+
+        units,
+
         localBillId,
       ]
     );
@@ -972,13 +1321,19 @@ const purchaseElectricity = async (req, res) => {
 
     return res.status(202).json({
       success: true,
+
       processing: true,
-      status: 'processing',
+
+      status:
+        'processing',
+
       message:
         providerMessage ||
         'Electricity payment is still processing. Please do not submit it again.',
+
       reference:
         transactionReference,
+
       provider_reference:
         providerReference,
     });
@@ -986,9 +1341,10 @@ const purchaseElectricity = async (req, res) => {
 
   /**
    * ----------------------------------------------------------
-   * STEP 6 — FAILED
+   * STEP 7 — FAILED / CANCELLED
    * ----------------------------------------------------------
    */
+
   if (
     providerStatus === 'failed' ||
     providerStatus === 'cancelled'
@@ -1001,9 +1357,6 @@ const purchaseElectricity = async (req, res) => {
         'BEGIN'
       );
 
-      /**
-       * Lock the account before refunding.
-       */
       const billAccount =
         await refundClient.query(
           `
@@ -1028,10 +1381,6 @@ const purchaseElectricity = async (req, res) => {
             billAccount.rows[0].amount
           );
 
-        /**
-         * Refund only if the bill is still processing.
-         * This protects against duplicate refunds.
-         */
         const statusCheck =
           await refundClient.query(
             `
@@ -1084,8 +1433,11 @@ const purchaseElectricity = async (req, res) => {
             `,
             [
               refundAccountId,
+
               refundAmount,
+
               `REF-${transactionReference}`,
+
               `Electricity payment refund - ${normalizedProvider}`,
             ]
           );
@@ -1097,20 +1449,26 @@ const purchaseElectricity = async (req, res) => {
         UPDATE bill_payments
         SET
           status = $1,
-          provider_reference = COALESCE($2, provider_reference),
+          provider_reference =
+            COALESCE($2, provider_reference),
           provider_response = $3,
           provider_response_message = $4
         WHERE id = $5
         `,
         [
-          providerStatus === 'cancelled'
+          providerStatus ===
+          'cancelled'
             ? 'cancelled'
             : 'failed',
+
           providerReference,
+
           JSON.stringify(
             purchaseResult
           ),
+
           providerMessage,
+
           localBillId,
         ]
       );
@@ -1123,9 +1481,11 @@ const purchaseElectricity = async (req, res) => {
         WHERE reference = $2
         `,
         [
-          providerStatus === 'cancelled'
+          providerStatus ===
+          'cancelled'
             ? 'cancelled'
             : 'failed',
+
           transactionReference,
         ]
       );
@@ -1145,21 +1505,27 @@ const purchaseElectricity = async (req, res) => {
         '❌ Electricity refund processing failed:',
         refundError
       );
+
     } finally {
       refundClient.release();
     }
 
     return res.status(502).json({
       success: false,
+
       status:
-        providerStatus === 'cancelled'
+        providerStatus ===
+        'cancelled'
           ? 'cancelled'
           : 'failed',
+
       message:
         providerMessage ||
         'Electricity payment failed. Your account has been refunded.',
+
       reference:
         transactionReference,
+
       provider_reference:
         providerReference,
     });
@@ -1167,9 +1533,10 @@ const purchaseElectricity = async (req, res) => {
 
   /**
    * ----------------------------------------------------------
-   * STEP 7 — REFUNDED
+   * STEP 8 — REFUNDED
    * ----------------------------------------------------------
    */
+
   if (
     providerStatus === 'refunded'
   ) {
@@ -1215,7 +1582,9 @@ const purchaseElectricity = async (req, res) => {
           `,
           [
             refundAmount,
-            billAccount.rows[0].account_id,
+
+            billAccount.rows[0]
+              .account_id,
           ]
         );
 
@@ -1241,9 +1610,13 @@ const purchaseElectricity = async (req, res) => {
           )
           `,
           [
-            billAccount.rows[0].account_id,
+            billAccount.rows[0]
+              .account_id,
+
             refundAmount,
+
             `REF-${transactionReference}`,
+
             `Electricity payment refund - ${normalizedProvider}`,
           ]
         );
@@ -1254,17 +1627,21 @@ const purchaseElectricity = async (req, res) => {
         UPDATE bill_payments
         SET
           status = 'refunded',
-          provider_reference = COALESCE($1, provider_reference),
+          provider_reference =
+            COALESCE($1, provider_reference),
           provider_response = $2,
           provider_response_message = $3
         WHERE id = $4
         `,
         [
           providerReference,
+
           JSON.stringify(
             purchaseResult
           ),
+
           providerMessage,
+
           localBillId,
         ]
       );
@@ -1294,17 +1671,23 @@ const purchaseElectricity = async (req, res) => {
         '❌ Electricity refund failed:',
         refundError
       );
+
     } finally {
       refundClient.release();
     }
 
     return res.status(200).json({
       success: true,
-      status: 'refunded',
+
+      status:
+        'refunded',
+
       message:
         'Electricity payment was refunded.',
+
       reference:
         transactionReference,
+
       provider_reference:
         providerReference,
     });
@@ -1312,9 +1695,10 @@ const purchaseElectricity = async (req, res) => {
 
   /**
    * ----------------------------------------------------------
-   * STEP 8 — UNKNOWN PROVIDER RESPONSE
+   * STEP 9 — UNKNOWN PROVIDER RESPONSE
    * ----------------------------------------------------------
    */
+
   console.error(
     '⚠️ Unexpected Sogo electricity response:',
     JSON.stringify(
@@ -1328,30 +1712,43 @@ const purchaseElectricity = async (req, res) => {
     `
     UPDATE bill_payments
     SET
-      status = 'provider_response_unrecognized',
-      provider_reference = COALESCE($1, provider_reference),
+      status =
+        'provider_response_unrecognized',
+
+      provider_reference =
+        COALESCE($1, provider_reference),
+
       provider_response = $2,
+
       provider_response_message = $3
+
     WHERE id = $4
     `,
     [
       providerReference,
+
       JSON.stringify(
         purchaseResult
       ),
+
       providerMessage,
+
       localBillId,
     ]
   );
 
   return res.status(502).json({
     success: false,
+
     status:
       'provider_response_unrecognized',
+
     message:
       'The electricity provider returned an unexpected response. Please do not submit the payment again while we verify the transaction.',
+
     reference:
       transactionReference,
+
     provider_reference:
       providerReference,
   });
