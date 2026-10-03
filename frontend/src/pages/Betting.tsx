@@ -1,54 +1,294 @@
-import React, { useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { Link } from 'react-router-dom';
 
 type BettingProvider = {
+  slug: string;
   name: string;
   icon: string;
   description: string;
 };
 
-const bettingProviders: BettingProvider[] = [
+type Step =
+  | 'providers'
+  | 'details'
+  | 'review'
+  | 'processing'
+  | 'success';
+
+const API_BASE =
+  process.env.REACT_APP_API_URL ||
+  'https://zenimonies-banking.onrender.com/api';
+
+const FALLBACK_PROVIDERS: BettingProvider[] = [
   {
+    slug: 'sportybet',
     name: 'SportyBet',
     icon: '⚽',
     description: 'Fund your SportyBet account',
   },
   {
+    slug: 'bet9ja',
     name: 'Bet9ja',
     icon: '🟢',
     description: 'Fund your Bet9ja account',
   },
   {
+    slug: 'betway',
     name: 'Betway',
     icon: '🔵',
     description: 'Fund your Betway account',
   },
   {
+    slug: '1xbet',
     name: '1xBet',
     icon: '🟠',
     description: 'Fund your 1xBet account',
   },
   {
+    slug: 'betking',
     name: 'BetKing',
     icon: '🔴',
     description: 'Fund your BetKing account',
   },
 ];
 
-const Betting: React.FC = () => {
-  const [selectedProvider, setSelectedProvider] =
-    useState<BettingProvider | null>(null);
+const providerIcons: Record<string, string> = {
+  sport: '⚽',
+  bet9ja: '🟢',
+  betway: '🔵',
+  '1xbet': '🟠',
+  betking: '🔴',
+  bangbet: '🟣',
+  betland: '🟡',
+  betlion: '🦁',
+  cloudbet: '☁️',
+  livescore: '📊',
+  merrybet: '🎯',
+  naijabet: '🇳🇬',
+  nairabet: '💚',
+  supabet: '⭐',
+};
 
-  const [accountIdentifier, setAccountIdentifier] =
+const getProviderIcon = (
+  nameOrSlug: string
+) => {
+  const value =
+    nameOrSlug
+      .toLowerCase()
+      .replace(/\s+/g, '');
+
+  const match = Object.keys(
+    providerIcons
+  ).find((key) =>
+    value.includes(key)
+  );
+
+  return match
+    ? providerIcons[match]
+    : '⚽';
+};
+
+const formatAmount = (
+  value: string | number
+) => {
+  const numeric =
+    Number(value) || 0;
+
+  return numeric.toLocaleString(
+    'en-NG',
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  );
+};
+
+const getAuthToken = () => {
+  return (
+    localStorage.getItem(
+      'zenimonies_token'
+    ) ||
+    localStorage.getItem(
+      'token'
+    ) ||
+    ''
+  );
+};
+
+const getErrorMessage = (
+  data: any,
+  fallback: string
+) => {
+  return (
+    data?.message ||
+    data?.error ||
+    data?.details ||
+    fallback
+  );
+};
+
+const normalizeProviders = (
+  payload: any
+): BettingProvider[] => {
+  const providers =
+    payload?.data?.betting?.providers ||
+    payload?.betting?.providers ||
+    payload?.data?.providers ||
+    payload?.providers ||
+    [];
+
+  if (!Array.isArray(providers)) {
+    return [];
+  }
+
+  return providers
+    .map(
+      (
+        provider: any,
+        index: number
+      ) => {
+        const slug = String(
+          provider?.slug ||
+            provider?.provider ||
+            provider?.id ||
+            provider?.code ||
+            ''
+        ).trim();
+
+        const name = String(
+          provider?.name ||
+            provider?.display_name ||
+            provider?.displayName ||
+            provider?.label ||
+            slug ||
+            `Betting Provider ${
+              index + 1
+            }`
+        ).trim();
+
+        if (!slug) {
+          return null;
+        }
+
+        return {
+          slug,
+          name,
+          icon: getProviderIcon(
+            `${name} ${slug}`
+          ),
+          description:
+            `Fund your ${name} account`,
+        };
+      }
+    )
+    .filter(
+      (
+        provider: BettingProvider | null
+      ): provider is BettingProvider =>
+        Boolean(provider)
+    );
+};
+
+const extractVerificationName = (
+  payload: any
+) => {
+  return (
+    payload?.username ||
+    payload?.customerName ||
+    payload?.customer_name ||
+    payload?.name ||
+    payload?.data?.username ||
+    payload?.data?.customerName ||
+    payload?.data?.customer_name ||
+    payload?.data?.name ||
+    payload?.data?.customer?.name ||
+    payload?.verification?.username ||
+    payload?.verification?.customerName ||
+    payload?.verification?.customer_name ||
+    ''
+  );
+};
+
+const Betting: React.FC = () => {
+  const [providers, setProviders] =
+    useState<BettingProvider[]>(
+      []
+    );
+
+  const [
+    loadingProviders,
+    setLoadingProviders,
+  ] = useState(true);
+
+  const [
+    selectedProvider,
+    setSelectedProvider,
+  ] =
+    useState<BettingProvider | null>(
+      null
+    );
+
+  const [
+    accountIdentifier,
+    setAccountIdentifier,
+  ] = useState('');
+
+  const [amount, setAmount] =
     useState('');
 
-  const [amount, setAmount] = useState('');
+  const [error, setError] =
+    useState('');
 
-  const [error, setError] = useState('');
+  const [
+    verificationError,
+    setVerificationError,
+  ] = useState('');
 
-  const [step, setStep] = useState<
-    'providers' | 'details' | 'review'
-  >('providers');
+  const [
+    verifiedCustomerName,
+    setVerifiedCustomerName,
+  ] = useState('');
+
+  const [
+    verifyingAccount,
+    setVerifyingAccount,
+  ] = useState(false);
+
+  const [
+    step,
+    setStep,
+  ] = useState<Step>(
+    'providers'
+  );
+
+  const [
+    transactionPin,
+    setTransactionPin,
+  ] = useState('');
+
+  const [
+    showPinModal,
+    setShowPinModal,
+  ] = useState(false);
+
+  const [
+    submitting,
+    setSubmitting,
+  ] = useState(false);
+
+  const [
+    successReference,
+    setSuccessReference,
+  ] = useState('');
+
+  const [
+    processingReference,
+    setProcessingReference,
+  ] = useState('');
 
   const quickAmounts = [
     '1000',
@@ -57,272 +297,990 @@ const Betting: React.FC = () => {
     '10000',
   ];
 
+  /**
+   * ==========================================================
+   * LOAD PROVIDERS
+   * ==========================================================
+   */
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadProviders =
+      async () => {
+        setLoadingProviders(
+          true
+        );
+
+        try {
+          const token =
+            getAuthToken();
+
+          const response =
+            await fetch(
+              `${API_BASE}/betting/providers`,
+              {
+                method: 'GET',
+                headers: {
+                  Accept:
+                    'application/json',
+                  ...(token
+                    ? {
+                        Authorization:
+                          `Bearer ${token}`,
+                      }
+                    : {}),
+                },
+              }
+            );
+
+          const data =
+            await response
+              .json()
+              .catch(
+                () => ({})
+              );
+
+          if (!response.ok) {
+            throw new Error(
+              getErrorMessage(
+                data,
+                'Unable to load betting providers.'
+              )
+            );
+          }
+
+          const liveProviders =
+            normalizeProviders(
+              data
+            );
+
+          if (
+            mounted &&
+            liveProviders.length >
+              0
+          ) {
+            setProviders(
+              liveProviders
+            );
+          } else if (
+            mounted
+          ) {
+            /*
+             * We keep a small fallback list so the page does
+             * not become blank if the provider catalog is
+             * temporarily unavailable.
+             *
+             * Actual funding still goes through our backend.
+             */
+            setProviders(
+              FALLBACK_PROVIDERS
+            );
+          }
+        } catch (loadError: any) {
+          console.error(
+            'Betting providers error:',
+            loadError
+          );
+
+          if (mounted) {
+            setProviders(
+              FALLBACK_PROVIDERS
+            );
+          }
+        } finally {
+          if (mounted) {
+            setLoadingProviders(
+              false
+            );
+          }
+        }
+      };
+
+    loadProviders();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  /**
+   * ==========================================================
+   * SELECT PROVIDER
+   * ==========================================================
+   */
+
   const selectProvider = (
     provider: BettingProvider
   ) => {
-    setSelectedProvider(provider);
+    setSelectedProvider(
+      provider
+    );
+
     setAccountIdentifier('');
     setAmount('');
     setError('');
+    setVerificationError('');
+    setVerifiedCustomerName('');
+    setTransactionPin('');
     setStep('details');
   };
 
-  const handleContinue = (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
-    event.preventDefault();
+  /**
+   * ==========================================================
+   * VERIFY BETTING ACCOUNT
+   * ==========================================================
+   */
 
-    setError('');
-
-    if (!accountIdentifier.trim()) {
-      setError(
-        'Please enter your betting account ID, username or phone number.'
+  const verifyBettingAccount =
+    async () => {
+      setVerificationError(
+        ''
       );
-      return;
-    }
 
-    const numericAmount = Number(amount);
+      const identifier =
+        accountIdentifier.trim();
 
-    if (!amount || numericAmount <= 0) {
-      setError('Please enter a valid amount.');
-      return;
-    }
+      if (!identifier) {
+        setVerificationError(
+          'Please enter your betting account ID, username or phone number.'
+        );
+        return false;
+      }
 
-    setStep('review');
+      if (!selectedProvider) {
+        setVerificationError(
+          'Please select a betting provider.'
+        );
+        return false;
+      }
+
+      setVerifyingAccount(
+        true
+      );
+
+      try {
+        const token =
+          getAuthToken();
+
+        if (!token) {
+          throw new Error(
+            'Your session has expired. Please sign in again.'
+          );
+        }
+
+        const response =
+          await fetch(
+            `${API_BASE}/betting/verify`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type':
+                  'application/json',
+                Accept:
+                  'application/json',
+                Authorization:
+                  `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                provider:
+                  selectedProvider.slug,
+                accountId:
+                  identifier,
+              }),
+            }
+          );
+
+        const data =
+          await response
+            .json()
+            .catch(
+              () => ({})
+            );
+
+        if (!response.ok) {
+          throw new Error(
+            getErrorMessage(
+              data,
+              'We could not verify this betting account.'
+            )
+          );
+        }
+
+        const customerName =
+          extractVerificationName(
+            data
+          );
+
+        setVerifiedCustomerName(
+          customerName ||
+            'Verified betting account'
+        );
+
+        return true;
+      } catch (verifyError: any) {
+        console.error(
+          'Betting account verification error:',
+          verifyError
+        );
+
+        setVerifiedCustomerName(
+          ''
+        );
+
+        setVerificationError(
+          verifyError?.message ||
+            'Unable to verify the betting account.'
+        );
+
+        return false;
+      } finally {
+        setVerifyingAccount(
+          false
+        );
+      }
+    };
+
+  /**
+   * ==========================================================
+   * CONTINUE FROM DETAILS
+   * ==========================================================
+   */
+
+  const handleContinue =
+    async (
+      event: React.FormEvent<HTMLFormElement>
+    ) => {
+      event.preventDefault();
+
+      setError('');
+      setVerificationError('');
+
+      if (
+        !accountIdentifier.trim()
+      ) {
+        setError(
+          'Please enter your betting account ID, username or phone number.'
+        );
+        return;
+      }
+
+      const numericAmount =
+        Number(amount);
+
+      if (
+        !amount ||
+        !Number.isFinite(
+          numericAmount
+        ) ||
+        numericAmount < 100
+      ) {
+        setError(
+          'The minimum betting funding amount is ₦100.'
+        );
+        return;
+      }
+
+      if (
+        numericAmount >
+        500000
+      ) {
+        setError(
+          'The maximum betting funding amount is ₦500,000.'
+        );
+        return;
+      }
+
+      const verified =
+        await verifyBettingAccount();
+
+      if (!verified) {
+        return;
+      }
+
+      setStep('review');
+    };
+
+  /**
+   * ==========================================================
+   * OPEN PIN MODAL
+   * ==========================================================
+   */
+
+  const openPinModal = () => {
+    setError('');
+    setTransactionPin('');
+    setShowPinModal(true);
   };
 
-  const goBack = () => {
-    setError('');
+  /**
+   * ==========================================================
+   * CLOSE PIN MODAL
+   * ==========================================================
+   */
 
-    if (step === 'review') {
+  const closePinModal = () => {
+    if (submitting) {
+      return;
+    }
+
+    setShowPinModal(false);
+    setTransactionPin('');
+  };
+
+  /**
+   * ==========================================================
+   * FUND BETTING ACCOUNT
+   * ==========================================================
+   */
+
+  const confirmFunding =
+    async () => {
+      setError('');
+
+      if (!selectedProvider) {
+        setError(
+          'Please select a betting provider.'
+        );
+        return;
+      }
+
+      if (
+        transactionPin.length !==
+        4
+      ) {
+        setError(
+          'Please enter your 4-digit Transaction PIN.'
+        );
+        return;
+      }
+
+      const numericAmount =
+        Number(amount);
+
+      if (
+        !Number.isFinite(
+          numericAmount
+        ) ||
+        numericAmount < 100
+      ) {
+        setError(
+          'Please enter a valid funding amount.'
+        );
+        return;
+      }
+
+      setSubmitting(true);
+
+      try {
+        const token =
+          getAuthToken();
+
+        if (!token) {
+          throw new Error(
+            'Your session has expired. Please sign in again.'
+          );
+        }
+
+        const response =
+          await fetch(
+            `${API_BASE}/betting/fund`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type':
+                  'application/json',
+                Accept:
+                  'application/json',
+                Authorization:
+                  `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                provider:
+                  selectedProvider.slug,
+                accountId:
+                  accountIdentifier.trim(),
+                amount:
+                  numericAmount,
+                transactionPin,
+              }),
+            }
+          );
+
+        const data =
+          await response
+            .json()
+            .catch(
+              () => ({})
+            );
+
+        if (
+          response.status ===
+          401
+        ) {
+          throw new Error(
+            'Your session has expired or your Transaction PIN was not accepted.'
+          );
+        }
+
+        if (
+          response.status ===
+          403
+        ) {
+          throw new Error(
+            getErrorMessage(
+              data,
+              'Transaction PIN verification failed.'
+            )
+          );
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            getErrorMessage(
+              data,
+              'Betting funding could not be started.'
+            )
+          );
+        }
+
+        const reference =
+          data?.reference ||
+          data?.data?.reference ||
+          data?.transactionReference ||
+          data?.data?.transactionReference ||
+          '';
+
+        setSuccessReference(
+          reference
+        );
+
+        setProcessingReference(
+          reference
+        );
+
+        setShowPinModal(false);
+        setTransactionPin('');
+
+        /*
+         * Sogo normally processes bill funding asynchronously.
+         * 202 means the funding request has been accepted and
+         * is still processing.
+         */
+        if (
+          response.status ===
+            202 ||
+          data?.status ===
+            'processing' ||
+          data?.status ===
+            'pending'
+        ) {
+          setStep(
+            'processing'
+          );
+          return;
+        }
+
+        setStep('success');
+      } catch (fundingError: any) {
+        console.error(
+          'Betting funding error:',
+          fundingError
+        );
+
+        setError(
+          fundingError?.message ||
+            'Betting funding could not be completed.'
+        );
+
+        setShowPinModal(
+          true
+        );
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+  /**
+   * ==========================================================
+   * BACK
+   * ==========================================================
+   */
+
+  const goBack = () => {
+    if (submitting) {
+      return;
+    }
+
+    setError('');
+    setVerificationError('');
+
+    if (
+      step === 'review'
+    ) {
       setStep('details');
       return;
     }
 
-    if (step === 'details') {
+    if (
+      step === 'details'
+    ) {
       setStep('providers');
-      setSelectedProvider(null);
+      setSelectedProvider(
+        null
+      );
+      setVerifiedCustomerName(
+        ''
+      );
       return;
+    }
+
+    if (
+      step === 'processing' ||
+      step === 'success'
+    ) {
+      resetFlow();
     }
   };
 
+  /**
+   * ==========================================================
+   * RESET
+   * ==========================================================
+   */
+
   const resetFlow = () => {
-    setSelectedProvider(null);
+    setSelectedProvider(
+      null
+    );
     setAccountIdentifier('');
     setAmount('');
     setError('');
+    setVerificationError('');
+    setVerifiedCustomerName('');
+    setTransactionPin('');
+    setShowPinModal(false);
+    setSubmitting(false);
+    setSuccessReference('');
+    setProcessingReference('');
     setStep('providers');
   };
 
+  const selectedAmount =
+    useMemo(
+      () =>
+        Number(amount) || 0,
+      [amount]
+    );
+
   return (
     <div style={styles.page}>
-      {/* HEADER */}
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
+
       <header style={styles.header}>
-        <Link to="/" style={styles.brandLink}>
-          <div style={styles.logo}>Z</div>
+        <Link
+          to="/"
+          style={styles.brandLink}
+        >
+          <div style={styles.logo}>
+            Z
+          </div>
 
           <div>
-            <div style={styles.brandName}>
+            <div
+              style={
+                styles.brandName
+              }
+            >
               Zenimonies
             </div>
 
-            <div style={styles.brandSubtitle}>
+            <div
+              style={
+                styles.brandSubtitle
+              }
+            >
               DIGITAL BANKING
             </div>
           </div>
         </Link>
 
-        <Link to="/" style={styles.homeLink}>
+        <Link
+          to="/"
+          style={styles.homeLink}
+        >
           Home
         </Link>
       </header>
 
       <main style={styles.main}>
-        <Link to="/" style={styles.backLink}>
+        <Link
+          to="/"
+          style={styles.backLink}
+        >
           ← Back to Dashboard
         </Link>
 
-        {/* TITLE */}
+        {/* ====================================================
+            TITLE
+        ==================================================== */}
+
         <section style={styles.intro}>
-          <div style={styles.mainIcon}>⚽</div>
+          <div
+            style={
+              styles.mainIcon
+            }
+          >
+            ⚽
+          </div>
 
           <div>
-            <div style={styles.eyebrow}>
+            <div
+              style={
+                styles.eyebrow
+              }
+            >
               BETTING SERVICES
             </div>
 
-            <h1 style={styles.title}>
+            <h1
+              style={styles.title}
+            >
               Fund Betting Account
             </h1>
 
-            <p style={styles.description}>
-              Choose your betting app and enter your
-              account details to continue.
+            <p
+              style={
+                styles.description
+              }
+            >
+              Fund your supported betting
+              account securely from your
+              Zenimonies balance.
             </p>
           </div>
         </section>
 
-        {/* STEP 1 */}
-        {step === 'providers' && (
-          <section style={styles.card}>
-            <h2 style={styles.cardTitle}>
+        {/* ====================================================
+            STEP 1 — PROVIDERS
+        ==================================================== */}
+
+        {step ===
+          'providers' && (
+          <section
+            style={styles.card}
+          >
+            <h2
+              style={
+                styles.cardTitle
+              }
+            >
               Choose Betting App
             </h2>
 
-            <p style={styles.cardDescription}>
-              Select the betting platform you want to
-              fund.
+            <p
+              style={
+                styles.cardDescription
+              }
+            >
+              Select the betting platform
+              you want to fund.
             </p>
 
-            <div style={styles.providerList}>
-              {bettingProviders.map((provider) => (
-                <button
-                  key={provider.name}
-                  type="button"
-                  onClick={() =>
-                    selectProvider(provider)
+            {loadingProviders ? (
+              <div
+                style={
+                  styles.loadingBox
+                }
+              >
+                <div
+                  style={
+                    styles.spinner
                   }
-                  style={styles.providerButton}
-                >
-                  <div style={styles.providerIcon}>
-                    {provider.icon}
-                  </div>
+                />
 
-                  <div style={styles.providerText}>
-                    <strong
-                      style={styles.providerName}
+                <span>
+                  Loading betting
+                  providers...
+                </span>
+              </div>
+            ) : (
+              <div
+                style={
+                  styles.providerList
+                }
+              >
+                {providers.map(
+                  (
+                    provider
+                  ) => (
+                    <button
+                      key={
+                        provider.slug
+                      }
+                      type="button"
+                      onClick={() =>
+                        selectProvider(
+                          provider
+                        )
+                      }
+                      style={
+                        styles.providerButton
+                      }
                     >
-                      {provider.name}
-                    </strong>
+                      <div
+                        style={
+                          styles.providerIcon
+                        }
+                      >
+                        {
+                          provider.icon
+                        }
+                      </div>
 
-                    <span
-                      style={styles.providerDescription}
-                    >
-                      {provider.description}
-                    </span>
-                  </div>
+                      <div
+                        style={
+                          styles.providerText
+                        }
+                      >
+                        <strong
+                          style={
+                            styles.providerName
+                          }
+                        >
+                          {
+                            provider.name
+                          }
+                        </strong>
 
-                  <span style={styles.arrow}>
-                    ›
-                  </span>
-                </button>
-              ))}
-            </div>
+                        <span
+                          style={
+                            styles.providerDescription
+                          }
+                        >
+                          {
+                            provider.description
+                          }
+                        </span>
+                      </div>
 
-            <div style={styles.notice}>
-              <span style={styles.noticeIcon}>
+                      <span
+                        style={
+                          styles.arrow
+                        }
+                      >
+                        ›
+                      </span>
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+
+            <div
+              style={styles.notice}
+            >
+              <span
+                style={
+                  styles.noticeIcon
+                }
+              >
                 ✓
               </span>
 
               <div>
                 <strong>
-                  Secure payments
+                  Secure funding
                 </strong>
 
-                <p style={styles.noticeText}>
-                  Your betting account details will
-                  only be used to process the requested
-                  funding transaction.
+                <p
+                  style={
+                    styles.noticeText
+                  }
+                >
+                  Your betting account
+                  details are verified
+                  before funding is
+                  submitted.
                 </p>
               </div>
             </div>
           </section>
         )}
 
-        {/* STEP 2 */}
-        {step === 'details' &&
+        {/* ====================================================
+            STEP 2 — DETAILS
+        ==================================================== */}
+
+        {step ===
+          'details' &&
           selectedProvider && (
-            <section style={styles.card}>
+            <section
+              style={styles.card}
+            >
               <button
                 type="button"
                 onClick={goBack}
-                style={styles.stepBack}
+                style={
+                  styles.stepBack
+                }
               >
-                ← Choose another betting app
+                ← Choose another
+                betting app
               </button>
 
-              <div style={styles.selectedProvider}>
-                <div style={styles.providerIconLarge}>
-                  {selectedProvider.icon}
+              <div
+                style={
+                  styles.selectedProvider
+                }
+              >
+                <div
+                  style={
+                    styles.providerIconLarge
+                  }
+                >
+                  {
+                    selectedProvider.icon
+                  }
                 </div>
 
                 <div>
-                  <div style={styles.selectedLabel}>
-                    Selected betting app
+                  <div
+                    style={
+                      styles.selectedLabel
+                    }
+                  >
+                    Selected betting
+                    app
                   </div>
 
                   <strong
-                    style={styles.selectedName}
+                    style={
+                      styles.selectedName
+                    }
                   >
-                    {selectedProvider.name}
+                    {
+                      selectedProvider.name
+                    }
                   </strong>
                 </div>
               </div>
 
-              <h2 style={styles.cardTitle}>
+              <h2
+                style={
+                  styles.cardTitle
+                }
+              >
                 Account Details
               </h2>
 
-              <p style={styles.cardDescription}>
-                Enter the account information used by
-                your {selectedProvider.name} account.
+              <p
+                style={
+                  styles.cardDescription
+                }
+              >
+                Enter the account
+                information used by your{' '}
+                {
+                  selectedProvider.name
+                }{' '}
+                account.
               </p>
 
-              <form onSubmit={handleContinue}>
+              <form
+                onSubmit={
+                  handleContinue
+                }
+              >
                 <label
                   htmlFor="accountIdentifier"
-                  style={styles.label}
+                  style={
+                    styles.label
+                  }
                 >
-                  Betting Account ID / Username /
-                  Phone
+                  Betting Account ID /
+                  Username / Phone
                 </label>
 
                 <input
                   id="accountIdentifier"
                   type="text"
-                  value={accountIdentifier}
-                  onChange={(event) =>
+                  value={
+                    accountIdentifier
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     setAccountIdentifier(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                   placeholder="Enter your betting account details"
-                  style={styles.input}
+                  style={
+                    styles.input
+                  }
                   autoComplete="off"
                 />
 
                 <label
                   htmlFor="amount"
-                  style={styles.label}
+                  style={
+                    styles.label
+                  }
                 >
                   Amount
                 </label>
 
-                <div style={styles.amountBox}>
-                  <span style={styles.currency}>
+                <div
+                  style={
+                    styles.amountBox
+                  }
+                >
+                  <span
+                    style={
+                      styles.currency
+                    }
+                  >
                     ₦
                   </span>
 
                   <input
                     id="amount"
                     type="number"
-                    min="1"
+                    min="100"
+                    max="500000"
                     value={amount}
-                    onChange={(event) =>
+                    onChange={(
+                      event
+                    ) =>
                       setAmount(
-                        event.target.value
+                        event.target
+                          .value
                       )
                     }
                     placeholder="0.00"
-                    style={styles.amountInput}
+                    style={
+                      styles.amountInput
+                    }
                   />
                 </div>
 
-                <div style={styles.quickAmounts}>
+                <div
+                  style={
+                    styles.quickAmounts
+                  }
+                >
                   {quickAmounts.map(
-                    (quickAmount) => (
+                    (
+                      quickAmount
+                    ) => (
                       <button
-                        key={quickAmount}
+                        key={
+                          quickAmount
+                        }
                         type="button"
                         onClick={() =>
                           setAmount(
@@ -336,7 +1294,9 @@ const Betting: React.FC = () => {
                         ₦
                         {Number(
                           quickAmount
-                        ).toLocaleString()}
+                        ).toLocaleString(
+                          'en-NG'
+                        )}
                       </button>
                     )
                   )}
@@ -345,137 +1305,706 @@ const Betting: React.FC = () => {
                 {error && (
                   <div
                     role="alert"
-                    style={styles.error}
+                    style={
+                      styles.error
+                    }
                   >
                     {error}
                   </div>
                 )}
 
+                {verificationError && (
+                  <div
+                    role="alert"
+                    style={
+                      styles.error
+                    }
+                  >
+                    {
+                      verificationError
+                    }
+                  </div>
+                )}
+
                 <button
                   type="submit"
-                  style={styles.primaryButton}
+                  disabled={
+                    verifyingAccount
+                  }
+                  style={{
+                    ...styles.primaryButton,
+                    opacity:
+                      verifyingAccount
+                        ? 0.65
+                        : 1,
+                  }}
                 >
-                  Review Funding
+                  {verifyingAccount
+                    ? 'Verifying Account...'
+                    : 'Verify & Continue'}
                 </button>
               </form>
             </section>
           )}
 
-        {/* STEP 3 */}
-        {step === 'review' &&
+        {/* ====================================================
+            STEP 3 — REVIEW
+        ==================================================== */}
+
+        {step ===
+          'review' &&
           selectedProvider && (
-            <section style={styles.card}>
+            <section
+              style={styles.card}
+            >
               <button
                 type="button"
                 onClick={goBack}
-                style={styles.stepBack}
+                style={
+                  styles.stepBack
+                }
               >
                 ← Edit details
               </button>
 
-              <div style={styles.reviewIcon}>
+              <div
+                style={
+                  styles.reviewIcon
+                }
+              >
                 ✓
               </div>
 
-              <h2 style={styles.reviewTitle}>
+              <h2
+                style={
+                  styles.reviewTitle
+                }
+              >
                 Review Funding
               </h2>
 
-              <p style={styles.reviewDescription}>
-                Please check the details before
-                continuing.
+              <p
+                style={
+                  styles.reviewDescription
+                }
+              >
+                Confirm the verified
+                account and funding
+                amount.
               </p>
 
-              <div style={styles.reviewBox}>
-                <div style={styles.reviewRow}>
-                  <span>Betting App</span>
+              <div
+                style={
+                  styles.verifiedBox
+                }
+              >
+                <div
+                  style={
+                    styles.verifiedBadge
+                  }
+                >
+                  ✓
+                </div>
+
+                <div>
+                  <strong
+                    style={
+                      styles.verifiedTitle
+                    }
+                  >
+                    Account Verified
+                  </strong>
+
+                  <div
+                    style={
+                      styles.verifiedName
+                    }
+                  >
+                    {
+                      verifiedCustomerName ||
+                      'Verified betting account'
+                    }
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={
+                  styles.reviewBox
+                }
+              >
+                <div
+                  style={
+                    styles.reviewRow
+                  }
+                >
+                  <span>
+                    Betting App
+                  </span>
 
                   <strong>
-                    {selectedProvider.name}
+                    {
+                      selectedProvider.name
+                    }
                   </strong>
                 </div>
 
-                <div style={styles.reviewRow}>
-                  <span>Account</span>
+                <div
+                  style={
+                    styles.reviewRow
+                  }
+                >
+                  <span>
+                    Account
+                  </span>
 
                   <strong
-                    style={styles.accountValue}
+                    style={
+                      styles.accountValue
+                    }
                   >
-                    {accountIdentifier}
+                    {
+                      accountIdentifier
+                    }
                   </strong>
                 </div>
 
-                <div style={styles.reviewRow}>
-                  <span>Amount</span>
+                <div
+                  style={
+                    styles.reviewRow
+                  }
+                >
+                  <span>
+                    Amount
+                  </span>
 
-                  <strong style={styles.amountValue}>
+                  <strong
+                    style={
+                      styles.amountValue
+                    }
+                  >
                     ₦
-                    {Number(
-                      amount
-                    ).toLocaleString()}
+                    {formatAmount(
+                      selectedAmount
+                    )}
                   </strong>
                 </div>
               </div>
 
-              <div style={styles.pendingNotice}>
+              {error && (
+                <div
+                  role="alert"
+                  style={
+                    styles.error
+                  }
+                >
+                  {error}
+                </div>
+              )}
+
+              <div
+                style={
+                  styles.pendingNotice
+                }
+              >
                 <strong>
-                  Ready for confirmation
+                  Transaction PIN
+                  required
                 </strong>
 
                 <p>
-                  The final transaction will only be
-                  marked successful after Zenimonies
-                  receives confirmation from the
-                  payment service.
+                  Your Transaction PIN
+                  is required to authorize
+                  this funding request.
                 </p>
               </div>
 
               <button
                 type="button"
-                style={styles.primaryButton}
-                onClick={() => {
-                  alert(
-                    'Betting funding is ready to be connected to the backend payment service.'
-                  );
-                }}
+                style={
+                  styles.primaryButton
+                }
+                onClick={
+                  openPinModal
+                }
               >
                 Confirm Funding
               </button>
 
               <button
                 type="button"
-                style={styles.secondaryButton}
-                onClick={resetFlow}
+                style={
+                  styles.secondaryButton
+                }
+                onClick={
+                  resetFlow
+                }
               >
                 Cancel
               </button>
             </section>
           )}
 
-        {/* INFORMATION */}
-        <section style={styles.infoCard}>
-          <div style={styles.infoIcon}>
+        {/* ====================================================
+            STEP 4 — PROCESSING
+        ==================================================== */}
+
+        {step ===
+          'processing' && (
+          <section
+            style={styles.card}
+          >
+            <div
+              style={
+                styles.processingIcon
+              }
+            >
+              <div
+                style={
+                  styles.processingSpinner
+                }
+              />
+            </div>
+
+            <h2
+              style={
+                styles.reviewTitle
+              }
+            >
+              Funding Processing
+            </h2>
+
+            <p
+              style={
+                styles.reviewDescription
+              }
+            >
+              Your betting funding request
+              has been submitted and is
+              being processed.
+            </p>
+
+            <div
+              style={
+                styles.processingBox
+              }
+            >
+              <div
+                style={
+                  styles.processingRow
+                }
+              >
+                <span>
+                  Betting App
+                </span>
+
+                <strong>
+                  {
+                    selectedProvider?.name
+                  }
+                </strong>
+              </div>
+
+              <div
+                style={
+                  styles.processingRow
+                }
+              >
+                <span>
+                  Amount
+                </span>
+
+                <strong
+                  style={
+                    styles.amountValue
+                  }
+                >
+                  ₦
+                  {formatAmount(
+                    selectedAmount
+                  )}
+                </strong>
+              </div>
+
+              {processingReference && (
+                <div
+                  style={
+                    styles.processingRow
+                  }
+                >
+                  <span>
+                    Reference
+                  </span>
+
+                  <strong
+                    style={
+                      styles.referenceValue
+                    }
+                  >
+                    {
+                      processingReference
+                    }
+                  </strong>
+                </div>
+              )}
+            </div>
+
+            <div
+              style={
+                styles.pendingNotice
+              }
+            >
+              <strong>
+                Please wait for provider
+                confirmation
+              </strong>
+
+              <p>
+                Do not submit the same
+                funding request again while
+                this transaction is
+                processing.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              style={
+                styles.secondaryButton
+              }
+              onClick={
+                resetFlow
+              }
+            >
+              Done
+            </button>
+          </section>
+        )}
+
+        {/* ====================================================
+            STEP 5 — SUCCESS
+        ==================================================== */}
+
+        {step ===
+          'success' && (
+          <section
+            style={styles.card}
+          >
+            <div
+              style={
+                styles.successIcon
+              }
+            >
+              ✓
+            </div>
+
+            <h2
+              style={
+                styles.reviewTitle
+              }
+            >
+              Funding Successful
+            </h2>
+
+            <p
+              style={
+                styles.reviewDescription
+              }
+            >
+              Your betting account funding
+              has been completed.
+            </p>
+
+            <div
+              style={
+                styles.successBox
+              }
+            >
+              <div
+                style={
+                  styles.processingRow
+                }
+              >
+                <span>
+                  Betting App
+                </span>
+
+                <strong>
+                  {
+                    selectedProvider?.name
+                  }
+                </strong>
+              </div>
+
+              <div
+                style={
+                  styles.processingRow
+                }
+              >
+                <span>
+                  Amount
+                </span>
+
+                <strong
+                  style={
+                    styles.amountValue
+                  }
+                >
+                  ₦
+                  {formatAmount(
+                    selectedAmount
+                  )}
+                </strong>
+              </div>
+
+              {successReference && (
+                <div
+                  style={
+                    styles.processingRow
+                  }
+                >
+                  <span>
+                    Reference
+                  </span>
+
+                  <strong
+                    style={
+                      styles.referenceValue
+                    }
+                  >
+                    {
+                      successReference
+                    }
+                  </strong>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              style={
+                styles.primaryButton
+              }
+              onClick={
+                resetFlow
+              }
+            >
+              Fund Another Account
+            </button>
+          </section>
+        )}
+
+        {/* ====================================================
+            INFORMATION
+        ==================================================== */}
+
+        <section
+          style={styles.infoCard}
+        >
+          <div
+            style={styles.infoIcon}
+          >
             i
           </div>
 
           <div>
-            <strong style={styles.infoTitle}>
+            <strong
+              style={
+                styles.infoTitle
+              }
+            >
               Important
             </strong>
 
-            <p style={styles.infoText}>
-              Make sure the betting account details
-              belong to you and are correct before
-              confirming a funding request.
+            <p
+              style={
+                styles.infoText
+              }
+            >
+              Make sure the betting account
+              details belong to you and are
+              correct before confirming a
+              funding request. Your Transaction
+              PIN authorizes the debit from your
+              Zenimonies account.
             </p>
           </div>
         </section>
       </main>
 
-      {/* BOTTOM NAV */}
-      <nav style={styles.bottomNav}>
-        <Link to="/" style={styles.navItem}>
-          <span style={styles.navIcon}>⌂</span>
+      {/* ======================================================
+          TRANSACTION PIN MODAL
+      ====================================================== */}
+
+      {showPinModal && (
+        <div
+          style={
+            styles.modalOverlay
+          }
+          onClick={
+            closePinModal
+          }
+        >
+          <div
+            style={
+              styles.pinModal
+            }
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <button
+              type="button"
+              style={
+                styles.modalClose
+              }
+              onClick={
+                closePinModal
+              }
+              disabled={
+                submitting
+              }
+              aria-label="Close"
+            >
+              ×
+            </button>
+
+            <div
+              style={
+                styles.pinIcon
+              }
+            >
+              🔐
+            </div>
+
+            <h2
+              style={
+                styles.pinTitle
+              }
+            >
+              Enter Transaction PIN
+            </h2>
+
+            <p
+              style={
+                styles.pinDescription
+              }
+            >
+              Enter your 4-digit Transaction
+              PIN to authorize this betting
+              funding.
+            </p>
+
+            <div
+              style={
+                styles.pinSummary
+              }
+            >
+              <span>
+                Amount
+              </span>
+
+              <strong>
+                ₦
+                {formatAmount(
+                  selectedAmount
+                )}
+              </strong>
+            </div>
+
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              value={
+                transactionPin
+              }
+              onChange={(
+                event
+              ) => {
+                const value =
+                  event.target.value.replace(
+                    /\D/g,
+                    ''
+                  );
+
+                setTransactionPin(
+                  value
+                );
+
+                setError('');
+              }}
+              placeholder="••••"
+              style={
+                styles.pinInput
+              }
+              autoFocus
+              autoComplete="off"
+            />
+
+            {error && (
+              <div
+                role="alert"
+                style={
+                  styles.modalError
+                }
+              >
+                {error}
+              </div>
+            )}
+
+            <button
+              type="button"
+              style={{
+                ...styles.primaryButton,
+                marginTop: 14,
+                opacity:
+                  submitting
+                    ? 0.65
+                    : 1,
+              }}
+              onClick={
+                confirmFunding
+              }
+              disabled={
+                submitting ||
+                transactionPin.length !==
+                  4
+              }
+            >
+              {submitting
+                ? 'Processing...'
+                : 'Authorize Funding'}
+            </button>
+
+            <p
+              style={
+                styles.securityText
+              }
+            >
+              Never share your Transaction PIN
+              with anyone.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================
+          BOTTOM NAV
+      ====================================================== */}
+
+      <nav
+        style={styles.bottomNav}
+      >
+        <Link
+          to="/"
+          style={styles.navItem}
+        >
+          <span
+            style={styles.navIcon}
+          >
+            ⌂
+          </span>
           Home
         </Link>
 
@@ -483,7 +2012,11 @@ const Betting: React.FC = () => {
           to="/transactions"
           style={styles.navItem}
         >
-          <span style={styles.navIcon}>↕</span>
+          <span
+            style={styles.navIcon}
+          >
+            ↕
+          </span>
           Transactions
         </Link>
 
@@ -491,7 +2024,11 @@ const Betting: React.FC = () => {
           to="/wallet"
           style={styles.navItem}
         >
-          <span style={styles.navIcon}>▱</span>
+          <span
+            style={styles.navIcon}
+          >
+            ▱
+          </span>
           Wallet
         </Link>
 
@@ -499,13 +2036,23 @@ const Betting: React.FC = () => {
           to="/profile"
           style={styles.navItem}
         >
-          <span style={styles.navIcon}>♙</span>
+          <span
+            style={styles.navIcon}
+          >
+            ♙
+          </span>
           Profile
         </Link>
       </nav>
     </div>
   );
 };
+
+/**
+ * ============================================================
+ * STYLES
+ * ============================================================
+ */
 
 const styles: Record<
   string,
@@ -527,7 +2074,8 @@ const styles: Record<
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '0 4%',
-    borderBottom: '1px solid #edf2ef',
+    borderBottom:
+      '1px solid #edf2ef',
     position: 'sticky',
     top: 0,
     zIndex: 20,
@@ -631,7 +2179,8 @@ const styles: Record<
 
   card: {
     background: '#ffffff',
-    border: '1px solid #e5ebe8',
+    border:
+      '1px solid #e5ebe8',
     borderRadius: 20,
     padding: 21,
     boxShadow:
@@ -652,6 +2201,26 @@ const styles: Record<
     lineHeight: 1.5,
   },
 
+  loadingBox: {
+    minHeight: 120,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    color: '#66756e',
+    fontSize: 13,
+  },
+
+  spinner: {
+    width: 20,
+    height: 20,
+    border:
+      '3px solid #d9eee3',
+    borderTopColor:
+      '#079447',
+    borderRadius: '50%',
+  },
+
   providerList: {
     display: 'flex',
     flexDirection: 'column',
@@ -660,7 +2229,8 @@ const styles: Record<
 
   providerButton: {
     width: '100%',
-    border: '1px solid #dcebe4',
+    border:
+      '1px solid #dcebe4',
     background: '#f8fcfa',
     borderRadius: 15,
     padding: 12,
@@ -711,7 +2281,8 @@ const styles: Record<
     padding: 13,
     borderRadius: 13,
     background: '#effbf5',
-    border: '1px solid #d2eee0',
+    border:
+      '1px solid #d2eee0',
     display: 'flex',
     gap: 10,
   },
@@ -756,7 +2327,8 @@ const styles: Record<
     marginBottom: 20,
     borderRadius: 14,
     background: '#f5fbf8',
-    border: '1px solid #dcebe4',
+    border:
+      '1px solid #dcebe4',
   },
 
   providerIconLarge: {
@@ -794,7 +2366,8 @@ const styles: Record<
     width: '100%',
     height: 49,
     boxSizing: 'border-box',
-    border: '1px solid #d8e5df',
+    border:
+      '1px solid #d8e5df',
     borderRadius: 12,
     padding: '0 13px',
     fontSize: 14,
@@ -803,7 +2376,8 @@ const styles: Record<
 
   amountBox: {
     height: 49,
-    border: '1px solid #d8e5df',
+    border:
+      '1px solid #d8e5df',
     borderRadius: 12,
     display: 'flex',
     alignItems: 'center',
@@ -834,7 +2408,8 @@ const styles: Record<
   },
 
   quickAmountButton: {
-    border: '1px solid #cfe6db',
+    border:
+      '1px solid #cfe6db',
     background: '#f5fbf8',
     color: '#087c43',
     borderRadius: 10,
@@ -870,13 +2445,50 @@ const styles: Record<
     width: '100%',
     height: 46,
     marginTop: 9,
-    border: '1px solid #d0d9d5',
+    border:
+      '1px solid #d0d9d5',
     borderRadius: 12,
     background: '#ffffff',
     color: '#344054',
     fontSize: 13,
     fontWeight: 700,
     cursor: 'pointer',
+  },
+
+  verifiedBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: 13,
+    marginBottom: 14,
+    borderRadius: 13,
+    background: '#effbf5',
+    border:
+      '1px solid #cfeadb',
+  },
+
+  verifiedBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: '50%',
+    background: '#079447',
+    color: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800,
+  },
+
+  verifiedTitle: {
+    display: 'block',
+    color: '#087c43',
+    fontSize: 12.5,
+  },
+
+  verifiedName: {
+    marginTop: 3,
+    color: '#172b22',
+    fontSize: 12,
   },
 
   reviewIcon: {
@@ -907,25 +2519,30 @@ const styles: Record<
   },
 
   reviewBox: {
-    border: '1px solid #dcebe4',
+    border:
+      '1px solid #dcebe4',
     borderRadius: 14,
     overflow: 'hidden',
   },
 
   reviewRow: {
     display: 'flex',
-    justifyContent: 'space-between',
+    justifyContent:
+      'space-between',
     gap: 12,
     padding: '13px',
-    borderBottom: '1px solid #edf2ef',
+    borderBottom:
+      '1px solid #edf2ef',
     fontSize: 12.5,
   },
 
   accountValue: {
     maxWidth: '55%',
     overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+    textOverflow:
+      'ellipsis',
+    whiteSpace:
+      'nowrap',
   },
 
   amountValue: {
@@ -938,10 +2555,82 @@ const styles: Record<
     padding: 13,
     borderRadius: 12,
     background: '#fff8e8',
-    border: '1px solid #f2dfad',
+    border:
+      '1px solid #f2dfad',
     color: '#7a5a00',
     fontSize: 12,
     lineHeight: 1.45,
+  },
+
+  processingIcon: {
+    width: 64,
+    height: 64,
+    margin: '0 auto 15px',
+    borderRadius: 18,
+    background: '#fff8e8',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  processingSpinner: {
+    width: 26,
+    height: 26,
+    border:
+      '3px solid #f0dfae',
+    borderTopColor:
+      '#c28a00',
+    borderRadius: '50%',
+  },
+
+  processingBox: {
+    border:
+      '1px solid #dcebe4',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+
+  processingRow: {
+    display: 'flex',
+    justifyContent:
+      'space-between',
+    gap: 12,
+    padding: '13px',
+    borderBottom:
+      '1px solid #edf2ef',
+    fontSize: 12.5,
+  },
+
+  referenceValue: {
+    maxWidth: '58%',
+    overflow: 'hidden',
+    textOverflow:
+      'ellipsis',
+    whiteSpace:
+      'nowrap',
+    fontSize: 11,
+  },
+
+  successIcon: {
+    width: 64,
+    height: 64,
+    margin: '0 auto 15px',
+    borderRadius: 18,
+    background: '#e5f7ee',
+    color: '#079447',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 30,
+    fontWeight: 800,
+  },
+
+  successBox: {
+    border:
+      '1px solid #cfeadb',
+    borderRadius: 14,
+    overflow: 'hidden',
+    background: '#f8fcfa',
   },
 
   infoCard: {
@@ -949,7 +2638,8 @@ const styles: Record<
     padding: 14,
     borderRadius: 16,
     background: '#ffffff',
-    border: '1px solid #e5ebe8',
+    border:
+      '1px solid #e5ebe8',
     display: 'flex',
     gap: 10,
   },
@@ -978,16 +2668,133 @@ const styles: Record<
     lineHeight: 1.45,
   },
 
+  modalOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background:
+      'rgba(6,30,21,0.48)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    zIndex: 100,
+  },
+
+  pinModal: {
+    width: 'min(410px, 100%)',
+    background: '#ffffff',
+    borderRadius: 22,
+    padding: 24,
+    position: 'relative',
+    boxShadow:
+      '0 20px 60px rgba(0,0,0,0.18)',
+  },
+
+  modalClose: {
+    position: 'absolute',
+    top: 12,
+    right: 15,
+    width: 32,
+    height: 32,
+    border: 'none',
+    background: '#f2f6f4',
+    borderRadius: '50%',
+    color: '#52615a',
+    fontSize: 22,
+    lineHeight: 1,
+    cursor: 'pointer',
+  },
+
+  pinIcon: {
+    width: 56,
+    height: 56,
+    margin: '0 auto 12px',
+    borderRadius: 17,
+    background: '#e8f8f0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 25,
+  },
+
+  pinTitle: {
+    margin: 0,
+    textAlign: 'center',
+    color: '#10251d',
+    fontSize: 20,
+  },
+
+  pinDescription: {
+    margin:
+      '7px auto 17px',
+    maxWidth: 330,
+    textAlign: 'center',
+    color: '#75827d',
+    fontSize: 12.5,
+    lineHeight: 1.5,
+  },
+
+  pinSummary: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent:
+      'space-between',
+    padding: '12px 13px',
+    borderRadius: 12,
+    background: '#f5fbf8',
+    border:
+      '1px solid #dcebe4',
+    color: '#66756e',
+    fontSize: 12.5,
+  },
+
+  pinInput: {
+    width: '100%',
+    height: 58,
+    boxSizing: 'border-box',
+    marginTop: 13,
+    border:
+      '1px solid #cfe0d8',
+    borderRadius: 13,
+    outline: 'none',
+    textAlign: 'center',
+    fontSize: 25,
+    letterSpacing: 10,
+    color: '#063b2d',
+    fontWeight: 800,
+  },
+
+  modalError: {
+    marginTop: 11,
+    padding: 10,
+    borderRadius: 9,
+    background: '#fee4e2',
+    color: '#b42318',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+
+  securityText: {
+    margin:
+      '13px 0 0',
+    textAlign: 'center',
+    color: '#98a39e',
+    fontSize: 10.5,
+  },
+
   bottomNav: {
     position: 'fixed',
     bottom: 0,
     left: 0,
     right: 0,
     height: 68,
-    background: 'rgba(255,255,255,0.98)',
-    borderTop: '1px solid #e5ebe8',
+    background:
+      'rgba(255,255,255,0.98)',
+    borderTop:
+      '1px solid #e5ebe8',
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    gridTemplateColumns:
+      'repeat(4, 1fr)',
     zIndex: 30,
     boxShadow:
       '0 -5px 18px rgba(25,55,43,0.05)',
@@ -999,7 +2806,8 @@ const styles: Record<
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent:
+      'center',
     gap: 3,
     fontSize: 10,
     fontWeight: 600,
