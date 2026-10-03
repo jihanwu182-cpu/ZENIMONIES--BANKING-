@@ -20,12 +20,6 @@ const {
 // - Third-Party Motor Insurance
 // - Personal Accident Insurance
 //
-// Uses:
-// - accounts
-// - bill_payments
-// - transactions
-// - VTpass
-//
 // IMPORTANT:
 // - Wallet is debited before provider payment.
 // - VTpass request ID is saved before provider call.
@@ -94,6 +88,32 @@ const getProviderReference = (
       ?.transactionId ||
     providerResponse?.transactionId ||
     providerResponse?.requestId ||
+    providerResponse?.raw?.transactionId ||
+    providerResponse?.raw?.requestId ||
+    fallbackRequestId ||
+    null
+  );
+};
+
+// ============================================================
+// IMPORTANT
+// Get the ACTUAL request ID returned by VTpass.
+//
+// We keep our generated request ID as fallback, but if VTpass
+// returns its own requestId we save that value for requery.
+// ============================================================
+
+const getProviderRequestId = (
+  providerResponse,
+  fallbackRequestId = null
+) => {
+  return (
+    providerResponse?.raw?.requestId ||
+    providerResponse?.raw?.request_id ||
+    providerResponse?.requestId ||
+    providerResponse?.request_id ||
+    providerResponse?.content?.requestId ||
+    providerResponse?.content?.request_id ||
     fallbackRequestId ||
     null
   );
@@ -106,6 +126,7 @@ const getProviderMessage = (
     providerResponse?.responseDescription ||
     providerResponse?.response_description ||
     providerResponse?.message ||
+    providerResponse?.raw?.response_description ||
     providerResponse?.content?.transactions
       ?.response_description ||
     null
@@ -120,6 +141,7 @@ const extractPurchasedCode = (
     providerResponse?.purchased_code ||
     providerResponse?.Pin ||
     providerResponse?.pin ||
+    providerResponse?.raw?.purchased_code ||
     providerResponse?.content?.transactions
       ?.purchased_code ||
     null
@@ -132,6 +154,8 @@ const extractCertificateUrl = (
   return (
     providerResponse?.certificateUrl ||
     providerResponse?.certUrl ||
+    providerResponse?.raw?.certUrl ||
+    providerResponse?.raw?.certificateUrl ||
     providerResponse?.content?.certUrl ||
     providerResponse?.content?.certificateUrl ||
     providerResponse?.content?.transactions
@@ -423,8 +447,6 @@ const getMotorModels = async (
 // PURCHASE INSURANCE
 //
 // POST /api/insurance
-//
-// transactionPinMiddleware runs BEFORE this controller.
 // ============================================================
 
 const purchase = async (
@@ -676,7 +698,7 @@ const purchase = async (
   // ==========================================================
   // GET LIVE VTpass PLAN
   //
-  // NEVER TRUST THE FRONTEND PRICE.
+  // NEVER TRUST FRONTEND PRICE.
   // ==========================================================
 
   let variationsResult;
@@ -785,11 +807,7 @@ const purchase = async (
     ) || null;
 
   // ==========================================================
-  // GENERATE VTpass REQUEST ID NOW
-  //
-  // We generate it before the provider call and save it
-  // in bill_payments so a timeout/pending payment can
-  // always be requeried later.
+  // GENERATE VTpass REQUEST ID
   // ==========================================================
 
   const providerRequestId =
@@ -798,8 +816,6 @@ const purchase = async (
   // ==========================================================
   // STEP 1
   // DEBIT WALLET + CREATE PENDING PAYMENT
-  //
-  // EVERYTHING IS ATOMIC.
   // ==========================================================
 
   const client =
@@ -1051,7 +1067,7 @@ const purchase = async (
         providerRequestId,
     };
 
-    // Internal ZENIMONIES field.
+    // Never send the internal ZENIMONIES PIN to VTpass.
     delete vtpassPayload.transaction_pin;
 
     providerResult =
@@ -1068,14 +1084,13 @@ const purchase = async (
     /*
      * IMPORTANT:
      *
-     * We DO NOT refund automatically here.
+     * Do NOT automatically refund here.
      *
      * VTpass may have received and processed
-     * the request even if our connection timed out.
+     * the request even if our connection failed.
      *
-     * The request ID has already been stored in
-     * bill_payments, so the transaction can be
-     * requeried safely.
+     * The provider request ID is already stored
+     * in bill_payments.
      */
 
     return res.status(202).json({
@@ -1089,10 +1104,20 @@ const purchase = async (
     });
   }
 
+  // ==========================================================
+  // GET ACTUAL PROVIDER REQUEST ID
+  // ==========================================================
+
+  const actualProviderRequestId =
+    getProviderRequestId(
+      providerResult,
+      providerRequestId
+    );
+
   const providerReference =
     getProviderReference(
       providerResult,
-      providerRequestId
+      actualProviderRequestId
     );
 
   const providerMessage =
@@ -1112,6 +1137,50 @@ const purchase = async (
     extractCertificateUrl(
       providerResult
     );
+
+  // ==========================================================
+  // DEBUG LOG
+  // ==========================================================
+
+  console.log(
+    '============================================================'
+  );
+
+  console.log(
+    'ZENIMONIES INSURANCE PROVIDER REQUEST IDS'
+  );
+
+  console.log(
+    'ZENIMONIES GENERATED REQUEST ID:',
+    providerRequestId
+  );
+
+  console.log(
+    'VTPASS RETURNED REQUEST ID:',
+    actualProviderRequestId
+  );
+
+  console.log(
+    'VTPASS TRANSACTION ID:',
+    providerResult?.transactionId ||
+      null
+  );
+
+  console.log(
+    'VTPASS STATUS:',
+    providerResult?.status ||
+      null
+  );
+
+  console.log(
+    'VTPASS RESPONSE CODE:',
+    providerResult?.responseCode ||
+      null
+  );
+
+  console.log(
+    '============================================================'
+  );
 
   // ==========================================================
   // STEP 3
@@ -1136,7 +1205,7 @@ const purchase = async (
           AND status = 'pending'
         `,
         [
-          providerRequestId,
+          actualProviderRequestId,
           providerReference,
           providerResult.raw ||
             providerResult.content ||
@@ -1172,7 +1241,7 @@ const purchase = async (
         status: 'pending',
         reference,
         request_id:
-          providerRequestId,
+          actualProviderRequestId,
         message:
           'The insurance payment was processed by the provider and is being finalized in your account.',
       });
@@ -1183,8 +1252,10 @@ const purchase = async (
       status: 'successful',
       reference,
       providerReference,
+
       request_id:
-        providerRequestId,
+        actualProviderRequestId,
+
       serviceID,
       serviceName,
       variationCode,
@@ -1231,7 +1302,7 @@ const purchase = async (
           AND status = 'pending'
         `,
         [
-          providerRequestId,
+          actualProviderRequestId,
           providerReference,
           providerResult.raw ||
             providerResult.content ||
@@ -1254,7 +1325,7 @@ const purchase = async (
       providerReference,
 
       request_id:
-        providerRequestId,
+        actualProviderRequestId,
 
       message:
         'Your insurance payment is being processed. Please check your transaction history for the final status.',
@@ -1275,10 +1346,6 @@ const purchase = async (
     await refundClient.query(
       'BEGIN'
     );
-
-    // ========================================================
-    // LOCK PAYMENT
-    // ========================================================
 
     const lockedPaymentResult =
       await refundClient.query(
@@ -1416,8 +1483,9 @@ const purchase = async (
         AND status = 'pending'
       `,
       [
-        providerRequestId,
+        actualProviderRequestId,
         providerReference,
+
         providerResult.raw ||
           providerResult.content ||
           providerResult,
@@ -1445,7 +1513,7 @@ const purchase = async (
     );
 
     // ========================================================
-    // REFUND TRANSACTION
+    // CREATE REFUND TRANSACTION
     // ========================================================
 
     await refundClient.query(
@@ -1465,12 +1533,12 @@ const purchase = async (
         $1,
         'insurance_refund',
         $2,
-        'NGN',
         $3,
         $4,
-        'completed',
         $5,
-        $6
+        'completed',
+        $6,
+        $7
       )
       `,
       [
@@ -1478,9 +1546,10 @@ const purchase = async (
 
         refundAmount,
 
-        'NGN',
+        lockedPayment.currency ||
+          'NGN',
 
-        `${reference}-REFUND`,
+        `${lockedPayment.reference}-REFUND`,
 
         `Refund for failed ${serviceName}`,
 
@@ -1494,14 +1563,24 @@ const purchase = async (
       'COMMIT'
     );
 
+    console.log(
+      'ZENIMONIES INSURANCE REFUNDED:',
+      lockedPayment.reference,
+      refundAmount
+    );
+
     return res.status(400).json({
       success: false,
       status: 'failed',
       refunded: true,
-      reference,
+      reference:
+        lockedPayment.reference,
+
       providerReference,
+
       request_id:
-        providerRequestId,
+        actualProviderRequestId,
+
       serviceID,
       serviceName,
       variationCode,
@@ -1532,7 +1611,7 @@ const purchase = async (
       reference,
 
       request_id:
-        providerRequestId,
+        actualProviderRequestId,
 
       message:
         'The insurance provider rejected the payment, but the wallet refund requires reconciliation. Please contact support with the transaction reference.',
@@ -1548,12 +1627,10 @@ const purchase = async (
 //
 // POST /api/insurance/requery
 //
-// Accepts either:
+// Accepts:
 // - request_id
+// - requestId
 // - ZENIMONIES transaction reference
-//
-// The frontend can safely send the ZENIMONIES reference.
-// The backend finds the stored VTpass request ID.
 // ============================================================
 
 const requery = async (
@@ -1570,10 +1647,6 @@ const requery = async (
         'Authentication required.',
     });
   }
-
-  // ==========================================================
-  // ACCEPT EITHER VTpass REQUEST ID OR ZENIMONIES REFERENCE
-  // ==========================================================
 
   const suppliedRequestId =
     cleanString(
@@ -1604,10 +1677,6 @@ const requery = async (
   try {
     // ========================================================
     // FIND CUSTOMER INSURANCE PAYMENT
-    //
-    // We verify the account belongs to the authenticated user.
-    // This prevents one customer from requeried another
-    // customer's insurance transaction.
     // ========================================================
 
     const paymentResult =
@@ -1623,7 +1692,8 @@ const requery = async (
           bp.provider_request_id,
           bp.provider_reference,
           bp.biller_name,
-          bp.customer_reference
+          bp.customer_reference,
+          bp.provider_response
         FROM bill_payments bp
         INNER JOIN accounts a
           ON a.id = bp.account_id
@@ -1666,11 +1736,16 @@ const requery = async (
       paymentResult.rows[0];
 
     // ========================================================
-    // USE THE STORED VTPASS REQUEST ID
+    // STORED PROVIDER REQUEST ID
     // ========================================================
 
+    const storedProviderRequestId =
+      cleanString(
+        payment.provider_request_id
+      );
+
     const requestId =
-      payment.provider_request_id ||
+      storedProviderRequestId ||
       suppliedRequestId ||
       null;
 
@@ -1741,7 +1816,7 @@ const requery = async (
     }
 
     // ========================================================
-    // REQUERY VTPASS
+    // LOG REQUERY
     // ========================================================
 
     console.log(
@@ -1758,13 +1833,22 @@ const requery = async (
     );
 
     console.log(
-      'VTPASS REQUEST ID:',
+      'STORED VTPASS REQUEST ID:',
+      storedProviderRequestId
+    );
+
+    console.log(
+      'REQUEST ID USED FOR REQUERY:',
       requestId
     );
 
     console.log(
       '============================================================'
     );
+
+    // ========================================================
+    // REQUERY VTPASS
+    // ========================================================
 
     const providerResult =
       await requeryInsurance(
@@ -1806,13 +1890,16 @@ const requery = async (
         `
         UPDATE bill_payments
         SET
-          provider_reference = $1,
-          provider_response = $2,
+          provider_request_id = $1,
+          provider_reference = $2,
+          provider_response = $3,
           status = 'pending'
-        WHERE id = $3
+        WHERE id = $4
           AND status = 'pending'
         `,
         [
+          requestId,
+
           providerReference,
 
           providerResult.raw ||
@@ -1919,9 +2006,7 @@ const requery = async (
     // ========================================================
     // PROVIDER FAILED
     //
-    // IMPORTANT:
-    // Refund is performed atomically and protected against
-    // duplicate refunds.
+    // Refund atomically.
     // ========================================================
 
     const client =
@@ -1951,9 +2036,7 @@ const requery = async (
           WHERE id = $1
           FOR UPDATE
           `,
-          [
-            payment.id,
-          ]
+          [payment.id]
         );
 
       if (
@@ -2073,14 +2156,17 @@ const requery = async (
         `
         UPDATE bill_payments
         SET
-          provider_reference = $1,
-          provider_response = $2,
+          provider_request_id = $1,
+          provider_reference = $2,
+          provider_response = $3,
           status = 'failed',
-          failure_reason = $3
-        WHERE id = $4
+          failure_reason = $4
+        WHERE id = $5
           AND status = 'pending'
         `,
         [
+          requestId,
+
           providerReference,
 
           providerResult.raw ||
@@ -2243,6 +2329,8 @@ const requery = async (
     });
   }
 };
+
+
 // ============================================================
 // EXPORTS
 // ============================================================
