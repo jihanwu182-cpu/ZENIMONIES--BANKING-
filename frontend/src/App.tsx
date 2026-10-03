@@ -90,9 +90,6 @@ import SessionGuard from './components/SessionGuard.tsx';
 
 // ============================================================
 // ADMIN ROUTE GUARD
-// IMPORTANT:
-// Admin routes are intentionally OUTSIDE SessionGuard.
-// Customer sessions must never redirect the Admin area.
 // ============================================================
 
 const AdminRoute: React.FC = () => {
@@ -362,359 +359,407 @@ const ServicePage: React.FC<ServicePageProps> = ({
 };
 
 // ============================================================
-// MAIN APPLICATION
+// ADMIN ROUTES
+//
+// IMPORTANT:
+// SessionGuard is NOT mounted here.
 // ============================================================
 
-const App: React.FC = () => {
+const AdminRoutes: React.FC = () => {
   return (
-    <BrowserRouter>
+    <Routes>
+      <Route
+        path="/admin/login"
+        element={<AdminLogin />}
+      />
 
-      {/* ======================================================
-          ADMIN APPLICATION
-          OUTSIDE CUSTOMER SESSION GUARD
-          ====================================================== */}
+      <Route
+        path="/admin"
+        element={
+          <Navigate
+            to="/admin/dashboard"
+            replace
+          />
+        }
+      />
 
+      <Route
+        path="/admin/dashboard"
+        element={<AdminRoute />}
+      />
+
+      {/* Safety fallback for unknown admin URLs */}
+      <Route
+        path="*"
+        element={
+          <Navigate
+            to="/admin/login"
+            replace
+          />
+        }
+      />
+    </Routes>
+  );
+};
+
+// ============================================================
+// CUSTOMER ROUTES
+// ============================================================
+
+const CustomerRoutes: React.FC = () => {
+  return (
+    <SessionGuard>
       <Routes>
+
+        {/* ================= AUTHENTICATION ================= */}
+
         <Route
-          path="/admin/login"
-          element={<AdminLogin />}
+          path="/login"
+          element={<Login />}
         />
 
         <Route
-          path="/admin"
+          path="/register"
+          element={<Register />}
+        />
+
+        <Route
+          path="/forgot-password"
+          element={<ForgotPassword />}
+        />
+
+        <Route
+          path="/reset-password"
+          element={<ResetPassword />}
+        />
+
+        {/* ================= SECURITY ================= */}
+
+        <Route
+          path="/passkey-security"
+          element={<PasskeySecurity />}
+        />
+
+        <Route
+          path="/account-locked"
+          element={<AccountLocked />}
+        />
+
+        {/* ================= PERSONAL DASHBOARD ================= */}
+
+        <Route
+          path="/"
+          element={<Dashboard />}
+        />
+
+        <Route
+          path="/dashboard"
           element={
             <Navigate
-              to="/admin/dashboard"
+              to="/"
+              replace
+            />
+          }
+        />
+
+        {/* ================= BUSINESS BANKING ================= */}
+
+        <Route
+          path="/business/dashboard/:id"
+          element={<BusinessDashboard />}
+        />
+
+        <Route
+          path="/business/:id/transactions"
+          element={<BusinessTransactions />}
+        />
+
+        <Route
+          path="/business/:id/:section"
+          element={<BusinessServicePage />}
+        />
+
+        <Route
+          path="/business/:id"
+          element={
+            <Navigate
+              to="/business"
               replace
             />
           }
         />
 
         <Route
-          path="/admin/dashboard"
-          element={<AdminRoute />}
+          path="/business"
+          element={<Business />}
         />
+
+        {/* ================= NOTIFICATIONS ================= */}
+
+        <Route
+          path="/notifications"
+          element={<Notifications />}
+        />
+
+        {/* ================= ACCOUNT ================= */}
+
+        <Route
+          path="/profile"
+          element={<Profile />}
+        />
+
+        <Route
+          path="/settings"
+          element={<Settings />}
+        />
+
+        <Route
+          path="/kyc"
+          element={<KYC />}
+        />
+
+        <Route
+          path="/verify-phone"
+          element={<VerifyPhone />}
+        />
+
+        <Route
+          path="/verify-otp"
+          element={<VerifyOTP />}
+        />
+
+        {/* ================= MONEY ================= */}
+
+        <Route
+          path="/transfer"
+          element={<Transfer />}
+        />
+
+        <Route
+          path="/to-bank"
+          element={<ToBank />}
+        />
+
+        <Route
+          path="/transfer-confirmation"
+          element={<TransferConfirmation />}
+        />
+
+        <Route
+          path="/deposit"
+          element={<Deposit />}
+        />
+
+        <Route
+          path="/withdraw"
+          element={<Withdraw />}
+        />
+
+        <Route
+          path="/transactions"
+          element={<Transactions />}
+        />
+
+        <Route
+          path="/transaction-receipt"
+          element={<TransactionReceipt />}
+        />
+
+        <Route
+          path="/statement"
+          element={<Statement />}
+        />
+
+        <Route
+          path="/beneficiaries"
+          element={<Beneficiaries />}
+        />
+
+        {/* ================= WALLET ================= */}
+
+        <Route
+          path="/wallet"
+          element={<Wallet />}
+        />
+
+        {/* ================= VIRTUAL CARD ================= */}
+
+        <Route
+          path="/virtual-card"
+          element={<VirtualCard />}
+        />
+
+        {/* ================= AIRTIME ================= */}
+
+        <Route
+          path="/airtime"
+          element={<Airtime />}
+        />
+
+        {/* ================= DATA ================= */}
+
+        <Route
+          path="/data"
+          element={<Data />}
+        />
+
+        {/* ================= TV ================= */}
+
+        <Route
+          path="/tv-subscription"
+          element={<TVSubscription />}
+        />
+
+        <Route
+          path="/tv"
+          element={<TVSubscription />}
+        />
+
+        {/* ================= BILLS ================= */}
+
+        <Route
+          path="/bills"
+          element={<Bills />}
+        />
+
+        <Route
+          path="/bills/internet"
+          element={<InternetBills />}
+        />
+
+        <Route
+          path="/bills/other"
+          element={<OtherBills />}
+        />
+
+        <Route
+          path="/gift-cards"
+          element={<GiftCards />}
+        />
+
+        <Route
+          path="/electricity"
+          element={<Electricity />}
+        />
+
+        <Route
+          path="/electricity/verification"
+          element={<ElectricityVerification />}
+        />
+
+        <Route
+          path="/electricity/payment-confirmation"
+          element={<ElectricityPaymentConfirmation />}
+        />
+
+        <Route
+          path="/education"
+          element={<Education />}
+        />
+
+        <Route
+          path="/insurance"
+          element={<Insurance />}
+        />
+
+        {/* ================= BETTING ================= */}
+
+        <Route
+          path="/betting"
+          element={<Betting />}
+        />
+
+        {/* ================= SAVINGS ================= */}
+
+        <Route
+          path="/safebox"
+          element={
+            <ServicePage
+              title="SafeBox"
+              icon="◉"
+              description="Manage funds you want to keep separately from your available balance."
+            />
+          }
+        />
+
+        <Route
+          path="/savings"
+          element={<Savings />}
+        />
+
+        {/* ================= MORE ================= */}
+
+        <Route
+          path="/more"
+          element={
+            <ServicePage
+              title="More Services"
+              icon="••"
+              description="Explore additional Zenimonies services and account features."
+            />
+          }
+        />
+
+        {/* ================= AIRTIME RECONCILIATION ================= */}
+
+        <Route
+          path="/airtime-reconciliation"
+          element={<AirtimeReconciliation />}
+        />
+
+        {/* ================= FALLBACK ================= */}
+
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to="/"
+              replace
+            />
+          }
+        />
+
       </Routes>
-
-      {/* ======================================================
-          CUSTOMER APPLICATION
-          PROTECTED BY EXISTING SESSION GUARD
-          ====================================================== */}
-
-      <SessionGuard>
-        <Routes>
-
-          {/* ================= AUTHENTICATION ================= */}
-
-          <Route
-            path="/login"
-            element={<Login />}
-          />
-
-          <Route
-            path="/register"
-            element={<Register />}
-          />
-
-          <Route
-            path="/forgot-password"
-            element={<ForgotPassword />}
-          />
-
-          <Route
-            path="/reset-password"
-            element={<ResetPassword />}
-          />
-
-          {/* ================= SECURITY ================= */}
-
-          <Route
-            path="/passkey-security"
-            element={<PasskeySecurity />}
-          />
-
-          <Route
-            path="/account-locked"
-            element={<AccountLocked />}
-          />
-
-          {/* ================= PERSONAL DASHBOARD ================= */}
-
-          <Route
-            path="/"
-            element={<Dashboard />}
-          />
-
-          <Route
-            path="/dashboard"
-            element={
-              <Navigate
-                to="/"
-                replace
-              />
-            }
-          />
-
-          {/* ================= BUSINESS BANKING ================= */}
-
-          <Route
-            path="/business/dashboard/:id"
-            element={<BusinessDashboard />}
-          />
-
-          <Route
-            path="/business/:id/transactions"
-            element={<BusinessTransactions />}
-          />
-
-          <Route
-            path="/business/:id/:section"
-            element={<BusinessServicePage />}
-          />
-
-          <Route
-            path="/business/:id"
-            element={
-              <Navigate
-                to="/business"
-                replace
-              />
-            }
-          />
-
-          <Route
-            path="/business"
-            element={<Business />}
-          />
-
-          {/* ================= NOTIFICATIONS ================= */}
-
-          <Route
-            path="/notifications"
-            element={<Notifications />}
-          />
-
-          {/* ================= ACCOUNT ================= */}
-
-          <Route
-            path="/profile"
-            element={<Profile />}
-          />
-
-          <Route
-            path="/settings"
-            element={<Settings />}
-          />
-
-          <Route
-            path="/kyc"
-            element={<KYC />}
-          />
-
-          <Route
-            path="/verify-phone"
-            element={<VerifyPhone />}
-          />
-
-          <Route
-            path="/verify-otp"
-            element={<VerifyOTP />}
-          />
-
-          {/* ================= MONEY ================= */}
-
-          <Route
-            path="/transfer"
-            element={<Transfer />}
-          />
-
-          <Route
-            path="/to-bank"
-            element={<ToBank />}
-          />
-
-          <Route
-            path="/transfer-confirmation"
-            element={<TransferConfirmation />}
-          />
-
-          <Route
-            path="/deposit"
-            element={<Deposit />}
-          />
-
-          <Route
-            path="/withdraw"
-            element={<Withdraw />}
-          />
-
-          <Route
-            path="/transactions"
-            element={<Transactions />}
-          />
-
-          <Route
-            path="/transaction-receipt"
-            element={<TransactionReceipt />}
-          />
-
-          <Route
-            path="/statement"
-            element={<Statement />}
-          />
-
-          <Route
-            path="/beneficiaries"
-            element={<Beneficiaries />}
-          />
-
-          {/* ================= WALLET ================= */}
-
-          <Route
-            path="/wallet"
-            element={<Wallet />}
-          />
-
-          {/* ================= VIRTUAL CARD ================= */}
-
-          <Route
-            path="/virtual-card"
-            element={<VirtualCard />}
-          />
-
-          {/* ================= AIRTIME ================= */}
-
-          <Route
-            path="/airtime"
-            element={<Airtime />}
-          />
-
-          {/* ================= DATA ================= */}
-
-          <Route
-            path="/data"
-            element={<Data />}
-          />
-
-          {/* ================= TV ================= */}
-
-          <Route
-            path="/tv-subscription"
-            element={<TVSubscription />}
-          />
-
-          <Route
-            path="/tv"
-            element={<TVSubscription />}
-          />
-
-          {/* ================= BILLS ================= */}
-
-          <Route
-            path="/bills"
-            element={<Bills />}
-          />
-
-          <Route
-            path="/bills/internet"
-            element={<InternetBills />}
-          />
-
-          <Route
-            path="/bills/other"
-            element={<OtherBills />}
-          />
-
-          <Route
-            path="/gift-cards"
-            element={<GiftCards />}
-          />
-
-          <Route
-            path="/electricity"
-            element={<Electricity />}
-          />
-
-          <Route
-            path="/electricity/verification"
-            element={<ElectricityVerification />}
-          />
-
-          <Route
-            path="/electricity/payment-confirmation"
-            element={<ElectricityPaymentConfirmation />}
-          />
-
-          <Route
-            path="/education"
-            element={<Education />}
-          />
-
-          <Route
-            path="/insurance"
-            element={<Insurance />}
-          />
-
-          {/* ================= BETTING ================= */}
-
-          <Route
-            path="/betting"
-            element={<Betting />}
-          />
-
-          {/* ================= SAVINGS ================= */}
-
-          <Route
-            path="/safebox"
-            element={
-              <ServicePage
-                title="SafeBox"
-                icon="◉"
-                description="Manage funds you want to keep separately from your available balance."
-              />
-            }
-          />
-
-          <Route
-            path="/savings"
-            element={<Savings />}
-          />
-
-          {/* ================= MORE ================= */}
-
-          <Route
-            path="/more"
-            element={
-              <ServicePage
-                title="More Services"
-                icon="••"
-                description="Explore additional Zenimonies services and account features."
-              />
-            }
-          />
-
-          {/* ================= AIRTIME RECONCILIATION ================= */}
-
-          <Route
-            path="/airtime-reconciliation"
-            element={<AirtimeReconciliation />}
-          />
-
-          {/* ================= FALLBACK ================= */}
-
-          <Route
-            path="*"
-            element={
-              <Navigate
-                to="/"
-                replace
-              />
-            }
-          />
-
-        </Routes>
-      </SessionGuard>
-
+    </SessionGuard>
+  );
+};
+
+// ============================================================
+// ROUTER SWITCH
+//
+// This is the important fix.
+//
+// When the URL begins with /admin:
+//   → ONLY AdminRoutes renders
+//
+// For every other URL:
+//   → ONLY CustomerRoutes renders
+//
+// Therefore SessionGuard can never interfere with /admin.
+// ============================================================
+
+const AppRouter: React.FC = () => {
+  const location = useLocation();
+
+  const isAdminRoute =
+    location.pathname === '/admin' ||
+    location.pathname.startsWith('/admin/');
+
+  if (isAdminRoute) {
+    return <AdminRoutes />;
+  }
+
+  return <CustomerRoutes />;
+};
+
+// ============================================================
+// MAIN APPLICATION
+// ============================================================
+
+const App: React.FC = () => {
+  return (
+    <BrowserRouter>
+      <AppRouter />
     </BrowserRouter>
   );
 };
