@@ -177,265 +177,356 @@ const TransactionReceipt: React.FC = () => {
    */
 
   useEffect(() => {
-    const currentTransaction =
-      location.state?.transaction as
-        | Transaction
-        | undefined;
+  const currentTransaction =
+    location.state?.transaction as
+      | Transaction
+      | undefined;
 
-    if (!currentTransaction) {
-      return;
-    }
+  if (!currentTransaction) {
+    return;
+  }
 
-    const currentReference =
-      currentTransaction.reference ||
-      currentTransaction.transaction_reference ||
-      '';
+  const currentReference =
+    currentTransaction.reference ||
+    currentTransaction.transaction_reference ||
+    '';
 
-    const currentType =
-      String(
-        currentTransaction.transaction_type ||
-          currentTransaction.type ||
-          currentTransaction.category ||
-          ''
-      ).toLowerCase();
-
-    const currentDescription =
-      String(
-        currentTransaction.description ||
-          ''
-      ).toLowerCase();
-
-    const currentCategory =
-      String(
+  const currentType =
+    String(
+      currentTransaction.transaction_type ||
+        currentTransaction.type ||
         currentTransaction.category ||
-          ''
-      ).toLowerCase();
+        ''
+    ).toLowerCase();
 
-    const currentIsInsurance =
-      currentType.includes('insurance') ||
-      currentCategory.includes('insurance') ||
-      currentDescription.includes('insurance') ||
-      String(currentReference)
-        .toUpperCase()
-        .startsWith('ZINS-');
+  const currentDescription =
+    String(
+      currentTransaction.description || ''
+    ).toLowerCase();
 
-    const currentStatus =
-      String(
-        currentTransaction.status ||
-          ''
-      )
-        .trim()
-        .toLowerCase();
+  const currentCategory =
+    String(
+      currentTransaction.category || ''
+    ).toLowerCase();
 
-    const pendingInsurance =
-      currentIsInsurance &&
-      Boolean(currentReference) &&
-      (
-        currentStatus === '' ||
-        currentStatus === 'pending' ||
-        currentStatus === 'processing' ||
-        currentStatus === 'initiated'
-      );
+  const currentIsInsurance =
+    currentType.includes('insurance') ||
+    currentCategory.includes('insurance') ||
+    currentDescription.includes('insurance') ||
+    String(currentReference)
+      .toUpperCase()
+      .startsWith('ZINS-');
 
-    if (!pendingInsurance) {
-      return;
-    }
+  if (
+    !currentIsInsurance ||
+    !currentReference
+  ) {
+    return;
+  }
 
-    let attempts = 0;
-    let cancelled = false;
+  const currentStatus =
+    String(
+      currentTransaction.status || ''
+    )
+      .trim()
+      .toLowerCase();
 
-    const checkStatus =
-      async () => {
+  /*
+   * ============================================================
+   * IMPORTANT
+   *
+   * We now requery BOTH:
+   *
+   * 1. Pending insurance transactions
+   * 2. Completed/successful insurance transactions that do not
+   *    already have a certificate URL
+   *
+   * This allows an already-completed transaction to retrieve the
+   * certificate URL stored by the backend.
+   * ============================================================
+   */
+
+  const isPending =
+    currentStatus === '' ||
+    currentStatus === 'pending' ||
+    currentStatus === 'processing' ||
+    currentStatus === 'initiated';
+
+  const isAlreadySuccessful =
+    currentStatus === 'completed' ||
+    currentStatus === 'successful' ||
+    currentStatus === 'success';
+
+  /*
+   * If the transaction is already completed and the transaction
+   * itself already contains a certificate URL, there is nothing
+   * else to retrieve.
+   */
+
+  const existingCertificate =
+    currentTransaction.certificate_url ||
+    currentTransaction.certificateUrl ||
+    '';
+
+  if (
+    isAlreadySuccessful &&
+    existingCertificate
+  ) {
+    setCertificateUrl(
+      String(existingCertificate)
+    );
+
+    setLiveStatus('completed');
+
+    setRequeryMessage(
+      'Insurance payment confirmed successfully.'
+    );
+
+    return;
+  }
+
+  let attempts = 0;
+  let cancelled = false;
+
+  const checkStatus =
+    async () => {
+      if (cancelled) {
+        return;
+      }
+
+      try {
+        const token =
+          localStorage.getItem(
+            'zenimonies_token'
+          );
+
+        const response =
+          await fetch(
+            `${API_URL}/insurance/requery`,
+            {
+              method: 'POST',
+
+              headers: {
+                'Content-Type':
+                  'application/json',
+
+                ...(token
+                  ? {
+                      Authorization:
+                        `Bearer ${token}`,
+                    }
+                  : {}),
+              },
+
+              body: JSON.stringify({
+                reference:
+                  currentReference,
+              }),
+            }
+          );
+
+        let result: any = null;
+
+        try {
+          result =
+            await response.json();
+        } catch {
+          result = null;
+        }
+
+        if (!response.ok) {
+          console.error(
+            'Insurance requery failed:',
+            result
+          );
+
+          return;
+        }
+
+        /*
+         * ========================================================
+         * STATUS
+         * ========================================================
+         */
+
+        const providerStatus =
+          String(
+            result?.status ||
+              result?.data?.status ||
+              ''
+          )
+            .trim()
+            .toLowerCase();
+
+        /*
+         * ========================================================
+         * CERTIFICATE
+         *
+         * Backend may return it in any of these supported
+         * locations.
+         * ========================================================
+         */
+
+        const certificate =
+          result?.certificate_url ||
+          result?.certificateUrl ||
+          result?.data?.certificate_url ||
+          result?.data?.certificateUrl ||
+          result?.data?.certUrl ||
+          result?.certUrl ||
+          '';
+
         if (cancelled) {
           return;
         }
 
-        try {
-          const token =
-            localStorage.getItem(
-              'zenimonies_token'
-            );
-
-          const response =
-            await fetch(
-              `${API_URL}/insurance/requery`,
-              {
-                method: 'POST',
-
-                headers: {
-                  'Content-Type':
-                    'application/json',
-
-                  ...(token
-                    ? {
-                        Authorization:
-                          `Bearer ${token}`,
-                      }
-                    : {}),
-                },
-
-                body: JSON.stringify({
-                  reference:
-                    currentReference,
-                }),
-              }
-            );
-
-          let result: any = null;
-
-          try {
-            result =
-              await response.json();
-          } catch {
-            result = null;
-          }
-
-          if (!response.ok) {
-            console.error(
-              'Insurance requery failed:',
-              result
-            );
-
-            return;
-          }
-
-          const providerStatus =
-            String(
-              result?.status ||
-                result?.data?.status ||
-                ''
-            )
-              .trim()
-              .toLowerCase();
-
-          const certificate =
-            result?.certificate_url ||
-            result?.certificateUrl ||
-            result?.data?.certificate_url ||
-            result?.data?.certificateUrl ||
-            '';
-
-          if (cancelled) {
-            return;
-          }
-
-          if (certificate) {
-            setCertificateUrl(
-              String(certificate)
-            );
-          }
-
-          if (providerStatus) {
-            setLiveStatus(
-              providerStatus
-            );
-          }
-
-          /*
-           * SUCCESS
-           */
-
-          if (
-            providerStatus ===
-              'completed' ||
-            providerStatus ===
-              'successful' ||
-            providerStatus ===
-              'success'
-          ) {
-            setLiveStatus(
-              'completed'
-            );
-
-            setRequeryMessage(
-              'Insurance payment confirmed successfully.'
-            );
-
-            if (
-              requeryTimerRef.current
-            ) {
-              clearInterval(
-                requeryTimerRef.current
-              );
-
-              requeryTimerRef.current =
-                null;
-            }
-
-            return;
-          }
-
-          /*
-           * FAILED
-           */
-
-          if (
-            providerStatus ===
-              'failed' ||
-            providerStatus ===
-              'failure' ||
-            providerStatus ===
-              'reversed' ||
-            providerStatus ===
-              'cancelled' ||
-            providerStatus ===
-              'canceled'
-          ) {
-            setLiveStatus(
-              'failed'
-            );
-
-            setRequeryMessage(
-              'The insurance transaction was not completed.'
-            );
-
-            if (
-              requeryTimerRef.current
-            ) {
-              clearInterval(
-                requeryTimerRef.current
-              );
-
-              requeryTimerRef.current =
-                null;
-            }
-
-            return;
-          }
-
-          /*
-           * STILL PENDING
-           */
-
-          if (
-            providerStatus ===
-              'pending' ||
-            providerStatus ===
-              'processing' ||
-            !providerStatus
-          ) {
-            setLiveStatus(
-              'pending'
-            );
-          }
-        } catch (error) {
-          console.error(
-            'ZENIMONIES insurance automatic requery error:',
-            error
+        if (certificate) {
+          setCertificateUrl(
+            String(certificate)
           );
         }
-      };
 
-    /*
-     * First check immediately.
-     */
+        if (providerStatus) {
+          setLiveStatus(
+            providerStatus
+          );
+        }
 
-    checkStatus();
+        /*
+         * ========================================================
+         * SUCCESS
+         * ========================================================
+         */
 
-    /*
-     * Then check every 5 seconds.
-     */
+        if (
+          providerStatus ===
+            'completed' ||
+          providerStatus ===
+            'successful' ||
+          providerStatus ===
+            'success'
+        ) {
+          setLiveStatus(
+            'completed'
+          );
 
+          if (certificate) {
+            setRequeryMessage(
+              'Insurance payment confirmed successfully. Your insurance certificate is ready.'
+            );
+          } else {
+            setRequeryMessage(
+              'Insurance payment confirmed successfully. The insurance certificate is not available from the provider yet.'
+            );
+          }
+
+          /*
+           * Once completed, stop polling.
+           */
+
+          if (
+            requeryTimerRef.current
+          ) {
+            clearInterval(
+              requeryTimerRef.current
+            );
+
+            requeryTimerRef.current =
+              null;
+          }
+
+          return;
+        }
+
+        /*
+         * ========================================================
+         * FAILED
+         * ========================================================
+         */
+
+        if (
+          providerStatus ===
+            'failed' ||
+          providerStatus ===
+            'failure' ||
+          providerStatus ===
+            'reversed' ||
+          providerStatus ===
+            'cancelled' ||
+          providerStatus ===
+            'canceled'
+        ) {
+          setLiveStatus(
+            'failed'
+          );
+
+          setRequeryMessage(
+            'The insurance transaction was not completed.'
+          );
+
+          if (
+            requeryTimerRef.current
+          ) {
+            clearInterval(
+              requeryTimerRef.current
+            );
+
+            requeryTimerRef.current =
+              null;
+          }
+
+          return;
+        }
+
+        /*
+         * ========================================================
+         * STILL PENDING
+         * ========================================================
+         */
+
+        if (
+          providerStatus ===
+            'pending' ||
+          providerStatus ===
+            'processing' ||
+          !providerStatus
+        ) {
+          setLiveStatus(
+            'pending'
+          );
+        }
+      } catch (error) {
+        console.error(
+          'ZENIMONIES insurance automatic requery error:',
+          error
+        );
+      }
+    };
+
+  /*
+   * ============================================================
+   * FIRST CHECK
+   *
+   * This runs immediately even if the transaction was already
+   * completed.
+   * ============================================================
+   */
+
+  checkStatus();
+
+  /*
+   * ============================================================
+   * POLLING
+   *
+   * Only continue polling when the original transaction was
+   * pending.
+   *
+   * A completed transaction gets one immediate requery so that
+   * we can retrieve its certificate.
+   * ============================================================
+   */
+
+  if (isPending) {
     requeryTimerRef.current =
       setInterval(
         async () => {
@@ -460,23 +551,24 @@ const TransactionReceipt: React.FC = () => {
         },
         5000
       );
+  }
 
-    return () => {
-      cancelled = true;
+  return () => {
+    cancelled = true;
 
-      if (
+    if (
+      requeryTimerRef.current
+    ) {
+      clearInterval(
         requeryTimerRef.current
-      ) {
-        clearInterval(
-          requeryTimerRef.current
-        );
+      );
 
-        requeryTimerRef.current =
-          null;
-      }
-    };
-  }, [location.state]);
-
+      requeryTimerRef.current =
+        null;
+    }
+  };
+}, [location.state]);
+          
   /*
    * ============================================================
    * RECEIPT UNAVAILABLE
