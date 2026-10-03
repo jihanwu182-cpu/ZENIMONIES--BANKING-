@@ -976,45 +976,56 @@ const Dashboard: React.FC = () => {
 
         <div style={styles.headerRight}>
 
-          {/* NOTIFICATIONS */}
+  {/* NOTIFICATIONS */}
 
-<button
-  type="button"
-  aria-label="Notifications"
-  style={styles.notificationButton}
-  onClick={() => navigate('/notifications')}
->
-  <Icon name="bell" size={24} />
+  <button
+    type="button"
+    aria-label="Notifications"
+    style={styles.notificationButton}
+    onClick={() => navigate('/notifications')}
+  >
+    <Icon name="bell" size={24} />
 
-  {unreadNotificationCount > 0 && (
-    <span
-      style={{
-        position: 'absolute',
-        top: '3px',
-        right: '3px',
-        minWidth: '17px',
-        height: '17px',
-        padding: '0 4px',
-        borderRadius: '999px',
-        background: '#e11d48',
-        color: '#ffffff',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '9px',
-        fontWeight: 800,
-        border: '2px solid #ffffff',
-        boxSizing: 'border-box',
-      }}
-    >
-      {unreadNotificationCount > 99
-        ? '99+'
-        : unreadNotificationCount}
-    </span>
-  )}
-    </button>
-     </div>
-    </header> 
+    {unreadNotificationCount > 0 && (
+      <span
+        style={{
+          position: 'absolute',
+          top: '3px',
+          right: '3px',
+          minWidth: '17px',
+          height: '17px',
+          padding: '0 4px',
+          borderRadius: '999px',
+          background: '#e11d48',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '9px',
+          fontWeight: 800,
+          border: '2px solid #ffffff',
+          boxSizing: 'border-box',
+        }}
+      >
+        {unreadNotificationCount > 99
+          ? '99+'
+          : unreadNotificationCount}
+      </span>
+    )}
+  </button>
+
+  {/* HELP CENTER */}
+
+  <button
+    type="button"
+    aria-label="Help Center"
+    style={styles.notificationButton}
+    onClick={() => navigate('/help-center')}
+  >
+    <Icon name="help" size={24} />
+  </button>
+
+</div>
       
       {/* ======================================================
           MAIN
