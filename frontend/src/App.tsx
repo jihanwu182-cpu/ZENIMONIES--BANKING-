@@ -78,6 +78,7 @@ import Savings from './pages/Savings.tsx';
 import Notifications from './pages/Notifications.tsx';
 import BusinessServicePage from './pages/BusinessServicePage.tsx';
 import HelpCenter from './pages/HelpCenter.tsx';
+import Support from './pages/Support.tsx';
 
 // ==================== ADMIN ====================
 
@@ -507,6 +508,11 @@ const CustomerRoutes: React.FC = () => {
         <Route
           path="/help-center"
           element={<HelpCenter />}
+        />
+
+        <Route
+          path="/support"
+          element={<Support />}
         />
 
         {/* ================= ACCOUNT ================= */}
