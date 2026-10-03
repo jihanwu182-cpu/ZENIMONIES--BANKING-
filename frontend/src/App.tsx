@@ -77,6 +77,7 @@ import VirtualCard from './pages/VirtualCard.tsx';
 import Savings from './pages/Savings.tsx';
 import Notifications from './pages/Notifications.tsx';
 import BusinessServicePage from './pages/BusinessServicePage.tsx';
+import HelpCenter from './pages/HelpCenter.tsx';
 
 // ==================== ADMIN ====================
 
@@ -499,6 +500,13 @@ const CustomerRoutes: React.FC = () => {
         <Route
           path="/notifications"
           element={<Notifications />}
+        />
+
+        {/* ================= HELP CENTER ================= */}
+
+        <Route
+          path="/help-center"
+          element={<HelpCenter />}
         />
 
         {/* ================= ACCOUNT ================= */}
