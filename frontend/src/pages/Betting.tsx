@@ -918,7 +918,8 @@ const Betting: React.FC = () => {
                 amount:
                   numericAmount,
 
-                transactionPin,
+                transaction_pin:
+                 transactionPin,
               }),
             }
           );
