@@ -21,37 +21,75 @@ const INSURANCE_SERVICE_IDS = {
 };
 
 // ============================================================
-// VTpass AUTH
+// VTpass AUTHENTICATION
 // ============================================================
+//
+// VTpass REST API:
+//
+// GET  -> api-key + public-key
+// POST -> api-key + secret-key
+//
+// IMPORTANT:
+// Do NOT use Basic Authentication here.
+//
 
-const getVtpassHeaders = () => {
+const getVtpassHeaders = (
+  method = 'GET'
+) => {
   const apiKey =
     process.env.VTPASS_API_KEY;
+
+  const publicKey =
+    process.env.VTPASS_PUBLIC_KEY;
 
   const secretKey =
     process.env.VTPASS_SECRET_KEY;
 
-  if (!apiKey || !secretKey) {
+  if (!apiKey) {
     throw new Error(
-      'VTpass API credentials are not configured.'
+      'VTPASS_API_KEY is not configured.'
     );
   }
 
-  const authorization =
-    Buffer.from(
-      `${apiKey}:${secretKey}`
-    ).toString('base64');
+  const normalizedMethod =
+    String(method || 'GET')
+      .trim()
+      .toUpperCase();
 
-  return {
+  const headers = {
     'Content-Type':
       'application/json',
 
     Accept:
       'application/json',
 
-    Authorization:
-      `Basic ${authorization}`,
+    'api-key':
+      apiKey,
   };
+
+  if (
+    normalizedMethod === 'GET'
+  ) {
+    if (!publicKey) {
+      throw new Error(
+        'VTPASS_PUBLIC_KEY is not configured.'
+      );
+    }
+
+    headers['public-key'] =
+      publicKey;
+  } else {
+    if (!secretKey) {
+      throw new Error(
+        'VTPASS_SECRET_KEY is not configured.'
+      );
+    }
+
+    headers['secret-key'] =
+      secretKey;
+  }
+
+  return headers;
 };
 
 // ============================================================
@@ -111,6 +149,120 @@ const generateRequestId = () => {
 };
 
 // ============================================================
+// NORMALIZE PROVIDER STATUS
+// ============================================================
+//
+// VTpass code 000 means the transaction was processed,
+// but the actual transaction state is found in:
+//
+// content.transactions.status
+//
+// Examples:
+//
+// initiated
+// pending
+// delivered
+//
+// We normalize these into our internal statuses.
+//
+
+const normalizeProviderStatus = (
+  data
+) => {
+  const transactionStatus =
+    String(
+      data?.content
+        ?.transactions
+        ?.status ||
+        ''
+    )
+      .trim()
+      .toLowerCase();
+
+  const responseCode =
+    String(
+      data?.code ||
+        data?.response_code ||
+        ''
+    )
+      .trim();
+
+  // ==========================================================
+  // DEFINITELY SUCCESSFUL
+  // ==========================================================
+
+  if (
+    transactionStatus ===
+      'delivered' ||
+    transactionStatus ===
+      'successful' ||
+    transactionStatus ===
+      'success' ||
+    transactionStatus ===
+      'completed'
+  ) {
+    return 'successful';
+  }
+
+  // ==========================================================
+  // STILL PROCESSING
+  // ==========================================================
+
+  if (
+    transactionStatus ===
+      'pending' ||
+    transactionStatus ===
+      'initiated' ||
+    transactionStatus ===
+      'processing' ||
+    responseCode === '099' ||
+    responseCode === '089'
+  ) {
+    return 'pending';
+  }
+
+  // ==========================================================
+  // PROVIDER FAILED
+  // ==========================================================
+
+  if (
+    responseCode === '016' ||
+    responseCode === '091' ||
+    responseCode === '010' ||
+    responseCode === '011' ||
+    responseCode === '012' ||
+    responseCode === '013' ||
+    responseCode === '014' ||
+    responseCode === '015' ||
+    responseCode === '017' ||
+    responseCode === '018' ||
+    responseCode === '032' ||
+    responseCode === '034' ||
+    responseCode === '035' ||
+    responseCode === '083'
+  ) {
+    return 'failed';
+  }
+
+  // ==========================================================
+  // CODE 000 WITHOUT A FINAL STATUS
+  //
+  // VTpass says code 000 means processed.
+  // If no final transaction status is available,
+  // do NOT prematurely mark it successful.
+  // Treat it as pending.
+  // ==========================================================
+
+  if (
+    responseCode === '000'
+  ) {
+    return 'pending';
+  }
+
+  return 'failed';
+};
+
+// ============================================================
 // SAFE JSON REQUEST
 // ============================================================
 
@@ -118,6 +270,14 @@ const vtpassRequest = async (
   endpoint,
   options = {}
 ) => {
+  const method =
+    String(
+      options?.method ||
+        'GET'
+    )
+      .trim()
+      .toUpperCase();
+
   const response =
     await fetch(
       `${VTPASS_BASE_URL}${endpoint}`,
@@ -125,8 +285,12 @@ const vtpassRequest = async (
         ...options,
 
         headers: {
-          ...getVtpassHeaders(),
-          ...(options.headers || {}),
+          ...getVtpassHeaders(
+            method
+          ),
+
+          ...(options.headers ||
+            {}),
         },
       }
     );
@@ -172,21 +336,6 @@ const vtpassRequest = async (
 // ============================================================
 // NORMALIZE VTpass ARRAY RESPONSE
 // ============================================================
-//
-// VTpass normally documents:
-//
-// content: [ ... ]
-//
-// But some sandbox insurance option responses currently
-// return:
-//
-// content: {
-//   headers: {},
-//   original: [ ... ]
-// }
-//
-// We support both formats.
-//
 
 const extractArray = (
   response,
@@ -249,10 +398,13 @@ const extractArray = (
 
     if (
       Array.isArray(
-        response?.content?.original?.[key]
+        response?.content
+          ?.original?.[key]
       )
     ) {
-      return response.content.original[key];
+      return response.content.original[
+        key
+      ];
     }
 
     if (
@@ -265,10 +417,13 @@ const extractArray = (
 
     if (
       Array.isArray(
-        response?.data?.original?.[key]
+        response?.data
+          ?.original?.[key]
       )
     ) {
-      return response.data.original[key];
+      return response.data.original[
+        key
+      ];
     }
 
     if (
@@ -424,9 +579,6 @@ const getMotorInsuranceOptions =
       }
     );
 
-    // Helpful diagnostic so we can verify
-    // the actual StateCode/StateName pair
-    // returned by VTpass.
     const deltaState =
       normalizedStates.find(
         (state) =>
@@ -531,23 +683,6 @@ const getMotorInsuranceLgas =
         2
       )
     );
-
-    // ========================================================
-    // IMPORTANT
-    //
-    // Standard documented VTpass response:
-    //
-    // content: [...]
-    //
-    // Current sandbox response observed:
-    //
-    // content: {
-    //   headers: {},
-    //   original: [...]
-    // }
-    //
-    // extractArray() supports both.
-    // ========================================================
 
     const lgas =
       extractArray(
@@ -705,13 +840,9 @@ const purchaseInsurance =
         null,
 
       status:
-        data?.code ===
-        '000'
-          ? 'successful'
-          : data?.code ===
-            '099'
-          ? 'pending'
-          : 'failed',
+        normalizeProviderStatus(
+          data
+        ),
 
       transactionId:
         data?.content
@@ -777,6 +908,34 @@ const requeryInsurance =
         }
       );
 
+    console.log(
+      'ZENIMONIES VTpass INSURANCE REQUERY RESPONSE:',
+      JSON.stringify(
+        {
+          code:
+            data?.code ||
+            data?.response_code ||
+            null,
+
+          response_description:
+            data?.response_description ||
+            null,
+
+          transaction_status:
+            data?.content
+              ?.transactions
+              ?.status ||
+            null,
+
+          requestId:
+            data?.requestId ||
+            requestId,
+        },
+        null,
+        2
+      )
+    );
+
     return {
       requestId,
 
@@ -790,13 +949,9 @@ const requeryInsurance =
         null,
 
       status:
-        data?.code ===
-        '000'
-          ? 'successful'
-          : data?.code ===
-            '099'
-          ? 'pending'
-          : 'failed',
+        normalizeProviderStatus(
+          data
+        ),
 
       transactionId:
         data?.content
