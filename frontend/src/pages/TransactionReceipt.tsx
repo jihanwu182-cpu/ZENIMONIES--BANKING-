@@ -92,6 +92,19 @@ interface Transaction {
 
   /*
    * ============================================================
+   * BETTING
+   * ============================================================
+   */
+
+  provider?: string;
+  betting_provider?: string;
+  betting_account_id?: string;
+  account_id?: string;
+  customer_reference?: string;
+  customer_number?: string;
+
+  /*
+   * ============================================================
    * INSURANCE
    * ============================================================
    */
@@ -658,6 +671,11 @@ const TransactionReceipt: React.FC = () => {
     transaction.transaction_reference ||
     '';
 
+  const normalizedReference =
+    String(reference)
+      .trim()
+      .toUpperCase();
+
   /*
    * ============================================================
    * DATE / TIME
@@ -729,7 +747,7 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * TYPE DETECTION
+   * RAW TRANSACTION VALUES
    * ============================================================
    */
 
@@ -753,6 +771,58 @@ const TransactionReceipt: React.FC = () => {
         ''
     ).toLowerCase();
 
+  /*
+   * ============================================================
+   * BETTING DETECTION
+   *
+   * IMPORTANT:
+   * Betting is checked BEFORE electricity because some
+   * transaction records may contain generic fields such as
+   * meter_number/customer_reference.
+   * ============================================================
+   */
+
+  const isBetting =
+    rawType.includes('betting') ||
+    rawType.includes('bet_funding') ||
+    rawType.includes('bet-funding') ||
+    rawCategory.includes('betting') ||
+    rawCategory.includes('bet') ||
+    rawDescription.includes('betting') ||
+    rawDescription.includes('bet funding') ||
+    rawDescription.includes('betting account funding') ||
+    normalizedReference.startsWith('ZBET-');
+
+  /*
+   * ============================================================
+   * BETTING VALUES
+   * ============================================================
+   */
+
+  const bettingProvider =
+    String(
+      transaction.betting_provider ||
+        transaction.provider ||
+        transaction.biller_name ||
+        ''
+    ).trim();
+
+  const bettingAccountId =
+    String(
+      transaction.betting_account_id ||
+        transaction.account_id ||
+        transaction.customer_reference ||
+        transaction.customer_number ||
+        transaction.meter_number ||
+        ''
+    ).trim();
+
+  /*
+   * ============================================================
+   * TRANSFER
+   * ============================================================
+   */
+
   const isTransfer =
     rawType.includes(
       'transfer'
@@ -764,26 +834,33 @@ const TransactionReceipt: React.FC = () => {
   /*
    * ============================================================
    * ELECTRICITY DETECTION
+   *
+   * IMPORTANT:
+   * A betting transaction can contain fields that look like
+   * electricity fields. Betting must therefore override it.
    * ============================================================
    */
 
   const isElectricity =
-    rawType.includes(
-      'electricity'
-    ) ||
-    rawCategory.includes(
-      'electricity'
-    ) ||
-    rawDescription.includes(
-      'electricity'
-    ) ||
-    String(reference)
-      .toUpperCase()
-      .startsWith('ZEL-') ||
-    Boolean(
-      transaction.electricity_token ||
-      transaction.meter_number ||
-      transaction.units
+    !isBetting &&
+    (
+      rawType.includes(
+        'electricity'
+      ) ||
+      rawCategory.includes(
+        'electricity'
+      ) ||
+      rawDescription.includes(
+        'electricity'
+      ) ||
+      normalizedReference.startsWith(
+        'ZEL-'
+      ) ||
+      Boolean(
+        transaction.electricity_token ||
+        transaction.meter_number ||
+        transaction.units
+      )
     );
 
   /*
@@ -845,7 +922,7 @@ const TransactionReceipt: React.FC = () => {
 
   /*
    * ============================================================
-   * INSURANCE DETECTION
+   * INSURANCE
    * ============================================================
    */
 
@@ -859,9 +936,9 @@ const TransactionReceipt: React.FC = () => {
     rawDescription.includes(
       'insurance'
     ) ||
-    reference
-      .toUpperCase()
-      .startsWith('ZINS-');
+    normalizedReference.startsWith(
+      'ZINS-'
+    );
 
   /*
    * ============================================================
@@ -1693,6 +1770,87 @@ const TransactionReceipt: React.FC = () => {
           )}
 
           {/* ====================================================
+              BETTING ACCOUNT FUNDING
+          ==================================================== */}
+
+          {isBetting && (
+            <Box
+              sx={{
+                mx: 2,
+                mb: 1.5,
+                borderRadius: 2.2,
+                overflow: 'hidden',
+                border:
+                  `1px solid ${COLORS.border}`,
+                background:
+                  '#FAFCFB',
+              }}
+            >
+              <Box
+                sx={{
+                  px: 1.6,
+                  py: 1.25,
+                  background:
+                    'rgba(8,127,91,0.07)',
+                  borderBottom:
+                    `1px solid ${COLORS.border}`,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color:
+                      COLORS.primary,
+                    fontSize: 12,
+                    fontWeight: 900,
+                  }}
+                >
+                  Betting Account Funding
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.25,
+                    color:
+                      COLORS.muted,
+                    fontSize: 10,
+                  }}
+                >
+                  Betting account funding details
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  py: 0.2,
+                }}
+              >
+                {bettingProvider && (
+                  <ReceiptRow
+                    label="Provider"
+                    value={
+                      bettingProvider
+                        .replace(
+                          /^./,
+                          (char) =>
+                            char.toUpperCase()
+                        )
+                    }
+                  />
+                )}
+
+                {bettingAccountId && (
+                  <ReceiptRow
+                    label="Betting Account"
+                    value={
+                      bettingAccountId
+                    }
+                  />
+                )}
+              </Box>
+            </Box>
+          )}
+
+          {/* ====================================================
               ELECTRICITY PAYMENT
           ==================================================== */}
 
@@ -2095,10 +2253,10 @@ const TransactionReceipt: React.FC = () => {
             )}
 
           {/* ====================================================
-              NON-TRANSFER TRANSACTION
+              BETTING TRANSACTION DETAILS
           ==================================================== */}
 
-          {!isTransfer && (
+          {isBetting && (
             <>
               <ReceiptRow
                 label="Transaction Amount"
@@ -2109,15 +2267,7 @@ const TransactionReceipt: React.FC = () => {
 
               <ReceiptRow
                 label="Transaction Type"
-                value={
-                  isElectricity
-                    ? 'ELECTRICITY PAYMENT'
-                    : String(
-                        transaction.transaction_type ||
-                          transaction.type ||
-                          'TRANSACTION'
-                      ).toUpperCase()
-                }
+                value="BETTING ACCOUNT FUNDING"
               />
 
               {transactionDate && (
@@ -2165,6 +2315,79 @@ const TransactionReceipt: React.FC = () => {
               />
             </>
           )}
+
+          {/* ====================================================
+              NON-TRANSFER / NON-BETTING TRANSACTION
+          ==================================================== */}
+
+          {!isTransfer &&
+            !isBetting && (
+              <>
+                <ReceiptRow
+                  label="Transaction Amount"
+                  value={formatMoney(
+                    numericAmount
+                  )}
+                />
+
+                <ReceiptRow
+                  label="Transaction Type"
+                  value={
+                    isElectricity
+                      ? 'ELECTRICITY PAYMENT'
+                      : String(
+                          transaction.transaction_type ||
+                            transaction.type ||
+                            'TRANSACTION'
+                        ).toUpperCase()
+                  }
+                />
+
+                {transactionDate && (
+                  <ReceiptRow
+                    label="Transaction Date"
+                    value={`${formatDate()} ${formatTime()}`}
+                  />
+                )}
+
+                {transaction.description &&
+                  transaction.description.trim() && (
+                    <ReceiptRow
+                      label="Narration"
+                      value={
+                        transaction.description.trim()
+                      }
+                    />
+                  )}
+
+                {reference && (
+                  <ReferenceRow
+                    label="Transaction Reference"
+                    value={
+                      reference
+                    }
+                    onCopy={
+                      copyReference
+                    }
+                  />
+                )}
+
+                <ReceiptRow
+                  label="Transaction Status"
+                  value={
+                    isSuccessful
+                      ? 'Transaction Successful'
+                      : isFailed
+                        ? 'Transaction Failed'
+                        : 'Transaction Pending'
+                  }
+                  valueColor={
+                    statusColor
+                  }
+                  last
+                />
+              </>
+            )}
 
           {/* ====================================================
               FOOTER
