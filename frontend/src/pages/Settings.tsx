@@ -1275,11 +1275,6 @@ const openSection = (section: string) => {
       paddingBottom: 35,
     }}
   >
-        fontFamily:
-          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-        paddingBottom: 35,
-      }}
-    >
       {/* ================= HEADER ================= */}
 
       <header
