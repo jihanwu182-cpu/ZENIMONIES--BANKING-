@@ -1,17 +1,72 @@
-* {
-  box-sizing: border-box;
-}
+/* ============================================================
+   ZENIMONIES BANKING
+   GLOBAL APPLICATION THEME
+   ============================================================ */
 
-html,
-body,
-#root {
-  margin: 0;
-  min-height: 100%;
-  width: 100%;
-}
+:root {
+  /* ==================== BRAND ==================== */
 
-body {
-  font-family:
+  --zen-green: #087c43;
+  --zen-green-dark: #063b2d;
+  --zen-green-deep: #04552f;
+  --zen-green-light: #e8f8f0;
+  --zen-green-soft: #effbf5;
+
+  /* ==================== BACKGROUNDS ==================== */
+
+  --zen-background: #f6faf8;
+  --zen-surface: #ffffff;
+  --zen-surface-soft: #f9fcfa;
+
+  /* ==================== TEXT ==================== */
+
+  --zen-text: #172b22;
+  --zen-text-dark: #063b2d;
+  --zen-text-secondary: #66756e;
+  --zen-text-muted: #98a2a0;
+
+  /* ==================== BORDERS ==================== */
+
+  --zen-border: #e5ebe8;
+  --zen-border-dark: #d0d9d5;
+  --zen-border-light: #edf2ef;
+
+  /* ==================== STATUS ==================== */
+
+  --zen-success: #087c43;
+  --zen-success-background: #e8f8f0;
+
+  --zen-warning: #b7791f;
+  --zen-warning-background: #fff8e6;
+
+  --zen-danger: #c62828;
+  --zen-danger-background: #fff0f0;
+
+  --zen-info: #1769aa;
+  --zen-info-background: #eef6ff;
+
+  /* ==================== RADIUS ==================== */
+
+  --zen-radius-sm: 8px;
+  --zen-radius-md: 12px;
+  --zen-radius-lg: 16px;
+  --zen-radius-xl: 20px;
+  --zen-radius-pill: 999px;
+
+  /* ==================== SHADOWS ==================== */
+
+  --zen-shadow-sm:
+    0 2px 8px rgba(26, 61, 47, 0.04);
+
+  --zen-shadow-md:
+    0 8px 25px rgba(26, 61, 47, 0.06);
+
+  --zen-shadow-lg:
+    0 14px 40px rgba(26, 61, 47, 0.09);
+
+  /* ==================== TYPOGRAPHY ==================== */
+
+  --zen-font-family:
     Inter,
     -apple-system,
     BlinkMacSystemFont,
@@ -20,9 +75,48 @@ body {
     Helvetica,
     Arial,
     sans-serif;
-  background: #f5f7fb;
-  color: #172033;
 }
+
+
+/* ============================================================
+   GLOBAL RESET
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+}
+
+html {
+  background: var(--zen-background);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--zen-font-family);
+  background: var(--zen-background);
+  color: var(--zen-text);
+
+  line-height: 1.5;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* ============================================================
+   FORM ELEMENTS
+   ============================================================ */
 
 button,
 input,
@@ -35,11 +129,181 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+}
+
+input,
+select,
+textarea {
+  color: var(--zen-text);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--zen-text-muted);
+}
+
+
+/* ============================================================
+   LINKS
+   ============================================================ */
+
 a {
   color: inherit;
   text-decoration: none;
 }
 
+
+/* ============================================================
+   ACCESSIBILITY / FOCUS
+   ============================================================ */
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(8, 124, 67, 0.18);
+  outline-offset: 2px;
+}
+
+
+/* ============================================================
+   SELECTION
+   ============================================================ */
+
+::selection {
+  background: var(--zen-green-light);
+  color: var(--zen-green-dark);
+}
+
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+
 * {
   scrollbar-width: thin;
+  scrollbar-color: #c9d8d1 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #c9d8d1;
+  border-radius: var(--zen-radius-pill);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #aebfb6;
+}
+
+
+/* ============================================================
+   COMMON ZENIMONIES UTILITY CLASSES
+   ============================================================ */
+
+.zen-page {
+  min-height: 100vh;
+  background: var(--zen-background);
+  color: var(--zen-text);
+}
+
+.zen-card {
+  background: var(--zen-surface);
+  border: 1px solid var(--zen-border);
+  border-radius: var(--zen-radius-xl);
+  box-shadow: var(--zen-shadow-md);
+}
+
+.zen-button {
+  border: 0;
+  border-radius: var(--zen-radius-md);
+  background: var(--zen-green);
+  color: #ffffff;
+  font-weight: 700;
+  padding: 12px 18px;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.zen-button:hover {
+  background: var(--zen-green-deep);
+  box-shadow: var(--zen-shadow-sm);
+}
+
+.zen-button:active {
+  transform: translateY(1px);
+}
+
+.zen-button-secondary {
+  border: 1px solid var(--zen-border-dark);
+  border-radius: var(--zen-radius-md);
+  background: #ffffff;
+  color: var(--zen-text);
+  font-weight: 700;
+  padding: 12px 18px;
+}
+
+.zen-button-secondary:hover {
+  background: var(--zen-surface-soft);
+}
+
+.zen-input {
+  width: 100%;
+  border: 1px solid var(--zen-border-dark);
+  border-radius: var(--zen-radius-md);
+  background: #ffffff;
+  color: var(--zen-text);
+  padding: 12px 14px;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.zen-input:focus {
+  border-color: var(--zen-green);
+  box-shadow: 0 0 0 3px rgba(8, 124, 67, 0.10);
+}
+
+
+/* ============================================================
+   MOBILE
+   ============================================================ */
+
+@media (max-width: 600px) {
+  body {
+    font-size: 14px;
+  }
+
+  .zen-card {
+    border-radius: var(--zen-radius-lg);
+  }
+}
+
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
