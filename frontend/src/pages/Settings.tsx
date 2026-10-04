@@ -1261,10 +1261,15 @@ const openSection = (section: string) => {
 
   return (
     <div
-      style={{
-        minHeight: '100vh',
-        background: '#f6faf8',
-        color: '#14251e',
+  className={
+    darkMode
+      ? 'zenimonies-settings dark-mode'
+      : 'zenimonies-settings'
+  }
+  style={{
+    minHeight: '100vh',
+    background: '#f6faf8',
+    color: '#14251e',
         fontFamily:
           'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
         paddingBottom: 35,
@@ -3837,5 +3842,133 @@ const styles: Record<
     cursor: 'pointer',
   },
 };
+  const ZenimoniesThemeStyles = () => (
+  <style>
+    {`
+      .zenimonies-settings.dark-mode {
+        background: #0d1712 !important;
+        color: #f3f8f5 !important;
+      }
+
+      /* Header */
+      .zenimonies-settings.dark-mode header {
+        background: #101c16 !important;
+        border-bottom-color: #24382e !important;
+      }
+
+      .zenimonies-settings.dark-mode header div {
+        color: #f3f8f5;
+      }
+
+      /* Main white cards */
+      .zenimonies-settings.dark-mode section[style*="background: rgb(255, 255, 255)"] {
+        background: #15231c !important;
+        border-color: #294238 !important;
+      }
+
+      /* Setting buttons */
+      .zenimonies-settings.dark-mode section button {
+        background: #15231c !important;
+        border-bottom-color: #294238 !important;
+        color: #f3f8f5 !important;
+      }
+
+      .zenimonies-settings.dark-mode section button div {
+        color: #f3f8f5;
+      }
+
+      .zenimonies-settings.dark-mode section button span {
+        color: #9aaba2 !important;
+      }
+
+      /* Keep green icon backgrounds */
+      .zenimonies-settings.dark-mode section button > div:first-child {
+        background: #19382a !important;
+      }
+
+      /* Modal */
+      .zenimonies-settings.dark-mode
+        + div[style*="rgba(10, 30, 22"] {
+        background: rgba(0, 0, 0, 0.65) !important;
+      }
+
+      /* Modal itself */
+      .zenimonies-settings.dark-mode
+        ~ div
+        > div[style*="background: rgb(255, 255, 255)"] {
+        background: #101b15 !important;
+        color: #f3f8f5 !important;
+      }
+
+      /* Modal headings/text */
+      .zenimonies-settings.dark-mode
+        ~ div
+        h2,
+      .zenimonies-settings.dark-mode
+        ~ div
+        h3,
+      .zenimonies-settings.dark-mode
+        ~ div
+        strong {
+        color: #f3f8f5 !important;
+      }
+
+      .zenimonies-settings.dark-mode
+        ~ div
+        p,
+      .zenimonies-settings.dark-mode
+        ~ div
+        label {
+        color: #a9b8b0 !important;
+      }
+
+      /* Inputs */
+      .zenimonies-settings.dark-mode
+        ~ div
+        input,
+      .zenimonies-settings.dark-mode
+        ~ div
+        textarea,
+      .zenimonies-settings.dark-mode
+        ~ div
+        select {
+        background: #15231c !important;
+        color: #f3f8f5 !important;
+        border-color: #294238 !important;
+      }
+
+      .zenimonies-settings.dark-mode
+        ~ div
+        input::placeholder,
+      .zenimonies-settings.dark-mode
+        ~ div
+        textarea::placeholder {
+        color: #7f9388 !important;
+      }
+
+      /* Information boxes */
+      .zenimonies-settings.dark-mode
+        ~ div
+        [style*="background: rgb(247, 250, 248)"] {
+        background: #15231c !important;
+        border-color: #294238 !important;
+        color: #a9b8b0 !important;
+      }
+
+      /* Modal close button */
+      .zenimonies-settings.dark-mode
+        ~ div
+        button[aria-label="Close"] {
+        background: #1b2b23 !important;
+        color: #f3f8f5 !important;
+      }
+
+      /* Bottom text */
+      .zenimonies-settings.dark-mode {
+        color: #f3f8f5 !important;
+      }
+    `}
+  </style>
+);
 
 export default Settings;
