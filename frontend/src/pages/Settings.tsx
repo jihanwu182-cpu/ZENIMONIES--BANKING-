@@ -3992,4 +3992,3 @@ const ZenimoniesThemeStyles: React.FC = () => {
 };
 
 export default Settings;
-export default Settings;
