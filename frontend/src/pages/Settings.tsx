@@ -1261,15 +1261,20 @@ const openSection = (section: string) => {
 
   return (
     <div
-  className={
-    darkMode
-      ? 'zenimonies-settings dark-mode'
-      : 'zenimonies-settings'
-  }
-  style={{
-    minHeight: '100vh',
-    background: '#f6faf8',
-    color: '#14251e',
+    className={
+      darkMode
+        ? 'zenimonies-settings dark-mode'
+        : 'zenimonies-settings'
+    }
+    style={{
+      minHeight: '100vh',
+      background: darkMode ? '#0f1714' : '#f6faf8',
+      color: darkMode ? '#f3f8f5' : '#14251e',
+      fontFamily:
+        'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+      paddingBottom: 35,
+    }}
+  >
         fontFamily:
           'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
         paddingBottom: 35,
