@@ -3853,113 +3853,143 @@ const styles: Record<
     cursor: 'pointer',
   },
 };
-  {`
-  .zenimonies-settings.dark-mode {
-    background: #0d1712 !important;
-    color: #f3f8f5 !important;
-  }
+  /* ============================================================
+   DARK THEME STYLES
+============================================================ */
 
-  /* HEADER */
-  .zenimonies-settings.dark-mode header {
-    background: #101c16 !important;
-    border-bottom-color: #24382e !important;
-  }
+const ZenimoniesThemeStyles: React.FC = () => {
+  return (
+    <style>{`
+      .zenimonies-settings.dark-mode {
+        background: #0d1712 !important;
+        color: #f3f8f5 !important;
+      }
 
-  .zenimonies-settings.dark-mode header > div > div {
-    color: #f3f8f5 !important;
-  }
+      /* HEADER */
+      .zenimonies-settings.dark-mode header {
+        background: #101c16 !important;
+        border-bottom-color: #24382e !important;
+      }
 
-  .zenimonies-settings.dark-mode header > div > div:last-child {
-    color: #9aaba2 !important;
-  }
+      .zenimonies-settings.dark-mode header button {
+        background: #19382a !important;
+        color: #7ee2ad !important;
+      }
 
-  /* SETTING CARDS */
-  .zenimonies-settings.dark-mode section[style] {
-    border-color: #294238 !important;
-  }
+      .zenimonies-settings.dark-mode header > div > div {
+        color: #f3f8f5 !important;
+      }
 
-  .zenimonies-settings.dark-mode section button {
-    background: #15231c !important;
-    border-bottom-color: #294238 !important;
-    color: #f3f8f5 !important;
-  }
+      .zenimonies-settings.dark-mode header > div > div:last-child {
+        color: #9aaba2 !important;
+      }
 
-  .zenimonies-settings.dark-mode section button > div:nth-child(2) > div:first-child {
-    color: #f3f8f5 !important;
-  }
+      /* SETTING CARDS */
+      .zenimonies-settings.dark-mode section {
+        border-color: #294238 !important;
+      }
 
-  .zenimonies-settings.dark-mode section button > div:nth-child(2) > div:last-child {
-    color: #9aaba2 !important;
-  }
+      .zenimonies-settings.dark-mode section button {
+        background: #15231c !important;
+        border-bottom-color: #294238 !important;
+        color: #f3f8f5 !important;
+      }
 
-  .zenimonies-settings.dark-mode section button > span {
-    color: #9aaba2 !important;
-  }
+      .zenimonies-settings.dark-mode
+        section button > div:nth-child(2) > div:first-child {
+        color: #f3f8f5 !important;
+      }
 
-  /* KEEP ICONS GREEN */
-  .zenimonies-settings.dark-mode section button > div:first-child {
-    background: #19382a !important;
-  }
+      .zenimonies-settings.dark-mode
+        section button > div:nth-child(2) > div:last-child {
+        color: #9aaba2 !important;
+      }
 
-  /* SECTION TITLES */
-  .zenimonies-settings.dark-mode main > div {
-    color: #9aaba2 !important;
-  }
+      .zenimonies-settings.dark-mode
+        section button > span {
+        color: #9aaba2 !important;
+      }
 
-  /* MODAL OVERLAY */
-  .zenimonies-settings.dark-mode > div[style*="rgba(10, 30, 22"] {
-    background: rgba(0, 0, 0, 0.68) !important;
-  }
+      /* KEEP ZENIMONIES GREEN ICON STYLE */
+      .zenimonies-settings.dark-mode
+        section button > div:first-child {
+        background: #19382a !important;
+        color: #7ee2ad !important;
+      }
 
-  /* MODAL */
-  .zenimonies-settings.dark-mode > div[style*="rgba(10, 30, 22"] > div {
-    background: #101b15 !important;
-    color: #f3f8f5 !important;
-  }
+      /* SECTION TITLES */
+      .zenimonies-settings.dark-mode
+        main > div {
+        color: #9aaba2 !important;
+      }
 
-  /* MODAL HEADINGS */
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] h2,
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] h3,
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] strong {
-    color: #f3f8f5 !important;
-  }
+      /* FOOTER */
+      .zenimonies-settings.dark-mode
+        main > div:last-child {
+        color: #718078 !important;
+      }
 
-  /* MODAL TEXT */
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] p,
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] label,
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] span {
-    color: #a9b8b0 !important;
-  }
+      /* MODAL OVERLAY */
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] {
+        background: rgba(0, 0, 0, 0.72) !important;
+      }
 
-  /* INPUTS */
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] input,
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] textarea,
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] select {
-    background: #15231c !important;
-    color: #f3f8f5 !important;
-    border-color: #294238 !important;
-  }
+      /* MODAL */
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"]
+        > div {
+        background: #101b15 !important;
+        color: #f3f8f5 !important;
+      }
 
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] input::placeholder,
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] textarea::placeholder {
-    color: #7f9388 !important;
-  }
+      /* MODAL HEADINGS */
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] h2,
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] h3,
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] strong {
+        color: #f3f8f5 !important;
+      }
 
-  /* MODAL CLOSE BUTTON */
-  .zenimonies-settings.dark-mode
-    > div[style*="rgba(10, 30, 22"] button {
-    color: #f3f8f5;
-  }
-`}
+      /* MODAL TEXT */
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] p,
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] label,
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] span {
+        color: #a9b8b0 !important;
+      }
+
+      /* MODAL INPUTS */
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] input,
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] textarea,
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] select {
+        background: #15231c !important;
+        color: #f3f8f5 !important;
+        border-color: #294238 !important;
+      }
+
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] input::placeholder,
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] textarea::placeholder {
+        color: #7f9388 !important;
+      }
+
+      /* MODAL CLOSE BUTTON */
+      .zenimonies-settings.dark-mode
+        > div[style*="rgba(10, 30, 22"] button {
+        color: #f3f8f5 !important;
+      }
+    `}</style>
+  );
+};
+
+export default Settings;
 export default Settings;
