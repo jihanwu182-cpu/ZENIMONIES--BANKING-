@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../theme/Theme.tsx';
 
 const API_BASE_URL =
   'https://zenimonies-banking.onrender.com/api';
@@ -108,18 +109,10 @@ const Settings: React.FC = () => {
 // THEME SETTINGS
 // ==========================================================
 
-const [darkMode, setDarkMode] = useState(() => {
-  return (
-    localStorage.getItem('zenimonies_dark_mode') ===
-    'true'
-  );
-});
-useEffect(() => {
-  localStorage.setItem(
-    'zenimonies_dark_mode',
-    String(darkMode)
-  );
-}, [darkMode]);
+const {
+  darkMode,
+  setDarkMode,
+} = useTheme();
 // ==========================================================
 // SMS PREFERENCES STATE
 // ==========================================================
