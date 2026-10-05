@@ -1,4 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+
 import { useTheme } from '../theme/Theme.tsx';
 
 // ============================================================
@@ -34,13 +39,26 @@ interface DojahWidgetOptions {
   app_id: string;
   p_key: string;
   type?: string;
+
   config?: {
     widget_id?: string;
   };
+
   reference_id?: string;
-  metadata?: Record<string, unknown>;
-  onSuccess?: (response: unknown) => void;
-  onError?: (error: unknown) => void;
+
+  metadata?: Record<
+    string,
+    unknown
+  >;
+
+  onSuccess?: (
+    response: unknown
+  ) => void;
+
+  onError?: (
+    error: unknown
+  ) => void;
+
   onClose?: () => void;
 }
 
@@ -59,44 +77,73 @@ declare global {
 
 interface KycData {
   status?: KycStatus | string;
+
   tier?: number;
+
   submitted_tier?: number;
 
-  bvn_status?: string | boolean;
+  bvn_status?:
+    | string
+    | boolean;
+
   bvn_verified?: boolean;
+
   bvn_rejection_reason?: string;
 
-  id_status?: string | boolean;
+  id_status?:
+    | string
+    | boolean;
+
   id_verified?: boolean;
+
   id_rejection_reason?: string;
 
-  tier_3_status?: string | boolean;
+  tier_3_status?:
+    | string
+    | boolean;
+
   tier_3_verified?: boolean;
+
   tier_3_method?: string;
+
   tier_3_rejection_reason?: string;
 
   rejection_reason?: string;
 
   missing_profile_fields?: string[];
+
   missingProfileFields?: string[];
 
   account_limit?: number | null;
-  daily_transfer_limit?: number | null;
-  daily_transfer_used?: number | null;
-  daily_transfer_remaining?: number | null;
+
+  daily_transfer_limit?:
+    | number
+    | null;
+
+  daily_transfer_used?:
+    | number
+    | null;
+
+  daily_transfer_remaining?:
+    | number
+    | null;
 }
 
 interface KycResponse {
   success?: boolean;
+
   message?: string;
+
   data?: {
     kyc?: KycData;
   };
+
   kyc?: KycData;
 }
 
 interface TierLimit {
   account: number | null;
+
   daily: number | null;
 }
 
@@ -104,19 +151,25 @@ interface TierLimit {
 // TIER LIMITS
 // ============================================================
 
-const TIER_LIMITS: Record<TierNumber, TierLimit> = {
+const TIER_LIMITS: Record<
+  TierNumber,
+  TierLimit
+> = {
   0: {
     account: 50000,
     daily: 25000,
   },
+
   1: {
     account: 200000,
     daily: 50000,
   },
+
   2: {
     account: 500000,
     daily: 200000,
   },
+
   3: {
     account: null,
     daily: 5000000,
@@ -132,22 +185,32 @@ const ADDRESS_DOCUMENT_OPTIONS = [
   {
     value: 'bank_statement',
     label: 'Bank Statement',
-    description: 'Valid within the last 3 months',
+    description:
+      'Valid within the last 3 months',
   },
+
   {
     value: 'utility_bill',
-    label: 'Electricity, waste or water bill',
-    description: 'Valid within the last 3 months',
+    label:
+      'Electricity, waste or water bill',
+    description:
+      'Valid within the last 3 months',
   },
+
   {
     value: 'tax_proof',
     label: 'Proof of tax',
-    description: 'Valid within the last 3 months',
+    description:
+      'Valid within the last 3 months',
   },
+
   {
-    value: 'rent_receipt_or_agreement',
-    label: 'Rent receipt or Agreement',
-    description: 'Valid within the last 3 months',
+    value:
+      'rent_receipt_or_agreement',
+    label:
+      'Rent receipt or Agreement',
+    description:
+      'Valid within the last 3 months',
   },
 ];
 
@@ -156,7 +219,10 @@ const ADDRESS_DOCUMENT_OPTIONS = [
 // ============================================================
 
 const money = (
-  value: number | null | undefined
+  value:
+    | number
+    | null
+    | undefined
 ) => {
   if (value === null) {
     return 'Unlimited';
@@ -164,17 +230,26 @@ const money = (
 
   if (
     value === undefined ||
-    !Number.isFinite(Number(value))
+    !Number.isFinite(
+      Number(value)
+    )
   ) {
     return 'Not available';
   }
 
-  return new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency: 'NGN',
-    maximumFractionDigits: 0,
-  }).format(Number(value));
+  return new Intl.NumberFormat(
+    'en-NG',
+    {
+      style: 'currency',
+      currency: 'NGN',
+      maximumFractionDigits: 0,
+    }
+  ).format(Number(value));
 };
+
+// ============================================================
+// NORMALIZE STATUS
+// ============================================================
 
 const normalizeStatus = (
   value: unknown
@@ -183,17 +258,26 @@ const normalizeStatus = (
     return 'verified';
   }
 
-  if (value === false || value === undefined || value === null) {
+  if (
+    value === false ||
+    value === undefined ||
+    value === null
+  ) {
     return 'not submitted';
   }
 
-  const normalized = String(value)
-    .trim()
-    .toLowerCase();
+  const normalized =
+    String(value)
+      .trim()
+      .toLowerCase();
 
   if (
-    normalized.includes('verified') ||
-    normalized.includes('approved') ||
+    normalized.includes(
+      'verified'
+    ) ||
+    normalized.includes(
+      'approved'
+    ) ||
     normalized === 'success' ||
     normalized === 'completed'
   ) {
@@ -201,17 +285,29 @@ const normalizeStatus = (
   }
 
   if (
-    normalized.includes('pending') ||
-    normalized.includes('processing') ||
-    normalized.includes('review')
+    normalized.includes(
+      'pending'
+    ) ||
+    normalized.includes(
+      'processing'
+    ) ||
+    normalized.includes(
+      'review'
+    )
   ) {
     return 'pending';
   }
 
   if (
-    normalized.includes('reject') ||
-    normalized.includes('failed') ||
-    normalized.includes('declined')
+    normalized.includes(
+      'reject'
+    ) ||
+    normalized.includes(
+      'failed'
+    ) ||
+    normalized.includes(
+      'declined'
+    )
   ) {
     return 'rejected';
   }
@@ -219,12 +315,19 @@ const normalizeStatus = (
   return 'not submitted';
 };
 
+// ============================================================
+// CLAMP TIER
+// ============================================================
+
 const clampTier = (
   value: unknown
 ): TierNumber => {
-  const number = Number(value);
+  const number =
+    Number(value);
 
-  if (!Number.isFinite(number)) {
+  if (
+    !Number.isFinite(number)
+  ) {
     return 0;
   }
 
@@ -236,7 +339,9 @@ const clampTier = (
     return 3;
   }
 
-  return Math.floor(number) as TierNumber;
+  return Math.floor(
+    number
+  ) as TierNumber;
 };
 
 // ============================================================
@@ -246,14 +351,21 @@ const clampTier = (
 const StatusBadge: React.FC<{
   status: KycStatus;
 }> = ({ status }) => {
-  const labels: Record<KycStatus, string> = {
+  const labels: Record<
+    KycStatus,
+    string
+  > = {
     verified: 'Verified',
     pending: 'Pending',
     rejected: 'Rejected',
-    'not submitted': 'Not submitted',
+    'not submitted':
+      'Not submitted',
   };
 
-  const icons: Record<KycStatus, string> = {
+  const icons: Record<
+    KycStatus,
+    string
+  > = {
     verified: '✓',
     pending: '◷',
     rejected: '!',
@@ -293,7 +405,9 @@ const TierLimits: React.FC<{
         </span>
 
         <strong>
-          {money(limits.account)}
+          {money(
+            limits.account
+          )}
         </strong>
       </div>
 
@@ -303,7 +417,9 @@ const TierLimits: React.FC<{
         </span>
 
         <strong>
-          {money(limits.daily)}
+          {money(
+            limits.daily
+          )}
         </strong>
       </div>
     </div>
@@ -324,10 +440,13 @@ const buildStyles = (
         soft: '#15231c',
         border: '#294238',
         divider: '#22372d',
+
         text: '#f3f8f5',
         secondary: '#a9b8b0',
         muted: '#82958b',
+
         input: '#15231c',
+
         green: '#079447',
         greenDark: '#006d3b',
         bright: '#25c477',
@@ -356,10 +475,13 @@ const buildStyles = (
         soft: '#f7faf8',
         border: '#e7eee9',
         divider: '#edf2ef',
+
         text: '#14251e',
         secondary: '#7b8982',
         muted: '#98a49f',
+
         input: '#ffffff',
+
         green: '#079447',
         greenDark: '#006d3b',
         bright: '#0b995b',
@@ -805,7 +927,9 @@ const buildStyles = (
 
     .zk-method.selected {
       background: ${
-        darkMode ? '#102c20' : '#e9f8f1'
+        darkMode
+          ? '#102c20'
+          : '#e9f8f1'
       };
       border-color: ${c.green};
       box-shadow:
@@ -857,7 +981,9 @@ const buildStyles = (
 
     .zk-proof-item.selected {
       background: ${
-        darkMode ? '#102c20' : '#e9f8f1'
+        darkMode
+          ? '#102c20'
+          : '#e9f8f1'
       };
     }
 
@@ -933,84 +1059,86 @@ const buildStyles = (
     }
 
     @media (max-width: 650px) {
-  .zk-page {
-    padding: 10px 10px 30px;
-  }
+      .zk-page {
+        padding: 10px 10px 30px;
+      }
 
-  .zk-hero {
-    padding: 18px 18px 20px;
-    border-radius: 20px;
-    margin-bottom: 14px;
-  }
+      .zk-hero {
+        padding: 18px 18px 20px;
+        border-radius: 20px;
+        margin-bottom: 14px;
+      }
 
-  .zk-brand {
-    font-size: 10px;
-    letter-spacing: .13em;
-    margin-bottom: 7px;
-  }
+      .zk-brand {
+        font-size: 10px;
+        letter-spacing: .13em;
+        margin-bottom: 7px;
+      }
 
-  .zk-hero h1 {
-    font-size: 24px;
-    line-height: 1.15;
-  }
+      .zk-hero h1 {
+        font-size: 24px;
+        line-height: 1.15;
+      }
 
-  .zk-hero p {
-    margin-top: 7px;
-    font-size: 13px;
-    line-height: 1.4;
-  }
+      .zk-hero p {
+        margin-top: 7px;
+        font-size: 13px;
+        line-height: 1.4;
+      }
 
-  .zk-hero-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 12px;
-  }
+      .zk-hero-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 12px;
+      }
 
-  .zk-pill {
-    padding: 6px 9px;
-    font-size: 10px;
-    line-height: 1.2;
-  }
+      .zk-pill {
+        padding: 6px 9px;
+        font-size: 10px;
+        line-height: 1.2;
+      }
 
-  .zk-card {
-    padding: 17px;
-    border-radius: 17px;
-  }
+      .zk-card {
+        padding: 17px;
+        border-radius: 17px;
+      }
 
-  .zk-card-heading {
-    flex-direction: column;
-  }
+      .zk-card-heading {
+        flex-direction: column;
+      }
 
-  .zk-current {
-    align-items: flex-start;
-  }
+      .zk-current {
+        align-items: flex-start;
+      }
 
-  .zk-current-badge {
-    display: none;
-  }
+      .zk-current-badge {
+        display: none;
+      }
 
-  .zk-methods {
-    grid-template-columns: 1fr;
-  }
+      .zk-methods {
+        grid-template-columns: 1fr;
+      }
 
-  .zk-tier-limit-row {
-    align-items: flex-start;
-  }
+      .zk-tier-limit-row {
+        align-items: flex-start;
+      }
     }
   `;
 };
+
 // ============================================================
 // COMPONENT
 // ============================================================
 
 const KYC: React.FC = () => {
-  const { darkMode: isDarkMode } =
-    useTheme();
+  const {
+    darkMode: isDarkMode,
+  } = useTheme();
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // STATE
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const [loading, setLoading] =
     useState(true);
@@ -1021,75 +1149,138 @@ const KYC: React.FC = () => {
   const [dojahLoading, setDojahLoading] =
     useState(false);
 
-  const [dojahScriptReady, setDojahScriptReady] =
-    useState<boolean>(
-      typeof window !== 'undefined' &&
-        Boolean(window.Connect)
-    );
+  const [
+    dojahScriptReady,
+    setDojahScriptReady,
+  ] = useState<boolean>(
+    typeof window !==
+      'undefined' &&
+      Boolean(
+        window.Connect
+      )
+  );
 
   const [alert, setAlert] =
     useState('');
 
   const [alertType, setAlertType] =
     useState<
-      'success' | 'error' | 'warning'
+      'success' |
+      'error' |
+      'warning'
     >('success');
 
   const [kyc, setKyc] =
     useState<KycData>({});
 
-  // Tier 1
+  // ==========================================================
+  // TIER 1
+  // ==========================================================
+
   const [bvn, setBvn] =
     useState('');
 
-  // Tier 2
-  const [documentType, setDocumentType] =
-    useState('national_id');
+  // ==========================================================
+  // TIER 2
+  // ==========================================================
 
-  const [documentNumber, setDocumentNumber] =
-    useState('');
+  const [
+    documentType,
+    setDocumentType,
+  ] = useState(
+    'national_id'
+  );
 
-  const [frontFile, setFrontFile] =
-    useState<File | null>(null);
+  const [
+    documentNumber,
+    setDocumentNumber,
+  ] = useState('');
 
-  const [backFile, setBackFile] =
-    useState<File | null>(null);
+  const [
+    frontFile,
+    setFrontFile,
+  ] = useState<File | null>(
+    null
+  );
 
-  const [tier2Selfie, setTier2Selfie] =
-    useState<File | null>(null);
+  const [
+    backFile,
+    setBackFile,
+  ] = useState<File | null>(
+    null
+  );
 
-  // Tier 3
-  const [tier3Method, setTier3Method] =
-    useState('bank_statement');
+  const [
+    tier2Selfie,
+    setTier2Selfie,
+  ] = useState<File | null>(
+    null
+  );
 
-  const [addressDocumentType, setAddressDocumentType] =
-    useState('bank_statement');
+  // ==========================================================
+  // TIER 3
+  // ==========================================================
 
-  const [addressFile, setAddressFile] =
-    useState<File | null>(null);
+  const [
+    tier3Method,
+    setTier3Method,
+  ] = useState(
+    'bank_statement'
+  );
 
-  const [tier3Selfie, setTier3Selfie] =
-    useState<File | null>(null);
+  const [
+    addressDocumentType,
+    setAddressDocumentType,
+  ] = useState(
+    'bank_statement'
+  );
 
-  // File refs
+  const [
+    addressFile,
+    setAddressFile,
+  ] = useState<File | null>(
+    null
+  );
+
+  const [
+    tier3Selfie,
+    setTier3Selfie,
+  ] = useState<File | null>(
+    null
+  );
+
+  // ==========================================================
+  // FILE REFS
+  // ==========================================================
+
   const frontFileRef =
-    useRef<HTMLInputElement | null>(null);
+    useRef<HTMLInputElement | null>(
+      null
+    );
 
   const backFileRef =
-    useRef<HTMLInputElement | null>(null);
+    useRef<HTMLInputElement | null>(
+      null
+    );
 
   const tier2SelfieRef =
-    useRef<HTMLInputElement | null>(null);
+    useRef<HTMLInputElement | null>(
+      null
+    );
 
   const addressFileRef =
-    useRef<HTMLInputElement | null>(null);
+    useRef<HTMLInputElement | null>(
+      null
+    );
 
   const tier3SelfieRef =
-    useRef<HTMLInputElement | null>(null);
+    useRef<HTMLInputElement | null>(
+      null
+    );
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // TOKEN
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const token =
     localStorage.getItem(
@@ -1098,20 +1289,24 @@ const KYC: React.FC = () => {
     localStorage.getItem(
       'access_token'
     ) ||
-    localStorage.getItem('token') ||
+    localStorage.getItem(
+      'token'
+    ) ||
     '';
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // HEADERS
-  // ----------------------------------------------------------
+  // ==========================================================
 
-  const requestHeaders = (): HeadersInit => ({
-    Authorization: `Bearer ${token}`,
-  });
+  const requestHeaders =
+    (): HeadersInit => ({
+      Authorization:
+        `Bearer ${token}`,
+    });
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // ALERT
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const showAlert = (
     message: string,
@@ -1124,19 +1319,22 @@ const KYC: React.FC = () => {
     setAlertType(type);
   };
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // DOJAH SCRIPT
-  // ----------------------------------------------------------
+  // ==========================================================
 
   useEffect(() => {
     if (
-      typeof window === 'undefined'
+      typeof window ===
+      'undefined'
     ) {
       return;
     }
 
     if (window.Connect) {
-      setDojahScriptReady(true);
+      setDojahScriptReady(
+        true
+      );
       return;
     }
 
@@ -1150,7 +1348,9 @@ const KYC: React.FC = () => {
         'load',
         () => {
           setDojahScriptReady(
-            Boolean(window.Connect)
+            Boolean(
+              window.Connect
+            )
           );
         }
       );
@@ -1159,7 +1359,9 @@ const KYC: React.FC = () => {
     }
 
     const script =
-      document.createElement('script');
+      document.createElement(
+        'script'
+      );
 
     script.src =
       'https://widget.dojah.io/widget.js';
@@ -1173,7 +1375,9 @@ const KYC: React.FC = () => {
 
     script.onload = () => {
       setDojahScriptReady(
-        Boolean(window.Connect)
+        Boolean(
+          window.Connect
+        )
       );
     };
 
@@ -1184,7 +1388,9 @@ const KYC: React.FC = () => {
       );
     };
 
-    document.body.appendChild(script);
+    document.body.appendChild(
+      script
+    );
 
     return () => {
       script.onload = null;
@@ -1192,91 +1398,78 @@ const KYC: React.FC = () => {
     };
   }, []);
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // FETCH KYC STATUS
-  // ----------------------------------------------------------
+  // ==========================================================
 
-  const fetchStatus = async () => {
-    if (!token) {
-      setLoading(false);
+  const fetchStatus =
+    async () => {
+      if (!token) {
+        setLoading(false);
 
-      showAlert(
-        'Please log in to continue with identity verification.',
-        'error'
-      );
-
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const response =
-        await fetch(
-          `${API_BASE}/kyc/status`,
-          {
-            method: 'GET',
-            headers: requestHeaders(),
-          }
+        showAlert(
+          'Please log in to continue with identity verification.',
+          'error'
         );
 
-      const result =
-        (await response.json()) as KycResponse;
-
-      if (!response.ok) {
-        throw new Error(
-          result.message ||
-            'Unable to load KYC status.'
-        );
+        return;
       }
 
-      const payload =
-        result.data || result;
+      try {
+        setLoading(true);
 
-      setKyc(
-        payload.kyc || {}
-      );
-    } catch (error) {
-      showAlert(
-        error instanceof Error
-          ? error.message
-          : 'Unable to load KYC status.',
-        'error'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+        const response =
+          await fetch(
+            `${API_BASE}/kyc/status`,
+            {
+              method: 'GET',
+              headers:
+                requestHeaders(),
+            }
+          );
+
+        const result =
+          (await response.json()) as KycResponse;
+
+        if (!response.ok) {
+          throw new Error(
+            result.message ||
+              'Unable to load KYC status.'
+          );
+        }
+
+        const payload =
+          result.data ||
+          result;
+
+        setKyc(
+          payload.kyc ||
+            {}
+        );
+      } catch (error) {
+        showAlert(
+          error instanceof
+            Error
+            ? error.message
+            : 'Unable to load KYC status.',
+          'error'
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
     fetchStatus();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // STATUS
-  // ----------------------------------------------------------
-
-  const bvnStatus =
-    normalizeStatus(
-      kyc.bvn_verified === true
-        ? true
-        : kyc.bvn_status
-    );
-
-  const idStatus =
-    normalizeStatus(
-      kyc.id_verified === true
-        ? true
-        : kyc.id_status
-    );
-
-  const tier3Status =
-    normalizeStatus(
-      kyc.tier_3_verified === true
-        ? true
-        : kyc.tier_3_status
-    );
+  // IMPORTANT:
+  // HIGHER LEVELS CANNOT APPEAR VERIFIED BEFORE APPROVAL
+  // ==========================================================
 
   const approvedTier =
     clampTier(
@@ -1285,28 +1478,117 @@ const KYC: React.FC = () => {
         0
     );
 
+  // -------------------------
+  // TIER 1 / BVN
+  // -------------------------
+
+  const rawBvnStatus =
+    normalizeStatus(
+      kyc.bvn_verified === true
+        ? true
+        : kyc.bvn_status
+    );
+
+  const bvnStatus =
+    approvedTier >= 1
+      ? rawBvnStatus
+      : rawBvnStatus ===
+        'pending'
+      ? 'pending'
+      : 'not submitted';
+
+  // -------------------------
+  // TIER 2 / ID
+  // -------------------------
+
+  const rawIdStatus =
+    normalizeStatus(
+      kyc.id_verified === true
+        ? true
+        : kyc.id_status
+    );
+
+  const idStatus =
+    approvedTier >= 2
+      ? rawIdStatus
+      : rawIdStatus ===
+        'pending'
+      ? 'pending'
+      : 'not submitted';
+
+  // -------------------------
+  // TIER 3
+  // -------------------------
+
+  const rawTier3Status =
+    normalizeStatus(
+      kyc.tier_3_verified ===
+        true
+        ? true
+        : kyc.tier_3_status
+    );
+
+  const tier3Status =
+    approvedTier >= 3
+      ? rawTier3Status
+      : rawTier3Status ===
+        'pending'
+      ? 'pending'
+      : 'not submitted';
+
+  // -------------------------
+  // MISSING PROFILE FIELDS
+  // -------------------------
+
   const missingFields =
     kyc.missing_profile_fields ||
     kyc.missingProfileFields ||
     [];
 
+  // -------------------------
+  // SUBMISSION RULES
+  // -------------------------
+
   const canSubmitBvn =
-    bvnStatus !== 'pending' &&
-    bvnStatus !== 'verified';
+    bvnStatus !==
+      'pending' &&
+    bvnStatus !==
+      'verified';
 
   const canSubmitTier2 =
-    bvnStatus === 'verified' &&
-    idStatus !== 'pending' &&
-    idStatus !== 'verified';
+    bvnStatus ===
+      'verified' &&
+    idStatus !==
+      'pending' &&
+    idStatus !==
+      'verified';
 
   const canSubmitTier3 =
-    idStatus === 'verified' &&
-    tier3Status !== 'pending' &&
-    tier3Status !== 'verified';
+    idStatus ===
+      'verified' &&
+    tier3Status !==
+      'pending' &&
+    tier3Status !==
+      'verified';
 
-  // ----------------------------------------------------------
+  // ==========================================================
+  // CURRENT VERIFICATION LABEL
+  // NO "TIER 0"
+  // ==========================================================
+
+  const currentLevelLabel =
+    approvedTier === 0
+      ? 'Not verified'
+      : `Level ${approvedTier}`;
+
+  const currentLevelSubtitle =
+    approvedTier === 0
+      ? 'Complete Tier 1 verification to get started'
+      : `Your approved ZENIMONIES verification level`;
+
+  // ==========================================================
   // DOJAH TIER 2
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const startDojahVerification =
     async () => {
@@ -1315,6 +1597,7 @@ const KYC: React.FC = () => {
           'Please log in before starting verification.',
           'error'
         );
+
         return;
       }
 
@@ -1327,6 +1610,7 @@ const KYC: React.FC = () => {
           'Dojah verification is not configured. Please use the manual Tier 2 verification option.',
           'warning'
         );
+
         return;
       }
 
@@ -1335,22 +1619,28 @@ const KYC: React.FC = () => {
           'Secure verification is still loading. Please try again in a moment.',
           'warning'
         );
+
         return;
       }
 
       try {
-        setDojahLoading(true);
+        setDojahLoading(
+          true
+        );
 
         const response =
           await fetch(
             `${API_BASE}/kyc/dojah/start`,
             {
               method: 'POST',
+
               headers: {
                 ...requestHeaders(),
+
                 'Content-Type':
                   'application/json',
               },
+
               body: JSON.stringify({
                 verification_type:
                   'tier_2',
@@ -1371,8 +1661,10 @@ const KYC: React.FC = () => {
         const referenceId =
           result.reference_id ||
           result.referenceId ||
-          result.data?.reference_id ||
-          result.data?.referenceId;
+          result.data
+            ?.reference_id ||
+          result.data
+            ?.referenceId;
 
         if (!referenceId) {
           throw new Error(
@@ -1421,11 +1713,14 @@ const KYC: React.FC = () => {
                       {
                         method:
                           'POST',
+
                         headers: {
                           ...requestHeaders(),
+
                           'Content-Type':
                             'application/json',
                         },
+
                         body: JSON.stringify({
                           reference_id:
                             referenceId,
@@ -1453,7 +1748,8 @@ const KYC: React.FC = () => {
                   await fetchStatus();
                 } catch (error) {
                   showAlert(
-                    error instanceof Error
+                    error instanceof
+                      Error
                       ? error.message
                       : 'Unable to confirm verification.',
                     'error'
@@ -1491,10 +1787,13 @@ const KYC: React.FC = () => {
           );
         }
       } catch (error) {
-        setDojahLoading(false);
+        setDojahLoading(
+          false
+        );
 
         showAlert(
-          error instanceof Error
+          error instanceof
+            Error
             ? error.message
             : 'Unable to start secure verification.',
           'error'
@@ -1502,9 +1801,9 @@ const KYC: React.FC = () => {
       }
     };
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // SUBMIT BVN
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const submitBvn =
     async (
@@ -1513,41 +1812,53 @@ const KYC: React.FC = () => {
       event.preventDefault();
 
       const cleanBvn =
-        bvn.replace(/\D/g, '');
+        bvn.replace(
+          /\D/g,
+          ''
+        );
 
       if (
-        cleanBvn.length !== 11
+        cleanBvn.length !==
+        11
       ) {
         showAlert(
           'Please enter a valid 11-digit BVN.',
           'error'
         );
+
         return;
       }
 
       if (
-        missingFields.length > 0
+        missingFields.length >
+        0
       ) {
         showAlert(
           'Please complete the required profile information before submitting your BVN.',
           'warning'
         );
+
         return;
       }
 
       try {
-        setSubmitting(true);
+        setSubmitting(
+          true
+        );
 
         const response =
           await fetch(
             `${API_BASE}/kyc/bvn`,
             {
               method: 'POST',
+
               headers: {
                 ...requestHeaders(),
+
                 'Content-Type':
                   'application/json',
               },
+
               body: JSON.stringify({
                 bvn: cleanBvn,
               }),
@@ -1575,19 +1886,22 @@ const KYC: React.FC = () => {
         await fetchStatus();
       } catch (error) {
         showAlert(
-          error instanceof Error
+          error instanceof
+            Error
             ? error.message
             : 'BVN verification failed.',
           'error'
         );
       } finally {
-        setSubmitting(false);
+        setSubmitting(
+          false
+        );
       }
     };
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // SUBMIT TIER 2
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const submitTier2 =
     async (
@@ -1602,6 +1916,7 @@ const KYC: React.FC = () => {
           'Please enter your document number.',
           'error'
         );
+
         return;
       }
 
@@ -1610,6 +1925,7 @@ const KYC: React.FC = () => {
           'Please upload the front of your identity document.',
           'error'
         );
+
         return;
       }
 
@@ -1622,6 +1938,7 @@ const KYC: React.FC = () => {
           'Please upload the back of your identity document.',
           'error'
         );
+
         return;
       }
 
@@ -1630,11 +1947,14 @@ const KYC: React.FC = () => {
           'Please upload a selfie.',
           'error'
         );
+
         return;
       }
 
       try {
-        setSubmitting(true);
+        setSubmitting(
+          true
+        );
 
         const formData =
           new FormData();
@@ -1671,8 +1991,10 @@ const KYC: React.FC = () => {
             `${API_BASE}/kyc/tier-2`,
             {
               method: 'POST',
+
               headers:
                 requestHeaders(),
+
               body: formData,
             }
           );
@@ -1693,22 +2015,39 @@ const KYC: React.FC = () => {
           'success'
         );
 
-        setDocumentNumber('');
-        setFrontFile(null);
-        setBackFile(null);
-        setTier2Selfie(null);
+        setDocumentNumber(
+          ''
+        );
 
-        if (frontFileRef.current) {
+        setFrontFile(
+          null
+        );
+
+        setBackFile(
+          null
+        );
+
+        setTier2Selfie(
+          null
+        );
+
+        if (
+          frontFileRef.current
+        ) {
           frontFileRef.current.value =
             '';
         }
 
-        if (backFileRef.current) {
+        if (
+          backFileRef.current
+        ) {
           backFileRef.current.value =
             '';
         }
 
-        if (tier2SelfieRef.current) {
+        if (
+          tier2SelfieRef.current
+        ) {
           tier2SelfieRef.current.value =
             '';
         }
@@ -1716,19 +2055,22 @@ const KYC: React.FC = () => {
         await fetchStatus();
       } catch (error) {
         showAlert(
-          error instanceof Error
+          error instanceof
+            Error
             ? error.message
             : 'Tier 2 verification failed.',
           'error'
         );
       } finally {
-        setSubmitting(false);
+        setSubmitting(
+          false
+        );
       }
     };
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // SUBMIT TIER 3
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const submitTier3 =
     async (
@@ -1743,6 +2085,7 @@ const KYC: React.FC = () => {
           'Please select a proof of address document.',
           'error'
         );
+
         return;
       }
 
@@ -1751,20 +2094,19 @@ const KYC: React.FC = () => {
           'Please upload your proof of address document.',
           'error'
         );
+
         return;
       }
 
-      if (
-        !tier3Selfie
-      ) {
+      if (!tier3Selfie) {
         showAlert(
           'Please upload a selfie for Tier 3 verification.',
           'error'
         );
+
         return;
       }
 
-      // Tier 3 proof of address must be PDF.
       if (
         addressFile.type !==
         'application/pdf'
@@ -1773,11 +2115,14 @@ const KYC: React.FC = () => {
           'Your proof of address must be uploaded as a PDF.',
           'error'
         );
+
         return;
       }
 
       try {
-        setSubmitting(true);
+        setSubmitting(
+          true
+        );
 
         const formData =
           new FormData();
@@ -1788,20 +2133,19 @@ const KYC: React.FC = () => {
           tier3Method
         );
 
-        // IMPORTANT:
-        // Send the exact proof-of-address type.
+        // Exact proof-of-address type
         formData.append(
           'tier_3_document_type',
           addressDocumentType
         );
 
-        // Proof of address PDF
+        // Proof of address
         formData.append(
           'tier_3_document',
           addressFile
         );
 
-        // Tier 3 selfie
+        // Selfie
         formData.append(
           'tier_3_selfie',
           tier3Selfie
@@ -1812,8 +2156,10 @@ const KYC: React.FC = () => {
             `${API_BASE}/kyc/tier-3`,
             {
               method: 'POST',
+
               headers:
                 requestHeaders(),
+
               body: formData,
             }
           );
@@ -1834,8 +2180,13 @@ const KYC: React.FC = () => {
           'success'
         );
 
-        setAddressFile(null);
-        setTier3Selfie(null);
+        setAddressFile(
+          null
+        );
+
+        setTier3Selfie(
+          null
+        );
 
         if (
           addressFileRef.current
@@ -1854,13 +2205,16 @@ const KYC: React.FC = () => {
         await fetchStatus();
       } catch (error) {
         showAlert(
-          error instanceof Error
+          error instanceof
+            Error
             ? error.message
             : 'Tier 3 verification failed.',
           'error'
         );
       } finally {
-        setSubmitting(false);
+        setSubmitting(
+          false
+        );
       }
     };
 
@@ -1870,6 +2224,7 @@ const KYC: React.FC = () => {
 
   return (
     <div className="zk-page">
+
       <style>
         {buildStyles(
           isDarkMode
@@ -1883,6 +2238,7 @@ const KYC: React.FC = () => {
         ================================================== */}
 
         <section className="zk-hero">
+
           <div className="zk-brand">
             ZENIMONIES BANKING
           </div>
@@ -1894,52 +2250,72 @@ const KYC: React.FC = () => {
           <p>
             Complete your verification
             securely to unlock higher
-            account and transfer limits.
+            account and transfer
+            limits.
           </p>
 
           <div className="zk-hero-pills">
+
             <span className="zk-pill">
               ✓ Secure verification
             </span>
 
             <span className="zk-pill">
-              🔒 Your information is protected
+              🔒 Your information is
+              protected
             </span>
 
             <span className="zk-pill">
               ₦ Nigerian Naira
             </span>
+
           </div>
         </section>
 
         {/* ==================================================
-            CURRENT STATUS
+            CURRENT VERIFICATION STATUS
+            IMPORTANT: NEVER SHOW "TIER 0"
         ================================================== */}
 
         {!loading && (
           <section className="zk-card">
+
             <div className="zk-current">
+
               <div className="zk-current-left">
+
                 <div className="zk-current-icon">
-                  {approvedTier}
+                  {approvedTier ===
+                  0
+                    ? '—'
+                    : approvedTier}
                 </div>
 
                 <div>
+
                   <div className="zk-current-title">
-                    Current verification level
+                    Current verification
+                    level
                   </div>
 
                   <div className="zk-current-subtitle">
-                    Your approved ZENIMONIES
-                    account tier
+                    {
+                      currentLevelSubtitle
+                    }
                   </div>
+
                 </div>
+
               </div>
 
               <div className="zk-current-badge">
-                Tier {approvedTier}
+                {
+                  currentLevelLabel
+                }
               </div>
+
             </div>
+
           </section>
         )}
 
@@ -1961,31 +2337,42 @@ const KYC: React.FC = () => {
 
         {loading ? (
           <section className="zk-card">
+
             <div className="zk-loading">
-              Loading your verification status...
+              Loading your verification
+              status...
             </div>
+
           </section>
         ) : (
           <>
+
             {/* ==================================================
                 MISSING PROFILE FIELDS
             ================================================== */}
 
-            {missingFields.length > 0 && (
+            {missingFields.length >
+              0 && (
               <div className="zk-alert zk-alert-warning">
-                Please complete your profile
-                information before continuing
+
+                Please complete your
+                profile information
+                before continuing
                 with KYC verification.
+
               </div>
             )}
 
             {/* ==================================================
-                TIER 1 — BVN
+                TIER 1
             ================================================== */}
 
             <section className="zk-card">
+
               <div className="zk-card-heading">
+
                 <div className="zk-card-heading-left">
+
                   <div className="zk-number">
                     Tier 1
                   </div>
@@ -1996,30 +2383,41 @@ const KYC: React.FC = () => {
 
                   <p>
                     Verify your Bank
-                    Verification Number to
-                    activate your first
-                    verification level.
+                    Verification Number
+                    to activate your
+                    first verification
+                    level.
                   </p>
+
                 </div>
 
                 <StatusBadge
-                  status={bvnStatus}
+                  status={
+                    bvnStatus
+                  }
                 />
+
               </div>
 
               <TierLimits tier={1} />
 
               {kyc.bvn_rejection_reason && (
                 <div className="zk-alert zk-alert-error">
-                  {kyc.bvn_rejection_reason}
+                  {
+                    kyc.bvn_rejection_reason
+                  }
                 </div>
               )}
 
               {canSubmitBvn && (
                 <form
-                  onSubmit={submitBvn}
+                  onSubmit={
+                    submitBvn
+                  }
                 >
+
                   <div className="zk-field">
+
                     <label className="zk-field-label">
                       Bank Verification
                       Number
@@ -2031,7 +2429,9 @@ const KYC: React.FC = () => {
                       inputMode="numeric"
                       maxLength={11}
                       value={bvn}
-                      onChange={(event) =>
+                      onChange={(
+                        event
+                      ) =>
                         setBvn(
                           event.target.value
                             .replace(
@@ -2051,9 +2451,11 @@ const KYC: React.FC = () => {
                     />
 
                     <div className="zk-help">
-                      Your BVN is used only
-                      for identity verification.
+                      Your BVN is used
+                      only for identity
+                      verification.
                     </div>
+
                   </div>
 
                   <button
@@ -2061,7 +2463,8 @@ const KYC: React.FC = () => {
                     className="zk-button"
                     disabled={
                       submitting ||
-                      bvn.length !== 11 ||
+                      bvn.length !==
+                        11 ||
                       missingFields.length >
                         0
                     }
@@ -2070,17 +2473,22 @@ const KYC: React.FC = () => {
                       ? 'Submitting...'
                       : 'Verify BVN'}
                   </button>
+
                 </form>
               )}
+
             </section>
 
             {/* ==================================================
-                TIER 2 — IDENTITY
+                TIER 2
             ================================================== */}
 
             <section className="zk-card">
+
               <div className="zk-card-heading">
+
                 <div className="zk-card-heading-left">
+
                   <div className="zk-number">
                     Tier 2
                   </div>
@@ -2090,57 +2498,74 @@ const KYC: React.FC = () => {
                   </h2>
 
                   <p>
-                    Verify your identity using
-                    Dojah or our manual document
+                    Verify your identity
+                    using Dojah or our
+                    manual document
                     verification process.
                   </p>
+
                 </div>
 
                 <StatusBadge
-                  status={idStatus}
+                  status={
+                    idStatus
+                  }
                 />
+
               </div>
 
               <TierLimits tier={2} />
 
               {kyc.id_rejection_reason && (
                 <div className="zk-alert zk-alert-error">
-                  {kyc.id_rejection_reason}
+                  {
+                    kyc.id_rejection_reason
+                  }
                 </div>
               )}
 
               {bvnStatus !==
-                'verified' ? (
+              'verified' ? (
                 <div className="zk-note">
+
                   <span className="zk-note-icon">
                     ✓
                   </span>
 
                   <span>
-                    Complete Tier 1 BVN
-                    verification before
-                    starting Tier 2.
+                    Complete Tier 1
+                    BVN verification
+                    before starting
+                    Tier 2.
                   </span>
+
                 </div>
               ) : canSubmitTier2 ? (
                 <>
+
                   {/* DOJAH */}
 
                   <div className="zk-small-title">
-                    Recommended verification
+                    Recommended
+                    verification
                   </div>
 
                   <div className="zk-note">
+
                     <span className="zk-note-icon">
                       🔒
                     </span>
 
                     <span>
-                      Complete secure identity
-                      verification through
-                      Dojah. This is the
-                      recommended option.
+                      Complete secure
+                      identity
+                      verification
+                      through Dojah.
+                      This is the
+                      recommended
+                      option.
                     </span>
+
                   </div>
 
                   <button
@@ -2170,16 +2595,20 @@ const KYC: React.FC = () => {
                   </div>
 
                   <div className="zk-note">
+
                     <span className="zk-note-icon">
                       •
                     </span>
 
                     <span>
-                      If you cannot use Dojah,
-                      you can submit your
-                      identity document and
-                      selfie manually.
+                      If you cannot use
+                      Dojah, you can
+                      submit your
+                      identity document
+                      and selfie
+                      manually.
                     </span>
+
                   </div>
 
                   <form
@@ -2187,7 +2616,9 @@ const KYC: React.FC = () => {
                       submitTier2
                     }
                   >
+
                     <div className="zk-field">
+
                       <label className="zk-field-label">
                         Document type
                       </label>
@@ -2197,7 +2628,9 @@ const KYC: React.FC = () => {
                         value={
                           documentType
                         }
-                        onChange={(event) =>
+                        onChange={(
+                          event
+                        ) =>
                           setDocumentType(
                             event.target
                               .value
@@ -2207,6 +2640,7 @@ const KYC: React.FC = () => {
                           submitting
                         }
                       >
+
                         <option value="national_id">
                           National ID
                         </option>
@@ -2222,10 +2656,13 @@ const KYC: React.FC = () => {
                         <option value="international_passport">
                           International Passport
                         </option>
+
                       </select>
+
                     </div>
 
                     <div className="zk-field">
+
                       <label className="zk-field-label">
                         Document number
                       </label>
@@ -2236,7 +2673,9 @@ const KYC: React.FC = () => {
                         value={
                           documentNumber
                         }
-                        onChange={(event) =>
+                        onChange={(
+                          event
+                        ) =>
                           setDocumentNumber(
                             event.target
                               .value
@@ -2247,9 +2686,11 @@ const KYC: React.FC = () => {
                           submitting
                         }
                       />
+
                     </div>
 
                     <div className="zk-field">
+
                       <label className="zk-field-label">
                         Document front
                       </label>
@@ -2261,7 +2702,9 @@ const KYC: React.FC = () => {
                         className="zk-input"
                         type="file"
                         accept="image/*,.pdf"
-                        onChange={(event) =>
+                        onChange={(
+                          event
+                        ) =>
                           setFrontFile(
                             event.target
                               .files?.[0] ||
@@ -2272,11 +2715,13 @@ const KYC: React.FC = () => {
                           submitting
                         }
                       />
+
                     </div>
 
                     {documentType !==
                       'international_passport' && (
                       <div className="zk-field">
+
                         <label className="zk-field-label">
                           Document back
                         </label>
@@ -2288,7 +2733,9 @@ const KYC: React.FC = () => {
                           className="zk-input"
                           type="file"
                           accept="image/*,.pdf"
-                          onChange={(event) =>
+                          onChange={(
+                            event
+                          ) =>
                             setBackFile(
                               event.target
                                 .files?.[0] ||
@@ -2299,10 +2746,12 @@ const KYC: React.FC = () => {
                             submitting
                           }
                         />
+
                       </div>
                     )}
 
                     <div className="zk-field">
+
                       <label className="zk-field-label">
                         Selfie
                       </label>
@@ -2315,7 +2764,9 @@ const KYC: React.FC = () => {
                         type="file"
                         accept="image/*"
                         capture="user"
-                        onChange={(event) =>
+                        onChange={(
+                          event
+                        ) =>
                           setTier2Selfie(
                             event.target
                               .files?.[0] ||
@@ -2331,6 +2782,7 @@ const KYC: React.FC = () => {
                         Upload a clear,
                         recent selfie.
                       </div>
+
                     </div>
 
                     <button
@@ -2344,9 +2796,12 @@ const KYC: React.FC = () => {
                         ? 'Submitting...'
                         : 'Submit Manual Verification'}
                     </button>
+
                   </form>
+
                 </>
               ) : null}
+
             </section>
 
             {/* ==================================================
@@ -2354,8 +2809,11 @@ const KYC: React.FC = () => {
             ================================================== */}
 
             <section className="zk-card">
+
               <div className="zk-card-heading">
+
                 <div className="zk-card-heading-left">
+
                   <div className="zk-number">
                     Tier 3
                   </div>
@@ -2365,11 +2823,13 @@ const KYC: React.FC = () => {
                   </h2>
 
                   <p>
-                    Submit an approved proof
-                    of address and a selfie
-                    to complete Tier 3
+                    Submit an approved
+                    proof of address
+                    and a selfie to
+                    complete Tier 3
                     verification.
                   </p>
+
                 </div>
 
                 <StatusBadge
@@ -2377,6 +2837,7 @@ const KYC: React.FC = () => {
                     tier3Status
                   }
                 />
+
               </div>
 
               <TierLimits tier={3} />
@@ -2390,18 +2851,21 @@ const KYC: React.FC = () => {
               )}
 
               {idStatus !==
-                'verified' ? (
+              'verified' ? (
                 <div className="zk-note">
+
                   <span className="zk-note-icon">
                     ✓
                   </span>
 
                   <span>
-                    Complete Tier 2 identity
+                    Complete Tier 2
+                    identity
                     verification before
-                    submitting Tier 3 proof
-                    of address.
+                    submitting Tier 3
+                    proof of address.
                   </span>
+
                 </div>
               ) : canSubmitTier3 ? (
                 <form
@@ -2409,15 +2873,17 @@ const KYC: React.FC = () => {
                     submitTier3
                   }
                 >
-                  {/* ============================================
+
+                  {/* ==================================================
                       VERIFICATION METHOD
-                  ============================================ */}
+                  ================================================== */}
 
                   <div className="zk-small-title">
                     Verification method
                   </div>
 
                   <div className="zk-methods">
+
                     <button
                       type="button"
                       className={`zk-method ${
@@ -2465,19 +2931,24 @@ const KYC: React.FC = () => {
                         proof of address.
                       </div>
                     </button>
+
                   </div>
 
-                  {/* ============================================
+                  {/* ==================================================
                       EXACT PROOF OF ADDRESS LIST
-                  ============================================ */}
+                  ================================================== */}
 
                   <div className="zk-small-title">
                     Proof of Address
                   </div>
 
                   <div className="zk-proof-list">
+
                     {ADDRESS_DOCUMENT_OPTIONS.map(
-                      (option) => {
+                      (
+                        option
+                      ) => {
+
                         const selected =
                           addressDocumentType ===
                           option.value;
@@ -2499,11 +2970,15 @@ const KYC: React.FC = () => {
                               )
                             }
                           >
+
                             <div className="zk-proof-item-top">
+
                               <span className="zk-radio">
+
                                 {selected && (
                                   <span className="zk-radio-dot" />
                                 )}
+
                               </span>
 
                               <span className="zk-proof-title">
@@ -2511,6 +2986,7 @@ const KYC: React.FC = () => {
                                   option.label
                                 }
                               </span>
+
                             </div>
 
                             <div className="zk-proof-description">
@@ -2518,17 +2994,20 @@ const KYC: React.FC = () => {
                                 option.description
                               }
                             </div>
+
                           </button>
                         );
                       }
                     )}
+
                   </div>
 
-                  {/* ============================================
+                  {/* ==================================================
                       SELECTED DOCUMENT
-                  ============================================ */}
+                  ================================================== */}
 
                   <div className="zk-field">
+
                     <label className="zk-field-label">
                       Selected proof of
                       address
@@ -2539,7 +3018,9 @@ const KYC: React.FC = () => {
                       value={
                         addressDocumentType
                       }
-                      onChange={(event) =>
+                      onChange={(
+                        event
+                      ) =>
                         setAddressDocumentType(
                           event.target
                             .value
@@ -2549,8 +3030,11 @@ const KYC: React.FC = () => {
                         submitting
                       }
                     >
+
                       {ADDRESS_DOCUMENT_OPTIONS.map(
-                        (option) => (
+                        (
+                          option
+                        ) => (
                           <option
                             key={
                               option.value
@@ -2559,18 +3043,23 @@ const KYC: React.FC = () => {
                               option.value
                             }
                           >
-                            {option.label}
+                            {
+                              option.label
+                            }
                           </option>
                         )
                       )}
+
                     </select>
+
                   </div>
 
-                  {/* ============================================
+                  {/* ==================================================
                       ADDRESS PDF
-                  ============================================ */}
+                  ================================================== */}
 
                   <div className="zk-field">
+
                     <label className="zk-field-label">
                       Upload proof of
                       address
@@ -2583,7 +3072,9 @@ const KYC: React.FC = () => {
                       className="zk-input"
                       type="file"
                       accept="application/pdf,.pdf"
-                      onChange={(event) =>
+                      onChange={(
+                        event
+                      ) =>
                         setAddressFile(
                           event.target
                             .files?.[0] ||
@@ -2597,17 +3088,19 @@ const KYC: React.FC = () => {
 
                     <div className="zk-help">
                       Upload a clear PDF.
-                      The document must be
-                      valid within the last
-                      3 months.
+                      The document must
+                      be valid within the
+                      last 3 months.
                     </div>
+
                   </div>
 
-                  {/* ============================================
+                  {/* ==================================================
                       SELFIE
-                  ============================================ */}
+                  ================================================== */}
 
                   <div className="zk-field">
+
                     <label className="zk-field-label">
                       Selfie
                     </label>
@@ -2620,7 +3113,9 @@ const KYC: React.FC = () => {
                       type="file"
                       accept="image/*"
                       capture="user"
-                      onChange={(event) =>
+                      onChange={(
+                        event
+                      ) =>
                         setTier3Selfie(
                           event.target
                             .files?.[0] ||
@@ -2637,13 +3132,15 @@ const KYC: React.FC = () => {
                       recent selfie for
                       verification.
                     </div>
+
                   </div>
 
-                  {/* ============================================
+                  {/* ==================================================
                       IMPORTANT NOTE
-                  ============================================ */}
+                  ================================================== */}
 
                   <div className="zk-note">
+
                     <span className="zk-note-icon">
                       🔒
                     </span>
@@ -2653,14 +3150,16 @@ const KYC: React.FC = () => {
                       must be dated within
                       the last 3 months.
                       Make sure your name
-                      and address are clearly
-                      visible on the document.
+                      and address are
+                      clearly visible on the
+                      document.
                     </span>
+
                   </div>
 
-                  {/* ============================================
+                  {/* ==================================================
                       SUBMIT
-                  ============================================ */}
+                  ================================================== */}
 
                   <button
                     type="submit"
@@ -2676,9 +3175,12 @@ const KYC: React.FC = () => {
                       ? 'Submitting Tier 3...'
                       : 'Submit Tier 3 Verification'}
                   </button>
+
                 </form>
               ) : null}
+
             </section>
+
           </>
         )}
 
@@ -2687,11 +3189,14 @@ const KYC: React.FC = () => {
         ================================================== */}
 
         <div className="zk-footer">
+
           ZENIMONIES Banking uses secure
           identity verification to help
           protect your account and comply
           with verification requirements.
+
         </div>
+
       </main>
     </div>
   );
