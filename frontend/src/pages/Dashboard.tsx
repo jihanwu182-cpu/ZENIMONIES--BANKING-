@@ -2640,7 +2640,7 @@ if (
   h2,
 .zenimonies-dashboard.dark-mode
   strong {
-  color: #f3f8f5 !important;
+  color: #17372b !important;
 }
 
 /* Welcome / secondary text */
