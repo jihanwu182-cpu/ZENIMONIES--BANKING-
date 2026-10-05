@@ -4,7 +4,7 @@
   useState,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../context/Theme';
+import { useTheme } from '../theme/Theme.tsx';
 
 /* ============================================================
    TYPES
