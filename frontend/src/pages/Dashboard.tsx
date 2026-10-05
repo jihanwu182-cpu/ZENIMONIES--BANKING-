@@ -2344,7 +2344,7 @@ const styles: Record<
 
   serviceName: {
     marginTop: 7,
-    color: darkMode ? '#dce9e3' : '#20372e',
+    color: '#20372e',
     fontSize: 11,
     fontWeight: 750,
     lineHeight: 1.25,
