@@ -11,6 +11,8 @@ import {
   useNavigate,
 } from 'react-router-dom';
 
+import { useTheme } from '../theme/Theme.tsx';
+
 interface Bank {
   name: string;
   code: string;
@@ -44,119 +46,171 @@ const API_URL =
 const ToBank: React.FC = () => {
   const navigate = useNavigate();
 
-  const [darkMode, setDarkMode] = useState(() => {
-    try {
-      return localStorage.getItem('zenimonies_theme') === 'dark';
-    } catch {
-      return false;
-    }
-  });
+  // ============================================================
+  // GLOBAL ZENIMONIES THEME
+  // ============================================================
+  const {
+    darkMode,
+    toggleDarkMode,
+  } = useTheme();
 
   const [banks, setBanks] = useState<Bank[]>([]);
-  const [banksLoading, setBanksLoading] = useState(true);
+  const [banksLoading, setBanksLoading] =
+    useState(true);
 
-  const [selectedBank, setSelectedBank] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [accountName, setAccountName] = useState('');
-  const [accountVerified, setAccountVerified] = useState(false);
+  const [selectedBank, setSelectedBank] =
+    useState('');
 
-  const [verifying, setVerifying] = useState(false);
-  const [amount, setAmount] = useState('');
-  const [narration, setNarration] = useState('');
+  const [accountNumber, setAccountNumber] =
+    useState('');
 
-  const [saveAsBeneficiary, setSaveAsBeneficiary] = useState(false);
+  const [accountName, setAccountName] =
+    useState('');
 
-  const [error, setError] = useState('');
-  const [bankSearch, setBankSearch] = useState('');
+  const [accountVerified, setAccountVerified] =
+    useState(false);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        'zenimonies_theme',
-        darkMode ? 'dark' : 'light'
-      );
-    } catch {
-      // Ignore storage errors.
-    }
-  }, [darkMode]);
+  const [verifying, setVerifying] =
+    useState(false);
 
+  const [amount, setAmount] =
+    useState('');
+
+  const [narration, setNarration] =
+    useState('');
+
+  const [saveAsBeneficiary, setSaveAsBeneficiary] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  const [bankSearch, setBankSearch] =
+    useState('');
+
+  // ============================================================
+  // ZENIMONIES COLORS
+  // ============================================================
   const theme = useMemo(
     () =>
       darkMode
         ? {
-            page: '#071411',
-            header: '#0b1c17',
-            card: '#0d211b',
-            input: '#102820',
-            border: '#1c3930',
-            text: '#f1f8f5',
-            muted: '#91aaa1',
-            label: '#c8d9d3',
-            green: '#16a66f',
-            greenBright: '#19b979',
-            greenSoft: '#103d2d',
-            greenBorder: '#1e5c46',
+            page: '#0d1712',
+            header: '#101c16',
+            card: '#101c16',
+            input: '#15231c',
+            border: '#294238',
+            text: '#f3f8f5',
+            muted: '#a9b8b0',
+            label: '#c5d3cd',
+
+            green: '#168c56',
+            greenBright: '#25c477',
+
+            greenSoft: '#123a29',
+            greenBorder: '#1c5139',
             selectedText: '#8de0ba',
-            dangerBg: '#351713',
-            dangerBorder: '#67302a',
+
+            dangerBg: '#2a1517',
+            dangerBorder: '#5b292d',
             dangerText: '#ffb4aa',
-            shadow: '0 14px 40px rgba(0, 0, 0, 0.24)',
+
+            shadow:
+              '0 14px 40px rgba(0, 0, 0, 0.28)',
           }
         : {
-            page: '#f5f9f7',
+            page: '#f6faf8',
             header: '#ffffff',
             card: '#ffffff',
-            input: '#f9fbfa',
-            border: '#dce7e2',
-            text: '#102a25',
-            muted: '#71807b',
+            input: '#ffffff',
+            border: '#e7eee9',
+            text: '#14251e',
+            muted: '#7b8982',
             label: '#344c46',
-            green: '#087f5b',
-            greenBright: '#0b9b6d',
-            greenSoft: '#ecfaf3',
-            greenBorder: '#c7ead8',
+
+            green: '#079447',
+            greenBright: '#0b995b',
+
+            greenSoft: '#e9f8f1',
+            greenBorder: '#d4eee1',
             selectedText: '#087c43',
-            dangerBg: '#fff3f1',
-            dangerBorder: '#f5ccc6',
+
+            dangerBg: '#fff4f4',
+            dangerBorder: '#f0cccc',
             dangerText: '#b42318',
-            shadow: '0 10px 30px rgba(16, 42, 37, 0.06)',
+
+            shadow:
+              '0 10px 30px rgba(7, 59, 42, 0.06)',
           },
     [darkMode]
   );
 
-  const handleBeneficiarySelect = (beneficiary: any) => {
-    if (beneficiary.recipient_type !== 'bank') return;
-    if (!beneficiary.account_number) return;
-
-    if (beneficiary.bank_code) {
-      setSelectedBank(beneficiary.bank_code);
+  // ============================================================
+  // BENEFICIARY SELECT
+  // ============================================================
+  const handleBeneficiarySelect = (
+    beneficiary: any
+  ) => {
+    if (
+      beneficiary.recipient_type !==
+      'bank'
+    ) {
+      return;
     }
 
-    setAccountNumber(beneficiary.account_number);
-    setAccountName(beneficiary.name || '');
+    if (!beneficiary.account_number) {
+      return;
+    }
+
+    if (beneficiary.bank_code) {
+      setSelectedBank(
+        beneficiary.bank_code
+      );
+    }
+
+    setAccountNumber(
+      beneficiary.account_number
+    );
+
+    setAccountName(
+      beneficiary.name || ''
+    );
+
     setAccountVerified(true);
     setError('');
     setBankSearch('');
   };
 
+  // ============================================================
+  // LOAD BANKS
+  // ============================================================
   useEffect(() => {
     const loadBanks = async () => {
       try {
         setBanksLoading(true);
         setError('');
 
-        const response = await fetch(`${API_URL}/api/banks`);
-        const data: BanksResponse = await response.json();
+        const response = await fetch(
+          `${API_URL}/api/banks`
+        );
 
-        if (!response.ok || !data.success) {
+        const data: BanksResponse =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !data.success
+        ) {
           throw new Error(
-            data.message || 'Unable to load banks.'
+            data.message ||
+              'Unable to load banks.'
           );
         }
 
-        const availableBanks = Array.isArray(data.banks)
-          ? data.banks
-          : [];
+        const availableBanks =
+          Array.isArray(data.banks)
+            ? data.banks
+            : [];
 
         setBanks(
           availableBanks
@@ -167,11 +221,16 @@ const ToBank: React.FC = () => {
                 bank.code
             )
             .sort((a, b) =>
-              a.name.localeCompare(b.name)
+              a.name.localeCompare(
+                b.name
+              )
             )
         );
       } catch (err: any) {
-        console.error('Bank loading error:', err);
+        console.error(
+          'Bank loading error:',
+          err
+        );
 
         setError(
           err?.message ||
@@ -185,12 +244,18 @@ const ToBank: React.FC = () => {
     loadBanks();
   }, []);
 
+  // ============================================================
+  // FILTER BANKS
+  // ============================================================
   const filteredBanks = useMemo(() => {
-    const search = bankSearch
-      .trim()
-      .toLowerCase();
+    const search =
+      bankSearch
+        .trim()
+        .toLowerCase();
 
-    if (!search) return banks;
+    if (!search) {
+      return banks;
+    }
 
     return banks.filter((bank) =>
       bank.name
@@ -199,20 +264,32 @@ const ToBank: React.FC = () => {
     );
   }, [banks, bankSearch]);
 
+  // ============================================================
+  // BANK CHANGE
+  // ============================================================
   const handleBankChange = (
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
-    setSelectedBank(event.target.value);
+    setSelectedBank(
+      event.target.value
+    );
+
     setAccountVerified(false);
     setAccountName('');
     setError('');
   };
 
+  // ============================================================
+  // ACCOUNT NUMBER
+  // ============================================================
   const handleAccountNumberChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const value = event.target.value
-      .replace(/\D/g, '');
+    const value =
+      event.target.value.replace(
+        /\D/g,
+        ''
+      );
 
     setAccountNumber(
       value.slice(0, 10)
@@ -223,91 +300,112 @@ const ToBank: React.FC = () => {
     setError('');
   };
 
-  const handleVerifyAccount = async () => {
-    setError('');
+  // ============================================================
+  // VERIFY ACCOUNT
+  // ============================================================
+  const handleVerifyAccount =
+    async () => {
+      setError('');
 
-    if (!selectedBank) {
-      setError('Please select a bank first.');
-      return;
-    }
-
-    if (!/^\d{10}$/.test(accountNumber)) {
-      setError(
-        'Please enter a valid 10-digit account number.'
-      );
-      return;
-    }
-
-    try {
-      setVerifying(true);
-
-      const response = await fetch(
-        `${API_URL}/api/banks/resolve`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            account_number: accountNumber,
-            bank_code: selectedBank,
-          }),
-        }
-      );
-
-      const data: ResolveResponse =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !data.success ||
-        !data.verified ||
-        !data.account?.account_name
-      ) {
-        throw new Error(
-          data.message ||
-            'Unable to verify this bank account.'
+      if (!selectedBank) {
+        setError(
+          'Please select a bank first.'
         );
+        return;
       }
 
-      setAccountName(
-        data.account.account_name
-      );
-
-      setAccountNumber(
-        data.account.account_number ||
+      if (
+        !/^\d{10}$/.test(
           accountNumber
-      );
+        )
+      ) {
+        setError(
+          'Please enter a valid 10-digit account number.'
+        );
+        return;
+      }
 
-      setAccountVerified(true);
-      setError('');
-    } catch (err: any) {
-      console.error(
-        'Account verification error:',
-        err
-      );
+      try {
+        setVerifying(true);
 
-      setAccountVerified(false);
-      setAccountName('');
+        const response =
+          await fetch(
+            `${API_URL}/api/banks/resolve`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type':
+                  'application/json',
+              },
+              body: JSON.stringify({
+                account_number:
+                  accountNumber,
+                bank_code:
+                  selectedBank,
+              }),
+            }
+          );
 
-      setError(
-        err?.message ||
-          'Unable to verify this bank account. Please check the bank and account number.'
-      );
-    } finally {
-      setVerifying(false);
-    }
-  };
+        const data: ResolveResponse =
+          await response.json();
 
+        if (
+          !response.ok ||
+          !data.success ||
+          !data.verified ||
+          !data.account
+            ?.account_name
+        ) {
+          throw new Error(
+            data.message ||
+              'Unable to verify this bank account.'
+          );
+        }
+
+        setAccountName(
+          data.account.account_name
+        );
+
+        setAccountNumber(
+          data.account
+            .account_number ||
+            accountNumber
+        );
+
+        setAccountVerified(true);
+        setError('');
+      } catch (err: any) {
+        console.error(
+          'Account verification error:',
+          err
+        );
+
+        setAccountVerified(false);
+        setAccountName('');
+
+        setError(
+          err?.message ||
+            'Unable to verify this bank account. Please check the bank and account number.'
+        );
+      } finally {
+        setVerifying(false);
+      }
+    };
+
+  // ============================================================
+  // AMOUNT
+  // ============================================================
   const handleAmountChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    let value = event.target.value.replace(
-      /[^0-9.]/g,
-      ''
-    );
+    let value =
+      event.target.value.replace(
+        /[^0-9.]/g,
+        ''
+      );
 
-    const firstDot = value.indexOf('.');
+    const firstDot =
+      value.indexOf('.');
 
     if (firstDot !== -1) {
       value =
@@ -317,22 +415,34 @@ const ToBank: React.FC = () => {
         ) +
         value
           .slice(firstDot + 1)
-          .replace(/\./g, '');
+          .replace(
+            /\./g,
+            ''
+          );
     }
 
     setAmount(value);
     setError('');
   };
 
+  // ============================================================
+  // CONTINUE
+  // ============================================================
   const handleContinue = () => {
     setError('');
 
     if (!selectedBank) {
-      setError('Please select a bank.');
+      setError(
+        'Please select a bank.'
+      );
       return;
     }
 
-    if (!/^\d{10}$/.test(accountNumber)) {
+    if (
+      !/^\d{10}$/.test(
+        accountNumber
+      )
+    ) {
       setError(
         'Please enter a valid 10-digit account number.'
       );
@@ -351,10 +461,14 @@ const ToBank: React.FC = () => {
     );
 
     if (
-      !Number.isFinite(numericAmount) ||
+      !Number.isFinite(
+        numericAmount
+      ) ||
       numericAmount <= 0
     ) {
-      setError('Please enter a valid amount.');
+      setError(
+        'Please enter a valid amount.'
+      );
       return;
     }
 
@@ -364,73 +478,106 @@ const ToBank: React.FC = () => {
     );
 
     if (!bank) {
-      setError('Please select a valid bank.');
+      setError(
+        'Please select a valid bank.'
+      );
       return;
     }
 
-    navigate('/transfer-confirmation', {
-      state: {
-        bank,
-        accountNumber,
-        accountName,
-        amount: numericAmount,
-        narration,
-        accountVerified: true,
-        saveAsBeneficiary,
-      },
-    });
+    navigate(
+      '/transfer-confirmation',
+      {
+        state: {
+          bank,
+          accountNumber,
+          accountName,
+          amount: numericAmount,
+          narration,
+          accountVerified: true,
+          saveAsBeneficiary,
+        },
+      }
+    );
   };
 
-  const selectedBankObject = banks.find(
-    (bank) =>
-      bank.code === selectedBank
-  );
+  const selectedBankObject =
+    banks.find(
+      (bank) =>
+        bank.code ===
+        selectedBank
+    );
 
+  // ============================================================
+  // BENEFICIARIES
+  // ============================================================
   const beneficiarySection = (
     <div
       style={{
         ...styles.beneficiarySection,
-        borderTopColor: theme.border,
+        borderTopColor:
+          theme.border,
       }}
     >
       <BeneficiaryTabs
         recipientType="bank"
-        onSelect={handleBeneficiarySelect}
+        onSelect={
+          handleBeneficiarySelect
+        }
       />
     </div>
   );
 
+  // ============================================================
+  // RENDER
+  // ============================================================
   return (
     <div
+      className="zenimonies-page"
       style={{
         ...styles.page,
         background: theme.page,
         color: theme.text,
       }}
     >
+      {/* ========================================================
+          HEADER
+      ======================================================== */}
       <header
+        className="zenimonies-surface"
         style={{
           ...styles.header,
           background: theme.header,
-          borderBottomColor: theme.border,
+          borderBottomColor:
+            theme.border,
         }}
       >
         <div style={styles.headerInner}>
+          {/* BACK */}
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() =>
+              navigate('/')
+            }
             style={{
               ...styles.backButton,
-              background: theme.input,
-              borderColor: theme.border,
-              color: theme.greenBright,
+              background:
+                theme.input,
+              borderColor:
+                theme.border,
+              color:
+                theme.greenBright,
             }}
             aria-label="Back"
           >
             ←
           </button>
 
-          <div style={{ flex: 1 }}>
+          {/* TITLE */}
+          <div
+            style={{
+              flex: 1,
+            }}
+          >
             <div
               style={{
                 ...styles.headerTitle,
@@ -446,20 +593,23 @@ const ToBank: React.FC = () => {
                 color: theme.muted,
               }}
             >
-              Send money to another bank account
+              Send money to another bank
+              account
             </div>
           </div>
 
+          {/* GLOBAL THEME BUTTON */}
           <button
             type="button"
-            onClick={() =>
-              setDarkMode((value) => !value)
-            }
+            onClick={toggleDarkMode}
             style={{
               ...styles.themeButton,
-              background: theme.input,
-              borderColor: theme.border,
-              color: theme.greenBright,
+              background:
+                theme.input,
+              borderColor:
+                theme.border,
+              color:
+                theme.greenBright,
             }}
             aria-label={
               darkMode
@@ -472,17 +622,24 @@ const ToBank: React.FC = () => {
                 : 'Dark mode'
             }
           >
-            {darkMode ? '☀' : '☾'}
+            {darkMode
+              ? '☀'
+              : '☾'}
           </button>
         </div>
       </header>
 
+      {/* ========================================================
+          MAIN
+      ======================================================== */}
       <main style={styles.main}>
+        {/* INTRO */}
         <div style={styles.intro}>
           <div
             style={{
               ...styles.eyebrow,
-              color: theme.greenBright,
+              color:
+                theme.greenBright,
             }}
           >
             BANK TRANSFER
@@ -503,12 +660,17 @@ const ToBank: React.FC = () => {
               color: theme.muted,
             }}
           >
-            Enter the bank account details and
-            verify the recipient before sending.
+            Enter the bank account details
+            and verify the recipient before
+            sending.
           </p>
         </div>
 
+        {/* ======================================================
+            MAIN CARD
+        ====================================================== */}
         <section
+          className="zenimonies-surface"
           style={{
             ...styles.card,
             background: theme.card,
@@ -516,6 +678,7 @@ const ToBank: React.FC = () => {
             boxShadow: theme.shadow,
           }}
         >
+          {/* BANK */}
           <label
             htmlFor="bank"
             style={{
@@ -530,15 +693,18 @@ const ToBank: React.FC = () => {
             <div
               style={{
                 ...styles.loadingBox,
-                background: theme.input,
-                borderColor: theme.border,
+                background:
+                  theme.input,
+                borderColor:
+                  theme.border,
                 color: theme.muted,
               }}
             >
               <span
                 style={{
                   ...styles.loadingDot,
-                  background: theme.greenBright,
+                  background:
+                    theme.greenBright,
                 }}
               />
 
@@ -546,54 +712,72 @@ const ToBank: React.FC = () => {
             </div>
           ) : (
             <>
+              {/* BANK SEARCH */}
               <input
                 type="search"
                 value={bankSearch}
                 onChange={(event) =>
                   setBankSearch(
-                    event.target.value
+                    event.target
+                      .value
                   )
                 }
                 placeholder="Search bank..."
                 style={{
                   ...styles.searchInput,
-                  background: theme.input,
-                  borderColor: theme.border,
+                  background:
+                    theme.input,
+                  borderColor:
+                    theme.border,
                   color: theme.text,
                 }}
                 aria-label="Search bank"
               />
 
+              {/* BANK SELECT */}
               <select
                 id="bank"
                 value={selectedBank}
-                onChange={handleBankChange}
+                onChange={
+                  handleBankChange
+                }
                 style={{
                   ...styles.select,
-                  background: theme.input,
-                  borderColor: theme.border,
+                  background:
+                    theme.input,
+                  borderColor:
+                    theme.border,
                   color: theme.text,
+                  colorScheme:
+                    darkMode
+                      ? 'dark'
+                      : 'light',
                 }}
               >
                 <option value="">
                   Select bank
                 </option>
 
-                {filteredBanks.map((bank) => (
-                  <option
-                    key={`${bank.code}-${bank.name}`}
-                    value={bank.code}
-                  >
-                    {bank.name}
-                  </option>
-                ))}
+                {filteredBanks.map(
+                  (bank) => (
+                    <option
+                      key={`${bank.code}-${bank.name}`}
+                      value={
+                        bank.code
+                      }
+                    >
+                      {bank.name}
+                    </option>
+                  )
+                )}
               </select>
 
               {!banks.length && (
                 <div
                   style={{
                     ...styles.smallError,
-                    color: theme.dangerText,
+                    color:
+                      theme.dangerText,
                   }}
                 >
                   No banks are currently
@@ -601,6 +785,7 @@ const ToBank: React.FC = () => {
                 </div>
               )}
 
+              {/* SELECTED BANK */}
               {selectedBankObject && (
                 <div
                   style={{
@@ -625,7 +810,8 @@ const ToBank: React.FC = () => {
                     <div
                       style={{
                         ...styles.selectedBankLabel,
-                        color: theme.muted,
+                        color:
+                          theme.muted,
                       }}
                     >
                       Selected bank
@@ -638,7 +824,9 @@ const ToBank: React.FC = () => {
                           theme.selectedText,
                       }}
                     >
-                      {selectedBankObject.name}
+                      {
+                        selectedBankObject.name
+                      }
                     </div>
                   </div>
                 </div>
@@ -646,6 +834,7 @@ const ToBank: React.FC = () => {
             </>
           )}
 
+          {/* ACCOUNT NUMBER */}
           <div style={styles.fieldSpacing}>
             <label
               htmlFor="account-number"
@@ -664,16 +853,21 @@ const ToBank: React.FC = () => {
                 inputMode="numeric"
                 autoComplete="off"
                 maxLength={10}
-                value={accountNumber}
+                value={
+                  accountNumber
+                }
                 onChange={
                   handleAccountNumberChange
                 }
                 placeholder="Enter 10-digit account number"
                 style={{
                   ...styles.accountInput,
-                  background: theme.input,
-                  borderColor: theme.border,
-                  color: theme.text,
+                  background:
+                    theme.input,
+                  borderColor:
+                    theme.border,
+                  color:
+                    theme.text,
                 }}
               />
 
@@ -714,17 +908,23 @@ const ToBank: React.FC = () => {
             <div
               style={{
                 ...styles.helperText,
-                color: theme.muted,
+                color:
+                  theme.muted,
               }}
             >
-              Enter the recipient's 10-digit
-              bank account number.
+              Enter the recipient's
+              10-digit bank account
+              number.
             </div>
           </div>
 
+          {/* BENEFICIARIES */}
           {!accountVerified &&
             beneficiarySection}
 
+          {/* ====================================================
+              VERIFIED ACCOUNT
+          ==================================================== */}
           {accountVerified && (
             <div
               style={{
@@ -745,7 +945,11 @@ const ToBank: React.FC = () => {
                 ✓
               </div>
 
-              <div style={styles.verifiedInfo}>
+              <div
+                style={
+                  styles.verifiedInfo
+                }
+              >
                 <div
                   style={{
                     ...styles.verifiedLabel,
@@ -759,7 +963,8 @@ const ToBank: React.FC = () => {
                 <div
                   style={{
                     ...styles.accountName,
-                    color: theme.text,
+                    color:
+                      theme.text,
                   }}
                 >
                   {accountName}
@@ -768,7 +973,8 @@ const ToBank: React.FC = () => {
                 <div
                   style={{
                     ...styles.accountNumberText,
-                    color: theme.muted,
+                    color:
+                      theme.muted,
                   }}
                 >
                   {accountNumber}
@@ -791,14 +997,23 @@ const ToBank: React.FC = () => {
             </div>
           )}
 
+          {/* ====================================================
+              AMOUNT + NARRATION
+          ==================================================== */}
           {accountVerified && (
             <>
-              <div style={styles.fieldSpacing}>
+              {/* AMOUNT */}
+              <div
+                style={
+                  styles.fieldSpacing
+                }
+              >
                 <label
                   htmlFor="amount"
                   style={{
                     ...styles.label,
-                    color: theme.label,
+                    color:
+                      theme.label,
                   }}
                 >
                   Amount
@@ -807,14 +1022,17 @@ const ToBank: React.FC = () => {
                 <div
                   style={{
                     ...styles.amountWrap,
-                    background: theme.input,
-                    borderColor: theme.border,
+                    background:
+                      theme.input,
+                    borderColor:
+                      theme.border,
                   }}
                 >
                   <span
                     style={{
                       ...styles.currency,
-                      color: theme.greenBright,
+                      color:
+                        theme.greenBright,
                     }}
                   >
                     ₦
@@ -831,25 +1049,33 @@ const ToBank: React.FC = () => {
                     placeholder="0.00"
                     style={{
                       ...styles.amountInput,
-                      color: theme.text,
+                      color:
+                        theme.text,
                     }}
                   />
                 </div>
               </div>
 
-              <div style={styles.fieldSpacing}>
+              {/* NARRATION */}
+              <div
+                style={
+                  styles.fieldSpacing
+                }
+              >
                 <label
                   htmlFor="narration"
                   style={{
                     ...styles.label,
-                    color: theme.label,
+                    color:
+                      theme.label,
                   }}
                 >
                   Narration
                   <span
                     style={{
                       ...styles.optional,
-                      color: theme.muted,
+                      color:
+                        theme.muted,
                     }}
                   >
                     {' '}
@@ -864,23 +1090,29 @@ const ToBank: React.FC = () => {
                   value={narration}
                   onChange={(event) =>
                     setNarration(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                   placeholder="What is this payment for?"
                   style={{
                     ...styles.fullInput,
-                    background: theme.input,
-                    borderColor: theme.border,
-                    color: theme.text,
+                    background:
+                      theme.input,
+                    borderColor:
+                      theme.border,
+                    color:
+                      theme.text,
                   }}
                 />
               </div>
 
+              {/* BENEFICIARY CHECKBOX */}
               <label
                 style={{
                   ...styles.beneficiaryCheckbox,
-                  color: theme.label,
+                  color:
+                    theme.label,
                 }}
               >
                 <input
@@ -890,7 +1122,8 @@ const ToBank: React.FC = () => {
                   }
                   onChange={(event) =>
                     setSaveAsBeneficiary(
-                      event.target.checked
+                      event.target
+                        .checked
                     )
                   }
                 />
@@ -900,6 +1133,7 @@ const ToBank: React.FC = () => {
                 </span>
               </label>
 
+              {/* ERROR */}
               {error && (
                 <div
                   style={{
@@ -914,13 +1148,18 @@ const ToBank: React.FC = () => {
                   role="alert"
                 >
                   <span>!</span>
-                  <span>{error}</span>
+                  <span>
+                    {error}
+                  </span>
                 </div>
               )}
 
+              {/* CONTINUE */}
               <button
                 type="button"
-                onClick={handleContinue}
+                onClick={
+                  handleContinue
+                }
                 disabled={
                   !accountVerified ||
                   !amount ||
@@ -936,6 +1175,10 @@ const ToBank: React.FC = () => {
                     banksLoading
                       ? 0.55
                       : 1,
+                  boxShadow:
+                    darkMode
+                      ? '0 8px 22px rgba(37, 196, 119, 0.12)'
+                      : '0 8px 20px rgba(8, 127, 91, 0.18)',
                 }}
               >
                 Continue
@@ -945,18 +1188,20 @@ const ToBank: React.FC = () => {
               <div
                 style={{
                   ...styles.securityText,
-                  color: theme.muted,
+                  color:
+                    theme.muted,
                 }}
               >
                 🔒 Your recipient will be
-                verified before the transfer
-                continues.
+                verified before the
+                transfer continues.
               </div>
 
               {beneficiarySection}
             </>
           )}
 
+          {/* ERROR BEFORE VERIFICATION */}
           {!accountVerified &&
             error && (
               <div
@@ -972,23 +1217,82 @@ const ToBank: React.FC = () => {
                 role="alert"
               >
                 <span>!</span>
-                <span>{error}</span>
+
+                <span>
+                  {error}
+                </span>
               </div>
             )}
         </section>
 
+        {/* DASHBOARD LINK */}
         <div style={styles.bottomBack}>
           <Link
             to="/"
             style={{
               ...styles.bottomBackLink,
-              color: theme.greenBright,
+              color:
+                theme.greenBright,
             }}
           >
             ← Back to dashboard
           </Link>
         </div>
       </main>
+
+      {/* ========================================================
+          SMALL GLOBAL ANIMATION
+      ======================================================== */}
+      <style>
+        {`
+          @keyframes zenimoniesPulse {
+            0%, 100% {
+              opacity: 0.35;
+              transform: scale(0.9);
+            }
+
+            50% {
+              opacity: 1;
+              transform: scale(1);
+            }
+          }
+
+          .zenimonies-page input::placeholder {
+            color: ${
+              darkMode
+                ? '#71857b'
+                : '#98a49f'
+            };
+            opacity: 1;
+          }
+
+          .zenimonies-page select option {
+            background: ${
+              darkMode
+                ? '#15231c'
+                : '#ffffff'
+            };
+            color: ${
+              darkMode
+                ? '#f3f8f5'
+                : '#14251e'
+            };
+          }
+
+          .zenimonies-page input,
+          .zenimonies-page select {
+            color-scheme: ${
+              darkMode
+                ? 'dark'
+                : 'light'
+            };
+          }
+
+          .zenimonies-page button {
+            -webkit-tap-highlight-color: transparent;
+          }
+        `}
+      </style>
     </div>
   );
 };
@@ -1362,8 +1666,6 @@ const styles: Record<
     fontSize: 16,
     fontWeight: 850,
     cursor: 'pointer',
-    boxShadow:
-      '0 8px 20px rgba(8, 127, 91, 0.18)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
