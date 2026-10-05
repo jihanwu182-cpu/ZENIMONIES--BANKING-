@@ -27,6 +27,7 @@ import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import WifiIcon from '@mui/icons-material/Wifi';
 import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 import SecurityIcon from '@mui/icons-material/Security';
+import { useTheme } from '../theme/Theme.tsx';
 
 type Network =
   | 'MTN'
