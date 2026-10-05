@@ -262,124 +262,231 @@ const createPhoneOtp = async (
 
 
 // ============================================================
-// REGISTER
-// POST /api/auth/register
+// ZENIMONIES BANKING
+// CUSTOMER REGISTRATION
 // ============================================================
 
-const register = async (
-  req,
-  res
-) => {
-
-  const client =
-    await pool.connect();
-
+const register = async (req, res) => {
+  let client;
 
   try {
-
     const {
-      full_name,
+      first_name,
+      middle_name,
+      surname,
+      gender,
       email,
       phone,
       password,
+      registration_account_type,
     } = req.body || {};
 
-
-    // ========================================================
-    // VALIDATION
-    // ========================================================
+    // ----------------------------------------------------------
+    // BASIC VALIDATION
+    // ----------------------------------------------------------
 
     if (
-      !full_name ||
+      !first_name ||
+      !surname ||
       !email ||
       !phone ||
       !password
     ) {
-
       return res.status(400).json({
-        success: false,
         message:
-          'Full name, email, phone number, and password are required',
+          'First name, surname, email, phone and password are required.',
       });
     }
 
+    // ----------------------------------------------------------
+    // ACCOUNT TYPE
+    // ----------------------------------------------------------
 
-    const normalizedFullName =
-      String(full_name).trim();
+    const accountType =
+      String(
+        registration_account_type || 'personal',
+      )
+        .trim()
+        .toLowerCase();
 
+    if (
+      !['personal', 'business'].includes(
+        accountType,
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          'Invalid account type.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // NORMALIZE CUSTOMER INFORMATION
+    // ----------------------------------------------------------
+
+    const normalizedFirstName =
+      String(first_name)
+        .trim()
+        .replace(/\s+/g, ' ');
+
+    const normalizedMiddleName =
+      middle_name
+        ? String(middle_name)
+            .trim()
+            .replace(/\s+/g, ' ')
+        : null;
+
+    const normalizedSurname =
+      String(surname)
+        .trim()
+        .replace(/\s+/g, ' ');
 
     const normalizedEmail =
       String(email)
         .trim()
         .toLowerCase();
 
-
     const normalizedPhone =
       normalizePhone(phone);
-
 
     const normalizedPassword =
       String(password);
 
+    const normalizedGender = gender
+      ? String(gender)
+          .trim()
+          .toLowerCase()
+      : null;
 
-    if (!normalizedFullName) {
-
-      return res.status(400).json({
-        success: false,
-        message:
-          'Full name is required',
-      });
-    }
-
+    // ----------------------------------------------------------
+    // NAME VALIDATION
+    // ----------------------------------------------------------
 
     if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        normalizedEmail
+      normalizedFirstName.length < 2
+    ) {
+      return res.status(400).json({
+        message:
+          'First name must contain at least 2 characters.',
+      });
+    }
+
+    if (
+      normalizedSurname.length < 2
+    ) {
+      return res.status(400).json({
+        message:
+          'Surname must contain at least 2 characters.',
+      });
+    }
+
+    if (
+      normalizedMiddleName &&
+      normalizedMiddleName.length < 2
+    ) {
+      return res.status(400).json({
+        message:
+          'Middle name must contain at least 2 characters.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // EMAIL VALIDATION
+    // ----------------------------------------------------------
+
+    const emailRegex =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (
+      !emailRegex.test(
+        normalizedEmail,
       )
     ) {
-
       return res.status(400).json({
-        success: false,
         message:
-          'Please enter a valid email address',
+          'Please provide a valid email address.',
       });
     }
 
-
-    if (!normalizedPhone) {
-
-      return res.status(400).json({
-        success: false,
-        message:
-          'Phone number is required',
-      });
-    }
-
+    // ----------------------------------------------------------
+    // PASSWORD VALIDATION
+    // ----------------------------------------------------------
 
     if (
       normalizedPassword.length < 8
     ) {
-
       return res.status(400).json({
-        success: false,
         message:
-          'Password must be at least 8 characters',
+          'Password must contain at least 8 characters.',
       });
     }
 
+    // ----------------------------------------------------------
+    // PHONE VALIDATION
+    // ----------------------------------------------------------
 
-    // ========================================================
-    // START TRANSACTION
-    // ========================================================
+    if (
+      !normalizedPhone ||
+      normalizedPhone.length < 7
+    ) {
+      return res.status(400).json({
+        message:
+          'Please provide a valid phone number.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // GENDER VALIDATION
+    // ----------------------------------------------------------
+
+    if (
+      !normalizedGender
+    ) {
+      return res.status(400).json({
+        message:
+          'Please select your gender.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // BUILD OFFICIAL FULL NAME
+    //
+    // IMPORTANT:
+    // The backend owns the official full_name.
+    // We do NOT trust a full_name sent by the frontend.
+    // ----------------------------------------------------------
+
+    const normalizedFullName = [
+      normalizedFirstName,
+      normalizedMiddleName,
+      normalizedSurname,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    if (
+      !normalizedFullName
+    ) {
+      return res.status(400).json({
+        message:
+          'Unable to create your full name.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // DATABASE CLIENT
+    // ----------------------------------------------------------
+
+    client =
+      await pool.connect();
 
     await client.query(
-      'BEGIN'
+      'BEGIN',
     );
 
-
-    // ========================================================
-    // CHECK EXISTING USER
-    // ========================================================
+    // ----------------------------------------------------------
+    // CHECK EXISTING EMAIL / PHONE
+    // ----------------------------------------------------------
 
     const existingUser =
       await client.query(
@@ -396,69 +503,72 @@ const register = async (
         [
           normalizedEmail,
           normalizedPhone,
-        ]
+        ],
       );
-
 
     if (
       existingUser.rows.length > 0
     ) {
-
       await client.query(
-        'ROLLBACK'
+        'ROLLBACK',
       );
-
 
       const existing =
         existingUser.rows[0];
-
 
       if (
         existing.email ===
         normalizedEmail
       ) {
-
         return res.status(409).json({
-          success: false,
           message:
-            'An account with this email already exists',
+            'An account with this email address already exists.',
         });
       }
 
-
       return res.status(409).json({
-        success: false,
         message:
-          'An account with this phone number already exists',
+          'An account with this phone number already exists.',
       });
     }
 
-
-    // ========================================================
+    // ----------------------------------------------------------
     // HASH PASSWORD
-    // ========================================================
+    // ----------------------------------------------------------
 
     const passwordHash =
       await bcrypt.hash(
         normalizedPassword,
-        12
+        12,
       );
 
-
-    // ========================================================
+    // ----------------------------------------------------------
     // CREATE USER
-    // ========================================================
+    //
+    // New users start:
+    //
+    // KYC = not_verified
+    // KYC Tier = 0
+    //
+    // They should NOT automatically be marked as KYC pending
+    // or Tier 1 before completing the required verification.
+    // ----------------------------------------------------------
 
     const userResult =
       await client.query(
         `
         INSERT INTO users (
+          first_name,
+          middle_name,
+          surname,
           full_name,
+          gender,
           email,
           phone,
           password_hash,
           role,
           status,
+          registration_account_type,
 
           kyc_status,
           kyc_tier,
@@ -466,52 +576,6 @@ const register = async (
           bvn_verified,
           id_verified,
           tier_3_verified,
-
-          is_verified,
-
-          account_limit,
-          daily_transfer_limit,
-          daily_transfer_used,
-          daily_transfer_reset_at
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-
-          'user',
-          'active',
-
-          'pending',
-          1,
-
-          false,
-          false,
-          false,
-
-          false,
-
-          50000.00,
-          25000.00,
-          0.00,
-          CURRENT_TIMESTAMP
-        )
-        RETURNING
-          id,
-          full_name,
-          email,
-          phone,
-          role,
-          status,
-
-          kyc_status,
-          kyc_tier,
-
-          bvn_verified,
-          id_verified,
-          tier_3_verified,
-
           is_verified,
 
           account_limit,
@@ -519,387 +583,335 @@ const register = async (
           daily_transfer_used,
           daily_transfer_reset_at,
 
+          password_changed_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+
+          'user',
+          'active',
+          $9,
+
+          'not_verified',
+          0,
+
+          false,
+          false,
+          false,
+          false,
+
+          50000.00,
+          25000.00,
+          0.00,
+          CURRENT_TIMESTAMP,
+
+          CURRENT_TIMESTAMP
+        )
+        RETURNING
+          id,
+          first_name,
+          middle_name,
+          surname,
+          full_name,
+          gender,
+          email,
+          phone,
+          role,
+          status,
+          registration_account_type,
+          kyc_status,
+          kyc_tier,
+          bvn_verified,
+          id_verified,
+          tier_3_verified,
+          is_verified,
           created_at
         `,
         [
+          normalizedFirstName,
+          normalizedMiddleName,
+          normalizedSurname,
           normalizedFullName,
+          normalizedGender,
           normalizedEmail,
           normalizedPhone,
           passwordHash,
-        ]
+          accountType,
+        ],
       );
-
 
     const user =
       userResult.rows[0];
 
+    // ----------------------------------------------------------
+    // GENERATE ZENIMONIES ACCOUNT NUMBER
+    // ----------------------------------------------------------
 
-    // ========================================================
-    // CREATE INTERNAL ZENIMONIES ACCOUNT
-    // ========================================================
-
-    let account = null;
-
-    let accountCreated = false;
-
-
-    for (
-      let attempt = 0;
-      attempt < 5;
-      attempt++
-    ) {
-
-      const accountNumber =
-        generateZenimoniesAccountNumber();
-
-
-      try {
-
-        const accountResult =
-          await client.query(
-            `
-            INSERT INTO accounts (
-              user_id,
-              account_number,
-              account_type,
-              currency,
-              balance,
-              status
-            )
-            VALUES (
-              $1,
-              $2,
-              'personal',
-              'NGN',
-              0.00,
-              'active'
-            )
-            RETURNING
-              id,
-              account_number,
-              account_type,
-              currency,
-              balance,
-              status,
-              created_at
-            `,
-            [
-              user.id,
-              accountNumber,
-            ]
-          );
-
-
-        account =
-          accountResult.rows[0];
-
-
-        accountCreated = true;
-
-        break;
-
-
-      } catch (error) {
-
-        if (
-          error &&
-          error.code === '23505'
-        ) {
-          continue;
-        }
-
-        throw error;
-      }
-    }
-
-
-    if (!accountCreated) {
-
-      throw new Error(
-        'Unable to create Zenimonies account number'
+    const accountNumber =
+      await generateZenimoniesAccountNumber(
+        client,
       );
-    }
 
+    // ----------------------------------------------------------
+    // CREATE ACCOUNT
+    //
+    // IMPORTANT:
+    // We preserve the current account creation behavior here.
+    //
+    // The selected registration type is stored on users.
+    // Business onboarding/POS remains a separate flow.
+    // ----------------------------------------------------------
 
-    // ========================================================
+    const accountResult =
+      await client.query(
+        `
+        INSERT INTO accounts (
+          user_id,
+          account_number,
+          account_name,
+          account_type,
+          currency,
+          balance,
+          status
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          'personal',
+          'NGN',
+          0.00,
+          'active'
+        )
+        RETURNING
+          id,
+          account_number,
+          account_name,
+          account_type,
+          currency,
+          balance,
+          status,
+          created_at
+        `,
+        [
+          user.id,
+          accountNumber,
+          normalizedFullName,
+        ],
+      );
+
+    const account =
+      accountResult.rows[0];
+
+    // ----------------------------------------------------------
     // CREATE PHONE OTP
-    // ========================================================
+    // ----------------------------------------------------------
 
     const otp =
       await createPhoneOtp(
         client,
-        user.id
-      );
-
-
-    // ========================================================
-    // SEND OTP THROUGH TERMII
-    // ========================================================
-
-    await sendPhoneOtp({
-      phone:
-        normalizedPhone,
-      otp,
-    });
-
-
-    // ========================================================
-    // AUDIT LOG
-    // ========================================================
-
-    await client.query(
-      `
-      INSERT INTO audit_logs (
-        user_id,
-        action,
-        description,
-        ip_address,
-        user_agent
-      )
-      VALUES (
-        $1,
-        'account_created',
-        $2,
-        $3,
-        $4
-      )
-      `,
-      [
         user.id,
-
-        'Zenimonies account created. Phone verification OTP generated and sent. Bank deposit account has not yet been provisioned.',
-
-        req.ip ||
-          null,
-
-        req.get(
-          'user-agent'
-        ) || null,
-      ]
-    );
-
-
-    // ========================================================
-    // COMMIT USER / ACCOUNT / OTP
-    // ========================================================
-
-    await client.query(
-      'COMMIT'
-    );
-
-
-    // ========================================================
-    // CREATE AUTHENTICATION SESSION
-    // ========================================================
-    //
-    // IMPORTANT:
-    //
-    // This happens AFTER COMMIT because sessionService uses
-    // the main pool and the newly-created user must already
-    // be committed before the auth_sessions foreign key can
-    // reference it.
-    // ========================================================
-
-    const session =
-      await createAuthSession(
-        user
+        normalizedPhone,
       );
 
+    // ----------------------------------------------------------
+    // SEND PHONE OTP
+    // ----------------------------------------------------------
 
-    const token =
-      session.token;
+    let smsResult = null;
 
+    try {
+      smsResult =
+        await sendPhoneOtp(
+          normalizedPhone,
+          otp,
+        );
+    } catch (smsError) {
+      console.error(
+        'ZENIMONIES registration OTP send error:',
+        smsError,
+      );
 
-    // ========================================================
-    // RESPONSE
-    // ========================================================
+      await client.query(
+        'ROLLBACK',
+      );
+
+      return res.status(500).json({
+        message:
+          'Your registration could not be completed because the verification code could not be sent. Please try again.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // AUDIT LOG
+    // ----------------------------------------------------------
+
+    try {
+      await client.query(
+        `
+        INSERT INTO audit_logs (
+          user_id,
+          action,
+          metadata,
+          created_at
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          CURRENT_TIMESTAMP
+        )
+        `,
+        [
+          user.id,
+          'account_registration',
+          JSON.stringify({
+            account_type:
+              accountType,
+            registration_account_type:
+              accountType,
+            phone_verified: false,
+            kyc_status:
+              'not_verified',
+            kyc_tier: 0,
+          }),
+        ],
+      );
+    } catch (auditError) {
+      // Audit failure should not expose database details
+      // to the customer.
+      console.error(
+        'ZENIMONIES registration audit log error:',
+        auditError,
+      );
+    }
+
+    // ----------------------------------------------------------
+    // COMMIT
+    // ----------------------------------------------------------
+
+    await client.query(
+      'COMMIT',
+    );
+
+    // ----------------------------------------------------------
+    // CREATE AUTH SESSION
+    // ----------------------------------------------------------
+
+    const authSession =
+      await createAuthSession(
+        user.id,
+        req,
+      );
+
+    // ----------------------------------------------------------
+    // DEVELOPMENT OTP
+    //
+    // Only expose this if your existing environment
+    // explicitly allows development OTP.
+    // ----------------------------------------------------------
+
+    const isDevelopment =
+      process.env.NODE_ENV !==
+      'production';
 
     const response = {
-
-      success: true,
-
       message:
-        'Account created successfully. A verification code has been sent to your phone.',
+        'Registration successful. Please verify your phone number.',
+      token:
+        authSession?.token ||
+        authSession?.access_token ||
+        null,
+      access_token:
+        authSession?.token ||
+        authSession?.access_token ||
+        null,
 
-      token,
-
-      session_expires_at:
-        session.expiresAt,
-
-      inactivity_timeout_minutes:
-        5,
-
-      requires_phone_verification:
+      phone_verification_required:
         true,
 
-
       user: {
-
-        id:
-          user.id,
-
-        full_name:
-          user.full_name,
-
-        email:
-          user.email,
-
-        phone:
-          user.phone,
-
-        role:
-          user.role,
-
-        status:
-          user.status,
-
-        phone_verified:
-          false,
-
-        kyc_status:
-          user.kyc_status,
-
-        kyc_tier:
-          user.kyc_tier,
-
-        bvn_verified:
-          user.bvn_verified,
-
-        id_verified:
-          user.id_verified,
-
-        tier_3_verified:
-          user.tier_3_verified,
-
-        is_verified:
-          false,
-
-        account_limit:
-          user.account_limit,
-
-        daily_transfer_limit:
-          user.daily_transfer_limit,
-
-        daily_transfer_used:
-          user.daily_transfer_used,
-
-        daily_transfer_reset_at:
-          user.daily_transfer_reset_at,
-
-        created_at:
-          user.created_at,
+        ...user,
       },
-
 
       account: {
-
-        id:
-          account.id,
-
+        id: account.id,
         account_number:
           account.account_number,
-
         account_name:
-          user.full_name,
-
+          account.account_name,
         account_type:
           account.account_type,
-
-        bank_name:
-          null,
-
-        bank_code:
-          null,
-
         currency:
           account.currency,
-
         balance:
           account.balance,
-
         status:
           account.status,
-
-        created_at:
-          account.created_at,
       },
-
-
-      deposit_account_status:
-        'not_provisioned',
     };
 
-
-    // ========================================================
-    // DEVELOPMENT ONLY
-    // ========================================================
-
     if (
-      process.env.NODE_ENV !==
-      'production'
+      isDevelopment &&
+      otp
     ) {
-
       response.development_otp =
         otp;
     }
 
-
     return res.status(201).json(
-      response
+      response,
+    );
+  } catch (error) {
+    console.error(
+      'ZENIMONIES registration error:',
+      error,
     );
 
-
-  } catch (error) {
-
-    try {
-
-      await client.query(
-        'ROLLBACK'
-      );
-
-    } catch (rollbackError) {
-
-      console.error(
-        'Rollback error:',
-        rollbackError
-      );
+    if (client) {
+      try {
+        await client.query(
+          'ROLLBACK',
+        );
+      } catch (rollbackError) {
+        console.error(
+          'ZENIMONIES registration rollback error:',
+          rollbackError,
+        );
+      }
     }
 
-
-    console.error(
-      'Registration error:',
-      error
-    );
-
+    // ----------------------------------------------------------
+    // UNIQUE CONSTRAINT HANDLING
+    // ----------------------------------------------------------
 
     if (
-      error &&
-      error.code === '23505'
+      error?.code === '23505'
     ) {
-
       return res.status(409).json({
-        success: false,
         message:
-          'Email, phone number, or account number is already registered',
+          'An account with some of these details already exists.',
       });
     }
 
-
     return res.status(500).json({
-      success: false,
       message:
-        error?.message ||
-        'Unable to create account',
+        'Registration failed. Please try again.',
     });
-
-
   } finally {
-
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
-
-
+              
 // ============================================================
 // VERIFY PHONE OTP
 // ============================================================
