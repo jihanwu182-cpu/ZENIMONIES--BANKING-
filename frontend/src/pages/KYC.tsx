@@ -933,49 +933,71 @@ const buildStyles = (
     }
 
     @media (max-width: 650px) {
-      .zk-page {
-        padding:
-          12px
-          10px
-          30px;
-      }
+  .zk-page {
+    padding: 10px 10px 30px;
+  }
 
-      .zk-hero {
-        padding: 22px 18px;
-        border-radius: 20px;
-      }
+  .zk-hero {
+    padding: 18px 18px 20px;
+    border-radius: 20px;
+    margin-bottom: 14px;
+  }
 
-      .zk-hero h1 {
-        font-size: 24px;
-      }
+  .zk-brand {
+    font-size: 10px;
+    letter-spacing: .13em;
+    margin-bottom: 7px;
+  }
 
-      .zk-card {
-        padding: 17px;
-        border-radius: 17px;
-      }
+  .zk-hero h1 {
+    font-size: 24px;
+    line-height: 1.15;
+  }
 
-      .zk-card-heading {
-        flex-direction: column;
-      }
+  .zk-hero p {
+    margin-top: 7px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
 
-      .zk-current {
-        align-items: flex-start;
-      }
+  .zk-hero-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+  }
 
-      .zk-current-badge {
-        display: none;
-      }
+  .zk-pill {
+    padding: 6px 9px;
+    font-size: 10px;
+    line-height: 1.2;
+  }
 
-      .zk-methods {
-        grid-template-columns: 1fr;
-      }
+  .zk-card {
+    padding: 17px;
+    border-radius: 17px;
+  }
 
-      .zk-tier-limit-row {
-        align-items: flex-start;
-      }
-    }
-  `;
-};
+  .zk-card-heading {
+    flex-direction: column;
+  }
+
+  .zk-current {
+    align-items: flex-start;
+  }
+
+  .zk-current-badge {
+    display: none;
+  }
+
+  .zk-methods {
+    grid-template-columns: 1fr;
+  }
+
+  .zk-tier-limit-row {
+    align-items: flex-start;
+  }
+}
 
 // ============================================================
 // COMPONENT
