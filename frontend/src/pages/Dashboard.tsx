@@ -61,10 +61,7 @@ type UserData = {
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
 
- const {
-  darkMode,
-  setDarkMode,
-} = useTheme();
+ const { darkMode } = useTheme();
   const [showBalance, setShowBalance] =
     useState(true);
 
