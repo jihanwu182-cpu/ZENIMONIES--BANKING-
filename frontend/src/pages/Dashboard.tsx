@@ -2658,11 +2658,12 @@ if (
   border-color: #29473b !important;
 }
 
-/* Quick action labels */
+/* Quick Actions feature names */
 
 .zenimonies-dashboard.dark-mode
-  [style*="#20372e"] {
-  color: #d9e7e1 !important;
+  [style*="rgb(32, 55, 46)"] {
+  color: #dce9e3 !important;
+  font-weight: 750 !important;
 }
 
 /* More Services */
