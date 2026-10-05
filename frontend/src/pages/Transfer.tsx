@@ -13,6 +13,7 @@ import {
 import axios from 'axios';
 
 import BeneficiaryTabs from '../components/BeneficiaryTabs.tsx';
+import { useTheme } from '../theme/Theme.tsx';
 
 const API_URL =
   process.env.REACT_APP_API_URL ||
@@ -97,20 +98,45 @@ interface TransferResponse {
 const Transfer: React.FC = () => {
   const navigate = useNavigate();
 
-  const [phone, setPhone] = useState('');
-  const [amount, setAmount] = useState('');
-  const [narration, setNarration] = useState('');
+  /*
+   * ==========================================================
+   * GLOBAL ZENIMONIES THEME
+   * ==========================================================
+   */
+
+  const { darkMode: isDarkMode } =
+    useTheme();
+
+  /*
+   * ==========================================================
+   * FORM STATE
+   * ==========================================================
+   */
+
+  const [phone, setPhone] =
+    useState('');
+
+  const [amount, setAmount] =
+    useState('');
+
+  const [narration, setNarration] =
+    useState('');
 
   const [
     saveAsBeneficiary,
     setSaveAsBeneficiary,
   ] = useState(false);
 
-  const [recipient, setRecipient] =
-    useState<Recipient | null>(null);
+  const [
+    recipient,
+    setRecipient,
+  ] = useState<Recipient | null>(null);
 
-  const [checking, setChecking] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [checking, setChecking] =
+    useState(false);
+
+  const [sending, setSending] =
+    useState(false);
 
   /*
    * ==========================================================
@@ -133,11 +159,6 @@ const Transfer: React.FC = () => {
     setRecentRecipientsError,
   ] = useState('');
 
-  /*
-   * Saved beneficiaries remain collapsed
-   * until the user chooses to open them.
-   */
-
   const [
     showSavedBeneficiaries,
     setShowSavedBeneficiaries,
@@ -145,7 +166,7 @@ const Transfer: React.FC = () => {
 
   /*
    * ==========================================================
-   * TRANSACTION PIN STATE
+   * TRANSACTION PIN
    * ==========================================================
    */
 
@@ -169,9 +190,20 @@ const Transfer: React.FC = () => {
     setTransactionPinError,
   ] = useState('');
 
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [reference, setReference] = useState('');
+  /*
+   * ==========================================================
+   * GENERAL STATUS
+   * ==========================================================
+   */
+
+  const [error, setError] =
+    useState('');
+
+  const [success, setSuccess] =
+    useState('');
+
+  const [reference, setReference] =
+    useState('');
 
   const [balanceAfter, setBalanceAfter] =
     useState<number | null>(null);
@@ -188,9 +220,13 @@ const Transfer: React.FC = () => {
    */
 
   const token =
-    localStorage.getItem('zenimonies_token') ||
+    localStorage.getItem(
+      'zenimonies_token'
+    ) ||
     localStorage.getItem('token') ||
-    localStorage.getItem('access_token');
+    localStorage.getItem(
+      'access_token'
+    );
 
   /*
    * ==========================================================
@@ -199,7 +235,10 @@ const Transfer: React.FC = () => {
    */
 
   const cleanPhone = useMemo(
-    () => phone.replace(/\s+/g, '').trim(),
+    () =>
+      phone
+        .replace(/\s+/g, '')
+        .trim(),
     [phone]
   );
 
@@ -209,17 +248,20 @@ const Transfer: React.FC = () => {
    * ==========================================================
    */
 
-  const transferAmount = Number(amount);
+  const transferAmount =
+    Number(amount);
 
   /*
    * ==========================================================
-   * TRANSFER FEE PREVIEW
+   * TRANSFER FEE
    * ==========================================================
    */
 
   const transactionFee = useMemo(() => {
     if (
-      !Number.isFinite(transferAmount) ||
+      !Number.isFinite(
+        transferAmount
+      ) ||
       transferAmount < 20
     ) {
       return 0;
@@ -247,19 +289,26 @@ const Transfer: React.FC = () => {
    */
 
   const totalDebit =
-    Number.isFinite(transferAmount) &&
+    Number.isFinite(
+      transferAmount
+    ) &&
     transferAmount >= 20
-      ? transferAmount + transactionFee
+      ? transferAmount +
+        transactionFee
       : 0;
 
   /*
    * ==========================================================
-   * FORMAT MONEY
+   * FORMAT NAIRA
    * ==========================================================
    */
 
-  const formatNaira = (value: number) =>
-    `₦${Number(value || 0).toLocaleString(
+  const formatNaira = (
+    value: number
+  ) =>
+    `₦${Number(
+      value || 0
+    ).toLocaleString(
       'en-NG',
       {
         minimumFractionDigits: 2,
@@ -269,73 +318,102 @@ const Transfer: React.FC = () => {
 
   /*
    * ==========================================================
-   * FETCH RECENT RECIPIENTS
-   *
-   * Backend:
-   * GET /api/internal-transfers/recent
-   *
-   * This endpoint returns successful transfers
-   * only, with the most recent recipient first.
+   * LOAD RECENT RECIPIENTS
    * ==========================================================
    */
 
-  const loadRecentRecipients = useCallback(
-    async () => {
-      if (!token) {
-        navigate('/login');
-        return;
-      }
-
-      try {
-        setLoadingRecentRecipients(true);
-        setRecentRecipientsError('');
-
-        const response =
-          await axios.get<RecentRecipientsResponse>(
-            `${API_URL.replace(/\/+$/, '')}/api/internal-transfers/recent`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-
-        if (response.data?.success) {
-          setRecentRecipients(
-            Array.isArray(response.data.recipients)
-              ? response.data.recipients
-              : []
-          );
-        } else {
-          setRecentRecipients([]);
-          setRecentRecipientsError(
-            response.data?.message ||
-              'Unable to load recent recipients.'
-          );
-        }
-      } catch (err: any) {
-        if (err?.response?.status === 401) {
-          localStorage.removeItem('zenimonies_token');
-          localStorage.removeItem('token');
-          localStorage.removeItem('access_token');
-
+  const loadRecentRecipients =
+    useCallback(
+      async () => {
+        if (!token) {
           navigate('/login');
           return;
         }
 
-        setRecentRecipientsError(
-          err?.response?.data?.message ||
-            'Unable to load recent recipients. Please try again.'
-        );
-      } finally {
-        setLoadingRecentRecipients(false);
-      }
-    },
-    [token, navigate]
-  );
+        try {
+          setLoadingRecentRecipients(
+            true
+          );
+
+          setRecentRecipientsError(
+            ''
+          );
+
+          const response =
+            await axios.get<RecentRecipientsResponse>(
+              `${API_URL.replace(
+                /\/+$/,
+                ''
+              )}/api/internal-transfers/recent`,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+
+          if (
+            response.data?.success
+          ) {
+            setRecentRecipients(
+              Array.isArray(
+                response.data
+                  .recipients
+              )
+                ? response.data
+                    .recipients
+                : []
+            );
+          } else {
+            setRecentRecipients(
+              []
+            );
+
+            setRecentRecipientsError(
+              response.data
+                ?.message ||
+                'Unable to load recent recipients.'
+            );
+          }
+        } catch (err: any) {
+          if (
+            err?.response
+              ?.status === 401
+          ) {
+            localStorage.removeItem(
+              'zenimonies_token'
+            );
+
+            localStorage.removeItem(
+              'token'
+            );
+
+            localStorage.removeItem(
+              'access_token'
+            );
+
+            navigate('/login');
+            return;
+          }
+
+          setRecentRecipientsError(
+            err?.response
+              ?.data?.message ||
+              'Unable to load recent recipients. Please try again.'
+          );
+        } finally {
+          setLoadingRecentRecipients(
+            false
+          );
+        }
+      },
+      [token, navigate]
+    );
 
   /*
-   * Load recent recipients when the page opens.
+   * ==========================================================
+   * INITIAL LOAD
+   * ==========================================================
    */
 
   useEffect(() => {
@@ -344,239 +422,274 @@ const Transfer: React.FC = () => {
 
   /*
    * ==========================================================
-   * VERIFY PHONE NUMBER
-   *
-   * Used by:
-   * 1. Verify button
-   * 2. Recent recipient selection
-   * 3. Saved beneficiary selection
+   * VERIFY PHONE
    * ==========================================================
    */
 
-  const verifyPhoneNumber = async (
-    phoneNumber: string
-  ) => {
-    setError('');
-    setSuccess('');
-    setRecipient(null);
-    setReference('');
-    setBalanceAfter(null);
-    setRecipientAccountNumber('');
-
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-
-    const cleanedPhone = phoneNumber
-      .replace(/\s+/g, '')
-      .trim();
-
-    if (!cleanedPhone) {
-      setError(
-        'Please enter the recipient phone number.'
+  const verifyPhoneNumber =
+    async (
+      phoneNumber: string
+    ) => {
+      setError('');
+      setSuccess('');
+      setRecipient(null);
+      setReference('');
+      setBalanceAfter(null);
+      setRecipientAccountNumber(
+        ''
       );
-      return;
-    }
 
-    if (cleanedPhone.length < 10) {
-      setError(
-        'Please enter a valid Zenimonies phone number.'
-      );
-      return;
-    }
-
-    try {
-      setChecking(true);
-
-      const response =
-        await axios.get<LookupResponse>(
-          `${API_URL}/api/internal-transfers/user`,
-          {
-            params: {
-              phone: cleanedPhone,
-            },
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-      if (
-        response.data?.success &&
-        response.data?.user
-      ) {
-        const verifiedRecipient =
-          response.data.user;
-
-        setRecipient(verifiedRecipient);
-
-        setPhone(
-          verifiedRecipient.phone || cleanedPhone
-        );
-
-        setRecipientAccountNumber(
-          verifiedRecipient.account_number || ''
-        );
-
-        setSuccess(
-          'Zenimonies recipient verified.'
-        );
-      } else {
-        setError(
-          response.data?.message ||
-            'Unable to find this Zenimonies user.'
-        );
-      }
-    } catch (err: any) {
-      if (err?.response?.status === 401) {
-        localStorage.removeItem('zenimonies_token');
-        localStorage.removeItem('token');
-        localStorage.removeItem('access_token');
-
+      if (!token) {
         navigate('/login');
         return;
       }
 
-      setError(
-        err?.response?.data?.message ||
-          'Unable to verify this Zenimonies user.'
-      );
-    } finally {
-      setChecking(false);
-    }
-  };
+      const cleanedPhone =
+        phoneNumber
+          .replace(/\s+/g, '')
+          .trim();
+
+      if (!cleanedPhone) {
+        setError(
+          'Please enter the recipient phone number.'
+        );
+        return;
+      }
+
+      if (cleanedPhone.length < 10) {
+        setError(
+          'Please enter a valid Zenimonies phone number.'
+        );
+        return;
+      }
+
+      try {
+        setChecking(true);
+
+        const response =
+          await axios.get<LookupResponse>(
+            `${API_URL}/api/internal-transfers/user`,
+            {
+              params: {
+                phone: cleanedPhone,
+              },
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+        if (
+          response.data
+            ?.success &&
+          response.data?.user
+        ) {
+          const verifiedRecipient =
+            response.data.user;
+
+          setRecipient(
+            verifiedRecipient
+          );
+
+          setPhone(
+            verifiedRecipient.phone ||
+              cleanedPhone
+          );
+
+          setRecipientAccountNumber(
+            verifiedRecipient
+              .account_number ||
+              ''
+          );
+
+          setSuccess(
+            'Zenimonies recipient verified.'
+          );
+        } else {
+          setError(
+            response.data
+              ?.message ||
+              'Unable to find this Zenimonies user.'
+          );
+        }
+      } catch (err: any) {
+        if (
+          err?.response
+            ?.status === 401
+        ) {
+          localStorage.removeItem(
+            'zenimonies_token'
+          );
+
+          localStorage.removeItem(
+            'token'
+          );
+
+          localStorage.removeItem(
+            'access_token'
+          );
+
+          navigate('/login');
+          return;
+        }
+
+        setError(
+          err?.response
+            ?.data?.message ||
+            'Unable to verify this Zenimonies user.'
+        );
+      } finally {
+        setChecking(false);
+      }
+    };
 
   /*
    * ==========================================================
-   * VERIFY RECIPIENT BUTTON
+   * VERIFY BUTTON
    * ==========================================================
    */
 
-  const verifyRecipient = async () => {
-    await verifyPhoneNumber(cleanPhone);
-  };
+  const verifyRecipient =
+    async () => {
+      await verifyPhoneNumber(
+        cleanPhone
+      );
+    };
 
   /*
    * ==========================================================
-   * SELECT RECENT RECIPIENT
+   * RECENT RECIPIENT
    * ==========================================================
    */
 
-  const selectRecentRecipient = async (
-    item: RecentRecipient
-  ) => {
-    const selectedPhone = String(
-      item.phone || ''
-    )
-      .replace(/\s+/g, '')
-      .trim();
+  const selectRecentRecipient =
+    async (
+      item: RecentRecipient
+    ) => {
+      const selectedPhone =
+        String(item.phone || '')
+          .replace(/\s+/g, '')
+          .trim();
 
-    if (!selectedPhone) {
-      setError(
-        'This recent recipient does not have a valid phone number.'
+      if (!selectedPhone) {
+        setError(
+          'This recent recipient does not have a valid phone number.'
+        );
+        return;
+      }
+
+      setPhone(selectedPhone);
+      setAmount('');
+      setNarration('');
+      setRecipient(null);
+
+      setError('');
+      setSuccess('');
+      setReference('');
+      setBalanceAfter(null);
+      setRecipientAccountNumber(
+        ''
       );
-      return;
-    }
 
-    /*
-     * Clear previous transfer details
-     * before verifying the new recipient.
-     */
+      setTransactionPin('');
+      setTransactionPinError('');
+      setShowTransactionPin(
+        false
+      );
 
-    setPhone(selectedPhone);
-    setAmount('');
-    setNarration('');
-    setRecipient(null);
+      setSaveAsBeneficiary(false);
 
-    setError('');
-    setSuccess('');
-    setReference('');
-    setBalanceAfter(null);
-    setRecipientAccountNumber('');
+      setShowSavedBeneficiaries(
+        false
+      );
 
-    setTransactionPin('');
-    setTransactionPinError('');
-    setShowTransactionPin(false);
-
-    setSaveAsBeneficiary(false);
-
-    setShowSavedBeneficiaries(false);
-
-    await verifyPhoneNumber(selectedPhone);
-  };
+      await verifyPhoneNumber(
+        selectedPhone
+      );
+    };
 
   /*
    * ==========================================================
-   * SELECT SAVED BENEFICIARY
+   * SAVED BENEFICIARY
    * ==========================================================
    */
 
-  const selectSavedBeneficiary = async (
-    beneficiary: SavedBeneficiary
-  ) => {
-    const selectedPhone = String(
-      beneficiary.recipient_phone || ''
-    )
-      .replace(/\s+/g, '')
-      .trim();
+  const selectSavedBeneficiary =
+    async (
+      beneficiary: SavedBeneficiary
+    ) => {
+      const selectedPhone =
+        String(
+          beneficiary
+            .recipient_phone ||
+            ''
+        )
+          .replace(/\s+/g, '')
+          .trim();
 
-    if (!selectedPhone) {
-      setError(
-        'This saved beneficiary does not have a valid Zenimonies phone number.'
+      if (!selectedPhone) {
+        setError(
+          'This saved beneficiary does not have a valid Zenimonies phone number.'
+        );
+        return;
+      }
+
+      setPhone(selectedPhone);
+      setAmount('');
+      setNarration('');
+      setRecipient(null);
+
+      setError('');
+      setSuccess('');
+      setReference('');
+      setBalanceAfter(null);
+      setRecipientAccountNumber(
+        ''
       );
-      return;
-    }
 
-    /*
-     * Clear previous transfer details
-     * before verifying the selected beneficiary.
-     */
+      setTransactionPin('');
+      setTransactionPinError('');
+      setShowTransactionPin(
+        false
+      );
 
-    setPhone(selectedPhone);
-    setAmount('');
-    setNarration('');
-    setRecipient(null);
+      setSaveAsBeneficiary(false);
 
-    setError('');
-    setSuccess('');
-    setReference('');
-    setBalanceAfter(null);
-    setRecipientAccountNumber('');
+      setShowSavedBeneficiaries(
+        false
+      );
 
-    setTransactionPin('');
-    setTransactionPinError('');
-    setShowTransactionPin(false);
-
-    setSaveAsBeneficiary(false);
-
-    setShowSavedBeneficiaries(false);
-
-    await verifyPhoneNumber(selectedPhone);
-  };
+      await verifyPhoneNumber(
+        selectedPhone
+      );
+    };
 
   /*
    * ==========================================================
-   * PHONE INPUT CHANGE
+   * PHONE CHANGE
    * ==========================================================
    */
 
   const handlePhoneChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    setPhone(event.target.value);
+    setPhone(
+      event.target.value
+    );
 
     setRecipient(null);
     setSuccess('');
     setError('');
     setReference('');
     setBalanceAfter(null);
-    setRecipientAccountNumber('');
+    setRecipientAccountNumber(
+      ''
+    );
   };
 
   /*
    * ==========================================================
-   * SAVE SUCCESSFUL RECIPIENT
+   * SAVE BENEFICIARY AFTER SUCCESS
    * ==========================================================
    */
 
@@ -594,39 +707,43 @@ const Transfer: React.FC = () => {
         await axios.post(
           `${API_URL}/api/beneficiaries`,
           {
-            recipient_type: 'zenimonies',
-            name: recipient.full_name,
+            recipient_type:
+              'zenimonies',
+
+            name:
+              recipient.full_name,
+
             recipient_phone:
-              recipient.phone || cleanPhone,
+              recipient.phone ||
+              cleanPhone,
           },
           {
             headers: {
               Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
+              'Content-Type':
+                'application/json',
             },
           }
         );
 
-        setSaveAsBeneficiary(false);
+        setSaveAsBeneficiary(
+          false
+        );
       } catch (error: any) {
-        /*
-         * The transfer already succeeded.
-         * Saving a beneficiary must not reverse
-         * or mark the transfer as failed.
-         */
-
         console.error(
           'Unable to save beneficiary:',
           error
         );
 
-        setSaveAsBeneficiary(false);
+        setSaveAsBeneficiary(
+          false
+        );
       }
     };
 
   /*
    * ==========================================================
-   * SEND MONEY — OPEN PIN PROMPT
+   * OPEN TRANSACTION PIN
    * ==========================================================
    */
 
@@ -639,7 +756,9 @@ const Transfer: React.FC = () => {
     setSuccess('');
     setReference('');
     setBalanceAfter(null);
-    setTransactionPinError('');
+    setTransactionPinError(
+      ''
+    );
 
     if (!token) {
       navigate('/login');
@@ -654,7 +773,9 @@ const Transfer: React.FC = () => {
     }
 
     if (
-      !Number.isFinite(transferAmount) ||
+      !Number.isFinite(
+        transferAmount
+      ) ||
       transferAmount < 20
     ) {
       setError(
@@ -664,7 +785,9 @@ const Transfer: React.FC = () => {
     }
 
     if (
-      Math.round(transferAmount * 100) !==
+      Math.round(
+        transferAmount * 100
+      ) !==
       transferAmount * 100
     ) {
       setError(
@@ -673,7 +796,10 @@ const Transfer: React.FC = () => {
       return;
     }
 
-    if (transferAmount > 100000000) {
+    if (
+      transferAmount >
+      100000000
+    ) {
       setError(
         'Transfer amount is too large.'
       );
@@ -681,19 +807,27 @@ const Transfer: React.FC = () => {
     }
 
     setTransactionPin('');
-    setTransactionPinError('');
-    setShowTransactionPin(true);
+    setTransactionPinError(
+      ''
+    );
+
+    setShowTransactionPin(
+      true
+    );
   };
 
   /*
    * ==========================================================
-   * VERIFY TRANSACTION PIN + SEND
+   * VERIFY PIN + SEND
    * ==========================================================
    */
 
   const verifyTransactionPinAndSend =
     async () => {
-      setTransactionPinError('');
+      setTransactionPinError(
+        ''
+      );
+
       setError('');
       setSuccess('');
 
@@ -709,7 +843,11 @@ const Transfer: React.FC = () => {
         return;
       }
 
-      if (!/^\d{4}$/.test(transactionPin)) {
+      if (
+        !/^\d{4}$/.test(
+          transactionPin
+        )
+      ) {
         setTransactionPinError(
           'Please enter your 4-digit Transaction PIN.'
         );
@@ -717,125 +855,137 @@ const Transfer: React.FC = () => {
       }
 
       try {
-        setVerifyingTransactionPin(true);
+        setVerifyingTransactionPin(
+          true
+        );
+
         setSending(true);
 
         const response =
           await axios.post<TransferResponse>(
             `${API_URL}/api/internal-transfers`,
             {
-              recipient_phone: cleanPhone,
-              amount: transferAmount,
+              recipient_phone:
+                cleanPhone,
+
+              amount:
+                transferAmount,
+
               narration:
-                narration.trim() || undefined,
-              transaction_pin: transactionPin,
+                narration.trim() ||
+                undefined,
+
+              transaction_pin:
+                transactionPin,
             },
             {
               headers: {
                 Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
+                'Content-Type':
+                  'application/json',
               },
             }
           );
 
-        /*
-         * Clear PIN immediately.
-         */
-
         setTransactionPin('');
-        setShowTransactionPin(false);
-
-        /*
-         * ======================================================
-         * SUCCESSFUL TRANSFER
-         * ======================================================
-         */
+        setShowTransactionPin(
+          false
+        );
 
         if (
-          response.data?.success &&
-          response.data?.transfer
+          response.data
+            ?.success &&
+          response.data
+            ?.transfer
         ) {
           const transfer =
             response.data.transfer;
 
-          const receiptTransaction = {
-            id: transfer.id || '',
+          const receiptTransaction =
+            {
+              id:
+                transfer.id ||
+                '',
 
-            reference:
-              transfer.reference || '',
+              reference:
+                transfer.reference ||
+                '',
 
-            transaction_reference:
-              transfer.transaction_reference ||
-              transfer.reference ||
-              '',
+              transaction_reference:
+                transfer.transaction_reference ||
+                transfer.reference ||
+                '',
 
-            type: 'internal_transfer',
+              type:
+                'internal_transfer',
 
-            transaction_type:
-              'internal_transfer',
+              transaction_type:
+                'internal_transfer',
 
-            category: 'debit',
+              category:
+                'debit',
 
-            status:
-              transfer.status || 'pending',
+              status:
+                transfer.status ||
+                'pending',
 
-            amount: Number(
-              transfer.amount ?? 0
-            ),
+              amount: Number(
+                transfer.amount ??
+                  0
+              ),
 
-            transaction_fee: Number(
-              transfer.transaction_fee ?? 0
-            ),
+              transaction_fee:
+                Number(
+                  transfer.transaction_fee ??
+                    0
+                ),
 
-            total_debit: Number(
-              transfer.total_debit ?? 0
-            ),
+              total_debit:
+                Number(
+                  transfer.total_debit ??
+                    0
+                ),
 
-            currency:
-              transfer.currency || 'NGN',
+              currency:
+                transfer.currency ||
+                'NGN',
 
-            recipient_name:
-              transfer.recipient_name ||
-              recipient.full_name,
-
-            recipient_phone:
-              transfer.recipient_phone ||
-              recipient.phone,
-
-            recipient_account:
-              transfer.recipient_account || '',
-
-            recipient_bank:
-              transfer.recipient_bank ||
-              'Zenimonies',
-
-            balance_after: Number(
-              transfer.balance_after ?? 0
-            ),
-
-            created_at:
-              transfer.created_at || '',
-
-            description:
-              transfer.description ||
-              narration.trim() ||
-              `Transfer to ${
+              recipient_name:
                 transfer.recipient_name ||
-                recipient.full_name
-              }`,
-          };
+                recipient.full_name,
 
-          /*
-           * Save beneficiary only after
-           * the transfer has succeeded.
-           */
+              recipient_phone:
+                transfer.recipient_phone ||
+                recipient.phone,
+
+              recipient_account:
+                transfer.recipient_account ||
+                '',
+
+              recipient_bank:
+                transfer.recipient_bank ||
+                'Zenimonies',
+
+              balance_after:
+                Number(
+                  transfer.balance_after ??
+                    0
+                ),
+
+              created_at:
+                transfer.created_at ||
+                '',
+
+              description:
+                transfer.description ||
+                narration.trim() ||
+                `Transfer to ${
+                  transfer.recipient_name ||
+                  recipient.full_name
+                }`,
+            };
 
           await saveSuccessfulBeneficiary();
-
-          /*
-           * Refresh recent recipients so the
-           * next visit reflects the latest transfer.
-           */
 
           void loadRecentRecipients();
 
@@ -853,7 +1003,8 @@ const Transfer: React.FC = () => {
         }
 
         setError(
-          response.data?.message ||
+          response.data
+            ?.message ||
             'Transfer failed.'
         );
       } catch (err: any) {
@@ -862,10 +1013,6 @@ const Transfer: React.FC = () => {
 
         const code =
           err?.response?.data?.code;
-
-        /*
-         * TRANSACTION PIN ERRORS
-         */
 
         if (
           code ===
@@ -877,51 +1024,136 @@ const Transfer: React.FC = () => {
           status === 423
         ) {
           setTransactionPinError(
-            err?.response?.data?.message ||
+            err?.response
+              ?.data?.message ||
               'Transaction PIN verification failed.'
           );
 
-          setShowTransactionPin(true);
+          setShowTransactionPin(
+            true
+          );
 
           return;
         }
 
-        /*
-         * AUTHENTICATION EXPIRED
-         */
-
-        if (status === 401) {
+        if (
+          status === 401
+        ) {
           localStorage.removeItem(
             'zenimonies_token'
           );
 
-          localStorage.removeItem('token');
+          localStorage.removeItem(
+            'token'
+          );
 
           localStorage.removeItem(
             'access_token'
           );
 
           setTransactionPin('');
-          setShowTransactionPin(false);
+          setShowTransactionPin(
+            false
+          );
 
           navigate('/login');
 
           return;
         }
 
-        /*
-         * GENERAL ERROR
-         */
-
         setError(
-          err?.response?.data?.message ||
+          err?.response
+            ?.data?.message ||
             'Unable to complete the transfer.'
         );
       } finally {
-        setVerifyingTransactionPin(false);
+        setVerifyingTransactionPin(
+          false
+        );
+
         setSending(false);
       }
     };
+
+  /*
+   * ==========================================================
+   * THEME COLORS
+   * ==========================================================
+   */
+
+  const colors = isDarkMode
+    ? {
+        page: '#0d1712',
+        header: '#101c16',
+        card: '#101c16',
+        surface: '#15231c',
+        surfaceSoft: '#15231c',
+        surfacePressed: '#1a2d23',
+
+        border: '#294238',
+        divider: '#22372d',
+
+        text: '#f3f8f5',
+        textSecondary: '#a9b8b0',
+        textMuted: '#82958b',
+
+        green: '#079447',
+        greenBright: '#25c477',
+        greenDark: '#168c56',
+
+        greenSoft: '#123a29',
+        greenBorder: '#1c5139',
+
+        successBg: '#0d2a1e',
+        successBorder: '#1c4a35',
+        successText: '#8de0ba',
+
+        errorBg: '#2a1517',
+        errorBorder: '#5b292d',
+        errorText: '#ffb4aa',
+
+        input: '#15231c',
+        inputBorder: '#294238',
+
+        shadow:
+          '0 14px 40px rgba(0, 0, 0, 0.28)',
+      }
+    : {
+        page: '#f6faf8',
+        header: '#ffffff',
+        card: '#ffffff',
+        surface: '#ffffff',
+        surfaceSoft: '#f7faf8',
+        surfacePressed: '#eef8f3',
+
+        border: '#e7eee9',
+        divider: '#e6efea',
+
+        text: '#14251e',
+        textSecondary: '#7b8982',
+        textMuted: '#98a49f',
+
+        green: '#079447',
+        greenBright: '#0b995b',
+        greenDark: '#006d3b',
+
+        greenSoft: '#e9f8f1',
+        greenBorder: '#d4eee1',
+
+        successBg: '#e9f8f1',
+        successBorder: '#d4eee1',
+        successText: '#087c43',
+
+        errorBg: '#fff4f4',
+        errorBorder: '#f0cccc',
+        errorText: '#b42318',
+
+        input: '#ffffff',
+        inputBorder: '#d7e0dc',
+
+        shadow:
+          '0 12px 35px rgba(7, 59, 42, 0.07)',
+      };
 
   /*
    * ==========================================================
@@ -930,25 +1162,64 @@ const Transfer: React.FC = () => {
    */
 
   return (
-    <div style={styles.page}>
+    <div
+      className="zenimonies-page"
+      style={{
+        ...styles.page,
+        background:
+          colors.page,
+        color:
+          colors.text,
+      }}
+    >
+      {/* ======================================================
+          HEADER
+          ====================================================== */}
 
-      {/* HEADER */}
-
-      <header style={styles.header}>
+      <header
+        className="zenimonies-surface"
+        style={{
+          ...styles.header,
+          background:
+            colors.header,
+          borderBottom:
+            `1px solid ${colors.border}`,
+        }}
+      >
         <Link
           to="/"
-          style={styles.brandLink}
+          style={{
+            ...styles.brandLink,
+          }}
         >
-          <div style={styles.logo}>
+          <div
+            style={{
+              ...styles.logo,
+              background:
+                colors.green,
+            }}
+          >
             Z
           </div>
 
           <div>
-            <div style={styles.brandName}>
+            <div
+              style={{
+                ...styles.brandName,
+                color:
+                  colors.text,
+              }}
+            >
               Zenimonies
             </div>
 
-            <div style={styles.brandSubtitle}>
+            <div
+              style={{
+                ...styles.brandSubtitle,
+                color:
+                  colors.textMuted,
+              }}
+            >
               DIGITAL BANKING
             </div>
           </div>
@@ -956,32 +1227,77 @@ const Transfer: React.FC = () => {
 
         <Link
           to="/"
-          style={styles.homeLink}
+          style={{
+            ...styles.homeLink,
+            color:
+              colors.greenBright,
+          }}
         >
           Home
         </Link>
       </header>
 
-      {/* MAIN */}
+      {/* ======================================================
+          MAIN
+          ====================================================== */}
 
       <main style={styles.main}>
         <Link
           to="/"
-          style={styles.backLink}
+          style={{
+            ...styles.backLink,
+            color:
+              colors.textSecondary,
+          }}
         >
           ← Back to Dashboard
         </Link>
 
-        <section style={styles.card}>
-          <div style={styles.iconCircle}>
+        <section
+          className="zenimonies-surface"
+          style={{
+            ...styles.card,
+            background:
+              colors.card,
+            borderColor:
+              colors.border,
+            boxShadow:
+              colors.shadow,
+          }}
+        >
+          {/* ICON */}
+
+          <div
+            style={{
+              ...styles.iconCircle,
+              background:
+                colors.greenSoft,
+              color:
+                colors.greenBright,
+              border:
+                `1px solid ${colors.greenBorder}`,
+            }}
+          >
             ➤
           </div>
 
-          <h1 style={styles.title}>
+          <h1
+            style={{
+              ...styles.title,
+              color:
+                colors.text,
+            }}
+          >
             Send to ZENIMONIES
           </h1>
 
-          <p style={styles.subtitle}>
+          <p
+            style={{
+              ...styles.subtitle,
+              color:
+                colors.textSecondary,
+            }}
+          >
             Send money instantly to another
             active Zenimonies account.
           </p>
@@ -990,7 +1306,15 @@ const Transfer: React.FC = () => {
 
           {error && (
             <div
-              style={styles.errorBox}
+              style={{
+                ...styles.errorBox,
+                background:
+                  colors.errorBg,
+                borderColor:
+                  colors.errorBorder,
+                color:
+                  colors.errorText,
+              }}
               role="alert"
             >
               {error}
@@ -999,49 +1323,87 @@ const Transfer: React.FC = () => {
 
           {/* SUCCESS */}
 
-          {success && recipient && (
-            <div
-              style={styles.successBox}
-              role="status"
-            >
-              <strong>
-                {success}
-              </strong>
-            </div>
-          )}
+          {success &&
+            recipient && (
+              <div
+                style={{
+                  ...styles.successBox,
+                  background:
+                    colors.successBg,
+                  borderColor:
+                    colors.successBorder,
+                  color:
+                    colors.successText,
+                }}
+                role="status"
+              >
+                <strong>
+                  {success}
+                </strong>
+              </div>
+            )}
 
-          {/* ==================================================
-              PHONE
-              ================================================== */}
+          {/* PHONE */}
 
           <label
             htmlFor="phone"
-            style={styles.label}
+            style={{
+              ...styles.label,
+              color:
+                colors.text,
+            }}
           >
             Recipient Phone Number
           </label>
 
-          <div style={styles.verifyRow}>
+          <div
+            style={
+              styles.verifyRow
+            }
+          >
             <input
               id="phone"
               type="tel"
               inputMode="tel"
               autoComplete="tel"
               value={phone}
-              onChange={handlePhoneChange}
+              onChange={
+                handlePhoneChange
+              }
               placeholder="e.g. 08012345678"
-              disabled={checking || sending}
-              style={styles.input}
+              disabled={
+                checking ||
+                sending
+              }
+              style={{
+                ...styles.input,
+                background:
+                  colors.input,
+                borderColor:
+                  colors.inputBorder,
+                color:
+                  colors.text,
+              }}
             />
 
             <button
               type="button"
-              onClick={verifyRecipient}
-              disabled={checking || sending}
+              onClick={
+                verifyRecipient
+              }
+              disabled={
+                checking ||
+                sending
+              }
               style={{
                 ...styles.verifyButton,
+                background:
+                  isDarkMode
+                    ? '#17372d'
+                    : '#102a25',
                 opacity:
-                  checking || sending
+                  checking ||
+                  sending
                     ? 0.65
                     : 1,
               }}
@@ -1052,14 +1414,30 @@ const Transfer: React.FC = () => {
             </button>
           </div>
 
-          {/* ==================================================
-              VERIFIED RECIPIENT
-              ================================================== */}
+          {/* VERIFIED RECIPIENT */}
 
           {recipient && (
             <>
-              <div style={styles.recipientCard}>
-                <div style={styles.recipientAvatar}>
+              <div
+                style={{
+                  ...styles.recipientCard,
+                  background:
+                    colors.greenSoft,
+                  borderColor:
+                    colors.greenBorder,
+                }}
+              >
+                <div
+                  style={{
+                    ...styles.recipientAvatar,
+                    background:
+                      isDarkMode
+                        ? '#174b38'
+                        : '#d8f3e5',
+                    color:
+                      colors.greenBright,
+                  }}
+                >
                   {recipient.full_name
                     ? recipient.full_name
                         .charAt(0)
@@ -1067,23 +1445,62 @@ const Transfer: React.FC = () => {
                     : 'Z'}
                 </div>
 
-                <div style={styles.recipientInfo}>
-                  <div style={styles.recipientName}>
-                    {recipient.full_name}
+                <div
+                  style={
+                    styles.recipientInfo
+                  }
+                >
+                  <div
+                    style={{
+                      ...styles.recipientName,
+                      color:
+                        colors.text,
+                    }}
+                  >
+                    {
+                      recipient.full_name
+                    }
                   </div>
 
-                  <div style={styles.recipientPhone}>
-                    {recipient.phone}
+                  <div
+                    style={{
+                      ...styles.recipientPhone,
+                      color:
+                        colors.textSecondary,
+                    }}
+                  >
+                    {
+                      recipient.phone
+                    }
                   </div>
 
                   {recipient.account_number && (
-                    <div style={styles.recipientAccount}>
-                      Account: {recipient.account_number}
+                    <div
+                      style={{
+                        ...styles.recipientAccount,
+                        color:
+                          colors.greenBright,
+                      }}
+                    >
+                      Account:{' '}
+                      {
+                        recipient.account_number
+                      }
                     </div>
                   )}
                 </div>
 
-                <div style={styles.verifiedPill}>
+                <div
+                  style={{
+                    ...styles.verifiedPill,
+                    background:
+                      isDarkMode
+                        ? '#174b38'
+                        : '#dff5e9',
+                    color:
+                      colors.successText,
+                  }}
+                >
                   ✓ Verified
                 </div>
               </div>
@@ -1092,13 +1509,31 @@ const Transfer: React.FC = () => {
 
               <label
                 htmlFor="amount"
-                style={styles.label}
+                style={{
+                  ...styles.label,
+                  color:
+                    colors.text,
+                }}
               >
                 Amount (NGN)
               </label>
 
-              <div style={styles.amountWrap}>
-                <span style={styles.currency}>
+              <div
+                style={{
+                  ...styles.amountWrap,
+                  background:
+                    colors.input,
+                  borderColor:
+                    colors.inputBorder,
+                }}
+              >
+                <span
+                  style={{
+                    ...styles.currency,
+                    color:
+                      colors.greenBright,
+                  }}
+                >
                   ₦
                 </span>
 
@@ -1109,61 +1544,141 @@ const Transfer: React.FC = () => {
                   step="0.01"
                   inputMode="decimal"
                   value={amount}
-                  onChange={(event) => {
-                    setAmount(event.target.value);
+                  onChange={(
+                    event
+                  ) => {
+                    setAmount(
+                      event.target
+                        .value
+                    );
+
                     setSuccess('');
                     setError('');
                   }}
                   placeholder="20.00"
                   disabled={sending}
-                  style={styles.amountInput}
+                  style={{
+                    ...styles.amountInput,
+                    color:
+                      colors.text,
+                  }}
                 />
               </div>
 
               {/* TRANSFER FEE */}
 
-              {Number.isFinite(transferAmount) &&
-                transferAmount >= 20 && (
-                  <div style={styles.feeCard}>
-                    <div style={styles.feeHeader}>
+              {Number.isFinite(
+                transferAmount
+              ) &&
+                transferAmount >=
+                  20 && (
+                  <div
+                    style={{
+                      ...styles.feeCard,
+                      background:
+                        colors.surfaceSoft,
+                      borderColor:
+                        colors.border,
+                    }}
+                  >
+                    <div
+                      style={{
+                        ...styles.feeHeader,
+                        color:
+                          colors.text,
+                      }}
+                    >
                       <span>
                         Transfer Summary
                       </span>
 
-                      <span style={styles.feeBadge}>
+                      <span
+                        style={{
+                          ...styles.feeBadge,
+                          background:
+                            colors.greenSoft,
+                          color:
+                            colors.greenBright,
+                        }}
+                      >
                         NGN
                       </span>
                     </div>
 
-                    <div style={styles.feeRow}>
+                    <div
+                      style={{
+                        ...styles.feeRow,
+                        color:
+                          colors.textSecondary,
+                      }}
+                    >
                       <span>
                         Transfer amount
                       </span>
 
-                      <strong>
-                        {formatNaira(transferAmount)}
+                      <strong
+                        style={{
+                          color:
+                            colors.text,
+                        }}
+                      >
+                        {formatNaira(
+                          transferAmount
+                        )}
                       </strong>
                     </div>
 
-                    <div style={styles.feeRow}>
+                    <div
+                      style={{
+                        ...styles.feeRow,
+                        color:
+                          colors.textSecondary,
+                      }}
+                    >
                       <span>
                         Transfer fee
                       </span>
 
-                      <strong>
-                        {formatNaira(transactionFee)}
+                      <strong
+                        style={{
+                          color:
+                            colors.text,
+                        }}
+                      >
+                        {formatNaira(
+                          transactionFee
+                        )}
                       </strong>
                     </div>
 
-                    <div style={styles.feeDivider} />
+                    <div
+                      style={{
+                        ...styles.feeDivider,
+                        background:
+                          colors.divider,
+                      }}
+                    />
 
-                    <div style={styles.totalRow}>
+                    <div
+                      style={{
+                        ...styles.totalRow,
+                        color:
+                          colors.text,
+                      }}
+                    >
                       <span>
                         Total to be deducted
                       </span>
 
-                      <strong>
-                        {formatNaira(totalDebit)}
+                      <strong
+                        style={{
+                          color:
+                            colors.greenBright,
+                        }}
+                      >
+                        {formatNaira(
+                          totalDebit
+                        )}
                       </strong>
                     </div>
                   </div>
@@ -1173,7 +1688,11 @@ const Transfer: React.FC = () => {
 
               <label
                 htmlFor="narration"
-                style={styles.label}
+                style={{
+                  ...styles.label,
+                  color:
+                    colors.text,
+                }}
               >
                 Narration (optional)
               </label>
@@ -1184,22 +1703,43 @@ const Transfer: React.FC = () => {
                 maxLength={150}
                 value={narration}
                 onChange={(event) =>
-                  setNarration(event.target.value)
+                  setNarration(
+                    event.target.value
+                  )
                 }
                 placeholder="What is this transfer for?"
                 disabled={sending}
-                style={styles.inputFull}
+                style={{
+                  ...styles.inputFull,
+                  background:
+                    colors.input,
+                  borderColor:
+                    colors.inputBorder,
+                  color:
+                    colors.text,
+                }}
               />
 
-              {/* SAVE BENEFICIARY */}
+              {/* BENEFICIARY */}
 
-              <label style={styles.beneficiaryCheckbox}>
+              <label
+                style={{
+                  ...styles.beneficiaryCheckbox,
+                  color:
+                    colors.text,
+                }}
+              >
                 <input
                   type="checkbox"
-                  checked={saveAsBeneficiary}
-                  onChange={(event) =>
+                  checked={
+                    saveAsBeneficiary
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     setSaveAsBeneficiary(
-                      event.target.checked
+                      event.target
+                        .checked
                     )
                   }
                   disabled={sending}
@@ -1210,6 +1750,25 @@ const Transfer: React.FC = () => {
                 </span>
               </label>
 
+              {/* ERROR */}
+
+              {error && (
+                <div
+                  style={{
+                    ...styles.errorBox,
+                    background:
+                      colors.errorBg,
+                    borderColor:
+                      colors.errorBorder,
+                    color:
+                      colors.errorText,
+                  }}
+                  role="alert"
+                >
+                  {error}
+                </div>
+              )}
+
               {/* CONTINUE */}
 
               <button
@@ -1217,7 +1776,8 @@ const Transfer: React.FC = () => {
                 onClick={() => {
                   handleSend(
                     {
-                      preventDefault: () => {},
+                      preventDefault:
+                        () => {},
                     } as React.FormEvent<HTMLFormElement>
                   );
                 }}
@@ -1226,20 +1786,32 @@ const Transfer: React.FC = () => {
                   checking ||
                   !recipient ||
                   !amount ||
-                  !Number.isFinite(transferAmount) ||
-                  transferAmount < 20
+                  !Number.isFinite(
+                    transferAmount
+                  ) ||
+                  transferAmount <
+                    20
                 }
                 style={{
                   ...styles.sendButton,
+                  background:
+                    `linear-gradient(135deg, ${colors.green}, ${colors.greenBright})`,
                   opacity:
                     sending ||
                     checking ||
                     !recipient ||
                     !amount ||
-                    !Number.isFinite(transferAmount) ||
-                    transferAmount < 20
+                    !Number.isFinite(
+                      transferAmount
+                    ) ||
+                    transferAmount <
+                      20
                       ? 0.55
                       : 1,
+                  boxShadow:
+                    isDarkMode
+                      ? '0 8px 22px rgba(37, 196, 119, 0.12)'
+                      : '0 8px 20px rgba(8, 127, 91, 0.18)',
                 }}
               >
                 {sending
@@ -1250,92 +1822,231 @@ const Transfer: React.FC = () => {
               </button>
 
               {/* ==================================================
-                  TRANSACTION PIN DIALOG
+                  TRANSACTION PIN
                   ================================================== */}
 
               {showTransactionPin && (
                 <div
-                  style={styles.pinOverlay}
+                  style={{
+                    ...styles.pinOverlay,
+                    background:
+                      isDarkMode
+                        ? 'rgba(0, 0, 0, 0.68)'
+                        : 'rgba(10, 25, 19, 0.55)',
+                  }}
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby="transaction-pin-title"
                 >
-                  <div style={styles.pinDialog}>
-                    <div style={styles.pinIcon}>
+                  <div
+                    style={{
+                      ...styles.pinDialog,
+                      background:
+                        colors.card,
+                      border:
+                        `1px solid ${colors.border}`,
+                      boxShadow:
+                        isDarkMode
+                          ? '0 25px 70px rgba(0, 0, 0, 0.55)'
+                          : '0 25px 70px rgba(0, 0, 0, 0.22)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        ...styles.pinIcon,
+                        background:
+                          colors.greenSoft,
+                        border:
+                          `1px solid ${colors.greenBorder}`,
+                      }}
+                    >
                       🔐
                     </div>
 
                     <h2
                       id="transaction-pin-title"
-                      style={styles.pinTitle}
+                      style={{
+                        ...styles.pinTitle,
+                        color:
+                          colors.text,
+                      }}
                     >
                       Confirm Transfer
                     </h2>
 
-                    <p style={styles.pinSubtitle}>
-                      Review the transfer details
-                      below, then enter your 4-digit
-                      Transaction PIN to authorize it.
+                    <p
+                      style={{
+                        ...styles.pinSubtitle,
+                        color:
+                          colors.textSecondary,
+                      }}
+                    >
+                      Review the transfer
+                      details below, then
+                      enter your 4-digit
+                      Transaction PIN to
+                      authorize it.
                     </p>
 
-                    <div style={styles.pinSummary}>
-                      <div style={styles.pinSummaryRow}>
-                        <span>Recipient</span>
+                    <div
+                      style={{
+                        ...styles.pinSummary,
+                        background:
+                          colors.surfaceSoft,
+                        borderColor:
+                          colors.border,
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...styles.pinSummaryRow,
+                          color:
+                            colors.textSecondary,
+                        }}
+                      >
+                        <span>
+                          Recipient
+                        </span>
 
-                        <strong>
-                          {recipient?.full_name}
-                        </strong>
-                      </div>
-
-                      <div style={styles.pinSummaryRow}>
-                        <span>Phone</span>
-
-                        <strong>
-                          {recipient?.phone}
-                        </strong>
-                      </div>
-
-                      <div style={styles.pinSummaryRow}>
-                        <span>Transfer amount</span>
-
-                        <strong>
-                          {formatNaira(transferAmount)}
-                        </strong>
-                      </div>
-
-                      <div style={styles.pinSummaryRow}>
-                        <span>Transfer fee</span>
-
-                        <strong>
-                          {formatNaira(transactionFee)}
+                        <strong
+                          style={{
+                            color:
+                              colors.text,
+                          }}
+                        >
+                          {
+                            recipient?.full_name
+                          }
                         </strong>
                       </div>
 
                       <div
-                        style={styles.pinSummaryDivider}
+                        style={{
+                          ...styles.pinSummaryRow,
+                          color:
+                            colors.textSecondary,
+                        }}
+                      >
+                        <span>
+                          Phone
+                        </span>
+
+                        <strong
+                          style={{
+                            color:
+                              colors.text,
+                          }}
+                        >
+                          {
+                            recipient?.phone
+                          }
+                        </strong>
+                      </div>
+
+                      <div
+                        style={{
+                          ...styles.pinSummaryRow,
+                          color:
+                            colors.textSecondary,
+                        }}
+                      >
+                        <span>
+                          Transfer amount
+                        </span>
+
+                        <strong
+                          style={{
+                            color:
+                              colors.text,
+                          }}
+                        >
+                          {formatNaira(
+                            transferAmount
+                          )}
+                        </strong>
+                      </div>
+
+                      <div
+                        style={{
+                          ...styles.pinSummaryRow,
+                          color:
+                            colors.textSecondary,
+                        }}
+                      >
+                        <span>
+                          Transfer fee
+                        </span>
+
+                        <strong
+                          style={{
+                            color:
+                              colors.text,
+                          }}
+                        >
+                          {formatNaira(
+                            transactionFee
+                          )}
+                        </strong>
+                      </div>
+
+                      <div
+                        style={{
+                          ...styles.pinSummaryDivider,
+                          background:
+                            colors.divider,
+                        }}
                       />
 
-                      <div style={styles.pinTotalRow}>
-                        <span>Total deducted</span>
+                      <div
+                        style={{
+                          ...styles.pinTotalRow,
+                          color:
+                            colors.text,
+                        }}
+                      >
+                        <span>
+                          Total deducted
+                        </span>
 
-                        <strong>
-                          {formatNaira(totalDebit)}
+                        <strong
+                          style={{
+                            color:
+                              colors.greenBright,
+                          }}
+                        >
+                          {formatNaira(
+                            totalDebit
+                          )}
                         </strong>
                       </div>
                     </div>
 
                     {transactionPinError && (
                       <div
-                        style={styles.pinError}
+                        style={{
+                          ...styles.pinError,
+                          background:
+                            colors.errorBg,
+                          borderColor:
+                            colors.errorBorder,
+                          color:
+                            colors.errorText,
+                        }}
                         role="alert"
                       >
-                        {transactionPinError}
+                        {
+                          transactionPinError
+                        }
                       </div>
                     )}
 
                     <label
                       htmlFor="transaction-pin"
-                      style={styles.pinLabel}
+                      style={{
+                        ...styles.pinLabel,
+                        color:
+                          colors.text,
+                      }}
                     >
                       Transaction PIN
                     </label>
@@ -1346,32 +2057,79 @@ const Transfer: React.FC = () => {
                       inputMode="numeric"
                       autoComplete="off"
                       maxLength={4}
-                      value={transactionPin}
-                      onChange={(event) => {
+                      value={
+                        transactionPin
+                      }
+                      onChange={(
+                        event
+                      ) => {
                         const value =
                           event.target.value
-                            .replace(/\D/g, '')
-                            .slice(0, 4);
+                            .replace(
+                              /\D/g,
+                              ''
+                            )
+                            .slice(
+                              0,
+                              4
+                            );
 
-                        setTransactionPin(value);
-                        setTransactionPinError('');
+                        setTransactionPin(
+                          value
+                        );
+
+                        setTransactionPinError(
+                          ''
+                        );
                       }}
                       placeholder="••••"
-                      disabled={verifyingTransactionPin}
-                      style={styles.pinInput}
+                      disabled={
+                        verifyingTransactionPin
+                      }
+                      style={{
+                        ...styles.pinInput,
+                        color:
+                          colors.text,
+                        background:
+                          colors.input,
+                        borderColor:
+                          colors.inputBorder,
+                      }}
                       autoFocus
                     />
 
-                    <div style={styles.pinActions}>
+                    <div
+                      style={
+                        styles.pinActions
+                      }
+                    >
                       <button
                         type="button"
                         onClick={() => {
-                          setShowTransactionPin(false);
-                          setTransactionPin('');
-                          setTransactionPinError('');
+                          setShowTransactionPin(
+                            false
+                          );
+
+                          setTransactionPin(
+                            ''
+                          );
+
+                          setTransactionPinError(
+                            ''
+                          );
                         }}
-                        disabled={verifyingTransactionPin}
-                        style={styles.cancelPinButton}
+                        disabled={
+                          verifyingTransactionPin
+                        }
+                        style={{
+                          ...styles.cancelPinButton,
+                          background:
+                            colors.surfaceSoft,
+                          borderColor:
+                            colors.border,
+                          color:
+                            colors.textSecondary,
+                        }}
                       >
                         Cancel
                       </button>
@@ -1383,13 +2141,17 @@ const Transfer: React.FC = () => {
                         }
                         disabled={
                           verifyingTransactionPin ||
-                          transactionPin.length !== 4
+                          transactionPin.length !==
+                            4
                         }
                         style={{
                           ...styles.confirmPinButton,
+                          background:
+                            `linear-gradient(135deg, ${colors.green}, ${colors.greenBright})`,
                           opacity:
                             verifyingTransactionPin ||
-                            transactionPin.length !== 4
+                            transactionPin.length !==
+                              4
                               ? 0.55
                               : 1,
                         }}
@@ -1400,10 +2162,17 @@ const Transfer: React.FC = () => {
                       </button>
                     </div>
 
-                    <div style={styles.pinSecurity}>
-                      🔒 Your Transaction PIN is
-                      securely verified and is never
-                      stored on this device.
+                    <div
+                      style={{
+                        ...styles.pinSecurity,
+                        color:
+                          colors.textMuted,
+                      }}
+                    >
+                      🔒 Your Transaction PIN
+                      is securely verified
+                      and is never stored on
+                      this device.
                     </div>
                   </div>
                 </div>
@@ -1411,34 +2180,68 @@ const Transfer: React.FC = () => {
 
               {/* SECURITY */}
 
-              <div style={styles.securityNote}>
-                <span style={styles.lock}>
+              <div
+                style={{
+                  ...styles.securityNote,
+                  color:
+                    colors.textMuted,
+                }}
+              >
+                <span
+                  style={styles.lock}
+                >
                   🔒
                 </span>
 
                 <span>
-                  Your transfer is processed
-                  securely between Zenimonies
+                  Your transfer is
+                  processed securely
+                  between Zenimonies
                   accounts.
                 </span>
               </div>
             </>
           )}
-          
+
           {/* ==================================================
               RECENT RECIPIENTS
               ================================================== */}
 
-          <div style={styles.recentSection}>
-            <div style={styles.recentHeader}>
+          <div
+            style={{
+              ...styles.recentSection,
+              background:
+                colors.surfaceSoft,
+              borderColor:
+                colors.border,
+            }}
+          >
+            <div
+              style={
+                styles.recentHeader
+              }
+            >
               <div>
-                <h2 style={styles.recentTitle}>
+                <h2
+                  style={{
+                    ...styles.recentTitle,
+                    color:
+                      colors.text,
+                  }}
+                >
                   Recent Recipients
                 </h2>
 
-                <p style={styles.recentSubtitle}>
-                  Quickly send money to people you've
-                  transferred to before.
+                <p
+                  style={{
+                    ...styles.recentSubtitle,
+                    color:
+                      colors.textMuted,
+                  }}
+                >
+                  Quickly send money to
+                  people you've transferred
+                  to before.
                 </p>
               </div>
 
@@ -1447,35 +2250,79 @@ const Transfer: React.FC = () => {
                 onClick={() => {
                   void loadRecentRecipients();
                 }}
-                disabled={loadingRecentRecipients}
-                style={styles.refreshButton}
+                disabled={
+                  loadingRecentRecipients
+                }
+                style={{
+                  ...styles.refreshButton,
+                  background:
+                    colors.input,
+                  borderColor:
+                    colors.border,
+                  color:
+                    colors.greenBright,
+                }}
                 title="Refresh recent recipients"
               >
-                {loadingRecentRecipients ? '...' : '↻'}
+                {loadingRecentRecipients
+                  ? '...'
+                  : '↻'}
               </button>
             </div>
 
             {loadingRecentRecipients &&
-              recentRecipients.length === 0 && (
-                <div style={styles.recentEmpty}>
-                  <div style={styles.loadingDot} />
+              recentRecipients.length ===
+                0 && (
+                <div
+                  style={{
+                    ...styles.recentEmpty,
+                    color:
+                      colors.textMuted,
+                  }}
+                >
+                  <div
+                    style={{
+                      ...styles.loadingDot,
+                      border:
+                        `3px solid ${colors.border}`,
+                      borderTop:
+                        `3px solid ${colors.greenBright}`,
+                    }}
+                  />
+
                   Loading recent recipients...
                 </div>
               )}
 
             {recentRecipientsError && (
               <div
-                style={styles.recentError}
+                style={{
+                  ...styles.recentError,
+                  background:
+                    colors.errorBg,
+                  borderColor:
+                    colors.errorBorder,
+                  color:
+                    colors.errorText,
+                }}
                 role="alert"
               >
-                <span>{recentRecipientsError}</span>
+                <span>
+                  {
+                    recentRecipientsError
+                  }
+                </span>
 
                 <button
                   type="button"
                   onClick={() => {
                     void loadRecentRecipients();
                   }}
-                  style={styles.retryButton}
+                  style={{
+                    ...styles.retryButton,
+                    background:
+                      colors.errorText,
+                  }}
                 >
                   Retry
                 </button>
@@ -1484,27 +2331,63 @@ const Transfer: React.FC = () => {
 
             {!loadingRecentRecipients &&
               !recentRecipientsError &&
-              recentRecipients.length === 0 && (
-                <div style={styles.recentEmpty}>
-                  <div style={styles.emptyIcon}>
+              recentRecipients.length ===
+                0 && (
+                <div
+                  style={{
+                    ...styles.recentEmpty,
+                    color:
+                      colors.textMuted,
+                  }}
+                >
+                  <div
+                    style={{
+                      ...styles.emptyIcon,
+                      background:
+                        colors.greenSoft,
+                      color:
+                        colors.greenBright,
+                    }}
+                  >
                     ↗
                   </div>
 
-                  <strong style={styles.emptyTitle}>
+                  <strong
+                    style={{
+                      ...styles.emptyTitle,
+                      color:
+                        colors.text,
+                    }}
+                  >
                     No recent recipients yet
                   </strong>
 
-                  <span style={styles.emptyText}>
-                    Your successful Zenimonies transfers
+                  <span
+                    style={{
+                      ...styles.emptyText,
+                      color:
+                        colors.textMuted,
+                    }}
+                  >
+                    Your successful
+                    Zenimonies transfers
                     will appear here.
                   </span>
                 </div>
               )}
 
-            {recentRecipients.length > 0 && (
-              <div style={styles.recentList}>
+            {recentRecipients.length >
+              0 && (
+              <div
+                style={
+                  styles.recentList
+                }
+              >
                 {recentRecipients.map(
-                  (item, index) => (
+                  (
+                    item,
+                    index
+                  ) => (
                     <button
                       key={
                         item.phone ||
@@ -1513,46 +2396,101 @@ const Transfer: React.FC = () => {
                       }
                       type="button"
                       onClick={() => {
-                        void selectRecentRecipient(item);
+                        void selectRecentRecipient(
+                          item
+                        );
                       }}
-                      disabled={checking || sending}
-                      style={styles.recentItem}
+                      disabled={
+                        checking ||
+                        sending
+                      }
+                      style={{
+                        ...styles.recentItem,
+                        background:
+                          colors.card,
+                        borderColor:
+                          colors.border,
+                      }}
                     >
-                      <div style={styles.recentAvatar}>
+                      <div
+                        style={{
+                          ...styles.recentAvatar,
+                          background:
+                            isDarkMode
+                              ? '#174b38'
+                              : '#e1f5e9',
+                          color:
+                            colors.greenBright,
+                        }}
+                      >
                         {item.full_name
                           ? item.full_name
-                              .charAt(0)
+                              .charAt(
+                                0
+                              )
                               .toUpperCase()
                           : 'Z'}
                       </div>
 
-                      <div style={styles.recentInfo}>
-                        <strong style={styles.recentName}>
+                      <div
+                        style={
+                          styles.recentInfo
+                        }
+                      >
+                        <strong
+                          style={{
+                            ...styles.recentName,
+                            color:
+                              colors.text,
+                          }}
+                        >
                           {item.full_name ||
                             'Zenimonies User'}
                         </strong>
 
-                        <span style={styles.recentPhone}>
-                          {item.phone}
+                        <span
+                          style={{
+                            ...styles.recentPhone,
+                            color:
+                              colors.textSecondary,
+                          }}
+                        >
+                          {
+                            item.phone
+                          }
                         </span>
 
                         {item.completed_at && (
-                          <span style={styles.recentDate}>
+                          <span
+                            style={{
+                              ...styles.recentDate,
+                              color:
+                                colors.textMuted,
+                            }}
+                          >
                             {new Date(
                               item.completed_at
                             ).toLocaleDateString(
                               'en-NG',
                               {
                                 day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
+                                month:
+                                  'short',
+                                year:
+                                  'numeric',
                               }
                             )}
                           </span>
                         )}
                       </div>
 
-                      <span style={styles.recentArrow}>
+                      <span
+                        style={{
+                          ...styles.recentArrow,
+                          color:
+                            colors.greenBright,
+                        }}
+                      >
                         ›
                       </span>
                     </button>
@@ -1561,44 +2499,97 @@ const Transfer: React.FC = () => {
               </div>
             )}
 
-            {/* ==================================================
-                SAVED BENEFICIARIES
-                ================================================== */}
+            {/* SAVED BENEFICIARIES */}
 
-            <div style={styles.savedSection}>
+            <div
+              style={{
+                ...styles.savedSection,
+                background:
+                  colors.card,
+                borderColor:
+                  colors.border,
+              }}
+            >
               <button
                 type="button"
                 onClick={() => {
                   setShowSavedBeneficiaries(
-                    (previous) => !previous
+                    (previous) =>
+                      !previous
                   );
                 }}
-                style={styles.savedToggle}
-                aria-expanded={showSavedBeneficiaries}
+                style={{
+                  ...styles.savedToggle,
+                  background:
+                    colors.surfaceSoft,
+                }}
+                aria-expanded={
+                  showSavedBeneficiaries
+                }
               >
-                <div style={styles.savedToggleLeft}>
-                  <div style={styles.savedIcon}>
+                <div
+                  style={
+                    styles.savedToggleLeft
+                  }
+                >
+                  <div
+                    style={{
+                      ...styles.savedIcon,
+                      background:
+                        colors.greenSoft,
+                      color:
+                        colors.greenBright,
+                    }}
+                  >
                     ♧
                   </div>
 
                   <div>
-                    <strong style={styles.savedTitle}>
+                    <strong
+                      style={{
+                        ...styles.savedTitle,
+                        color:
+                          colors.text,
+                      }}
+                    >
                       Saved Beneficiaries
                     </strong>
 
-                    <span style={styles.savedSubtitle}>
+                    <span
+                      style={{
+                        ...styles.savedSubtitle,
+                        color:
+                          colors.textMuted,
+                      }}
+                    >
                       Your saved recipients
                     </span>
                   </div>
                 </div>
 
-                <span style={styles.savedChevron}>
-                  {showSavedBeneficiaries ? '−' : '+'}
+                <span
+                  style={{
+                    ...styles.savedChevron,
+                    color:
+                      colors.greenBright,
+                  }}
+                >
+                  {showSavedBeneficiaries
+                    ? '−'
+                    : '+'}
                 </span>
               </button>
 
               {showSavedBeneficiaries && (
-                <div style={styles.savedContent}>
+                <div
+                  style={{
+                    ...styles.savedContent,
+                    borderTopColor:
+                      colors.border,
+                    background:
+                      colors.card,
+                  }}
+                >
                   <BeneficiaryTabs
                     recipientType="zenimonies"
                     onSelect={(
@@ -1613,9 +2604,38 @@ const Transfer: React.FC = () => {
               )}
             </div>
           </div>
-
         </section>
       </main>
+
+      {/* ======================================================
+          GLOBAL PAGE HELPERS
+          ====================================================== */}
+
+      <style>
+        {`
+          .zenimonies-page input::placeholder {
+            color: ${
+              isDarkMode
+                ? '#71857b'
+                : '#98a49f'
+            };
+            opacity: 1;
+          }
+
+          .zenimonies-page input,
+          .zenimonies-page select {
+            color-scheme: ${
+              isDarkMode
+                ? 'dark'
+                : 'light'
+            };
+          }
+
+          .zenimonies-page button {
+            -webkit-tap-highlight-color: transparent;
+          }
+        `}
+      </style>
     </div>
   );
 };
@@ -1626,25 +2646,28 @@ const Transfer: React.FC = () => {
  * ============================================================
  */
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
   page: {
     minHeight: '100vh',
-    background: '#f6faf8',
-    color: '#10251d',
     fontFamily:
       'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
     paddingBottom: 40,
+    transition:
+      'background-color 0.2s ease, color 0.2s ease',
   },
 
   header: {
     height: 68,
-    background: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '0 5%',
-    borderBottom: '1px solid #e8efeb',
     boxSizing: 'border-box',
+    transition:
+      'background-color 0.2s ease, border-color 0.2s ease',
   },
 
   brandLink: {
@@ -1658,7 +2681,6 @@ const styles: Record<string, React.CSSProperties> = {
     width: 42,
     height: 42,
     borderRadius: 12,
-    background: '#079447',
     color: '#ffffff',
     display: 'flex',
     alignItems: 'center',
@@ -1668,20 +2690,17 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   brandName: {
-    color: '#10251d',
     fontSize: 18,
     fontWeight: 800,
   },
 
   brandSubtitle: {
-    color: '#9aa7a1',
     fontSize: 8,
     letterSpacing: 1.7,
     marginTop: 2,
   },
 
   homeLink: {
-    color: '#087c43',
     textDecoration: 'none',
     fontSize: 13,
     fontWeight: 800,
@@ -1696,52 +2715,46 @@ const styles: Record<string, React.CSSProperties> = {
   backLink: {
     display: 'inline-block',
     marginBottom: 16,
-    color: '#66756e',
     textDecoration: 'none',
     fontSize: 13,
     fontWeight: 700,
   },
 
   card: {
-    background: '#ffffff',
-    border: '1px solid #e3ebe7',
     borderRadius: 24,
     padding: 24,
-    boxShadow:
-      '0 12px 35px rgba(22, 61, 46, 0.07)',
+    border: '1px solid',
+    transition:
+      'background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
   },
 
   iconCircle: {
     width: 58,
     height: 58,
     borderRadius: 18,
-    background: '#e7f8ef',
-    color: '#079447',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: 28,
     fontWeight: 800,
     marginBottom: 16,
+    boxSizing: 'border-box',
   },
 
   title: {
     margin: 0,
-    color: '#10251d',
     fontSize: 28,
     fontWeight: 850,
   },
 
   subtitle: {
     margin: '7px 0 22px',
-    color: '#748079',
     fontSize: 14,
     lineHeight: 1.55,
   },
 
   label: {
     display: 'block',
-    color: '#263d33',
     fontSize: 13,
     fontWeight: 800,
     marginBottom: 7,
@@ -1756,37 +2769,366 @@ const styles: Record<string, React.CSSProperties> = {
   input: {
     flex: 1,
     minWidth: 0,
-    border: '1px solid #d7e0dc',
+    border: '1px solid',
     borderRadius: 12,
     padding: '13px 14px',
     fontSize: 14,
     outline: 'none',
     boxSizing: 'border-box',
-    background: '#ffffff',
-    color: '#10251d',
   },
 
   verifyButton: {
     border: 'none',
     borderRadius: 12,
     padding: '0 17px',
-    background: '#10251d',
     color: '#ffffff',
     fontWeight: 800,
     cursor: 'pointer',
     whiteSpace: 'nowrap',
   },
 
+  recipientCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 11,
+    borderRadius: 15,
+    padding: 12,
+    marginBottom: 18,
+    border: '1px solid',
+  },
+
+  recipientAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800,
+    fontSize: 16,
+    flexShrink: 0,
+  },
+
+  recipientInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  recipientName: {
+    fontSize: 14,
+    fontWeight: 800,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+
+  recipientPhone: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  recipientAccount: {
+    fontSize: 12,
+    fontWeight: 700,
+    marginTop: 3,
+  },
+
+  verifiedPill: {
+    borderRadius: 999,
+    padding: '6px 9px',
+    fontSize: 10,
+    fontWeight: 800,
+    whiteSpace: 'nowrap',
+  },
+
+  amountWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    border: '1px solid',
+    borderRadius: 12,
+    marginBottom: 15,
+    overflow: 'hidden',
+  },
+
+  currency: {
+    paddingLeft: 14,
+    fontSize: 20,
+    fontWeight: 800,
+  },
+
+  amountInput: {
+    flex: 1,
+    minWidth: 0,
+    border: 'none',
+    outline: 'none',
+    padding: '13px 12px',
+    fontSize: 19,
+    fontWeight: 800,
+    background: 'transparent',
+  },
+
+  feeCard: {
+    border: '1px solid',
+    borderRadius: 15,
+    padding: 14,
+    marginBottom: 19,
+  },
+
+  feeHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    fontSize: 13,
+    fontWeight: 850,
+    marginBottom: 8,
+  },
+
+  feeBadge: {
+    borderRadius: 999,
+    padding: '4px 8px',
+    fontSize: 9,
+    fontWeight: 850,
+  },
+
+  feeRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    padding: '6px 0',
+    fontSize: 12.5,
+  },
+
+  feeDivider: {
+    height: 1,
+    margin: '5px 0',
+  },
+
+  totalRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    padding: '7px 0 2px',
+    fontSize: 14,
+    fontWeight: 850,
+  },
+
+  inputFull: {
+    width: '100%',
+    border: '1px solid',
+    borderRadius: 12,
+    padding: '13px 14px',
+    fontSize: 14,
+    outline: 'none',
+    boxSizing: 'border-box',
+    marginBottom: 20,
+  },
+
+  beneficiaryCheckbox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 18,
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+
+  sendButton: {
+    width: '100%',
+    border: 'none',
+    borderRadius: 13,
+    padding: '14px 16px',
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: 800,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  errorBox: {
+    borderRadius: 13,
+    padding: 13,
+    marginBottom: 16,
+    border: '1px solid',
+    fontSize: 13,
+    fontWeight: 700,
+    lineHeight: 1.45,
+  },
+
+  successBox: {
+    borderRadius: 13,
+    padding: 13,
+    marginBottom: 16,
+    border: '1px solid',
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+
   /*
+   * ==========================================================
+   * PIN
+   * ==========================================================
+   */
+
+  pinOverlay: {
+    position: 'fixed',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    zIndex: 9999,
+    boxSizing: 'border-box',
+  },
+
+  pinDialog: {
+    width: 'min(420px, 100%)',
+    maxHeight: '90vh',
+    overflowY: 'auto',
+    borderRadius: 24,
+    padding: 24,
+    boxSizing: 'border-box',
+    transition:
+      'background-color 0.2s ease, border-color 0.2s ease',
+  },
+
+  pinIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 17,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 25,
+    marginBottom: 15,
+    boxSizing: 'border-box',
+  },
+
+  pinTitle: {
+    margin: 0,
+    fontSize: 23,
+    fontWeight: 850,
+  },
+
+  pinSubtitle: {
+    margin: '7px 0 18px',
+    fontSize: 13,
+    lineHeight: 1.5,
+  },
+
+  pinSummary: {
+    borderRadius: 14,
+    padding: 13,
+    marginBottom: 17,
+    border: '1px solid',
+  },
+
+  pinSummaryRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: '5px 0',
+    fontSize: 12,
+  },
+
+  pinSummaryDivider: {
+    height: 1,
+    margin: '7px 0',
+  },
+
+  pinTotalRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: '5px 0 2px',
+    fontSize: 14,
+    fontWeight: 850,
+  },
+
+  pinLabel: {
+    display: 'block',
+    fontSize: 13,
+    fontWeight: 800,
+    marginBottom: 7,
+  },
+
+  pinInput: {
+    width: '100%',
+    boxSizing: 'border-box',
+    border: '1px solid',
+    borderRadius: 13,
+    padding: 14,
+    textAlign: 'center',
+    letterSpacing: 9,
+    fontSize: 24,
+    fontWeight: 800,
+    outline: 'none',
+    marginBottom: 12,
+  },
+
+  pinError: {
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 14,
+    border: '1px solid',
+    fontSize: 12,
+    fontWeight: 700,
+    lineHeight: 1.4,
+  },
+
+  pinActions: {
+    display: 'flex',
+    gap: 9,
+    marginTop: 4,
+  },
+
+  cancelPinButton: {
+    flex: 1,
+    border: '1px solid',
+    borderRadius: 12,
+    padding: '13px 10px',
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+
+  confirmPinButton: {
+    flex: 1.5,
+    border: 'none',
+    borderRadius: 12,
+    padding: '13px 10px',
+    color: '#ffffff',
+    fontWeight: 800,
+    cursor: 'pointer',
+  },
+
+  pinSecurity: {
+    marginTop: 14,
+    fontSize: 10,
+    lineHeight: 1.45,
+    textAlign: 'center',
+  },
+
+  /*
+   * ==========================================================
    * RECENT RECIPIENTS
+   * ==========================================================
    */
 
   recentSection: {
+    marginTop: 24,
     marginBottom: 24,
     padding: 15,
-    background: '#fbfdfc',
-    border: '1px solid #e4eee8',
+    border: '1px solid',
     borderRadius: 17,
+    transition:
+      'background-color 0.2s ease, border-color 0.2s ease',
   },
 
   recentHeader: {
@@ -1799,14 +3141,12 @@ const styles: Record<string, React.CSSProperties> = {
 
   recentTitle: {
     margin: 0,
-    color: '#10251d',
     fontSize: 16,
     fontWeight: 850,
   },
 
   recentSubtitle: {
     margin: '5px 0 0',
-    color: '#85928b',
     fontSize: 11,
     lineHeight: 1.5,
   },
@@ -1815,10 +3155,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: 34,
     height: 34,
     flexShrink: 0,
-    border: '1px solid #dce9e1',
+    border: '1px solid',
     borderRadius: 10,
-    background: '#ffffff',
-    color: '#087c43',
     fontSize: 22,
     fontWeight: 800,
     cursor: 'pointer',
@@ -1836,9 +3174,8 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 11,
     padding: '11px 12px',
-    border: '1px solid #e5eee8',
+    border: '1px solid',
     borderRadius: 13,
-    background: '#ffffff',
     cursor: 'pointer',
     textAlign: 'left',
     boxSizing: 'border-box',
@@ -1849,8 +3186,6 @@ const styles: Record<string, React.CSSProperties> = {
     height: 39,
     flexShrink: 0,
     borderRadius: '50%',
-    background: '#e1f5e9',
-    color: '#087c43',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1867,7 +3202,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   recentName: {
-    color: '#17362a',
     fontSize: 13,
     fontWeight: 800,
     overflow: 'hidden',
@@ -1876,17 +3210,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   recentPhone: {
-    color: '#728078',
     fontSize: 11,
   },
 
   recentDate: {
-    color: '#98a49e',
     fontSize: 10,
   },
 
   recentArrow: {
-    color: '#079447',
     fontSize: 25,
     fontWeight: 700,
     flexShrink: 0,
@@ -1899,7 +3230,6 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     gap: 7,
     padding: '22px 12px',
-    color: '#7b8981',
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 1.5,
@@ -1908,8 +3238,6 @@ const styles: Record<string, React.CSSProperties> = {
   loadingDot: {
     width: 23,
     height: 23,
-    border: '3px solid #dcefe4',
-    borderTop: '3px solid #079447',
     borderRadius: '50%',
     marginBottom: 5,
   },
@@ -1921,21 +3249,17 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 14,
-    background: '#eaf7ef',
-    color: '#079447',
     fontSize: 23,
     fontWeight: 800,
     marginBottom: 4,
   },
 
   emptyTitle: {
-    color: '#354c40',
     fontSize: 13,
     fontWeight: 800,
   },
 
   emptyText: {
-    color: '#87948d',
     fontSize: 11,
     maxWidth: 230,
   },
@@ -1948,9 +3272,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
     padding: 12,
     borderRadius: 12,
-    background: '#fff1ef',
-    border: '1px solid #f4d1cb',
-    color: '#a53227',
+    border: '1px solid',
     fontSize: 12,
     lineHeight: 1.5,
   },
@@ -1959,7 +3281,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     borderRadius: 8,
     padding: '7px 12px',
-    background: '#a53227',
     color: '#ffffff',
     fontSize: 11,
     fontWeight: 800,
@@ -1967,14 +3288,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   /*
+   * ==========================================================
    * SAVED BENEFICIARIES
+   * ==========================================================
    */
 
   savedSection: {
     marginTop: 14,
-    border: '1px solid #dcebe2',
+    border: '1px solid',
     borderRadius: 13,
-    background: '#ffffff',
     overflow: 'hidden',
   },
 
@@ -1986,7 +3308,6 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
     padding: '12px 13px',
     border: 'none',
-    background: '#f4faf6',
     cursor: 'pointer',
     textAlign: 'left',
   },
@@ -2003,8 +3324,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#e1f5e9',
-    color: '#087c43',
     borderRadius: 11,
     fontSize: 20,
     fontWeight: 800,
@@ -2012,7 +3331,6 @@ const styles: Record<string, React.CSSProperties> = {
 
   savedTitle: {
     display: 'block',
-    color: '#17362a',
     fontSize: 13,
     fontWeight: 850,
   },
@@ -2020,12 +3338,10 @@ const styles: Record<string, React.CSSProperties> = {
   savedSubtitle: {
     display: 'block',
     marginTop: 3,
-    color: '#87948d',
     fontSize: 10,
   },
 
   savedChevron: {
-    color: '#087c43',
     fontSize: 24,
     fontWeight: 700,
     flexShrink: 0,
@@ -2033,372 +3349,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   savedContent: {
     padding: 12,
-    borderTop: '1px solid #e4eee8',
-    background: '#ffffff',
-  },
-
-  errorBox: {
-    background: '#fff1ef',
-    color: '#a53227',
-    border: '1px solid #f4d1cb',
-    borderRadius: 13,
-    padding: 13,
-    marginBottom: 16,
-    fontSize: 13,
-    fontWeight: 700,
-    lineHeight: 1.45,
-  },
-
-  successBox: {
-    background: '#eaf9f1',
-    color: '#087c43',
-    border: '1px solid #ccebd9',
-    borderRadius: 13,
-    padding: 13,
-    marginBottom: 16,
-    fontSize: 13,
-    lineHeight: 1.5,
-  },
-
-  recipientCard: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 11,
-    background: '#f1fbf6',
-    border: '1px solid #d4eee0',
-    borderRadius: 15,
-    padding: 12,
-    marginBottom: 18,
-  },
-
-  recipientAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: '50%',
-    background: '#d8f3e5',
-    color: '#087c43',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 800,
-    fontSize: 16,
-    flexShrink: 0,
-  },
-
-  recipientInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  recipientName: {
-    color: '#17362a',
-    fontSize: 14,
-    fontWeight: 800,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-
-  recipientPhone: {
-    color: '#728078',
-    fontSize: 12,
-    marginTop: 2,
-  },
-
-  recipientAccount: {
-    color: '#087c43',
-    fontSize: 12,
-    fontWeight: 700,
-    marginTop: 3,
-  },
-
-  verifiedPill: {
-    background: '#dff5e9',
-    color: '#087c43',
-    borderRadius: 999,
-    padding: '6px 9px',
-    fontSize: 10,
-    fontWeight: 800,
-    whiteSpace: 'nowrap',
-  },
-
-  amountWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    border: '1px solid #d7e0dc',
-    borderRadius: 12,
-    marginBottom: 15,
-    overflow: 'hidden',
-    background: '#ffffff',
-  },
-
-  currency: {
-    paddingLeft: 14,
-    color: '#087c43',
-    fontSize: 20,
-    fontWeight: 800,
-  },
-
-  amountInput: {
-    flex: 1,
-    minWidth: 0,
-    border: 'none',
-    outline: 'none',
-    padding: '13px 12px',
-    fontSize: 19,
-    fontWeight: 800,
-    color: '#10251d',
-    background: 'transparent',
-  },
-
-  feeCard: {
-    background: '#f2faf6',
-    border: '1px solid #d7ebe1',
-    borderRadius: 15,
-    padding: 14,
-    marginBottom: 19,
-  },
-
-  feeHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    color: '#15543d',
-    fontSize: 13,
-    fontWeight: 850,
-    marginBottom: 8,
-  },
-
-  feeBadge: {
-    background: '#dcefe6',
-    color: '#087c43',
-    borderRadius: 999,
-    padding: '4px 8px',
-    fontSize: 9,
-    fontWeight: 850,
-  },
-
-  feeRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-    padding: '6px 0',
-    color: '#65756d',
-    fontSize: 12.5,
-  },
-
-  feeDivider: {
-    height: 1,
-    background: '#d9e8e1',
-    margin: '5px 0',
-  },
-
-  totalRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-    padding: '7px 0 2px',
-    color: '#10251d',
-    fontSize: 14,
-    fontWeight: 850,
-  },
-
-  inputFull: {
-    width: '100%',
-    border: '1px solid #d7e0dc',
-    borderRadius: 12,
-    padding: '13px 14px',
-    fontSize: 14,
-    outline: 'none',
-    boxSizing: 'border-box',
-    marginBottom: 20,
-    background: '#ffffff',
-    color: '#10251d',
-  },
-
-  beneficiaryCheckbox: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 18,
-    color: '#344c46',
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-
-  sendButton: {
-    width: '100%',
-    border: 'none',
-    borderRadius: 13,
-    padding: '14px 16px',
-    background: '#079447',
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: 800,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-
-  pinOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(10, 25, 19, 0.55)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    zIndex: 9999,
-    boxSizing: 'border-box',
-  },
-
-  pinDialog: {
-    width: 'min(420px, 100%)',
-    maxHeight: '90vh',
-    overflowY: 'auto',
-    background: '#ffffff',
-    borderRadius: 24,
-    padding: 24,
-    boxShadow: '0 25px 70px rgba(0, 0, 0, 0.22)',
-    boxSizing: 'border-box',
-  },
-
-  pinIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 17,
-    background: '#e7f8ef',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 25,
-    marginBottom: 15,
-  },
-
-  pinTitle: {
-    margin: 0,
-    color: '#10251d',
-    fontSize: 23,
-    fontWeight: 850,
-  },
-
-  pinSubtitle: {
-    margin: '7px 0 18px',
-    color: '#748079',
-    fontSize: 13,
-    lineHeight: 1.5,
-  },
-
-  pinSummary: {
-    background: '#f5faf7',
-    border: '1px solid #e0ebe5',
-    borderRadius: 14,
-    padding: 13,
-    marginBottom: 17,
-  },
-
-  pinSummaryRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    padding: '5px 0',
-    color: '#6d7c75',
-    fontSize: 12,
-  },
-
-  pinSummaryDivider: {
-    height: 1,
-    background: '#d9e5df',
-    margin: '7px 0',
-  },
-
-  pinTotalRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    padding: '5px 0 2px',
-    color: '#10251d',
-    fontSize: 14,
-    fontWeight: 850,
-  },
-
-  pinLabel: {
-    display: 'block',
-    color: '#263d33',
-    fontSize: 13,
-    fontWeight: 800,
-    marginBottom: 7,
-  },
-
-  pinInput: {
-    width: '100%',
-    boxSizing: 'border-box',
-    border: '1px solid #cfdcd5',
-    borderRadius: 13,
-    padding: '14px',
-    textAlign: 'center',
-    letterSpacing: 9,
-    fontSize: 24,
-    fontWeight: 800,
-    outline: 'none',
-    color: '#10251d',
-    background: '#ffffff',
-    marginBottom: 12,
-  },
-
-  pinError: {
-    background: '#fff1ef',
-    color: '#a53227',
-    border: '1px solid #f4d1cb',
-    borderRadius: 12,
-    padding: 11,
-    marginBottom: 14,
-    fontSize: 12,
-    fontWeight: 700,
-    lineHeight: 1.4,
-  },
-
-  pinActions: {
-    display: 'flex',
-    gap: 9,
-    marginTop: 4,
-  },
-
-  cancelPinButton: {
-    flex: 1,
-    border: '1px solid #d7e0dc',
-    borderRadius: 12,
-    padding: '13px 10px',
-    background: '#ffffff',
-    color: '#52625a',
-    fontWeight: 800,
-    cursor: 'pointer',
-  },
-
-  confirmPinButton: {
-    flex: 1.5,
-    border: 'none',
-    borderRadius: 12,
-    padding: '13px 10px',
-    background: '#079447',
-    color: '#ffffff',
-    fontWeight: 800,
-    cursor: 'pointer',
-  },
-
-  pinSecurity: {
-    marginTop: 14,
-    color: '#7a8781',
-    fontSize: 10,
-    lineHeight: 1.45,
-    textAlign: 'center',
+    borderTop: '1px solid',
   },
 
   securityNote: {
@@ -2406,7 +3357,6 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'flex-start',
     gap: 7,
     marginTop: 17,
-    color: '#7a8781',
     fontSize: 11,
     lineHeight: 1.5,
     textAlign: 'center',
