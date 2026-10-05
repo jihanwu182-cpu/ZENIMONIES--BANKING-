@@ -997,7 +997,8 @@ const buildStyles = (
   .zk-tier-limit-row {
     align-items: flex-start;
   }
-);
+    }
+  `;
 };
 // ============================================================
 // COMPONENT
