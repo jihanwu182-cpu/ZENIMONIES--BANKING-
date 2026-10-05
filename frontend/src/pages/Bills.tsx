@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../theme/Theme.tsx';
 
@@ -33,48 +33,33 @@ const BILL_OPTIONS: BillOption[] = [
 const Bills: React.FC = () => {
   const navigate = useNavigate();
 
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [pressedIndex, setPressedIndex] = useState<number | null>(null);
-
   // ============================================================
-  // SYSTEM DARK MODE
+  // GLOBAL ZENIMONIES THEME
   // ============================================================
-  useEffect(() => {
-    const mediaQuery = window.matchMedia(
-      '(prefers-color-scheme: dark)'
-    );
+  const { darkMode: isDarkMode } = useTheme();
 
-    const updateTheme = () => {
-      setIsDarkMode(mediaQuery.matches);
-    };
-
-    updateTheme();
-
-    mediaQuery.addEventListener('change', updateTheme);
-
-    return () => {
-      mediaQuery.removeEventListener('change', updateTheme);
-    };
-  }, []);
+  const [pressedIndex, setPressedIndex] =
+    useState<number | null>(null);
 
   // ============================================================
   // ZENIMONIES COLORS
   // ============================================================
   const colors = isDarkMode
     ? {
-        background: '#07110d',
-        header: '#0b1712',
-        card: '#101d17',
-        cardPressed: '#14251d',
-        border: '#1d382b',
-        divider: '#1b3026',
+        background: '#0d1712',
+        header: '#101c16',
+        card: '#101c16',
+        cardPressed: '#15231c',
+        border: '#294238',
+        divider: '#22372d',
 
-        primaryText: '#f3faf6',
-        secondaryText: '#a9bbb2',
-        mutedText: '#81968c',
+        primaryText: '#f3f8f5',
+        secondaryText: '#a9b8b0',
+        mutedText: '#82958b',
 
         green: '#19a765',
         greenBright: '#25c477',
+        greenDark: '#168c56',
 
         iconBackground: '#123a29',
         iconBorder: '#1c5139',
@@ -86,32 +71,34 @@ const Bills: React.FC = () => {
         securityText: '#a8c8b8',
       }
     : {
-        background: '#f4faf7',
+        background: '#f6faf8',
         header: '#ffffff',
         card: '#ffffff',
-        cardPressed: '#f7fbf9',
-        border: '#dcebe5',
-        divider: '#e7efeb',
+        cardPressed: '#f7faf8',
+        border: '#e7eee9',
+        divider: '#e6efea',
 
-        primaryText: '#073b2a',
-        secondaryText: '#687b74',
-        mutedText: '#70827b',
+        primaryText: '#14251e',
+        secondaryText: '#7b8982',
+        mutedText: '#98a49f',
 
-        green: '#087b48',
-        greenBright: '#0b8f55',
+        green: '#079447',
+        greenBright: '#0b995b',
+        greenDark: '#006d3b',
 
-        iconBackground: '#e8f6ef',
-        iconBorder: '#d5eee2',
+        iconBackground: '#e9f8f1',
+        iconBorder: '#d4eee1',
 
         arrowBackground: '#f0f7f4',
 
-        securityBackground: '#eaf7f0',
-        securityBorder: '#d5eee2',
+        securityBackground: '#e9f8f1',
+        securityBorder: '#d4eee1',
         securityText: '#356b57',
       };
 
   return (
     <div
+      className="zenimonies-page"
       style={{
         minHeight: '100vh',
         background: colors.background,
@@ -127,6 +114,7 @@ const Bills: React.FC = () => {
           HEADER
       ======================================================== */}
       <header
+        className="zenimonies-surface"
         style={{
           position: 'sticky',
           top: 0,
@@ -159,7 +147,7 @@ const Bills: React.FC = () => {
             border: 'none',
             borderRadius: 14,
             background: isDarkMode
-              ? '#13251d'
+              ? '#15231c'
               : '#f1f7f4',
             color: colors.primaryText,
             fontSize: 31,
@@ -171,13 +159,24 @@ const Bills: React.FC = () => {
               'background-color 0.2s ease, transform 0.1s ease',
           }}
           onMouseDown={(event) => {
-            event.currentTarget.style.transform = 'scale(0.94)';
+            event.currentTarget.style.transform =
+              'scale(0.94)';
           }}
           onMouseUp={(event) => {
-            event.currentTarget.style.transform = 'scale(1)';
+            event.currentTarget.style.transform =
+              'scale(1)';
           }}
           onMouseLeave={(event) => {
-            event.currentTarget.style.transform = 'scale(1)';
+            event.currentTarget.style.transform =
+              'scale(1)';
+          }}
+          onTouchStart={(event) => {
+            event.currentTarget.style.transform =
+              'scale(0.94)';
+          }}
+          onTouchEnd={(event) => {
+            event.currentTarget.style.transform =
+              'scale(1)';
           }}
         >
           ‹
@@ -225,8 +224,8 @@ const Bills: React.FC = () => {
               borderRadius: 999,
               background: isDarkMode
                 ? '#0d2a1e'
-                : '#eaf7f0',
-              color: colors.green,
+                : '#e9f8f1',
+              color: colors.greenBright,
               fontSize: 11,
               fontWeight: 800,
               letterSpacing: 1,
@@ -269,6 +268,7 @@ const Bills: React.FC = () => {
         ====================================================== */}
         <section
           aria-label="Bill payment options"
+          className="zenimonies-surface"
           style={{
             background: colors.card,
             border: `1px solid ${colors.border}`,
@@ -282,18 +282,29 @@ const Bills: React.FC = () => {
           }}
         >
           {BILL_OPTIONS.map((bill, index) => {
-            const isPressed = pressedIndex === index;
+            const isPressed =
+              pressedIndex === index;
 
             return (
               <button
                 key={bill.title}
                 type="button"
                 onClick={() => navigate(bill.path)}
-                onMouseDown={() => setPressedIndex(index)}
-                onMouseUp={() => setPressedIndex(null)}
-                onMouseLeave={() => setPressedIndex(null)}
-                onTouchStart={() => setPressedIndex(index)}
-                onTouchEnd={() => setPressedIndex(null)}
+                onMouseDown={() =>
+                  setPressedIndex(index)
+                }
+                onMouseUp={() =>
+                  setPressedIndex(null)
+                }
+                onMouseLeave={() =>
+                  setPressedIndex(null)
+                }
+                onTouchStart={() =>
+                  setPressedIndex(index)
+                }
+                onTouchEnd={() =>
+                  setPressedIndex(null)
+                }
                 style={{
                   width: '100%',
                   display: 'flex',
@@ -305,7 +316,8 @@ const Bills: React.FC = () => {
                     : colors.card,
                   border: 'none',
                   borderBottom:
-                    index === BILL_OPTIONS.length - 1
+                    index ===
+                    BILL_OPTIONS.length - 1
                       ? 'none'
                       : `1px solid ${colors.divider}`,
                   textAlign: 'left',
@@ -316,6 +328,8 @@ const Bills: React.FC = () => {
                     ? 'scale(0.995)'
                     : 'scale(1)',
                   boxSizing: 'border-box',
+                  WebkitTapHighlightColor:
+                    'transparent',
                 }}
               >
                 {/* ==================================================
@@ -327,7 +341,8 @@ const Bills: React.FC = () => {
                     height: 52,
                     minWidth: 52,
                     borderRadius: 16,
-                    background: colors.iconBackground,
+                    background:
+                      colors.iconBackground,
                     border: `1px solid ${colors.iconBorder}`,
                     display: 'flex',
                     alignItems: 'center',
@@ -380,7 +395,8 @@ const Bills: React.FC = () => {
                     height: 32,
                     minWidth: 32,
                     borderRadius: '50%',
-                    background: colors.arrowBackground,
+                    background:
+                      colors.arrowBackground,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -404,7 +420,8 @@ const Bills: React.FC = () => {
           style={{
             marginTop: 18,
             padding: '15px 16px',
-            background: colors.securityBackground,
+            background:
+              colors.securityBackground,
             border: `1px solid ${colors.securityBorder}`,
             borderRadius: 17,
             color: colors.securityText,
@@ -433,9 +450,10 @@ const Bills: React.FC = () => {
             </span>
 
             <span>
-              Payments are processed securely through ZENIMONIES.
-              Always verify your bill details before confirming a
-              payment.
+              Payments are processed securely
+              through ZENIMONIES. Always verify
+              your bill details before confirming
+              a payment.
             </span>
           </div>
         </div>
