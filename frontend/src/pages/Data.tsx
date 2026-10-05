@@ -1,4 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
 import {
   Alert,
   Box,
@@ -50,10 +55,6 @@ const API_URL =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com';
 
-const ZEN_GREEN = '#087f5b';
-const ZEN_DARK_GREEN = '#056247';
-const ZEN_LIGHT_GREEN = '#eaf7f1';
-
 const NETWORKS: NetworkOption[] = [
   {
     name: 'MTN',
@@ -96,17 +97,86 @@ const CATEGORY_ORDER = [
   'Other',
 ];
 
+/* ============================================================
+   THEME COLORS
+============================================================ */
+
+const LIGHT = {
+  background: '#f4faf7',
+  surface: '#ffffff',
+  surfaceSoft: '#f8fcfa',
+  surfacePressed: '#eef8f3',
+  border: '#dcebe5',
+  divider: '#e6efea',
+
+  primaryText: '#073b2a',
+  secondaryText: '#687b74',
+  mutedText: '#81908a',
+
+  green: '#087b48',
+  greenBright: '#0b995b',
+  greenDark: '#05633b',
+
+  greenSoft: '#e8f6ef',
+  greenSoftBorder: '#d4eee1',
+
+  inputBackground: '#fbfdfc',
+
+  dangerBackground: '#fff4f4',
+  dangerBorder: '#f0cccc',
+};
+
+const DARK = {
+  background: '#07110d',
+  surface: '#101d17',
+  surfaceSoft: '#0d1813',
+  surfacePressed: '#14251d',
+  border: '#1d382b',
+  divider: '#1b3026',
+
+  primaryText: '#f3faf6',
+  secondaryText: '#a9bbb2',
+  mutedText: '#81968c',
+
+  green: '#19a765',
+  greenBright: '#25c477',
+  greenDark: '#168c56',
+
+  greenSoft: '#123a29',
+  greenSoftBorder: '#1c5139',
+
+  inputBackground: '#0d1813',
+
+  dangerBackground: '#2a1517',
+  dangerBorder: '#5b292d',
+};
+
+/* ============================================================
+   TOKEN
+============================================================ */
+
 const getToken = (): string => {
   return (
-    localStorage.getItem('zenimonies_token') ||
-    localStorage.getItem('access_token') ||
+    localStorage.getItem(
+      'zenimonies_token'
+    ) ||
+    localStorage.getItem(
+      'access_token'
+    ) ||
     localStorage.getItem('token') ||
     ''
   );
 };
 
+/* ============================================================
+   AMOUNT
+============================================================ */
+
 const normalizeAmount = (
-  value: number | string | undefined
+  value:
+    | number
+    | string
+    | undefined
 ): number => {
   if (
     value === undefined ||
@@ -137,13 +207,20 @@ const formatNaira = (
       currency: 'NGN',
       maximumFractionDigits: 0,
     }
-  ).format(normalizeAmount(value));
+  ).format(
+    normalizeAmount(value)
+  );
 };
+
+/* ============================================================
+   PHONE
+============================================================ */
 
 const cleanPhoneNumber = (
   value: string
 ): string => {
-  let phone = value.replace(/\D/g, '');
+  let phone =
+    value.replace(/\D/g, '');
 
   if (phone.startsWith('234')) {
     phone = `0${phone.slice(3)}`;
@@ -197,10 +274,6 @@ const getPlanCategory = (
       plan.description || ''
     }`.toLowerCase();
 
-  /* ==========================================================
-     HOT
-  ========================================================== */
-
   if (
     variationCode.includes('hot') ||
     text.includes('hot') ||
@@ -209,10 +282,6 @@ const getPlanCategory = (
   ) {
     return 'HOT';
   }
-
-  /* ==========================================================
-     ROUTER / MIFI / ODU
-  ========================================================== */
 
   if (
     variationCode.includes('router') ||
@@ -225,10 +294,6 @@ const getPlanCategory = (
   ) {
     return 'Router';
   }
-
-  /* ==========================================================
-     3 MONTHS+
-  ========================================================== */
 
   if (
     variationCode.includes('3month') ||
@@ -247,12 +312,6 @@ const getPlanCategory = (
     return '3 Months+';
   }
 
-  /* ==========================================================
-     MONTHLY
-
-     Check variation code before checking Night.
-  ========================================================== */
-
   if (
     variationCode.includes('monthly') ||
     variationCode.includes('month') ||
@@ -263,10 +322,6 @@ const getPlanCategory = (
   ) {
     return 'Monthly';
   }
-
-  /* ==========================================================
-     WEEKLY
-  ========================================================== */
 
   if (
     variationCode.includes('weekly') ||
@@ -282,10 +337,6 @@ const getPlanCategory = (
     return 'Weekly';
   }
 
-  /* ==========================================================
-     WEEKEND
-  ========================================================== */
-
   if (
     variationCode.includes('weekend') ||
     text.includes('weekend') ||
@@ -294,10 +345,6 @@ const getPlanCategory = (
   ) {
     return 'Weekend';
   }
-
-  /* ==========================================================
-     SOCIAL
-  ========================================================== */
 
   if (
     variationCode.includes('social') ||
@@ -313,10 +360,6 @@ const getPlanCategory = (
     return 'Social';
   }
 
-  /* ==========================================================
-     BINGE
-  ========================================================== */
-
   if (
     variationCode.includes('binge') ||
     variationCode.includes('youtube') ||
@@ -325,10 +368,6 @@ const getPlanCategory = (
   ) {
     return 'Binge';
   }
-
-  /* ==========================================================
-     SPECIAL
-  ========================================================== */
 
   if (
     variationCode.includes('special') ||
@@ -340,18 +379,6 @@ const getPlanCategory = (
   ) {
     return 'Special';
   }
-
-  /* ==========================================================
-     DAILY
-
-     Check variation code first.
-
-     This catches examples such as:
-
-     glo-daily-50
-     glo-daily-100
-     glo-2days-200
-  ========================================================== */
 
   if (
     variationCode.includes('daily') ||
@@ -378,10 +405,6 @@ const getPlanCategory = (
     return 'Daily';
   }
 
-  /* ==========================================================
-     NIGHT
-  ========================================================== */
-
   if (
     variationCode.includes('night') ||
     text.includes('night') ||
@@ -396,10 +419,6 @@ const getPlanCategory = (
     return 'Night';
   }
 
-  /* ==========================================================
-     OTHER
-  ========================================================== */
-
   return 'Other';
 };
 
@@ -411,12 +430,13 @@ const Data: React.FC = () => {
   const [network, setNetwork] =
     useState<Network>('MTN');
 
-  const [plans, setPlans] = useState<
-    DataPlan[]
-  >([]);
+  const [plans, setPlans] =
+    useState<DataPlan[]>([]);
 
-  const [loadingPlans, setLoadingPlans] =
-    useState(false);
+  const [
+    loadingPlans,
+    setLoadingPlans,
+  ] = useState(false);
 
   const [buying, setBuying] =
     useState(false);
@@ -424,8 +444,12 @@ const Data: React.FC = () => {
   const [phone, setPhone] =
     useState('');
 
-  const [selectedPlan, setSelectedPlan] =
-    useState<DataPlan | null>(null);
+  const [
+    selectedPlan,
+    setSelectedPlan,
+  ] = useState<DataPlan | null>(
+    null
+  );
 
   const [
     activeCategory,
@@ -447,23 +471,74 @@ const Data: React.FC = () => {
     setTransactionPinError,
   ] = useState('');
 
-  const [snackbar, setSnackbar] =
-    useState<{
-      open: boolean;
-      message: string;
-      severity:
-        | 'success'
-        | 'error';
-    }>({
-      open: false,
-      message: '',
-      severity: 'success',
-    });
+  const [
+    isDarkMode,
+    setIsDarkMode,
+  ] = useState(false);
 
-  const [logoErrors, setLogoErrors] =
-    useState<
-      Record<string, boolean>
-    >({});
+  const [
+    pressedNetwork,
+    setPressedNetwork,
+  ] = useState<Network | null>(
+    null
+  );
+
+  const [
+    snackbar,
+    setSnackbar,
+  ] = useState<{
+    open: boolean;
+    message: string;
+    severity:
+      | 'success'
+      | 'error';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
+  const [
+    logoErrors,
+    setLogoErrors,
+  ] = useState<
+    Record<string, boolean>
+  >({});
+
+  /* ==========================================================
+     SYSTEM DARK MODE
+  ========================================================== */
+
+  useEffect(() => {
+    const mediaQuery =
+      window.matchMedia(
+        '(prefers-color-scheme: dark)'
+      );
+
+    const updateTheme = () => {
+      setIsDarkMode(
+        mediaQuery.matches
+      );
+    };
+
+    updateTheme();
+
+    mediaQuery.addEventListener(
+      'change',
+      updateTheme
+    );
+
+    return () => {
+      mediaQuery.removeEventListener(
+        'change',
+        updateTheme
+      );
+    };
+  }, []);
+
+  const colors = isDarkMode
+    ? DARK
+    : LIGHT;
 
   /* ==========================================================
      MESSAGE
@@ -503,19 +578,20 @@ const Data: React.FC = () => {
         return;
       }
 
-      const response = await fetch(
-        `${API_URL}/api/data/plans?network=${encodeURIComponent(
-          selectedNetwork
-        )}`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type':
-              'application/json',
-          },
-        }
-      );
+      const response =
+        await fetch(
+          `${API_URL}/api/data/plans?network=${encodeURIComponent(
+            selectedNetwork
+          )}`,
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type':
+                'application/json',
+            },
+          }
+        );
 
       const data =
         await response.json();
@@ -528,9 +604,13 @@ const Data: React.FC = () => {
       }
 
       const receivedPlans =
-        Array.isArray(data?.plans)
+        Array.isArray(
+          data?.plans
+        )
           ? data.plans
-          : Array.isArray(data?.data)
+          : Array.isArray(
+              data?.data
+            )
           ? data.data
           : [];
 
@@ -562,7 +642,8 @@ const Data: React.FC = () => {
               plan.fixedPrice,
 
             description:
-              plan.description || '',
+              plan.description ||
+              '',
 
             serviceID:
               plan.serviceID ||
@@ -574,7 +655,9 @@ const Data: React.FC = () => {
           })
         );
 
-      setPlans(normalizedPlans);
+      setPlans(
+        normalizedPlans
+      );
     } catch (error: any) {
       showMessage(
         error?.message ||
@@ -592,17 +675,6 @@ const Data: React.FC = () => {
 
   /* ==========================================================
      GROUP PLANS
-
-     IMPORTANT:
-     HOT FALLBACK
-
-     VTpass does not always return a "HOT" category.
-
-     If no plans are explicitly marked HOT, Zenimonies
-     automatically selects up to 6 accessible plans from
-     the provider catalogue.
-
-     The original variation_code is preserved.
   ========================================================== */
 
   const groupedPlans =
@@ -626,9 +698,6 @@ const Data: React.FC = () => {
           groups[category] = [];
         }
 
-        /*
-         * Explicit HOT plans stay in HOT.
-         */
         if (category === 'HOT') {
           groups.HOT.push(plan);
           return;
@@ -636,15 +705,6 @@ const Data: React.FC = () => {
 
         groups[category].push(plan);
       });
-
-      /* ========================================================
-         HOT FALLBACK
-
-         When VTpass does not explicitly label any plan as HOT,
-         use selected accessible plans from the catalogue.
-
-         We exclude special device-oriented categories.
-      ======================================================== */
 
       if (
         groups.HOT.length === 0 &&
@@ -654,13 +714,19 @@ const Data: React.FC = () => {
           plans
             .filter((plan) => {
               const category =
-                getPlanCategory(plan);
+                getPlanCategory(
+                  plan
+                );
 
               return (
-                category !== 'Router' &&
-                category !== '3 Months+' &&
-                category !== 'Social' &&
-                category !== 'Binge'
+                category !==
+                  'Router' &&
+                category !==
+                  '3 Months+' &&
+                category !==
+                  'Social' &&
+                category !==
+                  'Binge'
               );
             })
             .slice()
@@ -675,7 +741,10 @@ const Data: React.FC = () => {
             );
 
         groups.HOT =
-          eligiblePlans.slice(0, 6);
+          eligiblePlans.slice(
+            0,
+            6
+          );
       }
 
       return groups;
@@ -689,19 +758,23 @@ const Data: React.FC = () => {
     useMemo(() => {
       return CATEGORY_ORDER.filter(
         (category) =>
-          groupedPlans[category] &&
-          groupedPlans[category].length >
-            0
+          groupedPlans[
+            category
+          ] &&
+          groupedPlans[
+            category
+          ].length > 0
       );
     }, [groupedPlans]);
 
   /* ==========================================================
-     KEEP ACTIVE CATEGORY VALID
+     VALIDATE ACTIVE CATEGORY
   ========================================================== */
 
   useEffect(() => {
     if (
-      availableCategories.length === 0
+      availableCategories.length ===
+      0
     ) {
       setActiveCategory('HOT');
       return;
@@ -712,9 +785,6 @@ const Data: React.FC = () => {
         activeCategory
       )
     ) {
-      /*
-       * Prefer HOT whenever it is available.
-       */
       if (
         availableCategories.includes(
           'HOT'
@@ -733,8 +803,9 @@ const Data: React.FC = () => {
   ]);
 
   const activePlans =
-    groupedPlans[activeCategory] ||
-    [];
+    groupedPlans[
+      activeCategory
+    ] || [];
 
   /* ==========================================================
      NETWORK CHANGE
@@ -744,10 +815,6 @@ const Data: React.FC = () => {
     selectedNetwork: Network
   ) => {
     setNetwork(selectedNetwork);
-
-    /*
-     * Always return to HOT after changing network.
-     */
     setActiveCategory('HOT');
   };
 
@@ -919,6 +986,22 @@ const Data: React.FC = () => {
     };
 
   /* ==========================================================
+     CLOSE PIN DIALOG
+  ========================================================== */
+
+  const closePinDialog = () => {
+    if (buying) {
+      return;
+    }
+
+    setShowTransactionPin(
+      false
+    );
+    setTransactionPin('');
+    setTransactionPinError('');
+  };
+
+  /* ==========================================================
      RENDER
   ========================================================== */
 
@@ -928,16 +1011,20 @@ const Data: React.FC = () => {
         sx={{
           minHeight: '100vh',
           background:
-            '#f7faf8',
+            colors.background,
+          color:
+            colors.primaryText,
           px: {
             xs: 1.5,
             sm: 3,
           },
           py: {
-            xs: 2,
+            xs: 1.5,
             sm: 3,
           },
-          pb: 7,
+          pb: 6,
+          transition:
+            'background-color 0.2s ease, color 0.2s ease',
         }}
       >
         <Box
@@ -947,7 +1034,7 @@ const Data: React.FC = () => {
           }}
         >
           {/* ===================================================
-              HEADER
+              HEADER CARD
           =================================================== */}
 
           <Card
@@ -958,15 +1045,17 @@ const Data: React.FC = () => {
                 sm: 4,
               },
               background:
-                '#ffffff',
-              border:
-                '1px solid #e4ebe7',
-              boxShadow:
-                '0 8px 30px rgba(10, 70, 50, 0.06)',
+                colors.surface,
+              border: `1px solid ${colors.border}`,
+              boxShadow: isDarkMode
+                ? '0 12px 35px rgba(0,0,0,0.22)'
+                : '0 8px 30px rgba(7,59,42,0.06)',
               p: {
                 xs: 2,
                 sm: 3,
               },
+              transition:
+                'background-color 0.2s ease, border-color 0.2s ease',
             }}
           >
             <Stack
@@ -979,21 +1068,21 @@ const Data: React.FC = () => {
                 <Typography
                   sx={{
                     color:
-                      ZEN_GREEN,
+                      colors.green,
                     fontSize: 11,
                     fontWeight: 800,
-                    letterSpacing: 2,
+                    letterSpacing: 1.8,
                     textTransform:
                       'uppercase',
                   }}
                 >
-                  Zenimonies
+                  ZENIMONIES
                 </Typography>
 
                 <Typography
                   sx={{
                     color:
-                      '#17221d',
+                      colors.primaryText,
                     fontSize: {
                       xs: 27,
                       sm: 31,
@@ -1001,6 +1090,8 @@ const Data: React.FC = () => {
                     fontWeight: 850,
                     lineHeight: 1.1,
                     mt: 0.4,
+                    letterSpacing:
+                      -0.7,
                   }}
                 >
                   Mobile Data
@@ -1009,14 +1100,13 @@ const Data: React.FC = () => {
                 <Typography
                   sx={{
                     color:
-                      '#718079',
+                      colors.secondaryText,
                     fontSize: 13,
                     mt: 0.7,
                   }}
                 >
                   Choose your network
-                  and select a data
-                  plan.
+                  and select a data plan.
                 </Typography>
               </Box>
 
@@ -1031,15 +1121,15 @@ const Data: React.FC = () => {
                   justifyContent:
                     'center',
                   background:
-                    ZEN_LIGHT_GREEN,
-                  border:
-                    '1px solid #d4eee2',
+                    colors.greenSoft,
+                  border: `1px solid ${colors.greenSoftBorder}`,
+                  flexShrink: 0,
                 }}
               >
                 <WifiIcon
                   sx={{
                     color:
-                      ZEN_GREEN,
+                      colors.greenBright,
                     fontSize: 25,
                   }}
                 />
@@ -1059,54 +1149,68 @@ const Data: React.FC = () => {
                 )
               }
               inputProps={{
-                inputMode: 'numeric',
+                inputMode:
+                  'numeric',
                 maxLength: 14,
               }}
               sx={{
                 mb: 2.5,
+
                 '& .MuiOutlinedInput-root':
                   {
                     borderRadius: 3,
                     background:
-                      '#fbfcfb',
+                      colors.inputBackground,
                     color:
-                      '#17221d',
+                      colors.primaryText,
                   },
+
                 '& .MuiOutlinedInput-notchedOutline':
                   {
                     borderColor:
-                      '#dce5e0',
+                      colors.border,
                   },
+
                 '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline':
                   {
                     borderColor:
-                      ZEN_GREEN,
+                      colors.green,
                   },
+
                 '& .MuiInputLabel-root':
                   {
                     color:
-                      '#7c8882',
+                      colors.mutedText,
                   },
-                '& .Mui-focused .MuiOutlinedInput-notchedOutline':
-                  {
-                    borderColor:
-                      ZEN_GREEN,
-                  },
+
                 '& .MuiInputLabel-root.Mui-focused':
                   {
                     color:
-                      ZEN_GREEN,
+                      colors.greenBright,
+                  },
+
+                '& .Mui-focused .MuiOutlinedInput-notchedOutline':
+                  {
+                    borderColor:
+                      colors.green,
+                  },
+
+                '& input::placeholder':
+                  {
+                    color:
+                      colors.mutedText,
+                    opacity: 0.65,
                   },
               }}
             />
 
-            {/* NETWORK TITLE */}
+            {/* NETWORK LABEL */}
 
             <Typography
               sx={{
                 color:
-                  '#4d5b54',
-                fontSize: 12,
+                  colors.secondaryText,
+                fontSize: 11,
                 fontWeight: 800,
                 letterSpacing: 1.1,
                 textTransform:
@@ -1129,7 +1233,8 @@ const Data: React.FC = () => {
                   'none',
                 '&::-webkit-scrollbar':
                   {
-                    display: 'none',
+                    display:
+                      'none',
                   },
               }}
             >
@@ -1137,6 +1242,10 @@ const Data: React.FC = () => {
                 (item) => {
                   const selected =
                     network ===
+                    item.name;
+
+                  const pressed =
+                    pressedNetwork ===
                     item.name;
 
                   return (
@@ -1149,42 +1258,71 @@ const Data: React.FC = () => {
                           item.name
                         )
                       }
+                      onMouseDown={() =>
+                        setPressedNetwork(
+                          item.name
+                        )
+                      }
+                      onMouseUp={() =>
+                        setPressedNetwork(
+                          null
+                        )
+                      }
+                      onMouseLeave={() =>
+                        setPressedNetwork(
+                          null
+                        )
+                      }
+                      onTouchStart={() =>
+                        setPressedNetwork(
+                          item.name
+                        )
+                      }
+                      onTouchEnd={() =>
+                        setPressedNetwork(
+                          null
+                        )
+                      }
                       sx={{
                         minWidth: {
-                          xs: 91,
-                          sm: 105,
+                          xs: 88,
+                          sm: 102,
                         },
                         flexShrink: 0,
                         cursor:
                           'pointer',
                         borderRadius: 3,
-                        border:
-                          selected
-                            ? `1.5px solid ${ZEN_GREEN}`
-                            : '1px solid #e0e7e3',
+                        border: selected
+                          ? `1.5px solid ${colors.greenBright}`
+                          : `1px solid ${colors.border}`,
                         background:
                           selected
-                            ? ZEN_LIGHT_GREEN
-                            : '#ffffff',
-                        p: 1.2,
+                            ? colors.greenSoft
+                            : colors.surface,
+                        p: 1.1,
                         transition:
-                          'all 0.18s ease',
-                        '&:active': {
-                          transform:
-                            'scale(0.98)',
-                        },
+                          'all 0.15s ease',
+                        transform:
+                          pressed
+                            ? 'scale(0.97)'
+                            : 'scale(1)',
+                        '&:hover':
+                          {
+                            borderColor:
+                              colors.green,
+                          },
                       }}
                     >
                       <Box
                         sx={{
-                          width: 45,
-                          height: 45,
+                          width: 43,
+                          height: 43,
                           mx: 'auto',
                           borderRadius: 2.5,
                           background:
                             '#ffffff',
                           border:
-                            '1px solid #edf0ee',
+                            '1px solid #e5ebe8',
                           display:
                             'flex',
                           alignItems:
@@ -1204,8 +1342,8 @@ const Data: React.FC = () => {
                             }
                             alt={`${item.name} logo`}
                             style={{
-                              width: 34,
-                              height: 34,
+                              width: 32,
+                              height: 32,
                               objectFit:
                                 'contain',
                             }}
@@ -1225,10 +1363,10 @@ const Data: React.FC = () => {
                           <Typography
                             sx={{
                               color:
-                                ZEN_GREEN,
+                                colors.green,
                               fontWeight:
                                 900,
-                              fontSize: 14,
+                              fontSize: 13,
                             }}
                           >
                             {
@@ -1245,9 +1383,9 @@ const Data: React.FC = () => {
                           mt: 0.8,
                           color:
                             selected
-                              ? ZEN_DARK_GREEN
-                              : '#58645e',
-                          fontSize: 12,
+                              ? colors.greenBright
+                              : colors.secondaryText,
+                          fontSize: 11.5,
                           fontWeight: 800,
                         }}
                       >
@@ -1267,21 +1405,23 @@ const Data: React.FC = () => {
           <Card
             elevation={0}
             sx={{
-              mt: 2,
+              mt: 1.7,
               borderRadius: {
                 xs: 3,
                 sm: 4,
               },
               background:
-                '#ffffff',
-              border:
-                '1px solid #e4ebe7',
-              boxShadow:
-                '0 8px 30px rgba(10, 70, 50, 0.05)',
+                colors.surface,
+              border: `1px solid ${colors.border}`,
+              boxShadow: isDarkMode
+                ? '0 12px 35px rgba(0,0,0,0.18)'
+                : '0 8px 30px rgba(10,70,50,0.05)',
               p: {
-                xs: 2,
+                xs: 1.8,
                 sm: 2.5,
               },
+              transition:
+                'background-color 0.2s ease, border-color 0.2s ease',
             }}
           >
             {/* TITLE */}
@@ -1296,7 +1436,7 @@ const Data: React.FC = () => {
                 <Typography
                   sx={{
                     color:
-                      '#17221d',
+                      colors.primaryText,
                     fontSize: 21,
                     fontWeight: 850,
                   }}
@@ -1307,7 +1447,7 @@ const Data: React.FC = () => {
                 <Typography
                   sx={{
                     color:
-                      '#7a8781',
+                      colors.mutedText,
                     fontSize: 12,
                     mt: 0.2,
                   }}
@@ -1322,7 +1462,7 @@ const Data: React.FC = () => {
                   height: 38,
                   borderRadius: 2.5,
                   background:
-                    ZEN_LIGHT_GREEN,
+                    colors.greenSoft,
                   display: 'flex',
                   alignItems:
                     'center',
@@ -1333,23 +1473,21 @@ const Data: React.FC = () => {
                 <PhoneAndroidIcon
                   sx={{
                     color:
-                      ZEN_GREEN,
+                      colors.greenBright,
                     fontSize: 21,
                   }}
                 />
               </Box>
             </Stack>
 
-            {/* =================================================
-                CATEGORY NAVIGATION
-            ================================================= */}
+            {/* CATEGORY NAVIGATION */}
 
             <Box
               sx={{
                 display: 'flex',
-                gap: 0.9,
+                gap: 0.8,
                 overflowX: 'auto',
-                pb: 1.4,
+                pb: 1.3,
                 scrollbarWidth:
                   'none',
                 '&::-webkit-scrollbar':
@@ -1388,41 +1526,44 @@ const Data: React.FC = () => {
                         flexShrink: 0,
                         minWidth:
                           'auto',
-                        px: 2,
-                        py: 0.9,
+                        px: 1.8,
+                        py: 0.8,
                         borderRadius:
                           999,
                         textTransform:
                           'none',
-                        fontSize: 12,
+                        fontSize: 11.5,
                         fontWeight: 800,
                         color:
                           selected
                             ? '#ffffff'
-                            : '#69756f',
+                            : colors.secondaryText,
                         background:
                           selected
-                            ? ZEN_GREEN
-                            : '#f5f7f6',
-                        border:
-                          selected
-                            ? `1px solid ${ZEN_GREEN}`
-                            : '1px solid #e3e9e5',
+                            ? colors.green
+                            : colors.surfaceSoft,
+                        border: selected
+                          ? `1px solid ${colors.green}`
+                          : `1px solid ${colors.border}`,
                         '&:hover':
                           {
                             background:
                               selected
-                                ? ZEN_DARK_GREEN
-                                : '#edf3ef',
+                                ? colors.greenDark
+                                : colors.surfacePressed,
                           },
                         '&.Mui-disabled':
                           {
                             color:
-                              '#c3cac6',
+                              isDarkMode
+                                ? '#46574e'
+                                : '#b9c4bf',
                             background:
-                              '#fafbfa',
+                              isDarkMode
+                                ? '#0c1511'
+                                : '#fafbfa',
                             border:
-                              '1px solid #edf0ee',
+                              `1px solid ${colors.divider}`,
                           },
                       }}
                     >
@@ -1436,14 +1577,12 @@ const Data: React.FC = () => {
             <Divider
               sx={{
                 borderColor:
-                  '#edf1ef',
-                mb: 2,
+                  colors.divider,
+                mb: 1.8,
               }}
             />
 
-            {/* =================================================
-                LOADING
-            ================================================= */}
+            {/* LOADING */}
 
             {loadingPlans ? (
               <Box
@@ -1464,14 +1603,14 @@ const Data: React.FC = () => {
                   thickness={3}
                   sx={{
                     color:
-                      ZEN_GREEN,
+                      colors.greenBright,
                   }}
                 />
 
                 <Typography
                   sx={{
                     color:
-                      '#78847e',
+                      colors.secondaryText,
                     fontSize: 13,
                   }}
                 >
@@ -1500,7 +1639,7 @@ const Data: React.FC = () => {
                       height: 52,
                       borderRadius: 3,
                       background:
-                        ZEN_LIGHT_GREEN,
+                        colors.greenSoft,
                       display:
                         'flex',
                       alignItems:
@@ -1514,7 +1653,7 @@ const Data: React.FC = () => {
                     <WifiIcon
                       sx={{
                         color:
-                          ZEN_GREEN,
+                          colors.greenBright,
                       }}
                     />
                   </Box>
@@ -1522,7 +1661,7 @@ const Data: React.FC = () => {
                   <Typography
                     sx={{
                       color:
-                        '#34413b',
+                        colors.primaryText,
                       fontWeight: 800,
                     }}
                   >
@@ -1534,15 +1673,14 @@ const Data: React.FC = () => {
                   <Typography
                     sx={{
                       color:
-                        '#89938e',
+                        colors.mutedText,
                       fontSize: 12,
                       mt: 0.5,
                     }}
                   >
                     Select another
-                    category to
-                    view available
-                    plans.
+                    category to view
+                    available plans.
                   </Typography>
                 </Box>
               </Box>
@@ -1551,7 +1689,7 @@ const Data: React.FC = () => {
                 <Typography
                   sx={{
                     color:
-                      '#7d8983',
+                      colors.mutedText,
                     fontSize: 11,
                     mb: 1.5,
                   }}
@@ -1577,7 +1715,7 @@ const Data: React.FC = () => {
                         sm: 'repeat(3, minmax(0, 1fr))',
                       },
                     gap: {
-                      xs: 1.2,
+                      xs: 1.1,
                       sm: 1.5,
                     },
                   }}
@@ -1595,18 +1733,17 @@ const Data: React.FC = () => {
                               xs: 2.8,
                               sm: 3.2,
                             },
-                          border:
-                            '1px solid #e1e8e4',
+                          border: `1px solid ${colors.border}`,
                           background:
-                            '#ffffff',
+                            colors.surfaceSoft,
                           p: {
-                            xs: 1.5,
+                            xs: 1.4,
                             sm: 1.8,
                           },
                           minHeight:
                             {
-                              xs: 166,
-                              sm: 180,
+                              xs: 164,
+                              sm: 178,
                             },
                           display:
                             'flex',
@@ -1619,9 +1756,11 @@ const Data: React.FC = () => {
                           '&:hover':
                             {
                               borderColor:
-                                '#b9d9ca',
+                                colors.greenSoftBorder,
                               boxShadow:
-                                '0 8px 22px rgba(10, 90, 60, 0.08)',
+                                isDarkMode
+                                  ? '0 8px 22px rgba(0,0,0,0.22)'
+                                  : '0 8px 22px rgba(10,90,60,0.08)',
                             },
                         }}
                       >
@@ -1629,11 +1768,11 @@ const Data: React.FC = () => {
                           <Typography
                             sx={{
                               color:
-                                '#17221d',
+                                colors.primaryText,
                               fontSize:
                                 {
-                                  xs: 16,
-                                  sm: 18,
+                                  xs: 15,
+                                  sm: 17,
                                 },
                               lineHeight:
                                 1.2,
@@ -1650,8 +1789,8 @@ const Data: React.FC = () => {
                             <Typography
                               sx={{
                                 color:
-                                  '#7b8781',
-                                fontSize: 11,
+                                  colors.mutedText,
+                                fontSize: 10.5,
                                 mt: 0.6,
                               }}
                             >
@@ -1665,15 +1804,15 @@ const Data: React.FC = () => {
                           <Typography
                             sx={{
                               color:
-                                ZEN_GREEN,
+                                colors.greenBright,
                               fontSize:
                                 {
-                                  xs: 17,
-                                  sm: 19,
+                                  xs: 16,
+                                  sm: 18,
                                 },
                               fontWeight:
                                 900,
-                              mt: 1.2,
+                              mt: 1.15,
                             }}
                           >
                             {formatNaira(
@@ -1695,19 +1834,24 @@ const Data: React.FC = () => {
                             borderRadius:
                               2,
                             background:
-                              ZEN_GREEN,
+                              colors.green,
                             color:
                               '#ffffff',
                             textTransform:
                               'none',
-                            fontSize: 12,
+                            fontSize: 11.5,
                             fontWeight:
                               850,
-                            py: 1,
+                            py: 0.95,
                             '&:hover':
                               {
                                 background:
-                                  ZEN_DARK_GREEN,
+                                  colors.greenDark,
+                              },
+                            '&:active':
+                              {
+                                transform:
+                                  'scale(0.98)',
                               },
                           }}
                         >
@@ -1737,7 +1881,7 @@ const Data: React.FC = () => {
             <SecurityIcon
               sx={{
                 color:
-                  ZEN_GREEN,
+                  colors.greenBright,
                 fontSize: 15,
               }}
             />
@@ -1745,49 +1889,43 @@ const Data: React.FC = () => {
             <Typography
               sx={{
                 color:
-                  '#8a948f',
+                  colors.mutedText,
                 fontSize: 10,
               }}
             >
-              Secured by Zenimonies
+              Secured by ZENIMONIES
             </Typography>
           </Stack>
         </Box>
       </Box>
 
       {/* =========================================================
-          TRANSACTION PIN
+          TRANSACTION PIN DIALOG
       ========================================================= */}
 
       <Dialog
         open={showTransactionPin}
-        onClose={() => {
-          if (!buying) {
-            setShowTransactionPin(
-              false
-            );
-            setTransactionPin('');
-            setTransactionPinError('');
-          }
-        }}
+        onClose={closePinDialog}
         fullWidth
         maxWidth="xs"
         PaperProps={{
           sx: {
             borderRadius: 4,
             background:
-              '#ffffff',
-            border:
-              '1px solid #e0e8e3',
-            boxShadow:
-              '0 25px 70px rgba(20, 60, 45, 0.18)',
+              colors.surface,
+            border: `1px solid ${colors.border}`,
+            color:
+              colors.primaryText,
+            boxShadow: isDarkMode
+              ? '0 25px 70px rgba(0,0,0,0.55)'
+              : '0 25px 70px rgba(20,60,45,0.18)',
           },
         }}
       >
         <DialogTitle
           sx={{
             color:
-              '#17221d',
+              colors.primaryText,
             fontWeight: 850,
             pb: 1,
           }}
@@ -1795,23 +1933,21 @@ const Data: React.FC = () => {
           Confirm Purchase
 
           <IconButton
-            onClick={() => {
-              if (!buying) {
-                setShowTransactionPin(
-                  false
-                );
-                setTransactionPin('');
-                setTransactionPinError('');
-              }
-            }}
+            onClick={closePinDialog}
             disabled={buying}
+            aria-label="Close"
             sx={{
               position:
                 'absolute',
               right: 10,
               top: 10,
               color:
-                '#7c8781',
+                colors.mutedText,
+              '&:hover':
+                {
+                  background:
+                    colors.surfacePressed,
+                },
             }}
           >
             <CloseIcon />
@@ -1824,9 +1960,8 @@ const Data: React.FC = () => {
               sx={{
                 borderRadius: 3,
                 background:
-                  ZEN_LIGHT_GREEN,
-                border:
-                  '1px solid #d6ede2',
+                  colors.greenSoft,
+                border: `1px solid ${colors.greenSoftBorder}`,
                 p: 1.8,
                 mb: 2,
               }}
@@ -1834,7 +1969,7 @@ const Data: React.FC = () => {
               <Typography
                 sx={{
                   color:
-                    '#1d2923',
+                    colors.primaryText,
                   fontWeight: 850,
                 }}
               >
@@ -1844,7 +1979,7 @@ const Data: React.FC = () => {
               <Typography
                 sx={{
                   color:
-                    ZEN_GREEN,
+                    colors.greenBright,
                   fontWeight: 900,
                   mt: 0.4,
                 }}
@@ -1857,13 +1992,12 @@ const Data: React.FC = () => {
               <Typography
                 sx={{
                   color:
-                    '#738078',
+                    colors.secondaryText,
                   fontSize: 11,
                   mt: 0.4,
                 }}
               >
-                {network} •{' '}
-                {phone}
+                {network} • {phone}
               </Typography>
             </Box>
           )}
@@ -1911,21 +2045,55 @@ const Data: React.FC = () => {
               '& .MuiOutlinedInput-root':
                 {
                   borderRadius: 3,
+                  background:
+                    colors.inputBackground,
+                  color:
+                    colors.primaryText,
                 },
+
               '& .MuiOutlinedInput-notchedOutline':
                 {
                   borderColor:
-                    '#dce5e0',
+                    colors.border,
                 },
-              '& .Mui-focused .MuiOutlinedInput-notchedOutline':
+
+              '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline':
                 {
                   borderColor:
-                    ZEN_GREEN,
+                    colors.green,
                 },
+
+              '& .MuiInputLabel-root':
+                {
+                  color:
+                    colors.mutedText,
+                },
+
               '& .MuiInputLabel-root.Mui-focused':
                 {
                   color:
-                    ZEN_GREEN,
+                    colors.greenBright,
+                },
+
+              '& .Mui-focused .MuiOutlinedInput-notchedOutline':
+                {
+                  borderColor:
+                    colors.green,
+                },
+
+              '& .MuiFormHelperText-root':
+                {
+                  color:
+                    transactionPinError
+                      ? undefined
+                      : colors.mutedText,
+                },
+
+              '& input::placeholder':
+                {
+                  color:
+                    colors.mutedText,
+                  opacity: 0.7,
                 },
             }}
           />
@@ -1938,19 +2106,13 @@ const Data: React.FC = () => {
           }}
         >
           <Button
-            onClick={() => {
-              if (!buying) {
-                setShowTransactionPin(
-                  false
-                );
-                setTransactionPin('');
-                setTransactionPinError('');
-              }
-            }}
+            onClick={
+              closePinDialog
+            }
             disabled={buying}
             sx={{
               color:
-                '#758079',
+                colors.secondaryText,
               textTransform:
                 'none',
               fontWeight: 700,
@@ -1988,26 +2150,29 @@ const Data: React.FC = () => {
             }
             sx={{
               background:
-                ZEN_GREEN,
+                colors.green,
               color:
                 '#ffffff',
               textTransform:
                 'none',
-              fontWeight:
-                850,
+              fontWeight: 850,
               borderRadius: 2.5,
               px: 2.2,
               '&:hover':
                 {
                   background:
-                    ZEN_DARK_GREEN,
+                    colors.greenDark,
                 },
               '&.Mui-disabled':
                 {
                   background:
-                    '#dce8e2',
+                    isDarkMode
+                      ? '#26362f'
+                      : '#dce8e2',
                   color:
-                    '#9aa59f',
+                    isDarkMode
+                      ? '#687970'
+                      : '#9aa59f',
                 },
             }}
           >
@@ -2023,17 +2188,11 @@ const Data: React.FC = () => {
       ========================================================= */}
 
       <Snackbar
-        open={
-          snackbar.open
-        }
-        autoHideDuration={
-          4500
-        }
+        open={snackbar.open}
+        autoHideDuration={4500}
         onClose={() =>
           setSnackbar(
-            (
-              previous
-            ) => ({
+            (previous) => ({
               ...previous,
               open: false,
             })
@@ -2046,9 +2205,7 @@ const Data: React.FC = () => {
           }
           onClose={() =>
             setSnackbar(
-              (
-                previous
-              ) => ({
+              (previous) => ({
                 ...previous,
                 open: false,
               })
@@ -2058,9 +2215,7 @@ const Data: React.FC = () => {
             width: '100%',
           }}
         >
-          {
-            snackbar.message
-          }
+          {snackbar.message}
         </Alert>
       </Snackbar>
     </>
