@@ -27,6 +27,7 @@ import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import WifiIcon from '@mui/icons-material/Wifi';
 import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 import SecurityIcon from '@mui/icons-material/Security';
+
 import { useTheme } from '../theme/Theme.tsx';
 
 type Network =
@@ -50,6 +51,12 @@ interface NetworkOption {
   name: Network;
   logo: string;
   fallback: string;
+}
+
+interface PurchaseError extends Error {
+  code?: string;
+  remainingAttempts?: number;
+  lockedUntil?: string;
 }
 
 const API_URL =
@@ -99,7 +106,7 @@ const CATEGORY_ORDER = [
 ];
 
 /* ============================================================
-   THEME COLORS
+   LIGHT THEME
 ============================================================ */
 
 const LIGHT = {
@@ -107,6 +114,7 @@ const LIGHT = {
   surface: '#ffffff',
   surfaceSoft: '#f8fcfa',
   surfacePressed: '#eef8f3',
+
   border: '#dcebe5',
   divider: '#e6efea',
 
@@ -127,17 +135,22 @@ const LIGHT = {
   dangerBorder: '#f0cccc',
 };
 
+/* ============================================================
+   DARK THEME
+============================================================ */
+
 const DARK = {
-  background: '#07110d',
-  surface: '#101d17',
-  surfaceSoft: '#0d1813',
-  surfacePressed: '#14251d',
-  border: '#1d382b',
+  background: '#0d1712',
+  surface: '#101c16',
+  surfaceSoft: '#15231c',
+  surfacePressed: '#1a2d24',
+
+  border: '#294238',
   divider: '#1b3026',
 
-  primaryText: '#f3faf6',
-  secondaryText: '#a9bbb2',
-  mutedText: '#81968c',
+  primaryText: '#f3f8f5',
+  secondaryText: '#a9b8b0',
+  mutedText: '#82958b',
 
   green: '#19a765',
   greenBright: '#25c477',
@@ -146,7 +159,7 @@ const DARK = {
   greenSoft: '#123a29',
   greenSoftBorder: '#1c5139',
 
-  inputBackground: '#0d1813',
+  inputBackground: '#15231c',
 
   dangerBackground: '#2a1517',
   dangerBorder: '#5b292d',
@@ -428,6 +441,20 @@ const getPlanCategory = (
 ============================================================ */
 
 const Data: React.FC = () => {
+  /*
+   * IMPORTANT:
+   * Data now uses the GLOBAL ZENIMONIES theme.
+   *
+   * It no longer creates its own dark-mode state.
+   */
+  const {
+    darkMode: isDarkMode,
+  } = useTheme();
+
+  const colors = isDarkMode
+    ? DARK
+    : LIGHT;
+
   const [network, setNetwork] =
     useState<Network>('MTN');
 
@@ -473,11 +500,6 @@ const Data: React.FC = () => {
   ] = useState('');
 
   const [
-    isDarkMode,
-    setIsDarkMode,
-  ] = useState(false);
-
-  const [
     pressedNetwork,
     setPressedNetwork,
   ] = useState<Network | null>(
@@ -505,41 +527,6 @@ const Data: React.FC = () => {
   ] = useState<
     Record<string, boolean>
   >({});
-
-  /* ==========================================================
-     SYSTEM DARK MODE
-  ========================================================== */
-
-  useEffect(() => {
-    const mediaQuery =
-      window.matchMedia(
-        '(prefers-color-scheme: dark)'
-      );
-
-    const updateTheme = () => {
-      setIsDarkMode(
-        mediaQuery.matches
-      );
-    };
-
-    updateTheme();
-
-    mediaQuery.addEventListener(
-      'change',
-      updateTheme
-    );
-
-    return () => {
-      mediaQuery.removeEventListener(
-        'change',
-        updateTheme
-      );
-    };
-  }, []);
-
-  const colors = isDarkMode
-    ? DARK
-    : LIGHT;
 
   /* ==========================================================
      MESSAGE
@@ -697,11 +684,6 @@ const Data: React.FC = () => {
 
         if (!groups[category]) {
           groups[category] = [];
-        }
-
-        if (category === 'HOT') {
-          groups.HOT.push(plan);
-          return;
         }
 
         groups[category].push(plan);
@@ -912,11 +894,11 @@ const Data: React.FC = () => {
           await response.json();
 
         if (!response.ok) {
-          const error: any =
+          const error =
             new Error(
               data?.message ||
                 'Unable to purchase this data plan.'
-            );
+            ) as PurchaseError;
 
           error.code =
             data?.code;
@@ -942,13 +924,16 @@ const Data: React.FC = () => {
             'Data purchase submitted successfully.',
           'success'
         );
-      } catch (error: any) {
+      } catch (error) {
+        const purchaseError =
+          error as PurchaseError;
+
         if (
-          error?.code ===
+          purchaseError?.code ===
           'INCORRECT_TRANSACTION_PIN'
         ) {
           const remaining =
-            error?.remainingAttempts;
+            purchaseError?.remainingAttempts;
 
           setTransactionPinError(
             remaining !==
@@ -962,14 +947,14 @@ const Data: React.FC = () => {
               : 'Incorrect Transaction PIN.'
           );
         } else if (
-          error?.code ===
+          purchaseError?.code ===
           'TRANSACTION_PIN_LOCKED'
         ) {
           setTransactionPinError(
             'Your Transaction PIN is temporarily locked. Please try again later.'
           );
         } else if (
-          error?.code ===
+          purchaseError?.code ===
           'TRANSACTION_PIN_NOT_SET'
         ) {
           setTransactionPinError(
@@ -977,7 +962,7 @@ const Data: React.FC = () => {
           );
         } else {
           setTransactionPinError(
-            error?.message ||
+            purchaseError?.message ||
               'Unable to complete the data purchase.'
           );
         }
@@ -998,6 +983,7 @@ const Data: React.FC = () => {
     setShowTransactionPin(
       false
     );
+
     setTransactionPin('');
     setTransactionPinError('');
   };
@@ -1009,9 +995,10 @@ const Data: React.FC = () => {
   return (
     <>
       <Box
+        className="zenimonies-page"
         sx={{
           minHeight: '100vh',
-          background:
+          backgroundColor:
             colors.background,
           color:
             colors.primaryText,
@@ -1034,22 +1021,23 @@ const Data: React.FC = () => {
             mx: 'auto',
           }}
         >
-          {/* ===================================================
-              HEADER CARD
-          =================================================== */}
+          {/* =================================================
+              HEADER
+          ================================================= */}
 
           <Card
+            className="zenimonies-surface"
             elevation={0}
             sx={{
               borderRadius: {
                 xs: 3,
                 sm: 4,
               },
-              background:
+              backgroundColor:
                 colors.surface,
               border: `1px solid ${colors.border}`,
               boxShadow: isDarkMode
-                ? '0 12px 35px rgba(0,0,0,0.22)'
+                ? '0 12px 35px rgba(0,0,0,0.25)'
                 : '0 8px 30px rgba(7,59,42,0.06)',
               p: {
                 xs: 2,
@@ -1069,7 +1057,7 @@ const Data: React.FC = () => {
                 <Typography
                   sx={{
                     color:
-                      colors.green,
+                      colors.greenBright,
                     fontSize: 11,
                     fontWeight: 800,
                     letterSpacing: 1.8,
@@ -1121,7 +1109,7 @@ const Data: React.FC = () => {
                     'center',
                   justifyContent:
                     'center',
-                  background:
+                  backgroundColor:
                     colors.greenSoft,
                   border: `1px solid ${colors.greenSoftBorder}`,
                   flexShrink: 0,
@@ -1137,7 +1125,9 @@ const Data: React.FC = () => {
               </Box>
             </Stack>
 
-            {/* PHONE */}
+            {/* =================================================
+                PHONE NUMBER
+            ================================================= */}
 
             <TextField
               fullWidth
@@ -1160,7 +1150,7 @@ const Data: React.FC = () => {
                 '& .MuiOutlinedInput-root':
                   {
                     borderRadius: 3,
-                    background:
+                    backgroundColor:
                       colors.inputBackground,
                     color:
                       colors.primaryText,
@@ -1178,6 +1168,12 @@ const Data: React.FC = () => {
                       colors.green,
                   },
 
+                '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline':
+                  {
+                    borderColor:
+                      colors.greenBright,
+                  },
+
                 '& .MuiInputLabel-root':
                   {
                     color:
@@ -1190,22 +1186,24 @@ const Data: React.FC = () => {
                       colors.greenBright,
                   },
 
-                '& .Mui-focused .MuiOutlinedInput-notchedOutline':
+                '& input':
                   {
-                    borderColor:
-                      colors.green,
+                    color:
+                      colors.primaryText,
                   },
 
                 '& input::placeholder':
                   {
                     color:
                       colors.mutedText,
-                    opacity: 0.65,
+                    opacity: 0.7,
                   },
               }}
             />
 
-            {/* NETWORK LABEL */}
+            {/* =================================================
+                NETWORK
+            ================================================= */}
 
             <Typography
               sx={{
@@ -1222,8 +1220,6 @@ const Data: React.FC = () => {
               Select Network
             </Typography>
 
-            {/* NETWORKS */}
-
             <Box
               sx={{
                 display: 'flex',
@@ -1232,6 +1228,7 @@ const Data: React.FC = () => {
                 pb: 0.5,
                 scrollbarWidth:
                   'none',
+
                 '&::-webkit-scrollbar':
                   {
                     display:
@@ -1292,11 +1289,11 @@ const Data: React.FC = () => {
                         flexShrink: 0,
                         cursor:
                           'pointer',
-                        borderRadius: 3,
                         border: selected
                           ? `1.5px solid ${colors.greenBright}`
                           : `1px solid ${colors.border}`,
-                        background:
+                        borderRadius: 3,
+                        backgroundColor:
                           selected
                             ? colors.greenSoft
                             : colors.surface,
@@ -1314,16 +1311,23 @@ const Data: React.FC = () => {
                           },
                       }}
                     >
+                      {/* NETWORK LOGO */}
+
                       <Box
                         sx={{
                           width: 43,
                           height: 43,
                           mx: 'auto',
                           borderRadius: 2.5,
-                          background:
-                            '#ffffff',
-                          border:
-                            '1px solid #e5ebe8',
+                          backgroundColor:
+                            isDarkMode
+                              ? '#182820'
+                              : '#ffffff',
+                          border: `1px solid ${
+                            isDarkMode
+                              ? colors.border
+                              : '#e5ebe8'
+                          }`,
                           display:
                             'flex',
                           alignItems:
@@ -1364,7 +1368,7 @@ const Data: React.FC = () => {
                           <Typography
                             sx={{
                               color:
-                                colors.green,
+                                colors.greenBright,
                               fontWeight:
                                 900,
                               fontSize: 13,
@@ -1399,11 +1403,12 @@ const Data: React.FC = () => {
             </Box>
           </Card>
 
-          {/* ===================================================
+          {/* =================================================
               DATA PLANS
-          =================================================== */}
+          ================================================= */}
 
           <Card
+            className="zenimonies-surface"
             elevation={0}
             sx={{
               mt: 1.7,
@@ -1411,22 +1416,18 @@ const Data: React.FC = () => {
                 xs: 3,
                 sm: 4,
               },
-              background:
+              backgroundColor:
                 colors.surface,
               border: `1px solid ${colors.border}`,
               boxShadow: isDarkMode
-                ? '0 12px 35px rgba(0,0,0,0.18)'
+                ? '0 12px 35px rgba(0,0,0,0.20)'
                 : '0 8px 30px rgba(10,70,50,0.05)',
               p: {
                 xs: 1.8,
                 sm: 2.5,
               },
-              transition:
-                'background-color 0.2s ease, border-color 0.2s ease',
             }}
           >
-            {/* TITLE */}
-
             <Stack
               direction="row"
               justifyContent="space-between"
@@ -1462,7 +1463,7 @@ const Data: React.FC = () => {
                   width: 38,
                   height: 38,
                   borderRadius: 2.5,
-                  background:
+                  backgroundColor:
                     colors.greenSoft,
                   display: 'flex',
                   alignItems:
@@ -1491,6 +1492,7 @@ const Data: React.FC = () => {
                 pb: 1.3,
                 scrollbarWidth:
                   'none',
+
                 '&::-webkit-scrollbar':
                   {
                     display:
@@ -1539,32 +1541,34 @@ const Data: React.FC = () => {
                           selected
                             ? '#ffffff'
                             : colors.secondaryText,
-                        background:
+                        backgroundColor:
                           selected
                             ? colors.green
                             : colors.surfaceSoft,
                         border: selected
                           ? `1px solid ${colors.green}`
                           : `1px solid ${colors.border}`,
+
                         '&:hover':
                           {
-                            background:
+                            backgroundColor:
                               selected
                                 ? colors.greenDark
                                 : colors.surfacePressed,
                           },
+
                         '&.Mui-disabled':
                           {
                             color:
                               isDarkMode
-                                ? '#46574e'
+                                ? '#52645b'
                                 : '#b9c4bf',
-                            background:
+                            backgroundColor:
                               isDarkMode
                                 ? '#0c1511'
                                 : '#fafbfa',
-                            border:
-                              `1px solid ${colors.divider}`,
+                            borderColor:
+                              colors.divider,
                           },
                       }}
                     >
@@ -1639,7 +1643,7 @@ const Data: React.FC = () => {
                       width: 52,
                       height: 52,
                       borderRadius: 3,
-                      background:
+                      backgroundColor:
                         colors.greenSoft,
                       display:
                         'flex',
@@ -1735,7 +1739,7 @@ const Data: React.FC = () => {
                               sm: 3.2,
                             },
                           border: `1px solid ${colors.border}`,
-                          background:
+                          backgroundColor:
                             colors.surfaceSoft,
                           p: {
                             xs: 1.4,
@@ -1754,6 +1758,7 @@ const Data: React.FC = () => {
                             'space-between',
                           transition:
                             'all 0.18s ease',
+
                           '&:hover':
                             {
                               borderColor:
@@ -1834,7 +1839,7 @@ const Data: React.FC = () => {
                             mt: 1.5,
                             borderRadius:
                               2,
-                            background:
+                            backgroundColor:
                               colors.green,
                             color:
                               '#ffffff',
@@ -1844,11 +1849,13 @@ const Data: React.FC = () => {
                             fontWeight:
                               850,
                             py: 0.95,
+
                             '&:hover':
                               {
-                                background:
+                                backgroundColor:
                                   colors.greenDark,
                               },
+
                             '&:active':
                               {
                                 transform:
@@ -1866,9 +1873,9 @@ const Data: React.FC = () => {
             )}
           </Card>
 
-          {/* ===================================================
+          {/* =================================================
               SECURITY
-          =================================================== */}
+          ================================================= */}
 
           <Stack
             direction="row"
@@ -1900,9 +1907,9 @@ const Data: React.FC = () => {
         </Box>
       </Box>
 
-      {/* =========================================================
+      {/* =======================================================
           TRANSACTION PIN DIALOG
-      ========================================================= */}
+      ======================================================= */}
 
       <Dialog
         open={showTransactionPin}
@@ -1912,7 +1919,7 @@ const Data: React.FC = () => {
         PaperProps={{
           sx: {
             borderRadius: 4,
-            background:
+            backgroundColor:
               colors.surface,
             border: `1px solid ${colors.border}`,
             color:
@@ -1944,9 +1951,10 @@ const Data: React.FC = () => {
               top: 10,
               color:
                 colors.mutedText,
+
               '&:hover':
                 {
-                  background:
+                  backgroundColor:
                     colors.surfacePressed,
                 },
             }}
@@ -1960,7 +1968,7 @@ const Data: React.FC = () => {
             <Box
               sx={{
                 borderRadius: 3,
-                background:
+                backgroundColor:
                   colors.greenSoft,
                 border: `1px solid ${colors.greenSoftBorder}`,
                 p: 1.8,
@@ -2046,7 +2054,7 @@ const Data: React.FC = () => {
               '& .MuiOutlinedInput-root':
                 {
                   borderRadius: 3,
-                  background:
+                  backgroundColor:
                     colors.inputBackground,
                   color:
                     colors.primaryText,
@@ -2064,6 +2072,12 @@ const Data: React.FC = () => {
                     colors.green,
                 },
 
+              '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline':
+                {
+                  borderColor:
+                    colors.greenBright,
+                },
+
               '& .MuiInputLabel-root':
                 {
                   color:
@@ -2076,10 +2090,17 @@ const Data: React.FC = () => {
                     colors.greenBright,
                 },
 
-              '& .Mui-focused .MuiOutlinedInput-notchedOutline':
+              '& input':
                 {
-                  borderColor:
-                    colors.green,
+                  color:
+                    colors.primaryText,
+                },
+
+              '& input::placeholder':
+                {
+                  color:
+                    colors.mutedText,
+                  opacity: 0.7,
                 },
 
               '& .MuiFormHelperText-root':
@@ -2088,13 +2109,6 @@ const Data: React.FC = () => {
                     transactionPinError
                       ? undefined
                       : colors.mutedText,
-                },
-
-              '& input::placeholder':
-                {
-                  color:
-                    colors.mutedText,
-                  opacity: 0.7,
                 },
             }}
           />
@@ -2150,7 +2164,7 @@ const Data: React.FC = () => {
               )
             }
             sx={{
-              background:
+              backgroundColor:
                 colors.green,
               color:
                 '#ffffff',
@@ -2159,14 +2173,16 @@ const Data: React.FC = () => {
               fontWeight: 850,
               borderRadius: 2.5,
               px: 2.2,
+
               '&:hover':
                 {
-                  background:
+                  backgroundColor:
                     colors.greenDark,
                 },
+
               '&.Mui-disabled':
                 {
-                  background:
+                  backgroundColor:
                     isDarkMode
                       ? '#26362f'
                       : '#dce8e2',
@@ -2184,9 +2200,9 @@ const Data: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* =========================================================
+      {/* =======================================================
           SNACKBAR
-      ========================================================= */}
+      ======================================================= */}
 
       <Snackbar
         open={snackbar.open}
