@@ -79,6 +79,7 @@ import Notifications from './pages/Notifications.tsx';
 import BusinessServicePage from './pages/BusinessServicePage.tsx';
 import HelpCenter from './pages/HelpCenter.tsx';
 import Support from './pages/Support.tsx';
+import ThemeProvider from './theme/Theme.tsx';
 
 // ==================== ADMIN ====================
 
@@ -772,9 +773,11 @@ const AppRouter: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <BrowserRouter>
-      <AppRouter />
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AppRouter />
+      </BrowserRouter>
+    </ThemeProvider>
   );
 };
 
