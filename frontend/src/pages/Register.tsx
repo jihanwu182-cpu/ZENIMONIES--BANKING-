@@ -1,379 +1,390 @@
-import React, { useState } from 'react';
-import axios, { AxiosError } from 'axios';
+import React, { FormEvent, useState } from 'react';
+import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 
-const API_URL = 'https://zenimonies-banking.onrender.com';
+// ============================================================
+// ZENIMONIES BANKING
+// CUSTOMER REGISTRATION
+// ============================================================
+
+const API_URL =
+  process.env.REACT_APP_API_URL ||
+  'https://zenimonies-banking.onrender.com';
 
 type AccountType = 'personal' | 'business';
 
-type User = {
-  id?: string;
+type RegisterUser = {
+  id: string;
   full_name?: string;
   first_name?: string;
-  middle_name?: string;
+  middle_name?: string | null;
   surname?: string;
   gender?: string;
   email?: string;
   phone?: string;
   role?: string;
   status?: string;
-  phone_verified?: boolean;
   kyc_status?: string;
   kyc_tier?: number;
-  bvn_verified?: boolean;
-  id_verified?: boolean;
-  tier_3_verified?: boolean;
-  is_verified?: boolean;
+  registration_account_type?: AccountType;
 };
 
-type Account = {
+type RegisterAccount = {
   id?: string;
   account_number?: string;
   account_name?: string;
   account_type?: string;
-  bank_name?: string | null;
-  bank_code?: string | null;
   currency?: string;
-  balance?: string | number;
+  balance?: number;
   status?: string;
 };
 
 type RegisterResponse = {
-  success?: boolean;
   message?: string;
   token?: string;
-  requires_phone_verification?: boolean;
-  user?: User;
-  account?: Account;
-  accounts?: Account[];
+  access_token?: string;
+  user?: RegisterUser;
+  account?: RegisterAccount;
+  phone_verification_required?: boolean;
   development_otp?: string;
 };
 
-function getErrorMessage(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<RegisterResponse>;
-    const response = axiosError.response;
+// ============================================================
+// HELPERS
+// ============================================================
 
-    if (response?.data?.message) {
-      return response.data.message;
-    }
+const cleanText = (value: string): string => {
+  return value.trim().replace(/\s+/g, ' ');
+};
 
-    if (axiosError.code === 'ECONNABORTED') {
-      return 'The server took too long to respond. Please try again.';
-    }
+const cleanEmail = (value: string): string => {
+  return value.trim().toLowerCase();
+};
 
-    if (!response) {
-      return 'Unable to reach the Zenimonies server. Check your internet connection and try again.';
-    }
+const cleanPhone = (value: string): string => {
+  return value.trim().replace(/\s+/g, '');
+};
 
-    if (response.status === 409) {
-      return 'An account with this email or phone number already exists.';
-    }
-
-    if (response.status === 400) {
-      return 'Please check your registration details.';
-    }
-
-    if (response.status === 503) {
-      return 'The Zenimonies server is waking up. Please wait a few seconds and try again.';
-    }
-
-    return `Registration failed. Server returned HTTP ${response.status}.`;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return 'Unable to create your account. Please try again.';
-}
+// ============================================================
+// COMPONENT
+// ============================================================
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
 
-  // NAME
+  // ----------------------------------------------------------
+  // FORM STATE
+  // ----------------------------------------------------------
+
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [surname, setSurname] = useState('');
+
   const [gender, setGender] = useState('');
 
-  // ACCOUNT TYPE
-  const [accountType, setAccountType] =
-    useState<AccountType | ''>('');
+  const [accountType, setAccountType] = useState<AccountType | ''>('');
 
-  // CONTACT
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
 
-  // PASSWORD
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] =
-    useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
-  const [showPassword, setShowPassword] =
-    useState(false);
+  // ----------------------------------------------------------
+  // UI STATE
+  // ----------------------------------------------------------
 
+  const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] =
     useState(false);
 
-  // STATUS
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // ==========================================================
+  // VALIDATION
+  // ==========================================================
+
+  const validateForm = (): string => {
+    const cleanFirstName = cleanText(firstName);
+    const cleanMiddleName = cleanText(middleName);
+    const cleanSurname = cleanText(surname);
+    const cleanEmailAddress = cleanEmail(email);
+    const cleanPhoneNumber = cleanPhone(phone);
+
+    if (!accountType) {
+      return 'Please select an account type.';
+    }
+
+    if (!cleanFirstName) {
+      return 'Please enter your first name.';
+    }
+
+    if (cleanFirstName.length < 2) {
+      return 'First name must contain at least 2 characters.';
+    }
+
+    if (!cleanSurname) {
+      return 'Please enter your surname.';
+    }
+
+    if (cleanSurname.length < 2) {
+      return 'Surname must contain at least 2 characters.';
+    }
+
+    if (cleanMiddleName && cleanMiddleName.length < 2) {
+      return 'Middle name must contain at least 2 characters.';
+    }
+
+    if (!gender) {
+      return 'Please select your gender.';
+    }
+
+    if (!cleanEmailAddress) {
+      return 'Please enter your email address.';
+    }
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        cleanEmailAddress,
+      )
+    ) {
+      return 'Please enter a valid email address.';
+    }
+
+    if (!cleanPhoneNumber) {
+      return 'Please enter your phone number.';
+    }
+
+    if (!/^[0-9+()\-.\s]{7,30}$/.test(cleanPhoneNumber)) {
+      return 'Please enter a valid phone number.';
+    }
+
+    if (!password) {
+      return 'Please create a password.';
+    }
+
+    if (password.length < 8) {
+      return 'Password must contain at least 8 characters.';
+    }
+
+    if (!confirmPassword) {
+      return 'Please confirm your password.';
+    }
+
+    if (password !== confirmPassword) {
+      return 'Passwords do not match.';
+    }
+
+    return '';
+  };
+
+  // ==========================================================
+  // REGISTER
+  // ==========================================================
+
   const handleSubmit = async (
-    event: React.FormEvent<HTMLFormElement>
+    event: FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
 
     setError('');
     setSuccess('');
 
-    // CLEAN INPUTS
-    const cleanFirstName = firstName.trim();
-    const cleanMiddleName = middleName.trim();
-    const cleanSurname = surname.trim();
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPhone = phone.trim();
+    const validationError = validateForm();
 
-    // VALIDATION
-    if (!accountType) {
-      setError('Please select an account type.');
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
-    if (!cleanFirstName) {
-      setError('First name is required.');
-      return;
-    }
-
-    if (!cleanSurname) {
-      setError('Surname is required.');
-      return;
-    }
-
-    if (!gender) {
-      setError('Please select your gender.');
-      return;
-    }
-
-    if (!cleanEmail) {
-      setError('Email is required.');
-      return;
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-
-    if (!cleanPhone || cleanPhone.length < 7) {
-      setError('Please enter a valid phone number.');
-      return;
-    }
-
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
-      return;
-    }
-
-    if (!confirmPassword) {
-      setError('Please confirm your password.');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
-    // ASSEMBLE CUSTOMER'S REGISTERED FULL NAME
-    const fullName = [
-      cleanFirstName,
-      cleanMiddleName,
-      cleanSurname,
-    ]
-      .filter(Boolean)
-      .join(' ');
+    setLoading(true);
 
     try {
-      setLoading(true);
+      const cleanFirstName = cleanText(firstName);
+      const cleanMiddleName = cleanText(middleName);
+      const cleanSurname = cleanText(surname);
+      const cleanEmailAddress = cleanEmail(email);
+      const cleanPhoneNumber = cleanPhone(phone);
 
-      const response =
-        await axios.post<RegisterResponse>(
-          `${API_URL}/api/auth/register`,
-          {
-            first_name: cleanFirstName,
-            middle_name: cleanMiddleName || null,
-            surname: cleanSurname,
-            full_name: fullName,
-            gender,
-            email: cleanEmail,
-            phone: cleanPhone,
-            password,
+      // IMPORTANT:
+      // We intentionally DO NOT send full_name.
+      //
+      // The backend will construct:
+      //
+      // First + Middle + Surname
+      //
+      // This prevents the customer from controlling
+      // the official full_name value directly.
 
-            // Account type selected by customer
-               registration_account_type: accountType,
+      const response = await axios.post<RegisterResponse>(
+        `${API_URL}/api/auth/register`,
+        {
+          first_name: cleanFirstName,
+          middle_name: cleanMiddleName || null,
+          surname: cleanSurname,
+          gender,
+          email: cleanEmailAddress,
+          phone: cleanPhoneNumber,
+          password,
+          registration_account_type: accountType,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
           },
-          {
-            timeout: 60000,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+          timeout: 30000,
+        },
+      );
 
       const data = response.data;
 
-      console.log(
-        'Zenimonies registration response:',
-        data
-      );
-
-      if (data.success !== true) {
-        setError(
-          data.message || 'Registration failed.'
-        );
-        return;
-      }
-
+      // ------------------------------------------------------
       // SAVE TOKEN
-      if (data.token) {
+      // ------------------------------------------------------
+
+      const token =
+        data.token ||
+        data.access_token ||
+        '';
+
+      if (token) {
         localStorage.setItem(
           'zenimonies_token',
-          data.token
-        );
-
-        localStorage.setItem(
-          'token',
-          data.token
+          token,
         );
       }
 
+      // ------------------------------------------------------
       // SAVE USER
+      // ------------------------------------------------------
+
       if (data.user) {
         localStorage.setItem(
           'zenimonies_user',
-          JSON.stringify(data.user)
+          JSON.stringify(data.user),
         );
       }
 
-      // SAVE ACCOUNTS WITHOUT INTERNAL ACCOUNT NUMBERS
-      const receivedAccounts = data.accounts?.length
-  ? data.accounts
-  : data.account
-    ? [data.account]
-    : [];
+      // ------------------------------------------------------
+      // SAVE ACCOUNT
+      // ------------------------------------------------------
 
-const safeAccounts = receivedAccounts.map(
-  (account) => {
-    const {
-      account_number,
-      ...safeAccount
-    } = account;
+      if (data.account) {
+        // Do not expose/store sensitive account number unnecessarily
+        // in the client registration payload.
 
-    return safeAccount;
-  }
-);
+        const safeAccount = {
+          ...data.account,
+          account_number: undefined,
+        };
 
-localStorage.setItem(
-  'zenimonies_accounts',
-  JSON.stringify(safeAccounts)
-);
+        localStorage.setItem(
+          'zenimonies_accounts',
+          JSON.stringify([safeAccount]),
+        );
+      }
 
-      // SAVE SELECTED ACCOUNT TYPE
+      // ------------------------------------------------------
+      // SAVE ACCOUNT TYPE
+      // ------------------------------------------------------
+
+      if (accountType) {
+        sessionStorage.setItem(
+          'zenimonies_registration_account_type',
+          accountType,
+        );
+      }
+
+      // ------------------------------------------------------
+      // SAVE PHONE / EMAIL FOR OTP SCREEN
+      // ------------------------------------------------------
+
       sessionStorage.setItem(
-        'zenimonies_registration_account_type',
-        accountType
+        'zenimonies_verification_phone',
+        cleanPhoneNumber,
       );
 
-      // PHONE VERIFICATION
-      if (data.requires_phone_verification === true) {
+      sessionStorage.setItem(
+        'zenimonies_verification_email',
+        cleanEmailAddress,
+      );
+
+      // ------------------------------------------------------
+      // DEVELOPMENT OTP
+      // ------------------------------------------------------
+
+      if (data.development_otp) {
         sessionStorage.setItem(
-          'zenimonies_phone',
-          cleanPhone
+          'zenimonies_development_otp',
+          data.development_otp,
         );
-
-        sessionStorage.setItem(
-          'zenimonies_otp_email',
-          cleanEmail
-        );
-
-        if (data.development_otp) {
-          sessionStorage.setItem(
-            'zenimonies_development_otp',
-            String(data.development_otp)
-          );
-        }
-
-        setSuccess(
-          data.message ||
-            'Account created successfully. Please verify your phone number.'
-        );
-
-        setTimeout(() => {
-          navigate('/verify-phone');
-        }, 800);
-
-        return;
       }
 
-      // REGISTRATION SUCCESS
-      if (data.token) {
-        setSuccess(
-          data.message ||
-            'Account created successfully.'
-        );
-
-        setTimeout(() => {
-          navigate('/');
-        }, 800);
-
-        return;
-      }
+      // ------------------------------------------------------
+      // SUCCESS
+      // ------------------------------------------------------
 
       setSuccess(
         data.message ||
-          'Account created successfully. Please sign in.'
+          'Your ZENIMONIES account has been created successfully.',
       );
+
+      // ------------------------------------------------------
+      // PHONE VERIFICATION
+      // ------------------------------------------------------
 
       setTimeout(() => {
-        navigate('/login');
-      }, 1000);
-
-    } catch (error: unknown) {
+        navigate('/verify-phone', {
+          replace: true,
+        });
+      }, 800);
+    } catch (err: any) {
       console.error(
-        'Zenimonies registration error:',
-        error
+        'ZENIMONIES registration error:',
+        err,
       );
 
-      setError(getErrorMessage(error));
+      const serverMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        '';
 
+      if (
+        err?.code === 'ECONNABORTED'
+      ) {
+        setError(
+          'The server took too long to respond. Please try again.',
+        );
+      } else if (
+        err?.response?.status === 409
+      ) {
+        setError(
+          serverMessage ||
+            'An account with this email or phone number already exists.',
+        );
+      } else if (
+        err?.response?.status === 400
+      ) {
+        setError(
+          serverMessage ||
+            'Please check your registration details and try again.',
+        );
+      } else {
+        setError(
+          serverMessage ||
+            'Registration failed. Please try again.',
+        );
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // REUSABLE INPUT STYLE
-  const inputStyle: React.CSSProperties = {
-    boxSizing: 'border-box',
-    width: '100%',
-    padding: '13px',
-    border: '1px solid #d0d5dd',
-    borderRadius: '9px',
-    outline: 'none',
-    fontSize: '15px',
-    background: '#ffffff',
-    color: '#172033',
-  };
-
-  const labelStyle: React.CSSProperties = {
-    display: 'block',
-    marginBottom: '7px',
-    fontWeight: 600,
-    fontSize: '14px',
-    color: '#344054',
-  };
+  // ==========================================================
+  // UI
+  // ==========================================================
 
   return (
     <div
@@ -382,9 +393,10 @@ localStorage.setItem(
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '24px 16px',
+        padding: '24px',
         background:
-          'linear-gradient(135deg, #f0f4ff 0%, #f8fafc 100%)',
+          'linear-gradient(135deg, #f4fbf7 0%, #ffffff 55%, #eef8f2 100%)',
+        boxSizing: 'border-box',
       }}
     >
       <div
@@ -392,592 +404,565 @@ localStorage.setItem(
           width: '100%',
           maxWidth: '520px',
           background: '#ffffff',
-          padding: '32px',
-          borderRadius: '18px',
+          borderRadius: '22px',
+          padding: '30px',
           boxShadow:
-            '0 12px 40px rgba(16, 24, 40, 0.08)',
+            '0 12px 40px rgba(0, 0, 0, 0.08)',
           boxSizing: 'border-box',
         }}
       >
-        {/* HEADER */}
+        {/* ====================================================
+            BRAND
+        ==================================================== */}
 
-        <h1
-          style={{
-            margin: '0 0 8px',
-            textAlign: 'center',
-            color: '#172033',
-            fontSize: '30px',
-            fontWeight: 800,
-          }}
-        >
-          Zenimonies
-        </h1>
-
-        <p
+        <div
           style={{
             textAlign: 'center',
-            color: '#667085',
-            marginBottom: '28px',
-            fontSize: '15px',
+            marginBottom: '26px',
           }}
         >
-          Create your banking account
-        </p>
+          <div
+            style={{
+              fontSize: '30px',
+              fontWeight: 800,
+              color: '#138a4b',
+              letterSpacing: '-0.8px',
+            }}
+          >
+            ZENIMONIES
+          </div>
 
-        {/* ERROR */}
+          <div
+            style={{
+              marginTop: '6px',
+              fontSize: '14px',
+              color: '#6b7280',
+            }}
+          >
+            Create your banking account
+          </div>
+        </div>
+
+        {/* ====================================================
+            ERROR
+        ==================================================== */}
 
         {error && (
           <div
-            role="alert"
             style={{
-              padding: '14px',
               marginBottom: '18px',
-              borderRadius: '9px',
-              background: '#fee4e2',
+              padding: '13px 14px',
+              borderRadius: '10px',
+              background: '#fff1f1',
+              border: '1px solid #ffd2d2',
               color: '#b42318',
               fontSize: '14px',
-              lineHeight: 1.5,
-              wordBreak: 'break-word',
+              lineHeight: 1.45,
             }}
           >
             {error}
           </div>
         )}
 
-        {/* SUCCESS */}
+        {/* ====================================================
+            SUCCESS
+        ==================================================== */}
 
         {success && (
           <div
-            role="status"
             style={{
-              padding: '14px',
               marginBottom: '18px',
-              borderRadius: '9px',
-              background: '#ecfdf3',
-              color: '#027a48',
+              padding: '13px 14px',
+              borderRadius: '10px',
+              background: '#effbf4',
+              border: '1px solid #c8efd7',
+              color: '#087443',
               fontSize: '14px',
-              lineHeight: 1.5,
+              lineHeight: 1.45,
             }}
           >
             {success}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} noValidate>
-          {/* ACCOUNT TYPE */}
-
-          <h3
-            style={{
-              color: '#172033',
-              fontSize: '17px',
-              margin: '0 0 12px',
-            }}
-          >
-            Choose Account Type
-          </h3>
+        <form onSubmit={handleSubmit}>
+          {/* ==================================================
+              ACCOUNT TYPE
+          ================================================== */}
 
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns:
-                'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '12px',
-              marginBottom: '26px',
+              marginBottom: '20px',
             }}
           >
-            {/* PERSONAL */}
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => setAccountType('personal')}
-              aria-pressed={accountType === 'personal'}
+            <label
               style={{
-                textAlign: 'left',
-                padding: '17px',
-                borderRadius: '12px',
-                border:
-                  accountType === 'personal'
-                    ? '2px solid #0b5cff'
-                    : '1px solid #d0d5dd',
-                background:
-                  accountType === 'personal'
-                    ? '#eff6ff'
-                    : '#ffffff',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                color: '#172033',
+                display: 'block',
+                marginBottom: '8px',
+                fontSize: '14px',
+                fontWeight: 600,
+                color: '#1f2937',
               }}
             >
-              <div
-                style={{
-                  fontSize: '25px',
-                  marginBottom: '8px',
-                }}
-              >
-                👤
-              </div>
+              Account Type
+            </label>
 
-              <strong
-                style={{
-                  display: 'block',
-                  fontSize: '15px',
-                  marginBottom: '6px',
-                }}
-              >
-                Personal Account
-              </strong>
-
-              <span
-                style={{
-                  fontSize: '13px',
-                  lineHeight: 1.5,
-                  color: '#667085',
-                }}
-              >
-                For personal banking, transfers,
-                bills, airtime and data.
-              </span>
-
-              {accountType === 'personal' && (
-                <div
-                  style={{
-                    color: '#0b5cff',
-                    fontWeight: 700,
-                    fontSize: '13px',
-                    marginTop: '10px',
-                  }}
-                >
-                  ✓ Selected
-                </div>
-              )}
-            </button>
-
-            {/* BUSINESS */}
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => setAccountType('business')}
-              aria-pressed={accountType === 'business'}
+            <div
               style={{
-                textAlign: 'left',
-                padding: '17px',
-                borderRadius: '12px',
-                border:
-                  accountType === 'business'
-                    ? '2px solid #0b5cff'
-                    : '1px solid #d0d5dd',
-                background:
-                  accountType === 'business'
-                    ? '#eff6ff'
-                    : '#ffffff',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                color: '#172033',
+                display: 'grid',
+                gridTemplateColumns:
+                  'repeat(2, minmax(0, 1fr))',
+                gap: '10px',
               }}
             >
-              <div
-                style={{
-                  fontSize: '25px',
-                  marginBottom: '8px',
-                }}
-              >
-                🏢
-              </div>
-
-              <strong
-                style={{
-                  display: 'block',
-                  fontSize: '15px',
-                  marginBottom: '6px',
-                }}
-              >
-                Business Account
-              </strong>
-
-              <span
-                style={{
-                  fontSize: '13px',
-                  lineHeight: 1.5,
-                  color: '#667085',
-                }}
-              >
-                For business banking, business
-                statements and POS services.
-              </span>
-
-              {accountType === 'business' && (
-                <div
+              {(
+                [
+                  ['personal', 'Personal'],
+                  ['business', 'Business'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() =>
+                    setAccountType(value)
+                  }
                   style={{
-                    color: '#0b5cff',
+                    padding: '13px',
+                    borderRadius: '10px',
+                    border:
+                      accountType === value
+                        ? '2px solid #138a4b'
+                        : '1px solid #d1d5db',
+                    background:
+                      accountType === value
+                        ? '#effbf4'
+                        : '#ffffff',
+                    color:
+                      accountType === value
+                        ? '#087443'
+                        : '#374151',
                     fontWeight: 700,
-                    fontSize: '13px',
-                    marginTop: '10px',
+                    cursor: 'pointer',
                   }}
                 >
-                  ✓ Selected
-                </div>
-              )}
-            </button>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* CUSTOMER INFORMATION */}
+          {/* ==================================================
+              FIRST NAME
+          ================================================== */}
 
-          <h3
-            style={{
-              color: '#172033',
-              fontSize: '17px',
-              margin: '0 0 16px',
-            }}
-          >
-            Personal Information
-          </h3>
-
-          {/* FIRST NAME */}
-
-          <div style={{ marginBottom: '18px' }}>
-            <label htmlFor="firstName" style={labelStyle}>
-              First Name *
+          <div style={{ marginBottom: '16px' }}>
+            <label
+              htmlFor="first-name"
+              style={labelStyle}
+            >
+              First Name
             </label>
 
             <input
-              id="firstName"
+              id="first-name"
               type="text"
               value={firstName}
-              onChange={(event) =>
-                setFirstName(event.target.value)
+              onChange={(e) =>
+                setFirstName(e.target.value)
               }
-              placeholder="Enter your first name"
               autoComplete="given-name"
-              disabled={loading}
-              required
+              placeholder="Enter your first name"
               style={inputStyle}
+              disabled={loading}
             />
           </div>
 
-          {/* MIDDLE NAME */}
+          {/* ==================================================
+              MIDDLE NAME
+          ================================================== */}
 
-          <div style={{ marginBottom: '18px' }}>
-            <label htmlFor="middleName" style={labelStyle}>
-              Middle Name (Optional)
+          <div style={{ marginBottom: '16px' }}>
+            <label
+              htmlFor="middle-name"
+              style={labelStyle}
+            >
+              Middle Name{' '}
+              <span
+                style={{
+                  color: '#9ca3af',
+                  fontWeight: 400,
+                }}
+              >
+                (Optional)
+              </span>
             </label>
 
             <input
-              id="middleName"
+              id="middle-name"
               type="text"
               value={middleName}
-              onChange={(event) =>
-                setMiddleName(event.target.value)
+              onChange={(e) =>
+                setMiddleName(e.target.value)
               }
-              placeholder="Enter your middle name"
               autoComplete="additional-name"
-              disabled={loading}
+              placeholder="Enter your middle name"
               style={inputStyle}
+              disabled={loading}
             />
           </div>
 
-          {/* SURNAME */}
+          {/* ==================================================
+              SURNAME
+          ================================================== */}
 
-          <div style={{ marginBottom: '18px' }}>
-            <label htmlFor="surname" style={labelStyle}>
-              Surname *
+          <div style={{ marginBottom: '16px' }}>
+            <label
+              htmlFor="surname"
+              style={labelStyle}
+            >
+              Surname
             </label>
 
             <input
               id="surname"
               type="text"
               value={surname}
-              onChange={(event) =>
-                setSurname(event.target.value)
+              onChange={(e) =>
+                setSurname(e.target.value)
               }
-              placeholder="Enter your surname"
               autoComplete="family-name"
-              disabled={loading}
-              required
+              placeholder="Enter your surname"
               style={inputStyle}
+              disabled={loading}
             />
           </div>
 
-          {/* GENDER */}
+          {/* ==================================================
+              GENDER
+          ================================================== */}
 
-          <div style={{ marginBottom: '22px' }}>
-            <label htmlFor="gender" style={labelStyle}>
-              Gender *
+          <div style={{ marginBottom: '16px' }}>
+            <label
+              htmlFor="gender"
+              style={labelStyle}
+            >
+              Gender
             </label>
 
             <select
               id="gender"
               value={gender}
-              onChange={(event) =>
-                setGender(event.target.value)
+              onChange={(e) =>
+                setGender(e.target.value)
               }
+              style={inputStyle}
               disabled={loading}
-              required
-              style={{
-                ...inputStyle,
-                cursor: loading ? 'not-allowed' : 'pointer',
-              }}
             >
               <option value="">
-                Select your gender
+                Select gender
               </option>
 
-              <option value="male">Male</option>
+              <option value="male">
+                Male
+              </option>
 
-              <option value="female">Female</option>
+              <option value="female">
+                Female
+              </option>
+
+              <option value="other">
+                Other
+              </option>
             </select>
           </div>
 
-          {/* CONTACT DETAILS */}
+          {/* ==================================================
+              EMAIL
+          ================================================== */}
 
-          <h3
-            style={{
-              color: '#172033',
-              fontSize: '17px',
-              margin: '0 0 16px',
-            }}
-          >
-            Contact Information
-          </h3>
-
-          {/* EMAIL */}
-
-          <div style={{ marginBottom: '18px' }}>
-            <label htmlFor="email" style={labelStyle}>
-              Email Address *
+          <div style={{ marginBottom: '16px' }}>
+            <label
+              htmlFor="email"
+              style={labelStyle}
+            >
+              Email Address
             </label>
 
             <input
               id="email"
               type="email"
               value={email}
-              onChange={(event) =>
-                setEmail(event.target.value)
+              onChange={(e) =>
+                setEmail(e.target.value)
               }
-              placeholder="Enter your email address"
               autoComplete="email"
-              disabled={loading}
-              required
+              placeholder="Enter your email address"
               style={inputStyle}
+              disabled={loading}
             />
           </div>
 
-          {/* PHONE */}
+          {/* ==================================================
+              PHONE
+          ================================================== */}
 
-          <div style={{ marginBottom: '22px' }}>
-            <label htmlFor="phone" style={labelStyle}>
-              Phone Number *
+          <div style={{ marginBottom: '16px' }}>
+            <label
+              htmlFor="phone"
+              style={labelStyle}
+            >
+              Phone Number
             </label>
 
             <input
               id="phone"
               type="tel"
               value={phone}
-              onChange={(event) =>
-                setPhone(event.target.value)
+              onChange={(e) =>
+                setPhone(e.target.value)
               }
-              placeholder="Enter your phone number"
               autoComplete="tel"
-              disabled={loading}
-              required
+              placeholder="Enter your phone number"
               style={inputStyle}
+              disabled={loading}
             />
           </div>
 
-          {/* PASSWORD */}
+          {/* ==================================================
+              PASSWORD
+          ================================================== */}
 
-          <h3
-            style={{
-              color: '#172033',
-              fontSize: '17px',
-              margin: '0 0 16px',
-            }}
-          >
-            Secure Your Account
-          </h3>
-
-          <div style={{ marginBottom: '18px' }}>
-            <label htmlFor="password" style={labelStyle}>
-              Password *
+          <div style={{ marginBottom: '16px' }}>
+            <label
+              htmlFor="password"
+              style={labelStyle}
+            >
+              Password
             </label>
 
-            <div style={{ position: 'relative' }}>
+            <div
+              style={{
+                position: 'relative',
+              }}
+            >
               <input
                 id="password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(event) =>
-                  setPassword(event.target.value)
+                type={
+                  showPassword
+                    ? 'text'
+                    : 'password'
                 }
-                placeholder="Minimum 8 characters"
+                value={password}
+                onChange={(e) =>
+                  setPassword(e.target.value)
+                }
                 autoComplete="new-password"
-                disabled={loading}
-                required
+                placeholder="Create a password"
                 style={{
                   ...inputStyle,
-                  paddingRight: '55px',
+                  paddingRight: '80px',
                 }}
+                disabled={loading}
               />
 
               <button
                 type="button"
                 onClick={() =>
-                  setShowPassword((current) => !current)
+                  setShowPassword(
+                    (previous) => !previous,
+                  )
                 }
-                aria-label={
-                  showPassword ? 'Hide password' : 'Show password'
-                }
-                disabled={loading}
-                style={{
-                  position: 'absolute',
-                  right: '10px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  fontSize: '20px',
-                }}
+                style={showButtonStyle}
               >
-                {showPassword ? '🙈' : '👁️'}
+                {showPassword
+                  ? 'Hide'
+                  : 'Show'}
               </button>
             </div>
 
-            <p
+            <div
               style={{
+                marginTop: '6px',
                 fontSize: '12px',
-                color: '#667085',
-                margin: '7px 0 0',
+                color: '#6b7280',
               }}
             >
-              Use at least 8 characters. Never share
-              your password with anyone.
-            </p>
+              Minimum 8 characters.
+            </div>
           </div>
 
-          {/* CONFIRM PASSWORD */}
+          {/* ==================================================
+              CONFIRM PASSWORD
+          ================================================== */}
 
-          <div style={{ marginBottom: '24px' }}>
+          <div style={{ marginBottom: '22px' }}>
             <label
-              htmlFor="confirmPassword"
+              htmlFor="confirm-password"
               style={labelStyle}
             >
-              Confirm Password *
+              Confirm Password
             </label>
 
-            <div style={{ position: 'relative' }}>
+            <div
+              style={{
+                position: 'relative',
+              }}
+            >
               <input
-                id="confirmPassword"
+                id="confirm-password"
                 type={
-                  showConfirmPassword ? 'text' : 'password'
+                  showConfirmPassword
+                    ? 'text'
+                    : 'password'
                 }
                 value={confirmPassword}
-                onChange={(event) =>
-                  setConfirmPassword(event.target.value)
+                onChange={(e) =>
+                  setConfirmPassword(
+                    e.target.value,
+                  )
                 }
-                placeholder="Enter your password again"
                 autoComplete="new-password"
-                disabled={loading}
-                required
+                placeholder="Confirm your password"
                 style={{
                   ...inputStyle,
-                  paddingRight: '55px',
+                  paddingRight: '80px',
                 }}
+                disabled={loading}
               />
 
               <button
                 type="button"
                 onClick={() =>
                   setShowConfirmPassword(
-                    (current) => !current
+                    (previous) => !previous,
                   )
                 }
-                aria-label={
-                  showConfirmPassword
-                    ? 'Hide confirm password'
-                    : 'Show confirm password'
-                }
-                disabled={loading}
-                style={{
-                  position: 'absolute',
-                  right: '10px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  fontSize: '20px',
-                }}
+                style={showButtonStyle}
               >
-                {showConfirmPassword ? '🙈' : '👁️'}
+                {showConfirmPassword
+                  ? 'Hide'
+                  : 'Show'}
               </button>
             </div>
           </div>
 
-          {/* SUBMIT */}
+          {/* ==================================================
+              REGISTER BUTTON
+          ================================================== */}
 
           <button
             type="submit"
             disabled={loading}
             style={{
               width: '100%',
-              padding: '15px',
+              padding: '14px',
               border: 'none',
-              borderRadius: '10px',
-              background: '#0b5cff',
+              borderRadius: '11px',
+              background:
+                loading
+                  ? '#7bbd9b'
+                  : '#138a4b',
               color: '#ffffff',
-              fontWeight: 700,
               fontSize: '16px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1,
+              fontWeight: 700,
+              cursor: loading
+                ? 'not-allowed'
+                : 'pointer',
+              boxShadow:
+                '0 6px 16px rgba(19, 138, 75, 0.20)',
             }}
           >
             {loading
-              ? 'Creating Account...'
-              : 'Create Account'}
+              ? 'Creating account...'
+              : 'Create ZENIMONIES Account'}
           </button>
-
-          <p
-            style={{
-              fontSize: '12px',
-              lineHeight: 1.6,
-              color: '#667085',
-              textAlign: 'center',
-              marginTop: '14px',
-            }}
-          >
-            By creating an account, you agree to
-            complete the required identity verification
-            and comply with Zenimonies account requirements.
-          </p>
         </form>
 
-        {/* LOGIN */}
+        {/* ====================================================
+            LOGIN
+        ==================================================== */}
 
-        <p
+        <div
           style={{
             textAlign: 'center',
-            marginTop: '24px',
-            marginBottom: 0,
-            color: '#667085',
+            marginTop: '22px',
             fontSize: '14px',
+            color: '#6b7280',
           }}
         >
-          Already have an account?{' '}
+          Already have a ZENIMONIES account?{' '}
 
           <Link
             to="/login"
             style={{
-              color: '#0b5cff',
+              color: '#138a4b',
               fontWeight: 700,
               textDecoration: 'none',
             }}
           >
-            Sign In
+            Sign in
           </Link>
-        </p>
+        </div>
+
+        {/* ====================================================
+            SECURITY NOTE
+        ==================================================== */}
+
+        <div
+          style={{
+            marginTop: '20px',
+            paddingTop: '16px',
+            borderTop: '1px solid #edf0f2',
+            textAlign: 'center',
+            fontSize: '11px',
+            lineHeight: 1.5,
+            color: '#9ca3af',
+          }}
+        >
+          Your information is protected by
+          ZENIMONIES security controls.
+        </div>
       </div>
     </div>
   );
+};
+
+// ============================================================
+// STYLES
+// ============================================================
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  marginBottom: '7px',
+  fontSize: '14px',
+  fontWeight: 600,
+  color: '#1f2937',
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  boxSizing: 'border-box',
+  padding: '12px 13px',
+  borderRadius: '10px',
+  border: '1px solid #d1d5db',
+  background: '#ffffff',
+  color: '#111827',
+  fontSize: '14px',
+  outline: 'none',
+};
+
+const showButtonStyle: React.CSSProperties = {
+  position: 'absolute',
+  right: '10px',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  border: 'none',
+  background: 'transparent',
+  color: '#138a4b',
+  fontSize: '12px',
+  fontWeight: 700,
+  cursor: 'pointer',
 };
 
 export default Register;
