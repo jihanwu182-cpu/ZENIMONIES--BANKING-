@@ -2668,7 +2668,7 @@ if (
 /* More Services */
 
 .zenimonies-dashboard.dark-mode
-  [style*="rgba(255,255,255,0.94)"] {
+  [style*="rgba(255, 255, 255, 0.94)"] {
   background: #10231c !important;
   border-color: #29483b !important;
 }
@@ -2676,7 +2676,7 @@ if (
 /* More service buttons */
 
 .zenimonies-dashboard.dark-mode
-  [style*="#f4faf7"] {
+  [style*="rgb(244, 250, 247)"] {
   background: #153027 !important;
   color: #72d8a5 !important;
 }
@@ -2691,7 +2691,7 @@ if (
 /* Recent Transactions */
 
 .zenimonies-dashboard.dark-mode
-  [style*="rgba(255,255,255,0.95)"] {
+  [style*="rgba(255, 255, 255, 0.95)"]{
   background: #10231c !important;
   border-color: #29483b !important;
 }
