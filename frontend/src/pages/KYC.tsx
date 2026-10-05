@@ -2545,46 +2545,37 @@ const KYC: React.FC = () => {
 
                   {/* DOJAH */}
 
-                  <div className="zk-small-title">
-                    Recommended
-                    verification
-                  </div>
+             <div className="zk-small-title">
+  Secure verification
+</div>
 
-                  <div className="zk-note">
+<div className="zk-note">
+  <span className="zk-note-icon">
+    🔒
+  </span>
 
-                    <span className="zk-note-icon">
-                      🔒
-                    </span>
+  <span>
+    Complete your identity verification
+    securely using ZENIMONIES' approved
+    verification process.
+  </span>
+</div>
 
-                    <span>
-                      Complete secure
-                      identity
-                      verification
-                      through Dojah.
-                      This is the
-                      recommended
-                      option.
-                    </span>
-
-                  </div>
-
-                  <button
-                    type="button"
-                    className="zk-button zk-dojah-button"
-                    onClick={
-                      startDojahVerification
-                    }
-                    disabled={
-                      dojahLoading ||
-                      !dojahScriptReady
-                    }
-                  >
-                    {dojahLoading
-                      ? 'Opening secure verification...'
-                      : !dojahScriptReady
-                      ? 'Loading secure verification...'
-                      : 'Verify with Dojah'}
-                  </button>
+<button
+  type="button"
+  className="zk-button zk-dojah-button"
+  onClick={startDojahVerification}
+  disabled={
+    dojahLoading ||
+    !dojahScriptReady
+  }
+>
+  {dojahLoading
+    ? 'Opening secure verification...'
+    : !dojahScriptReady
+    ? 'Preparing secure verification...'
+    : 'Start secure verification'}
+</button>
 
                   <div className="zk-divider" />
 
