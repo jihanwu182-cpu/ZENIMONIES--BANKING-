@@ -4,6 +4,7 @@
   useState,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../context/Theme';
 
 /* ============================================================
    TYPES
@@ -59,48 +60,11 @@ type UserData = {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
- 
-const [darkMode, setDarkMode] = useState(() => {
-  return (
-    localStorage.getItem('zenimonies_dark_mode') ===
-    'true'
-  );
-});
- useEffect(() => {
-  const syncTheme = () => {
-    setDarkMode(
-      localStorage.getItem('zenimonies_dark_mode') ===
-        'true'
-    );
-  };
 
-  // Detect changes made by Settings
-  window.addEventListener('storage', syncTheme);
-
-  // Also check whenever Dashboard becomes visible again
-  const handleVisibility = () => {
-    if (document.visibilityState === 'visible') {
-      syncTheme();
-    }
-  };
-
-  document.addEventListener(
-    'visibilitychange',
-    handleVisibility
-  );
-
-  return () => {
-    window.removeEventListener(
-      'storage',
-      syncTheme
-    );
-
-    document.removeEventListener(
-      'visibilitychange',
-      handleVisibility
-    );
-  };
-}, []);
+ const {
+  darkMode,
+  setDarkMode,
+} = useTheme();
   const [showBalance, setShowBalance] =
     useState(true);
 
