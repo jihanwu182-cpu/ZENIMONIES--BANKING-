@@ -46,10 +46,7 @@ interface DojahWidgetOptions {
 
   reference_id?: string;
 
-  metadata?: Record<
-    string,
-    unknown
-  >;
+  metadata?: Record<string, unknown>;
 
   onSuccess?: (
     response: unknown
@@ -143,7 +140,6 @@ interface KycResponse {
 
 interface TierLimit {
   account: number | null;
-
   daily: number | null;
 }
 
@@ -178,7 +174,6 @@ const TIER_LIMITS: Record<
 
 // ============================================================
 // TIER 3 — PROOF OF ADDRESS
-// EXACTLY AS APPROVED
 // ============================================================
 
 const ADDRESS_DOCUMENT_OPTIONS = [
@@ -399,7 +394,9 @@ const TierLimits: React.FC<{
 
   return (
     <div className="zk-tier-limits">
+
       <div className="zk-tier-limit-row">
+
         <span className="zk-label">
           Account limit
         </span>
@@ -409,9 +406,11 @@ const TierLimits: React.FC<{
             limits.account
           )}
         </strong>
+
       </div>
 
       <div className="zk-tier-limit-row">
+
         <span className="zk-label">
           Daily transfer limit
         </span>
@@ -421,7 +420,9 @@ const TierLimits: React.FC<{
             limits.daily
           )}
         </strong>
+
       </div>
+
     </div>
   );
 };
@@ -1320,7 +1321,7 @@ const KYC: React.FC = () => {
   };
 
   // ==========================================================
-  // DOJAH SCRIPT
+  // SECURE VERIFICATION SCRIPT
   // ==========================================================
 
   useEffect(() => {
@@ -1467,8 +1468,6 @@ const KYC: React.FC = () => {
 
   // ==========================================================
   // STATUS
-  // IMPORTANT:
-  // HIGHER LEVELS CANNOT APPEAR VERIFIED BEFORE APPROVAL
   // ==========================================================
 
   const approvedTier =
@@ -1478,9 +1477,9 @@ const KYC: React.FC = () => {
         0
     );
 
-  // -------------------------
+  // ==========================================================
   // TIER 1 / BVN
-  // -------------------------
+  // ==========================================================
 
   const rawBvnStatus =
     normalizeStatus(
@@ -1497,9 +1496,9 @@ const KYC: React.FC = () => {
       ? 'pending'
       : 'not submitted';
 
-  // -------------------------
+  // ==========================================================
   // TIER 2 / ID
-  // -------------------------
+  // ==========================================================
 
   const rawIdStatus =
     normalizeStatus(
@@ -1516,9 +1515,9 @@ const KYC: React.FC = () => {
       ? 'pending'
       : 'not submitted';
 
-  // -------------------------
+  // ==========================================================
   // TIER 3
-  // -------------------------
+  // ==========================================================
 
   const rawTier3Status =
     normalizeStatus(
@@ -1536,18 +1535,18 @@ const KYC: React.FC = () => {
       ? 'pending'
       : 'not submitted';
 
-  // -------------------------
+  // ==========================================================
   // MISSING PROFILE FIELDS
-  // -------------------------
+  // ==========================================================
 
   const missingFields =
     kyc.missing_profile_fields ||
     kyc.missingProfileFields ||
     [];
 
-  // -------------------------
+  // ==========================================================
   // SUBMISSION RULES
-  // -------------------------
+  // ==========================================================
 
   const canSubmitBvn =
     bvnStatus !==
@@ -1573,7 +1572,6 @@ const KYC: React.FC = () => {
 
   // ==========================================================
   // CURRENT VERIFICATION LABEL
-  // NO "TIER 0"
   // ==========================================================
 
   const currentLevelLabel =
@@ -1587,7 +1585,7 @@ const KYC: React.FC = () => {
       : `Your approved ZENIMONIES verification level`;
 
   // ==========================================================
-  // DOJAH TIER 2
+  // SECURE TIER 2 VERIFICATION
   // ==========================================================
 
   const startDojahVerification =
@@ -1607,7 +1605,7 @@ const KYC: React.FC = () => {
         !DOJAH_WIDGET_ID
       ) {
         showAlert(
-          'Dojah verification is not configured. Please use the manual Tier 2 verification option.',
+          'Secure verification is not currently available. Please use the manual Tier 2 verification option.',
           'warning'
         );
 
@@ -1654,7 +1652,7 @@ const KYC: React.FC = () => {
         if (!response.ok) {
           throw new Error(
             result.message ||
-              'Unable to start Dojah verification.'
+              'Unable to start secure verification.'
           );
         }
 
@@ -1677,7 +1675,7 @@ const KYC: React.FC = () => {
 
         if (!Connect) {
           throw new Error(
-            'Dojah verification is unavailable.'
+            'Secure verification is unavailable.'
           );
         }
 
@@ -1736,7 +1734,7 @@ const KYC: React.FC = () => {
                   ) {
                     throw new Error(
                       confirmResult.message ||
-                        'Unable to confirm Dojah verification.'
+                        'Unable to confirm secure verification.'
                     );
                   }
 
@@ -1767,7 +1765,7 @@ const KYC: React.FC = () => {
               );
 
               showAlert(
-                'Dojah verification was not completed. You can try again or use manual verification.',
+                'Secure verification was not completed. You can try again or use manual verification.',
                 'error'
               );
             },
@@ -1783,7 +1781,7 @@ const KYC: React.FC = () => {
           instance.open();
         } else {
           throw new Error(
-            'Unable to open the verification window.'
+            'Unable to open the secure verification window.'
           );
         }
       } catch (error) {
@@ -2015,21 +2013,13 @@ const KYC: React.FC = () => {
           'success'
         );
 
-        setDocumentNumber(
-          ''
-        );
+        setDocumentNumber('');
 
-        setFrontFile(
-          null
-        );
+        setFrontFile(null);
 
-        setBackFile(
-          null
-        );
+        setBackFile(null);
 
-        setTier2Selfie(
-          null
-        );
+        setTier2Selfie(null);
 
         if (
           frontFileRef.current
@@ -2127,25 +2117,21 @@ const KYC: React.FC = () => {
         const formData =
           new FormData();
 
-        // Verification method
         formData.append(
           'tier_3_method',
           tier3Method
         );
 
-        // Exact proof-of-address type
         formData.append(
           'tier_3_document_type',
           addressDocumentType
         );
 
-        // Proof of address
         formData.append(
           'tier_3_document',
           addressFile
         );
 
-        // Selfie
         formData.append(
           'tier_3_selfie',
           tier3Selfie
@@ -2180,13 +2166,9 @@ const KYC: React.FC = () => {
           'success'
         );
 
-        setAddressFile(
-          null
-        );
+        setAddressFile(null);
 
-        setTier3Selfie(
-          null
-        );
+        setTier3Selfie(null);
 
         if (
           addressFileRef.current
@@ -2270,11 +2252,11 @@ const KYC: React.FC = () => {
             </span>
 
           </div>
+
         </section>
 
         {/* ==================================================
             CURRENT VERIFICATION STATUS
-            IMPORTANT: NEVER SHOW "TIER 0"
         ================================================== */}
 
         {!loading && (
@@ -2497,10 +2479,12 @@ const KYC: React.FC = () => {
                     Identity Verification
                   </h2>
 
+                  {/* CUSTOMER-FACING COPY:
+                      NO PROVIDER NAME */}
                   <p>
-                    Verify your identity
-                    using Dojah or our
-                    manual document
+                    Complete your identity
+                    verification securely
+                    using our approved
                     verification process.
                   </p>
 
@@ -2543,43 +2527,49 @@ const KYC: React.FC = () => {
               ) : canSubmitTier2 ? (
                 <>
 
-                  {/* DOJAH */}
+                  {/* SECURE VERIFICATION */}
 
-             <div className="zk-small-title">
-  Secure verification
-</div>
+                  <div className="zk-small-title">
+                    Secure verification
+                  </div>
 
-<div className="zk-note">
-  <span className="zk-note-icon">
-    🔒
-  </span>
+                  <div className="zk-note">
 
-  <span>
-    Complete your identity verification
-    securely using ZENIMONIES' approved
-    verification process.
-  </span>
-</div>
+                    <span className="zk-note-icon">
+                      🔒
+                    </span>
 
-<button
-  type="button"
-  className="zk-button zk-dojah-button"
-  onClick={startDojahVerification}
-  disabled={
-    dojahLoading ||
-    !dojahScriptReady
-  }
->
-  {dojahLoading
-    ? 'Opening secure verification...'
-    : !dojahScriptReady
-    ? 'Preparing secure verification...'
-    : 'Start secure verification'}
-</button>
+                    <span>
+                      Complete your identity
+                      verification securely
+                      using ZENIMONIES'
+                      approved verification
+                      process.
+                    </span>
+
+                  </div>
+
+                  <button
+                    type="button"
+                    className="zk-button zk-dojah-button"
+                    onClick={
+                      startDojahVerification
+                    }
+                    disabled={
+                      dojahLoading ||
+                      !dojahScriptReady
+                    }
+                  >
+                    {dojahLoading
+                      ? 'Opening secure verification...'
+                      : !dojahScriptReady
+                      ? 'Preparing secure verification...'
+                      : 'Start secure verification'}
+                  </button>
 
                   <div className="zk-divider" />
 
-                  {/* MANUAL */}
+                  {/* MANUAL VERIFICATION */}
 
                   <div className="zk-small-title">
                     Manual verification
@@ -2592,12 +2582,11 @@ const KYC: React.FC = () => {
                     </span>
 
                     <span>
-                      If you cannot use
-                      Dojah, you can
-                      submit your
-                      identity document
-                      and selfie
-                      manually.
+                      If you cannot use the
+                      secure verification
+                      option, you can submit
+                      your identity document
+                      and selfie manually.
                     </span>
 
                   </div>
@@ -2865,9 +2854,7 @@ const KYC: React.FC = () => {
                   }
                 >
 
-                  {/* ==================================================
-                      VERIFICATION METHOD
-                  ================================================== */}
+                  {/* VERIFICATION METHOD */}
 
                   <div className="zk-small-title">
                     Verification method
@@ -2897,6 +2884,7 @@ const KYC: React.FC = () => {
                         Submit your proof
                         of address.
                       </div>
+
                     </button>
 
                     <button
@@ -2921,13 +2909,12 @@ const KYC: React.FC = () => {
                         Upload an approved
                         proof of address.
                       </div>
+
                     </button>
 
                   </div>
 
-                  {/* ==================================================
-                      EXACT PROOF OF ADDRESS LIST
-                  ================================================== */}
+                  {/* PROOF OF ADDRESS */}
 
                   <div className="zk-small-title">
                     Proof of Address
@@ -2993,9 +2980,7 @@ const KYC: React.FC = () => {
 
                   </div>
 
-                  {/* ==================================================
-                      SELECTED DOCUMENT
-                  ================================================== */}
+                  {/* SELECTED DOCUMENT */}
 
                   <div className="zk-field">
 
@@ -3045,9 +3030,7 @@ const KYC: React.FC = () => {
 
                   </div>
 
-                  {/* ==================================================
-                      ADDRESS PDF
-                  ================================================== */}
+                  {/* ADDRESS PDF */}
 
                   <div className="zk-field">
 
@@ -3086,9 +3069,7 @@ const KYC: React.FC = () => {
 
                   </div>
 
-                  {/* ==================================================
-                      SELFIE
-                  ================================================== */}
+                  {/* SELFIE */}
 
                   <div className="zk-field">
 
@@ -3126,9 +3107,7 @@ const KYC: React.FC = () => {
 
                   </div>
 
-                  {/* ==================================================
-                      IMPORTANT NOTE
-                  ================================================== */}
+                  {/* IMPORTANT NOTE */}
 
                   <div className="zk-note">
 
@@ -3148,9 +3127,7 @@ const KYC: React.FC = () => {
 
                   </div>
 
-                  {/* ==================================================
-                      SUBMIT
-                  ================================================== */}
+                  {/* SUBMIT */}
 
                   <button
                     type="submit"
