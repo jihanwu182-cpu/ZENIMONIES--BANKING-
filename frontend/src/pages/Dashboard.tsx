@@ -59,7 +59,48 @@ type UserData = {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+ 
+const [darkMode, setDarkMode] = useState(() => {
+  return (
+    localStorage.getItem('zenimonies_dark_mode') ===
+    'true'
+  );
+});
+ useEffect(() => {
+  const syncTheme = () => {
+    setDarkMode(
+      localStorage.getItem('zenimonies_dark_mode') ===
+        'true'
+    );
+  };
 
+  // Detect changes made by Settings
+  window.addEventListener('storage', syncTheme);
+
+  // Also check whenever Dashboard becomes visible again
+  const handleVisibility = () => {
+    if (document.visibilityState === 'visible') {
+      syncTheme();
+    }
+  };
+
+  document.addEventListener(
+    'visibilitychange',
+    handleVisibility
+  );
+
+  return () => {
+    window.removeEventListener(
+      'storage',
+      syncTheme
+    );
+
+    document.removeEventListener(
+      'visibilitychange',
+      handleVisibility
+    );
+  };
+}, []);
   const [showBalance, setShowBalance] =
     useState(true);
 
@@ -960,7 +1001,14 @@ const Dashboard: React.FC = () => {
   ========================================================== */
 
   return (
-    <div style={styles.page}>
+  <div
+    className={
+      darkMode
+        ? 'zenimonies-dashboard dark-mode'
+        : 'zenimonies-dashboard'
+    }
+    style={styles.page}
+  >
 
  {/* ======================================================
     HEADER
@@ -2558,6 +2606,134 @@ if (
         margin: auto;
       }
     }
+  /* ==========================================================
+   ZENIMONIES DASHBOARD DARK THEME
+========================================================== */
+
+.zenimonies-dashboard.dark-mode {
+  background: linear-gradient(
+    180deg,
+    #071710 0%,
+    #0b1d16 100%
+  ) !important;
+
+  color: #f3f8f5 !important;
+}
+
+/* Header */
+
+.zenimonies-dashboard.dark-mode header {
+  background: rgba(8, 25, 18, 0.97) !important;
+  border-bottom-color: #203c31 !important;
+}
+
+.zenimonies-dashboard.dark-mode
+  header button {
+  color: #b8c9c1 !important;
+}
+
+/* Main headings */
+
+.zenimonies-dashboard.dark-mode
+  h1,
+.zenimonies-dashboard.dark-mode
+  h2,
+.zenimonies-dashboard.dark-mode
+  strong {
+  color: #f3f8f5 !important;
+}
+
+/* Welcome / secondary text */
+
+.zenimonies-dashboard.dark-mode
+  p {
+  color: #9eb0a8 !important;
+}
+
+/* Quick action cards */
+
+.zenimonies-dashboard.dark-mode
+  [style*="#ffffff"] {
+  background: #12271f !important;
+  border-color: #29473b !important;
+}
+
+/* Quick action labels */
+
+.zenimonies-dashboard.dark-mode
+  [style*="#20372e"] {
+  color: #d9e7e1 !important;
+}
+
+/* More Services */
+
+.zenimonies-dashboard.dark-mode
+  [style*="rgba(255,255,255,0.94)"] {
+  background: #10231c !important;
+  border-color: #29483b !important;
+}
+
+/* More service buttons */
+
+.zenimonies-dashboard.dark-mode
+  [style*="#f4faf7"] {
+  background: #153027 !important;
+  color: #72d8a5 !important;
+}
+
+/* More panel */
+
+.zenimonies-dashboard.dark-mode
+  [style*="#ffffff"] {
+  border-color: #29483b !important;
+}
+
+/* Recent Transactions */
+
+.zenimonies-dashboard.dark-mode
+  [style*="rgba(255,255,255,0.95)"] {
+  background: #10231c !important;
+  border-color: #29483b !important;
+}
+
+/* Empty transaction box */
+
+.zenimonies-dashboard.dark-mode
+  [style*="#fbfdfc"] {
+  background: #132920 !important;
+  border-color: #29483b !important;
+}
+
+/* Empty transaction text */
+
+.zenimonies-dashboard.dark-mode
+  [style*="#263d33"] {
+  color: #dce9e3 !important;
+}
+
+/* Bottom navigation */
+
+.zenimonies-dashboard.dark-mode
+  nav {
+  background: rgba(7, 23, 16, 0.98) !important;
+  border-top-color: #294238 !important;
+  box-shadow:
+    0 -8px 25px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* Bottom navigation */
+
+.zenimonies-dashboard.dark-mode
+  nav button {
+  color: #899c94 !important;
+}
+
+/* Active navigation */
+
+.zenimonies-dashboard.dark-mode
+  nav button:first-child {
+  color: #69d9a0 !important;
+}
   `;
 
   if (
