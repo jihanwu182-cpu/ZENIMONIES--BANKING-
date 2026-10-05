@@ -33,7 +33,11 @@ const Bills: React.FC = () => {
   const navigate = useNavigate();
 
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [pressedIndex, setPressedIndex] = useState<number | null>(null);
 
+  // ============================================================
+  // SYSTEM DARK MODE
+  // ============================================================
   useEffect(() => {
     const mediaQuery = window.matchMedia(
       '(prefers-color-scheme: dark)'
@@ -52,6 +56,9 @@ const Bills: React.FC = () => {
     };
   }, []);
 
+  // ============================================================
+  // ZENIMONIES COLORS
+  // ============================================================
   const colors = isDarkMode
     ? {
         background: '#07110d',
@@ -60,14 +67,19 @@ const Bills: React.FC = () => {
         cardPressed: '#14251d',
         border: '#1d382b',
         divider: '#1b3026',
+
         primaryText: '#f3faf6',
         secondaryText: '#a9bbb2',
         mutedText: '#81968c',
+
         green: '#19a765',
         greenBright: '#25c477',
+
         iconBackground: '#123a29',
         iconBorder: '#1c5139',
+
         arrowBackground: '#183126',
+
         securityBackground: '#0d2a1e',
         securityBorder: '#1c4a35',
         securityText: '#a8c8b8',
@@ -79,14 +91,19 @@ const Bills: React.FC = () => {
         cardPressed: '#f7fbf9',
         border: '#dcebe5',
         divider: '#e7efeb',
+
         primaryText: '#073b2a',
         secondaryText: '#687b74',
         mutedText: '#70827b',
+
         green: '#087b48',
         greenBright: '#0b8f55',
+
         iconBackground: '#e8f6ef',
         iconBorder: '#d5eee2',
+
         arrowBackground: '#f0f7f4',
+
         securityBackground: '#eaf7f0',
         securityBorder: '#d5eee2',
         securityText: '#356b57',
@@ -101,24 +118,28 @@ const Bills: React.FC = () => {
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
         paddingBottom: 40,
-        transition: 'background 0.2s ease, color 0.2s ease',
+        transition:
+          'background-color 0.2s ease, color 0.2s ease',
       }}
     >
-      {/* =========================================================
+      {/* ========================================================
           HEADER
-      ========================================================= */}
-      <div
+      ======================================================== */}
+      <header
         style={{
           position: 'sticky',
           top: 0,
-          zIndex: 10,
+          zIndex: 20,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '18px 20px 16px',
+          height: 74,
+          padding: '0 20px',
           background: colors.header,
           borderBottom: `1px solid ${colors.border}`,
-          transition: 'background 0.2s ease, border-color 0.2s ease',
+          boxSizing: 'border-box',
+          transition:
+            'background-color 0.2s ease, border-color 0.2s ease',
         }}
       >
         {/* Back button */}
@@ -136,13 +157,26 @@ const Bills: React.FC = () => {
             justifyContent: 'center',
             border: 'none',
             borderRadius: 14,
-            background: isDarkMode ? '#13251d' : '#f1f7f4',
+            background: isDarkMode
+              ? '#13251d'
+              : '#f1f7f4',
             color: colors.primaryText,
-            fontSize: 32,
+            fontSize: 31,
+            fontWeight: 400,
             lineHeight: 1,
             cursor: 'pointer',
             padding: 0,
-            transition: 'background 0.2s ease',
+            transition:
+              'background-color 0.2s ease, transform 0.1s ease',
+          }}
+          onMouseDown={(event) => {
+            event.currentTarget.style.transform = 'scale(0.94)';
+          }}
+          onMouseUp={(event) => {
+            event.currentTarget.style.transform = 'scale(1)';
+          }}
+          onMouseLeave={(event) => {
+            event.currentTarget.style.transform = 'scale(1)';
           }}
         >
           ‹
@@ -152,7 +186,7 @@ const Bills: React.FC = () => {
         <h1
           style={{
             margin: 0,
-            fontSize: 24,
+            fontSize: 23,
             fontWeight: 800,
             letterSpacing: -0.4,
             color: colors.primaryText,
@@ -160,34 +194,44 @@ const Bills: React.FC = () => {
         >
           Bills
         </h1>
-      </div>
+      </header>
 
-      {/* =========================================================
-          MAIN CONTENT
-      ========================================================= */}
+      {/* ========================================================
+          MAIN
+      ======================================================== */}
       <main
         style={{
           width: '100%',
           maxWidth: 680,
           margin: '0 auto',
-          padding: '26px 18px',
+          padding: '27px 18px 0',
           boxSizing: 'border-box',
         }}
       >
-        {/* Intro */}
-        <div
+        {/* ======================================================
+            INTRO
+        ====================================================== */}
+        <section
           style={{
             marginBottom: 22,
           }}
         >
           <div
             style={{
-              fontSize: 12,
-              fontWeight: 800,
-              letterSpacing: 1.2,
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '6px 10px',
+              borderRadius: 999,
+              background: isDarkMode
+                ? '#0d2a1e'
+                : '#eaf7f0',
               color: colors.green,
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: 1,
               textTransform: 'uppercase',
-              marginBottom: 7,
+              marginBottom: 11,
+              border: `1px solid ${colors.securityBorder}`,
             }}
           >
             Payments
@@ -199,7 +243,7 @@ const Bills: React.FC = () => {
               fontSize: 30,
               lineHeight: 1.15,
               fontWeight: 850,
-              letterSpacing: -0.7,
+              letterSpacing: -0.8,
               color: colors.primaryText,
             }}
           >
@@ -212,134 +256,149 @@ const Bills: React.FC = () => {
               fontSize: 15,
               lineHeight: 1.5,
               color: colors.secondaryText,
+              maxWidth: 520,
             }}
           >
             Select a bill or service you want to pay.
           </p>
-        </div>
+        </section>
 
-        {/* =======================================================
+        {/* ======================================================
             BILL OPTIONS
-        ======================================================= */}
-        <div
+        ====================================================== */}
+        <section
+          aria-label="Bill payment options"
           style={{
             background: colors.card,
             border: `1px solid ${colors.border}`,
             borderRadius: 22,
             overflow: 'hidden',
             boxShadow: isDarkMode
-              ? '0 10px 30px rgba(0, 0, 0, 0.20)'
+              ? '0 12px 32px rgba(0, 0, 0, 0.22)'
               : '0 8px 30px rgba(7, 59, 42, 0.06)',
-            transition: 'background 0.2s ease, border-color 0.2s ease',
+            transition:
+              'background-color 0.2s ease, border-color 0.2s ease',
           }}
         >
-          {BILL_OPTIONS.map((bill, index) => (
-            <button
-              key={bill.title}
-              type="button"
-              onClick={() => navigate(bill.path)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-                padding: '17px 16px',
-                background: colors.card,
-                border: 'none',
-                borderBottom:
-                  index === BILL_OPTIONS.length - 1
-                    ? 'none'
-                    : `1px solid ${colors.divider}`,
-                textAlign: 'left',
-                cursor: 'pointer',
-                transition:
-                  'background 0.15s ease, transform 0.1s ease',
-              }}
-              onMouseDown={(event) => {
-                event.currentTarget.style.background =
-                  colors.cardPressed;
-              }}
-              onMouseUp={(event) => {
-                event.currentTarget.style.background = colors.card;
-              }}
-              onMouseLeave={(event) => {
-                event.currentTarget.style.background = colors.card;
-              }}
-            >
-              {/* Icon */}
-              <div
+          {BILL_OPTIONS.map((bill, index) => {
+            const isPressed = pressedIndex === index;
+
+            return (
+              <button
+                key={bill.title}
+                type="button"
+                onClick={() => navigate(bill.path)}
+                onMouseDown={() => setPressedIndex(index)}
+                onMouseUp={() => setPressedIndex(null)}
+                onMouseLeave={() => setPressedIndex(null)}
+                onTouchStart={() => setPressedIndex(index)}
+                onTouchEnd={() => setPressedIndex(null)}
                 style={{
-                  width: 52,
-                  height: 52,
-                  minWidth: 52,
-                  borderRadius: 16,
-                  background: colors.iconBackground,
-                  border: `1px solid ${colors.iconBorder}`,
+                  width: '100%',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 25,
+                  gap: 14,
+                  padding: '17px 16px',
+                  background: isPressed
+                    ? colors.cardPressed
+                    : colors.card,
+                  border: 'none',
+                  borderBottom:
+                    index === BILL_OPTIONS.length - 1
+                      ? 'none'
+                      : `1px solid ${colors.divider}`,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition:
+                    'background-color 0.15s ease, transform 0.1s ease',
+                  transform: isPressed
+                    ? 'scale(0.995)'
+                    : 'scale(1)',
                   boxSizing: 'border-box',
                 }}
               >
-                {bill.icon}
-              </div>
-
-              {/* Text */}
-              <div
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                }}
-              >
+                {/* ==================================================
+                    ICON
+                ================================================== */}
                 <div
                   style={{
-                    fontSize: 17,
-                    fontWeight: 800,
+                    width: 52,
+                    height: 52,
+                    minWidth: 52,
+                    borderRadius: 16,
+                    background: colors.iconBackground,
+                    border: `1px solid ${colors.iconBorder}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 25,
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  {bill.icon}
+                </div>
+
+                {/* ==================================================
+                    TEXT
+                ================================================== */}
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 17,
+                      fontWeight: 800,
+                      color: colors.greenBright,
+                      marginBottom: 4,
+                      letterSpacing: -0.15,
+                    }}
+                  >
+                    {bill.title}
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: 13,
+                      lineHeight: 1.4,
+                      color: colors.secondaryText,
+                    }}
+                  >
+                    {bill.description}
+                  </div>
+                </div>
+
+                {/* ==================================================
+                    ARROW
+                ================================================== */}
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    minWidth: 32,
+                    borderRadius: '50%',
+                    background: colors.arrowBackground,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     color: colors.greenBright,
-                    marginBottom: 4,
+                    fontSize: 25,
+                    fontWeight: 700,
+                    lineHeight: 1,
                   }}
                 >
-                  {bill.title}
+                  ›
                 </div>
+              </button>
+            );
+          })}
+        </section>
 
-                <div
-                  style={{
-                    fontSize: 13,
-                    lineHeight: 1.4,
-                    color: colors.secondaryText,
-                  }}
-                >
-                  {bill.description}
-                </div>
-              </div>
-
-              {/* Arrow */}
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  minWidth: 32,
-                  borderRadius: '50%',
-                  background: colors.arrowBackground,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: colors.greenBright,
-                  fontSize: 25,
-                  fontWeight: 700,
-                  lineHeight: 1,
-                }}
-              >
-                ›
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* =======================================================
+        {/* ======================================================
             SECURITY NOTICE
-        ======================================================= */}
+        ====================================================== */}
         <div
           style={{
             marginTop: 18,
@@ -351,7 +410,7 @@ const Bills: React.FC = () => {
             fontSize: 12.5,
             lineHeight: 1.5,
             transition:
-              'background 0.2s ease, border-color 0.2s ease',
+              'background-color 0.2s ease, border-color 0.2s ease',
           }}
         >
           <div
@@ -365,7 +424,9 @@ const Bills: React.FC = () => {
               style={{
                 fontSize: 17,
                 lineHeight: 1.2,
+                flexShrink: 0,
               }}
+              aria-hidden="true"
             >
               🔒
             </span>
@@ -376,6 +437,20 @@ const Bills: React.FC = () => {
               payment.
             </span>
           </div>
+        </div>
+
+        {/* ======================================================
+            FOOTER
+        ====================================================== */}
+        <div
+          style={{
+            textAlign: 'center',
+            marginTop: 20,
+            fontSize: 11,
+            color: colors.mutedText,
+          }}
+        >
+          ZENIMONIES • Secure Bill Payments
         </div>
       </main>
     </div>
