@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../theme/Theme.tsx';
 
 type Service = {
   id: string;
@@ -73,16 +74,79 @@ const ACTIVE_SERVICE_IDS = new Set([
 const OtherBills: React.FC = () => {
   const navigate = useNavigate();
 
+  const { darkMode: isDarkMode } =
+    useTheme();
+
   const [selectedService, setSelectedService] =
     useState<Service | null>(null);
+
+  /*
+   * ============================================================
+   * ZENIMONIES GLOBAL THEME COLORS
+   * ============================================================
+   */
+
+  const colors = isDarkMode
+    ? {
+        page: '#0d1712',
+        card: '#101c16',
+        surface: '#15231c',
+        surfaceSoft: '#15231c',
+        border: '#294238',
+        divider: '#22372d',
+
+        text: '#f3f8f5',
+        secondary: '#a9b8b0',
+        muted: '#82958b',
+
+        green: '#079447',
+        greenBright: '#25c477',
+        greenDark: '#006d3b',
+
+        greenSoft: '#123a29',
+        greenBorder: '#1c5139',
+
+        comingSoonBg: '#18251f',
+        comingSoonText: '#91a39a',
+
+        shadow:
+          '0 10px 30px rgba(0, 0, 0, 0.25)',
+      }
+    : {
+        page: '#f6faf8',
+        card: '#ffffff',
+        surface: '#ffffff',
+        surfaceSoft: '#f7faf8',
+        border: '#e7eee9',
+        divider: '#e6efea',
+
+        text: '#14251e',
+        secondary: '#7b8982',
+        muted: '#98a49f',
+
+        green: '#079447',
+        greenBright: '#0b995b',
+        greenDark: '#006d3b',
+
+        greenSoft: '#e9f8f1',
+        greenBorder: '#d4eee1',
+
+        comingSoonBg: '#f1f4f2',
+        comingSoonText: '#718078',
+
+        shadow:
+          '0 3px 12px rgba(20, 92, 57, 0.035)',
+      };
+
+  /*
+   * ============================================================
+   * SERVICE CLICK
+   * ============================================================
+   */
 
   const handleServiceClick = (
     service: Service
   ) => {
-    // ======================================================
-    // ACTIVE SERVICES
-    // ======================================================
-
     if (service.id === 'gift-cards') {
       navigate('/gift-cards');
       return;
@@ -93,25 +157,28 @@ const OtherBills: React.FC = () => {
       return;
     }
 
-    // ======================================================
-    // ALL OTHER SERVICES
-    // ======================================================
-    // These services are intentionally marked Coming Soon.
-    // No provider payment flow is opened.
-    // ======================================================
-
     setSelectedService(service);
   };
 
+  /*
+   * ============================================================
+   * RENDER
+   * ============================================================
+   */
+
   return (
     <div
+      className="zenimonies-page"
       style={{
         minHeight: '100vh',
-        background: '#f5f8f6',
+        background: colors.page,
+        color: colors.text,
         padding: '24px 16px',
         boxSizing: 'border-box',
         fontFamily:
           "'Inter', 'Segoe UI', Arial, sans-serif",
+        transition:
+          'background-color 0.2s ease, color 0.2s ease',
       }}
     >
       <div
@@ -140,12 +207,14 @@ const OtherBills: React.FC = () => {
               width: '42px',
               height: '42px',
               borderRadius: '12px',
-              border: '1px solid #e0e9e3',
-              background: '#ffffff',
-              color: '#145c39',
+              border: `1px solid ${colors.border}`,
+              background: colors.card,
+              color: colors.greenBright,
               fontSize: '22px',
               cursor: 'pointer',
               flexShrink: 0,
+              transition:
+                'background-color 0.2s ease, border-color 0.2s ease',
             }}
           >
             ←
@@ -155,7 +224,7 @@ const OtherBills: React.FC = () => {
             <h1
               style={{
                 margin: 0,
-                color: '#145c39',
+                color: colors.text,
                 fontSize: '22px',
                 fontWeight: 800,
               }}
@@ -166,7 +235,7 @@ const OtherBills: React.FC = () => {
             <p
               style={{
                 margin: '5px 0 0',
-                color: '#748078',
+                color: colors.secondary,
                 fontSize: '13px',
               }}
             >
@@ -182,7 +251,9 @@ const OtherBills: React.FC = () => {
         <div
           style={{
             background:
-              'linear-gradient(135deg, #176b43, #104d32)',
+              isDarkMode
+                ? 'linear-gradient(135deg, #145d3b, #0d3827)'
+                : 'linear-gradient(135deg, #176b43, #104d32)',
             borderRadius: '16px',
             padding: '18px',
             marginBottom: '25px',
@@ -190,6 +261,10 @@ const OtherBills: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: '14px',
+            boxShadow:
+              isDarkMode
+                ? '0 8px 25px rgba(0, 0, 0, 0.18)'
+                : 'none',
           }}
         >
           <div
@@ -248,7 +323,7 @@ const OtherBills: React.FC = () => {
           <h2
             style={{
               margin: 0,
-              color: '#193b2a',
+              color: colors.text,
               fontSize: '17px',
               fontWeight: 800,
             }}
@@ -258,12 +333,14 @@ const OtherBills: React.FC = () => {
 
           <span
             style={{
-              background: '#e5f3e9',
-              color: '#176b43',
+              background: colors.greenSoft,
+              color: colors.greenBright,
               fontSize: '12px',
               fontWeight: 700,
               padding: '6px 10px',
               borderRadius: '20px',
+              border:
+                `1px solid ${colors.greenBorder}`,
             }}
           >
             {SERVICES.length} Services
@@ -300,9 +377,9 @@ const OtherBills: React.FC = () => {
                   }
                   style={{
                     position: 'relative',
-                    background: '#ffffff',
+                    background: colors.card,
                     border:
-                      '1px solid #e4ece6',
+                      `1px solid ${colors.border}`,
                     borderRadius: '16px',
                     padding: '18px 14px',
                     minHeight: '150px',
@@ -312,12 +389,24 @@ const OtherBills: React.FC = () => {
                     textAlign: 'left',
                     cursor: 'pointer',
                     boxShadow:
-                      '0 3px 12px rgba(20, 92, 57, 0.035)',
+                      colors.shadow,
+                    transition:
+                      'background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease',
+                  }}
+                  onMouseDown={(event) => {
+                    event.currentTarget.style.transform =
+                      'scale(0.985)';
+                  }}
+                  onMouseUp={(event) => {
+                    event.currentTarget.style.transform =
+                      'scale(1)';
+                  }}
+                  onMouseLeave={(event) => {
+                    event.currentTarget.style.transform =
+                      'scale(1)';
                   }}
                 >
-                  {/* ==================================================
-                      STATUS BADGE
-                  ================================================== */}
+                  {/* STATUS BADGE */}
 
                   {!isActive && (
                     <div
@@ -325,8 +414,10 @@ const OtherBills: React.FC = () => {
                         position: 'absolute',
                         top: '12px',
                         right: '10px',
-                        background: '#f1f4f2',
-                        color: '#718078',
+                        background:
+                          colors.comingSoonBg,
+                        color:
+                          colors.comingSoonText,
                         fontSize: '9px',
                         fontWeight: 800,
                         padding:
@@ -341,9 +432,7 @@ const OtherBills: React.FC = () => {
                     </div>
                   )}
 
-                  {/* ==================================================
-                      ICON
-                  ================================================== */}
+                  {/* ICON */}
 
                   <div
                     style={{
@@ -351,24 +440,24 @@ const OtherBills: React.FC = () => {
                       height: '46px',
                       borderRadius: '13px',
                       background:
-                        '#eaf5ed',
+                        colors.greenSoft,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontSize: '24px',
                       marginBottom: '14px',
+                      border:
+                        `1px solid ${colors.greenBorder}`,
                     }}
                   >
                     {service.icon}
                   </div>
 
-                  {/* ==================================================
-                      NAME
-                  ================================================== */}
+                  {/* NAME */}
 
                   <div
                     style={{
-                      color: '#193b2a',
+                      color: colors.text,
                       fontSize: '14px',
                       fontWeight: 800,
                       lineHeight: 1.4,
@@ -382,13 +471,12 @@ const OtherBills: React.FC = () => {
                     {service.name}
                   </div>
 
-                  {/* ==================================================
-                      DESCRIPTION
-                  ================================================== */}
+                  {/* DESCRIPTION */}
 
                   <div
                     style={{
-                      color: '#7b857e',
+                      color:
+                        colors.secondary,
                       fontSize: '12px',
                       lineHeight: 1.5,
                     }}
@@ -396,15 +484,13 @@ const OtherBills: React.FC = () => {
                     {service.description}
                   </div>
 
-                  {/* ==================================================
-                      ACTION
-                  ================================================== */}
+                  {/* ACTION */}
 
                   <div
                     style={{
                       color: isActive
-                        ? '#176b43'
-                        : '#8a968f',
+                        ? colors.greenBright
+                        : colors.comingSoonText,
                       fontSize: '12px',
                       fontWeight: 700,
                       marginTop: '12px',
@@ -431,11 +517,13 @@ const OtherBills: React.FC = () => {
               marginTop: '22px',
               padding: '17px',
               borderRadius: '14px',
-              background: '#ffffff',
+              background: colors.card,
               border:
-                '1px solid #dcece1',
+                `1px solid ${colors.border}`,
               boxShadow:
-                '0 3px 12px rgba(20, 92, 57, 0.035)',
+                colors.shadow,
+              transition:
+                'background-color 0.2s ease, border-color 0.2s ease',
             }}
           >
             <div
@@ -457,7 +545,7 @@ const OtherBills: React.FC = () => {
               <div>
                 <strong
                   style={{
-                    color: '#145c39',
+                    color: colors.text,
                     fontSize: '15px',
                   }}
                 >
@@ -467,7 +555,8 @@ const OtherBills: React.FC = () => {
                 <div
                   style={{
                     marginTop: '3px',
-                    color: '#8a968f',
+                    color:
+                      colors.comingSoonText,
                     fontSize: '10px',
                     fontWeight: 800,
                     letterSpacing:
@@ -481,7 +570,7 @@ const OtherBills: React.FC = () => {
 
             <p
               style={{
-                color: '#68786d',
+                color: colors.secondary,
                 fontSize: '13px',
                 lineHeight: 1.7,
                 margin: '0 0 15px',
@@ -505,7 +594,8 @@ const OtherBills: React.FC = () => {
                 height: '44px',
                 border: 'none',
                 borderRadius: '11px',
-                background: '#176b43',
+                background:
+                  colors.green,
                 color: '#ffffff',
                 fontSize: '14px',
                 fontWeight: 800,
@@ -526,14 +616,14 @@ const OtherBills: React.FC = () => {
             textAlign: 'center',
             marginTop: '28px',
             paddingBottom: '20px',
-            color: '#89958d',
+            color: colors.muted,
             fontSize: '12px',
             lineHeight: 1.7,
           }}
         >
           <div
             style={{
-              color: '#176b43',
+              color: colors.greenBright,
               fontWeight: 800,
               letterSpacing: '1px',
               marginBottom: '5px',
