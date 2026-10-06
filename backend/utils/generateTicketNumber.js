@@ -20,7 +20,7 @@ function generateTicketNumber() {
     100000 + Math.random() * 900000
   );
 
-  return `ZEN-SUP-${year}${month}${day}-${random}`;
+  return `${year}${month}${day}-${random}`;
 }
 
 module.exports = {
