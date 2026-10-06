@@ -2,43 +2,25 @@ const express = require('express');
 
 const router = express.Router();
 
-const authMiddleware = require(
-  '../middleware/authMiddleware'
-);
+const authMiddleware = require('../middleware/authMiddleware');
 
 const {
   createSupportTicket,
   listSupportTickets,
   getSupportTicket,
   replyToSupportTicket,
+  listSupportCategories,
   supportHealth,
-} = require(
-  '../controllers/supportController'
-);
+} = require('../controllers/supportController');
 
 // ============================================================
 // ZENIMONIES BANKING
 // CUSTOMER SUPPORT ROUTES
 // ============================================================
-//
-// Customer support uses the existing ZENIMONIES authentication
-// and server-side session system.
-//
-// IMPORTANT:
-// Customer requests MUST pass through authMiddleware.
-//
-// This prevents one customer from accessing another customer's
-// support tickets.
-// ============================================================
-
 
 // ============================================================
-// SUPPORT HEALTH CHECK
+// HEALTH CHECK
 // GET /api/support/health
-// ============================================================
-//
-// Public health endpoint.
-// Does not expose customer information.
 // ============================================================
 
 router.get(
@@ -46,18 +28,16 @@ router.get(
   supportHealth
 );
 
-
 // ============================================================
-// CUSTOMER SUPPORT
-// ============================================================
-//
-// All routes below require:
-// 1. Valid JWT
-// 2. Valid server-side session
-// 3. Active customer account
-// 4. Valid 5-minute activity session
+// SUPPORT CATEGORIES
+// GET /api/support/categories
 // ============================================================
 
+router.get(
+  '/categories',
+  authMiddleware,
+  listSupportCategories
+);
 
 // ============================================================
 // CREATE SUPPORT TICKET
@@ -70,9 +50,8 @@ router.post(
   createSupportTicket
 );
 
-
 // ============================================================
-// GET CUSTOMER'S SUPPORT TICKETS
+// GET CUSTOMER SUPPORT TICKETS
 // GET /api/support/tickets
 // ============================================================
 
@@ -82,9 +61,8 @@ router.get(
   listSupportTickets
 );
 
-
 // ============================================================
-// GET ONE CUSTOMER'S SUPPORT TICKET
+// GET SINGLE SUPPORT TICKET
 // GET /api/support/tickets/:ticketId
 // ============================================================
 
@@ -93,7 +71,6 @@ router.get(
   authMiddleware,
   getSupportTicket
 );
-
 
 // ============================================================
 // CUSTOMER REPLY
@@ -106,5 +83,8 @@ router.post(
   replyToSupportTicket
 );
 
+// ============================================================
+// EXPORT
+// ============================================================
 
 module.exports = router;
