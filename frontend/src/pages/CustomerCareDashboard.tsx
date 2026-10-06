@@ -2267,6 +2267,96 @@ const CustomerCareDashboard: React.FC = () => {
               </Box>
 
               {/* =================================================
+    CASE OWNERSHIP
+================================================= */}
+
+{!selectedCase.ticket.assigned_to &&
+  selectedCase.ticket.status !== 'closed' && (
+    <Box
+      sx={{
+        mx: {
+          xs: 1.5,
+          md: 2,
+        },
+        mb: 1,
+        p: 1.5,
+        borderRadius: '12px',
+        background: '#f0fbf5',
+        border: '1px solid #ccebd9',
+      }}
+    >
+      <Stack
+        direction={{
+          xs: 'column',
+          sm: 'row',
+        }}
+        spacing={1.5}
+        alignItems={{
+          xs: 'stretch',
+          sm: 'center',
+        }}
+        justifyContent="space-between"
+      >
+        <Box>
+          <Box
+            sx={{
+              fontSize: 12,
+              fontWeight: 800,
+              color: '#063b2d',
+            }}
+          >
+            This case is available
+          </Box>
+
+          <Box
+            sx={{
+              mt: 0.3,
+              fontSize: 10.5,
+              color: '#66756e',
+            }}
+          >
+            Take this case to become responsible
+            for the customer conversation.
+          </Box>
+        </Box>
+
+        <Button
+          variant="contained"
+          onClick={takeCase}
+          disabled={actionLoading}
+          startIcon={
+            actionLoading ? (
+              <CircularProgress
+                size={16}
+                sx={{
+                  color: '#ffffff',
+                }}
+              />
+            ) : (
+              <SupportAgentRoundedIcon />
+            )
+          }
+          sx={{
+            background: '#087c43',
+            color: '#ffffff',
+            textTransform: 'none',
+            fontWeight: 800,
+            borderRadius: '10px',
+            boxShadow: 'none',
+            whiteSpace: 'nowrap',
+            '&:hover': {
+              background: '#066a38',
+              boxShadow: 'none',
+            },
+          }}
+        >
+          Take Case
+        </Button>
+      </Stack>
+    </Box>
+  )}
+
+              {/* =================================================
                   CONVERSATION
               ================================================= */}
 
