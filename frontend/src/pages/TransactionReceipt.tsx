@@ -1565,15 +1565,14 @@ const TransactionReceipt: React.FC = () => {
           }}
         >
 
-{/* ====================================================
-    ZENIMONIES LOGO
+ {/* ====================================================
+    ZENIMONIES LOGO + RECEIPT TITLE
 ==================================================== */}
 
 <Box
   sx={{
-    textAlign: 'center',
     px: 2,
-    pt: 2.2,
+    pt: 2,
     pb: 1.8,
   }}
 >
@@ -1583,22 +1582,22 @@ const TransactionReceipt: React.FC = () => {
     alt="ZENIMONIES BANKING"
     sx={{
       display: 'block',
-      width: '100%',
-      maxWidth: 230,
+      width: 185,
       height: 'auto',
-      maxHeight: 82,
+      maxHeight: 65,
       objectFit: 'contain',
-      mx: 'auto',
+      objectPosition: 'left center',
     }}
   />
 
   <Typography
     sx={{
-      mt: 1.5,
+      mt: 1.8,
       color: COLORS.text,
       fontSize: 17,
       fontWeight: 800,
       lineHeight: 1.2,
+      textAlign: 'center',
     }}
   >
     Transaction Receipt
@@ -2391,36 +2390,7 @@ const TransactionReceipt: React.FC = () => {
               </>
             )}
 
-          {/* ====================================================
-              FOOTER
-          ==================================================== */}
-
-          <Box
-            sx={{
-              borderTop:
-                `1px solid ${COLORS.border}`,
-              px: 2,
-              py: 1.5,
-              textAlign:
-                'center',
-            }}
-          >
-            <Box
-  component="img"
-  src="/zenimonies-logo-light.png"
-  alt="ZENIMONIES BANKING"
-  sx={{
-    display: 'block',
-    width: 135,
-    height: 'auto',
-    maxHeight: 45,
-    objectFit: 'contain',
-    mx: 'auto',
-  }}
-/>
           </Box>
-        </Box>
-
         {/* ======================================================
             ACTIONS
         ====================================================== */}
