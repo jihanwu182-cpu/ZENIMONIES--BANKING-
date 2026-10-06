@@ -256,6 +256,41 @@ async function replyToSupportTicket(
     });
   }
 }
+// ============================================================
+// GET SUPPORT CATEGORIES
+// GET /api/support/categories
+// ============================================================
+
+async function listSupportCategories(req, res) {
+  try {
+    const result = await require('../config/database').query(
+      `
+      SELECT
+        id,
+        name,
+        description
+      FROM support_categories
+      ORDER BY name ASC
+      `
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error(
+      'Get support categories error:',
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Unable to load support categories.',
+    });
+  }
+}
 
 // ============================================================
 // HEALTH CHECK
@@ -275,5 +310,6 @@ module.exports = {
   listSupportTickets,
   getSupportTicket,
   replyToSupportTicket,
+  listSupportCategories,
   supportHealth,
 };
