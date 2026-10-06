@@ -151,6 +151,84 @@ interface Transaction {
   created_at: string;
 }
 
+/* ============================================================
+   CUSTOMER CARE TYPES
+   ============================================================ */
+
+interface SupportTicket {
+  id: string;
+  ticket_number: string;
+  user_id: string;
+  category_id?: string | null;
+  category_name?: string | null;
+
+  subject: string;
+  description: string;
+
+  status: string;
+  priority: string;
+
+  transaction_id?: string | null;
+
+  assigned_to?: string | null;
+  assigned_agent_name?: string | null;
+
+  created_at: string;
+  updated_at: string;
+  resolved_at?: string | null;
+  closed_at?: string | null;
+
+  customer_name?: string | null;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+}
+
+interface SupportMessage {
+  id: string;
+  ticket_id: string;
+
+  sender_user_id?: string | null;
+  sender_type: string;
+
+  message: string;
+
+  created_at: string;
+
+  sender_name?: string | null;
+  sender_email?: string | null;
+}
+
+interface SupportEvent {
+  id: string;
+  ticket_id: string;
+
+  event_type: string;
+
+  old_value?: string | null;
+  new_value?: string | null;
+
+  created_at: string;
+
+  actor_name?: string | null;
+}
+
+interface SupportTransaction {
+  id: string;
+  reference?: string | null;
+  type?: string | null;
+  amount?: string | number | null;
+  currency?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+}
+
+interface SupportTicketDetails {
+  ticket: SupportTicket;
+  messages: SupportMessage[];
+  events: SupportEvent[];
+  transaction?: SupportTransaction | null;
+}
+
 type KycType = 'bvn' | 'tier2' | 'tier3';
 type KycDecision = 'verify' | 'reject';
 
@@ -166,6 +244,7 @@ type Section =
   | 'giftcards'
   | 'business'
   | 'pos'
+  | 'support'
   | 'security'
   | 'settings';
 
@@ -178,7 +257,7 @@ const getAdminToken = (): string | null => {
 };
 
 /* ============================================================
-   SIDEBAR ITEMS
+   NAVIGATION
    ============================================================ */
 
 const NAVIGATION: {
@@ -242,6 +321,11 @@ const NAVIGATION: {
     icon: '▦',
   },
   {
+    key: 'support',
+    label: 'Customer Care',
+    icon: '◌',
+  },
+  {
     key: 'security',
     label: 'Security',
     icon: '◆',
@@ -260,7 +344,10 @@ const NAVIGATION: {
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  const isMobile = useMediaQuery(
+    theme.breakpoints.down('md')
+  );
 
   const [section, setSection] =
     useState<Section>('overview');
@@ -289,6 +376,10 @@ const AdminDashboard: React.FC = () => {
   const [actionLoading, setActionLoading] =
     useState<string | null>(null);
 
+  /* ============================================================
+     KYC STATE
+     ============================================================ */
+
   const [selectedKyc, setSelectedKyc] =
     useState<KycRecord | null>(null);
 
@@ -306,6 +397,40 @@ const AdminDashboard: React.FC = () => {
 
   const [decisionMessage, setDecisionMessage] =
     useState('');
+
+  /* ============================================================
+     CUSTOMER CARE STATE
+     ============================================================ */
+
+  const [supportTickets, setSupportTickets] =
+    useState<SupportTicket[]>([]);
+
+  const [supportLoading, setSupportLoading] =
+    useState(false);
+
+  const [supportSearch, setSupportSearch] =
+    useState('');
+
+  const [supportStatusFilter, setSupportStatusFilter] =
+    useState('all');
+
+  const [supportPriorityFilter, setSupportPriorityFilter] =
+    useState('all');
+
+  const [selectedSupportTicket, setSelectedSupportTicket] =
+    useState<SupportTicketDetails | null>(null);
+
+  const [supportDialogOpen, setSupportDialogOpen] =
+    useState(false);
+
+  const [supportReply, setSupportReply] =
+    useState('');
+
+  const [supportReplyLoading, setSupportReplyLoading] =
+    useState(false);
+
+  const [supportActionLoading, setSupportActionLoading] =
+    useState(false);
 
   const token = getAdminToken();
 
@@ -417,6 +542,360 @@ const AdminDashboard: React.FC = () => {
     );
   };
 
+  /* ============================================================
+     CUSTOMER CARE LOADERS
+     ============================================================ */
+
+  const loadSupportTickets = async () => {
+    try {
+      setSupportLoading(true);
+
+      const params = new URLSearchParams();
+
+      if (
+        supportStatusFilter &&
+        supportStatusFilter !== 'all'
+      ) {
+        params.set(
+          'status',
+          supportStatusFilter
+        );
+      }
+
+      if (
+        supportPriorityFilter &&
+        supportPriorityFilter !== 'all'
+      ) {
+        params.set(
+          'priority',
+          supportPriorityFilter
+        );
+      }
+
+      if (
+        supportSearch.trim()
+      ) {
+        params.set(
+          'search',
+          supportSearch.trim()
+        );
+      }
+
+      const queryString =
+        params.toString();
+
+      const endpoint =
+        `${API_BASE_URL}/admin/support/tickets${
+          queryString
+            ? `?${queryString}`
+            : ''
+        }`;
+
+      const response =
+        await fetch(
+          endpoint,
+          {
+            headers:
+              authHeaders,
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to load customer care tickets.'
+        );
+      }
+
+      setSupportTickets(
+        data.tickets || []
+      );
+    } catch (err: any) {
+      console.error(
+        'Customer Care loading error:',
+        err
+      );
+
+      setError(
+        err?.message ||
+          'Unable to load customer care tickets.'
+      );
+    } finally {
+      setSupportLoading(false);
+    }
+  };
+
+  const openSupportTicket = async (
+    ticketId: string
+  ) => {
+    try {
+      setSupportActionLoading(true);
+      setError('');
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/admin/support/tickets/${ticketId}`,
+          {
+            headers:
+              authHeaders,
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to open support ticket.'
+        );
+      }
+
+      setSelectedSupportTicket(
+        data
+      );
+
+      setSupportReply('');
+
+      setSupportDialogOpen(
+        true
+      );
+    } catch (err: any) {
+      console.error(
+        'Open support ticket error:',
+        err
+      );
+
+      setError(
+        err?.message ||
+          'Unable to open support ticket.'
+      );
+    } finally {
+      setSupportActionLoading(false);
+    }
+  };
+
+  const replyToSupportTicket =
+    async () => {
+      if (
+        !selectedSupportTicket ||
+        !supportReply.trim()
+      ) {
+        return;
+      }
+
+      try {
+        setSupportReplyLoading(
+          true
+        );
+
+        setError('');
+
+        const response =
+          await fetch(
+            `${API_BASE_URL}/admin/support/tickets/${selectedSupportTicket.ticket.id}/reply`,
+            {
+              method:
+                'POST',
+              headers:
+                authHeaders,
+              body:
+                JSON.stringify({
+                  message:
+                    supportReply.trim(),
+                }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              'Unable to send support reply.'
+          );
+        }
+
+        setSupportReply('');
+
+        await openSupportTicket(
+          selectedSupportTicket.ticket.id
+        );
+
+        await loadSupportTickets();
+      } catch (err: any) {
+        console.error(
+          'Support reply error:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to send support reply.'
+        );
+      } finally {
+        setSupportReplyLoading(
+          false
+        );
+      }
+    };
+
+  const updateSupportStatus =
+    async (
+      status: string
+    ) => {
+      if (
+        !selectedSupportTicket
+      ) {
+        return;
+      }
+
+      try {
+        setSupportActionLoading(
+          true
+        );
+
+        setError('');
+
+        const response =
+          await fetch(
+            `${API_BASE_URL}/admin/support/tickets/${selectedSupportTicket.ticket.id}/status`,
+            {
+              method:
+                'PATCH',
+              headers:
+                authHeaders,
+              body:
+                JSON.stringify({
+                  status,
+                }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              'Unable to update support ticket status.'
+          );
+        }
+
+        await openSupportTicket(
+          selectedSupportTicket.ticket.id
+        );
+
+        await loadSupportTickets();
+      } catch (err: any) {
+        console.error(
+          'Support status update error:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to update ticket status.'
+        );
+      } finally {
+        setSupportActionLoading(
+          false
+        );
+      }
+    };
+
+  const updateSupportPriority =
+    async (
+      priority: string
+    ) => {
+      if (
+        !selectedSupportTicket
+      ) {
+        return;
+      }
+
+      try {
+        setSupportActionLoading(
+          true
+        );
+
+        setError('');
+
+        const response =
+          await fetch(
+            `${API_BASE_URL}/admin/support/tickets/${selectedSupportTicket.ticket.id}/priority`,
+            {
+              method:
+                'PATCH',
+              headers:
+                authHeaders,
+              body:
+                JSON.stringify({
+                  priority,
+                }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              'Unable to update support ticket priority.'
+          );
+        }
+
+        await openSupportTicket(
+          selectedSupportTicket.ticket.id
+        );
+
+        await loadSupportTickets();
+      } catch (err: any) {
+        console.error(
+          'Support priority update error:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to update ticket priority.'
+        );
+      } finally {
+        setSupportActionLoading(
+          false
+        );
+      }
+    };
+
+  const closeSupportDialog =
+    () => {
+      if (
+        supportReplyLoading ||
+        supportActionLoading
+      ) {
+        return;
+      }
+
+      setSupportDialogOpen(
+        false
+      );
+
+      setSelectedSupportTicket(
+        null
+      );
+
+      setSupportReply('');
+    };
+
+  /* ============================================================
+     LOAD ALL CORE DATA
+     ============================================================ */
+
   const loadAllData = async () => {
     try {
       setLoading(true);
@@ -464,6 +943,7 @@ const AdminDashboard: React.FC = () => {
         localStorage.removeItem(
           'adminToken'
         );
+
         localStorage.removeItem(
           'admin'
         );
@@ -480,9 +960,26 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     loadAllData();
 
-    // Initial dashboard load only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* ============================================================
+     LOAD CUSTOMER CARE WHEN OPENED
+     ============================================================ */
+
+  useEffect(() => {
+    if (section !== 'support') {
+      return;
+    }
+
+    loadSupportTickets();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    section,
+    supportStatusFilter,
+    supportPriorityFilter,
+  ]);
 
   /* ============================================================
      LOGOUT
@@ -829,16 +1326,19 @@ const AdminDashboard: React.FC = () => {
       case 'approved':
       case 'completed':
       case 'verified':
+      case 'resolved':
         return 'success';
 
       case 'pending':
       case 'under_review':
+      case 'in_progress':
         return 'warning';
 
       case 'rejected':
       case 'failed':
       case 'blocked':
       case 'suspended':
+      case 'closed':
         return 'error';
 
       default:
@@ -864,14 +1364,30 @@ const AdminDashboard: React.FC = () => {
         'Not Verified',
       under_review:
         'Under Review',
-      verified: 'Verified',
-      rejected: 'Rejected',
-      pending: 'Pending',
-      active: 'Active',
-      suspended: 'Suspended',
-      blocked: 'Blocked',
-      failed: 'Failed',
-      completed: 'Completed',
+      in_progress:
+        'In Progress',
+      verified:
+        'Verified',
+      rejected:
+        'Rejected',
+      pending:
+        'Pending',
+      active:
+        'Active',
+      suspended:
+        'Suspended',
+      blocked:
+        'Blocked',
+      failed:
+        'Failed',
+      completed:
+        'Completed',
+      resolved:
+        'Resolved',
+      closed:
+        'Closed',
+      open:
+        'Open',
     };
 
     return (
@@ -926,6 +1442,131 @@ const AdminDashboard: React.FC = () => {
             letter.toUpperCase()
         );
     };
+
+  /* ============================================================
+     SUPPORT FORMATTERS
+     ============================================================ */
+
+  const formatSupportStatus = (
+    status: string
+  ) => {
+    return getStatusLabel(
+      status
+    );
+  };
+
+  const supportStatusColor = (
+    status: string
+  ) => {
+    return statusColor(
+      status
+    );
+  };
+
+  const formatSupportPriority = (
+    priority: string
+  ) => {
+    const normalized =
+      String(
+        priority || ''
+      ).toLowerCase();
+
+    const labels: Record<
+      string,
+      string
+    > = {
+      low: 'Low',
+      normal: 'Normal',
+      high: 'High',
+      urgent: 'Urgent',
+    };
+
+    return (
+      labels[normalized] ||
+      priority ||
+      'Normal'
+    );
+  };
+
+  const supportPriorityColor = (
+    priority: string
+  ):
+    | 'success'
+    | 'warning'
+    | 'error'
+    | 'default' => {
+    switch (
+      String(
+        priority || ''
+      ).toLowerCase()
+    ) {
+      case 'urgent':
+        return 'error';
+
+      case 'high':
+        return 'warning';
+
+      case 'low':
+        return 'success';
+
+      default:
+        return 'default';
+    }
+  };
+
+  const formatSupportEvent = (
+    event: SupportEvent
+  ) => {
+    const type =
+      String(
+        event.event_type ||
+          ''
+      ).toLowerCase();
+
+    if (
+      type.includes(
+        'status'
+      )
+    ) {
+      return `Status changed${
+        event.old_value
+          ? ` from ${formatSupportStatus(event.old_value)}`
+          : ''
+      }${
+        event.new_value
+          ? ` to ${formatSupportStatus(event.new_value)}`
+          : ''
+      }.`;
+    }
+
+    if (
+      type.includes(
+        'priority'
+      )
+    ) {
+      return `Priority changed${
+        event.old_value
+          ? ` from ${formatSupportPriority(event.old_value)}`
+          : ''
+      }${
+        event.new_value
+          ? ` to ${formatSupportPriority(event.new_value)}`
+          : ''
+      }.`;
+    }
+
+    if (
+      type.includes(
+        'reply'
+      )
+    ) {
+      return 'Administrator replied to the customer.';
+    }
+
+    return getDocumentTypeLabel(
+      event.event_type
+    );
+  };
 
   /* ============================================================
      KYC DOCUMENT PREVIEW
@@ -1067,8 +1708,6 @@ const AdminDashboard: React.FC = () => {
         color: '#ffffff',
       }}
     >
-      {/* BRAND */}
-
       <Box
         sx={{
           px: 2.5,
@@ -1101,8 +1740,6 @@ const AdminDashboard: React.FC = () => {
           ADMIN PORTAL
         </Typography>
       </Box>
-
-      {/* NAV */}
 
       <List
         sx={{
@@ -1185,8 +1822,6 @@ const AdminDashboard: React.FC = () => {
         )}
       </List>
 
-      {/* LOGOUT */}
-
       <Box
         sx={{
           p: 1.5,
@@ -1219,6 +1854,7 @@ const AdminDashboard: React.FC = () => {
           }}
         >
           ⇥
+
           <Box
             component="span"
             sx={{
@@ -1267,22 +1903,22 @@ const AdminDashboard: React.FC = () => {
       );
 
     const pendingKyc =
-      kycRecords.filter(
-        (record) =>
-          record.verification_status ===
-            'pending' ||
-          record.bvn_verification_status ===
-            'pending' ||
-          record.id_verification_status ===
-            'pending' ||
-          record.tier_3_verification_status ===
-            'pending'
-      ).slice(0, 5);
+      kycRecords
+        .filter(
+          (record) =>
+            record.verification_status ===
+              'pending' ||
+            record.bvn_verification_status ===
+              'pending' ||
+            record.id_verification_status ===
+              'pending' ||
+            record.tier_3_verification_status ===
+              'pending'
+        )
+        .slice(0, 5);
 
     return (
       <Stack spacing={3}>
-        {/* STATISTICS */}
-
         <Grid
           container
           spacing={2}
@@ -1393,8 +2029,6 @@ const AdminDashboard: React.FC = () => {
           />
         </Grid>
 
-        {/* ACTIVITY */}
-
         <Grid
           container
           spacing={2}
@@ -1448,12 +2082,15 @@ const AdminDashboard: React.FC = () => {
                         <TableCell>
                           Customer
                         </TableCell>
+
                         <TableCell>
                           Type
                         </TableCell>
+
                         <TableCell>
                           Amount
                         </TableCell>
+
                         <TableCell>
                           Status
                         </TableCell>
@@ -1648,8 +2285,6 @@ const AdminDashboard: React.FC = () => {
             </Card>
           </Grid>
         </Grid>
-
-        {/* SYSTEM STATUS */}
 
         <Card
           sx={{
@@ -2322,6 +2957,617 @@ const AdminDashboard: React.FC = () => {
   );
 
   /* ============================================================
+     CUSTOMER CARE
+     ============================================================ */
+
+  const renderSupport = () => {
+    const openCount =
+      supportTickets.filter(
+        (ticket) =>
+          String(
+            ticket.status
+          ).toLowerCase() ===
+          'open'
+      ).length;
+
+    const pendingCount =
+      supportTickets.filter(
+        (ticket) =>
+          String(
+            ticket.status
+          ).toLowerCase() ===
+            'pending' ||
+          String(
+            ticket.status
+          ).toLowerCase() ===
+            'in_progress'
+      ).length;
+
+    const urgentCount =
+      supportTickets.filter(
+        (ticket) =>
+          String(
+            ticket.priority
+          ).toLowerCase() ===
+            'urgent' ||
+          String(
+            ticket.priority
+          ).toLowerCase() ===
+            'high'
+      ).length;
+
+    const resolvedCount =
+      supportTickets.filter(
+        (ticket) =>
+          String(
+            ticket.status
+          ).toLowerCase() ===
+            'resolved' ||
+          String(
+            ticket.status
+          ).toLowerCase() ===
+            'closed'
+      ).length;
+
+    return (
+      <Stack spacing={3}>
+        {/* SUPPORT SUMMARY */}
+
+        <Grid
+          container
+          spacing={2}
+        >
+          <SupportStat
+            title="Open Tickets"
+            value={openCount}
+            subtitle="Awaiting attention"
+            icon="◌"
+            warning={
+              openCount > 0
+            }
+          />
+
+          <SupportStat
+            title="In Progress"
+            value={pendingCount}
+            subtitle="Being handled"
+            icon="◷"
+          />
+
+          <SupportStat
+            title="High Priority"
+            value={urgentCount}
+            subtitle="Needs attention"
+            icon="!"
+            danger={
+              urgentCount > 0
+            }
+          />
+
+          <SupportStat
+            title="Resolved"
+            value={resolvedCount}
+            subtitle="Completed support"
+            icon="✓"
+          />
+        </Grid>
+
+        {/* TICKET MANAGEMENT */}
+
+        <AdminCard
+          title="Customer Care"
+          subtitle="Manage customer support requests, replies and ticket status."
+          action={
+            <Button
+              variant="outlined"
+              onClick={
+                loadSupportTickets
+              }
+              disabled={
+                supportLoading
+              }
+            >
+              {supportLoading
+                ? 'Refreshing...'
+                : 'Refresh'}
+            </Button>
+          }
+        >
+          {/* FILTERS */}
+
+          <Grid
+            container
+            spacing={2}
+            sx={{
+              mb: 2.5,
+            }}
+          >
+            <Grid
+              item
+              xs={12}
+              md={5}
+            >
+              <TextField
+                fullWidth
+                size="small"
+                label="Search tickets"
+                placeholder="Ticket number, subject, customer, email..."
+                value={
+                  supportSearch
+                }
+                onChange={(
+                  event
+                ) =>
+                  setSupportSearch(
+                    event.target.value
+                  )
+                }
+                onKeyDown={(
+                  event
+                ) => {
+                  if (
+                    event.key ===
+                    'Enter'
+                  ) {
+                    loadSupportTickets();
+                  }
+                }}
+              />
+            </Grid>
+
+            <Grid
+              item
+              xs={12}
+              sm={6}
+              md={3}
+            >
+              <TextField
+                select
+                SelectProps={{
+                  native: true,
+                }}
+                fullWidth
+                size="small"
+                label="Status"
+                value={
+                  supportStatusFilter
+                }
+                onChange={(
+                  event
+                ) =>
+                  setSupportStatusFilter(
+                    event.target.value
+                  )
+                }
+              >
+                <option value="all">
+                  All statuses
+                </option>
+
+                <option value="open">
+                  Open
+                </option>
+
+                <option value="pending">
+                  Pending
+                </option>
+
+                <option value="in_progress">
+                  In Progress
+                </option>
+
+                <option value="resolved">
+                  Resolved
+                </option>
+
+                <option value="closed">
+                  Closed
+                </option>
+              </TextField>
+            </Grid>
+
+            <Grid
+              item
+              xs={12}
+              sm={6}
+              md={3}
+            >
+              <TextField
+                select
+                SelectProps={{
+                  native: true,
+                }}
+                fullWidth
+                size="small"
+                label="Priority"
+                value={
+                  supportPriorityFilter
+                }
+                onChange={(
+                  event
+                ) =>
+                  setSupportPriorityFilter(
+                    event.target.value
+                  )
+                }
+              >
+                <option value="all">
+                  All priorities
+                </option>
+
+                <option value="low">
+                  Low
+                </option>
+
+                <option value="normal">
+                  Normal
+                </option>
+
+                <option value="high">
+                  High
+                </option>
+
+                <option value="urgent">
+                  Urgent
+                </option>
+              </TextField>
+            </Grid>
+
+            <Grid
+              item
+              xs={12}
+              md={1}
+              sx={{
+                display:
+                  'flex',
+                alignItems:
+                  'center',
+              }}
+            >
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={
+                  loadSupportTickets
+                }
+                disabled={
+                  supportLoading
+                }
+                sx={{
+                  minHeight: 40,
+                  background:
+                    '#087f5b',
+                  '&:hover':
+                    {
+                      background:
+                        '#066a4b',
+                    },
+                }}
+              >
+                Search
+              </Button>
+            </Grid>
+          </Grid>
+
+          {/* TICKET TABLE */}
+
+          {supportLoading ? (
+            <Box
+              sx={{
+                py: 8,
+                display:
+                  'flex',
+                justifyContent:
+                  'center',
+              }}
+            >
+              <Stack
+                spacing={1.5}
+                alignItems="center"
+              >
+                <CircularProgress
+                  size={30}
+                  sx={{
+                    color:
+                      '#087f5b',
+                  }}
+                />
+
+                <Typography
+                  color="text.secondary"
+                  fontSize={13}
+                >
+                  Loading customer care...
+                </Typography>
+              </Stack>
+            </Box>
+          ) : (
+            <TableContainer>
+              <Table
+                sx={{
+                  minWidth: 1050,
+                }}
+              >
+                <TableHead>
+                  <TableRow>
+                    <TableCell>
+                      Ticket
+                    </TableCell>
+
+                    <TableCell>
+                      Customer
+                    </TableCell>
+
+                    <TableCell>
+                      Subject
+                    </TableCell>
+
+                    <TableCell>
+                      Category
+                    </TableCell>
+
+                    <TableCell>
+                      Priority
+                    </TableCell>
+
+                    <TableCell>
+                      Status
+                    </TableCell>
+
+                    <TableCell>
+                      Created
+                    </TableCell>
+
+                    <TableCell>
+                      Action
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {supportTickets.map(
+                    (
+                      ticket
+                    ) => (
+                      <TableRow
+                        key={
+                          ticket.id
+                        }
+                        hover
+                      >
+                        <TableCell>
+                          <Typography
+                            fontWeight={900}
+                            fontSize={12}
+                            sx={{
+                              wordBreak:
+                                'break-word',
+                            }}
+                          >
+                            {
+                              ticket.ticket_number
+                            }
+                          </Typography>
+                        </TableCell>
+
+                        <TableCell>
+                          <Typography
+                            fontWeight={800}
+                            fontSize={13}
+                          >
+                            {
+                              ticket.customer_name ||
+                              'Unknown customer'
+                            }
+                          </Typography>
+
+                          <Typography
+                            fontSize={11}
+                            color="text.secondary"
+                          >
+                            {
+                              ticket.customer_email ||
+                              '—'
+                            }
+                          </Typography>
+
+                          <Typography
+                            fontSize={11}
+                            color="text.secondary"
+                          >
+                            {
+                              ticket.customer_phone ||
+                              '—'
+                            }
+                          </Typography>
+                        </TableCell>
+
+                        <TableCell>
+                          <Typography
+                            fontWeight={700}
+                            fontSize={13}
+                            sx={{
+                              maxWidth: 260,
+                            }}
+                          >
+                            {
+                              ticket.subject
+                            }
+                          </Typography>
+
+                          {ticket.transaction_id && (
+                            <Typography
+                              fontSize={10}
+                              color="text.secondary"
+                            >
+                              Transaction linked
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          <Typography
+                            fontSize={12}
+                          >
+                            {
+                              ticket.category_name ||
+                              'General Support'
+                            }
+                          </Typography>
+                        </TableCell>
+
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={formatSupportPriority(
+                              ticket.priority
+                            )}
+                            color={supportPriorityColor(
+                              ticket.priority
+                            )}
+                          />
+                        </TableCell>
+
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={formatSupportStatus(
+                              ticket.status
+                            )}
+                            color={supportStatusColor(
+                              ticket.status
+                            )}
+                          />
+                        </TableCell>
+
+                        <TableCell>
+                          <Typography
+                            fontSize={11}
+                          >
+                            {formatDate(
+                              ticket.created_at
+                            )}
+                          </Typography>
+                        </TableCell>
+
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            onClick={() =>
+                              openSupportTicket(
+                                ticket.id
+                              )
+                            }
+                            disabled={
+                              supportActionLoading
+                            }
+                            sx={{
+                              background:
+                                '#087f5b',
+                              '&:hover':
+                                {
+                                  background:
+                                    '#066a4b',
+                                },
+                              textTransform:
+                                'none',
+                              fontWeight:
+                                800,
+                            }}
+                          >
+                            Open
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  )}
+                </TableBody>
+              </Table>
+
+              {supportTickets.length ===
+                0 && (
+                <EmptyState text="No customer support tickets found." />
+              )}
+            </TableContainer>
+          )}
+        </AdminCard>
+
+        {/* SUPPORT INFORMATION */}
+
+        <Card
+          sx={{
+            border:
+              '1px solid #e2ebe6',
+            borderRadius: 3,
+            boxShadow:
+              '0 4px 18px rgba(20,65,48,0.04)',
+          }}
+        >
+          <CardContent>
+            <Stack
+              direction={{
+                xs: 'column',
+                md: 'row',
+              }}
+              spacing={2}
+              alignItems={{
+                xs: 'flex-start',
+                md: 'center',
+              }}
+            >
+              <Box
+                sx={{
+                  width: 48,
+                  height: 48,
+                  borderRadius:
+                    '14px',
+                  background:
+                    '#eaf7f1',
+                  color:
+                    '#087f5b',
+                  display:
+                    'flex',
+                  alignItems:
+                    'center',
+                  justifyContent:
+                    'center',
+                  fontSize: 22,
+                  fontWeight: 900,
+                  flexShrink: 0,
+                }}
+              >
+                ◌
+              </Box>
+
+              <Box>
+                <Typography
+                  fontWeight={900}
+                  color="#12382d"
+                >
+                  Customer Care Protection
+                </Typography>
+
+                <Typography
+                  fontSize={12}
+                  color="text.secondary"
+                >
+                  Customer Care can communicate
+                  with customers and manage
+                  support tickets. Financial
+                  balances and transactions are
+                  not directly modified through
+                  the support module.
+                </Typography>
+              </Box>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Stack>
+    );
+  };
+
+  /* ============================================================
      PLACEHOLDER ADMIN SECTIONS
      ============================================================ */
 
@@ -2405,6 +3651,10 @@ const AdminDashboard: React.FC = () => {
     </Card>
   );
 
+  /* ============================================================
+     SECTION ROUTER
+     ============================================================ */
+
   const renderSection = () => {
     switch (section) {
       case 'overview':
@@ -2418,6 +3668,9 @@ const AdminDashboard: React.FC = () => {
 
       case 'transactions':
         return renderTransactions();
+
+      case 'support':
+        return renderSupport();
 
       case 'accounts':
         return renderComingSoon(
@@ -2528,7 +3781,7 @@ const AdminDashboard: React.FC = () => {
   }
 
   /* ============================================================
-     ERROR
+     ERROR SCREEN
      ============================================================ */
 
   if (
@@ -2907,8 +4160,6 @@ const AdminDashboard: React.FC = () => {
 
                 <Divider />
 
-                {/* BVN */}
-
                 {selectedType ===
                   'bvn' && (
                   <>
@@ -2940,8 +4191,6 @@ const AdminDashboard: React.FC = () => {
                     )}
                   </>
                 )}
-
-                {/* TIER 2 */}
 
                 {selectedType ===
                   'tier2' && (
@@ -2993,8 +4242,6 @@ const AdminDashboard: React.FC = () => {
                     )}
                   </>
                 )}
-
-                {/* TIER 3 */}
 
                 {selectedType ===
                   'tier3' && (
@@ -3122,7 +4369,7 @@ const AdminDashboard: React.FC = () => {
       </Dialog>
 
       {/* ========================================================
-          REJECTION DIALOG
+          KYC REJECTION DIALOG
           ======================================================== */}
 
       <Dialog
@@ -3220,6 +4467,751 @@ const AdminDashboard: React.FC = () => {
             {actionLoading
               ? 'Rejecting...'
               : 'Reject Verification'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ========================================================
+          CUSTOMER CARE TICKET DIALOG
+          ======================================================== */}
+
+      <Dialog
+        open={
+          supportDialogOpen
+        }
+        onClose={
+          closeSupportDialog
+        }
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 900,
+            color: '#12382d',
+          }}
+        >
+          {selectedSupportTicket
+            ? `Customer Care — ${selectedSupportTicket.ticket.ticket_number}`
+            : 'Customer Care'}
+        </DialogTitle>
+
+        <DialogContent
+          dividers
+        >
+          {selectedSupportTicket && (
+            <Stack spacing={3}>
+              {/* CUSTOMER + TICKET HEADER */}
+
+              <Grid
+                container
+                spacing={2}
+              >
+                <Grid
+                  item
+                  xs={12}
+                  md={7}
+                >
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      borderColor:
+                        '#e2ebe6',
+                    }}
+                  >
+                    <Typography
+                      fontSize={11}
+                      color="text.secondary"
+                      fontWeight={800}
+                      sx={{
+                        textTransform:
+                          'uppercase',
+                        letterSpacing:
+                          0.7,
+                      }}
+                    >
+                      Customer
+                    </Typography>
+
+                    <Typography
+                      fontWeight={900}
+                      sx={{
+                        mt: 0.5,
+                      }}
+                    >
+                      {selectedSupportTicket.ticket.customer_name ||
+                        'Unknown customer'}
+                    </Typography>
+
+                    <Typography
+                      fontSize={13}
+                      color="text.secondary"
+                    >
+                      {selectedSupportTicket.ticket.customer_email ||
+                        '—'}
+                    </Typography>
+
+                    <Typography
+                      fontSize={13}
+                      color="text.secondary"
+                    >
+                      {selectedSupportTicket.ticket.customer_phone ||
+                        '—'}
+                    </Typography>
+                  </Paper>
+                </Grid>
+
+                <Grid
+                  item
+                  xs={12}
+                  md={5}
+                >
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      borderColor:
+                        '#e2ebe6',
+                    }}
+                  >
+                    <Typography
+                      fontSize={11}
+                      color="text.secondary"
+                      fontWeight={800}
+                      sx={{
+                        textTransform:
+                          'uppercase',
+                        letterSpacing:
+                          0.7,
+                      }}
+                    >
+                      Ticket
+                    </Typography>
+
+                    <Typography
+                      fontWeight={900}
+                      sx={{
+                        mt: 0.5,
+                      }}
+                    >
+                      {
+                        selectedSupportTicket.ticket.subject
+                      }
+                    </Typography>
+
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      flexWrap="wrap"
+                      sx={{
+                        mt: 1,
+                      }}
+                    >
+                      <Chip
+                        size="small"
+                        label={formatSupportStatus(
+                          selectedSupportTicket.ticket.status
+                        )}
+                        color={supportStatusColor(
+                          selectedSupportTicket.ticket.status
+                        )}
+                      />
+
+                      <Chip
+                        size="small"
+                        label={formatSupportPriority(
+                          selectedSupportTicket.ticket.priority
+                        )}
+                        color={supportPriorityColor(
+                          selectedSupportTicket.ticket.priority
+                        )}
+                      />
+
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={
+                          selectedSupportTicket.ticket.category_name ||
+                          'General Support'
+                        }
+                      />
+                    </Stack>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              {/* CONTROLS */}
+
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  borderColor:
+                    '#e2ebe6',
+                }}
+              >
+                <Typography
+                  fontWeight={900}
+                  sx={{
+                    mb: 1.5,
+                  }}
+                >
+                  Ticket Controls
+                </Typography>
+
+                <Grid
+                  container
+                  spacing={2}
+                >
+                  <Grid
+                    item
+                    xs={12}
+                    sm={6}
+                  >
+                    <TextField
+                      select
+                      SelectProps={{
+                        native: true,
+                      }}
+                      fullWidth
+                      size="small"
+                      label="Status"
+                      value={
+                        selectedSupportTicket.ticket.status
+                      }
+                      disabled={
+                        supportActionLoading
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateSupportStatus(
+                          event.target.value
+                        )
+                      }
+                    >
+                      <option value="open">
+                        Open
+                      </option>
+
+                      <option value="pending">
+                        Pending
+                      </option>
+
+                      <option value="in_progress">
+                        In Progress
+                      </option>
+
+                      <option value="resolved">
+                        Resolved
+                      </option>
+
+                      <option value="closed">
+                        Closed
+                      </option>
+                    </TextField>
+                  </Grid>
+
+                  <Grid
+                    item
+                    xs={12}
+                    sm={6}
+                  >
+                    <TextField
+                      select
+                      SelectProps={{
+                        native: true,
+                      }}
+                      fullWidth
+                      size="small"
+                      label="Priority"
+                      value={
+                        selectedSupportTicket.ticket.priority
+                      }
+                      disabled={
+                        supportActionLoading
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateSupportPriority(
+                          event.target.value
+                        )
+                      }
+                    >
+                      <option value="low">
+                        Low
+                      </option>
+
+                      <option value="normal">
+                        Normal
+                      </option>
+
+                      <option value="high">
+                        High
+                      </option>
+
+                      <option value="urgent">
+                        Urgent
+                      </option>
+                    </TextField>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* CUSTOMER REQUEST */}
+
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  borderColor:
+                    '#e2ebe6',
+                }}
+              >
+                <Typography
+                  fontWeight={900}
+                  sx={{
+                    mb: 1,
+                  }}
+                >
+                  Customer Request
+                </Typography>
+
+                <Typography
+                  whiteSpace="pre-wrap"
+                  fontSize={14}
+                  lineHeight={1.7}
+                >
+                  {
+                    selectedSupportTicket.ticket.description
+                  }
+                </Typography>
+
+                <Typography
+                  fontSize={11}
+                  color="text.secondary"
+                  sx={{
+                    mt: 1.5,
+                  }}
+                >
+                  Submitted:{' '}
+                  {formatDate(
+                    selectedSupportTicket.ticket.created_at
+                  )}
+                </Typography>
+              </Paper>
+
+              {/* LINKED TRANSACTION */}
+
+              {selectedSupportTicket.transaction && (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    borderColor:
+                      '#e2ebe6',
+                  }}
+                >
+                  <Typography
+                    fontWeight={900}
+                    sx={{
+                      mb: 1.5,
+                    }}
+                  >
+                    Linked Transaction
+                  </Typography>
+
+                  <Grid
+                    container
+                    spacing={2}
+                  >
+                    <Grid
+                      item
+                      xs={12}
+                      sm={6}
+                      md={3}
+                    >
+                      <InfoDisplay
+                        label="Reference"
+                        value={
+                          selectedSupportTicket
+                            .transaction
+                            .reference ||
+                          '—'
+                        }
+                      />
+                    </Grid>
+
+                    <Grid
+                      item
+                      xs={12}
+                      sm={6}
+                      md={3}
+                    >
+                      <InfoDisplay
+                        label="Type"
+                        value={
+                          selectedSupportTicket
+                            .transaction
+                            .type ||
+                          '—'
+                        }
+                      />
+                    </Grid>
+
+                    <Grid
+                      item
+                      xs={12}
+                      sm={6}
+                      md={3}
+                    >
+                      <InfoDisplay
+                        label="Amount"
+                        value={
+                          selectedSupportTicket
+                            .transaction
+                            .amount !=
+                          null
+                            ? formatMoney(
+                                selectedSupportTicket
+                                  .transaction
+                                  .amount
+                              )
+                            : '—'
+                        }
+                      />
+                    </Grid>
+
+                    <Grid
+                      item
+                      xs={12}
+                      sm={6}
+                      md={3}
+                    >
+                      <InfoDisplay
+                        label="Status"
+                        value={
+                          getStatusLabel(
+                            selectedSupportTicket
+                              .transaction
+                              .status ||
+                              ''
+                          )
+                        }
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              )}
+
+              {/* CONVERSATION */}
+
+              <Box>
+                <Typography
+                  fontWeight={900}
+                  sx={{
+                    mb: 1.5,
+                  }}
+                >
+                  Conversation
+                </Typography>
+
+                <Stack
+                  spacing={1.5}
+                >
+                  {selectedSupportTicket.messages
+                    ?.length ? (
+                    selectedSupportTicket.messages.map(
+                      (
+                        message
+                      ) => {
+                        const isAdmin =
+                          String(
+                            message.sender_type ||
+                              ''
+                          ).toLowerCase() ===
+                          'admin';
+
+                        return (
+                          <Box
+                            key={
+                              message.id
+                            }
+                            sx={{
+                              display:
+                                'flex',
+                              justifyContent:
+                                isAdmin
+                                  ? 'flex-end'
+                                  : 'flex-start',
+                            }}
+                          >
+                            <Paper
+                              elevation={
+                                0
+                              }
+                              sx={{
+                                p: 1.8,
+                                maxWidth:
+                                  '82%',
+                                borderRadius:
+                                  2.5,
+                                background:
+                                  isAdmin
+                                    ? '#eaf7f1'
+                                    : '#f4f6f5',
+                                border:
+                                  '1px solid #e2ebe6',
+                              }}
+                            >
+                              <Stack
+                                direction="row"
+                                justifyContent="space-between"
+                                spacing={2}
+                                sx={{
+                                  mb: 0.7,
+                                }}
+                              >
+                                <Typography
+                                  fontSize={11}
+                                  fontWeight={900}
+                                  color={
+                                    isAdmin
+                                      ? '#087f5b'
+                                      : '#12382d'
+                                  }
+                                >
+                                  {isAdmin
+                                    ? 'ZENIMONIES ADMIN'
+                                    : message.sender_name ||
+                                      'CUSTOMER'}
+                                </Typography>
+
+                                <Typography
+                                  fontSize={10}
+                                  color="text.secondary"
+                                >
+                                  {formatDate(
+                                    message.created_at
+                                  )}
+                                </Typography>
+                              </Stack>
+
+                              <Typography
+                                fontSize={13}
+                                whiteSpace="pre-wrap"
+                                lineHeight={
+                                  1.65
+                                }
+                              >
+                                {
+                                  message.message
+                                }
+                              </Typography>
+                            </Paper>
+                          </Box>
+                        );
+                      }
+                    )
+                  ) : (
+                    <EmptyState text="No messages in this ticket yet." />
+                  )}
+                </Stack>
+              </Box>
+
+              {/* ADMIN REPLY */}
+
+              {String(
+                selectedSupportTicket.ticket.status ||
+                  ''
+              ).toLowerCase() !==
+                'closed' && (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    borderColor:
+                      '#e2ebe6',
+                  }}
+                >
+                  <Typography
+                    fontWeight={900}
+                    sx={{
+                      mb: 1.5,
+                    }}
+                  >
+                    Reply to Customer
+                  </Typography>
+
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={4}
+                    placeholder="Write a professional response to the customer..."
+                    value={
+                      supportReply
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setSupportReply(
+                        event.target.value
+                      )
+                    }
+                    disabled={
+                      supportReplyLoading
+                    }
+                  />
+
+                  <Stack
+                    direction="row"
+                    justifyContent="flex-end"
+                    sx={{
+                      mt: 1.5,
+                    }}
+                  >
+                    <Button
+                      variant="contained"
+                      onClick={
+                        replyToSupportTicket
+                      }
+                      disabled={
+                        supportReplyLoading ||
+                        !supportReply.trim()
+                      }
+                      sx={{
+                        background:
+                          '#087f5b',
+                        '&:hover':
+                          {
+                            background:
+                              '#066a4b',
+                          },
+                        textTransform:
+                          'none',
+                        fontWeight:
+                          800,
+                      }}
+                    >
+                      {supportReplyLoading
+                        ? 'Sending...'
+                        : 'Send Reply'}
+                    </Button>
+                  </Stack>
+                </Paper>
+              )}
+
+              {/* ACTIVITY HISTORY */}
+
+              <Box>
+                <Typography
+                  fontWeight={900}
+                  sx={{
+                    mb: 1.5,
+                  }}
+                >
+                  Activity History
+                </Typography>
+
+                <Stack
+                  spacing={1}
+                >
+                  {selectedSupportTicket.events
+                    ?.length ? (
+                    selectedSupportTicket.events.map(
+                      (
+                        event
+                      ) => (
+                        <Paper
+                          key={
+                            event.id
+                          }
+                          variant="outlined"
+                          sx={{
+                            p: 1.5,
+                            borderRadius:
+                              2,
+                            borderColor:
+                              '#e2ebe6',
+                          }}
+                        >
+                          <Stack
+                            direction={{
+                              xs: 'column',
+                              sm: 'row',
+                            }}
+                            justifyContent="space-between"
+                            spacing={1}
+                          >
+                            <Box>
+                              <Typography
+                                fontSize={12}
+                                fontWeight={800}
+                              >
+                                {
+                                  formatSupportEvent(
+                                    event
+                                  )
+                                }
+                              </Typography>
+
+                              {event.actor_name && (
+                                <Typography
+                                  fontSize={11}
+                                  color="text.secondary"
+                                >
+                                  By{' '}
+                                  {
+                                    event.actor_name
+                                  }
+                                </Typography>
+                              )}
+                            </Box>
+
+                            <Typography
+                              fontSize={10}
+                              color="text.secondary"
+                            >
+                              {formatDate(
+                                event.created_at
+                              )}
+                            </Typography>
+                          </Stack>
+                        </Paper>
+                      )
+                    )
+                  ) : (
+                    <EmptyState text="No activity history recorded." />
+                  )}
+                </Stack>
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            p: 2,
+          }}
+        >
+          <Button
+            onClick={
+              closeSupportDialog
+            }
+            disabled={
+              supportReplyLoading ||
+              supportActionLoading
+            }
+          >
+            Close
           </Button>
         </DialogActions>
       </Dialog>
@@ -3353,6 +5345,120 @@ const StatCard: React.FC<
 };
 
 /* ============================================================
+   SUPPORT STAT
+   ============================================================ */
+
+interface SupportStatProps {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: string;
+  warning?: boolean;
+  danger?: boolean;
+}
+
+const SupportStat: React.FC<
+  SupportStatProps
+> = ({
+  title,
+  value,
+  subtitle,
+  icon,
+  warning,
+  danger,
+}) => {
+  const background =
+    danger
+      ? '#fff1f0'
+      : warning
+        ? '#fff8e8'
+        : '#eaf7f1';
+
+  const color =
+    danger
+      ? '#b42318'
+      : warning
+        ? '#b54708'
+        : '#087f5b';
+
+  return (
+    <Grid
+      item
+      xs={12}
+      sm={6}
+      lg={3}
+    >
+      <Card
+        sx={{
+          border:
+            '1px solid #e2ebe6',
+          borderRadius: 3,
+          boxShadow:
+            '0 4px 18px rgba(20,65,48,0.04)',
+        }}
+      >
+        <CardContent>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            spacing={2}
+          >
+            <Box>
+              <Typography
+                fontSize={12}
+                fontWeight={700}
+                color="text.secondary"
+              >
+                {title}
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.5,
+                  fontSize: 27,
+                  fontWeight: 900,
+                  color: '#12382d',
+                }}
+              >
+                {value}
+              </Typography>
+
+              <Typography
+                fontSize={11}
+                color="text.secondary"
+              >
+                {subtitle}
+              </Typography>
+            </Box>
+
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius:
+                  '12px',
+                background,
+                color,
+                display:
+                  'flex',
+                alignItems:
+                  'center',
+                justifyContent:
+                  'center',
+                fontSize: 19,
+                fontWeight: 900,
+              }}
+            >
+              {icon}
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+    </Grid>
+  );
+};
+
+/* ============================================================
    SECTION HEADING
    ============================================================ */
 
@@ -3370,9 +5476,15 @@ const SectionHeading: React.FC<
   action,
 }) => (
   <Stack
-    direction="row"
+    direction={{
+      xs: 'column',
+      sm: 'row',
+    }}
     justifyContent="space-between"
-    alignItems="flex-start"
+    alignItems={{
+      xs: 'flex-start',
+      sm: 'center',
+    }}
     spacing={2}
     sx={{ mb: 2 }}
   >
@@ -3574,6 +5686,87 @@ const SystemStatus: React.FC<{
 );
 
 /* ============================================================
+   INFO DISPLAY
+   ============================================================ */
+
+const InfoDisplay: React.FC<{
+  label: string;
+  value: string;
+}> = ({
+  label,
+  value,
+}) => (
+  <Box>
+    <Typography
+      fontSize={11}
+      color="text.secondary"
+      fontWeight={700}
+      sx={{
+        textTransform:
+          'uppercase',
+        letterSpacing:
+          0.5,
+      }}
+    >
+      {label}
+    </Typography>
+
+    <Typography
+      fontSize={14}
+      fontWeight={800}
+      sx={{
+        mt: 0.4,
+        wordBreak:
+          'break-word',
+      }}
+    >
+      {value}
+    </Typography>
+  </Box>
+);
+
+/* ============================================================
+   STATUS DISPLAY
+   ============================================================ */
+
+const StatusDisplay: React.FC<{
+  label: string;
+  status: string;
+}> = ({
+  label,
+  status,
+}) => (
+  <Stack
+    direction={{
+      xs: 'column',
+      sm: 'row',
+    }}
+    spacing={1}
+    alignItems={{
+      xs: 'flex-start',
+      sm: 'center',
+    }}
+  >
+    <Typography
+      fontSize={13}
+      fontWeight={800}
+    >
+      {label}
+    </Typography>
+
+    <Chip
+      size="small"
+      label={getGlobalStatusLabel(
+        status
+      )}
+      color={getGlobalStatusColor(
+        status
+      )}
+    />
+  </Stack>
+);
+
+/* ============================================================
    GLOBAL STATUS HELPERS
    ============================================================ */
 
@@ -3590,8 +5783,12 @@ const getGlobalStatusLabel =
     > = {
       not_verified:
         'Not Verified',
+      'not verified':
+        'Not Verified',
       under_review:
         'Under Review',
+      in_progress:
+        'In Progress',
       verified:
         'Verified',
       rejected:
@@ -3608,6 +5805,12 @@ const getGlobalStatusLabel =
         'Failed',
       completed:
         'Completed',
+      resolved:
+        'Resolved',
+      closed:
+        'Closed',
+      open:
+        'Open',
     };
 
     return (
@@ -3636,7 +5839,9 @@ const getGlobalStatusColor =
       normalized ===
         'active' ||
       normalized ===
-        'completed'
+        'completed' ||
+      normalized ===
+        'resolved'
     ) {
       return 'success';
     }
@@ -3645,7 +5850,9 @@ const getGlobalStatusColor =
       normalized ===
         'pending' ||
       normalized ===
-        'under_review'
+        'under_review' ||
+      normalized ===
+        'in_progress'
     ) {
       return 'warning';
     }
@@ -3658,7 +5865,9 @@ const getGlobalStatusColor =
       normalized ===
         'blocked' ||
       normalized ===
-        'suspended'
+        'suspended' ||
+      normalized ===
+        'closed'
     ) {
       return 'error';
     }
