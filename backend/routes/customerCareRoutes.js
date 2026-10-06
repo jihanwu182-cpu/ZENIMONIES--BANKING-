@@ -13,51 +13,36 @@ const {
   waitForCustomer,
   resolveCase,
   closeCase,
+  investigateTransaction,
 } = require('../controllers/customerCareController');
-
 
 // ============================================================
 // ZENIMONIES BANKING
-// CUSTOMER CARE AGENT ROUTES
+// CUSTOMER CARE ROUTES
 // ============================================================
 //
 // IMPORTANT:
+// Every route in this file is protected by
+// customerCareMiddleware.
 //
-// These routes are protected by:
+// Only users with:
+//     role = customer_care
 //
-// customerCareMiddleware
+// can access these endpoints.
 //
-// Therefore:
-//
-// role = customer_care
-//        ↓
-// Customer Care workspace
-//
-// role = admin
-//        ↓
-// NOT automatically allowed here
-//
-// role = user
-//        ↓
-// NOT allowed
-//
-// Admin routes remain protected separately by:
-// adminMiddleware
+// Customer Care agents do NOT receive Admin Dashboard access.
 // ============================================================
 
-
-// ============================================================
-// ALL CUSTOMER CARE ROUTES REQUIRE CUSTOMER CARE ROLE
-// ============================================================
-
-router.use(
-  customerCareMiddleware
-);
-
+router.use(customerCareMiddleware);
 
 // ============================================================
 // AVAILABLE CASES
 // GET /api/customer-care/tickets
+// ============================================================
+//
+// Shows Customer Care cases that are connected to Customer Care
+// and are currently available for an agent to take.
+//
 // ============================================================
 
 router.get(
@@ -65,17 +50,16 @@ router.get(
   getAvailableCases
 );
 
-
 // ============================================================
-// MY ASSIGNED CASES
+// MY CASES
 // GET /api/customer-care/tickets/mine
 // ============================================================
 //
-// IMPORTANT:
-// This route MUST come before:
-// /tickets/:ticketId
+// Shows cases currently assigned to the authenticated
+// Customer Care agent.
 //
-// Otherwise "mine" could be interpreted as a ticket ID.
+// IMPORTANT:
+// This route must appear BEFORE /tickets/:ticketId.
 // ============================================================
 
 router.get(
@@ -83,10 +67,39 @@ router.get(
   getMyCases
 );
 
+// ============================================================
+// TRANSACTION INVESTIGATION
+// GET /api/customer-care/transactions/investigate?reference=...
+// ============================================================
+//
+// READ-ONLY.
+//
+// Allows a Customer Care agent to investigate a customer's
+// bank transfer using the transaction/reference number.
+//
+// It does NOT:
+// - change balances
+// - reverse transactions
+// - change transaction status
+// - resend transfers
+// - modify recipients
+// - execute financial operations
+//
+// Account numbers returned by the controller are masked.
+// ============================================================
+
+router.get(
+  '/transactions/investigate',
+  investigateTransaction
+);
 
 // ============================================================
 // CASE DETAILS
 // GET /api/customer-care/tickets/:ticketId
+// ============================================================
+//
+// Returns the case, customer information, conversation,
+// assigned agent, events and linked transaction information.
 // ============================================================
 
 router.get(
@@ -94,10 +107,13 @@ router.get(
   getCaseDetails
 );
 
-
 // ============================================================
-// TAKE / JOIN CASE
+// TAKE CASE
 // POST /api/customer-care/tickets/:ticketId/take
+// ============================================================
+//
+// Allows an available Customer Care agent to take ownership
+// of a case.
 // ============================================================
 
 router.post(
@@ -105,10 +121,13 @@ router.post(
   takeCase
 );
 
-
 // ============================================================
-// AGENT REPLY
+// REPLY TO CUSTOMER
 // POST /api/customer-care/tickets/:ticketId/reply
+// ============================================================
+//
+// Sends a message from the authenticated Customer Care agent
+// to the customer.
 // ============================================================
 
 router.post(
@@ -116,10 +135,17 @@ router.post(
   replyToCustomer
 );
 
-
 // ============================================================
 // WAITING FOR CUSTOMER
 // PATCH /api/customer-care/tickets/:ticketId/waiting
+// ============================================================
+//
+// Places the case into the waiting-for-customer state.
+//
+// The backend starts the customer response timer.
+// If the customer does not respond within the configured
+// period, the automated support workflow can remind the
+// customer and eventually close the case.
 // ============================================================
 
 router.patch(
@@ -127,10 +153,12 @@ router.patch(
   waitForCustomer
 );
 
-
 // ============================================================
 // RESOLVE CASE
 // PATCH /api/customer-care/tickets/:ticketId/resolve
+// ============================================================
+//
+// Marks the case as resolved.
 // ============================================================
 
 router.patch(
@@ -138,10 +166,12 @@ router.patch(
   resolveCase
 );
 
-
 // ============================================================
 // CLOSE CASE
 // PATCH /api/customer-care/tickets/:ticketId/close
+// ============================================================
+//
+// Permanently closes the support case.
 // ============================================================
 
 router.patch(
@@ -149,5 +179,8 @@ router.patch(
   closeCase
 );
 
+// ============================================================
+// EXPORT
+// ============================================================
 
 module.exports = router;
