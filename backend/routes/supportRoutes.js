@@ -8,18 +8,21 @@ const {
   createSupportTicket,
   listSupportTickets,
   getSupportTicket,
+  connectCustomerToCare,
   replyToSupportTicket,
   listSupportCategories,
   supportHealth,
 } = require('../controllers/supportController');
 
-// ============================================================
-// ZENIMONIES BANKING
-// CUSTOMER SUPPORT ROUTES
-// ============================================================
 
 // ============================================================
-// HEALTH CHECK
+// ZENIMONIES BANKING
+// CUSTOMER CARE ROUTES
+// ============================================================
+
+
+// ============================================================
+// HEALTH
 // GET /api/support/health
 // ============================================================
 
@@ -28,8 +31,9 @@ router.get(
   supportHealth
 );
 
+
 // ============================================================
-// SUPPORT CATEGORIES
+// CATEGORIES
 // GET /api/support/categories
 // ============================================================
 
@@ -39,8 +43,9 @@ router.get(
   listSupportCategories
 );
 
+
 // ============================================================
-// CREATE SUPPORT TICKET
+// CREATE COMPLAINT
 // POST /api/support/tickets
 // ============================================================
 
@@ -50,8 +55,9 @@ router.post(
   createSupportTicket
 );
 
+
 // ============================================================
-// GET CUSTOMER SUPPORT TICKETS
+// CUSTOMER'S CASES
 // GET /api/support/tickets
 // ============================================================
 
@@ -61,8 +67,9 @@ router.get(
   listSupportTickets
 );
 
+
 // ============================================================
-// GET SINGLE SUPPORT TICKET
+// SINGLE CASE
 // GET /api/support/tickets/:ticketId
 // ============================================================
 
@@ -71,6 +78,19 @@ router.get(
   authMiddleware,
   getSupportTicket
 );
+
+
+// ============================================================
+// CONNECT TO CUSTOMER CARE
+// POST /api/support/tickets/:ticketId/connect
+// ============================================================
+
+router.post(
+  '/tickets/:ticketId/connect',
+  authMiddleware,
+  connectCustomerToCare
+);
+
 
 // ============================================================
 // CUSTOMER REPLY
@@ -83,8 +103,5 @@ router.post(
   replyToSupportTicket
 );
 
-// ============================================================
-// EXPORT
-// ============================================================
 
 module.exports = router;
