@@ -37,14 +37,20 @@ import {
   Refresh,
   Send,
   SupportAgent,
-ConfirmationNumberOutlined,
+  ConfirmationNumberOutlined,
+  SmartToyOutlined,
+  PersonOutline,
+  AccessTimeOutlined,
+  DoneAllOutlined,
+  HourglassEmptyOutlined,
 } from '@mui/icons-material';
 
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../theme/Theme.tsx';
 
 // ============================================================
-// ZENIMONIES BANKING — CUSTOMER CARE
+// ZENIMONIES BANKING
+// CUSTOMER CARE / COMPLAINTS & SUPPORT
 // ============================================================
 
 const API_BASE =
@@ -94,8 +100,15 @@ type SupportTicket = {
   category_id?: string;
   category_name?: string;
   transaction_id?: string | null;
+  connected_to_customer_care?: boolean;
+  assigned_to?: string | null;
   created_at: string;
   updated_at?: string;
+  last_message_at?: string;
+  waiting_since?: string | null;
+  customer_response_due_at?: string | null;
+  auto_closed_at?: string | null;
+  auto_close_reason?: string | null;
   messages?: SupportMessage[];
 };
 
@@ -164,7 +177,7 @@ function statusLabel(status: TicketStatus) {
       return 'Open';
 
     case 'pending':
-      return 'Pending';
+      return 'Waiting for Customer Care';
 
     case 'in_progress':
       return 'In Progress';
@@ -178,7 +191,9 @@ function statusLabel(status: TicketStatus) {
     default:
       return String(status)
         .replace(/_/g, ' ')
-        .replace(/\b\w/g, (char) => char.toUpperCase());
+        .replace(/\b\w/g, (char) =>
+          char.toUpperCase()
+        );
   }
 }
 
@@ -202,6 +217,33 @@ function statusColor(status: TicketStatus) {
     default:
       return 'default';
   }
+}
+
+function isAssistantMessage(
+  message: SupportMessage
+) {
+  return (
+    message.sender_type === 'assistant' ||
+    message.sender_type === 'bot'
+  );
+}
+
+function isAgentMessage(
+  message: SupportMessage
+) {
+  return (
+    message.sender_type === 'agent' ||
+    message.sender_type === 'admin'
+  );
+}
+
+function isCustomerMessage(
+  message: SupportMessage
+) {
+  return (
+    message.sender_type === 'customer' ||
+    message.sender_type === 'user'
+  );
 }
 
 // ============================================================
@@ -243,13 +285,11 @@ async function apiRequest(
   }
 
   if (!response.ok) {
-    const error = new Error(
+    throw new Error(
       data?.message ||
         data?.error ||
         'Something went wrong. Please try again.'
     );
-
-    throw error;
   }
 
   return data;
@@ -292,6 +332,9 @@ export default function Support() {
   const [sending, setSending] =
     useState(false);
 
+  const [connecting, setConnecting] =
+    useState(false);
+
   const [error, setError] = useState('');
 
   const [success, setSuccess] = useState('');
@@ -315,9 +358,6 @@ export default function Support() {
   const [description, setDescription] =
     useState('');
 
-  const [transactionId, setTransactionId] =
-    useState('');
-
   const [reply, setReply] =
     useState('');
 
@@ -339,10 +379,11 @@ export default function Support() {
       if (Array.isArray(list)) {
         setCategories(list);
       }
-    } catch {
-      // Categories may not have a dedicated endpoint yet.
-      // The fallback categories below keep the customer UI usable.
-      setCategories([]);
+    } catch (err) {
+      console.error(
+        'Unable to load support categories:',
+        err
+      );
     }
   }
 
@@ -365,7 +406,9 @@ export default function Support() {
         [];
 
       setTickets(
-        Array.isArray(list) ? list : []
+        Array.isArray(list)
+          ? list
+          : []
       );
     } catch (err: any) {
       setError(
@@ -394,52 +437,15 @@ export default function Support() {
   }, []);
 
   // ==========================================================
-  // FALLBACK CATEGORIES
+  // REAL CATEGORIES ONLY
   // ==========================================================
 
   const availableCategories = useMemo(() => {
-    if (categories.length > 0) {
-      return categories;
-    }
-
-    return [
-      {
-        id: 'account',
-        name: 'Account',
-      },
-      {
-        id: 'login_security',
-        name: 'Login & Security',
-      },
-      {
-        id: 'transfer',
-        name: 'Transfer',
-      },
-      {
-        id: 'airtime_data',
-        name: 'Airtime & Data',
-      },
-      {
-        id: 'bills',
-        name: 'Bills',
-      },
-      {
-        id: 'gift_cards',
-        name: 'Gift Cards',
-      },
-      {
-        id: 'kyc',
-        name: 'KYC & Verification',
-      },
-      {
-        id: 'card_pos',
-        name: 'Card / POS',
-      },
-      {
-        id: 'other',
-        name: 'Other',
-      },
-    ];
+    return categories.filter(
+      (category) =>
+        category?.id &&
+        category?.name
+    );
   }, [categories]);
 
   // ==========================================================
@@ -470,7 +476,7 @@ export default function Support() {
 
     if (!description.trim()) {
       setError(
-        'Please describe the issue.'
+        'Please describe what happened.'
       );
       return;
     }
@@ -485,9 +491,8 @@ export default function Support() {
           body: JSON.stringify({
             category_id: categoryId,
             subject: subject.trim(),
-            description: description.trim(),
-            transaction_id:
-              transactionId.trim() || null,
+            description:
+              description.trim(),
           }),
         }
       );
@@ -502,26 +507,25 @@ export default function Support() {
       setCategoryId('');
       setSubject('');
       setDescription('');
-      setTransactionId('');
-
-      setSuccess(
-        createdTicket?.ticket_number
-          ? `Support ticket ${createdTicket.ticket_number} has been created.`
-          : 'Your support ticket has been created successfully.'
-      );
 
       await loadTickets();
 
       if (createdTicket?.id) {
         await openTicket(
           createdTicket.id,
-          false
+          true
         );
       }
+
+      setSuccess(
+        createdTicket?.ticket_number
+          ? `Your complaint has been received. Ticket ${createdTicket.ticket_number} has been created.`
+          : 'Your complaint has been received and your support case has been created.'
+      );
     } catch (err: any) {
       setError(
         err?.message ||
-          'Unable to create your support ticket.'
+          'Unable to create your support case.'
       );
     } finally {
       setCreating(false);
@@ -551,7 +555,7 @@ export default function Support() {
 
       if (!ticket) {
         throw new Error(
-          'Support ticket could not be loaded.'
+          'Support case could not be loaded.'
         );
       }
 
@@ -563,10 +567,51 @@ export default function Support() {
     } catch (err: any) {
       setError(
         err?.message ||
-          'Unable to load this support ticket.'
+          'Unable to load this support case.'
       );
     } finally {
       setTicketLoading(false);
+    }
+  }
+
+  // ==========================================================
+  // CONNECT TO CUSTOMER CARE
+  // ==========================================================
+
+  async function connectToCustomerCare() {
+    if (!selectedTicket) {
+      return;
+    }
+
+    setConnecting(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await apiRequest(
+        `/support/tickets/${selectedTicket.id}/connect`,
+        {
+          method: 'POST',
+        }
+      );
+
+      await openTicket(
+        selectedTicket.id,
+        false
+      );
+
+      await loadTickets();
+
+      setSuccess(
+        'Your case has been connected to Customer Care.'
+      );
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          'Unable to connect you to Customer Care.'
+      );
+    } finally {
+      setConnecting(false);
     }
   }
 
@@ -579,9 +624,18 @@ export default function Support() {
   ) {
     event.preventDefault();
 
-    if (!selectedTicket) return;
+    if (!selectedTicket) {
+      return;
+    }
 
     if (!reply.trim()) {
+      return;
+    }
+
+    if (
+      selectedTicket.status ===
+      'closed'
+    ) {
       return;
     }
 
@@ -618,7 +672,7 @@ export default function Support() {
   }
 
   // ==========================================================
-  // CLOSE TICKET
+  // CLOSE TICKET DIALOG
   // ==========================================================
 
   function closeTicketDialog() {
@@ -656,7 +710,8 @@ export default function Support() {
     <Box
       sx={{
         minHeight: '100vh',
-        backgroundColor: colors.background,
+        backgroundColor:
+          colors.background,
         color: colors.text,
         pb: 8,
       }}
@@ -723,7 +778,7 @@ export default function Support() {
                   mt: 0.3,
                 }}
               >
-                We're here to help
+                Complaints & Support
               </Typography>
             </Box>
           </Stack>
@@ -773,7 +828,7 @@ export default function Support() {
         )}
 
         {/* ====================================================
-            HELP CARD
+            CUSTOMER CARE HERO
         ==================================================== */}
 
         <Card
@@ -804,19 +859,20 @@ export default function Support() {
             >
               <Box
                 sx={{
-                  width: 52,
-                  height: 52,
+                  width: 54,
+                  height: 54,
                   borderRadius: 2.5,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor:
                     'rgba(255,255,255,0.14)',
+                  flexShrink: 0,
                 }}
               >
                 <SupportAgent
                   sx={{
-                    fontSize: 30,
+                    fontSize: 31,
                   }}
                 />
               </Box>
@@ -826,7 +882,7 @@ export default function Support() {
                   fontWeight={800}
                   fontSize={18}
                 >
-                  Need help?
+                  How can we help?
                 </Typography>
 
                 <Typography
@@ -836,8 +892,9 @@ export default function Support() {
                     mt: 0.4,
                   }}
                 >
-                  Create a support ticket and our
-                  customer care team will assist you.
+                  Tell us what happened and
+                  our Customer Care team will
+                  assist you.
                 </Typography>
               </Box>
             </Stack>
@@ -845,7 +902,9 @@ export default function Support() {
             <Button
               fullWidth
               variant="contained"
-              startIcon={<ConfirmationNumberOutlined />}
+              startIcon={
+                <ConfirmationNumberOutlined />
+              }
               onClick={() =>
                 setShowCreateDialog(true)
               }
@@ -853,15 +912,17 @@ export default function Support() {
                 mt: 2.5,
                 height: 48,
                 borderRadius: 2,
-                backgroundColor: '#ffffff',
+                backgroundColor:
+                  '#ffffff',
                 color: '#087443',
                 fontWeight: 800,
                 '&:hover': {
-                  backgroundColor: '#f1f7f3',
+                  backgroundColor:
+                    '#f1f7f3',
                 },
               }}
             >
-              Create Support Ticket
+              Report a Problem
             </Button>
           </CardContent>
         </Card>
@@ -882,21 +943,27 @@ export default function Support() {
           }}
         >
           <SummaryCard
-            icon={<ChatBubbleOutline />}
+            icon={
+              <ChatBubbleOutline />
+            }
             label="Open"
             value={openCount}
             colors={colors}
           />
 
           <SummaryCard
-            icon={<HelpOutline />}
+            icon={
+              <HourglassEmptyOutlined />
+            }
             label="Pending"
             value={pendingCount}
             colors={colors}
           />
 
           <SummaryCard
-            icon={<CheckCircleOutline />}
+            icon={
+              <CheckCircleOutline />
+            }
             label="Resolved"
             value={resolvedCount}
             colors={colors}
@@ -915,7 +982,7 @@ export default function Support() {
             color: colors.text,
           }}
         >
-          My Support Tickets
+          My Support Cases
         </Typography>
 
         {loading ? (
@@ -975,7 +1042,7 @@ export default function Support() {
                 mb: 0.7,
               }}
             >
-              No support tickets yet
+              No support cases yet
             </Typography>
 
             <Typography
@@ -988,9 +1055,10 @@ export default function Support() {
               }}
             >
               If you need help with your
-              account or a transaction, create
-              a support ticket and our team will
-              assist you.
+              account or a transaction,
+              report the problem and our
+              Customer Care team will assist
+              you.
             </Typography>
           </Paper>
         ) : (
@@ -1009,7 +1077,7 @@ export default function Support() {
         )}
 
         {/* ====================================================
-            FAQ
+            SECURITY NOTICE
         ==================================================== */}
 
         <Paper
@@ -1026,11 +1094,12 @@ export default function Support() {
           <Stack
             direction="row"
             spacing={1.5}
-            alignItems="center"
+            alignItems="flex-start"
           >
             <HelpOutline
               sx={{
                 color: colors.primary,
+                mt: 0.2,
               }}
             />
 
@@ -1041,7 +1110,7 @@ export default function Support() {
                   color: colors.text,
                 }}
               >
-                Need quick answers?
+                Stay safe
               </Typography>
 
               <Typography
@@ -1049,12 +1118,14 @@ export default function Support() {
                 sx={{
                   color:
                     colors.textSecondary,
-                  mt: 0.3,
+                  mt: 0.4,
+                  lineHeight: 1.6,
                 }}
               >
-                We're building the ZENIMONIES
-                Help Centre with answers to
-                common questions.
+                ZENIMONIES Customer Care will
+                never ask you for your password,
+                PIN, OTP, CVV, passkey or other
+                secret security information.
               </Typography>
             </Box>
           </Stack>
@@ -1062,7 +1133,7 @@ export default function Support() {
       </Container>
 
       {/* ======================================================
-          CREATE TICKET DIALOG
+          CREATE COMPLAINT DIALOG
       ====================================================== */}
 
       <Dialog
@@ -1090,7 +1161,7 @@ export default function Support() {
             pb: 1,
           }}
         >
-          Create Support Ticket
+          Report a Problem
         </DialogTitle>
 
         <DialogContent>
@@ -1100,15 +1171,18 @@ export default function Support() {
               color:
                 colors.textSecondary,
               mb: 2.5,
+              lineHeight: 1.6,
             }}
           >
-            Tell us what you need help with.
-            Please do not include your password,
-            PIN, OTP or other secret security
-            information.
+            Tell us what happened. Your
+            complaint will receive a unique
+            ticket ID so you can follow the
+            conversation with Customer Care.
           </Typography>
 
           <Stack spacing={2}>
+            {/* CATEGORY */}
+
             <Box>
               <Typography
                 variant="body2"
@@ -1118,7 +1192,7 @@ export default function Support() {
                   color: colors.text,
                 }}
               >
-                Category
+                What is the issue about?
               </Typography>
 
               <Select
@@ -1129,6 +1203,10 @@ export default function Support() {
                   setCategoryId(
                     event.target.value
                   )
+                }
+                disabled={
+                  availableCategories.length ===
+                  0
                 }
                 sx={{
                   color: colors.text,
@@ -1152,25 +1230,48 @@ export default function Support() {
                   )
                 )}
               </Select>
+
+              {availableCategories.length ===
+                0 && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: 'block',
+                    mt: 0.7,
+                    color:
+                      colors.textSecondary,
+                  }}
+                >
+                  Support categories are
+                  currently unavailable.
+                  Please try again shortly.
+                </Typography>
+              )}
             </Box>
+
+            {/* SUBJECT */}
 
             <TextField
               fullWidth
               label="Subject"
-              placeholder="What do you need help with?"
+              placeholder="Briefly describe the problem"
               value={subject}
               onChange={(event) =>
-                setSubject(event.target.value)
+                setSubject(
+                  event.target.value
+                )
               }
               sx={inputStyles(colors)}
             />
+
+            {/* DESCRIPTION */}
 
             <TextField
               fullWidth
               multiline
               minRows={5}
-              label="Describe the issue"
-              placeholder="Please explain what happened..."
+              label="What happened?"
+              placeholder="Please explain what happened and how we can help..."
               value={description}
               onChange={(event) =>
                 setDescription(
@@ -1180,18 +1281,34 @@ export default function Support() {
               sx={inputStyles(colors)}
             />
 
-            <TextField
-              fullWidth
-              label="Transaction reference (optional)"
-              placeholder="e.g. ZEN..."
-              value={transactionId}
-              onChange={(event) =>
-                setTransactionId(
-                  event.target.value
-                )
-              }
-              sx={inputStyles(colors)}
-            />
+            {/* SECURITY */}
+
+            <Paper
+              elevation={0}
+              sx={{
+                p: 1.7,
+                borderRadius: 2,
+                backgroundColor:
+                  isDarkMode
+                    ? '#13251c'
+                    : '#f0f8f3',
+                border: `1px solid ${colors.border}`,
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{
+                  color:
+                    colors.textSecondary,
+                  lineHeight: 1.6,
+                }}
+              >
+                For your security, do not
+                include passwords, PINs, OTPs,
+                CVVs, passkeys or other secret
+                authentication information.
+              </Typography>
+            </Paper>
           </Stack>
         </DialogContent>
 
@@ -1207,7 +1324,8 @@ export default function Support() {
             }
             disabled={creating}
             sx={{
-              color: colors.textSecondary,
+              color:
+                colors.textSecondary,
               fontWeight: 700,
             }}
           >
@@ -1217,7 +1335,11 @@ export default function Support() {
           <Button
             variant="contained"
             onClick={handleCreateTicket}
-            disabled={creating}
+            disabled={
+              creating ||
+              availableCategories.length ===
+                0
+            }
             startIcon={
               creating ? (
                 <CircularProgress
@@ -1229,7 +1351,7 @@ export default function Support() {
               )
             }
             sx={{
-              minWidth: 130,
+              minWidth: 150,
               backgroundColor:
                 colors.primary,
               '&:hover': {
@@ -1240,14 +1362,14 @@ export default function Support() {
             }}
           >
             {creating
-              ? 'Creating...'
-              : 'Submit Ticket'}
+              ? 'Submitting...'
+              : 'Submit Complaint'}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* ======================================================
-          TICKET CONVERSATION DIALOG
+          SUPPORT CASE / CHAT DIALOG
       ====================================================== */}
 
       <Dialog
@@ -1261,7 +1383,7 @@ export default function Support() {
             backgroundColor:
               colors.surface,
             color: colors.text,
-            maxHeight: '90vh',
+            maxHeight: '92vh',
           },
         }}
       >
@@ -1282,9 +1404,13 @@ export default function Support() {
           </Box>
         ) : selectedTicket ? (
           <>
+            {/* =================================================
+                CHAT HEADER
+            ================================================= */}
+
             <DialogTitle
               sx={{
-                pb: 1,
+                pb: 1.5,
               }}
             >
               <Stack
@@ -1293,7 +1419,11 @@ export default function Support() {
                 justifyContent="space-between"
                 spacing={2}
               >
-                <Box>
+                <Box
+                  sx={{
+                    minWidth: 0,
+                  }}
+                >
                   <Typography
                     fontWeight={800}
                     sx={{
@@ -1303,15 +1433,34 @@ export default function Support() {
                     {selectedTicket.subject}
                   </Typography>
 
-                  <Typography
-                    variant="caption"
+                  <Stack
+                    direction="row"
+                    spacing={0.7}
+                    alignItems="center"
                     sx={{
-                      color:
-                        colors.textSecondary,
+                      mt: 0.5,
                     }}
                   >
-                    {selectedTicket.ticket_number}
-                  </Typography>
+                    <ConfirmationNumberOutlined
+                      sx={{
+                        fontSize: 15,
+                        color:
+                          colors.primary,
+                      }}
+                    />
+
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color:
+                          colors.textSecondary,
+                      }}
+                    >
+                      {
+                        selectedTicket.ticket_number
+                      }
+                    </Typography>
+                  </Stack>
                 </Box>
 
                 <IconButton
@@ -1332,6 +1481,8 @@ export default function Support() {
                 spacing={1}
                 sx={{
                   mt: 1.5,
+                  flexWrap: 'wrap',
+                  gap: 0.5,
                 }}
               >
                 <Chip
@@ -1354,7 +1505,8 @@ export default function Support() {
                     size="small"
                     variant="outlined"
                     sx={{
-                      color: colors.text,
+                      color:
+                        colors.text,
                       borderColor:
                         colors.border,
                     }}
@@ -1375,6 +1527,70 @@ export default function Support() {
                 pt: 2,
               }}
             >
+              {/* =================================================
+                  TICKET INTRO
+              ================================================= */}
+
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 1.7,
+                  mb: 2,
+                  borderRadius: 2,
+                  backgroundColor:
+                    colors.surfaceAlt,
+                  border: `1px solid ${colors.border}`,
+                }}
+              >
+                <Stack
+                  direction="row"
+                  spacing={1.2}
+                  alignItems="flex-start"
+                >
+                  <ConfirmationNumberOutlined
+                    sx={{
+                      color:
+                        colors.primary,
+                      fontSize: 20,
+                      mt: 0.1,
+                    }}
+                  />
+
+                  <Box>
+                    <Typography
+                      variant="body2"
+                      fontWeight={800}
+                      sx={{
+                        color:
+                          colors.text,
+                      }}
+                    >
+                      Support Case
+                    </Typography>
+
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color:
+                          colors.textSecondary,
+                        display:
+                          'block',
+                        mt: 0.3,
+                      }}
+                    >
+                      Keep your ticket ID
+                      for reference when
+                      contacting ZENIMONIES
+                      Customer Care.
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+
+              {/* =================================================
+                  ORIGINAL COMPLAINT
+              ================================================= */}
+
               {selectedTicket.description && (
                 <Paper
                   elevation={0}
@@ -1388,11 +1604,27 @@ export default function Support() {
                   }}
                 >
                   <Typography
+                    variant="caption"
+                    fontWeight={800}
+                    sx={{
+                      color:
+                        colors.primary,
+                      display:
+                        'block',
+                      mb: 0.7,
+                    }}
+                  >
+                    Your complaint
+                  </Typography>
+
+                  <Typography
                     variant="body2"
                     sx={{
-                      color: colors.text,
+                      color:
+                        colors.text,
                       whiteSpace:
                         'pre-wrap',
+                      lineHeight: 1.6,
                     }}
                   >
                     {
@@ -1402,24 +1634,239 @@ export default function Support() {
                 </Paper>
               )}
 
-              <Stack spacing={1.5}>
+              {/* =================================================
+                  CONNECT TO CUSTOMER CARE
+              ================================================= */}
+
+              {!selectedTicket.connected_to_customer_care &&
+                selectedTicket.status !==
+                  'closed' &&
+                selectedTicket.status !==
+                  'resolved' && (
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      mb: 2,
+                      borderRadius: 2.5,
+                      backgroundColor:
+                        isDarkMode
+                          ? '#13251c'
+                          : '#eff9f3',
+                      border: `1px solid ${colors.border}`,
+                    }}
+                  >
+                    <Stack
+                      direction="row"
+                      spacing={1.4}
+                      alignItems="flex-start"
+                    >
+                      <Box
+                        sx={{
+                          width: 38,
+                          height: 38,
+                          borderRadius:
+                            '50%',
+                          display:
+                            'flex',
+                          alignItems:
+                            'center',
+                          justifyContent:
+                            'center',
+                          backgroundColor:
+                            isDarkMode
+                              ? '#1e5138'
+                              : '#d9f1e3',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <SmartToyOutlined
+                          sx={{
+                            color:
+                              colors.primary,
+                          }}
+                        />
+                      </Box>
+
+                      <Box
+                        sx={{
+                          flex: 1,
+                        }}
+                      >
+                        <Typography
+                          variant="body2"
+                          fontWeight={800}
+                          sx={{
+                            color:
+                              colors.text,
+                          }}
+                        >
+                          ZENIMONIES
+                          Support
+                          Assistant
+                        </Typography>
+
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            mt: 0.6,
+                            color:
+                              colors.text,
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          Thank you for
+                          contacting
+                          ZENIMONIES
+                          Customer Care.
+                          I've received
+                          your complaint
+                          and created
+                          your support
+                          case.
+                        </Typography>
+
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            mt: 0.8,
+                            color:
+                              colors.text,
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          I'm unable to
+                          resolve this
+                          issue
+                          automatically.
+                          Would you
+                          like me to
+                          connect you
+                          with a
+                          Customer Care
+                          agent?
+                        </Typography>
+
+                        <Stack
+                          direction={{
+                            xs: 'column',
+                            sm: 'row',
+                          }}
+                          spacing={1}
+                          sx={{
+                            mt: 1.5,
+                          }}
+                        >
+                          <Button
+                            variant="contained"
+                            onClick={
+                              connectToCustomerCare
+                            }
+                            disabled={
+                              connecting
+                            }
+                            startIcon={
+                              connecting ? (
+                                <CircularProgress
+                                  size={
+                                    16
+                                  }
+                                  color="inherit"
+                                />
+                              ) : (
+                                <SupportAgent />
+                              )
+                            }
+                            sx={{
+                              backgroundColor:
+                                colors.primary,
+                              fontWeight: 800,
+                              textTransform:
+                                'none',
+                              '&:hover':
+                                {
+                                  backgroundColor:
+                                    colors.primaryDark,
+                                },
+                            }}
+                          >
+                            {connecting
+                              ? 'Connecting...'
+                              : 'Connect me to Customer Care'}
+                          </Button>
+
+                          <Button
+                            variant="outlined"
+                            onClick={
+                              closeTicketDialog
+                            }
+                            disabled={
+                              connecting
+                            }
+                            sx={{
+                              borderColor:
+                                colors.border,
+                              color:
+                                colors.text,
+                              fontWeight: 700,
+                              textTransform:
+                                'none',
+                            }}
+                          >
+                            Not now
+                          </Button>
+                        </Stack>
+                      </Box>
+                    </Stack>
+                  </Paper>
+                )}
+
+              {/* =================================================
+                  CONVERSATION
+              ================================================= */}
+
+              <Typography
+                variant="body2"
+                fontWeight={800}
+                sx={{
+                  color: colors.text,
+                  mb: 1.2,
+                }}
+              >
+                Conversation
+              </Typography>
+
+              <Stack spacing={1.6}>
                 {(
                   selectedTicket.messages ||
                   []
                 ).map((message) => {
-                  const isCustomer =
-                    message.sender_type ===
-                      'customer' ||
-                    message.sender_type ===
-                      'user';
+                  const assistant =
+                    isAssistantMessage(
+                      message
+                    );
+
+                  const agent =
+                    isAgentMessage(
+                      message
+                    );
+
+                  const customer =
+                    isCustomerMessage(
+                      message
+                    );
+
+                  const isHumanSupport =
+                    agent;
 
                   return (
                     <Box
                       key={message.id}
                       sx={{
-                        display: 'flex',
+                        display:
+                          'flex',
                         justifyContent:
-                          isCustomer
+                          customer
                             ? 'flex-end'
                             : 'flex-start',
                       }}
@@ -1427,54 +1874,103 @@ export default function Support() {
                       <Box
                         sx={{
                           maxWidth:
-                            '85%',
+                            '88%',
                         }}
                       >
+                        {/* SENDER */}
+
+                        <Stack
+                          direction="row"
+                          spacing={0.7}
+                          alignItems="center"
+                          sx={{
+                            mb: 0.5,
+                            px: 0.5,
+                          }}
+                        >
+                          {assistant ? (
+                            <SmartToyOutlined
+                              sx={{
+                                fontSize: 15,
+                                color:
+                                  colors.primary,
+                              }}
+                            />
+                          ) : isHumanSupport ? (
+                            <PersonOutline
+                              sx={{
+                                fontSize: 15,
+                                color:
+                                  colors.primary,
+                              }}
+                            />
+                          ) : (
+                            <PersonOutline
+                              sx={{
+                                fontSize: 15,
+                                color:
+                                  colors.textSecondary,
+                              }}
+                            />
+                          )}
+
+                          <Typography
+                            variant="caption"
+                            fontWeight={800}
+                            sx={{
+                              color:
+                                colors.text,
+                            }}
+                          >
+                            {assistant
+                              ? 'ZENIMONIES Support Assistant'
+                              : isHumanSupport
+                              ? message.sender_name ||
+                                'Customer Care Agent'
+                              : 'You'}
+                          </Typography>
+                        </Stack>
+
+                        {/* MESSAGE */}
+
                         <Paper
                           elevation={0}
                           sx={{
                             p: 1.7,
                             borderRadius: 2.5,
                             backgroundColor:
-                              isCustomer
+                              customer
                                 ? colors.primary
+                                : assistant
+                                ? isDarkMode
+                                  ? '#13251c'
+                                  : '#eef8f2'
                                 : colors.surfaceAlt,
                             color:
-                              isCustomer
+                              customer
                                 ? '#ffffff'
                                 : colors.text,
-                            border: isCustomer
-                              ? 'none'
-                              : `1px solid ${colors.border}`,
+                            border:
+                              customer
+                                ? 'none'
+                                : `1px solid ${colors.border}`,
                           }}
                         >
-                          {!isCustomer &&
-                            message.sender_name && (
-                              <Typography
-                                variant="caption"
-                                fontWeight={800}
-                                sx={{
-                                  display:
-                                    'block',
-                                  mb: 0.5,
-                                }}
-                              >
-                                {
-                                  message.sender_name
-                                }
-                              </Typography>
-                            )}
-
                           <Typography
                             variant="body2"
                             sx={{
                               whiteSpace:
                                 'pre-wrap',
+                              lineHeight: 1.6,
                             }}
                           >
-                            {message.message}
+                            {
+                              message.message
+                            }
                           </Typography>
                         </Paper>
+
+                        {/* DATE */}
 
                         <Typography
                           variant="caption"
@@ -1486,7 +1982,7 @@ export default function Support() {
                             color:
                               colors.textSecondary,
                             textAlign:
-                              isCustomer
+                              customer
                                 ? 'right'
                                 : 'left',
                           }}
@@ -1501,65 +1997,138 @@ export default function Support() {
                 })}
               </Stack>
 
-              {selectedTicket.status !==
-                'closed' && (
-                <Box
-                  component="form"
-                  onSubmit={handleReply}
-                  sx={{
-                    mt: 2.5,
-                  }}
-                >
-                  <TextField
-                    fullWidth
-                    multiline
-                    minRows={3}
-                    placeholder="Write a reply..."
-                    value={reply}
-                    onChange={(event) =>
-                      setReply(
-                        event.target.value
-                      )
-                    }
-                    sx={inputStyles(colors)}
-                  />
+              {/* =================================================
+                  WAITING FOR CUSTOMER
+              ================================================= */}
 
-                  <Button
-                    type="submit"
-                    fullWidth
-                    variant="contained"
-                    disabled={
-                      sending ||
-                      !reply.trim()
-                    }
-                    startIcon={
-                      sending ? (
-                        <CircularProgress
-                          size={18}
-                          color="inherit"
-                        />
-                      ) : (
-                        <Send />
-                      )
-                    }
+              {selectedTicket.status ===
+                'pending' &&
+                selectedTicket.connected_to_customer_care && (
+                  <Paper
+                    elevation={0}
                     sx={{
-                      mt: 1.2,
-                      height: 46,
+                      mt: 2,
+                      p: 1.7,
+                      borderRadius: 2,
                       backgroundColor:
-                        colors.primary,
-                      fontWeight: 800,
-                      '&:hover': {
-                        backgroundColor:
-                          colors.primaryDark,
-                      },
+                        isDarkMode
+                          ? '#302815'
+                          : '#fff8e8',
+                      border:
+                        '1px solid rgba(180,140,40,0.25)',
                     }}
                   >
-                    {sending
-                      ? 'Sending...'
-                      : 'Send Reply'}
-                  </Button>
-                </Box>
+                    <Stack
+                      direction="row"
+                      spacing={1.2}
+                      alignItems="flex-start"
+                    >
+                      <AccessTimeOutlined
+                        sx={{
+                          color:
+                            '#b1841e',
+                        }}
+                      />
+
+                      <Box>
+                        <Typography
+                          variant="body2"
+                          fontWeight={800}
+                          sx={{
+                            color:
+                              colors.text,
+                          }}
+                        >
+                          Customer Care is
+                          waiting for a
+                          response
+                        </Typography>
+
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display:
+                              'block',
+                            mt: 0.4,
+                            color:
+                              colors.textSecondary,
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          Please reply to
+                          this conversation
+                          if Customer Care
+                          has requested
+                          additional
+                          information.
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Paper>
+                )}
+
+              {/* =================================================
+                  RESOLVED
+              ================================================= */}
+
+              {selectedTicket.status ===
+                'resolved' && (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    mt: 2,
+                    p: 1.7,
+                    borderRadius: 2,
+                    backgroundColor:
+                      isDarkMode
+                        ? '#13251c'
+                        : '#eef8f2',
+                    border: `1px solid ${colors.border}`,
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    spacing={1.2}
+                    alignItems="center"
+                  >
+                    <DoneAllOutlined
+                      sx={{
+                        color:
+                          colors.primary,
+                      }}
+                    />
+
+                    <Box>
+                      <Typography
+                        variant="body2"
+                        fontWeight={800}
+                        sx={{
+                          color:
+                            colors.text,
+                        }}
+                      >
+                        Case resolved
+                      </Typography>
+
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color:
+                            colors.textSecondary,
+                        }}
+                      >
+                        Your Customer Care
+                        case has been marked
+                        as resolved.
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Paper>
               )}
+
+              {/* =================================================
+                  CLOSED
+              ================================================= */}
 
               {selectedTicket.status ===
                 'closed' && (
@@ -1567,14 +2136,101 @@ export default function Support() {
                   severity="info"
                   sx={{
                     mt: 2,
+                    borderRadius: 2,
                   }}
                 >
-                  This support ticket is
-                  closed. Please create a new
-                  ticket if you need further
-                  assistance.
+                  This conversation has been
+                  closed. If you still need
+                  assistance, please create a
+                  new Customer Care complaint.
                 </Alert>
               )}
+
+              {/* =================================================
+                  CUSTOMER REPLY
+              ================================================= */}
+
+              {selectedTicket.status !==
+                'closed' &&
+                selectedTicket.status !==
+                  'resolved' && (
+                  <Box
+                    component="form"
+                    onSubmit={handleReply}
+                    sx={{
+                      mt: 2.5,
+                    }}
+                  >
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={3}
+                      placeholder="Write a message to Customer Care..."
+                      value={reply}
+                      onChange={(event) =>
+                        setReply(
+                          event.target.value
+                        )
+                      }
+                      sx={inputStyles(
+                        colors
+                      )}
+                    />
+
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display:
+                          'block',
+                        mt: 0.7,
+                        color:
+                          colors.textSecondary,
+                      }}
+                    >
+                      Never send passwords,
+                      PINs, OTPs, CVVs or
+                      other secret security
+                      information.
+                    </Typography>
+
+                    <Button
+                      type="submit"
+                      fullWidth
+                      variant="contained"
+                      disabled={
+                        sending ||
+                        !reply.trim()
+                      }
+                      startIcon={
+                        sending ? (
+                          <CircularProgress
+                            size={18}
+                            color="inherit"
+                          />
+                        ) : (
+                          <Send />
+                        )
+                      }
+                      sx={{
+                        mt: 1.2,
+                        height: 46,
+                        backgroundColor:
+                          colors.primary,
+                        fontWeight: 800,
+                        textTransform:
+                          'none',
+                        '&:hover': {
+                          backgroundColor:
+                            colors.primaryDark,
+                        },
+                      }}
+                    >
+                      {sending
+                        ? 'Sending...'
+                        : 'Send Message'}
+                    </Button>
+                  </Box>
+                )}
             </DialogContent>
           </>
         ) : null}
