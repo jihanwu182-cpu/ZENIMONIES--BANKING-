@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
   Container,
   Dialog,
@@ -12,11 +13,14 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  Drawer,
   Grid,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemText,
   Paper,
   Stack,
-  Tab,
-  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -25,12 +29,20 @@ import {
   TableRow,
   TextField,
   Typography,
-  Chip,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com/api';
+
+const SIDEBAR_WIDTH = 255;
+
+/* ============================================================
+   TYPES
+   ============================================================ */
 
 interface DashboardData {
   users: {
@@ -139,37 +151,122 @@ interface Transaction {
   created_at: string;
 }
 
-type KycType =
-  | 'bvn'
-  | 'tier2'
-  | 'tier3';
+type KycType = 'bvn' | 'tier2' | 'tier3';
+type KycDecision = 'verify' | 'reject';
 
-type KycDecision =
-  | 'verify'
-  | 'reject';
+type Section =
+  | 'overview'
+  | 'customers'
+  | 'kyc'
+  | 'accounts'
+  | 'transactions'
+  | 'transfers'
+  | 'bills'
+  | 'airtime'
+  | 'giftcards'
+  | 'business'
+  | 'pos'
+  | 'security'
+  | 'settings';
+
+/* ============================================================
+   AUTH
+   ============================================================ */
 
 const getAdminToken = (): string | null => {
-  const keys = [
-    'adminToken',
-    'admin_token',
-    'token',
-    'accessToken',
-    'access_token',
-  ];
-
-  for (const key of keys) {
-    const token = localStorage.getItem(key);
-
-    if (token) {
-      return token;
-    }
-  }
-
-  return null;
+  return localStorage.getItem('adminToken');
 };
 
+/* ============================================================
+   SIDEBAR ITEMS
+   ============================================================ */
+
+const NAVIGATION: {
+  key: Section;
+  label: string;
+  icon: string;
+}[] = [
+  {
+    key: 'overview',
+    label: 'Overview',
+    icon: '⌂',
+  },
+  {
+    key: 'customers',
+    label: 'Customers',
+    icon: '♙',
+  },
+  {
+    key: 'kyc',
+    label: 'KYC & Verification',
+    icon: '✓',
+  },
+  {
+    key: 'accounts',
+    label: 'Accounts',
+    icon: '▣',
+  },
+  {
+    key: 'transactions',
+    label: 'Transactions',
+    icon: '↔',
+  },
+  {
+    key: 'transfers',
+    label: 'Transfers',
+    icon: '⇄',
+  },
+  {
+    key: 'bills',
+    label: 'Bills',
+    icon: '▤',
+  },
+  {
+    key: 'airtime',
+    label: 'Airtime & Data',
+    icon: '◉',
+  },
+  {
+    key: 'giftcards',
+    label: 'Gift Cards',
+    icon: '▧',
+  },
+  {
+    key: 'business',
+    label: 'Business Banking',
+    icon: '▥',
+  },
+  {
+    key: 'pos',
+    label: 'POS',
+    icon: '▦',
+  },
+  {
+    key: 'security',
+    label: 'Security',
+    icon: '◆',
+  },
+  {
+    key: 'settings',
+    label: 'Admin Settings',
+    icon: '⚙',
+  },
+];
+
+/* ============================================================
+   MAIN COMPONENT
+   ============================================================ */
+
 const AdminDashboard: React.FC = () => {
-  const [tab, setTab] = useState(0);
+  const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  const [section, setSection] =
+    useState<Section>('overview');
+
+  const [mobileDrawerOpen, setMobileDrawerOpen] =
+    useState(false);
 
   const [dashboard, setDashboard] =
     useState<DashboardData | null>(null);
@@ -212,13 +309,28 @@ const AdminDashboard: React.FC = () => {
 
   const token = getAdminToken();
 
-  const authHeaders = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
+  const authHeaders = useMemo(
+    () => ({
+      Authorization: `Bearer ${token || ''}`,
+      'Content-Type': 'application/json',
+    }),
+    [token]
+  );
 
   /* ============================================================
-     LOAD DASHBOARD
+     AUTH CHECK
+     ============================================================ */
+
+  useEffect(() => {
+    if (!token) {
+      navigate('/admin/login', {
+        replace: true,
+      });
+    }
+  }, [navigate, token]);
+
+  /* ============================================================
+     API LOADERS
      ============================================================ */
 
   const loadDashboard = async () => {
@@ -233,17 +345,13 @@ const AdminDashboard: React.FC = () => {
 
     if (!response.ok) {
       throw new Error(
-        data.message ||
-          'Unable to load dashboard'
+        data?.message ||
+          'Unable to load dashboard.'
       );
     }
 
     setDashboard(data.dashboard);
   };
-
-  /* ============================================================
-     LOAD USERS
-     ============================================================ */
 
   const loadUsers = async () => {
     const response = await fetch(
@@ -257,17 +365,13 @@ const AdminDashboard: React.FC = () => {
 
     if (!response.ok) {
       throw new Error(
-        data.message ||
-          'Unable to load users'
+        data?.message ||
+          'Unable to load users.'
       );
     }
 
     setUsers(data.users || []);
   };
-
-  /* ============================================================
-     LOAD KYC
-     ============================================================ */
 
   const loadKyc = async () => {
     const response = await fetch(
@@ -281,8 +385,8 @@ const AdminDashboard: React.FC = () => {
 
     if (!response.ok) {
       throw new Error(
-        data.message ||
-          'Unable to load KYC records'
+        data?.message ||
+          'Unable to load KYC records.'
       );
     }
 
@@ -291,47 +395,40 @@ const AdminDashboard: React.FC = () => {
     );
   };
 
-  /* ============================================================
-     LOAD TRANSACTIONS
-     ============================================================ */
-
-  const loadTransactions =
-    async () => {
-      const response = await fetch(
-        `${API_BASE_URL}/admin/transactions`,
-        {
-          headers: authHeaders,
-        }
-      );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            'Unable to load transactions'
-        );
+  const loadTransactions = async () => {
+    const response = await fetch(
+      `${API_BASE_URL}/admin/transactions`,
+      {
+        headers: authHeaders,
       }
+    );
 
-      setTransactions(
-        data.transactions || []
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message ||
+          'Unable to load transactions.'
       );
-    };
+    }
 
-  /* ============================================================
-     LOAD ALL DATA
-     ============================================================ */
+    setTransactions(
+      data.transactions || []
+    );
+  };
 
   const loadAllData = async () => {
     try {
       setLoading(true);
       setError('');
 
-      if (!token) {
-        setError(
-          'Administrator authentication token is missing. Please log in as an administrator.'
-        );
+      const currentToken =
+        getAdminToken();
+
+      if (!currentToken) {
+        navigate('/admin/login', {
+          replace: true,
+        });
         return;
       }
 
@@ -347,10 +444,34 @@ const AdminDashboard: React.FC = () => {
         err
       );
 
-      setError(
+      const message =
         err?.message ||
-          'Unable to load administrator dashboard'
-      );
+        'Unable to load administrator dashboard.';
+
+      setError(message);
+
+      if (
+        message
+          .toLowerCase()
+          .includes('unauthorized') ||
+        message
+          .toLowerCase()
+          .includes('token') ||
+        message
+          .toLowerCase()
+          .includes('expired')
+      ) {
+        localStorage.removeItem(
+          'adminToken'
+        );
+        localStorage.removeItem(
+          'admin'
+        );
+
+        navigate('/admin/login', {
+          replace: true,
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -359,73 +480,93 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     loadAllData();
 
+    // Initial dashboard load only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* ============================================================
+     LOGOUT
+     ============================================================ */
+
+  const handleLogout = () => {
+    localStorage.removeItem(
+      'adminToken'
+    );
+
+    localStorage.removeItem(
+      'admin'
+    );
+
+    navigate('/admin/login', {
+      replace: true,
+    });
+  };
 
   /* ============================================================
      USER STATUS
      ============================================================ */
 
-  const updateUserStatus =
-    async (
-      userId: string,
-      status: string
-    ) => {
-      try {
-        setActionLoading(userId);
-        setError('');
+  const updateUserStatus = async (
+    userId: string,
+    status: string
+  ) => {
+    try {
+      setActionLoading(userId);
+      setError('');
 
-        const response =
-          await fetch(
-            `${API_BASE_URL}/admin/users/${userId}/status`,
-            {
-              method: 'PATCH',
-              headers: authHeaders,
-              body: JSON.stringify({
-                status,
-              }),
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.message ||
-              'Unable to update user status'
-          );
-        }
-
-        setUsers(
-          (currentUsers) =>
-            currentUsers.map(
-              (user) =>
-                user.id === userId
-                  ? {
-                      ...user,
-                      status,
-                    }
-                  : user
-            )
-        );
-      } catch (err: any) {
-        console.error(
-          'Update user status error:',
-          err
+      const response =
+        await fetch(
+          `${API_BASE_URL}/admin/users/${userId}/status`,
+          {
+            method: 'PATCH',
+            headers: authHeaders,
+            body: JSON.stringify({
+              status,
+            }),
+          }
         );
 
-        setError(
-          err?.message ||
-            'Unable to update user status'
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to update user status.'
         );
-      } finally {
-        setActionLoading(null);
       }
-    };
+
+      setUsers(
+        (current) =>
+          current.map(
+            (user) =>
+              user.id === userId
+                ? {
+                    ...user,
+                    status,
+                  }
+                : user
+          )
+      );
+
+      await loadDashboard();
+    } catch (err: any) {
+      console.error(
+        'Update user status error:',
+        err
+      );
+
+      setError(
+        err?.message ||
+          'Unable to update user status.'
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   /* ============================================================
-     KYC REVIEW HELPERS
+     KYC HELPERS
      ============================================================ */
 
   const getKycTypeLabel = (
@@ -499,6 +640,7 @@ const AdminDashboard: React.FC = () => {
     setReviewOpen(false);
     setSelectedKyc(null);
     setSelectedType(null);
+    setDecisionMessage('');
   };
 
   const openRejectDialog = () => {
@@ -541,16 +683,6 @@ const AdminDashboard: React.FC = () => {
         return;
       }
 
-      if (!token) {
-        setError(
-          'Administrator authentication token is missing.'
-        );
-        return;
-      }
-
-      const endpoint =
-        `${API_BASE_URL}/admin/kyc/${selectedKyc.id}/${selectedType}/${decision}`;
-
       try {
         setActionLoading(
           `${selectedKyc.id}-${selectedType}`
@@ -558,6 +690,9 @@ const AdminDashboard: React.FC = () => {
 
         setError('');
         setDecisionMessage('');
+
+        const endpoint =
+          `${API_BASE_URL}/admin/kyc/${selectedKyc.id}/${selectedType}/${decision}`;
 
         const response =
           await fetch(
@@ -582,15 +717,13 @@ const AdminDashboard: React.FC = () => {
 
         if (!response.ok) {
           throw new Error(
-            data.message ||
-              `Unable to ${decision} ${getKycTypeLabel(
-                selectedType
-              )}.`
+            data?.message ||
+              `Unable to ${decision} KYC verification.`
           );
         }
 
         setDecisionMessage(
-          data.message ||
+          data?.message ||
             `${getKycTypeLabel(
               selectedType
             )} ${
@@ -603,9 +736,11 @@ const AdminDashboard: React.FC = () => {
 
         setRejectOpen(false);
 
-        await loadKyc();
-        await loadDashboard();
-        await loadUsers();
+        await Promise.all([
+          loadKyc(),
+          loadDashboard(),
+          loadUsers(),
+        ]);
 
         setTimeout(() => {
           setReviewOpen(false);
@@ -629,7 +764,7 @@ const AdminDashboard: React.FC = () => {
     };
 
   /* ============================================================
-     FORMAT HELPERS
+     FORMATTERS
      ============================================================ */
 
   const formatMoney = (
@@ -661,9 +796,18 @@ const AdminDashboard: React.FC = () => {
       return '—';
     }
 
-    return new Date(
-      value
-    ).toLocaleString(
+    const date =
+      new Date(value);
+
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return '—';
+    }
+
+    return date.toLocaleString(
       'en-NG'
     );
   };
@@ -710,51 +854,40 @@ const AdminDashboard: React.FC = () => {
         status || ''
       ).toLowerCase();
 
-    if (
-      normalized ===
-        'not_verified' ||
-      normalized ===
-        'not verified'
-    ) {
-      return 'Not Verified';
-    }
+    const labels: Record<
+      string,
+      string
+    > = {
+      not_verified:
+        'Not Verified',
+      'not verified':
+        'Not Verified',
+      under_review:
+        'Under Review',
+      verified: 'Verified',
+      rejected: 'Rejected',
+      pending: 'Pending',
+      active: 'Active',
+      suspended: 'Suspended',
+      blocked: 'Blocked',
+      failed: 'Failed',
+      completed: 'Completed',
+    };
 
-    if (
-      normalized ===
-        'under_review'
-    ) {
-      return 'Under Review';
-    }
-
-    if (
-      normalized ===
-        'verified'
-    ) {
-      return 'Verified';
-    }
-
-    if (
-      normalized ===
-        'rejected'
-    ) {
-      return 'Rejected';
-    }
-
-    if (
-      normalized ===
-        'pending'
-    ) {
-      return 'Pending';
-    }
-
-    return status || '—';
+    return (
+      labels[normalized] ||
+      status ||
+      '—'
+    );
   };
 
   const getDocumentTypeLabel =
-    (value:
-      | string
-      | null
-      | undefined) => {
+    (
+      value:
+        | string
+        | null
+        | undefined
+    ) => {
       if (!value) {
         return '—';
       }
@@ -772,10 +905,12 @@ const AdminDashboard: React.FC = () => {
     };
 
   const getTier3MethodLabel =
-    (value:
-      | string
-      | null
-      | undefined) => {
+    (
+      value:
+        | string
+        | null
+        | undefined
+    ) => {
       if (!value) {
         return '—';
       }
@@ -810,10 +945,10 @@ const AdminDashboard: React.FC = () => {
             sx={{
               p: 2,
               border:
-                '1px dashed #d0d5dd',
+                '1px dashed #cfd8d4',
               borderRadius: 2,
               background:
-                '#f9fafb',
+                '#f7faf8',
             }}
           >
             <Typography
@@ -849,6 +984,9 @@ const AdminDashboard: React.FC = () => {
             sx={{
               justifyContent:
                 'flex-start',
+              borderColor:
+                '#087f5b',
+              color: '#087f5b',
             }}
           >
             📄 Open {label}
@@ -878,9 +1016,9 @@ const AdminDashboard: React.FC = () => {
                 'contain',
               borderRadius: 2,
               border:
-                '1px solid #d0d5dd',
+                '1px solid #d7e1dc',
               background:
-                '#f9fafb',
+                '#f7faf8',
               cursor: 'pointer',
             }}
             onClick={() =>
@@ -896,6 +1034,1460 @@ const AdminDashboard: React.FC = () => {
     };
 
   /* ============================================================
+     MOBILE NAVIGATION
+     ============================================================ */
+
+  const handleNavigation = (
+    value: Section
+  ) => {
+    setSection(value);
+
+    if (isMobile) {
+      setMobileDrawerOpen(
+        false
+      );
+    }
+
+    setError('');
+  };
+
+  /* ============================================================
+     SIDEBAR
+     ============================================================ */
+
+  const sidebar = (
+    <Box
+      sx={{
+        width: SIDEBAR_WIDTH,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background:
+          '#082d23',
+        color: '#ffffff',
+      }}
+    >
+      {/* BRAND */}
+
+      <Box
+        sx={{
+          px: 2.5,
+          py: 2.5,
+          borderBottom:
+            '1px solid rgba(255,255,255,0.08)',
+        }}
+      >
+        <Typography
+          sx={{
+            fontSize: 22,
+            fontWeight: 900,
+            letterSpacing:
+              '-0.5px',
+          }}
+        >
+          ZENIMONIES
+        </Typography>
+
+        <Typography
+          sx={{
+            mt: 0.3,
+            fontSize: 9,
+            fontWeight: 800,
+            letterSpacing: 2.5,
+            color:
+              'rgba(255,255,255,0.55)',
+          }}
+        >
+          ADMIN PORTAL
+        </Typography>
+      </Box>
+
+      {/* NAV */}
+
+      <List
+        sx={{
+          px: 1.2,
+          py: 1.5,
+          flex: 1,
+          overflowY: 'auto',
+        }}
+      >
+        {NAVIGATION.map(
+          (item) => {
+            const active =
+              section ===
+              item.key;
+
+            return (
+              <ListItemButton
+                key={
+                  item.key
+                }
+                selected={
+                  active
+                }
+                onClick={() =>
+                  handleNavigation(
+                    item.key
+                  )
+                }
+                sx={{
+                  minHeight: 43,
+                  mb: 0.4,
+                  borderRadius:
+                    1.7,
+                  color: active
+                    ? '#ffffff'
+                    : 'rgba(255,255,255,0.68)',
+                  backgroundColor:
+                    active
+                      ? '#087f5b'
+                      : 'transparent',
+                  '&:hover':
+                    {
+                      backgroundColor:
+                        active
+                          ? '#087f5b'
+                          : 'rgba(255,255,255,0.06)',
+                    },
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 30,
+                    fontSize: 17,
+                    fontWeight: 800,
+                    textAlign:
+                      'center',
+                    mr: 0.8,
+                  }}
+                >
+                  {
+                    item.icon
+                  }
+                </Box>
+
+                <ListItemText
+                  primary={
+                    item.label
+                  }
+                  primaryTypographyProps={{
+                    fontSize: 13,
+                    fontWeight:
+                      active
+                        ? 800
+                        : 600,
+                  }}
+                />
+              </ListItemButton>
+            );
+          }
+        )}
+      </List>
+
+      {/* LOGOUT */}
+
+      <Box
+        sx={{
+          p: 1.5,
+          borderTop:
+            '1px solid rgba(255,255,255,0.08)',
+        }}
+      >
+        <Button
+          fullWidth
+          onClick={
+            handleLogout
+          }
+          sx={{
+            justifyContent:
+              'flex-start',
+            color:
+              'rgba(255,255,255,0.72)',
+            textTransform:
+              'none',
+            borderRadius:
+              1.5,
+            px: 1.5,
+            '&:hover':
+              {
+                color:
+                  '#ffffff',
+                backgroundColor:
+                  'rgba(255,255,255,0.07)',
+              },
+          }}
+        >
+          ⇥
+          <Box
+            component="span"
+            sx={{
+              ml: 1.5,
+              fontWeight: 700,
+            }}
+          >
+            Sign out
+          </Box>
+        </Button>
+      </Box>
+    </Box>
+  );
+
+  /* ============================================================
+     PAGE HEADER
+     ============================================================ */
+
+  const getSectionTitle = () => {
+    const item =
+      NAVIGATION.find(
+        (entry) =>
+          entry.key ===
+          section
+      );
+
+    return (
+      item?.label ||
+      'Overview'
+    );
+  };
+
+  /* ============================================================
+     OVERVIEW
+     ============================================================ */
+
+  const renderOverview = () => {
+    if (!dashboard) {
+      return null;
+    }
+
+    const recentTransactions =
+      transactions.slice(
+        0,
+        6
+      );
+
+    const pendingKyc =
+      kycRecords.filter(
+        (record) =>
+          record.verification_status ===
+            'pending' ||
+          record.bvn_verification_status ===
+            'pending' ||
+          record.id_verification_status ===
+            'pending' ||
+          record.tier_3_verification_status ===
+            'pending'
+      ).slice(0, 5);
+
+    return (
+      <Stack spacing={3}>
+        {/* STATISTICS */}
+
+        <Grid
+          container
+          spacing={2}
+        >
+          <StatCard
+            title="Total Customers"
+            value={
+              dashboard
+                .users
+                .total
+            }
+            subtitle={`${dashboard.users.active} active`}
+            icon="♙"
+          />
+
+          <StatCard
+            title="Pending KYC"
+            value={
+              dashboard
+                .kyc
+                .pending
+            }
+            subtitle={`${dashboard.kyc.approved} approved`}
+            icon="✓"
+            warning={
+              dashboard.kyc
+                .pending >
+              0
+            }
+          />
+
+          <StatCard
+            title="Total Deposits"
+            value={formatMoney(
+              dashboard
+                .deposits
+                .total_amount
+            )}
+            subtitle={`${dashboard.deposits.count} deposits`}
+            icon="↓"
+          />
+
+          <StatCard
+            title="Total Transfers"
+            value={formatMoney(
+              dashboard
+                .transfers
+                .total_amount
+            )}
+            subtitle={`${dashboard.transfers.count} transfers`}
+            icon="⇄"
+          />
+
+          <StatCard
+            title="Withdrawals"
+            value={formatMoney(
+              dashboard
+                .withdrawals
+                .total_amount
+            )}
+            subtitle={`${dashboard.withdrawals.count} withdrawals`}
+            icon="↑"
+          />
+
+          <StatCard
+            title="Pending Transactions"
+            value={
+              dashboard
+                .transactions
+                .pending
+            }
+            subtitle="Requires monitoring"
+            icon="◷"
+            warning={
+              dashboard
+                .transactions
+                .pending >
+              0
+            }
+          />
+
+          <StatCard
+            title="Failed Transactions"
+            value={
+              dashboard
+                .transactions
+                .failed
+            }
+            subtitle="Requires investigation"
+            icon="!"
+            danger={
+              dashboard
+                .transactions
+                .failed >
+              0
+            }
+          />
+
+          <StatCard
+            title="Rejected KYC"
+            value={
+              dashboard
+                .kyc
+                .rejected
+            }
+            subtitle="Customer submissions"
+            icon="×"
+          />
+        </Grid>
+
+        {/* ACTIVITY */}
+
+        <Grid
+          container
+          spacing={2}
+        >
+          <Grid
+            item
+            xs={12}
+            lg={7}
+          >
+            <Card
+              sx={{
+                border:
+                  '1px solid #e2ebe6',
+                borderRadius: 3,
+                boxShadow:
+                  '0 4px 18px rgba(20,65,48,0.04)',
+              }}
+            >
+              <CardContent>
+                <SectionHeading
+                  title="Recent Transactions"
+                  subtitle="Latest transaction activity"
+                  action={
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        handleNavigation(
+                          'transactions'
+                        )
+                      }
+                      sx={{
+                        color:
+                          '#087f5b',
+                        textTransform:
+                          'none',
+                        fontWeight:
+                          800,
+                      }}
+                    >
+                      View all
+                    </Button>
+                  }
+                />
+
+                <TableContainer>
+                  <Table
+                    size="small"
+                  >
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>
+                          Customer
+                        </TableCell>
+                        <TableCell>
+                          Type
+                        </TableCell>
+                        <TableCell>
+                          Amount
+                        </TableCell>
+                        <TableCell>
+                          Status
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+
+                    <TableBody>
+                      {recentTransactions.map(
+                        (
+                          transaction
+                        ) => (
+                          <TableRow
+                            key={
+                              transaction.id
+                            }
+                          >
+                            <TableCell>
+                              <Typography
+                                fontWeight={700}
+                                fontSize={13}
+                              >
+                                {
+                                  transaction.full_name
+                                }
+                              </Typography>
+
+                              <Typography
+                                fontSize={11}
+                                color="text.secondary"
+                              >
+                                {
+                                  transaction.account_number
+                                }
+                              </Typography>
+                            </TableCell>
+
+                            <TableCell>
+                              <Typography
+                                fontSize={12}
+                              >
+                                {
+                                  transaction.type
+                                }
+                              </Typography>
+                            </TableCell>
+
+                            <TableCell>
+                              <Typography
+                                fontWeight={700}
+                                fontSize={12}
+                              >
+                                {formatMoney(
+                                  transaction.amount
+                                )}
+                              </Typography>
+                            </TableCell>
+
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                label={getStatusLabel(
+                                  transaction.status
+                                )}
+                                color={statusColor(
+                                  transaction.status
+                                )}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        )
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                {recentTransactions.length ===
+                  0 && (
+                  <EmptyState text="No recent transactions." />
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid
+            item
+            xs={12}
+            lg={5}
+          >
+            <Card
+              sx={{
+                height:
+                  '100%',
+                border:
+                  '1px solid #e2ebe6',
+                borderRadius: 3,
+                boxShadow:
+                  '0 4px 18px rgba(20,65,48,0.04)',
+              }}
+            >
+              <CardContent>
+                <SectionHeading
+                  title="KYC Requiring Attention"
+                  subtitle="Submissions awaiting review"
+                  action={
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        handleNavigation(
+                          'kyc'
+                        )
+                      }
+                      sx={{
+                        color:
+                          '#087f5b',
+                        textTransform:
+                          'none',
+                        fontWeight:
+                          800,
+                      }}
+                    >
+                      Review
+                    </Button>
+                  }
+                />
+
+                <Stack
+                  spacing={1.2}
+                >
+                  {pendingKyc.map(
+                    (
+                      record
+                    ) => (
+                      <Paper
+                        key={
+                          record.id
+                        }
+                        variant="outlined"
+                        sx={{
+                          p: 1.5,
+                          borderRadius:
+                            2,
+                          borderColor:
+                            '#e3ebe7',
+                        }}
+                      >
+                        <Stack
+                          direction="row"
+                          justifyContent="space-between"
+                          alignItems="center"
+                          spacing={2}
+                        >
+                          <Box>
+                            <Typography
+                              fontWeight={800}
+                              fontSize={13}
+                            >
+                              {
+                                record.full_name
+                              }
+                            </Typography>
+
+                            <Typography
+                              fontSize={11}
+                              color="text.secondary"
+                            >
+                              {
+                                record.email
+                              }
+                            </Typography>
+                          </Box>
+
+                          <Chip
+                            size="small"
+                            label={getStatusLabel(
+                              record.verification_status
+                            )}
+                            color={statusColor(
+                              record.verification_status
+                            )}
+                          />
+                        </Stack>
+                      </Paper>
+                    )
+                  )}
+
+                  {pendingKyc.length ===
+                    0 && (
+                    <EmptyState text="No KYC submissions require attention." />
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* SYSTEM STATUS */}
+
+        <Card
+          sx={{
+            border:
+              '1px solid #e2ebe6',
+            borderRadius: 3,
+            boxShadow:
+              '0 4px 18px rgba(20,65,48,0.04)',
+          }}
+        >
+          <CardContent>
+            <SectionHeading
+              title="System Overview"
+              subtitle="Current administration environment"
+            />
+
+            <Grid
+              container
+              spacing={2}
+            >
+              <SystemStatus
+                title="Admin Authentication"
+                status="Protected"
+              />
+
+              <SystemStatus
+                title="Customer API"
+                status="Connected"
+              />
+
+              <SystemStatus
+                title="KYC Management"
+                status="Operational"
+              />
+
+              <SystemStatus
+                title="Gift Cards"
+                status="Provider Integration"
+              />
+            </Grid>
+          </CardContent>
+        </Card>
+      </Stack>
+    );
+  };
+
+  /* ============================================================
+     CUSTOMERS
+     ============================================================ */
+
+  const renderCustomers = () => (
+    <AdminCard
+      title="Customers"
+      subtitle="Manage registered ZENIMONIES customers."
+      action={
+        <Button
+          variant="outlined"
+          onClick={loadUsers}
+        >
+          Refresh
+        </Button>
+      }
+    >
+      <TableContainer>
+        <Table
+          sx={{
+            minWidth: 1050,
+          }}
+        >
+          <TableHead>
+            <TableRow>
+              <TableCell>
+                Customer
+              </TableCell>
+
+              <TableCell>
+                Phone
+              </TableCell>
+
+              <TableCell>
+                KYC
+              </TableCell>
+
+              <TableCell>
+                Tier
+              </TableCell>
+
+              <TableCell>
+                Status
+              </TableCell>
+
+              <TableCell>
+                Verification
+              </TableCell>
+
+              <TableCell>
+                Created
+              </TableCell>
+
+              <TableCell>
+                Actions
+              </TableCell>
+            </TableRow>
+          </TableHead>
+
+          <TableBody>
+            {users.map(
+              (user) => (
+                <TableRow
+                  key={
+                    user.id
+                  }
+                >
+                  <TableCell>
+                    <Typography
+                      fontWeight={800}
+                    >
+                      {
+                        user.full_name
+                      }
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                    >
+                      {
+                        user.email
+                      }
+                    </Typography>
+                  </TableCell>
+
+                  <TableCell>
+                    {
+                      user.phone
+                    }
+                  </TableCell>
+
+                  <TableCell>
+                    <Chip
+                      label={getStatusLabel(
+                        user.kyc_status
+                      )}
+                      color={statusColor(
+                        user.kyc_status
+                      )}
+                      size="small"
+                    />
+                  </TableCell>
+
+                  <TableCell>
+                    Tier{' '}
+                    {
+                      user.kyc_tier
+                    }
+                  </TableCell>
+
+                  <TableCell>
+                    <Chip
+                      label={getStatusLabel(
+                        user.status
+                      )}
+                      color={statusColor(
+                        user.status
+                      )}
+                      size="small"
+                    />
+                  </TableCell>
+
+                  <TableCell>
+                    <Stack
+                      spacing={
+                        0.4
+                      }
+                    >
+                      <Typography
+                        fontSize={12}
+                      >
+                        BVN:{' '}
+                        {user.bvn_verified
+                          ? '✓'
+                          : '—'}
+                      </Typography>
+
+                      <Typography
+                        fontSize={12}
+                      >
+                        ID:{' '}
+                        {user.id_verified
+                          ? '✓'
+                          : '—'}
+                      </Typography>
+
+                      <Typography
+                        fontSize={12}
+                      >
+                        Tier 3:{' '}
+                        {user.tier_3_verified
+                          ? '✓'
+                          : '—'}
+                      </Typography>
+                    </Stack>
+                  </TableCell>
+
+                  <TableCell>
+                    {formatDate(
+                      user.created_at
+                    )}
+                  </TableCell>
+
+                  <TableCell>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                    >
+                      {user.status !==
+                        'active' && (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          disabled={
+                            actionLoading ===
+                            user.id
+                          }
+                          onClick={() =>
+                            updateUserStatus(
+                              user.id,
+                              'active'
+                            )
+                          }
+                          sx={{
+                            background:
+                              '#087f5b',
+                            '&:hover':
+                              {
+                                background:
+                                  '#066a4b',
+                              },
+                          }}
+                        >
+                          Activate
+                        </Button>
+                      )}
+
+                      {user.status ===
+                        'active' && (
+                        <Button
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                          disabled={
+                            actionLoading ===
+                            user.id
+                          }
+                          onClick={() =>
+                            updateUserStatus(
+                              user.id,
+                              'suspended'
+                            )
+                          }
+                        >
+                          Suspend
+                        </Button>
+                      )}
+
+                      {user.status !==
+                        'blocked' && (
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          disabled={
+                            actionLoading ===
+                            user.id
+                          }
+                          onClick={() =>
+                            updateUserStatus(
+                              user.id,
+                              'blocked'
+                            )
+                          }
+                        >
+                          Block
+                        </Button>
+                      )}
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              )
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {users.length ===
+        0 && (
+        <EmptyState text="No customers found." />
+      )}
+    </AdminCard>
+  );
+
+  /* ============================================================
+     KYC
+     ============================================================ */
+
+  const renderKyc = () => (
+    <AdminCard
+      title="KYC & Verification"
+      subtitle="Review and process customer verification submissions."
+      action={
+        <Button
+          variant="outlined"
+          onClick={loadKyc}
+        >
+          Refresh KYC
+        </Button>
+      }
+    >
+      <TableContainer>
+        <Table
+          sx={{
+            minWidth: 1100,
+          }}
+        >
+          <TableHead>
+            <TableRow>
+              <TableCell>
+                Customer
+              </TableCell>
+
+              <TableCell>
+                BVN
+              </TableCell>
+
+              <TableCell>
+                Tier 2
+              </TableCell>
+
+              <TableCell>
+                Tier 3
+              </TableCell>
+
+              <TableCell>
+                Overall
+              </TableCell>
+
+              <TableCell>
+                Submitted
+              </TableCell>
+
+              <TableCell>
+                Review
+              </TableCell>
+            </TableRow>
+          </TableHead>
+
+          <TableBody>
+            {kycRecords.map(
+              (record) => (
+                <TableRow
+                  key={
+                    record.id
+                  }
+                >
+                  <TableCell>
+                    <Typography
+                      fontWeight={800}
+                    >
+                      {
+                        record.full_name
+                      }
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                    >
+                      {
+                        record.email
+                      }
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                    >
+                      {
+                        record.phone
+                      }
+                    </Typography>
+                  </TableCell>
+
+                  <KycTableCell
+                    status={
+                      record.bvn_verification_status
+                    }
+                    pending={
+                      record.bvn_verification_status ===
+                      'pending'
+                    }
+                    buttonLabel="Review BVN"
+                    onReview={() =>
+                      openKycReview(
+                        record,
+                        'bvn'
+                      )
+                    }
+                  />
+
+                  <KycTableCell
+                    status={
+                      record.id_verification_status
+                    }
+                    pending={
+                      record.id_verification_status ===
+                      'pending'
+                    }
+                    buttonLabel="Review Tier 2"
+                    onReview={() =>
+                      openKycReview(
+                        record,
+                        'tier2'
+                      )
+                    }
+                  />
+
+                  <KycTableCell
+                    status={
+                      record.tier_3_verification_status
+                    }
+                    pending={
+                      record.tier_3_verification_status ===
+                      'pending'
+                    }
+                    buttonLabel="Review Tier 3"
+                    onReview={() =>
+                      openKycReview(
+                        record,
+                        'tier3'
+                      )
+                    }
+                  />
+
+                  <TableCell>
+                    <Chip
+                      label={getStatusLabel(
+                        record.verification_status
+                      )}
+                      color={statusColor(
+                        record.verification_status
+                      )}
+                      size="small"
+                    />
+
+                    {record.rejection_reason && (
+                      <Typography
+                        variant="body2"
+                        color="error"
+                        sx={{
+                          mt: 1,
+                        }}
+                      >
+                        {
+                          record.rejection_reason
+                        }
+                      </Typography>
+                    )}
+                  </TableCell>
+
+                  <TableCell>
+                    {formatDate(
+                      record.created_at
+                    )}
+                  </TableCell>
+
+                  <TableCell>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() =>
+                        openKycReview(
+                          record,
+                          'bvn'
+                        )
+                      }
+                    >
+                      Open
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {kycRecords.length ===
+        0 && (
+        <EmptyState text="No KYC records found." />
+      )}
+    </AdminCard>
+  );
+
+  /* ============================================================
+     TRANSACTIONS
+     ============================================================ */
+
+  const renderTransactions = () => (
+    <AdminCard
+      title="Transactions"
+      subtitle="Monitor customer transaction activity."
+      action={
+        <Button
+          variant="outlined"
+          onClick={
+            loadTransactions
+          }
+        >
+          Refresh
+        </Button>
+      }
+    >
+      <TableContainer>
+        <Table
+          sx={{
+            minWidth: 1050,
+          }}
+        >
+          <TableHead>
+            <TableRow>
+              <TableCell>
+                Customer
+              </TableCell>
+
+              <TableCell>
+                Type
+              </TableCell>
+
+              <TableCell>
+                Amount
+              </TableCell>
+
+              <TableCell>
+                Reference
+              </TableCell>
+
+              <TableCell>
+                Status
+              </TableCell>
+
+              <TableCell>
+                Balance After
+              </TableCell>
+
+              <TableCell>
+                Date
+              </TableCell>
+            </TableRow>
+          </TableHead>
+
+          <TableBody>
+            {transactions.map(
+              (transaction) => (
+                <TableRow
+                  key={
+                    transaction.id
+                  }
+                >
+                  <TableCell>
+                    <Typography
+                      fontWeight={800}
+                    >
+                      {
+                        transaction.full_name
+                      }
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                    >
+                      {
+                        transaction.email
+                      }
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                    >
+                      {
+                        transaction.account_number
+                      }
+                    </Typography>
+                  </TableCell>
+
+                  <TableCell>
+                    {
+                      transaction.type
+                    }
+                  </TableCell>
+
+                  <TableCell>
+                    <Typography
+                      fontWeight={700}
+                    >
+                      {formatMoney(
+                        transaction.amount
+                      )}
+                    </Typography>
+
+                    <Typography
+                      fontSize={11}
+                      color="text.secondary"
+                    >
+                      {
+                        transaction.currency
+                      }
+                    </Typography>
+                  </TableCell>
+
+                  <TableCell>
+                    <Typography
+                      fontSize={12}
+                      sx={{
+                        maxWidth: 180,
+                        wordBreak:
+                          'break-all',
+                      }}
+                    >
+                      {
+                        transaction.reference
+                      }
+                    </Typography>
+                  </TableCell>
+
+                  <TableCell>
+                    <Chip
+                      label={getStatusLabel(
+                        transaction.status
+                      )}
+                      color={statusColor(
+                        transaction.status
+                      )}
+                      size="small"
+                    />
+                  </TableCell>
+
+                  <TableCell>
+                    {formatMoney(
+                      transaction.balance_after
+                    )}
+                  </TableCell>
+
+                  <TableCell>
+                    {formatDate(
+                      transaction.created_at
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {transactions.length ===
+        0 && (
+        <EmptyState text="No transactions found." />
+      )}
+    </AdminCard>
+  );
+
+  /* ============================================================
+     PLACEHOLDER ADMIN SECTIONS
+     ============================================================ */
+
+  const renderComingSoon = (
+    title: string,
+    description: string,
+    icon: string
+  ) => (
+    <Card
+      sx={{
+        border:
+          '1px solid #e2ebe6',
+        borderRadius: 3,
+        boxShadow:
+          '0 4px 18px rgba(20,65,48,0.04)',
+      }}
+    >
+      <CardContent
+        sx={{
+          minHeight: 360,
+          display: 'flex',
+          alignItems:
+            'center',
+          justifyContent:
+            'center',
+        }}
+      >
+        <Stack
+          spacing={1.5}
+          alignItems="center"
+          textAlign="center"
+          maxWidth={480}
+        >
+          <Box
+            sx={{
+              width: 64,
+              height: 64,
+              borderRadius:
+                '18px',
+              background:
+                '#eaf7f1',
+              color: '#087f5b',
+              display: 'flex',
+              alignItems:
+                'center',
+              justifyContent:
+                'center',
+              fontSize: 28,
+              fontWeight: 900,
+            }}
+          >
+            {icon}
+          </Box>
+
+          <Typography
+            variant="h5"
+            fontWeight={900}
+            color="#12382d"
+          >
+            {title}
+          </Typography>
+
+          <Typography
+            color="text.secondary"
+          >
+            {description}
+          </Typography>
+
+          <Chip
+            label="Admin module"
+            sx={{
+              mt: 1,
+              color: '#087f5b',
+              background:
+                '#eaf7f1',
+              fontWeight: 800,
+            }}
+          />
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+
+  const renderSection = () => {
+    switch (section) {
+      case 'overview':
+        return renderOverview();
+
+      case 'customers':
+        return renderCustomers();
+
+      case 'kyc':
+        return renderKyc();
+
+      case 'transactions':
+        return renderTransactions();
+
+      case 'accounts':
+        return renderComingSoon(
+          'Accounts',
+          'Account management, balances, status controls and account activity will be connected here.',
+          '▣'
+        );
+
+      case 'transfers':
+        return renderComingSoon(
+          'Transfers',
+          'Bank transfer monitoring, provider status, pending transfers and reversals will be managed here.',
+          '⇄'
+        );
+
+      case 'bills':
+        return renderComingSoon(
+          'Bills',
+          'Electricity, cable, internet and other bill-payment operations will be managed here.',
+          '▤'
+        );
+
+      case 'airtime':
+        return renderComingSoon(
+          'Airtime & Data',
+          'Monitor airtime and data purchases, provider responses, refunds and failed transactions.',
+          '◉'
+        );
+
+      case 'giftcards':
+        return renderComingSoon(
+          'Gift Cards',
+          'Prestmit catalogue, gift-card purchases, sell orders, rates, webhooks and provider transactions will appear here.',
+          '▧'
+        );
+
+      case 'business':
+        return renderComingSoon(
+          'Business Banking',
+          'Business customers, verification levels, business accounts and business activity will be managed here.',
+          '▥'
+        );
+
+      case 'pos':
+        return renderComingSoon(
+          'POS Management',
+          'POS applications, terminals, assignments, approval status and terminal activity will be managed here.',
+          '▦'
+        );
+
+      case 'security':
+        return renderComingSoon(
+          'Security',
+          'Security events, admin activity, suspicious activity, login monitoring and security controls will be managed here.',
+          '◆'
+        );
+
+      case 'settings':
+        return renderComingSoon(
+          'Admin Settings',
+          'Administrator profile, access controls, security settings and future two-factor authentication controls will be managed here.',
+          '⚙'
+        );
+
+      default:
+        return renderOverview();
+    }
+  };
+
+  /* ============================================================
      LOADING
      ============================================================ */
 
@@ -905,8 +2497,9 @@ const AdminDashboard: React.FC = () => {
         sx={{
           minHeight:
             '100vh',
-          display:
-            'flex',
+          background:
+            '#f5f8f6',
+          display: 'flex',
           alignItems:
             'center',
           justifyContent:
@@ -917,10 +2510,17 @@ const AdminDashboard: React.FC = () => {
           spacing={2}
           alignItems="center"
         >
-          <CircularProgress />
+          <CircularProgress
+            sx={{
+              color: '#087f5b',
+            }}
+          />
 
-          <Typography>
-            Loading administrator dashboard...
+          <Typography
+            color="text.secondary"
+            fontWeight={600}
+          >
+            Loading ZENIMONIES Admin...
           </Typography>
         </Stack>
       </Box>
@@ -936,18 +2536,35 @@ const AdminDashboard: React.FC = () => {
     !dashboard
   ) {
     return (
-      <Container
-        maxWidth="md"
-        sx={{ py: 6 }}
+      <Box
+        sx={{
+          minHeight:
+            '100vh',
+          background:
+            '#f5f8f6',
+          display: 'flex',
+          alignItems:
+            'center',
+          justifyContent:
+            'center',
+          p: 3,
+        }}
       >
-        <Card>
+        <Card
+          sx={{
+            maxWidth: 520,
+            width: '100%',
+            borderRadius: 3,
+          }}
+        >
           <CardContent>
             <Typography
               variant="h5"
-              fontWeight="bold"
+              fontWeight={900}
+              color="#12382d"
               gutterBottom
             >
-              Administrator Dashboard
+              Admin Dashboard
             </Typography>
 
             <Alert
@@ -957,17 +2574,40 @@ const AdminDashboard: React.FC = () => {
               {error}
             </Alert>
 
-            <Button
-              variant="contained"
-              onClick={
-                loadAllData
-              }
+            <Stack
+              direction="row"
+              spacing={1}
             >
-              Retry
-            </Button>
+              <Button
+                variant="contained"
+                onClick={
+                  loadAllData
+                }
+                sx={{
+                  background:
+                    '#087f5b',
+                  '&:hover':
+                    {
+                      background:
+                        '#066a4b',
+                    },
+                }}
+              >
+                Retry
+              </Button>
+
+              <Button
+                variant="outlined"
+                onClick={
+                  handleLogout
+                }
+              >
+                Sign out
+              </Button>
+            </Stack>
           </CardContent>
         </Card>
-      </Container>
+      </Box>
     );
   }
 
@@ -980,1069 +2620,213 @@ const AdminDashboard: React.FC = () => {
       sx={{
         minHeight:
           '100vh',
-        backgroundColor:
-          '#f5f6f8',
-        py: 4,
+        background:
+          '#f5f8f6',
       }}
     >
-      <Container maxWidth="xl">
+      {/* DESKTOP SIDEBAR */}
 
-        {/* HEADER */}
-        <Stack
-          direction={{
-            xs: 'column',
-            md: 'row',
+      {!isMobile && (
+        <Box
+          sx={{
+            position:
+              'fixed',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width:
+              SIDEBAR_WIDTH,
+            zIndex: 1200,
           }}
-          justifyContent="space-between"
-          alignItems={{
-            xs: 'flex-start',
-            md: 'center',
-          }}
-          spacing={2}
-          sx={{ mb: 4 }}
         >
-          <Box>
-            <Typography
-              variant="h4"
-              fontWeight="bold"
-            >
-              Zenimonies Admin
-            </Typography>
+          {sidebar}
+        </Box>
+      )}
 
-            <Typography
-              color="text.secondary"
-            >
-              Banking platform administration
-            </Typography>
-          </Box>
+      {/* MOBILE DRAWER */}
 
-          <Button
-            variant="outlined"
-            onClick={
-              loadAllData
-            }
+      {isMobile && (
+        <Drawer
+          open={
+            mobileDrawerOpen
+          }
+          onClose={() =>
+            setMobileDrawerOpen(
+              false
+            )
+          }
+          PaperProps={{
+            sx: {
+              background:
+                '#082d23',
+              color:
+                '#ffffff',
+              width:
+                SIDEBAR_WIDTH,
+            },
+          }}
+        >
+          {sidebar}
+        </Drawer>
+      )}
+
+      {/* MAIN */}
+
+      <Box
+        sx={{
+          ml: {
+            xs: 0,
+            md: `${SIDEBAR_WIDTH}px`,
+          },
+          minHeight:
+            '100vh',
+        }}
+      >
+        {/* TOP BAR */}
+
+        <Box
+          sx={{
+            position:
+              'sticky',
+            top: 0,
+            zIndex: 1000,
+            background:
+              'rgba(255,255,255,0.96)',
+            backdropFilter:
+              'blur(12px)',
+            borderBottom:
+              '1px solid #e1e9e5',
+          }}
+        >
+          <Container
+            maxWidth="xl"
+            sx={{
+              py: 1.5,
+            }}
           >
-            Refresh
-          </Button>
-        </Stack>
-
-        {error && (
-          <Alert
-            severity="error"
-            sx={{ mb: 3 }}
-          >
-            {error}
-          </Alert>
-        )}
-
-        {/* DASHBOARD STATISTICS */}
-        {dashboard && (
-          <Grid
-            container
-            spacing={2}
-            sx={{ mb: 4 }}
-          >
-            <Grid
-              item
-              xs={12}
-              sm={6}
-              md={3}
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              spacing={2}
             >
-              <Card>
-                <CardContent>
-                  <Typography
-                    color="text.secondary"
-                  >
-                    Total Users
-                  </Typography>
-
-                  <Typography
-                    variant="h4"
-                    fontWeight="bold"
-                  >
-                    {
-                      dashboard
-                        .users
-                        .total
-                    }
-                  </Typography>
-
-                  <Typography
-                    color="success.main"
-                  >
-                    {
-                      dashboard
-                        .users
-                        .active
-                    }{' '}
-                    active
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid
-              item
-              xs={12}
-              sm={6}
-              md={3}
-            >
-              <Card>
-                <CardContent>
-                  <Typography
-                    color="text.secondary"
-                  >
-                    Pending KYC
-                  </Typography>
-
-                  <Typography
-                    variant="h4"
-                    fontWeight="bold"
-                  >
-                    {
-                      dashboard
-                        .kyc
-                        .pending
-                    }
-                  </Typography>
-
-                  <Typography>
-                    {
-                      dashboard
-                        .kyc
-                        .approved
-                    }{' '}
-                    approved
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid
-              item
-              xs={12}
-              sm={6}
-              md={3}
-            >
-              <Card>
-                <CardContent>
-                  <Typography
-                    color="text.secondary"
-                  >
-                    Completed Deposits
-                  </Typography>
-
-                  <Typography
-                    variant="h4"
-                    fontWeight="bold"
-                  >
-                    {formatMoney(
-                      dashboard
-                        .deposits
-                        .total_amount
-                    )}
-                  </Typography>
-
-                  <Typography>
-                    {
-                      dashboard
-                        .deposits
-                        .count
-                    }{' '}
-                    deposits
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid
-              item
-              xs={12}
-              sm={6}
-              md={3}
-            >
-              <Card>
-                <CardContent>
-                  <Typography
-                    color="text.secondary"
-                  >
-                    Completed Transfers
-                  </Typography>
-
-                  <Typography
-                    variant="h4"
-                    fontWeight="bold"
-                  >
-                    {formatMoney(
-                      dashboard
-                        .transfers
-                        .total_amount
-                    )}
-                  </Typography>
-
-                  <Typography>
-                    {
-                      dashboard
-                        .transfers
-                        .count
-                    }{' '}
-                    transfers
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid
-              item
-              xs={12}
-              sm={6}
-              md={3}
-            >
-              <Card>
-                <CardContent>
-                  <Typography
-                    color="text.secondary"
-                  >
-                    Withdrawals
-                  </Typography>
-
-                  <Typography
-                    variant="h5"
-                    fontWeight="bold"
-                  >
-                    {formatMoney(
-                      dashboard
-                        .withdrawals
-                        .total_amount
-                    )}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid
-              item
-              xs={12}
-              sm={6}
-              md={3}
-            >
-              <Card>
-                <CardContent>
-                  <Typography
-                    color="text.secondary"
-                  >
-                    Pending Transactions
-                  </Typography>
-
-                  <Typography
-                    variant="h4"
-                    fontWeight="bold"
-                  >
-                    {
-                      dashboard
-                        .transactions
-                        .pending
-                    }
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid
-              item
-              xs={12}
-              sm={6}
-              md={3}
-            >
-              <Card>
-                <CardContent>
-                  <Typography
-                    color="text.secondary"
-                  >
-                    Failed Transactions
-                  </Typography>
-
-                  <Typography
-                    variant="h4"
-                    fontWeight="bold"
-                  >
-                    {
-                      dashboard
-                        .transactions
-                        .failed
-                    }
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid
-              item
-              xs={12}
-              sm={6}
-              md={3}
-            >
-              <Card>
-                <CardContent>
-                  <Typography
-                    color="text.secondary"
-                  >
-                    Rejected KYC
-                  </Typography>
-
-                  <Typography
-                    variant="h4"
-                    fontWeight="bold"
-                  >
-                    {
-                      dashboard
-                        .kyc
-                        .rejected
-                    }
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        )}
-
-        {/* NAVIGATION */}
-        <Paper sx={{ mb: 3 }}>
-          <Tabs
-            value={tab}
-            onChange={(
-              _event,
-              newValue
-            ) =>
-              setTab(
-                newValue
-              )
-            }
-            variant="scrollable"
-            scrollButtons="auto"
-          >
-            <Tab label="Users" />
-            <Tab label="KYC" />
-            <Tab label="Transactions" />
-          </Tabs>
-        </Paper>
-
-        {/* ======================================================
-            USERS
-            ====================================================== */}
-
-        {tab === 0 && (
-          <Card>
-            <CardContent>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                sx={{ mb: 2 }}
-              >
-                Users
-              </Typography>
-
-              <Divider
-                sx={{ mb: 2 }}
-              />
-
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>
-                        User
-                      </TableCell>
-
-                      <TableCell>
-                        Phone
-                      </TableCell>
-
-                      <TableCell>
-                        KYC
-                      </TableCell>
-
-                      <TableCell>
-                        Tier
-                      </TableCell>
-
-                      <TableCell>
-                        Status
-                      </TableCell>
-
-                      <TableCell>
-                        Verification
-                      </TableCell>
-
-                      <TableCell>
-                        Created
-                      </TableCell>
-
-                      <TableCell>
-                        Actions
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-
-                  <TableBody>
-                    {users.map(
-                      (user) => (
-                        <TableRow
-                          key={
-                            user.id
-                          }
-                        >
-                          <TableCell>
-                            <Typography
-                              fontWeight="bold"
-                            >
-                              {
-                                user.full_name
-                              }
-                            </Typography>
-
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                            >
-                              {
-                                user.email
-                              }
-                            </Typography>
-                          </TableCell>
-
-                          <TableCell>
-                            {
-                              user.phone
-                            }
-                          </TableCell>
-
-                          <TableCell>
-                            <Chip
-                              label={
-                                getStatusLabel(
-                                  user.kyc_status
-                                )
-                              }
-                              color={statusColor(
-                                user.kyc_status
-                              )}
-                              size="small"
-                            />
-                          </TableCell>
-
-                          <TableCell>
-                            Tier{' '}
-                            {
-                              user.kyc_tier
-                            }
-                          </TableCell>
-
-                          <TableCell>
-                            <Chip
-                              label={
-                                user.status
-                              }
-                              color={statusColor(
-                                user.status
-                              )}
-                              size="small"
-                            />
-                          </TableCell>
-
-                          <TableCell>
-                            <Stack
-                              spacing={
-                                0.5
-                              }
-                            >
-                              <Typography
-                                variant="body2"
-                              >
-                                BVN:{' '}
-                                {user.bvn_verified
-                                  ? '✓'
-                                  : '—'}
-                              </Typography>
-
-                              <Typography
-                                variant="body2"
-                              >
-                                ID:{' '}
-                                {user.id_verified
-                                  ? '✓'
-                                  : '—'}
-                              </Typography>
-
-                              <Typography
-                                variant="body2"
-                              >
-                                Tier 3:{' '}
-                                {user.tier_3_verified
-                                  ? '✓'
-                                  : '—'}
-                              </Typography>
-                            </Stack>
-                          </TableCell>
-
-                          <TableCell>
-                            {formatDate(
-                              user.created_at
-                            )}
-                          </TableCell>
-
-                          <TableCell>
-                            <Stack
-                              direction="row"
-                              spacing={1}
-                            >
-                              {user.status !==
-                                'active' && (
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  disabled={
-                                    actionLoading ===
-                                    user.id
-                                  }
-                                  onClick={() =>
-                                    updateUserStatus(
-                                      user.id,
-                                      'active'
-                                    )
-                                  }
-                                >
-                                  Activate
-                                </Button>
-                              )}
-
-                              {user.status ===
-                                'active' && (
-                                <Button
-                                  size="small"
-                                  color="warning"
-                                  variant="outlined"
-                                  disabled={
-                                    actionLoading ===
-                                    user.id
-                                  }
-                                  onClick={() =>
-                                    updateUserStatus(
-                                      user.id,
-                                      'suspended'
-                                    )
-                                  }
-                                >
-                                  Suspend
-                                </Button>
-                              )}
-
-                              {user.status !==
-                                'blocked' && (
-                                <Button
-                                  size="small"
-                                  color="error"
-                                  variant="outlined"
-                                  disabled={
-                                    actionLoading ===
-                                    user.id
-                                  }
-                                  onClick={() =>
-                                    updateUserStatus(
-                                      user.id,
-                                      'blocked'
-                                    )
-                                  }
-                                >
-                                  Block
-                                </Button>
-                              )}
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-
-              {users.length ===
-                0 && (
-                <Typography
-                  sx={{ py: 4 }}
-                  textAlign="center"
-                  color="text.secondary"
-                >
-                  No users found.
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ======================================================
-            KYC MANAGEMENT
-            ====================================================== */}
-
-        {tab === 1 && (
-          <Card>
-            <CardContent>
               <Stack
-                direction={{
-                  xs: 'column',
-                  md: 'row',
-                }}
-                justifyContent="space-between"
-                alignItems={{
-                  xs: 'flex-start',
-                  md: 'center',
-                }}
-                spacing={2}
-                sx={{ mb: 2 }}
+                direction="row"
+                alignItems="center"
+                spacing={1.5}
               >
+                {isMobile && (
+                  <IconButton
+                    onClick={() =>
+                      setMobileDrawerOpen(
+                        true
+                      )
+                    }
+                    sx={{
+                      color:
+                        '#087f5b',
+                    }}
+                  >
+                    ☰
+                  </IconButton>
+                )}
+
                 <Box>
                   <Typography
-                    variant="h5"
-                    fontWeight="bold"
+                    fontSize={{
+                      xs: 17,
+                      sm: 20,
+                    }}
+                    fontWeight={900}
+                    color="#12382d"
                   >
-                    KYC Management
+                    {getSectionTitle()}
                   </Typography>
 
                   <Typography
+                    fontSize={11}
                     color="text.secondary"
-                    variant="body2"
                   >
-                    Review and process real customer KYC submissions.
+                    ZENIMONIES
+                    Banking
+                    Administration
                   </Typography>
                 </Box>
-
-                <Button
-                  variant="outlined"
-                  onClick={
-                    loadKyc
-                  }
-                >
-                  Refresh KYC
-                </Button>
               </Stack>
 
-              <Divider
-                sx={{ mb: 2 }}
-              />
-
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>
-                        Customer
-                      </TableCell>
-
-                      <TableCell>
-                        BVN
-                      </TableCell>
-
-                      <TableCell>
-                        Tier 2 ID
-                      </TableCell>
-
-                      <TableCell>
-                        Tier 3
-                      </TableCell>
-
-                      <TableCell>
-                        Overall
-                      </TableCell>
-
-                      <TableCell>
-                        Submitted
-                      </TableCell>
-
-                      <TableCell>
-                        Review
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-
-                  <TableBody>
-                    {kycRecords.map(
-                      (kycRecord) => (
-                        <TableRow
-                          key={
-                            kycRecord.id
-                          }
-                        >
-                          <TableCell>
-                            <Typography
-                              fontWeight="bold"
-                            >
-                              {
-                                kycRecord.full_name
-                              }
-                            </Typography>
-
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                            >
-                              {
-                                kycRecord.email
-                              }
-                            </Typography>
-
-                            <Typography
-                              variant="body2"
-                            >
-                              {
-                                kycRecord.phone
-                              }
-                            </Typography>
-                          </TableCell>
-
-                          <TableCell>
-                            <Stack
-                              spacing={1}
-                            >
-                              <Chip
-                                size="small"
-                                label={getStatusLabel(
-                                  kycRecord.bvn_verification_status
-                                )}
-                                color={statusColor(
-                                  kycRecord.bvn_verification_status
-                                )}
-                              />
-
-                              {kycRecord.bvn_verification_status ===
-                                'pending' && (
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  onClick={() =>
-                                    openKycReview(
-                                      kycRecord,
-                                      'bvn'
-                                    )
-                                  }
-                                >
-                                  Review BVN
-                                </Button>
-                              )}
-                            </Stack>
-                          </TableCell>
-
-                          <TableCell>
-                            <Stack
-                              spacing={1}
-                            >
-                              <Typography
-                                variant="body2"
-                                fontWeight="bold"
-                              >
-                                {getDocumentTypeLabel(
-                                  kycRecord.document_type
-                                )}
-                              </Typography>
-
-                              <Chip
-                                size="small"
-                                label={getStatusLabel(
-                                  kycRecord.id_verification_status
-                                )}
-                                color={statusColor(
-                                  kycRecord.id_verification_status
-                                )}
-                              />
-
-                              {kycRecord.id_verification_status ===
-                                'pending' && (
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  onClick={() =>
-                                    openKycReview(
-                                      kycRecord,
-                                      'tier2'
-                                    )
-                                  }
-                                >
-                                  Review Tier 2
-                                </Button>
-                              )}
-                            </Stack>
-                          </TableCell>
-
-                          <TableCell>
-                            <Stack
-                              spacing={1}
-                            >
-                              <Typography
-                                variant="body2"
-                                fontWeight="bold"
-                              >
-                                {getTier3MethodLabel(
-                                  kycRecord.tier_3_method
-                                )}
-                              </Typography>
-
-                              <Chip
-                                size="small"
-                                label={getStatusLabel(
-                                  kycRecord.tier_3_verification_status
-                                )}
-                                color={statusColor(
-                                  kycRecord.tier_3_verification_status
-                                )}
-                              />
-
-                              {kycRecord.tier_3_verification_status ===
-                                'pending' && (
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  onClick={() =>
-                                    openKycReview(
-                                      kycRecord,
-                                      'tier3'
-                                    )
-                                  }
-                                >
-                                  Review Tier 3
-                                </Button>
-                              )}
-                            </Stack>
-                          </TableCell>
-
-                          <TableCell>
-                            <Chip
-                              label={getStatusLabel(
-                                kycRecord.verification_status
-                              )}
-                              color={statusColor(
-                                kycRecord.verification_status
-                              )}
-                              size="small"
-                            />
-
-                            {kycRecord.rejection_reason && (
-                              <Typography
-                                variant="body2"
-                                color="error"
-                                sx={{
-                                  mt: 1,
-                                }}
-                              >
-                                {
-                                  kycRecord.rejection_reason
-                                }
-                              </Typography>
-                            )}
-                          </TableCell>
-
-                          <TableCell>
-                            {formatDate(
-                              kycRecord.created_at
-                            )}
-                          </TableCell>
-
-                          <TableCell>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() =>
-                                openKycReview(
-                                  kycRecord,
-                                  'bvn'
-                                )
-                              }
-                            >
-                              Open
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-
-              {kycRecords.length ===
-                0 && (
-                <Typography
-                  sx={{ py: 4 }}
-                  textAlign="center"
-                  color="text.secondary"
-                >
-                  No KYC records found.
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ======================================================
-            TRANSACTIONS
-            ====================================================== */}
-
-        {tab === 2 && (
-          <Card>
-            <CardContent>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                sx={{ mb: 2 }}
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
               >
-                Transactions
-              </Typography>
+                <Chip
+                  label="Admin"
+                  size="small"
+                  sx={{
+                    background:
+                      '#eaf7f1',
+                    color:
+                      '#087f5b',
+                    fontWeight:
+                      800,
+                  }}
+                />
 
-              <Divider
-                sx={{ mb: 2 }}
-              />
-
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>
-                        User
-                      </TableCell>
-
-                      <TableCell>
-                        Type
-                      </TableCell>
-
-                      <TableCell>
-                        Amount
-                      </TableCell>
-
-                      <TableCell>
-                        Reference
-                      </TableCell>
-
-                      <TableCell>
-                        Status
-                      </TableCell>
-
-                      <TableCell>
-                        Balance After
-                      </TableCell>
-
-                      <TableCell>
-                        Date
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-
-                  <TableBody>
-                    {transactions.map(
-                      (
-                        transaction
-                      ) => (
-                        <TableRow
-                          key={
-                            transaction.id
-                          }
-                        >
-                          <TableCell>
-                            <Typography
-                              fontWeight="bold"
-                            >
-                              {
-                                transaction.full_name
-                              }
-                            </Typography>
-
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                            >
-                              {
-                                transaction.email
-                              }
-                            </Typography>
-
-                            <Typography
-                              variant="body2"
-                            >
-                              {
-                                transaction.account_number
-                              }
-                            </Typography>
-                          </TableCell>
-
-                          <TableCell>
-                            {
-                              transaction.type
-                            }
-                          </TableCell>
-
-                          <TableCell>
-                            {formatMoney(
-                              transaction.amount
-                            )}{' '}
-                            {
-                              transaction.currency
-                            }
-                          </TableCell>
-
-                          <TableCell>
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                wordBreak:
-                                  'break-all',
-                              }}
-                            >
-                              {
-                                transaction.reference
-                              }
-                            </Typography>
-                          </TableCell>
-
-                          <TableCell>
-                            <Chip
-                              label={getStatusLabel(
-                                transaction.status
-                              )}
-                              color={statusColor(
-                                transaction.status
-                              )}
-                              size="small"
-                            />
-                          </TableCell>
-
-                          <TableCell>
-                            {formatMoney(
-                              transaction.balance_after
-                            )}
-                          </TableCell>
-
-                          <TableCell>
-                            {formatDate(
-                              transaction.created_at
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-
-              {transactions.length ===
-                0 && (
-                <Typography
-                  sx={{ py: 4 }}
-                  textAlign="center"
-                  color="text.secondary"
+                <Button
+                  size="small"
+                  onClick={
+                    loadAllData
+                  }
+                  sx={{
+                    display: {
+                      xs: 'none',
+                      sm: 'inline-flex',
+                    },
+                    color:
+                      '#087f5b',
+                    fontWeight:
+                      800,
+                    textTransform:
+                      'none',
+                  }}
                 >
-                  No transactions found.
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </Container>
+                  Refresh
+                </Button>
+              </Stack>
+            </Stack>
+          </Container>
+        </Box>
+
+        {/* CONTENT */}
+
+        <Container
+          maxWidth="xl"
+          sx={{
+            py: {
+              xs: 2,
+              md: 3,
+            },
+          }}
+        >
+          {error && (
+            <Alert
+              severity="error"
+              onClose={() =>
+                setError('')
+              }
+              sx={{
+                mb: 2,
+                borderRadius:
+                  2,
+              }}
+            >
+              {error}
+            </Alert>
+          )}
+
+          {renderSection()}
+        </Container>
+      </Box>
 
       {/* ========================================================
           KYC REVIEW DIALOG
@@ -2050,11 +2834,18 @@ const AdminDashboard: React.FC = () => {
 
       <Dialog
         open={reviewOpen}
-        onClose={closeKycReview}
+        onClose={
+          closeKycReview
+        }
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>
+        <DialogTitle
+          sx={{
+            fontWeight: 900,
+            color: '#12382d',
+          }}
+        >
           {selectedKyc &&
           selectedType
             ? `Review ${getKycTypeLabel(
@@ -2065,7 +2856,9 @@ const AdminDashboard: React.FC = () => {
             : 'KYC Review'}
         </DialogTitle>
 
-        <DialogContent dividers>
+        <DialogContent
+          dividers
+        >
           {selectedKyc &&
             selectedType && (
               <Stack
@@ -2088,7 +2881,7 @@ const AdminDashboard: React.FC = () => {
                   </Typography>
 
                   <Typography
-                    fontWeight="bold"
+                    fontWeight={900}
                   >
                     {
                       selectedKyc.full_name
@@ -2115,30 +2908,17 @@ const AdminDashboard: React.FC = () => {
                 <Divider />
 
                 {/* BVN */}
+
                 {selectedType ===
                   'bvn' && (
                   <>
-                    <Box>
-                      <Typography
-                        variant="subtitle2"
-                        color="text.secondary"
-                      >
-                        Submitted BVN
-                      </Typography>
-
-                      <Typography
-                        variant="h6"
-                        fontWeight="bold"
-                        sx={{
-                          letterSpacing:
-                            1,
-                          mt: 0.5,
-                        }}
-                      >
-                        {selectedKyc.bvn ||
-                          'Not available'}
-                      </Typography>
-                    </Box>
+                    <InfoDisplay
+                      label="Submitted BVN"
+                      value={
+                        selectedKyc.bvn ||
+                        'Not available'
+                      }
+                    />
 
                     <StatusDisplay
                       label="BVN Status"
@@ -2162,6 +2942,7 @@ const AdminDashboard: React.FC = () => {
                 )}
 
                 {/* TIER 2 */}
+
                 {selectedType ===
                   'tier2' && (
                   <>
@@ -2214,6 +2995,7 @@ const AdminDashboard: React.FC = () => {
                 )}
 
                 {/* TIER 3 */}
+
                 {selectedType ===
                   'tier3' && (
                   <>
@@ -2297,7 +3079,6 @@ const AdminDashboard: React.FC = () => {
                 </Button>
 
                 <Button
-                  color="success"
                   variant="contained"
                   onClick={() =>
                     submitKycDecision(
@@ -2309,6 +3090,15 @@ const AdminDashboard: React.FC = () => {
                       actionLoading
                     )
                   }
+                  sx={{
+                    background:
+                      '#087f5b',
+                    '&:hover':
+                      {
+                        background:
+                          '#066a4b',
+                      },
+                  }}
                 >
                   {actionLoading
                     ? 'Processing...'
@@ -2343,7 +3133,11 @@ const AdminDashboard: React.FC = () => {
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>
+        <DialogTitle
+          sx={{
+            fontWeight: 900,
+          }}
+        >
           Reject{' '}
           {selectedType
             ? getKycTypeLabel(
@@ -2356,9 +3150,16 @@ const AdminDashboard: React.FC = () => {
         <DialogContent>
           <Typography
             color="text.secondary"
-            sx={{ mb: 2 }}
+            sx={{
+              mb: 2,
+              mt: 1,
+            }}
           >
-            Enter a clear reason for rejection. The customer will be able to see the reason and correct the submission before resubmitting.
+            Enter a clear reason for
+            rejection. The customer will
+            be able to see the reason and
+            correct the submission before
+            resubmitting.
           </Typography>
 
           <TextField
@@ -2373,8 +3174,7 @@ const AdminDashboard: React.FC = () => {
               event
             ) =>
               setRejectionReason(
-                event.target
-                  .value
+                event.target.value
               )
             }
             placeholder="Example: The submitted ID image is unclear. Please upload a clear image of the original document."
@@ -2428,86 +3228,239 @@ const AdminDashboard: React.FC = () => {
 };
 
 /* ============================================================
-   INFO DISPLAY
+   STAT CARD
    ============================================================ */
 
-interface InfoDisplayProps {
-  label: string;
-  value: string;
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: string;
+  warning?: boolean;
+  danger?: boolean;
 }
 
-const InfoDisplay: React.FC<
-  InfoDisplayProps
+const StatCard: React.FC<
+  StatCardProps
 > = ({
-  label,
+  title,
   value,
+  subtitle,
+  icon,
+  warning,
+  danger,
 }) => {
-  return (
-    <Box
-      sx={{
-        p: 2,
-        background:
-          '#f9fafb',
-        border:
-          '1px solid #eaecf0',
-        borderRadius: 2,
-      }}
-    >
-      <Typography
-        variant="caption"
-        color="text.secondary"
-      >
-        {label}
-      </Typography>
+  const iconBackground =
+    danger
+      ? '#fff1f0'
+      : warning
+        ? '#fff8e8'
+        : '#eaf7f1';
 
-      <Typography
-        fontWeight="bold"
-        sx={{ mt: 0.5 }}
+  const iconColor =
+    danger
+      ? '#b42318'
+      : warning
+        ? '#b54708'
+        : '#087f5b';
+
+  return (
+    <Grid
+      item
+      xs={12}
+      sm={6}
+      lg={3}
+    >
+      <Card
+        sx={{
+          height: '100%',
+          border:
+            '1px solid #e2ebe6',
+          borderRadius: 3,
+          boxShadow:
+            '0 4px 18px rgba(20,65,48,0.04)',
+        }}
       >
-        {value}
-      </Typography>
-    </Box>
+        <CardContent>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            spacing={2}
+          >
+            <Box>
+              <Typography
+                color="text.secondary"
+                fontSize={12}
+                fontWeight={700}
+              >
+                {title}
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.7,
+                  fontSize: {
+                    xs: 24,
+                    sm: 27,
+                  },
+                  fontWeight: 900,
+                  color: '#12382d',
+                  letterSpacing:
+                    '-0.5px',
+                }}
+              >
+                {value}
+              </Typography>
+
+              <Typography
+                fontSize={11}
+                color="text.secondary"
+                sx={{
+                  mt: 0.4,
+                }}
+              >
+                {subtitle}
+              </Typography>
+            </Box>
+
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                flexShrink: 0,
+                borderRadius:
+                  '12px',
+                background:
+                  iconBackground,
+                color:
+                  iconColor,
+                display: 'flex',
+                alignItems:
+                  'center',
+                justifyContent:
+                  'center',
+                fontSize: 19,
+                fontWeight: 900,
+              }}
+            >
+              {icon}
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+    </Grid>
   );
 };
 
 /* ============================================================
-   STATUS DISPLAY
+   SECTION HEADING
    ============================================================ */
 
-interface StatusDisplayProps {
-  label: string;
-  status: string;
+interface SectionHeadingProps {
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
 }
 
-const StatusDisplay: React.FC<
-  StatusDisplayProps
+const SectionHeading: React.FC<
+  SectionHeadingProps
 > = ({
-  label,
-  status,
-}) => {
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        justifyContent:
-          'space-between',
-        alignItems:
-          'center',
-        gap: 2,
-        p: 2,
-        background:
-          '#f9fafb',
-        border:
-          '1px solid #eaecf0',
-        borderRadius: 2,
-      }}
-    >
+  title,
+  subtitle,
+  action,
+}) => (
+  <Stack
+    direction="row"
+    justifyContent="space-between"
+    alignItems="flex-start"
+    spacing={2}
+    sx={{ mb: 2 }}
+  >
+    <Box>
       <Typography
-        fontWeight="600"
+        fontWeight={900}
+        color="#12382d"
       >
-        {label}
+        {title}
       </Typography>
 
+      <Typography
+        fontSize={12}
+        color="text.secondary"
+      >
+        {subtitle}
+      </Typography>
+    </Box>
+
+    {action}
+  </Stack>
+);
+
+/* ============================================================
+   ADMIN CARD
+   ============================================================ */
+
+interface AdminCardProps {
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}
+
+const AdminCard: React.FC<
+  AdminCardProps
+> = ({
+  title,
+  subtitle,
+  action,
+  children,
+}) => (
+  <Card
+    sx={{
+      border:
+        '1px solid #e2ebe6',
+      borderRadius: 3,
+      boxShadow:
+        '0 4px 18px rgba(20,65,48,0.04)',
+    }}
+  >
+    <CardContent>
+      <SectionHeading
+        title={title}
+        subtitle={subtitle}
+        action={action}
+      />
+
+      <Divider
+        sx={{ mb: 2 }}
+      />
+
+      {children}
+    </CardContent>
+  </Card>
+);
+
+/* ============================================================
+   KYC TABLE CELL
+   ============================================================ */
+
+interface KycTableCellProps {
+  status: string;
+  pending: boolean;
+  buttonLabel: string;
+  onReview: () => void;
+}
+
+const KycTableCell: React.FC<
+  KycTableCellProps
+> = ({
+  status,
+  pending,
+  buttonLabel,
+  onReview,
+}) => (
+  <TableCell>
+    <Stack spacing={1}>
       <Chip
         size="small"
         label={getGlobalStatusLabel(
@@ -2517,9 +3470,108 @@ const StatusDisplay: React.FC<
           status
         )}
       />
-    </Box>
-  );
-};
+
+      {pending && (
+        <Button
+          size="small"
+          variant="contained"
+          onClick={
+            onReview
+          }
+          sx={{
+            background:
+              '#087f5b',
+            '&:hover':
+              {
+                background:
+                  '#066a4b',
+              },
+          }}
+        >
+          {buttonLabel}
+        </Button>
+      )}
+    </Stack>
+  </TableCell>
+);
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+
+const EmptyState: React.FC<{
+  text: string;
+}> = ({ text }) => (
+  <Box
+    sx={{
+      py: 5,
+      textAlign: 'center',
+    }}
+  >
+    <Typography
+      color="text.secondary"
+      fontSize={13}
+    >
+      {text}
+    </Typography>
+  </Box>
+);
+
+/* ============================================================
+   SYSTEM STATUS
+   ============================================================ */
+
+const SystemStatus: React.FC<{
+  title: string;
+  status: string;
+}> = ({
+  title,
+  status,
+}) => (
+  <Grid
+    item
+    xs={12}
+    sm={6}
+    md={3}
+  >
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.8,
+        borderRadius: 2,
+        borderColor:
+          '#e2ebe6',
+      }}
+    >
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        spacing={1}
+      >
+        <Typography
+          fontSize={12}
+          fontWeight={800}
+        >
+          {title}
+        </Typography>
+
+        <Chip
+          size="small"
+          label={status}
+          sx={{
+            background:
+              '#eaf7f1',
+            color:
+              '#087f5b',
+            fontWeight:
+              800,
+          }}
+        />
+      </Stack>
+    </Paper>
+  </Grid>
+);
 
 /* ============================================================
    GLOBAL STATUS HELPERS
@@ -2532,42 +3584,37 @@ const getGlobalStatusLabel =
         status || ''
       ).toLowerCase();
 
-    if (
-      normalized ===
-      'not_verified'
-    ) {
-      return 'Not Verified';
-    }
+    const labels: Record<
+      string,
+      string
+    > = {
+      not_verified:
+        'Not Verified',
+      under_review:
+        'Under Review',
+      verified:
+        'Verified',
+      rejected:
+        'Rejected',
+      pending:
+        'Pending',
+      active:
+        'Active',
+      suspended:
+        'Suspended',
+      blocked:
+        'Blocked',
+      failed:
+        'Failed',
+      completed:
+        'Completed',
+    };
 
-    if (
-      normalized ===
-      'under_review'
-    ) {
-      return 'Under Review';
-    }
-
-    if (
-      normalized ===
-      'verified'
-    ) {
-      return 'Verified';
-    }
-
-    if (
-      normalized ===
-      'rejected'
-    ) {
-      return 'Rejected';
-    }
-
-    if (
-      normalized ===
-      'pending'
-    ) {
-      return 'Pending';
-    }
-
-    return status || '—';
+    return (
+      labels[normalized] ||
+      status ||
+      '—'
+    );
   };
 
 const getGlobalStatusColor =
@@ -2585,7 +3632,11 @@ const getGlobalStatusColor =
 
     if (
       normalized ===
-      'verified'
+        'verified' ||
+      normalized ===
+        'active' ||
+      normalized ===
+        'completed'
     ) {
       return 'success';
     }
@@ -2601,7 +3652,13 @@ const getGlobalStatusColor =
 
     if (
       normalized ===
-      'rejected'
+        'rejected' ||
+      normalized ===
+        'failed' ||
+      normalized ===
+        'blocked' ||
+      normalized ===
+        'suspended'
     ) {
       return 'error';
     }
