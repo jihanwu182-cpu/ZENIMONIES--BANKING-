@@ -1253,7 +1253,382 @@ async function closeCase(req, res) {
     client.release();
   }
 }
+// ============================================================
+// CUSTOMER CARE — READ-ONLY TRANSACTION INVESTIGATION
+// ============================================================
 
+const investigateTransaction = async (req, res) => {
+  try {
+    const agentId =
+      req.user?.id ||
+      req.user?.userId ||
+      req.user?.user_id ||
+      req.userId;
+
+    if (!agentId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required.',
+      });
+    }
+
+    const { reference } = req.query;
+
+    const cleanReference = String(reference || '').trim();
+
+    if (!cleanReference) {
+      return res.status(400).json({
+        success: false,
+        message: 'Transaction reference is required.',
+      });
+    }
+
+    if (cleanReference.length > 150) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid transaction reference.',
+      });
+    }
+
+    // ========================================================
+    // FIND EXTERNAL BANK TRANSFER
+    //
+    // Customer Care is READ-ONLY.
+    // Nothing is modified here.
+    // ========================================================
+
+    const transferResult = await pool.query(
+      `
+      SELECT
+        bt.id,
+        bt.account_id,
+        bt.recipient_name,
+        bt.recipient_account_number,
+        bt.recipient_bank_name,
+        bt.recipient_bank_code,
+        bt.amount,
+        bt.currency,
+        bt.narration,
+        bt.reference,
+        bt.status,
+        bt.provider_reference,
+        bt.failure_reason,
+        bt.created_at,
+        bt.completed_at,
+
+        a.account_number,
+        a.user_id,
+
+        u.full_name,
+        u.email,
+        u.phone,
+        u.kyc_status,
+        u.kyc_tier
+
+      FROM bank_transfers bt
+
+      INNER JOIN accounts a
+        ON a.id = bt.account_id
+
+      INNER JOIN users u
+        ON u.id = a.user_id
+
+      WHERE
+        bt.reference = $1
+        OR bt.provider_reference = $1
+
+      LIMIT 1
+      `,
+      [cleanReference]
+    );
+
+    if (transferResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        code: 'TRANSACTION_NOT_FOUND',
+        message:
+          'No bank transfer was found with that reference.',
+      });
+    }
+
+    const transfer = transferResult.rows[0];
+
+    // ========================================================
+    // FIND CORRESPONDING LEDGER TRANSACTION
+    // ========================================================
+
+    const ledgerResult = await pool.query(
+      `
+      SELECT
+        id,
+        account_id,
+        type,
+        amount,
+        currency,
+        reference,
+        description,
+        status,
+        balance_before,
+        balance_after,
+        created_at
+      FROM transactions
+      WHERE
+        account_id = $1
+        AND reference = $2
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [
+        transfer.account_id,
+        transfer.reference,
+      ]
+    );
+
+    const ledger =
+      ledgerResult.rows[0] || null;
+
+    // ========================================================
+    // MASK ACCOUNT NUMBER
+    // ========================================================
+
+    const maskAccountNumber = (accountNumber) => {
+      const value = String(accountNumber || '');
+
+      if (value.length <= 4) {
+        return value;
+      }
+
+      return `****${value.slice(-4)}`;
+    };
+
+    // ========================================================
+    // TRANSACTION STATUS
+    // ========================================================
+
+    const transferStatus =
+      String(transfer.status || '')
+        .trim()
+        .toLowerCase();
+
+    let statusLabel = 'Processing';
+
+    if (transferStatus === 'completed') {
+      statusLabel = 'Completed';
+    } else if (transferStatus === 'failed') {
+      statusLabel = 'Failed';
+    } else if (
+      transferStatus === 'pending'
+    ) {
+      statusLabel = 'Pending';
+    } else if (
+      transferStatus === 'processing'
+    ) {
+      statusLabel = 'Processing';
+    }
+
+    // ========================================================
+    // TRANSACTION FLOW
+    // ========================================================
+
+    const flow = [];
+
+    flow.push({
+      step: 'transfer_initiated',
+      label: 'Transfer initiated',
+      status: 'completed',
+      timestamp: transfer.created_at,
+    });
+
+    if (ledger) {
+      flow.push({
+        step: 'account_debited',
+        label: 'ZENIMONIES account debited',
+        status: 'completed',
+        timestamp: ledger.created_at,
+      });
+    } else {
+      flow.push({
+        step: 'account_debited',
+        label: 'ZENIMONIES account debited',
+        status: 'unknown',
+        timestamp: null,
+      });
+    }
+
+    if (
+      transferStatus === 'failed'
+    ) {
+      flow.push({
+        step: 'bank_transfer_submitted',
+        label: 'Bank transfer submitted',
+        status: 'completed',
+        timestamp: transfer.created_at,
+      });
+
+      flow.push({
+        step: 'interbank_processing',
+        label: 'Bank transfer failed',
+        status: 'failed',
+        timestamp: transfer.completed_at,
+      });
+
+      flow.push({
+        step: 'recipient_credit',
+        label: 'Recipient credit',
+        status: 'failed',
+        timestamp: transfer.completed_at,
+      });
+    } else if (
+      transferStatus === 'completed'
+    ) {
+      flow.push({
+        step: 'bank_transfer_submitted',
+        label: 'Bank transfer submitted',
+        status: 'completed',
+        timestamp: transfer.created_at,
+      });
+
+      flow.push({
+        step: 'interbank_processing',
+        label: 'Interbank processing',
+        status: 'completed',
+        timestamp: transfer.completed_at,
+      });
+
+      flow.push({
+        step: 'recipient_credit',
+        label: 'Recipient credit completed',
+        status: 'completed',
+        timestamp: transfer.completed_at,
+      });
+    } else {
+      flow.push({
+        step: 'bank_transfer_submitted',
+        label: 'Bank transfer submitted',
+        status: 'completed',
+        timestamp: transfer.created_at,
+      });
+
+      flow.push({
+        step: 'interbank_processing',
+        label: 'Interbank processing',
+        status: 'processing',
+        timestamp: null,
+      });
+
+      flow.push({
+        step: 'recipient_credit',
+        label: 'Recipient credit',
+        status: 'pending',
+        timestamp: null,
+      });
+    }
+
+    // ========================================================
+    // RETURN READ-ONLY INVESTIGATION DATA
+    // ========================================================
+
+    return res.status(200).json({
+      success: true,
+
+      transaction: {
+        id: transfer.id,
+        reference: transfer.reference,
+        provider_reference:
+          transfer.provider_reference,
+        type: 'Bank Transfer',
+
+        amount: Number(transfer.amount),
+        currency: transfer.currency,
+
+        status: transferStatus,
+        status_label: statusLabel,
+
+        narration: transfer.narration,
+
+        initiated_at:
+          transfer.created_at,
+
+        completed_at:
+          transfer.completed_at,
+
+        failure_reason:
+          transfer.failure_reason || null,
+
+        customer: {
+          id: transfer.user_id,
+          full_name: transfer.full_name,
+          email: transfer.email,
+          phone: transfer.phone,
+          kyc_status:
+            transfer.kyc_status,
+          kyc_tier:
+            Number(transfer.kyc_tier || 0),
+          account_number:
+            maskAccountNumber(
+              transfer.account_number
+            ),
+        },
+
+        recipient: {
+          name: transfer.recipient_name,
+
+          account_number:
+            maskAccountNumber(
+              transfer.recipient_account_number
+            ),
+
+          bank_name:
+            transfer.recipient_bank_name,
+
+          bank_code:
+            transfer.recipient_bank_code,
+        },
+
+        ledger: ledger
+          ? {
+              id: ledger.id,
+              type: ledger.type,
+              amount: Number(
+                ledger.amount
+              ),
+              currency:
+                ledger.currency,
+              reference:
+                ledger.reference,
+              description:
+                ledger.description,
+              status:
+                ledger.status,
+              balance_before:
+                Number(
+                  ledger.balance_before
+                ),
+              balance_after:
+                Number(
+                  ledger.balance_after
+                ),
+              created_at:
+                ledger.created_at,
+            }
+          : null,
+
+        flow,
+      },
+    });
+  } catch (error) {
+    console.error(
+      'Customer Care transaction investigation error:',
+      error?.message || error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Unable to investigate the transaction.',
+    });
+  }
+};
 
 // ============================================================
 // EXPORTS
@@ -1268,4 +1643,5 @@ module.exports = {
   waitForCustomer,
   resolveCase,
   closeCase,
+  investigateTransaction,
 };
