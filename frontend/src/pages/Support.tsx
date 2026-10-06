@@ -2,27 +2,18 @@ import React, {
   FormEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
 import {
   Alert,
+  Avatar,
   Box,
   Button,
-  Card,
-  CardContent,
-  Chip,
   CircularProgress,
-  Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
   IconButton,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   TextField,
   Typography,
@@ -30,19 +21,14 @@ import {
 
 import {
   ArrowBack,
-  ChatBubbleOutline,
+  ArrowForwardIos,
   CheckCircleOutline,
   Close,
-  HelpOutline,
+  ConfirmationNumberOutlined,
   Refresh,
   Send,
-  SupportAgent,
-  ConfirmationNumberOutlined,
   SmartToyOutlined,
-  PersonOutline,
-  AccessTimeOutlined,
-  DoneAllOutlined,
-  HourglassEmptyOutlined,
+  SupportAgent,
 } from '@mui/icons-material';
 
 import { useNavigate } from 'react-router-dom';
@@ -50,7 +36,7 @@ import { useTheme } from '../theme/Theme.tsx';
 
 // ============================================================
 // ZENIMONIES BANKING
-// CUSTOMER CARE / COMPLAINTS & SUPPORT
+// CUSTOMER CARE — LIVE CHAT
 // ============================================================
 
 const API_BASE =
@@ -61,21 +47,6 @@ const API_BASE =
 // TYPES
 // ============================================================
 
-type TicketStatus =
-  | 'open'
-  | 'pending'
-  | 'in_progress'
-  | 'resolved'
-  | 'closed'
-  | string;
-
-type TicketPriority =
-  | 'low'
-  | 'normal'
-  | 'high'
-  | 'urgent'
-  | string;
-
 type SupportCategory = {
   id: string;
   name: string;
@@ -84,6 +55,7 @@ type SupportCategory = {
 
 type SupportMessage = {
   id: string;
+  sender_user_id?: string | null;
   sender_type?: string;
   sender_name?: string;
   message: string;
@@ -92,23 +64,18 @@ type SupportMessage = {
 
 type SupportTicket = {
   id: string;
-  ticket_number: string;
+  ticket_number?: string;
   subject: string;
   description?: string;
-  status: TicketStatus;
-  priority?: TicketPriority;
+  status: string;
+  priority?: string;
   category_id?: string;
   category_name?: string;
-  transaction_id?: string | null;
   connected_to_customer_care?: boolean;
   assigned_to?: string | null;
+  assigned_agent_name?: string | null;
   created_at: string;
   updated_at?: string;
-  last_message_at?: string;
-  waiting_since?: string | null;
-  customer_response_due_at?: string | null;
-  auto_closed_at?: string | null;
-  auto_close_reason?: string | null;
   messages?: SupportMessage[];
 };
 
@@ -117,28 +84,83 @@ type SupportTicket = {
 // ============================================================
 
 const LIGHT = {
-  background: '#f5f8f6',
+  background: '#f6f9f7',
   surface: '#ffffff',
-  surfaceAlt: '#f0f5f2',
+  surfaceAlt: '#edf6f1',
   text: '#12372a',
-  textSecondary: '#66756d',
+  textSecondary: '#6b7b73',
   primary: '#087443',
   primaryDark: '#055a34',
-  border: '#dce7e1',
-  input: '#ffffff',
+  border: '#dce8e1',
+  bubbleAssistant: '#edf8f2',
 };
 
 const DARK = {
   background: '#08120e',
   surface: '#101d17',
-  surfaceAlt: '#16261e',
+  surfaceAlt: '#172a21',
   text: '#f1f7f3',
   textSecondary: '#aabbb1',
   primary: '#36b878',
   primaryDark: '#29965f',
   border: '#263b31',
-  input: '#101d17',
+  bubbleAssistant: '#13251c',
 };
+
+// ============================================================
+// COMMON ISSUES
+// ============================================================
+
+const FALLBACK_CATEGORIES = [
+  {
+    key: 'transfer',
+    title: 'Bank Transfer',
+    description: 'Transfers and recipient issues',
+    icon: '↔',
+  },
+  {
+    key: 'account',
+    title: 'Account',
+    description: 'Account and profile',
+    icon: '▣',
+  },
+  {
+    key: 'airtime_data',
+    title: 'Airtime & Data',
+    description: 'Airtime and data purchases',
+    icon: '▤',
+  },
+  {
+    key: 'bills',
+    title: 'Bills Payment',
+    description: 'Electricity, TV and bills',
+    icon: '▥',
+  },
+  {
+    key: 'gift_cards',
+    title: 'Gift Cards',
+    description: 'Buy and sell gift cards',
+    icon: '◇',
+  },
+  {
+    key: 'kyc',
+    title: 'KYC & Verification',
+    description: 'Identity verification',
+    icon: '✓',
+  },
+  {
+    key: 'card_pos',
+    title: 'Card / POS',
+    description: 'Card and POS support',
+    icon: '▭',
+  },
+  {
+    key: 'other',
+    title: 'Other',
+    description: 'Something else',
+    icon: '⋯',
+  },
+];
 
 // ============================================================
 // HELPERS
@@ -153,93 +175,36 @@ function getToken(): string | null {
   );
 }
 
-function formatDate(date?: string) {
+function formatTime(date?: string) {
   if (!date) return '';
 
-  const parsed = new Date(date);
+  const value = new Date(date);
 
-  if (Number.isNaN(parsed.getTime())) {
+  if (Number.isNaN(value.getTime())) {
     return '';
   }
 
-  return parsed.toLocaleString('en-NG', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
+  return value.toLocaleTimeString('en-NG', {
     hour: 'numeric',
     minute: '2-digit',
   });
 }
 
-function statusLabel(status: TicketStatus) {
-  switch (status) {
-    case 'open':
-      return 'Open';
-
-    case 'pending':
-      return 'Waiting for Customer Care';
-
-    case 'in_progress':
-      return 'In Progress';
-
-    case 'resolved':
-      return 'Resolved';
-
-    case 'closed':
-      return 'Closed';
-
-    default:
-      return String(status)
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, (char) =>
-          char.toUpperCase()
-        );
-  }
-}
-
-function statusColor(status: TicketStatus) {
-  switch (status) {
-    case 'open':
-      return 'primary';
-
-    case 'pending':
-      return 'warning';
-
-    case 'in_progress':
-      return 'info';
-
-    case 'resolved':
-      return 'success';
-
-    case 'closed':
-      return 'default';
-
-    default:
-      return 'default';
-  }
-}
-
-function isAssistantMessage(
-  message: SupportMessage
-) {
+function isAssistant(message: SupportMessage) {
   return (
     message.sender_type === 'assistant' ||
     message.sender_type === 'bot'
   );
 }
 
-function isAgentMessage(
-  message: SupportMessage
-) {
+function isAgent(message: SupportMessage) {
   return (
     message.sender_type === 'agent' ||
     message.sender_type === 'admin'
   );
 }
 
-function isCustomerMessage(
-  message: SupportMessage
-) {
+function isCustomer(message: SupportMessage) {
   return (
     message.sender_type === 'customer' ||
     message.sender_type === 'user'
@@ -288,7 +253,7 @@ async function apiRequest(
     throw new Error(
       data?.message ||
         data?.error ||
-        'Something went wrong. Please try again.'
+        'Unable to complete this request.'
     );
   }
 
@@ -296,7 +261,7 @@ async function apiRequest(
 }
 
 // ============================================================
-// COMPONENT
+// MAIN COMPONENT
 // ============================================================
 
 export default function Support() {
@@ -306,25 +271,30 @@ export default function Support() {
 
   const colors = isDarkMode ? DARK : LIGHT;
 
+  const messagesEndRef =
+    useRef<HTMLDivElement | null>(null);
+
   // ----------------------------------------------------------
   // STATE
   // ----------------------------------------------------------
 
-  const [categories, setCategories] = useState<
-    SupportCategory[]
-  >([]);
+  const [categories, setCategories] =
+    useState<SupportCategory[]>([]);
 
-  const [tickets, setTickets] = useState<
-    SupportTicket[]
-  >([]);
+  const [selectedCategory, setSelectedCategory] =
+    useState<SupportCategory | null>(null);
 
-  const [selectedTicket, setSelectedTicket] =
+  const [selectedIssue, setSelectedIssue] =
+    useState('');
+
+  const [message, setMessage] =
+    useState('');
+
+  const [ticket, setTicket] =
     useState<SupportTicket | null>(null);
 
-  const [loading, setLoading] = useState(true);
-
-  const [ticketLoading, setTicketLoading] =
-    useState(false);
+  const [loadingCategories, setLoadingCategories] =
+    useState(true);
 
   const [creating, setCreating] =
     useState(false);
@@ -335,37 +305,25 @@ export default function Support() {
   const [connecting, setConnecting] =
     useState(false);
 
-  const [error, setError] = useState('');
+  const [error, setError] =
+    useState('');
 
-  const [success, setSuccess] = useState('');
-
-  const [showCreateDialog, setShowCreateDialog] =
+  const [showCases, setShowCases] =
     useState(false);
 
-  const [showTicketDialog, setShowTicketDialog] =
+  const [tickets, setTickets] =
+    useState<SupportTicket[]>([]);
+
+  const [loadingCases, setLoadingCases] =
     useState(false);
-
-  // ----------------------------------------------------------
-  // FORM
-  // ----------------------------------------------------------
-
-  const [categoryId, setCategoryId] =
-    useState('');
-
-  const [subject, setSubject] =
-    useState('');
-
-  const [description, setDescription] =
-    useState('');
-
-  const [reply, setReply] =
-    useState('');
 
   // ==========================================================
   // LOAD CATEGORIES
   // ==========================================================
 
   async function loadCategories() {
+    setLoadingCategories(true);
+
     try {
       const data = await apiRequest(
         '/support/categories'
@@ -384,15 +342,17 @@ export default function Support() {
         'Unable to load support categories:',
         err
       );
+    } finally {
+      setLoadingCategories(false);
     }
   }
 
   // ==========================================================
-  // LOAD TICKETS
+  // LOAD CASES
   // ==========================================================
 
-  async function loadTickets() {
-    setLoading(true);
+  async function loadCases() {
+    setLoadingCases(true);
     setError('');
 
     try {
@@ -413,10 +373,10 @@ export default function Support() {
     } catch (err: any) {
       setError(
         err?.message ||
-          'Unable to load your support tickets.'
+          'Unable to retrieve your Customer Care cases.'
       );
     } finally {
-      setLoading(false);
+      setLoadingCases(false);
     }
   }
 
@@ -425,107 +385,203 @@ export default function Support() {
   // ==========================================================
 
   useEffect(() => {
-    const token = getToken();
-
-    if (!token) {
+    if (!getToken()) {
       navigate('/login');
       return;
     }
 
     loadCategories();
-    loadTickets();
   }, []);
 
   // ==========================================================
-  // REAL CATEGORIES ONLY
+  // SCROLL CHAT
   // ==========================================================
 
-  const availableCategories = useMemo(() => {
-    return categories.filter(
-      (category) =>
-        category?.id &&
-        category?.name
-    );
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: 'smooth',
+    });
+  }, [
+    ticket?.messages?.length,
+    ticket?.id,
+  ]);
+
+  // ==========================================================
+  // CATEGORY LIST
+  // ==========================================================
+
+  const displayCategories = useMemo(() => {
+    if (categories.length > 0) {
+      return categories.map((category) => ({
+        ...category,
+      }));
+    }
+
+    return [];
   }, [categories]);
 
   // ==========================================================
-  // CREATE TICKET
+  // COMMON ISSUE SUGGESTIONS
   // ==========================================================
 
-  async function handleCreateTicket(
-    event: FormEvent
+  const issueSuggestions = useMemo(() => {
+    const name =
+      selectedCategory?.name
+        ?.toLowerCase()
+        .trim();
+
+    if (
+      name?.includes('transfer') ||
+      name?.includes('bank')
+    ) {
+      return [
+        'Transfer successful but recipient has not received it',
+        'My bank transfer is still processing',
+        'My transfer failed',
+        'I transferred to the wrong account',
+      ];
+    }
+
+    if (
+      name?.includes('airtime') ||
+      name?.includes('data')
+    ) {
+      return [
+        'Airtime was not received',
+        'Data was not received',
+        'I was charged but the purchase failed',
+        'I need help with an airtime or data purchase',
+      ];
+    }
+
+    if (
+      name?.includes('bill')
+    ) {
+      return [
+        'My bill payment failed',
+        'I was charged but the bill was not paid',
+        'My payment is still processing',
+        'I need help with a bill payment',
+      ];
+    }
+
+    if (
+      name?.includes('gift')
+    ) {
+      return [
+        'I need help buying a gift card',
+        'I need help selling a gift card',
+        'My gift card transaction is pending',
+        'My gift card transaction failed',
+      ];
+    }
+
+    if (
+      name?.includes('kyc') ||
+      name?.includes('verification')
+    ) {
+      return [
+        'My verification is still pending',
+        'My verification was rejected',
+        'I need help completing verification',
+        'I have a problem with my identity document',
+      ];
+    }
+
+    if (
+      name?.includes('card') ||
+      name?.includes('pos')
+    ) {
+      return [
+        'My card is not working',
+        'I have a POS problem',
+        'I was charged but the transaction failed',
+        'I need help with my card or POS',
+      ];
+    }
+
+    if (
+      name?.includes('account')
+    ) {
+      return [
+        'I have a problem with my account',
+        'I need help updating my profile',
+        'I cannot access my account',
+        'I have an account question',
+      ];
+    }
+
+    return [
+      'I need help with a transaction',
+      'I have an account problem',
+      'I need help with a payment',
+      'Something else is wrong',
+    ];
+  }, [selectedCategory]);
+
+  // ==========================================================
+  // CREATE CASE
+  // ==========================================================
+
+  async function createCase(
+    complaint: string
   ) {
-    event.preventDefault();
-
-    setError('');
-    setSuccess('');
-
-    if (!categoryId) {
+    if (!selectedCategory) {
       setError(
-        'Please select a support category.'
+        'Please select an issue category first.'
       );
       return;
     }
 
-    if (!subject.trim()) {
-      setError(
-        'Please enter a subject.'
-      );
-      return;
-    }
-
-    if (!description.trim()) {
-      setError(
-        'Please describe what happened.'
-      );
+    if (!complaint.trim()) {
       return;
     }
 
     setCreating(true);
+    setError('');
 
     try {
+      const subject =
+        selectedIssue ||
+        selectedCategory.name;
+
       const data = await apiRequest(
         '/support/tickets',
         {
           method: 'POST',
           body: JSON.stringify({
-            category_id: categoryId,
+            category_id:
+              selectedCategory.id,
             subject: subject.trim(),
             description:
-              description.trim(),
+              complaint.trim(),
           }),
         }
       );
 
-      const createdTicket =
+      const created =
         data?.data ||
         data?.ticket ||
         null;
 
-      setShowCreateDialog(false);
-
-      setCategoryId('');
-      setSubject('');
-      setDescription('');
-
-      await loadTickets();
-
-      if (createdTicket?.id) {
-        await openTicket(
-          createdTicket.id,
-          true
+      if (!created?.id) {
+        throw new Error(
+          'Your support case could not be created.'
         );
       }
 
-      setSuccess(
-        createdTicket?.ticket_number
-          ? `Your complaint has been received. Ticket ${createdTicket.ticket_number} has been created.`
-          : 'Your complaint has been received and your support case has been created.'
-      );
+      setTicket({
+        ...created,
+        messages:
+          created.messages || [],
+      });
+
+      setMessage('');
+      setSelectedIssue('');
     } catch (err: any) {
       setError(
         err?.message ||
-          'Unable to create your support case.'
+          'Unable to create your Customer Care case.'
       );
     } finally {
       setCreating(false);
@@ -533,77 +589,108 @@ export default function Support() {
   }
 
   // ==========================================================
-  // OPEN TICKET
+  // SEND MESSAGE
   // ==========================================================
 
-  async function openTicket(
-    ticketId: string,
-    showDialog = true
+  async function handleSendMessage(
+    event?: FormEvent
   ) {
-    setTicketLoading(true);
+    event?.preventDefault();
+
+    const text = message.trim();
+
+    if (!text) return;
+
+    // --------------------------------------------------------
+    // First message creates the support case.
+    // --------------------------------------------------------
+
+    if (!ticket) {
+      await createCase(text);
+      return;
+    }
+
+    if (ticket.status === 'closed') {
+      return;
+    }
+
+    setSending(true);
     setError('');
 
+    try {
+      await apiRequest(
+        `/support/tickets/${ticket.id}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            message: text,
+          }),
+        }
+      );
+
+      setMessage('');
+
+      await refreshTicket(
+        ticket.id
+      );
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          'Unable to send your message.'
+      );
+    } finally {
+      setSending(false);
+    }
+  }
+
+  // ==========================================================
+  // REFRESH CURRENT CASE
+  // ==========================================================
+
+  async function refreshTicket(
+    ticketId: string
+  ) {
     try {
       const data = await apiRequest(
         `/support/tickets/${ticketId}`
       );
 
-      const ticket =
+      const updated =
         data?.data ||
         data?.ticket ||
         null;
 
-      if (!ticket) {
-        throw new Error(
-          'Support case could not be loaded.'
-        );
-      }
-
-      setSelectedTicket(ticket);
-
-      if (showDialog) {
-        setShowTicketDialog(true);
+      if (updated) {
+        setTicket(updated);
       }
     } catch (err: any) {
       setError(
         err?.message ||
-          'Unable to load this support case.'
+          'Unable to refresh this conversation.'
       );
-    } finally {
-      setTicketLoading(false);
     }
   }
 
   // ==========================================================
-  // CONNECT TO CUSTOMER CARE
+  // CONNECT CUSTOMER CARE
   // ==========================================================
 
   async function connectToCustomerCare() {
-    if (!selectedTicket) {
-      return;
-    }
+    if (!ticket) return;
 
     setConnecting(true);
     setError('');
-    setSuccess('');
 
     try {
       await apiRequest(
-        `/support/tickets/${selectedTicket.id}/connect`,
+        `/support/tickets/${ticket.id}/connect`,
         {
           method: 'POST',
         }
       );
 
-      await openTicket(
-        selectedTicket.id,
-        false
-      );
-
-      await loadTickets();
-
-      setSuccess(
-        'Your case has been connected to Customer Care.'
+      await refreshTicket(
+        ticket.id
       );
     } catch (err: any) {
       setError(
@@ -616,91 +703,52 @@ export default function Support() {
   }
 
   // ==========================================================
-  // REPLY TO TICKET
+  // OPEN EXISTING CASE
   // ==========================================================
 
-  async function handleReply(
-    event: FormEvent
+  async function openExistingCase(
+    ticketId: string
   ) {
-    event.preventDefault();
-
-    if (!selectedTicket) {
-      return;
-    }
-
-    if (!reply.trim()) {
-      return;
-    }
-
-    if (
-      selectedTicket.status ===
-      'closed'
-    ) {
-      return;
-    }
-
-    setSending(true);
     setError('');
 
     try {
-      await apiRequest(
-        `/support/tickets/${selectedTicket.id}/messages`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            message: reply.trim(),
-          }),
-        }
+      const data = await apiRequest(
+        `/support/tickets/${ticketId}`
       );
 
-      setReply('');
+      const existing =
+        data?.data ||
+        data?.ticket ||
+        null;
 
-      await openTicket(
-        selectedTicket.id,
-        false
-      );
+      if (!existing) {
+        throw new Error(
+          'Unable to open this case.'
+        );
+      }
 
-      await loadTickets();
+      setTicket(existing);
+      setShowCases(false);
     } catch (err: any) {
       setError(
         err?.message ||
-          'Unable to send your reply.'
+          'Unable to open this case.'
       );
-    } finally {
-      setSending(false);
     }
   }
 
   // ==========================================================
-  // CLOSE TICKET DIALOG
+  // RESET CHAT
   // ==========================================================
 
-  function closeTicketDialog() {
-    setShowTicketDialog(false);
-    setSelectedTicket(null);
-    setReply('');
+  function startNewConversation() {
+    setTicket(null);
+    setSelectedCategory(null);
+    setSelectedIssue('');
+    setMessage('');
+    setError('');
+    setShowCases(false);
   }
-
-  // ==========================================================
-  // COUNTERS
-  // ==========================================================
-
-  const openCount = tickets.filter(
-    (ticket) =>
-      ticket.status === 'open' ||
-      ticket.status === 'in_progress'
-  ).length;
-
-  const pendingCount = tickets.filter(
-    (ticket) =>
-      ticket.status === 'pending'
-  ).length;
-
-  const resolvedCount = tickets.filter(
-    (ticket) =>
-      ticket.status === 'resolved' ||
-      ticket.status === 'closed'
-  ).length;
 
   // ==========================================================
   // RENDER
@@ -709,976 +757,396 @@ export default function Support() {
   return (
     <Box
       sx={{
-        minHeight: '100vh',
+        position: 'fixed',
+        inset: 0,
+        display: 'flex',
+        flexDirection: 'column',
         backgroundColor:
           colors.background,
         color: colors.text,
-        pb: 8,
+        overflow: 'hidden',
       }}
     >
-      <Container
-        maxWidth="md"
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
+
+      <Box
         sx={{
-          pt: {
-            xs: 2,
-            sm: 4,
-          },
+          height: ticket?.ticket_number
+            ? 88
+            : 72,
+          flexShrink: 0,
+          backgroundColor:
+            isDarkMode
+              ? '#101714'
+              : '#ffffff',
+          borderBottom:
+            `1px solid ${colors.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          px: 1.5,
+          zIndex: 5,
         }}
       >
-        {/* ====================================================
-            HEADER
-        ==================================================== */}
-
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          spacing={2}
+        <IconButton
+          onClick={() => navigate(-1)}
           sx={{
-            mb: 3,
+            color: colors.text,
+            mr: 1,
           }}
         >
-          <Stack
-            direction="row"
-            alignItems="center"
-            spacing={1.5}
-          >
-            <IconButton
-              onClick={() => navigate(-1)}
-              sx={{
-                color: colors.text,
-                backgroundColor:
-                  colors.surface,
-                border: `1px solid ${colors.border}`,
-                '&:hover': {
-                  backgroundColor:
-                    colors.surfaceAlt,
-                },
-              }}
-            >
-              <ArrowBack />
-            </IconButton>
+          <ArrowBack />
+        </IconButton>
 
-            <Box>
-              <Typography
-                variant="h5"
-                fontWeight={800}
-                sx={{
-                  color: colors.text,
-                }}
-              >
-                Customer Care
-              </Typography>
-
-              <Typography
-                variant="body2"
-                sx={{
-                  color:
-                    colors.textSecondary,
-                  mt: 0.3,
-                }}
-              >
-                Complaints & Support
-              </Typography>
-            </Box>
-          </Stack>
-
-          <IconButton
-            onClick={loadTickets}
-            disabled={loading}
-            sx={{
-              color: colors.primary,
-              backgroundColor:
-                colors.surface,
-              border: `1px solid ${colors.border}`,
-            }}
-          >
-            <Refresh />
-          </IconButton>
-        </Stack>
-
-        {/* ====================================================
-            ALERTS
-        ==================================================== */}
-
-        {error && (
-          <Alert
-            severity="error"
-            onClose={() => setError('')}
-            sx={{
-              mb: 2,
-              borderRadius: 2,
-            }}
-          >
-            {error}
-          </Alert>
-        )}
-
-        {success && (
-          <Alert
-            severity="success"
-            onClose={() => setSuccess('')}
-            sx={{
-              mb: 2,
-              borderRadius: 2,
-            }}
-          >
-            {success}
-          </Alert>
-        )}
-
-        {/* ====================================================
-            CUSTOMER CARE HERO
-        ==================================================== */}
-
-        <Card
-          elevation={0}
+        <Avatar
           sx={{
-            mb: 2.5,
-            borderRadius: 3,
-            background:
+            width: 38,
+            height: 38,
+            mr: 1.2,
+            backgroundColor:
               isDarkMode
-                ? 'linear-gradient(135deg, #0f2a1d 0%, #102019 100%)'
-                : 'linear-gradient(135deg, #087443 0%, #075c36 100%)',
-            color: '#ffffff',
-            overflow: 'hidden',
+                ? '#173d2b'
+                : '#e5f4eb',
+            color: colors.primary,
           }}
         >
-          <CardContent
-            sx={{
-              p: {
-                xs: 2.5,
-                sm: 3,
-              },
-            }}
-          >
-            <Stack
-              direction="row"
-              spacing={2}
-              alignItems="center"
-            >
-              <Box
-                sx={{
-                  width: 54,
-                  height: 54,
-                  borderRadius: 2.5,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor:
-                    'rgba(255,255,255,0.14)',
-                  flexShrink: 0,
-                }}
-              >
-                <SupportAgent
-                  sx={{
-                    fontSize: 31,
-                  }}
-                />
-              </Box>
-
-              <Box>
-                <Typography
-                  fontWeight={800}
-                  fontSize={18}
-                >
-                  How can we help?
-                </Typography>
-
-                <Typography
-                  variant="body2"
-                  sx={{
-                    opacity: 0.88,
-                    mt: 0.4,
-                  }}
-                >
-                  Tell us what happened and
-                  our Customer Care team will
-                  assist you.
-                </Typography>
-              </Box>
-            </Stack>
-
-            <Button
-              fullWidth
-              variant="contained"
-              startIcon={
-                <ConfirmationNumberOutlined />
-              }
-              onClick={() =>
-                setShowCreateDialog(true)
-              }
-              sx={{
-                mt: 2.5,
-                height: 48,
-                borderRadius: 2,
-                backgroundColor:
-                  '#ffffff',
-                color: '#087443',
-                fontWeight: 800,
-                '&:hover': {
-                  backgroundColor:
-                    '#f1f7f3',
-                },
-              }}
-            >
-              Report a Problem
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* ====================================================
-            SUMMARY
-        ==================================================== */}
+          <SupportAgent
+            sx={{ fontSize: 22 }}
+          />
+        </Avatar>
 
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              sm: 'repeat(3, 1fr)',
-            },
-            gap: 1.5,
-            mb: 3,
+            flex: 1,
+            minWidth: 0,
           }}
         >
-          <SummaryCard
-            icon={
-              <ChatBubbleOutline />
-            }
-            label="Open"
-            value={openCount}
-            colors={colors}
-          />
-
-          <SummaryCard
-            icon={
-              <HourglassEmptyOutlined />
-            }
-            label="Pending"
-            value={pendingCount}
-            colors={colors}
-          />
-
-          <SummaryCard
-            icon={
-              <CheckCircleOutline />
-            }
-            label="Resolved"
-            value={resolvedCount}
-            colors={colors}
-          />
-        </Box>
-
-        {/* ====================================================
-            TICKETS
-        ==================================================== */}
-
-        <Typography
-          variant="h6"
-          fontWeight={800}
-          sx={{
-            mb: 1.5,
-            color: colors.text,
-          }}
-        >
-          My Support Cases
-        </Typography>
-
-        {loading ? (
-          <Box
-            sx={{
-              py: 8,
-              display: 'flex',
-              justifyContent: 'center',
-            }}
-          >
-            <CircularProgress
-              sx={{
-                color: colors.primary,
-              }}
-            />
-          </Box>
-        ) : tickets.length === 0 ? (
-          <Paper
-            elevation={0}
-            sx={{
-              p: 4,
-              textAlign: 'center',
-              borderRadius: 3,
-              backgroundColor:
-                colors.surface,
-              border: `1px solid ${colors.border}`,
-            }}
-          >
-            <Box
-              sx={{
-                width: 64,
-                height: 64,
-                mx: 'auto',
-                mb: 2,
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor:
-                  isDarkMode
-                    ? '#173025'
-                    : '#eaf5ef',
-              }}
-            >
-              <SupportAgent
-                sx={{
-                  fontSize: 32,
-                  color: colors.primary,
-                }}
-              />
-            </Box>
-
-            <Typography
-              fontWeight={800}
-              sx={{
-                color: colors.text,
-                mb: 0.7,
-              }}
-            >
-              No support cases yet
-            </Typography>
-
-            <Typography
-              variant="body2"
-              sx={{
-                color:
-                  colors.textSecondary,
-                maxWidth: 420,
-                mx: 'auto',
-              }}
-            >
-              If you need help with your
-              account or a transaction,
-              report the problem and our
-              Customer Care team will assist
-              you.
-            </Typography>
-          </Paper>
-        ) : (
-          <Stack spacing={1.5}>
-            {tickets.map((ticket) => (
-              <TicketCard
-                key={ticket.id}
-                ticket={ticket}
-                colors={colors}
-                onClick={() =>
-                  openTicket(ticket.id)
-                }
-              />
-            ))}
-          </Stack>
-        )}
-
-        {/* ====================================================
-            SECURITY NOTICE
-        ==================================================== */}
-
-        <Paper
-          elevation={0}
-          sx={{
-            mt: 3,
-            p: 2.5,
-            borderRadius: 3,
-            backgroundColor:
-              colors.surface,
-            border: `1px solid ${colors.border}`,
-          }}
-        >
-          <Stack
-            direction="row"
-            spacing={1.5}
-            alignItems="flex-start"
-          >
-            <HelpOutline
-              sx={{
-                color: colors.primary,
-                mt: 0.2,
-              }}
-            />
-
-            <Box>
-              <Typography
-                fontWeight={800}
-                sx={{
-                  color: colors.text,
-                }}
-              >
-                Stay safe
-              </Typography>
-
-              <Typography
-                variant="body2"
-                sx={{
-                  color:
-                    colors.textSecondary,
-                  mt: 0.4,
-                  lineHeight: 1.6,
-                }}
-              >
-                ZENIMONIES Customer Care will
-                never ask you for your password,
-                PIN, OTP, CVV, passkey or other
-                secret security information.
-              </Typography>
-            </Box>
-          </Stack>
-        </Paper>
-      </Container>
-
-      {/* ======================================================
-          CREATE COMPLAINT DIALOG
-      ====================================================== */}
-
-      <Dialog
-        open={showCreateDialog}
-        onClose={() => {
-          if (!creating) {
-            setShowCreateDialog(false);
-          }
-        }}
-        fullWidth
-        maxWidth="sm"
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            backgroundColor:
-              colors.surface,
-            color: colors.text,
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            fontWeight: 800,
-            color: colors.text,
-            pb: 1,
-          }}
-        >
-          Report a Problem
-        </DialogTitle>
-
-        <DialogContent>
           <Typography
-            variant="body2"
+            fontWeight={800}
+            fontSize={17}
+            sx={{
+              color: colors.text,
+              lineHeight: 1.2,
+            }}
+          >
+            Live Chat
+          </Typography>
+
+          <Typography
+            variant="caption"
             sx={{
               color:
                 colors.textSecondary,
-              mb: 2.5,
-              lineHeight: 1.6,
+              display: 'block',
+              mt: 0.2,
             }}
           >
-            Tell us what happened. Your
-            complaint will receive a unique
-            ticket ID so you can follow the
-            conversation with Customer Care.
+            ZENIMONIES Customer Care
           </Typography>
 
-          <Stack spacing={2}>
-            {/* CATEGORY */}
+          {/* =================================================
+              TICKET ID
+          ================================================= */}
 
-            <Box>
-              <Typography
-                variant="body2"
-                fontWeight={700}
-                sx={{
-                  mb: 0.7,
-                  color: colors.text,
-                }}
-              >
-                What is the issue about?
-              </Typography>
-
-              <Select
-                fullWidth
-                value={categoryId}
-                displayEmpty
-                onChange={(event) =>
-                  setCategoryId(
-                    event.target.value
-                  )
-                }
-                disabled={
-                  availableCategories.length ===
-                  0
-                }
-                sx={{
-                  color: colors.text,
-                  backgroundColor:
-                    colors.input,
-                  borderRadius: 2,
-                }}
-              >
-                <MenuItem value="">
-                  Select a category
-                </MenuItem>
-
-                {availableCategories.map(
-                  (category) => (
-                    <MenuItem
-                      key={category.id}
-                      value={category.id}
-                    >
-                      {category.name}
-                    </MenuItem>
-                  )
-                )}
-              </Select>
-
-              {availableCategories.length ===
-                0 && (
-                <Typography
-                  variant="caption"
-                  sx={{
-                    display: 'block',
-                    mt: 0.7,
-                    color:
-                      colors.textSecondary,
-                  }}
-                >
-                  Support categories are
-                  currently unavailable.
-                  Please try again shortly.
-                </Typography>
-              )}
-            </Box>
-
-            {/* SUBJECT */}
-
-            <TextField
-              fullWidth
-              label="Subject"
-              placeholder="Briefly describe the problem"
-              value={subject}
-              onChange={(event) =>
-                setSubject(
-                  event.target.value
-                )
-              }
-              sx={inputStyles(colors)}
-            />
-
-            {/* DESCRIPTION */}
-
-            <TextField
-              fullWidth
-              multiline
-              minRows={5}
-              label="What happened?"
-              placeholder="Please explain what happened and how we can help..."
-              value={description}
-              onChange={(event) =>
-                setDescription(
-                  event.target.value
-                )
-              }
-              sx={inputStyles(colors)}
-            />
-
-            {/* SECURITY */}
-
-            <Paper
-              elevation={0}
+          {ticket?.ticket_number && (
+            <Stack
+              direction="row"
+              spacing={0.5}
+              alignItems="center"
               sx={{
-                p: 1.7,
-                borderRadius: 2,
-                backgroundColor:
-                  isDarkMode
-                    ? '#13251c'
-                    : '#f0f8f3',
-                border: `1px solid ${colors.border}`,
+                mt: 0.25,
               }}
             >
+              <ConfirmationNumberOutlined
+                sx={{
+                  fontSize: 13,
+                  color:
+                    colors.primary,
+                }}
+              />
+
               <Typography
                 variant="caption"
                 sx={{
                   color:
-                    colors.textSecondary,
-                  lineHeight: 1.6,
+                    colors.primary,
+                  fontWeight: 800,
+                  letterSpacing:
+                    '0.15px',
                 }}
               >
-                For your security, do not
-                include passwords, PINs, OTPs,
-                CVVs, passkeys or other secret
-                authentication information.
+                Ticket ID: {ticket.ticket_number}
               </Typography>
-            </Paper>
-          </Stack>
-        </DialogContent>
+            </Stack>
+          )}
+        </Box>
 
-        <DialogActions
+        <IconButton
+          onClick={() => {
+            if (ticket?.id) {
+              refreshTicket(ticket.id);
+            } else {
+              loadCategories();
+            }
+          }}
           sx={{
-            p: 2,
-            pt: 0.5,
+            color: colors.primary,
           }}
         >
-          <Button
-            onClick={() =>
-              setShowCreateDialog(false)
-            }
-            disabled={creating}
-            sx={{
-              color:
-                colors.textSecondary,
-              fontWeight: 700,
-            }}
-          >
-            Cancel
-          </Button>
+          <Refresh />
+        </IconButton>
+      </Box>
 
-          <Button
-            variant="contained"
-            onClick={handleCreateTicket}
-            disabled={
-              creating ||
-              availableCategories.length ===
-                0
-            }
-            startIcon={
-              creating ? (
-                <CircularProgress
-                  size={18}
-                  color="inherit"
-                />
-              ) : (
-                <Send />
-              )
-            }
-            sx={{
-              minWidth: 150,
-              backgroundColor:
-                colors.primary,
-              '&:hover': {
-                backgroundColor:
-                  colors.primaryDark,
-              },
-              fontWeight: 800,
-            }}
-          >
-            {creating
-              ? 'Submitting...'
-              : 'Submit Complaint'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* =====================================================
+          CHAT AREA
+      ===================================================== */}
 
-      {/* ======================================================
-          SUPPORT CASE / CHAT DIALOG
-      ====================================================== */}
-
-      <Dialog
-        open={showTicketDialog}
-        onClose={closeTicketDialog}
-        fullWidth
-        maxWidth="sm"
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            backgroundColor:
-              colors.surface,
-            color: colors.text,
-            maxHeight: '92vh',
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          px: {
+            xs: 1.5,
+            sm: 3,
           },
+          py: 2,
         }}
       >
-        {ticketLoading &&
-        !selectedTicket ? (
-          <Box
-            sx={{
-              p: 6,
-              display: 'flex',
-              justifyContent: 'center',
-            }}
-          >
-            <CircularProgress
-              sx={{
-                color: colors.primary,
-              }}
-            />
-          </Box>
-        ) : selectedTicket ? (
-          <>
-            {/* =================================================
-                CHAT HEADER
-            ================================================= */}
+        <Box
+          sx={{
+            width: '100%',
+            maxWidth: 760,
+            mx: 'auto',
+          }}
+        >
+          {/* ERROR */}
 
-            <DialogTitle
+          {error && (
+            <Alert
+              severity="error"
+              onClose={() =>
+                setError('')
+              }
               sx={{
-                pb: 1.5,
+                mb: 2,
+                borderRadius: 2,
               }}
             >
-              <Stack
-                direction="row"
-                alignItems="flex-start"
-                justifyContent="space-between"
-                spacing={2}
+              {error}
+            </Alert>
+          )}
+
+          {/* =================================================
+              EXISTING CONVERSATION
+          ================================================= */}
+
+          {ticket ? (
+            <>
+              {/* CASE STATUS */}
+
+              <Box
+                sx={{
+                  textAlign: 'center',
+                  mb: 2,
+                }}
               >
-                <Box
-                  sx={{
-                    minWidth: 0,
-                  }}
-                >
-                  <Typography
-                    fontWeight={800}
-                    sx={{
-                      color: colors.text,
-                    }}
-                  >
-                    {selectedTicket.subject}
-                  </Typography>
-
-                  <Stack
-                    direction="row"
-                    spacing={0.7}
-                    alignItems="center"
-                    sx={{
-                      mt: 0.5,
-                    }}
-                  >
-                    <ConfirmationNumberOutlined
-                      sx={{
-                        fontSize: 15,
-                        color:
-                          colors.primary,
-                      }}
-                    />
-
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        color:
-                          colors.textSecondary,
-                      }}
-                    >
-                      {
-                        selectedTicket.ticket_number
-                      }
-                    </Typography>
-                  </Stack>
-                </Box>
-
-                <IconButton
-                  onClick={
-                    closeTicketDialog
-                  }
+                <Typography
+                  variant="caption"
                   sx={{
                     color:
                       colors.textSecondary,
                   }}
                 >
-                  <Close />
-                </IconButton>
-              </Stack>
+                  Secure Customer Care
+                  conversation
+                </Typography>
 
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{
-                  mt: 1.5,
-                  flexWrap: 'wrap',
-                  gap: 0.5,
-                }}
-              >
-                <Chip
-                  label={statusLabel(
-                    selectedTicket.status
-                  )}
-                  color={
-                    statusColor(
-                      selectedTicket.status
-                    ) as any
-                  }
-                  size="small"
-                />
+                {/* TICKET ID ALSO VISIBLE IN CHAT */}
 
-                {selectedTicket.priority && (
-                  <Chip
-                    label={
-                      selectedTicket.priority
-                    }
-                    size="small"
-                    variant="outlined"
-                    sx={{
-                      color:
-                        colors.text,
-                      borderColor:
-                        colors.border,
-                    }}
-                  />
-                )}
-              </Stack>
-            </DialogTitle>
-
-            <Divider
-              sx={{
-                borderColor:
-                  colors.border,
-              }}
-            />
-
-            <DialogContent
-              sx={{
-                pt: 2,
-              }}
-            >
-              {/* =================================================
-                  TICKET INTRO
-              ================================================= */}
-
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 1.7,
-                  mb: 2,
-                  borderRadius: 2,
-                  backgroundColor:
-                    colors.surfaceAlt,
-                  border: `1px solid ${colors.border}`,
-                }}
-              >
-                <Stack
-                  direction="row"
-                  spacing={1.2}
-                  alignItems="flex-start"
-                >
-                  <ConfirmationNumberOutlined
-                    sx={{
-                      color:
-                        colors.primary,
-                      fontSize: 20,
-                      mt: 0.1,
-                    }}
-                  />
-
-                  <Box>
-                    <Typography
-                      variant="body2"
-                      fontWeight={800}
-                      sx={{
-                        color:
-                          colors.text,
-                      }}
-                    >
-                      Support Case
-                    </Typography>
-
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        color:
-                          colors.textSecondary,
-                        display:
-                          'block',
-                        mt: 0.3,
-                      }}
-                    >
-                      Keep your ticket ID
-                      for reference when
-                      contacting ZENIMONIES
-                      Customer Care.
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Paper>
-
-              {/* =================================================
-                  ORIGINAL COMPLAINT
-              ================================================= */}
-
-              {selectedTicket.description && (
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    borderRadius: 2,
-                    backgroundColor:
-                      colors.surfaceAlt,
-                    border: `1px solid ${colors.border}`,
-                  }}
-                >
+                {ticket.ticket_number && (
                   <Typography
                     variant="caption"
-                    fontWeight={800}
                     sx={{
+                      display: 'block',
+                      mt: 0.4,
                       color:
                         colors.primary,
-                      display:
-                        'block',
-                      mb: 0.7,
+                      fontWeight: 800,
                     }}
                   >
-                    Your complaint
+                    Ticket ID:{' '}
+                    {ticket.ticket_number}
                   </Typography>
+                )}
+              </Box>
 
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color:
-                        colors.text,
-                      whiteSpace:
-                        'pre-wrap',
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    {
-                      selectedTicket.description
-                    }
-                  </Typography>
-                </Paper>
-              )}
+              {/* MESSAGES */}
 
-              {/* =================================================
-                  CONNECT TO CUSTOMER CARE
-              ================================================= */}
+              <Stack spacing={2}>
+                {(ticket.messages || []).map(
+                  (item) => {
+                    const assistant =
+                      isAssistant(item);
 
-              {!selectedTicket.connected_to_customer_care &&
-                selectedTicket.status !==
-                  'closed' &&
-                selectedTicket.status !==
-                  'resolved' && (
+                    const agent =
+                      isAgent(item);
+
+                    const customer =
+                      isCustomer(item);
+
+                    return (
+                      <Box
+                        key={item.id}
+                        sx={{
+                          display: 'flex',
+                          justifyContent:
+                            customer
+                              ? 'flex-end'
+                              : 'flex-start',
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            maxWidth: {
+                              xs: '90%',
+                              sm: '75%',
+                            },
+                          }}
+                        >
+                          {/* SENDER */}
+
+                          {!customer && (
+                            <Stack
+                              direction="row"
+                              spacing={0.7}
+                              alignItems="center"
+                              sx={{
+                                mb: 0.5,
+                                ml: 0.5,
+                              }}
+                            >
+                              {assistant ? (
+                                <SmartToyOutlined
+                                  sx={{
+                                    fontSize: 16,
+                                    color:
+                                      colors.primary,
+                                  }}
+                                />
+                              ) : (
+                                <SupportAgent
+                                  sx={{
+                                    fontSize: 16,
+                                    color:
+                                      colors.primary,
+                                  }}
+                                />
+                              )}
+
+                              <Typography
+                                variant="caption"
+                                fontWeight={800}
+                                sx={{
+                                  color:
+                                    colors.text,
+                                }}
+                              >
+                                {assistant
+                                  ? 'ZENIMONIES Support Assistant'
+                                  : item.sender_name ||
+                                    'Customer Care Agent'}
+                              </Typography>
+                            </Stack>
+                          )}
+
+                          {/* BUBBLE */}
+
+                          <Paper
+                            elevation={0}
+                            sx={{
+                              p: 1.7,
+                              borderRadius:
+                                customer
+                                  ? '18px 18px 5px 18px'
+                                  : '18px 18px 18px 5px',
+                              backgroundColor:
+                                customer
+                                  ? colors.primary
+                                  : assistant
+                                  ? colors.bubbleAssistant
+                                  : colors.surface,
+                              color:
+                                customer
+                                  ? '#ffffff'
+                                  : colors.text,
+                              border:
+                                customer
+                                  ? 'none'
+                                  : `1px solid ${colors.border}`,
+                            }}
+                          >
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                whiteSpace:
+                                  'pre-wrap',
+                                lineHeight: 1.65,
+                              }}
+                            >
+                              {item.message}
+                            </Typography>
+                          </Paper>
+
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              display: 'block',
+                              mt: 0.4,
+                              px: 0.5,
+                              color:
+                                colors.textSecondary,
+                              textAlign:
+                                customer
+                                  ? 'right'
+                                  : 'left',
+                            }}
+                          >
+                            {formatTime(
+                              item.created_at
+                            )}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    );
+                  }
+                )}
+              </Stack>
+
+              {/* CONNECT BUTTON */}
+
+              {!ticket.connected_to_customer_care &&
+                ticket.status !== 'closed' &&
+                ticket.status !== 'resolved' && (
                   <Paper
                     elevation={0}
                     sx={{
+                      mt: 2.5,
                       p: 2,
-                      mb: 2,
-                      borderRadius: 2.5,
+                      borderRadius: 3,
                       backgroundColor:
-                        isDarkMode
-                          ? '#13251c'
-                          : '#eff9f3',
-                      border: `1px solid ${colors.border}`,
+                        colors.surface,
+                      border:
+                        `1px solid ${colors.border}`,
                     }}
                   >
                     <Stack
-                      direction="row"
-                      spacing={1.4}
-                      alignItems="flex-start"
+                      spacing={1.5}
                     >
-                      <Box
-                        sx={{
-                          width: 38,
-                          height: 38,
-                          borderRadius:
-                            '50%',
-                          display:
-                            'flex',
-                          alignItems:
-                            'center',
-                          justifyContent:
-                            'center',
-                          backgroundColor:
-                            isDarkMode
-                              ? '#1e5138'
-                              : '#d9f1e3',
-                          flexShrink: 0,
-                        }}
+                      <Stack
+                        direction="row"
+                        spacing={1.2}
+                        alignItems="center"
                       >
                         <SmartToyOutlined
                           sx={{
@@ -1686,757 +1154,1110 @@ export default function Support() {
                               colors.primary,
                           }}
                         />
-                      </Box>
 
-                      <Box
-                        sx={{
-                          flex: 1,
-                        }}
-                      >
                         <Typography
-                          variant="body2"
                           fontWeight={800}
                           sx={{
                             color:
                               colors.text,
                           }}
                         >
-                          ZENIMONIES
-                          Support
-                          Assistant
-                        </Typography>
-
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            mt: 0.6,
-                            color:
-                              colors.text,
-                            lineHeight: 1.6,
-                          }}
-                        >
-                          Thank you for
-                          contacting
-                          ZENIMONIES
-                          Customer Care.
-                          I've received
-                          your complaint
-                          and created
-                          your support
-                          case.
-                        </Typography>
-
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            mt: 0.8,
-                            color:
-                              colors.text,
-                            lineHeight: 1.6,
-                          }}
-                        >
-                          I'm unable to
-                          resolve this
-                          issue
-                          automatically.
-                          Would you
-                          like me to
-                          connect you
-                          with a
+                          Would you like
                           Customer Care
-                          agent?
+                          to assist you?
                         </Typography>
+                      </Stack>
 
-                        <Stack
-                          direction={{
-                            xs: 'column',
-                            sm: 'row',
-                          }}
-                          spacing={1}
-                          sx={{
-                            mt: 1.5,
-                          }}
-                        >
-                          <Button
-                            variant="contained"
-                            onClick={
-                              connectToCustomerCare
-                            }
-                            disabled={
-                              connecting
-                            }
-                            startIcon={
-                              connecting ? (
-                                <CircularProgress
-                                  size={
-                                    16
-                                  }
-                                  color="inherit"
-                                />
-                              ) : (
-                                <SupportAgent />
-                              )
-                            }
-                            sx={{
-                              backgroundColor:
-                                colors.primary,
-                              fontWeight: 800,
-                              textTransform:
-                                'none',
-                              '&:hover':
-                                {
-                                  backgroundColor:
-                                    colors.primaryDark,
-                                },
-                            }}
-                          >
-                            {connecting
-                              ? 'Connecting...'
-                              : 'Connect me to Customer Care'}
-                          </Button>
-
-                          <Button
-                            variant="outlined"
-                            onClick={
-                              closeTicketDialog
-                            }
-                            disabled={
-                              connecting
-                            }
-                            sx={{
-                              borderColor:
-                                colors.border,
-                              color:
-                                colors.text,
-                              fontWeight: 700,
-                              textTransform:
-                                'none',
-                            }}
-                          >
-                            Not now
-                          </Button>
-                        </Stack>
-                      </Box>
-                    </Stack>
-                  </Paper>
-                )}
-
-              {/* =================================================
-                  CONVERSATION
-              ================================================= */}
-
-              <Typography
-                variant="body2"
-                fontWeight={800}
-                sx={{
-                  color: colors.text,
-                  mb: 1.2,
-                }}
-              >
-                Conversation
-              </Typography>
-
-              <Stack spacing={1.6}>
-                {(
-                  selectedTicket.messages ||
-                  []
-                ).map((message) => {
-                  const assistant =
-                    isAssistantMessage(
-                      message
-                    );
-
-                  const agent =
-                    isAgentMessage(
-                      message
-                    );
-
-                  const customer =
-                    isCustomerMessage(
-                      message
-                    );
-
-                  const isHumanSupport =
-                    agent;
-
-                  return (
-                    <Box
-                      key={message.id}
-                      sx={{
-                        display:
-                          'flex',
-                        justifyContent:
-                          customer
-                            ? 'flex-end'
-                            : 'flex-start',
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          maxWidth:
-                            '88%',
+                      <Stack
+                        direction={{
+                          xs: 'column',
+                          sm: 'row',
                         }}
+                        spacing={1}
                       >
-                        {/* SENDER */}
-
-                        <Stack
-                          direction="row"
-                          spacing={0.7}
-                          alignItems="center"
+                        <Button
+                          variant="contained"
+                          onClick={
+                            connectToCustomerCare
+                          }
+                          disabled={
+                            connecting
+                          }
+                          startIcon={
+                            connecting ? (
+                              <CircularProgress
+                                size={16}
+                                color="inherit"
+                              />
+                            ) : (
+                              <SupportAgent />
+                            )
+                          }
                           sx={{
-                            mb: 0.5,
-                            px: 0.5,
-                          }}
-                        >
-                          {assistant ? (
-                            <SmartToyOutlined
-                              sx={{
-                                fontSize: 15,
-                                color:
-                                  colors.primary,
-                              }}
-                            />
-                          ) : isHumanSupport ? (
-                            <PersonOutline
-                              sx={{
-                                fontSize: 15,
-                                color:
-                                  colors.primary,
-                              }}
-                            />
-                          ) : (
-                            <PersonOutline
-                              sx={{
-                                fontSize: 15,
-                                color:
-                                  colors.textSecondary,
-                              }}
-                            />
-                          )}
-
-                          <Typography
-                            variant="caption"
-                            fontWeight={800}
-                            sx={{
-                              color:
-                                colors.text,
-                            }}
-                          >
-                            {assistant
-                              ? 'ZENIMONIES Support Assistant'
-                              : isHumanSupport
-                              ? message.sender_name ||
-                                'Customer Care Agent'
-                              : 'You'}
-                          </Typography>
-                        </Stack>
-
-                        {/* MESSAGE */}
-
-                        <Paper
-                          elevation={0}
-                          sx={{
-                            p: 1.7,
+                            flex: 1,
+                            height: 45,
                             borderRadius: 2.5,
                             backgroundColor:
-                              customer
-                                ? colors.primary
-                                : assistant
-                                ? isDarkMode
-                                  ? '#13251c'
-                                  : '#eef8f2'
-                                : colors.surfaceAlt,
-                            color:
-                              customer
-                                ? '#ffffff'
-                                : colors.text,
-                            border:
-                              customer
-                                ? 'none'
-                                : `1px solid ${colors.border}`,
+                              colors.primary,
+                            fontWeight: 800,
+                            textTransform:
+                              'none',
+                            '&:hover': {
+                              backgroundColor:
+                                colors.primaryDark,
+                            },
                           }}
                         >
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              whiteSpace:
-                                'pre-wrap',
-                              lineHeight: 1.6,
-                            }}
-                          >
-                            {
-                              message.message
-                            }
-                          </Typography>
-                        </Paper>
+                          {connecting
+                            ? 'Connecting...'
+                            : 'Connect me to Customer Care'}
+                        </Button>
 
-                        {/* DATE */}
-
-                        <Typography
-                          variant="caption"
+                        <Button
+                          variant="outlined"
+                          onClick={
+                            startNewConversation
+                          }
+                          disabled={
+                            connecting
+                          }
                           sx={{
-                            display:
-                              'block',
-                            mt: 0.4,
-                            px: 0.5,
-                            color:
-                              colors.textSecondary,
-                            textAlign:
-                              customer
-                                ? 'right'
-                                : 'left',
-                          }}
-                        >
-                          {formatDate(
-                            message.created_at
-                          )}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  );
-                })}
-              </Stack>
-
-              {/* =================================================
-                  WAITING FOR CUSTOMER
-              ================================================= */}
-
-              {selectedTicket.status ===
-                'pending' &&
-                selectedTicket.connected_to_customer_care && (
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      mt: 2,
-                      p: 1.7,
-                      borderRadius: 2,
-                      backgroundColor:
-                        isDarkMode
-                          ? '#302815'
-                          : '#fff8e8',
-                      border:
-                        '1px solid rgba(180,140,40,0.25)',
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      spacing={1.2}
-                      alignItems="flex-start"
-                    >
-                      <AccessTimeOutlined
-                        sx={{
-                          color:
-                            '#b1841e',
-                        }}
-                      />
-
-                      <Box>
-                        <Typography
-                          variant="body2"
-                          fontWeight={800}
-                          sx={{
+                            height: 45,
+                            borderRadius: 2.5,
                             color:
                               colors.text,
+                            borderColor:
+                              colors.border,
+                            fontWeight: 700,
+                            textTransform:
+                              'none',
                           }}
                         >
-                          Customer Care is
-                          waiting for a
-                          response
-                        </Typography>
-
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            display:
-                              'block',
-                            mt: 0.4,
-                            color:
-                              colors.textSecondary,
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          Please reply to
-                          this conversation
-                          if Customer Care
-                          has requested
-                          additional
-                          information.
-                        </Typography>
-                      </Box>
+                          Not now
+                        </Button>
+                      </Stack>
                     </Stack>
                   </Paper>
                 )}
 
-              {/* =================================================
-                  RESOLVED
-              ================================================= */}
+              {/* WAITING */}
 
-              {selectedTicket.status ===
+              {ticket.status ===
+                'pending' &&
+                ticket.connected_to_customer_care && (
+                  <Box
+                    sx={{
+                      mt: 2,
+                      textAlign: 'center',
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color:
+                          colors.textSecondary,
+                      }}
+                    >
+                      Your case is waiting
+                      for Customer Care.
+                    </Typography>
+                  </Box>
+                )}
+
+              {/* RESOLVED */}
+
+              {ticket.status ===
                 'resolved' && (
                 <Paper
                   elevation={0}
                   sx={{
                     mt: 2,
                     p: 1.7,
-                    borderRadius: 2,
+                    borderRadius: 2.5,
                     backgroundColor:
-                      isDarkMode
-                        ? '#13251c'
-                        : '#eef8f2',
-                    border: `1px solid ${colors.border}`,
+                      colors.surface,
+                    border:
+                      `1px solid ${colors.border}`,
                   }}
                 >
                   <Stack
                     direction="row"
-                    spacing={1.2}
+                    spacing={1}
                     alignItems="center"
                   >
-                    <DoneAllOutlined
+                    <CheckCircleOutline
                       sx={{
                         color:
                           colors.primary,
                       }}
                     />
 
-                    <Box>
+                    <Typography
+                      variant="body2"
+                      fontWeight={700}
+                      sx={{
+                        color:
+                          colors.text,
+                      }}
+                    >
+                      Your case has been
+                      resolved.
+                    </Typography>
+                  </Stack>
+                </Paper>
+              )}
+
+              {/* CLOSED */}
+
+              {ticket.status ===
+                'closed' && (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    mt: 2,
+                    p: 1.7,
+                    borderRadius: 2.5,
+                    backgroundColor:
+                      colors.surface,
+                    border:
+                      `1px solid ${colors.border}`,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color:
+                        colors.text,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    This conversation has
+                    been closed. If you still
+                    need assistance, please
+                    start a new Customer Care
+                    conversation.
+                  </Typography>
+                </Paper>
+              )}
+
+              <div
+                ref={messagesEndRef}
+              />
+            </>
+          ) : (
+            /* =================================================
+               NEW CHAT
+            ================================================= */
+
+            <>
+              {/* WELCOME */}
+
+              <Box
+                sx={{
+                  textAlign: 'center',
+                  pt: {
+                    xs: 2,
+                    sm: 4,
+                  },
+                  pb: 2,
+                }}
+              >
+                <Avatar
+                  sx={{
+                    width: 64,
+                    height: 64,
+                    mx: 'auto',
+                    mb: 1.5,
+                    backgroundColor:
+                      isDarkMode
+                        ? '#173d2b'
+                        : '#e3f4eb',
+                    color:
+                      colors.primary,
+                  }}
+                >
+                  <SmartToyOutlined
+                    sx={{
+                      fontSize: 34,
+                    }}
+                  />
+                </Avatar>
+
+                <Typography
+                  variant="h5"
+                  fontWeight={800}
+                  sx={{
+                    color: colors.text,
+                  }}
+                >
+                  Welcome to ZENIMONIES
+                  Customer Care
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  sx={{
+                    mt: 0.7,
+                    color:
+                      colors.textSecondary,
+                    maxWidth: 470,
+                    mx: 'auto',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Tell us what you need help
+                  with. I'll help you get your
+                  complaint to the right
+                  Customer Care team.
+                </Typography>
+              </Box>
+
+              {/* CATEGORY SELECTOR */}
+
+              {!selectedCategory ? (
+                <>
+                  <Typography
+                    fontWeight={800}
+                    sx={{
+                      mb: 1.3,
+                      color: colors.text,
+                    }}
+                  >
+                    What can we help you with?
+                  </Typography>
+
+                  {loadingCategories ? (
+                    <Box
+                      sx={{
+                        py: 5,
+                        textAlign: 'center',
+                      }}
+                    >
+                      <CircularProgress
+                        size={28}
+                        sx={{
+                          color:
+                            colors.primary,
+                        }}
+                      />
+                    </Box>
+                  ) : displayCategories.length ===
+                    0 ? (
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 3,
+                        borderRadius: 3,
+                        textAlign: 'center',
+                        backgroundColor:
+                          colors.surface,
+                        border:
+                          `1px solid ${colors.border}`,
+                      }}
+                    >
                       <Typography
-                        variant="body2"
-                        fontWeight={800}
+                        fontWeight={700}
                         sx={{
                           color:
                             colors.text,
                         }}
                       >
-                        Case resolved
+                        Support categories
+                        are unavailable
                       </Typography>
 
                       <Typography
-                        variant="caption"
+                        variant="body2"
                         sx={{
+                          mt: 0.5,
                           color:
                             colors.textSecondary,
                         }}
                       >
-                        Your Customer Care
-                        case has been marked
-                        as resolved.
+                        Please refresh and
+                        try again.
                       </Typography>
+                    </Paper>
+                  ) : (
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: {
+                          xs: 'repeat(2, 1fr)',
+                          sm: 'repeat(4, 1fr)',
+                        },
+                        gap: 1.2,
+                      }}
+                    >
+                      {displayCategories.map(
+                        (category) => {
+                          const normalized =
+                            category.name
+                              .toLowerCase()
+                              .replace(
+                                /[^a-z0-9]+/g,
+                                '_'
+                              );
+
+                          const fallback =
+                            FALLBACK_CATEGORIES.find(
+                              (item) =>
+                                normalized.includes(
+                                  item.key
+                                ) ||
+                                item.key.includes(
+                                  normalized
+                                )
+                            );
+
+                          return (
+                            <Paper
+                              key={category.id}
+                              elevation={0}
+                              onClick={() =>
+                                setSelectedCategory(
+                                  category
+                                )
+                              }
+                              sx={{
+                                p: {
+                                  xs: 1.7,
+                                  sm: 2,
+                                },
+                                minHeight: 125,
+                                cursor:
+                                  'pointer',
+                                borderRadius: 3,
+                                backgroundColor:
+                                  colors.surface,
+                                border:
+                                  `1px solid ${colors.border}`,
+                                display: 'flex',
+                                flexDirection:
+                                  'column',
+                                alignItems:
+                                  'center',
+                                justifyContent:
+                                  'center',
+                                textAlign:
+                                  'center',
+                                transition:
+                                  '0.18s ease',
+                                '&:hover':
+                                  {
+                                    borderColor:
+                                      colors.primary,
+                                    transform:
+                                      'translateY(-1px)',
+                                  },
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  width: 48,
+                                  height: 48,
+                                  borderRadius:
+                                    '50%',
+                                  display:
+                                    'flex',
+                                  alignItems:
+                                    'center',
+                                  justifyContent:
+                                    'center',
+                                  mb: 1,
+                                  backgroundColor:
+                                    isDarkMode
+                                      ? '#173d2b'
+                                      : '#e3f4eb',
+                                  color:
+                                    colors.primary,
+                                  fontSize: 22,
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {fallback?.icon ||
+                                  '•'}
+                              </Box>
+
+                              <Typography
+                                variant="body2"
+                                fontWeight={800}
+                                sx={{
+                                  color:
+                                    colors.text,
+                                }}
+                              >
+                                {
+                                  category.name
+                                }
+                              </Typography>
+
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  mt: 0.4,
+                                  color:
+                                    colors.textSecondary,
+                                  display: {
+                                    xs: 'none',
+                                    sm: 'block',
+                                  },
+                                }}
+                              >
+                                {
+                                  category.description ||
+                                  fallback?.description
+                                }
+                              </Typography>
+                            </Paper>
+                          );
+                        }
+                      )}
                     </Box>
-                  </Stack>
-                </Paper>
-              )}
+                  )}
+                </>
+              ) : (
+                /* =================================================
+                   SELECTED CATEGORY
+                ================================================= */
 
-              {/* =================================================
-                  CLOSED
-              ================================================= */}
-
-              {selectedTicket.status ===
-                'closed' && (
-                <Alert
-                  severity="info"
-                  sx={{
-                    mt: 2,
-                    borderRadius: 2,
-                  }}
-                >
-                  This conversation has been
-                  closed. If you still need
-                  assistance, please create a
-                  new Customer Care complaint.
-                </Alert>
-              )}
-
-              {/* =================================================
-                  CUSTOMER REPLY
-              ================================================= */}
-
-              {selectedTicket.status !==
-                'closed' &&
-                selectedTicket.status !==
-                  'resolved' && (
-                  <Box
-                    component="form"
-                    onSubmit={handleReply}
+                <>
+                  <Button
+                    startIcon={
+                      <ArrowBack />
+                    }
+                    onClick={() => {
+                      setSelectedCategory(
+                        null
+                      );
+                      setSelectedIssue('');
+                    }}
                     sx={{
-                      mt: 2.5,
+                      mb: 1.5,
+                      color:
+                        colors.primary,
+                      textTransform:
+                        'none',
+                      fontWeight: 700,
                     }}
                   >
-                    <TextField
-                      fullWidth
-                      multiline
-                      minRows={3}
-                      placeholder="Write a message to Customer Care..."
-                      value={reply}
-                      onChange={(event) =>
-                        setReply(
-                          event.target.value
-                        )
-                      }
-                      sx={inputStyles(
-                        colors
-                      )}
-                    />
+                    Change category
+                  </Button>
 
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 1.7,
+                      mb: 2,
+                      borderRadius: 2.5,
+                      backgroundColor:
+                        colors.surface,
+                      border:
+                        `1px solid ${colors.border}`,
+                    }}
+                  >
                     <Typography
                       variant="caption"
                       sx={{
-                        display:
-                          'block',
-                        mt: 0.7,
                         color:
                           colors.textSecondary,
                       }}
                     >
-                      Never send passwords,
-                      PINs, OTPs, CVVs or
-                      other secret security
-                      information.
+                      Selected issue
                     </Typography>
 
-                    <Button
-                      type="submit"
-                      fullWidth
-                      variant="contained"
-                      disabled={
-                        sending ||
-                        !reply.trim()
-                      }
-                      startIcon={
-                        sending ? (
-                          <CircularProgress
-                            size={18}
-                            color="inherit"
-                          />
-                        ) : (
-                          <Send />
-                        )
-                      }
+                    <Typography
+                      fontWeight={800}
                       sx={{
-                        mt: 1.2,
-                        height: 46,
-                        backgroundColor:
-                          colors.primary,
-                        fontWeight: 800,
-                        textTransform:
-                          'none',
-                        '&:hover': {
-                          backgroundColor:
-                            colors.primaryDark,
-                        },
+                        mt: 0.2,
+                        color:
+                          colors.text,
                       }}
                     >
-                      {sending
-                        ? 'Sending...'
-                        : 'Send Message'}
-                    </Button>
-                  </Box>
-                )}
-            </DialogContent>
-          </>
-        ) : null}
-      </Dialog>
-    </Box>
-  );
-}
+                      {
+                        selectedCategory.name
+                      }
+                    </Typography>
+                  </Paper>
 
-// ============================================================
-// SUMMARY CARD
-// ============================================================
+                  <Typography
+                    fontWeight={800}
+                    sx={{
+                      mb: 1.2,
+                      color:
+                        colors.text,
+                    }}
+                  >
+                    What happened?
+                  </Typography>
 
-function SummaryCard({
-  icon,
-  label,
-  value,
-  colors,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  colors: typeof LIGHT;
-}) {
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        p: 2,
-        borderRadius: 2.5,
-        backgroundColor:
-          colors.surface,
-        border: `1px solid ${colors.border}`,
-      }}
-    >
-      <Stack
-        direction="row"
-        alignItems="center"
-        spacing={1.3}
-      >
-        <Box
-          sx={{
-            width: 40,
-            height: 40,
-            borderRadius: 2,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor:
-              colors.surfaceAlt,
-            color: colors.primary,
-          }}
-        >
-          {icon}
+                  <Stack spacing={1}>
+                    {issueSuggestions.map(
+                      (issue) => (
+                        <Paper
+                          key={issue}
+                          elevation={0}
+                          onClick={() =>
+                            setSelectedIssue(
+                              issue
+                            )
+                          }
+                          sx={{
+                            p: 1.6,
+                            cursor:
+                              'pointer',
+                            borderRadius:
+                              2.5,
+                            backgroundColor:
+                              selectedIssue ===
+                              issue
+                                ? isDarkMode
+                                  ? '#173d2b'
+                                  : '#e8f6ee'
+                                : colors.surface,
+                            border:
+                              `1px solid ${
+                                selectedIssue ===
+                                issue
+                                  ? colors.primary
+                                  : colors.border
+                              }`,
+                          }}
+                        >
+                          <Stack
+                            direction="row"
+                            alignItems="center"
+                            spacing={1}
+                          >
+                            <Typography
+                              sx={{
+                                flex: 1,
+                                color:
+                                  colors.text,
+                                fontWeight:
+                                  selectedIssue ===
+                                  issue
+                                    ? 800
+                                    : 600,
+                              }}
+                            >
+                              {issue}
+                            </Typography>
+
+                            <ArrowForwardIos
+                              sx={{
+                                fontSize: 14,
+                                color:
+                                  colors.textSecondary,
+                              }}
+                            />
+                          </Stack>
+                        </Paper>
+                      )
+                    )}
+                  </Stack>
+
+                  <Typography
+                    variant="body2"
+                    fontWeight={700}
+                    sx={{
+                      mt: 2.5,
+                      mb: 1,
+                      color:
+                        colors.text,
+                    }}
+                  >
+                    Or describe the problem
+                    below
+                  </Typography>
+
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={3}
+                    placeholder="Tell us what happened..."
+                    value={message}
+                    onChange={(event) =>
+                      setMessage(
+                        event.target.value
+                      )
+                    }
+                    sx={inputStyles(
+                      colors
+                    )}
+                  />
+
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    onClick={() =>
+                      handleSendMessage()
+                    }
+                    disabled={
+                      creating ||
+                      !message.trim()
+                    }
+                    startIcon={
+                      creating ? (
+                        <CircularProgress
+                          size={18}
+                          color="inherit"
+                        />
+                      ) : (
+                        <Send />
+                      )
+                    }
+                    sx={{
+                      mt: 1.2,
+                      height: 48,
+                      borderRadius: 2.5,
+                      backgroundColor:
+                        colors.primary,
+                      fontWeight: 800,
+                      textTransform:
+                        'none',
+                      '&:hover': {
+                        backgroundColor:
+                          colors.primaryDark,
+                      },
+                    }}
+                  >
+                    {creating
+                      ? 'Starting conversation...'
+                      : 'Send to Customer Care'}
+                  </Button>
+                </>
+              )}
+            </>
+          )}
+
+          <div
+            ref={messagesEndRef}
+          />
         </Box>
+      </Box>
 
-        <Box>
-          <Typography
-            variant="h6"
-            fontWeight={800}
-            sx={{
-              color: colors.text,
-              lineHeight: 1,
-            }}
-          >
-            {value}
-          </Typography>
+      {/* =====================================================
+          BOTTOM CHAT BAR
+      ===================================================== */}
 
-          <Typography
-            variant="caption"
-            sx={{
-              color:
-                colors.textSecondary,
-            }}
-          >
-            {label}
-          </Typography>
-        </Box>
-      </Stack>
-    </Paper>
-  );
-}
-
-// ============================================================
-// TICKET CARD
-// ============================================================
-
-function TicketCard({
-  ticket,
-  colors,
-  onClick,
-}: {
-  ticket: SupportTicket;
-  colors: typeof LIGHT;
-  onClick: () => void;
-}) {
-  return (
-    <Card
-      elevation={0}
-      onClick={onClick}
-      sx={{
-        cursor: 'pointer',
-        borderRadius: 2.5,
-        backgroundColor:
-          colors.surface,
-        border: `1px solid ${colors.border}`,
-        transition: '0.2s ease',
-        '&:hover': {
-          transform:
-            'translateY(-1px)',
-          borderColor:
-            colors.primary,
-        },
-      }}
-    >
-      <CardContent
-        sx={{
-          p: 2,
-          '&:last-child': {
-            pb: 2,
-          },
-        }}
-      >
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="flex-start"
-          spacing={2}
-        >
+      {ticket &&
+        ticket.status !== 'closed' &&
+        ticket.status !== 'resolved' && (
           <Box
             sx={{
-              minWidth: 0,
+              flexShrink: 0,
+              backgroundColor:
+                isDarkMode
+                  ? '#101714'
+                  : '#ffffff',
+              borderTop:
+                `1px solid ${colors.border}`,
+              px: {
+                xs: 1.2,
+                sm: 2,
+              },
+              py: 1.1,
             }}
           >
-            <Typography
-              fontWeight={800}
+            <Box
+              component="form"
+              onSubmit={handleSendMessage}
               sx={{
-                color: colors.text,
-                mb: 0.5,
+                width: '100%',
+                maxWidth: 760,
+                mx: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
               }}
             >
-              {ticket.subject}
-            </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder={
+                  ticket.connected_to_customer_care
+                    ? 'Message Customer Care...'
+                    : 'Describe your problem...'
+                }
+                value={message}
+                onChange={(event) =>
+                  setMessage(
+                    event.target.value
+                  )
+                }
+                sx={{
+                  ...inputStyles(colors),
+                  '& .MuiOutlinedInput-root':
+                    {
+                      borderRadius:
+                        '24px',
+                    },
+                }}
+              />
+
+              <IconButton
+                type="submit"
+                disabled={
+                  sending ||
+                  !message.trim()
+                }
+                sx={{
+                  width: 48,
+                  height: 48,
+                  flexShrink: 0,
+                  backgroundColor:
+                    colors.primary,
+                  color: '#ffffff',
+                  '&:hover': {
+                    backgroundColor:
+                      colors.primaryDark,
+                  },
+                  '&.Mui-disabled': {
+                    backgroundColor:
+                      isDarkMode
+                        ? '#1d3027'
+                        : '#dce9e2',
+                    color:
+                      colors.textSecondary,
+                  },
+                }}
+              >
+                {sending ? (
+                  <CircularProgress
+                    size={20}
+                    sx={{
+                      color:
+                        'currentColor',
+                    }}
+                  />
+                ) : (
+                  <Send
+                    sx={{
+                      fontSize: 20,
+                    }}
+                  />
+                )}
+              </IconButton>
+            </Box>
 
             <Typography
               variant="caption"
               sx={{
+                display: 'block',
+                textAlign: 'center',
+                mt: 0.7,
                 color:
                   colors.textSecondary,
               }}
             >
-              {ticket.ticket_number}
+              Never send your password,
+              PIN, OTP, CVV or passkey.
             </Typography>
           </Box>
+        )}
 
-          <Chip
-            label={statusLabel(
-              ticket.status
-            )}
-            color={
-              statusColor(
-                ticket.status
-              ) as any
-            }
-            size="small"
-          />
-        </Stack>
+      {/* =====================================================
+          MY CASES BUTTON
+      ===================================================== */}
 
-        <Divider
+      {!ticket && (
+        <Box
           sx={{
-            my: 1.5,
-            borderColor:
-              colors.border,
+            position: 'absolute',
+            top: 82,
+            right: 12,
           }}
-        />
-
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          spacing={2}
         >
-          <Typography
-            variant="caption"
+          <Button
+            size="small"
+            onClick={async () => {
+              setShowCases(true);
+              await loadCases();
+            }}
             sx={{
               color:
-                colors.textSecondary,
+                colors.primary,
+              textTransform:
+                'none',
+              fontWeight: 800,
             }}
           >
-            {ticket.category_name ||
-              'Customer Support'}
-          </Typography>
+            My Cases
+          </Button>
+        </Box>
+      )}
 
-          <Typography
-            variant="caption"
+      {/* =====================================================
+          CASES PANEL
+      ===================================================== */}
+
+      {showCases && (
+        <Box
+          sx={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 20,
+            backgroundColor:
+              colors.background,
+            overflowY: 'auto',
+          }}
+        >
+          <Box
             sx={{
+              height: 70,
+              display: 'flex',
+              alignItems: 'center',
+              px: 1.5,
+              borderBottom:
+                `1px solid ${colors.border}`,
+              backgroundColor:
+                colors.surface,
+            }}
+          >
+            <IconButton
+              onClick={() =>
+                setShowCases(false)
+              }
+              sx={{
+                color:
+                  colors.text,
+              }}
+            >
+              <ArrowBack />
+            </IconButton>
+
+            <Typography
+              fontWeight={800}
+              sx={{
+                ml: 1,
+                color:
+                  colors.text,
+              }}
+            >
+              My Cases
+            </Typography>
+
+            <IconButton
+              onClick={loadCases}
+              sx={{
+                ml: 'auto',
+                color:
+                  colors.primary,
+              }}
+            >
+              <Refresh />
+            </IconButton>
+          </Box>
+
+          <Box
+            sx={{
+              maxWidth: 760,
+              mx: 'auto',
+              p: 2,
+            }}
+          >
+            {loadingCases ? (
+              <Box
+                sx={{
+                  py: 8,
+                  textAlign:
+                    'center',
+                }}
+              >
+                <CircularProgress
+                  sx={{
+                    color:
+                      colors.primary,
+                  }}
+                />
+              </Box>
+            ) : tickets.length ===
+              0 ? (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 4,
+                  mt: 3,
+                  textAlign:
+                    'center',
+                  borderRadius: 3,
+                  backgroundColor:
+                    colors.surface,
+                  border:
+                    `1px solid ${colors.border}`,
+                }}
+              >
+                <SupportAgent
+                  sx={{
+                    fontSize: 42,
+                    color:
+                      colors.primary,
+                  }}
+                />
+
+                <Typography
+                  fontWeight={800}
+                  sx={{
+                    mt: 1,
+                    color:
+                      colors.text,
+                  }}
+                >
+                  No cases yet
+                </Typography>
+              </Paper>
+            ) : (
+              <Stack
+                spacing={1.2}
+                sx={{
+                  mt: 2,
+                }}
+              >
+                {tickets.map(
+                  (item) => (
+                    <Paper
+                      key={item.id}
+                      elevation={0}
+                      onClick={() =>
+                        openExistingCase(
+                          item.id
+                        )
+                      }
+                      sx={{
+                        p: 1.7,
+                        cursor:
+                          'pointer',
+                        borderRadius:
+                          2.5,
+                        backgroundColor:
+                          colors.surface,
+                        border:
+                          `1px solid ${colors.border}`,
+                      }}
+                    >
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        alignItems="center"
+                      >
+                        <Box
+                          sx={{
+                            flex: 1,
+                          }}
+                        >
+                          <Typography
+                            fontWeight={
+                              800
+                            }
+                            sx={{
+                              color:
+                                colors.text,
+                            }}
+                          >
+                            {
+                              item.subject
+                            }
+                          </Typography>
+
+                          {/* TICKET ID */}
+
+                          {item.ticket_number && (
+                            <Stack
+                              direction="row"
+                              spacing={0.4}
+                              alignItems="center"
+                              sx={{
+                                mt: 0.25,
+                              }}
+                            >
+                              <ConfirmationNumberOutlined
+                                sx={{
+                                  fontSize: 13,
+                                  color:
+                                    colors.primary,
+                                }}
+                              />
+
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color:
+                                    colors.primary,
+                                  fontWeight:
+                                    800,
+                                }}
+                              >
+                                {
+                                  item.ticket_number
+                                }
+                              </Typography>
+                            </Stack>
+                          )}
+
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              display:
+                                'block',
+                              mt: 0.25,
+                              color:
+                                colors.textSecondary,
+                            }}
+                          >
+                            {item.category_name ||
+                              'Customer Care'}
+                          </Typography>
+                        </Box>
+
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color:
+                              colors.primary,
+                            fontWeight:
+                              800,
+                          }}
+                        >
+                          {item.status ===
+                          'pending'
+                            ? 'Pending'
+                            : item.status ===
+                              'in_progress'
+                            ? 'In Progress'
+                            : item.status ===
+                              'resolved'
+                            ? 'Resolved'
+                            : item.status ===
+                              'closed'
+                            ? 'Closed'
+                            : 'Open'}
+                        </Typography>
+                      </Stack>
+                    </Paper>
+                  )
+                )}
+              </Stack>
+            )}
+          </Box>
+
+          <IconButton
+            onClick={() =>
+              setShowCases(false)
+            }
+            sx={{
+              position: 'fixed',
+              top: 13,
+              right: 10,
               color:
                 colors.textSecondary,
             }}
           >
-            {formatDate(
-              ticket.updated_at ||
-                ticket.created_at
-            )}
-          </Typography>
-        </Stack>
-      </CardContent>
-    </Card>
+            <Close />
+          </IconButton>
+        </Box>
+      )}
+    </Box>
   );
 }
 
@@ -2449,17 +2270,20 @@ function inputStyles(
 ) {
   return {
     '& .MuiInputLabel-root': {
-      color: colors.textSecondary,
+      color:
+        colors.textSecondary,
     },
 
-    '& .MuiInputLabel-root.Mui-focused': {
-      color: colors.primary,
-    },
+    '& .MuiInputLabel-root.Mui-focused':
+      {
+        color:
+          colors.primary,
+      },
 
     '& .MuiOutlinedInput-root': {
       color: colors.text,
       backgroundColor:
-        colors.input,
+        colors.surface,
 
       '& fieldset': {
         borderColor:
@@ -2479,7 +2303,8 @@ function inputStyles(
 
     '& .MuiInputBase-input::placeholder':
       {
-        color: colors.textSecondary,
+        color:
+          colors.textSecondary,
         opacity: 0.8,
       },
   };
