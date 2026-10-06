@@ -1,134 +1,285 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
 
-const adminMiddleware = async (req, res, next) => {
+const {
+  validateAndRefreshSession,
+} = require('../services/sessionService');
+
+// ============================================================
+// ZENIMONIES BANKING
+// CUSTOMER CARE AUTHENTICATION MIDDLEWARE
+// ============================================================
+//
+// Customer Care is deliberately separated from Admin.
+//
+// Allowed:
+//   role = customer_care
+//
+// Not allowed:
+//   role = admin
+//   role = user
+//
+// This middleware protects Customer Care APIs only.
+//
+// IMPORTANT:
+// Customer Care agents do NOT receive Admin Dashboard access.
+// ============================================================
+
+const customerCareMiddleware = async (
+  req,
+  res,
+  next
+) => {
   try {
-    // --------------------------------------------------------
-    // CHECK AUTHORIZATION HEADER
-    // --------------------------------------------------------
+    // ========================================================
+    // AUTHORIZATION HEADER
+    // ========================================================
 
-    const authHeader = req.headers.authorization;
+    const authHeader =
+      req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (
+      !authHeader ||
+      !authHeader.startsWith('Bearer ')
+    ) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required',
+        message:
+          'Customer Care authentication required.',
       });
     }
 
-    const token = authHeader.split(' ')[1];
+    const token =
+      authHeader
+        .substring(7)
+        .trim();
 
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication token is missing',
+        message:
+          'Authentication token is missing.',
       });
     }
 
-    // --------------------------------------------------------
-    // CHECK JWT SECRET
-    // --------------------------------------------------------
+    // ========================================================
+    // JWT SECRET
+    // ========================================================
 
     if (!process.env.JWT_SECRET) {
-      console.error('JWT_SECRET is not configured');
+      console.error(
+        'JWT_SECRET is not configured.'
+      );
 
       return res.status(500).json({
         success: false,
-        message: 'Authentication service is not configured',
+        message:
+          'Authentication service is not configured.',
       });
     }
 
-    // --------------------------------------------------------
-    // VERIFY TOKEN
-    // --------------------------------------------------------
+    // ========================================================
+    // VERIFY JWT
+    // ========================================================
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET
-    );
+    let decoded;
 
-    if (!decoded.userId) {
+    try {
+      decoded =
+        jwt.verify(
+          token,
+          process.env.JWT_SECRET
+        );
+    } catch (error) {
+      console.error(
+        'Customer Care JWT verification failed:',
+        error?.message
+      );
+
       return res.status(401).json({
         success: false,
-        message: 'Invalid authentication token',
+        message:
+          'Invalid or expired authentication token.',
       });
     }
 
-    // --------------------------------------------------------
-    // GET USER FROM DATABASE
-    // --------------------------------------------------------
+    // ========================================================
+    // USER ID
+    // ========================================================
 
-    const result = await pool.query(
-      `
-      SELECT
-        id,
-        full_name,
-        email,
-        role,
-        status
-      FROM users
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [decoded.userId]
-    );
+    const userId =
+      decoded?.userId ||
+      decoded?.id ||
+      decoded?.user_id ||
+      decoded?.sub;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message:
+          'Invalid authentication token.',
+      });
+    }
+
+    // ========================================================
+    // SESSION ID
+    // ========================================================
+
+    const sessionId =
+      decoded?.sessionId ||
+      decoded?.session_id ||
+      decoded?.sid;
+
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        code:
+          'SESSION_REQUIRED',
+        message:
+          'Your session is no longer valid. Please sign in again.',
+      });
+    }
+
+    // ========================================================
+    // LOAD CUSTOMER CARE USER
+    // ========================================================
+
+    const result =
+      await pool.query(
+        `
+        SELECT
+          id,
+          full_name,
+          email,
+          phone,
+          role,
+          status
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [userId]
+      );
 
     if (result.rows.length === 0) {
       return res.status(401).json({
         success: false,
-        message: 'User not found',
+        message:
+          'Customer Care account could not be found.',
       });
     }
 
-    const user = result.rows[0];
+    const user =
+      result.rows[0];
 
-    // --------------------------------------------------------
-    // CHECK ADMIN ROLE
-    // --------------------------------------------------------
+    // ========================================================
+    // CUSTOMER CARE ROLE
+    // ========================================================
 
-    if (user.role !== 'admin') {
+    if (
+      user.role !== 'customer_care'
+    ) {
       return res.status(403).json({
         success: false,
-        message: 'Administrator access required',
+        message:
+          'Customer Care access required.',
       });
     }
 
-    // --------------------------------------------------------
-    // CHECK ACCOUNT STATUS
-    // --------------------------------------------------------
+    // ========================================================
+    // ACCOUNT STATUS
+    // ========================================================
 
-    if (user.status !== 'active') {
+    if (
+      user.status !== 'active'
+    ) {
       return res.status(403).json({
         success: false,
-        message: 'Administrator account is not active',
+        message:
+          'Customer Care account is not active.',
       });
     }
 
-    // --------------------------------------------------------
-    // ATTACH ADMIN TO REQUEST
-    // --------------------------------------------------------
+    // ========================================================
+    // VALIDATE SERVER SESSION
+    // ========================================================
+
+    const session =
+      await validateAndRefreshSession({
+        userId,
+        sessionId,
+      });
+
+    if (!session.valid) {
+      if (
+        session.reason ===
+        'SESSION_EXPIRED'
+      ) {
+        return res.status(401).json({
+          success: false,
+          code:
+            'SESSION_EXPIRED',
+          message:
+            'Your session has expired. Please sign in again.',
+        });
+      }
+
+      if (
+        session.reason ===
+        'SESSION_REVOKED'
+      ) {
+        return res.status(401).json({
+          success: false,
+          code:
+            'SESSION_REVOKED',
+          message:
+            'Your session has been ended. Please sign in again.',
+        });
+      }
+
+      return res.status(401).json({
+        success: false,
+        code:
+          'SESSION_INVALID',
+        message:
+          'Your session is no longer valid. Please sign in again.',
+      });
+    }
+
+    // ========================================================
+    // ATTACH CUSTOMER CARE USER
+    // ========================================================
 
     req.user = user;
 
-    next();
-  } catch (error) {
-    console.error('Admin authentication error:', error);
+    req.userId =
+      user.id;
 
-    if (
-      error.name === 'JsonWebTokenError' ||
-      error.name === 'TokenExpiredError'
-    ) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid or expired authentication token',
-      });
-    }
+    req.sessionId =
+      sessionId;
+
+    req.session =
+      session;
+
+    // ========================================================
+    // CONTINUE
+    // ========================================================
+
+    return next();
+
+  } catch (error) {
+    console.error(
+      'Customer Care authentication error:',
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: 'Unable to authenticate administrator',
+      message:
+        'Unable to authenticate Customer Care agent.',
     });
   }
 };
 
-module.exports = adminMiddleware;
+module.exports =
+  customerCareMiddleware;
