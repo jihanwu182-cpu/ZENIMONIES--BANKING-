@@ -40,6 +40,7 @@ const educationRoutes =
   require('./routes/education');
 const bettingRoutes = require('./routes/betting');
 const insuranceRoutes = require('./routes/insurance');
+const giftcardRoutes = require('./routes/giftcardRoutes');
 const statementRoutes = require('./routes/statementRoutes');
 const posRoutes = require('./routes/posRoutes');
 const smsPreferencesRoutes = require('./routes/smsPreferences');
@@ -216,6 +217,10 @@ app.use(
   '/api/insurance', 
     insuranceRoutes
   );
+app.use(
+  '/api/auth',
+  authRoutes
+ );
 // ============================================================
 // BENEFICIARIES
 // ============================================================
