@@ -86,6 +86,7 @@ import ThemeProvider from './theme/Theme.tsx';
 import AdminLogin from './pages/AdminLogin.tsx';
 import Admin from './pages/AdminDashboard.tsx';
 import AirtimeReconciliation from './pages/AirtimeReconciliation.tsx';
+import CustomerCareDashboard from './pages/CustomerCareDashboard.tsx';
 
 // ==================== SESSION ====================
 
@@ -404,7 +405,86 @@ const AdminRoutes: React.FC = () => {
     </Routes>
   );
 };
+// ============================================================
+// CUSTOMER CARE ROUTE GUARD
+//
+// Customer Care is a separate workspace from Admin.
+//
+// Allowed:
+//   role = customer_care
+//
+// Not allowed:
+//   user
+//   admin
+//
+// The backend customerCareMiddleware remains the real
+// security boundary. This guard only controls frontend
+// navigation and prevents the wrong workspace from rendering.
+// ============================================================
 
+const CustomerCareRoute: React.FC = () => {
+  const token =
+    localStorage.getItem('zenimonies_token') ||
+    localStorage.getItem('token') ||
+    localStorage.getItem('accessToken');
+
+  if (!token) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    );
+  }
+
+  let user: any = null;
+
+  try {
+    const storedUser =
+      localStorage.getItem('zenimonies_user');
+
+    if (storedUser) {
+      user = JSON.parse(storedUser);
+    }
+  } catch (error) {
+    console.error(
+      'Unable to read stored customer care user:',
+      error
+    );
+  }
+
+  const role = String(
+    user?.role || ''
+  )
+    .trim()
+    .toLowerCase();
+
+  if (role !== 'customer_care') {
+    if (role === 'admin') {
+      return (
+        <Navigate
+          to="/admin/dashboard"
+          replace
+        />
+      );
+    }
+
+    return (
+      <Navigate
+        to="/"
+        replace
+      />
+    );
+  }
+
+  return <CustomerCareDashboard />;
+};
+{/* ================= CUSTOMER CARE ================= */}
+
+<Route
+  path="/customer-care"
+  element={<CustomerCareRoute />}
+/>
 // ============================================================
 // CUSTOMER ROUTES
 // ============================================================
