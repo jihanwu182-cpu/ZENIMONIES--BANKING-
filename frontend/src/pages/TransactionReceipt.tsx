@@ -1578,7 +1578,7 @@ const TransactionReceipt: React.FC = () => {
 >
   <Box
     component="img"
-    src="/zenimonies-logo-light.png"
+    src="/zenimonies-logo-horizontal.png"
     alt="ZENIMONIES BANKING"
     sx={{
       display: 'block',
