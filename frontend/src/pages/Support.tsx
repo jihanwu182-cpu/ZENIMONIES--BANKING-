@@ -37,7 +37,7 @@ import {
   Refresh,
   Send,
   SupportAgent,
-  TicketOutlined,
+ConfirmationNumberOutlined,
 } from '@mui/icons-material';
 
 import { useNavigate } from 'react-router-dom';
@@ -845,7 +845,7 @@ export default function Support() {
             <Button
               fullWidth
               variant="contained"
-              startIcon={<TicketOutlined />}
+              startIcon={<ConfirmationNumberOutlined />}
               onClick={() =>
                 setShowCreateDialog(true)
               }
