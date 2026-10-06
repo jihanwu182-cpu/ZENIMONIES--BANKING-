@@ -1565,43 +1565,45 @@ const TransactionReceipt: React.FC = () => {
           }}
         >
 
-          {/* ====================================================
-              LOGO
-          ==================================================== */}
+{/* ====================================================
+    ZENIMONIES LOGO
+==================================================== */}
 
-          <Box
-            sx={{
-              textAlign: 'center',
-              px: 2,
-              pt: 2.5,
-              pb: 1.8,
-            }}
-          >
-            <Typography
-              sx={{
-                color:
-                  COLORS.primary,
-                fontSize: 23,
-                fontWeight: 900,
-                letterSpacing: 2,
-                lineHeight: 1,
-              }}
-            >
-              ZENIMONIES
-            </Typography>
+<Box
+  sx={{
+    textAlign: 'center',
+    px: 2,
+    pt: 2.2,
+    pb: 1.8,
+  }}
+>
+  <Box
+    component="img"
+    src="/zenimonies-logo-light.png"
+    alt="ZENIMONIES BANKING"
+    sx={{
+      display: 'block',
+      width: '100%',
+      maxWidth: 230,
+      height: 'auto',
+      maxHeight: 82,
+      objectFit: 'contain',
+      mx: 'auto',
+    }}
+  />
 
-            <Typography
-              sx={{
-                mt: 1,
-                color:
-                  COLORS.text,
-                fontSize: 17,
-                fontWeight: 800,
-              }}
-            >
-              Transaction Receipt
-            </Typography>
-          </Box>
+  <Typography
+    sx={{
+      mt: 1.5,
+      color: COLORS.text,
+      fontSize: 17,
+      fontWeight: 800,
+      lineHeight: 1.2,
+    }}
+  >
+    Transaction Receipt
+  </Typography>
+</Box>
 
           {/* ====================================================
               INSURANCE STATUS PANEL
@@ -2403,17 +2405,19 @@ const TransactionReceipt: React.FC = () => {
                 'center',
             }}
           >
-            <Typography
-              sx={{
-                color:
-                  COLORS.primary,
-                fontSize: 10,
-                fontWeight: 900,
-                letterSpacing: 1.5,
-              }}
-            >
-              ZENIMONIES
-            </Typography>
+            <Box
+  component="img"
+  src="/zenimonies-logo-light.png"
+  alt="ZENIMONIES BANKING"
+  sx={{
+    display: 'block',
+    width: 135,
+    height: 'auto',
+    maxHeight: 45,
+    objectFit: 'contain',
+    mx: 'auto',
+  }}
+/>
           </Box>
         </Box>
 
