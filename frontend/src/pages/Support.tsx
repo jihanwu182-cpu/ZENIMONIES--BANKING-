@@ -1,726 +1,1830 @@
-import React, { FormEvent, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 
-type SupportType =
-  | 'general'
-  | 'transaction'
-  | 'security'
-  | 'account-access';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  IconButton,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 
-const supportConfig: Record<
-  SupportType,
-  {
-    title: string;
-    description: string;
-    icon: string;
-    subject: string;
-    placeholder: string;
-  }
-> = {
-  general: {
-    title: 'Contact Support',
-    description:
-      'Tell us what you need help with and provide as much detail as possible.',
-    icon: '💬',
-    subject: 'General Support',
-    placeholder:
-      'Describe what you need help with...',
-  },
+import {
+  ArrowBack,
+  ChatBubbleOutline,
+  CheckCircleOutline,
+  Close,
+  HelpOutline,
+  Refresh,
+  Send,
+  SupportAgent,
+  TicketOutlined,
+} from '@mui/icons-material';
 
-  transaction: {
-    title: 'Report a Transaction',
-    description:
-      'Use this form to report a problem with a transfer, payment or transaction.',
-    icon: '🧾',
-    subject: 'Transaction Problem',
-    placeholder:
-      'Tell us what happened. Include the transaction reference if you have it...',
-  },
+import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../theme/Theme.tsx';
 
-  security: {
-    title: 'Suspicious Activity',
-    description:
-      'Report activity that you do not recognize or believe may be unauthorized.',
-    icon: '🔐',
-    subject: 'Suspicious Activity',
-    placeholder:
-      'Describe the suspicious activity and any transaction reference you recognize...',
-  },
+// ============================================================
+// ZENIMONIES BANKING — CUSTOMER CARE
+// ============================================================
 
-  'account-access': {
-    title: 'Account Access',
-    description:
-      'Get help if you cannot access your ZENIMONIES account.',
-    icon: '🔑',
-    subject: 'Account Access Problem',
-    placeholder:
-      'Describe the problem you are experiencing when trying to access your account...',
-  },
+const API_BASE =
+  process.env.REACT_APP_API_URL ||
+  'https://zenimonies-banking.onrender.com/api';
+
+// ============================================================
+// TYPES
+// ============================================================
+
+type TicketStatus =
+  | 'open'
+  | 'pending'
+  | 'in_progress'
+  | 'resolved'
+  | 'closed'
+  | string;
+
+type TicketPriority =
+  | 'low'
+  | 'normal'
+  | 'high'
+  | 'urgent'
+  | string;
+
+type SupportCategory = {
+  id: string;
+  name: string;
+  description?: string;
 };
 
-const Support: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+type SupportMessage = {
+  id: string;
+  sender_type?: string;
+  sender_name?: string;
+  message: string;
+  created_at: string;
+};
 
-  const incomingType =
-    (location.state as { supportType?: SupportType } | null)
-      ?.supportType || 'general';
+type SupportTicket = {
+  id: string;
+  ticket_number: string;
+  subject: string;
+  description?: string;
+  status: TicketStatus;
+  priority?: TicketPriority;
+  category_id?: string;
+  category_name?: string;
+  transaction_id?: string | null;
+  created_at: string;
+  updated_at?: string;
+  messages?: SupportMessage[];
+};
 
-  const initialType: SupportType =
-    supportConfig[incomingType]
-      ? incomingType
-      : 'general';
+// ============================================================
+// COLORS
+// ============================================================
 
-  const [supportType, setSupportType] =
-    useState<SupportType>(initialType);
+const LIGHT = {
+  background: '#f5f8f6',
+  surface: '#ffffff',
+  surfaceAlt: '#f0f5f2',
+  text: '#12372a',
+  textSecondary: '#66756d',
+  primary: '#087443',
+  primaryDark: '#055a34',
+  border: '#dce7e1',
+  input: '#ffffff',
+};
 
-  const [subject, setSubject] = useState(
-    supportConfig[initialType].subject
+const DARK = {
+  background: '#08120e',
+  surface: '#101d17',
+  surfaceAlt: '#16261e',
+  text: '#f1f7f3',
+  textSecondary: '#aabbb1',
+  primary: '#36b878',
+  primaryDark: '#29965f',
+  border: '#263b31',
+  input: '#101d17',
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+function getToken(): string | null {
+  return (
+    localStorage.getItem('zenimonies_token') ||
+    localStorage.getItem('token') ||
+    localStorage.getItem('accessToken') ||
+    null
+  );
+}
+
+function formatDate(date?: string) {
+  if (!date) return '';
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+
+  return parsed.toLocaleString('en-NG', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function statusLabel(status: TicketStatus) {
+  switch (status) {
+    case 'open':
+      return 'Open';
+
+    case 'pending':
+      return 'Pending';
+
+    case 'in_progress':
+      return 'In Progress';
+
+    case 'resolved':
+      return 'Resolved';
+
+    case 'closed':
+      return 'Closed';
+
+    default:
+      return String(status)
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+}
+
+function statusColor(status: TicketStatus) {
+  switch (status) {
+    case 'open':
+      return 'primary';
+
+    case 'pending':
+      return 'warning';
+
+    case 'in_progress':
+      return 'info';
+
+    case 'resolved':
+      return 'success';
+
+    case 'closed':
+      return 'default';
+
+    default:
+      return 'default';
+  }
+}
+
+// ============================================================
+// API
+// ============================================================
+
+async function apiRequest(
+  endpoint: string,
+  options: RequestInit = {}
+) {
+  const token = getToken();
+
+  const response = await fetch(
+    `${API_BASE}${endpoint}`,
+    {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : {}),
+        ...(options.headers || {}),
+      },
+    }
   );
 
-  const [message, setMessage] = useState('');
+  const text = await response.text();
 
-  const [reference, setReference] =
-    useState('');
+  let data: any = {};
 
-  const [submitted, setSubmitted] =
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = {
+      message: text,
+    };
+  }
+
+  if (!response.ok) {
+    const error = new Error(
+      data?.message ||
+        data?.error ||
+        'Something went wrong. Please try again.'
+    );
+
+    throw error;
+  }
+
+  return data;
+}
+
+// ============================================================
+// COMPONENT
+// ============================================================
+
+export default function Support() {
+  const navigate = useNavigate();
+
+  const { darkMode: isDarkMode } = useTheme();
+
+  const colors = isDarkMode ? DARK : LIGHT;
+
+  // ----------------------------------------------------------
+  // STATE
+  // ----------------------------------------------------------
+
+  const [categories, setCategories] = useState<
+    SupportCategory[]
+  >([]);
+
+  const [tickets, setTickets] = useState<
+    SupportTicket[]
+  >([]);
+
+  const [selectedTicket, setSelectedTicket] =
+    useState<SupportTicket | null>(null);
+
+  const [loading, setLoading] = useState(true);
+
+  const [ticketLoading, setTicketLoading] =
     useState(false);
 
-  const config = supportConfig[supportType];
+  const [creating, setCreating] =
+    useState(false);
 
-  const handleTypeChange = (
-    type: SupportType
-  ) => {
-    setSupportType(type);
-    setSubject(supportConfig[type].subject);
-    setSubmitted(false);
-  };
+  const [sending, setSending] =
+    useState(false);
 
-  const handleSubmit = (
-    event: FormEvent
-  ) => {
-    event.preventDefault();
+  const [error, setError] = useState('');
 
-    /*
-     * The database-backed support ticket system will be
-     * connected after the planned database upgrade.
-     *
-     * For today, we only validate the frontend form.
-     */
-    if (!message.trim()) {
+  const [success, setSuccess] = useState('');
+
+  const [showCreateDialog, setShowCreateDialog] =
+    useState(false);
+
+  const [showTicketDialog, setShowTicketDialog] =
+    useState(false);
+
+  // ----------------------------------------------------------
+  // FORM
+  // ----------------------------------------------------------
+
+  const [categoryId, setCategoryId] =
+    useState('');
+
+  const [subject, setSubject] =
+    useState('');
+
+  const [description, setDescription] =
+    useState('');
+
+  const [transactionId, setTransactionId] =
+    useState('');
+
+  const [reply, setReply] =
+    useState('');
+
+  // ==========================================================
+  // LOAD CATEGORIES
+  // ==========================================================
+
+  async function loadCategories() {
+    try {
+      const data = await apiRequest(
+        '/support/categories'
+      );
+
+      const list =
+        data?.data ||
+        data?.categories ||
+        [];
+
+      if (Array.isArray(list)) {
+        setCategories(list);
+      }
+    } catch {
+      // Categories may not have a dedicated endpoint yet.
+      // The fallback categories below keep the customer UI usable.
+      setCategories([]);
+    }
+  }
+
+  // ==========================================================
+  // LOAD TICKETS
+  // ==========================================================
+
+  async function loadTickets() {
+    setLoading(true);
+    setError('');
+
+    try {
+      const data = await apiRequest(
+        '/support/tickets'
+      );
+
+      const list =
+        data?.data ||
+        data?.tickets ||
+        [];
+
+      setTickets(
+        Array.isArray(list) ? list : []
+      );
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          'Unable to load your support tickets.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ==========================================================
+  // INITIAL LOAD
+  // ==========================================================
+
+  useEffect(() => {
+    const token = getToken();
+
+    if (!token) {
+      navigate('/login');
       return;
     }
 
-    setSubmitted(true);
-  };
+    loadCategories();
+    loadTickets();
+  }, []);
+
+  // ==========================================================
+  // FALLBACK CATEGORIES
+  // ==========================================================
+
+  const availableCategories = useMemo(() => {
+    if (categories.length > 0) {
+      return categories;
+    }
+
+    return [
+      {
+        id: 'account',
+        name: 'Account',
+      },
+      {
+        id: 'login_security',
+        name: 'Login & Security',
+      },
+      {
+        id: 'transfer',
+        name: 'Transfer',
+      },
+      {
+        id: 'airtime_data',
+        name: 'Airtime & Data',
+      },
+      {
+        id: 'bills',
+        name: 'Bills',
+      },
+      {
+        id: 'gift_cards',
+        name: 'Gift Cards',
+      },
+      {
+        id: 'kyc',
+        name: 'KYC & Verification',
+      },
+      {
+        id: 'card_pos',
+        name: 'Card / POS',
+      },
+      {
+        id: 'other',
+        name: 'Other',
+      },
+    ];
+  }, [categories]);
+
+  // ==========================================================
+  // CREATE TICKET
+  // ==========================================================
+
+  async function handleCreateTicket(
+    event: FormEvent
+  ) {
+    event.preventDefault();
+
+    setError('');
+    setSuccess('');
+
+    if (!categoryId) {
+      setError(
+        'Please select a support category.'
+      );
+      return;
+    }
+
+    if (!subject.trim()) {
+      setError(
+        'Please enter a subject.'
+      );
+      return;
+    }
+
+    if (!description.trim()) {
+      setError(
+        'Please describe the issue.'
+      );
+      return;
+    }
+
+    setCreating(true);
+
+    try {
+      const data = await apiRequest(
+        '/support/tickets',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            category_id: categoryId,
+            subject: subject.trim(),
+            description: description.trim(),
+            transaction_id:
+              transactionId.trim() || null,
+          }),
+        }
+      );
+
+      const createdTicket =
+        data?.data ||
+        data?.ticket ||
+        null;
+
+      setShowCreateDialog(false);
+
+      setCategoryId('');
+      setSubject('');
+      setDescription('');
+      setTransactionId('');
+
+      setSuccess(
+        createdTicket?.ticket_number
+          ? `Support ticket ${createdTicket.ticket_number} has been created.`
+          : 'Your support ticket has been created successfully.'
+      );
+
+      await loadTickets();
+
+      if (createdTicket?.id) {
+        await openTicket(
+          createdTicket.id,
+          false
+        );
+      }
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          'Unable to create your support ticket.'
+      );
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  // ==========================================================
+  // OPEN TICKET
+  // ==========================================================
+
+  async function openTicket(
+    ticketId: string,
+    showDialog = true
+  ) {
+    setTicketLoading(true);
+    setError('');
+
+    try {
+      const data = await apiRequest(
+        `/support/tickets/${ticketId}`
+      );
+
+      const ticket =
+        data?.data ||
+        data?.ticket ||
+        null;
+
+      if (!ticket) {
+        throw new Error(
+          'Support ticket could not be loaded.'
+        );
+      }
+
+      setSelectedTicket(ticket);
+
+      if (showDialog) {
+        setShowTicketDialog(true);
+      }
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          'Unable to load this support ticket.'
+      );
+    } finally {
+      setTicketLoading(false);
+    }
+  }
+
+  // ==========================================================
+  // REPLY TO TICKET
+  // ==========================================================
+
+  async function handleReply(
+    event: FormEvent
+  ) {
+    event.preventDefault();
+
+    if (!selectedTicket) return;
+
+    if (!reply.trim()) {
+      return;
+    }
+
+    setSending(true);
+    setError('');
+
+    try {
+      await apiRequest(
+        `/support/tickets/${selectedTicket.id}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            message: reply.trim(),
+          }),
+        }
+      );
+
+      setReply('');
+
+      await openTicket(
+        selectedTicket.id,
+        false
+      );
+
+      await loadTickets();
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          'Unable to send your reply.'
+      );
+    } finally {
+      setSending(false);
+    }
+  }
+
+  // ==========================================================
+  // CLOSE TICKET
+  // ==========================================================
+
+  function closeTicketDialog() {
+    setShowTicketDialog(false);
+    setSelectedTicket(null);
+    setReply('');
+  }
+
+  // ==========================================================
+  // COUNTERS
+  // ==========================================================
+
+  const openCount = tickets.filter(
+    (ticket) =>
+      ticket.status === 'open' ||
+      ticket.status === 'in_progress'
+  ).length;
+
+  const pendingCount = tickets.filter(
+    (ticket) =>
+      ticket.status === 'pending'
+  ).length;
+
+  const resolvedCount = tickets.filter(
+    (ticket) =>
+      ticket.status === 'resolved' ||
+      ticket.status === 'closed'
+  ).length;
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
 
   return (
-    <div style={styles.page}>
-      <div style={styles.container}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        backgroundColor: colors.background,
+        color: colors.text,
+        pb: 8,
+      }}
+    >
+      <Container
+        maxWidth="md"
+        sx={{
+          pt: {
+            xs: 2,
+            sm: 4,
+          },
+        }}
+      >
+        {/* ====================================================
+            HEADER
+        ==================================================== */}
 
-        {/* HEADER */}
-
-        <header style={styles.header}>
-          <button
-            type="button"
-            onClick={() => navigate('/help-center')}
-            style={styles.backButton}
-            aria-label="Back to Help Center"
+        <Stack
+          direction="row"
+          alignItems="center"
+          justifyContent="space-between"
+          spacing={2}
+          sx={{
+            mb: 3,
+          }}
+        >
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1.5}
           >
-            ←
-          </button>
+            <IconButton
+              onClick={() => navigate(-1)}
+              sx={{
+                color: colors.text,
+                backgroundColor:
+                  colors.surface,
+                border: `1px solid ${colors.border}`,
+                '&:hover': {
+                  backgroundColor:
+                    colors.surfaceAlt,
+                },
+              }}
+            >
+              <ArrowBack />
+            </IconButton>
 
-          <div>
-            <div style={styles.eyebrow}>
-              ZENIMONIES
-            </div>
+            <Box>
+              <Typography
+                variant="h5"
+                fontWeight={800}
+                sx={{
+                  color: colors.text,
+                }}
+              >
+                Customer Care
+              </Typography>
 
-            <h1 style={styles.title}>
-              Support
-            </h1>
+              <Typography
+                variant="body2"
+                sx={{
+                  color:
+                    colors.textSecondary,
+                  mt: 0.3,
+                }}
+              >
+                We're here to help
+              </Typography>
+            </Box>
+          </Stack>
 
-            <p style={styles.subtitle}>
-              We're here to help with your account and
-              transactions.
-            </p>
-          </div>
-        </header>
+          <IconButton
+            onClick={loadTickets}
+            disabled={loading}
+            sx={{
+              color: colors.primary,
+              backgroundColor:
+                colors.surface,
+              border: `1px solid ${colors.border}`,
+            }}
+          >
+            <Refresh />
+          </IconButton>
+        </Stack>
 
-        {/* SUPPORT TYPE */}
+        {/* ====================================================
+            ALERTS
+        ==================================================== */}
 
-        <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>
-            What do you need help with?
-          </h2>
+        {error && (
+          <Alert
+            severity="error"
+            onClose={() => setError('')}
+            sx={{
+              mb: 2,
+              borderRadius: 2,
+            }}
+          >
+            {error}
+          </Alert>
+        )}
 
-          <div style={styles.typeGrid}>
-            {(
-              Object.keys(
-                supportConfig
-              ) as SupportType[]
-            ).map((type) => {
-              const item =
-                supportConfig[type];
+        {success && (
+          <Alert
+            severity="success"
+            onClose={() => setSuccess('')}
+            sx={{
+              mb: 2,
+              borderRadius: 2,
+            }}
+          >
+            {success}
+          </Alert>
+        )}
 
-              const active =
-                supportType === type;
+        {/* ====================================================
+            HELP CARD
+        ==================================================== */}
 
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() =>
-                    handleTypeChange(type)
-                  }
-                  style={{
-                    ...styles.typeButton,
-                    ...(active
-                      ? styles.typeButtonActive
-                      : {}),
+        <Card
+          elevation={0}
+          sx={{
+            mb: 2.5,
+            borderRadius: 3,
+            background:
+              isDarkMode
+                ? 'linear-gradient(135deg, #0f2a1d 0%, #102019 100%)'
+                : 'linear-gradient(135deg, #087443 0%, #075c36 100%)',
+            color: '#ffffff',
+            overflow: 'hidden',
+          }}
+        >
+          <CardContent
+            sx={{
+              p: {
+                xs: 2.5,
+                sm: 3,
+              },
+            }}
+          >
+            <Stack
+              direction="row"
+              spacing={2}
+              alignItems="center"
+            >
+              <Box
+                sx={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 2.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor:
+                    'rgba(255,255,255,0.14)',
+                }}
+              >
+                <SupportAgent
+                  sx={{
+                    fontSize: 30,
+                  }}
+                />
+              </Box>
+
+              <Box>
+                <Typography
+                  fontWeight={800}
+                  fontSize={18}
+                >
+                  Need help?
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  sx={{
+                    opacity: 0.88,
+                    mt: 0.4,
                   }}
                 >
-                  <span
-                    style={{
-                      ...styles.typeIcon,
-                      ...(active
-                        ? styles.typeIconActive
-                        : {}),
-                    }}
-                  >
-                    {item.icon}
-                  </span>
+                  Create a support ticket and our
+                  customer care team will assist you.
+                </Typography>
+              </Box>
+            </Stack>
 
-                  <span
-                    style={{
-                      ...styles.typeText,
-                      ...(active
-                        ? styles.typeTextActive
-                        : {}),
-                    }}
-                  >
-                    {item.title}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={<TicketOutlined />}
+              onClick={() =>
+                setShowCreateDialog(true)
+              }
+              sx={{
+                mt: 2.5,
+                height: 48,
+                borderRadius: 2,
+                backgroundColor: '#ffffff',
+                color: '#087443',
+                fontWeight: 800,
+                '&:hover': {
+                  backgroundColor: '#f1f7f3',
+                },
+              }}
+            >
+              Create Support Ticket
+            </Button>
+          </CardContent>
+        </Card>
 
-        {/* FORM */}
+        {/* ====================================================
+            SUMMARY
+        ==================================================== */}
 
-        {!submitted ? (
-          <form
-            onSubmit={handleSubmit}
-            style={styles.card}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(3, 1fr)',
+            },
+            gap: 1.5,
+            mb: 3,
+          }}
+        >
+          <SummaryCard
+            icon={<ChatBubbleOutline />}
+            label="Open"
+            value={openCount}
+            colors={colors}
+          />
+
+          <SummaryCard
+            icon={<HelpOutline />}
+            label="Pending"
+            value={pendingCount}
+            colors={colors}
+          />
+
+          <SummaryCard
+            icon={<CheckCircleOutline />}
+            label="Resolved"
+            value={resolvedCount}
+            colors={colors}
+          />
+        </Box>
+
+        {/* ====================================================
+            TICKETS
+        ==================================================== */}
+
+        <Typography
+          variant="h6"
+          fontWeight={800}
+          sx={{
+            mb: 1.5,
+            color: colors.text,
+          }}
+        >
+          My Support Tickets
+        </Typography>
+
+        {loading ? (
+          <Box
+            sx={{
+              py: 8,
+              display: 'flex',
+              justifyContent: 'center',
+            }}
           >
-            <div style={styles.formIntro}>
-              <div style={styles.formIcon}>
-                {config.icon}
-              </div>
+            <CircularProgress
+              sx={{
+                color: colors.primary,
+              }}
+            />
+          </Box>
+        ) : tickets.length === 0 ? (
+          <Paper
+            elevation={0}
+            sx={{
+              p: 4,
+              textAlign: 'center',
+              borderRadius: 3,
+              backgroundColor:
+                colors.surface,
+              border: `1px solid ${colors.border}`,
+            }}
+          >
+            <Box
+              sx={{
+                width: 64,
+                height: 64,
+                mx: 'auto',
+                mb: 2,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor:
+                  isDarkMode
+                    ? '#173025'
+                    : '#eaf5ef',
+              }}
+            >
+              <SupportAgent
+                sx={{
+                  fontSize: 32,
+                  color: colors.primary,
+                }}
+              />
+            </Box>
 
-              <div>
-                <h2 style={styles.formTitle}>
-                  {config.title}
-                </h2>
+            <Typography
+              fontWeight={800}
+              sx={{
+                color: colors.text,
+                mb: 0.7,
+              }}
+            >
+              No support tickets yet
+            </Typography>
 
-                <p style={styles.formDescription}>
-                  {config.description}
-                </p>
-              </div>
-            </div>
+            <Typography
+              variant="body2"
+              sx={{
+                color:
+                  colors.textSecondary,
+                maxWidth: 420,
+                mx: 'auto',
+              }}
+            >
+              If you need help with your
+              account or a transaction, create
+              a support ticket and our team will
+              assist you.
+            </Typography>
+          </Paper>
+        ) : (
+          <Stack spacing={1.5}>
+            {tickets.map((ticket) => (
+              <TicketCard
+                key={ticket.id}
+                ticket={ticket}
+                colors={colors}
+                onClick={() =>
+                  openTicket(ticket.id)
+                }
+              />
+            ))}
+          </Stack>
+        )}
 
-            <label style={styles.label}>
-              Subject
-            </label>
+        {/* ====================================================
+            FAQ
+        ==================================================== */}
 
-            <input
-              type="text"
+        <Paper
+          elevation={0}
+          sx={{
+            mt: 3,
+            p: 2.5,
+            borderRadius: 3,
+            backgroundColor:
+              colors.surface,
+            border: `1px solid ${colors.border}`,
+          }}
+        >
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="center"
+          >
+            <HelpOutline
+              sx={{
+                color: colors.primary,
+              }}
+            />
+
+            <Box>
+              <Typography
+                fontWeight={800}
+                sx={{
+                  color: colors.text,
+                }}
+              >
+                Need quick answers?
+              </Typography>
+
+              <Typography
+                variant="body2"
+                sx={{
+                  color:
+                    colors.textSecondary,
+                  mt: 0.3,
+                }}
+              >
+                We're building the ZENIMONIES
+                Help Centre with answers to
+                common questions.
+              </Typography>
+            </Box>
+          </Stack>
+        </Paper>
+      </Container>
+
+      {/* ======================================================
+          CREATE TICKET DIALOG
+      ====================================================== */}
+
+      <Dialog
+        open={showCreateDialog}
+        onClose={() => {
+          if (!creating) {
+            setShowCreateDialog(false);
+          }
+        }}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            backgroundColor:
+              colors.surface,
+            color: colors.text,
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 800,
+            color: colors.text,
+            pb: 1,
+          }}
+        >
+          Create Support Ticket
+        </DialogTitle>
+
+        <DialogContent>
+          <Typography
+            variant="body2"
+            sx={{
+              color:
+                colors.textSecondary,
+              mb: 2.5,
+            }}
+          >
+            Tell us what you need help with.
+            Please do not include your password,
+            PIN, OTP or other secret security
+            information.
+          </Typography>
+
+          <Stack spacing={2}>
+            <Box>
+              <Typography
+                variant="body2"
+                fontWeight={700}
+                sx={{
+                  mb: 0.7,
+                  color: colors.text,
+                }}
+              >
+                Category
+              </Typography>
+
+              <Select
+                fullWidth
+                value={categoryId}
+                displayEmpty
+                onChange={(event) =>
+                  setCategoryId(
+                    event.target.value
+                  )
+                }
+                sx={{
+                  color: colors.text,
+                  backgroundColor:
+                    colors.input,
+                  borderRadius: 2,
+                }}
+              >
+                <MenuItem value="">
+                  Select a category
+                </MenuItem>
+
+                {availableCategories.map(
+                  (category) => (
+                    <MenuItem
+                      key={category.id}
+                      value={category.id}
+                    >
+                      {category.name}
+                    </MenuItem>
+                  )
+                )}
+              </Select>
+            </Box>
+
+            <TextField
+              fullWidth
+              label="Subject"
+              placeholder="What do you need help with?"
               value={subject}
               onChange={(event) =>
                 setSubject(event.target.value)
               }
-              style={styles.input}
-              required
+              sx={inputStyles(colors)}
             />
 
-            <label style={styles.label}>
-              Transaction reference
-              <span style={styles.optional}>
-                Optional
-              </span>
-            </label>
-
-            <input
-              type="text"
-              value={reference}
+            <TextField
+              fullWidth
+              multiline
+              minRows={5}
+              label="Describe the issue"
+              placeholder="Please explain what happened..."
+              value={description}
               onChange={(event) =>
-                setReference(event.target.value)
+                setDescription(
+                  event.target.value
+                )
               }
-              placeholder="e.g. ZTRX-XXXXXXXX"
-              style={styles.input}
+              sx={inputStyles(colors)}
             />
 
-            <label style={styles.label}>
-              Message
-            </label>
-
-            <textarea
-              value={message}
+            <TextField
+              fullWidth
+              label="Transaction reference (optional)"
+              placeholder="e.g. ZEN..."
+              value={transactionId}
               onChange={(event) =>
-                setMessage(event.target.value)
+                setTransactionId(
+                  event.target.value
+                )
               }
-              placeholder={config.placeholder}
-              style={styles.textarea}
-              rows={6}
-              required
+              sx={inputStyles(colors)}
             />
+          </Stack>
+        </DialogContent>
 
-            <div style={styles.securityNotice}>
-              <span style={styles.noticeIcon}>
-                🔒
-              </span>
+        <DialogActions
+          sx={{
+            p: 2,
+            pt: 0.5,
+          }}
+        >
+          <Button
+            onClick={() =>
+              setShowCreateDialog(false)
+            }
+            disabled={creating}
+            sx={{
+              color: colors.textSecondary,
+              fontWeight: 700,
+            }}
+          >
+            Cancel
+          </Button>
 
-              <span>
-                Never include your password, transaction
-                PIN, OTP or passkey in a support message.
-              </span>
-            </div>
+          <Button
+            variant="contained"
+            onClick={handleCreateTicket}
+            disabled={creating}
+            startIcon={
+              creating ? (
+                <CircularProgress
+                  size={18}
+                  color="inherit"
+                />
+              ) : (
+                <Send />
+              )
+            }
+            sx={{
+              minWidth: 130,
+              backgroundColor:
+                colors.primary,
+              '&:hover': {
+                backgroundColor:
+                  colors.primaryDark,
+              },
+              fontWeight: 800,
+            }}
+          >
+            {creating
+              ? 'Creating...'
+              : 'Submit Ticket'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-            <button
-              type="submit"
-              style={{
-                ...styles.submitButton,
-                opacity: message.trim()
-                  ? 1
-                  : 0.55,
+      {/* ======================================================
+          TICKET CONVERSATION DIALOG
+      ====================================================== */}
+
+      <Dialog
+        open={showTicketDialog}
+        onClose={closeTicketDialog}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            backgroundColor:
+              colors.surface,
+            color: colors.text,
+            maxHeight: '90vh',
+          },
+        }}
+      >
+        {ticketLoading &&
+        !selectedTicket ? (
+          <Box
+            sx={{
+              p: 6,
+              display: 'flex',
+              justifyContent: 'center',
+            }}
+          >
+            <CircularProgress
+              sx={{
+                color: colors.primary,
               }}
-              disabled={!message.trim()}
+            />
+          </Box>
+        ) : selectedTicket ? (
+          <>
+            <DialogTitle
+              sx={{
+                pb: 1,
+              }}
             >
-              Send Support Request
-            </button>
+              <Stack
+                direction="row"
+                alignItems="flex-start"
+                justifyContent="space-between"
+                spacing={2}
+              >
+                <Box>
+                  <Typography
+                    fontWeight={800}
+                    sx={{
+                      color: colors.text,
+                    }}
+                  >
+                    {selectedTicket.subject}
+                  </Typography>
 
-            <p style={styles.comingSoonText}>
-              Support ticket submission will be connected
-              to the ZENIMONIES support system after the
-              database upgrade.
-            </p>
-          </form>
-        ) : (
-          <section style={styles.successCard}>
-            <div style={styles.successIcon}>
-              ✓
-            </div>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color:
+                        colors.textSecondary,
+                    }}
+                  >
+                    {selectedTicket.ticket_number}
+                  </Typography>
+                </Box>
 
-            <h2 style={styles.successTitle}>
-              Request Prepared
-            </h2>
+                <IconButton
+                  onClick={
+                    closeTicketDialog
+                  }
+                  sx={{
+                    color:
+                      colors.textSecondary,
+                  }}
+                >
+                  <Close />
+                </IconButton>
+              </Stack>
 
-            <p style={styles.successText}>
-              Your support information has been captured
-              on this page.
-            </p>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  mt: 1.5,
+                }}
+              >
+                <Chip
+                  label={statusLabel(
+                    selectedTicket.status
+                  )}
+                  color={
+                    statusColor(
+                      selectedTicket.status
+                    ) as any
+                  }
+                  size="small"
+                />
 
-            <div style={styles.pendingNotice}>
-              <strong>
-                Ticket system coming next
-              </strong>
+                {selectedTicket.priority && (
+                  <Chip
+                    label={
+                      selectedTicket.priority
+                    }
+                    size="small"
+                    variant="outlined"
+                    sx={{
+                      color: colors.text,
+                      borderColor:
+                        colors.border,
+                    }}
+                  />
+                )}
+              </Stack>
+            </DialogTitle>
 
-              <span>
-                The actual support ticket submission,
-                reference number and Admin Dashboard
-                workflow will be connected during the
-                planned database upgrade.
-              </span>
-            </div>
+            <Divider
+              sx={{
+                borderColor:
+                  colors.border,
+              }}
+            />
 
-            <button
-              type="button"
-              onClick={() =>
-                navigate('/help-center')
-              }
-              style={styles.primaryButton}
+            <DialogContent
+              sx={{
+                pt: 2,
+              }}
             >
-              Back to Help Center
-            </button>
-          </section>
-        )}
+              {selectedTicket.description && (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    mb: 2,
+                    borderRadius: 2,
+                    backgroundColor:
+                      colors.surfaceAlt,
+                    border: `1px solid ${colors.border}`,
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: colors.text,
+                      whiteSpace:
+                        'pre-wrap',
+                    }}
+                  >
+                    {
+                      selectedTicket.description
+                    }
+                  </Typography>
+                </Paper>
+              )}
 
-        {/* SECURITY */}
+              <Stack spacing={1.5}>
+                {(
+                  selectedTicket.messages ||
+                  []
+                ).map((message) => {
+                  const isCustomer =
+                    message.sender_type ===
+                      'customer' ||
+                    message.sender_type ===
+                      'user';
 
-        <section style={styles.securityCard}>
-          <div style={styles.securityIcon}>
-            🔐
-          </div>
+                  return (
+                    <Box
+                      key={message.id}
+                      sx={{
+                        display: 'flex',
+                        justifyContent:
+                          isCustomer
+                            ? 'flex-end'
+                            : 'flex-start',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          maxWidth:
+                            '85%',
+                        }}
+                      >
+                        <Paper
+                          elevation={0}
+                          sx={{
+                            p: 1.7,
+                            borderRadius: 2.5,
+                            backgroundColor:
+                              isCustomer
+                                ? colors.primary
+                                : colors.surfaceAlt,
+                            color:
+                              isCustomer
+                                ? '#ffffff'
+                                : colors.text,
+                            border: isCustomer
+                              ? 'none'
+                              : `1px solid ${colors.border}`,
+                          }}
+                        >
+                          {!isCustomer &&
+                            message.sender_name && (
+                              <Typography
+                                variant="caption"
+                                fontWeight={800}
+                                sx={{
+                                  display:
+                                    'block',
+                                  mb: 0.5,
+                                }}
+                              >
+                                {
+                                  message.sender_name
+                                }
+                              </Typography>
+                            )}
 
-          <div>
-            <h3 style={styles.securityTitle}>
-              Keep your account safe
-            </h3>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              whiteSpace:
+                                'pre-wrap',
+                            }}
+                          >
+                            {message.message}
+                          </Typography>
+                        </Paper>
 
-            <p style={styles.securityText}>
-              ZENIMONIES will never require you to
-              disclose your password, transaction PIN,
-              OTP or passkey through a support request.
-            </p>
-          </div>
-        </section>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display:
+                              'block',
+                            mt: 0.4,
+                            px: 0.5,
+                            color:
+                              colors.textSecondary,
+                            textAlign:
+                              isCustomer
+                                ? 'right'
+                                : 'left',
+                          }}
+                        >
+                          {formatDate(
+                            message.created_at
+                          )}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Stack>
 
-        <div style={styles.footer}>
-          <strong>ZENIMONIES</strong>
-          <span>Secure banking made simple.</span>
-        </div>
-      </div>
-    </div>
+              {selectedTicket.status !==
+                'closed' && (
+                <Box
+                  component="form"
+                  onSubmit={handleReply}
+                  sx={{
+                    mt: 2.5,
+                  }}
+                >
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={3}
+                    placeholder="Write a reply..."
+                    value={reply}
+                    onChange={(event) =>
+                      setReply(
+                        event.target.value
+                      )
+                    }
+                    sx={inputStyles(colors)}
+                  />
+
+                  <Button
+                    type="submit"
+                    fullWidth
+                    variant="contained"
+                    disabled={
+                      sending ||
+                      !reply.trim()
+                    }
+                    startIcon={
+                      sending ? (
+                        <CircularProgress
+                          size={18}
+                          color="inherit"
+                        />
+                      ) : (
+                        <Send />
+                      )
+                    }
+                    sx={{
+                      mt: 1.2,
+                      height: 46,
+                      backgroundColor:
+                        colors.primary,
+                      fontWeight: 800,
+                      '&:hover': {
+                        backgroundColor:
+                          colors.primaryDark,
+                      },
+                    }}
+                  >
+                    {sending
+                      ? 'Sending...'
+                      : 'Send Reply'}
+                  </Button>
+                </Box>
+              )}
+
+              {selectedTicket.status ===
+                'closed' && (
+                <Alert
+                  severity="info"
+                  sx={{
+                    mt: 2,
+                  }}
+                >
+                  This support ticket is
+                  closed. Please create a new
+                  ticket if you need further
+                  assistance.
+                </Alert>
+              )}
+            </DialogContent>
+          </>
+        ) : null}
+      </Dialog>
+    </Box>
   );
-};
+}
 
-const styles: Record<
-  string,
-  React.CSSProperties
-> = {
-  page: {
-    minHeight: '100vh',
-    background: '#f6faf8',
-    color: '#14251d',
-    padding: '20px 16px 50px',
-  },
+// ============================================================
+// SUMMARY CARD
+// ============================================================
 
-  container: {
-    width: '100%',
-    maxWidth: 760,
-    margin: '0 auto',
-  },
+function SummaryCard({
+  icon,
+  label,
+  value,
+  colors,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  colors: typeof LIGHT;
+}) {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        p: 2,
+        borderRadius: 2.5,
+        backgroundColor:
+          colors.surface,
+        border: `1px solid ${colors.border}`,
+      }}
+    >
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1.3}
+      >
+        <Box
+          sx={{
+            width: 40,
+            height: 40,
+            borderRadius: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor:
+              colors.surfaceAlt,
+            color: colors.primary,
+          }}
+        >
+          {icon}
+        </Box>
 
-  header: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 14,
-    marginBottom: 22,
-  },
+        <Box>
+          <Typography
+            variant="h6"
+            fontWeight={800}
+            sx={{
+              color: colors.text,
+              lineHeight: 1,
+            }}
+          >
+            {value}
+          </Typography>
 
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    border: '1px solid #dcebe3',
-    background: '#ffffff',
-    color: '#176b45',
-    fontSize: 25,
-    cursor: 'pointer',
-    flexShrink: 0,
-  },
+          <Typography
+            variant="caption"
+            sx={{
+              color:
+                colors.textSecondary,
+            }}
+          >
+            {label}
+          </Typography>
+        </Box>
+      </Stack>
+    </Paper>
+  );
+}
 
-  eyebrow: {
-    color: '#15935c',
-    fontSize: 12,
-    fontWeight: 900,
-    letterSpacing: 1.5,
-    marginBottom: 4,
-  },
+// ============================================================
+// TICKET CARD
+// ============================================================
 
-  title: {
-    margin: 0,
-    fontSize: 'clamp(28px, 6vw, 38px)',
-    fontWeight: 900,
-    letterSpacing: -0.8,
-  },
+function TicketCard({
+  ticket,
+  colors,
+  onClick,
+}: {
+  ticket: SupportTicket;
+  colors: typeof LIGHT;
+  onClick: () => void;
+}) {
+  return (
+    <Card
+      elevation={0}
+      onClick={onClick}
+      sx={{
+        cursor: 'pointer',
+        borderRadius: 2.5,
+        backgroundColor:
+          colors.surface,
+        border: `1px solid ${colors.border}`,
+        transition: '0.2s ease',
+        '&:hover': {
+          transform:
+            'translateY(-1px)',
+          borderColor:
+            colors.primary,
+        },
+      }}
+    >
+      <CardContent
+        sx={{
+          p: 2,
+          '&:last-child': {
+            pb: 2,
+          },
+        }}
+      >
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="flex-start"
+          spacing={2}
+        >
+          <Box
+            sx={{
+              minWidth: 0,
+            }}
+          >
+            <Typography
+              fontWeight={800}
+              sx={{
+                color: colors.text,
+                mb: 0.5,
+              }}
+            >
+              {ticket.subject}
+            </Typography>
 
-  subtitle: {
-    margin: '7px 0 0',
-    color: '#6d7d75',
-    fontSize: 14,
-    lineHeight: 1.5,
-  },
+            <Typography
+              variant="caption"
+              sx={{
+                color:
+                  colors.textSecondary,
+              }}
+            >
+              {ticket.ticket_number}
+            </Typography>
+          </Box>
 
-  card: {
-    background: '#ffffff',
-    border: '1px solid #dfece5',
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 14,
-    boxShadow:
-      '0 5px 18px rgba(26,93,61,0.04)',
-  },
+          <Chip
+            label={statusLabel(
+              ticket.status
+            )}
+            color={
+              statusColor(
+                ticket.status
+              ) as any
+            }
+            size="small"
+          />
+        </Stack>
 
-  sectionTitle: {
-    margin: '0 0 13px',
-    fontSize: 17,
-    fontWeight: 850,
-  },
+        <Divider
+          sx={{
+            my: 1.5,
+            borderColor:
+              colors.border,
+          }}
+        />
 
-  typeGrid: {
-    display: 'grid',
-    gridTemplateColumns:
-      'repeat(2, minmax(0, 1fr))',
-    gap: 9,
-  },
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          spacing={2}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              color:
+                colors.textSecondary,
+            }}
+          >
+            {ticket.category_name ||
+              'Customer Support'}
+          </Typography>
 
-  typeButton: {
-    border: '1px solid #dfebe5',
-    background: '#fbfdfc',
-    borderRadius: 13,
-    padding: 11,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 9,
-    cursor: 'pointer',
-    textAlign: 'left',
-  },
+          <Typography
+            variant="caption"
+            sx={{
+              color:
+                colors.textSecondary,
+            }}
+          >
+            {formatDate(
+              ticket.updated_at ||
+                ticket.created_at
+            )}
+          </Typography>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
 
-  typeButtonActive: {
-    borderColor: '#15935c',
-    background: '#edf8f2',
-  },
+// ============================================================
+// INPUT STYLES
+// ============================================================
 
-  typeIcon: {
-    width: 35,
-    height: 35,
-    borderRadius: 10,
-    background: '#edf5f1',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 17,
-    flexShrink: 0,
-  },
+function inputStyles(
+  colors: typeof LIGHT
+) {
+  return {
+    '& .MuiInputLabel-root': {
+      color: colors.textSecondary,
+    },
 
-  typeIconActive: {
-    background: '#d7f1e3',
-  },
+    '& .MuiInputLabel-root.Mui-focused': {
+      color: colors.primary,
+    },
 
-  typeText: {
-    color: '#34463e',
-    fontSize: 12,
-    fontWeight: 750,
-    lineHeight: 1.3,
-  },
+    '& .MuiOutlinedInput-root': {
+      color: colors.text,
+      backgroundColor:
+        colors.input,
 
-  typeTextActive: {
-    color: '#087c48',
-  },
+      '& fieldset': {
+        borderColor:
+          colors.border,
+      },
 
-  formIntro: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 19,
-  },
+      '&:hover fieldset': {
+        borderColor:
+          colors.primary,
+      },
 
-  formIcon: {
-    width: 45,
-    height: 45,
-    borderRadius: 13,
-    background: '#edf8f2',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 22,
-    flexShrink: 0,
-  },
+      '&.Mui-focused fieldset': {
+        borderColor:
+          colors.primary,
+      },
+    },
 
-  formTitle: {
-    margin: 0,
-    fontSize: 18,
-    fontWeight: 850,
-  },
-
-  formDescription: {
-    margin: '4px 0 0',
-    color: '#718079',
-    fontSize: 13,
-    lineHeight: 1.45,
-  },
-
-  label: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 7,
-    marginBottom: 7,
-    color: '#263b32',
-    fontSize: 13,
-    fontWeight: 800,
-  },
-
-  optional: {
-    color: '#8a9892',
-    fontSize: 11,
-    fontWeight: 600,
-  },
-
-  input: {
-    width: '100%',
-    height: 46,
-    border: '1px solid #d9e8e0',
-    borderRadius: 11,
-    outline: 'none',
-    padding: '0 13px',
-    fontSize: 14,
-    color: '#172c22',
-    background: '#fbfdfc',
-    marginBottom: 15,
-    boxSizing: 'border-box',
-  },
-
-  textarea: {
-    width: '100%',
-    border: '1px solid #d9e8e0',
-    borderRadius: 11,
-    outline: 'none',
-    padding: '12px 13px',
-    fontSize: 14,
-    lineHeight: 1.5,
-    color: '#172c22',
-    background: '#fbfdfc',
-    resize: 'vertical',
-    minHeight: 130,
-    boxSizing: 'border-box',
-    marginBottom: 13,
-    fontFamily: 'inherit',
-  },
-
-  securityNotice: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 8,
-    padding: 11,
-    borderRadius: 11,
-    background: '#f8faf9',
-    border: '1px solid #e4ece8',
-    color: '#68766f',
-    fontSize: 11,
-    lineHeight: 1.45,
-    marginBottom: 15,
-  },
-
-  noticeIcon: {
-    flexShrink: 0,
-  },
-
-  submitButton: {
-    width: '100%',
-    border: 'none',
-    borderRadius: 12,
-    background: '#15935c',
-    color: '#ffffff',
-    padding: '13px 16px',
-    fontSize: 14,
-    fontWeight: 850,
-    cursor: 'pointer',
-  },
-
-  comingSoonText: {
-    margin: '10px 0 0',
-    color: '#89968f',
-    textAlign: 'center',
-    fontSize: 10,
-    lineHeight: 1.4,
-  },
-
-  successCard: {
-    background: '#ffffff',
-    border: '1px solid #dfece5',
-    borderRadius: 18,
-    padding: '34px 20px',
-    textAlign: 'center',
-    marginBottom: 14,
-  },
-
-  successIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: '50%',
-    background: '#e5f7ed',
-    color: '#15935c',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    margin: '0 auto 15px',
-    fontSize: 30,
-    fontWeight: 900,
-  },
-
-  successTitle: {
-    margin: 0,
-    fontSize: 22,
-    fontWeight: 900,
-  },
-
-  successText: {
-    margin: '8px 0 17px',
-    color: '#718079',
-    fontSize: 14,
-  },
-
-  pendingNotice: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 5,
-    textAlign: 'left',
-    padding: 13,
-    borderRadius: 12,
-    background: '#f5faf7',
-    border: '1px solid #dcebe3',
-    color: '#66756e',
-    fontSize: 12,
-    lineHeight: 1.5,
-    marginBottom: 17,
-  },
-
-  primaryButton: {
-    border: 'none',
-    borderRadius: 11,
-    background: '#15935c',
-    color: '#ffffff',
-    padding: '12px 18px',
-    fontSize: 13,
-    fontWeight: 800,
-    cursor: 'pointer',
-  },
-
-  securityCard: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 11,
-    background: '#ffffff',
-    border: '1px solid #dfece5',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 20,
-  },
-
-  securityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 11,
-    background: '#edf8f2',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 19,
-    flexShrink: 0,
-  },
-
-  securityTitle: {
-    margin: 0,
-    fontSize: 14,
-    fontWeight: 850,
-  },
-
-  securityText: {
-    margin: '4px 0 0',
-    color: '#718079',
-    fontSize: 11,
-    lineHeight: 1.5,
-  },
-
-  footer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 4,
-    color: '#15935c',
-    fontSize: 12,
-  },
-};
-
-export default Support;
+    '& .MuiInputBase-input::placeholder':
+      {
+        color: colors.textSecondary,
+        opacity: 0.8,
+      },
+  };
+}
