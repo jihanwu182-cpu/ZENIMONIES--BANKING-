@@ -2354,114 +2354,103 @@ async function investigateTransaction(req, res) {
     };
 
     // ----------------------------------------------------------
-    // INTERNAL TRANSFER RECIPIENT
-    //
-    // Internal transfers normally do not have a bank_transfers
-    // record. Find the receiving ledger transaction using the
-    // same reference.
-    //
-    // IMPORTANT:
-    // We ONLY return:
-    // - recipient name
-    // - masked account number
-    //
-    // No balance information is exposed.
-    // ----------------------------------------------------------
+// INTERNAL TRANSFER RECIPIENT
+//
+// Find the receiving customer's account using the same
+// internal transfer reference.
+//
+// SECURITY:
+// - Full account number is NEVER returned.
+// - Only the last 4 digits are exposed.
+// - No balance information is exposed.
+// ----------------------------------------------------------
 
-    if (
-      isInternalTransfer &&
-      transaction.transaction_id &&
-      transaction.customer_id
-    ) {
-      try {
-        const recipientResult =
-          await pool.query(
-            `
-            SELECT
-              t.id AS transaction_id,
+if (
+  isInternalTransfer &&
+  transaction.transaction_id &&
+  transaction.customer_id
+) {
+  try {
+    const recipientResult = await pool.query(
+      `
+      SELECT
+        t.id AS transaction_id,
 
-              u.id AS customer_id,
-              u.full_name AS customer_name,
+        u.id AS customer_id,
+        u.full_name AS customer_name,
 
-              CASE
-                WHEN a.account_number IS NULL
-                  THEN NULL
-                WHEN LENGTH(a.account_number) <= 4
-                  THEN '****'
-                ELSE
-                  '****' ||
-                  RIGHT(a.account_number, 4)
-              END AS masked_account_number
+        CASE
+          WHEN a.account_number IS NULL
+            THEN NULL
 
-            FROM transactions t
+          WHEN LENGTH(a.account_number) <= 4
+            THEN '****'
 
-            INNER JOIN accounts a
-              ON a.id = t.account_id
+          ELSE
+            '****' || RIGHT(a.account_number, 4)
+        END AS masked_account_number
 
-            INNER JOIN users u
-              ON u.id = a.user_id
+      FROM transactions t
 
-            WHERE
-              t.reference = $1
+      INNER JOIN accounts a
+        ON a.id = t.account_id
 
-              AND a.user_id <> $2
+      INNER JOIN users u
+        ON u.id = a.user_id
 
-              AND (
-                t.type =
-                  'internal_transfer_received'
+      WHERE
+        t.reference = $1
 
-                OR t.type =
-                  'internal_transfer'
-              )
+        AND a.user_id <> $2
 
-            ORDER BY
-              t.created_at ASC
+        AND (
+          t.type = 'internal_transfer_received'
+          OR t.type = 'internal_transfer'
+        )
 
-            LIMIT 1
-            `,
-            [
-              reference,
-              transaction.customer_id,
-            ]
-          );
+      ORDER BY
+        CASE
+          WHEN t.type = 'internal_transfer_received'
+            THEN 1
+          ELSE 2
+        END,
+        t.created_at ASC
 
-        if (
-          recipientResult.rows.length > 0
-        ) {
-          const recipientRow =
-            recipientResult.rows[0];
+      LIMIT 1
+      `,
+      [
+        reference,
+        transaction.customer_id,
+      ]
+    );
 
-          recipient = {
-            name:
-              recipientRow.customer_name ||
-              null,
+    if (recipientResult.rows.length > 0) {
+      const recipientRow =
+        recipientResult.rows[0];
 
-            account_number:
-              recipientRow.masked_account_number ||
-              null,
+      recipient = {
+        name:
+          recipientRow.customer_name ||
+          null,
 
-            bank_name:
-              'ZENIMONIES',
+        account_number:
+          recipientRow.masked_account_number ||
+          null,
 
-            bank_code:
-              null,
-          };
-        }
-      } catch (
-        recipientError
-      ) {
-        // ------------------------------------------------------
-        // Do NOT fail the entire investigation if the recipient
-        // lookup fails.
-        // ------------------------------------------------------
+        bank_name:
+          'ZENIMONIES',
 
-        console.error(
-          'Internal transfer recipient lookup error:',
-          recipientError
-        );
-      }
+        bank_code:
+          null,
+      };
     }
-
+  } catch (recipientError) {
+    console.error(
+      'Internal transfer recipient lookup error:',
+      recipientError
+    );
+  }
+}
     // ----------------------------------------------------------
     // BUILD SAFE CUSTOMER OBJECT
     // ----------------------------------------------------------
