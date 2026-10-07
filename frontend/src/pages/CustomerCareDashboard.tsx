@@ -5048,7 +5048,6 @@ const CustomerCareDashboard: React.FC =
             )}
           </Box>
         </Box>
-      </Box>
 
       {/* ========================================================
           FORWARD TO ADMINISTRATION DIALOG
