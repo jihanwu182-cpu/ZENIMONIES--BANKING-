@@ -1007,7 +1007,6 @@ async function getCaseDetails(req, res) {
           ste.event_type,
           ste.old_value,
           ste.new_value,
-          ste.metadata,
           ste.created_at,
 
           actor.full_name
