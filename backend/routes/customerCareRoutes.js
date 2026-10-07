@@ -2,7 +2,8 @@ const express = require('express');
 
 const router = express.Router();
 
-const customerCareMiddleware = require('../middleware/customerCareMiddleware');
+const customerCareMiddleware =
+  require('../middleware/customerCareMiddleware');
 
 const {
   getAvailableCases,
@@ -16,32 +17,41 @@ const {
   investigateTransaction,
 } = require('../controllers/customerCareController');
 
+const {
+  escalateCaseToAdministration,
+} = require('../controllers/customerCareEscalationController');
+
 // ============================================================
 // ZENIMONIES BANKING
 // CUSTOMER CARE ROUTES
 // ============================================================
 //
 // IMPORTANT:
+//
 // Every route in this file is protected by
 // customerCareMiddleware.
 //
 // Only users with:
+//
 //     role = customer_care
 //
 // can access these endpoints.
 //
-// Customer Care agents do NOT receive Admin Dashboard access.
+// Customer Care does NOT receive Admin Dashboard access.
+//
+// Customer Care and Administration are separate roles.
 // ============================================================
 
 router.use(customerCareMiddleware);
+
 
 // ============================================================
 // AVAILABLE CASES
 // GET /api/customer-care/tickets
 // ============================================================
 //
-// Shows Customer Care cases that are connected to Customer Care
-// and are currently available for an agent to take.
+// Shows cases connected to Customer Care that are available
+// for an agent to take.
 //
 // ============================================================
 
@@ -50,22 +60,26 @@ router.get(
   getAvailableCases
 );
 
+
 // ============================================================
 // MY CASES
 // GET /api/customer-care/tickets/mine
 // ============================================================
 //
-// Shows cases currently assigned to the authenticated
-// Customer Care agent.
+// Shows cases assigned to the authenticated Customer Care
+// agent.
 //
-// IMPORTANT:
-// This route must appear BEFORE /tickets/:ticketId.
+// This route must appear BEFORE:
+//
+//     /tickets/:ticketId
+//
 // ============================================================
 
 router.get(
   '/tickets/mine',
   getMyCases
 );
+
 
 // ============================================================
 // TRANSACTION INVESTIGATION
@@ -74,18 +88,19 @@ router.get(
 //
 // READ-ONLY.
 //
-// Allows a Customer Care agent to investigate a customer's
-// bank transfer using the transaction/reference number.
+// Customer Care can investigate a transaction without receiving
+// access to:
 //
-// It does NOT:
-// - change balances
-// - reverse transactions
-// - change transaction status
-// - resend transfers
-// - modify recipients
-// - execute financial operations
+// - customer balance
+// - available balance
+// - ledger balance
+// - balance_before
+// - balance_after
+// - full account number
+// - security secrets
 //
-// Account numbers returned by the controller are masked.
+// Account numbers are masked.
+//
 // ============================================================
 
 router.get(
@@ -93,19 +108,30 @@ router.get(
   investigateTransaction
 );
 
+
 // ============================================================
 // CASE DETAILS
 // GET /api/customer-care/tickets/:ticketId
 // ============================================================
 //
-// Returns the case, customer information, conversation,
-// assigned agent, events and linked transaction information.
+// Returns:
+//
+// - case information
+// - customer information
+// - masked account information
+// - KYC status
+// - conversation
+// - assigned Customer Care agent
+// - Administration escalation information
+// - case events
+//
 // ============================================================
 
 router.get(
   '/tickets/:ticketId',
   getCaseDetails
 );
+
 
 // ============================================================
 // TAKE CASE
@@ -114,6 +140,9 @@ router.get(
 //
 // Allows an available Customer Care agent to take ownership
 // of a case.
+//
+// Once taken, the case belongs to that Customer Care agent.
+//
 // ============================================================
 
 router.post(
@@ -121,19 +150,24 @@ router.post(
   takeCase
 );
 
+
 // ============================================================
 // REPLY TO CUSTOMER
 // POST /api/customer-care/tickets/:ticketId/reply
 // ============================================================
 //
-// Sends a message from the authenticated Customer Care agent
-// to the customer.
+// Sends a message from the authenticated Customer Care agent.
+//
+// Customer Care cannot reply after the case has been escalated
+// to Administration.
+//
 // ============================================================
 
 router.post(
   '/tickets/:ticketId/reply',
   replyToCustomer
 );
+
 
 // ============================================================
 // WAITING FOR CUSTOMER
@@ -143,9 +177,13 @@ router.post(
 // Places the case into the waiting-for-customer state.
 //
 // The backend starts the customer response timer.
-// If the customer does not respond within the configured
-// period, the automated support workflow can remind the
-// customer and eventually close the case.
+//
+// Reminder:
+//     configured reminder period
+//
+// Auto-close:
+//     configured response timeout
+//
 // ============================================================
 
 router.patch(
@@ -153,12 +191,17 @@ router.patch(
   waitForCustomer
 );
 
+
 // ============================================================
 // RESOLVE CASE
 // PATCH /api/customer-care/tickets/:ticketId/resolve
 // ============================================================
 //
-// Marks the case as resolved.
+// Customer Care can resolve normal support cases.
+//
+// Escalated Administration cases cannot be resolved by
+// Customer Care.
+//
 // ============================================================
 
 router.patch(
@@ -166,18 +209,53 @@ router.patch(
   resolveCase
 );
 
+
 // ============================================================
 // CLOSE CASE
 // PATCH /api/customer-care/tickets/:ticketId/close
 // ============================================================
 //
-// Permanently closes the support case.
+// Customer Care can close normal support cases.
+//
+// Escalated cases are controlled by Administration.
+//
 // ============================================================
 
 router.patch(
   '/tickets/:ticketId/close',
   closeCase
 );
+
+
+// ============================================================
+// FORWARD TO ADMINISTRATION
+// POST /api/customer-care/tickets/:ticketId/escalate
+// ============================================================
+//
+// Transfers administrative responsibility for the case.
+//
+// Customer Care provides an escalation reason.
+//
+// After successful escalation:
+//
+// - escalated_to_admin = true
+// - Customer Care loses operational control
+// - Administration receives the case
+// - customer conversation is retained
+// - escalation event is recorded
+// - customer receives an automated notification
+//
+// IMPORTANT:
+//
+// Forwarding a case does NOT give Customer Care Admin access.
+//
+// ============================================================
+
+router.post(
+  '/tickets/:ticketId/escalate',
+  escalateCaseToAdministration
+);
+
 
 // ============================================================
 // EXPORT
