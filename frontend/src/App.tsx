@@ -479,7 +479,6 @@ const CustomerCareRoute: React.FC = () => {
 
   return <CustomerCareDashboard />;
 };
-/>
 // ============================================================
 // CUSTOMER ROUTES
 // ============================================================
