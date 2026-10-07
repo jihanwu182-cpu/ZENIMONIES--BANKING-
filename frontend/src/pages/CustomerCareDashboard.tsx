@@ -659,14 +659,15 @@ const CustomerCareDashboard: React.FC =
     ] = useState('');
 
     const [
-      activeView,
-      setActiveView,
-    ] = useState<
-      'available' |
-      'mine' |
-      'waiting' |
-      'resolved'
-    >('available');
+  activeView,
+  setActiveView,
+] = useState<
+  'available' |
+  'mine' |
+  'waiting' |
+  'resolved' |
+  'escalated'
+>('available');
 
     const [
       reply,
@@ -1323,37 +1324,48 @@ const CustomerCareDashboard: React.FC =
       useMemo(() => {
         let source: Ticket[] =
           [];
-
-        if (
-          activeView ===
-          'available'
-        ) {
-          source =
-            availableCases;
-        } else if (
-          activeView === 'mine'
-        ) {
-          source = myCases;
-        } else if (
-          activeView ===
-          'waiting'
-        ) {
-          source =
-            myCases.filter(
-              (ticket) =>
-                ticket.status ===
-                'pending'
-            );
-        } else {
-          source =
-            myCases.filter(
-              (ticket) =>
-                ticket.status ===
-                  'resolved' ||
-                ticket.status ===
-                  'closed'
-            );
-        }
+     if (
+  activeView ===
+  'available'
+) {
+  source =
+    availableCases;
+} else if (
+  activeView === 'mine'
+) {
+  source =
+    myCases;
+} else if (
+  activeView ===
+  'waiting'
+) {
+  source =
+    myCases.filter(
+      (ticket) =>
+        ticket.status ===
+        'pending'
+    );
+} else if (
+  activeView ===
+  'escalated'
+) {
+  source =
+    myCases.filter(
+      (ticket) =>
+        ticket.escalated_to_admin ===
+        true
+    );
+} else {
+  source =
+    myCases.filter(
+      (ticket) =>
+        ticket.status ===
+          'resolved' ||
+        ticket.status ===
+          'closed'
+    );
+}
+        
 
         const query =
           search
@@ -1938,7 +1950,7 @@ const CustomerCareDashboard: React.FC =
                   <AccountBalanceRoundedIcon />,
 
                 view:
-                  'mine' as const,
+                   'escalated' as const,
               },
             ].map(
               (item) => (
@@ -2181,15 +2193,18 @@ const CustomerCareDashboard: React.FC =
                     }}
                   >
                     {activeView ===
-                    'available'
-                      ? 'Available Cases'
-                      : activeView ===
-                        'mine'
+                     'available'
+                     ? 'Available Cases'
+                     : activeView ===
+                       'mine'
                       ? 'My Cases'
                       : activeView ===
-                        'waiting'
-                      ? 'Waiting for Customer'
-                      : 'Resolved Cases'}
+                      'waiting'
+                     ? 'Waiting for Customer'
+                     : activeView ===
+                     'escalated'
+                    ? 'Administration Cases'
+                    : 'Resolved Cases'}
                   </Box>
 
                   <Chip
