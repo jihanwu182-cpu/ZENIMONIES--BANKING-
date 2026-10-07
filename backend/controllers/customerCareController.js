@@ -1852,7 +1852,9 @@ async function closeCase(req, res) {
 //   - password
 //   - session ID
 // ============================================================
-
+// INVESTIGATE TRANSACTION
+// CUSTOMER CARE — READ ONLY
+// ===========================================================
 async function investigateTransaction(req, res) {
   try {
     const reference = String(
@@ -2384,83 +2386,7 @@ async function investigateTransaction(req, res) {
     });
   }
 }
-
-    // ----------------------------------------------------------
-    // INTERNAL TRANSFER COUNTERPART
-    // ----------------------------------------------------------
-
-    if (
-      isInternalTransfer &&
-      !recipient.name
-    ) {
-      const counterpartResult =
-        await pool.query(
-          `
-          SELECT
-            t.id AS transaction_id,
-
-            u.id AS customer_id,
-            u.full_name AS customer_name,
-
-            CASE
-              WHEN a.account_number IS NULL
-                THEN NULL
-
-              WHEN LENGTH(a.account_number) <= 4
-                THEN '****'
-
-              ELSE
-                '****' ||
-                RIGHT(a.account_number, 4)
-            END AS masked_account_number
-
-          FROM transactions t
-
-          INNER JOIN accounts a
-            ON a.id = t.account_id
-
-          INNER JOIN users u
-            ON u.id = a.user_id
-
-          WHERE
-            t.reference = $1
-            AND a.user_id <> $2
-
-          ORDER BY
-            t.created_at ASC
-
-          LIMIT 1
-          `,
-          [
-            transactionReference,
-            source.customer_id,
-          ]
-        );
-
-      if (
-        counterpartResult.rows.length > 0
-      ) {
-        const counterpart =
-          counterpartResult.rows[0];
-
-        recipient = {
-          name:
-            counterpart.customer_name ||
-            null,
-
-          account_number:
-            counterpart.masked_account_number ||
-            null,
-
-          bank_name:
-            'ZENIMONIES',
-
-          bank_code:
-            null,
-        };
-      }
-    }
-
+  
     // ----------------------------------------------------------
     // MASK CUSTOMER PHONE
     // ----------------------------------------------------------
