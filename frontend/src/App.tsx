@@ -836,13 +836,36 @@ const CustomerRoutes: React.FC = () => {
 const AppRouter: React.FC = () => {
   const location = useLocation();
 
+  const pathname = location.pathname;
+
+  // ============================================================
+  // ADMIN WORKSPACE
+  // ============================================================
+
   const isAdminRoute =
-    location.pathname === '/admin' ||
-    location.pathname.startsWith('/admin/');
+    pathname === '/admin' ||
+    pathname.startsWith('/admin/');
 
   if (isAdminRoute) {
     return <AdminRoutes />;
   }
+
+  // ============================================================
+  // CUSTOMER CARE WORKSPACE
+  //
+  // Customer Care is separate from normal customer banking.
+  // ============================================================
+
+  if (
+    pathname === '/customer-care' ||
+    pathname.startsWith('/customer-care/')
+  ) {
+    return <CustomerCareRoute />;
+  }
+
+  // ============================================================
+  // NORMAL CUSTOMER BANKING
+  // ============================================================
 
   return <CustomerRoutes />;
 };
