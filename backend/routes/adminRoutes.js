@@ -3,84 +3,152 @@ const express = require('express');
 const router = express.Router();
 
 const adminMiddleware = require('../middleware/adminMiddleware');
-
 const {
-  getDashboard,
-  getUsers,
-  getUser,
-  updateUserStatus,
-  getKycRecords,
-  getTransactions,
-  getAuditLogs,
-} = require('../controllers/adminController');
+  getEscalatedSupportTickets,
+  getEscalatedSupportTicket,
+  takeEscalatedSupportTicket,
+} = require('../controllers/adminSupportEscalationController');
 
 // ============================================================
-// ADMIN SECURITY
+// EXISTING ADMIN CONTROLLERS
+// ============================================================
+
+// KEEP ALL YOUR EXISTING IMPORTS HERE.
+
+// Example:
+//
+// const {
+//   getDashboard,
+//   getUsers,
+//   getUser,
+//   updateUserStatus,
+//   getKycRecords,
+//   ...
+// } = require('../controllers/adminController');
+
+
+// ============================================================
+// CUSTOMER CARE ROLE MANAGEMENT
+// ============================================================
+
+const {
+  listCustomerCareAgents,
+  assignCustomerCareRole,
+  removeCustomerCareRole,
+} = require('../controllers/customerCareAdminController');
+
+
+// ============================================================
+// CUSTOMER CARE → ADMINISTRATION ESCALATION
+// ============================================================
+
+const {
+  getEscalatedSupportTickets,
+  getEscalatedSupportTicket,
+  takeEscalatedSupportTicket,
+} = require('../controllers/adminSupportEscalationController');
+
+
+// ============================================================
+// ADMIN AUTHENTICATION
 // ============================================================
 
 router.use(adminMiddleware);
 
+
 // ============================================================
-// ADMIN DASHBOARD
-// GET /api/admin/dashboard
+// YOUR EXISTING ADMIN ROUTES
+// ============================================================
+//
+// KEEP ALL OF YOUR CURRENT ADMIN ROUTES HERE.
+// DO NOT DELETE OR REPLACE THEM.
+//
+// Examples:
+//
+// router.get('/dashboard', getDashboard);
+// router.get('/users', getUsers);
+// router.get('/users/:id', getUser);
+// router.patch('/users/:id/status', updateUserStatus);
+// router.get('/kyc', getKycRecords);
+//
+// etc.
+//
+// ============================================================
+
+
+// ============================================================
+// CUSTOMER CARE AGENT MANAGEMENT
 // ============================================================
 
 router.get(
-  '/dashboard',
-  getDashboard
+  '/customer-care/agents',
+  listCustomerCareAgents
 );
 
-// ============================================================
-// USERS
-// ============================================================
-
-// GET /api/admin/users
-router.get(
-  '/users',
-  getUsers
-);
-
-// GET /api/admin/users/:id
-router.get(
-  '/users/:id',
-  getUser
-);
-
-// PATCH /api/admin/users/:id/status
 router.patch(
-  '/users/:id/status',
-  updateUserStatus
+  '/customer-care/agents/:id',
+  assignCustomerCareRole
 );
 
+router.patch(
+  '/customer-care/agents/:id/remove',
+  removeCustomerCareRole
+);
+
+
 // ============================================================
-// KYC
-// GET /api/admin/kyc
+// EXISTING ADMIN CUSTOMER SUPPORT
+// ============================================================
+//
+// KEEP YOUR EXISTING SUPPORT ROUTES.
+//
+// Example:
+//
+// router.get(
+//   '/support/tickets',
+//   getSupportTickets
+// );
+//
+// router.get(
+//   '/support/tickets/:id',
+//   getSupportTicket
+// );
+//
+// router.post(
+//   '/support/tickets/:id/reply',
+//   replyToSupportTicket
+// );
+//
+// router.patch(
+//   '/support/tickets/:id/status',
+//   updateSupportTicketStatus
+// );
+//
+// router.patch(
+//   '/support/tickets/:id/priority',
+//   updateSupportTicketPriority
+// );
+
+
+// ============================================================
+// CUSTOMER CARE → ADMINISTRATION ESCALATION
 // ============================================================
 
 router.get(
-  '/kyc',
-  getKycRecords
+  '/support/escalated',
+  getEscalatedSupportTickets
 );
-
-// ============================================================
-// TRANSACTIONS
-// GET /api/admin/transactions
-// ============================================================
 
 router.get(
-  '/transactions',
-  getTransactions
+  '/support/escalated/:id',
+  getEscalatedSupportTicket
 );
 
-// ============================================================
-// AUDIT LOGS
-// GET /api/admin/audit-logs
-// ============================================================
-
-router.get(
-  '/audit-logs',
-  getAuditLogs
+router.post(
+  '/support/escalated/:id/take',
+  takeEscalatedSupportTicket
 );
+
 
 // ============================================================
 // EXPORT
