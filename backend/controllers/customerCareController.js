@@ -89,7 +89,216 @@ function titleCase(value) {
     .trim()
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
+// ============================================================
+// BUILD TRANSACTION FLOW
+// ============================================================
 
+function buildInvestigationFlow(transaction) {
+  const flow = [];
+
+  const createdAt =
+    transaction.transaction_created_at ||
+    transaction.transfer_created_at ||
+    transaction.created_at ||
+    null;
+
+  const completedAt =
+    transaction.transfer_completed_at ||
+    transaction.completed_at ||
+    null;
+
+  const status = String(
+    transaction.transaction_status ||
+    transaction.bank_transfer_status ||
+    transaction.status ||
+    'unknown'
+  ).toLowerCase();
+
+  const transactionType = String(
+    transaction.transaction_type ||
+    transaction.type ||
+    ''
+  ).toLowerCase();
+
+  const failureReason =
+    transaction.failure_reason ||
+    null;
+
+  const isInternalTransfer =
+    transactionType === 'internal_transfer' ||
+    transactionType === 'internal_transfer_received';
+
+  // ==========================================================
+  // INTERNAL TRANSFER
+  // ==========================================================
+
+  if (isInternalTransfer) {
+    flow.push({
+      step: 'initiated',
+      label: 'Transfer initiated',
+      status:
+        status === 'failed'
+          ? 'failed'
+          : 'completed',
+      timestamp: createdAt,
+    });
+
+    flow.push({
+      step: 'processed',
+      label: 'ZENIMONIES account transfer processed',
+      status:
+        status === 'failed'
+          ? 'failed'
+          : status === 'pending'
+          ? 'pending'
+          : status === 'processing'
+          ? 'processing'
+          : 'completed',
+      timestamp:
+        status === 'pending' ||
+        status === 'processing'
+          ? null
+          : completedAt || createdAt,
+    });
+
+    flow.push({
+      step: 'recipient_credited',
+      label: 'Recipient account credited',
+      status:
+        status === 'completed' ||
+        status === 'success' ||
+        status === 'successful'
+          ? 'completed'
+          : status === 'failed' ||
+            status === 'reversed'
+          ? 'failed'
+          : 'pending',
+      timestamp:
+        status === 'completed' ||
+        status === 'success' ||
+        status === 'successful'
+          ? completedAt
+          : null,
+    });
+
+    return flow;
+  }
+
+  // ==========================================================
+  // EXTERNAL BANK TRANSFER
+  // ==========================================================
+
+  flow.push({
+    step: 'initiated',
+    label: 'Transfer initiated',
+    status:
+      status === 'failed'
+        ? 'failed'
+        : 'completed',
+    timestamp: createdAt,
+  });
+
+  flow.push({
+    step: 'bank_submitted',
+    label: 'Bank transfer submitted',
+    status: 'completed',
+    timestamp: createdAt,
+  });
+
+  // ==========================================================
+  // PENDING / PROCESSING
+  // ==========================================================
+
+  if (
+    status === 'pending' ||
+    status === 'processing'
+  ) {
+    flow.push({
+      step: 'interbank_processing',
+      label: 'Interbank processing',
+      status:
+        status === 'processing'
+          ? 'processing'
+          : 'pending',
+      timestamp: null,
+    });
+
+    flow.push({
+      step: 'recipient_credit',
+      label: 'Recipient credit',
+      status: 'pending',
+      timestamp: null,
+    });
+
+    return flow;
+  }
+
+  // ==========================================================
+  // COMPLETED
+  // ==========================================================
+
+  if (
+    status === 'completed' ||
+    status === 'success' ||
+    status === 'successful'
+  ) {
+    flow.push({
+      step: 'interbank_processing',
+      label: 'Interbank processing',
+      status: 'completed',
+      timestamp: completedAt || null,
+    });
+
+    flow.push({
+      step: 'recipient_credit',
+      label: 'Recipient credit',
+      status: 'completed',
+      timestamp: completedAt || null,
+    });
+
+    return flow;
+  }
+
+  // ==========================================================
+  // FAILED
+  // ==========================================================
+
+  if (
+    status === 'failed' ||
+    status === 'reversed'
+  ) {
+    flow.push({
+      step: 'interbank_processing',
+      label: failureReason
+        ? `Interbank processing failed: ${failureReason}`
+        : 'Interbank processing failed',
+      status: 'failed',
+      timestamp: completedAt || null,
+    });
+
+    flow.push({
+      step: 'recipient_credit',
+      label: 'Recipient credit',
+      status: 'failed',
+      timestamp: null,
+    });
+
+    return flow;
+  }
+
+  // ==========================================================
+  // UNKNOWN
+  // ==========================================================
+
+  flow.push({
+    step: 'status',
+    label: titleCase(status),
+    status: 'unknown',
+    timestamp: completedAt || null,
+  });
+
+  return flow;
+}
 // ============================================================
 // GET AVAILABLE CUSTOMER CARE CASES
 // GET /api/customer-care/tickets
