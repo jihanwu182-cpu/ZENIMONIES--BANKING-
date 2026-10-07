@@ -2194,18 +2194,18 @@ const CustomerCareDashboard: React.FC =
                     }}
                   >
                     {activeView ===
-                     'available'
-                     ? 'Available Cases'
-                     : activeView ===
-                       'mine'
-                      ? 'My Cases'
-                      : activeView ===
-                      'waiting'
-                     ? 'Waiting for Customer'
-                     : activeView ===
-                     'escalated'
-                    ? 'Administration Cases'
-                    : 'Resolved Cases'}
+'available'
+  ? 'Available Cases'
+  : activeView ===
+    'mine'
+  ? 'My Cases'
+  : activeView ===
+    'waiting'
+  ? 'Waiting for Customer'
+  : activeView ===
+    'escalated'
+  ? 'Administration Cases'
+  : 'Resolved Cases'}
                   </Box>
 
                   <Chip
