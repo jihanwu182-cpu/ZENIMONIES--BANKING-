@@ -173,6 +173,16 @@ interface SupportTicket {
   assigned_to?: string | null;
   assigned_agent_name?: string | null;
 
+  escalated_to_admin?: boolean;
+  escalated_at?: string | null;
+  escalated_by?: string | null;
+  escalated_by_name?: string | null;
+  escalation_reason?: string | null;
+
+  assigned_admin_id?: string | null;
+  assigned_admin_name?: string | null;
+  admin_taken_at?: string | null;
+
   created_at: string;
   updated_at: string;
   resolved_at?: string | null;
@@ -181,6 +191,7 @@ interface SupportTicket {
   customer_name?: string | null;
   customer_email?: string | null;
   customer_phone?: string | null;
+  customer_kyc_status?: string | null;
 }
 
 interface SupportMessage {
@@ -210,6 +221,8 @@ interface SupportEvent {
   created_at: string;
 
   actor_name?: string | null;
+  actor_role?: string | null;
+  note?: string | null;
 }
 
 interface SupportTransaction {
@@ -432,6 +445,34 @@ const AdminDashboard: React.FC = () => {
   const [supportActionLoading, setSupportActionLoading] =
     useState(false);
 
+  /* ============================================================
+     ADMINISTRATION ESCALATION STATE
+     ============================================================ */
+
+  const [escalatedTickets, setEscalatedTickets] =
+    useState<SupportTicket[]>([]);
+
+  const [escalationLoading, setEscalationLoading] =
+    useState(false);
+
+  const [escalationSearch, setEscalationSearch] =
+    useState('');
+
+  const [selectedEscalatedTicket, setSelectedEscalatedTicket] =
+    useState<SupportTicketDetails | null>(null);
+
+  const [escalationDialogOpen, setEscalationDialogOpen] =
+    useState(false);
+
+  const [escalationActionLoading, setEscalationActionLoading] =
+    useState(false);
+
+  const [adminReply, setAdminReply] =
+    useState('');
+
+  const [adminReplyLoading, setAdminReplyLoading] =
+    useState(false);
+
   const token = getAdminToken();
 
   const authHeaders = useMemo(
@@ -572,9 +613,7 @@ const AdminDashboard: React.FC = () => {
         );
       }
 
-      if (
-        supportSearch.trim()
-      ) {
+      if (supportSearch.trim()) {
         params.set(
           'search',
           supportSearch.trim()
@@ -628,6 +667,70 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  /* ============================================================
+     ADMINISTRATION ESCALATION LOADERS
+     ============================================================ */
+
+  const loadEscalatedTickets = async () => {
+    try {
+      setEscalationLoading(true);
+
+      const params = new URLSearchParams();
+
+      if (escalationSearch.trim()) {
+        params.set(
+          'search',
+          escalationSearch.trim()
+        );
+      }
+
+      const queryString =
+        params.toString();
+
+      const endpoint =
+        `${API_BASE_URL}/admin/support/escalated${
+          queryString
+            ? `?${queryString}`
+            : ''
+        }`;
+
+      const response =
+        await fetch(
+          endpoint,
+          {
+            headers:
+              authHeaders,
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to load Administration escalations.'
+        );
+      }
+
+      setEscalatedTickets(
+        data.tickets || []
+      );
+    } catch (err: any) {
+      console.error(
+        'Administration escalation loading error:',
+        err
+      );
+
+      setError(
+        err?.message ||
+          'Unable to load Administration escalations.'
+      );
+    } finally {
+      setEscalationLoading(false);
+    }
+  };
+
   const openSupportTicket = async (
     ticketId: string
   ) => {
@@ -677,6 +780,368 @@ const AdminDashboard: React.FC = () => {
       setSupportActionLoading(false);
     }
   };
+
+  /* ============================================================
+     OPEN ESCALATED CASE
+     ============================================================ */
+
+  const openEscalatedTicket = async (
+    ticketId: string
+  ) => {
+    try {
+      setEscalationActionLoading(true);
+      setError('');
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/admin/support/escalated/${ticketId}`,
+          {
+            headers:
+              authHeaders,
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            'Unable to open escalated case.'
+        );
+      }
+
+      setSelectedEscalatedTicket(
+        data
+      );
+
+      setAdminReply('');
+
+      setEscalationDialogOpen(
+        true
+      );
+    } catch (err: any) {
+      console.error(
+        'Open escalated case error:',
+        err
+      );
+
+      setError(
+        err?.message ||
+          'Unable to open escalated case.'
+      );
+    } finally {
+      setEscalationActionLoading(false);
+    }
+  };
+
+  /* ============================================================
+     TAKE ESCALATED CASE
+     ============================================================ */
+
+  const takeEscalatedCase =
+    async () => {
+      if (
+        !selectedEscalatedTicket
+      ) {
+        return;
+      }
+
+      try {
+        setEscalationActionLoading(
+          true
+        );
+
+        setError('');
+
+        const ticketId =
+          selectedEscalatedTicket
+            .ticket.id;
+
+        const response =
+          await fetch(
+            `${API_BASE_URL}/admin/support/escalated/${ticketId}/take`,
+            {
+              method:
+                'POST',
+              headers:
+                authHeaders,
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              'Unable to take Administration case.'
+          );
+        }
+
+        await openEscalatedTicket(
+          ticketId
+        );
+
+        await loadEscalatedTickets();
+      } catch (err: any) {
+        console.error(
+          'Take Administration case error:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to take Administration case.'
+        );
+      } finally {
+        setEscalationActionLoading(
+          false
+        );
+      }
+    };
+
+  /* ============================================================
+     ADMIN REPLY TO ESCALATED CASE
+     ============================================================ */
+
+  const replyToEscalatedCase =
+    async () => {
+      if (
+        !selectedEscalatedTicket ||
+        !adminReply.trim()
+      ) {
+        return;
+      }
+
+      try {
+        setAdminReplyLoading(
+          true
+        );
+
+        setError('');
+
+        const ticketId =
+          selectedEscalatedTicket
+            .ticket.id;
+
+        const response =
+          await fetch(
+            `${API_BASE_URL}/admin/support/tickets/${ticketId}/reply`,
+            {
+              method:
+                'POST',
+              headers:
+                authHeaders,
+              body:
+                JSON.stringify({
+                  message:
+                    adminReply.trim(),
+                }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              'Unable to send Administration reply.'
+          );
+        }
+
+        setAdminReply('');
+
+        await openEscalatedTicket(
+          ticketId
+        );
+
+        await loadEscalatedTickets();
+      } catch (err: any) {
+        console.error(
+          'Administration reply error:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to send Administration reply.'
+        );
+      } finally {
+        setAdminReplyLoading(
+          false
+        );
+      }
+    };
+
+  /* ============================================================
+     ADMIN STATUS UPDATE
+     ============================================================ */
+
+  const updateEscalatedStatus =
+    async (
+      status: string
+    ) => {
+      if (
+        !selectedEscalatedTicket
+      ) {
+        return;
+      }
+
+      try {
+        setEscalationActionLoading(
+          true
+        );
+
+        setError('');
+
+        const ticketId =
+          selectedEscalatedTicket
+            .ticket.id;
+
+        const response =
+          await fetch(
+            `${API_BASE_URL}/admin/support/tickets/${ticketId}/status`,
+            {
+              method:
+                'PATCH',
+              headers:
+                authHeaders,
+              body:
+                JSON.stringify({
+                  status,
+                }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              'Unable to update Administration case status.'
+          );
+        }
+
+        await openEscalatedTicket(
+          ticketId
+        );
+
+        await loadEscalatedTickets();
+      } catch (err: any) {
+        console.error(
+          'Administration status update error:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to update Administration case status.'
+        );
+      } finally {
+        setEscalationActionLoading(
+          false
+        );
+      }
+    };
+
+  /* ============================================================
+     ADMIN PRIORITY UPDATE
+     ============================================================ */
+
+  const updateEscalatedPriority =
+    async (
+      priority: string
+    ) => {
+      if (
+        !selectedEscalatedTicket
+      ) {
+        return;
+      }
+
+      try {
+        setEscalationActionLoading(
+          true
+        );
+
+        setError('');
+
+        const ticketId =
+          selectedEscalatedTicket
+            .ticket.id;
+
+        const response =
+          await fetch(
+            `${API_BASE_URL}/admin/support/tickets/${ticketId}/priority`,
+            {
+              method:
+                'PATCH',
+              headers:
+                authHeaders,
+              body:
+                JSON.stringify({
+                  priority,
+                }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
+              'Unable to update Administration case priority.'
+          );
+        }
+
+        await openEscalatedTicket(
+          ticketId
+        );
+
+        await loadEscalatedTickets();
+      } catch (err: any) {
+        console.error(
+          'Administration priority update error:',
+          err
+        );
+
+        setError(
+          err?.message ||
+            'Unable to update Administration case priority.'
+        );
+      } finally {
+        setEscalationActionLoading(
+          false
+        );
+      }
+    };
+
+  const closeEscalationDialog =
+    () => {
+      if (
+        escalationActionLoading ||
+        adminReplyLoading
+      ) {
+        return;
+      }
+
+      setEscalationDialogOpen(
+        false
+      );
+
+      setSelectedEscalatedTicket(
+        null
+      );
+
+      setAdminReply('');
+    };
+
+  /* ============================================================
+     CUSTOMER CARE REPLY
+     ============================================================ */
 
   const replyToSupportTicket =
     async () => {
@@ -744,6 +1209,10 @@ const AdminDashboard: React.FC = () => {
       }
     };
 
+  /* ============================================================
+     CUSTOMER CARE STATUS
+     ============================================================ */
+
   const updateSupportStatus =
     async (
       status: string
@@ -807,6 +1276,10 @@ const AdminDashboard: React.FC = () => {
         );
       }
     };
+
+  /* ============================================================
+     CUSTOMER CARE PRIORITY
+     ============================================================ */
 
   const updateSupportPriority =
     async (
@@ -964,7 +1437,7 @@ const AdminDashboard: React.FC = () => {
   }, []);
 
   /* ============================================================
-     LOAD CUSTOMER CARE WHEN OPENED
+     LOAD CUSTOMER CARE
      ============================================================ */
 
   useEffect(() => {
@@ -973,6 +1446,7 @@ const AdminDashboard: React.FC = () => {
     }
 
     loadSupportTickets();
+    loadEscalatedTickets();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -1450,6 +1924,13 @@ const AdminDashboard: React.FC = () => {
   const formatSupportStatus = (
     status: string
   ) => {
+    if (
+      status ===
+      'escalated_to_admin'
+    ) {
+      return 'Escalated to Administration';
+    }
+
     return getStatusLabel(
       status
     );
@@ -1458,6 +1939,13 @@ const AdminDashboard: React.FC = () => {
   const supportStatusColor = (
     status: string
   ) => {
+    if (
+      status ===
+      'escalated_to_admin'
+    ) {
+      return 'error' as const;
+    }
+
     return statusColor(
       status
     );
@@ -1522,6 +2010,30 @@ const AdminDashboard: React.FC = () => {
         event.event_type ||
           ''
       ).toLowerCase();
+
+    if (
+      type.includes(
+        'escalated'
+      )
+    ) {
+      return 'Case forwarded to Administration.';
+    }
+
+    if (
+      type.includes(
+        'admin_took'
+      )
+    ) {
+      return 'Administration took responsibility for this case.';
+    }
+
+    if (
+      type.includes(
+        'case_taken'
+      )
+    ) {
+      return 'Customer Care agent took responsibility for this case.';
+    }
 
     if (
       type.includes(
@@ -3009,6 +3521,16 @@ const AdminDashboard: React.FC = () => {
             'closed'
       ).length;
 
+    const escalationCount =
+      escalatedTickets.filter(
+        (ticket) =>
+          !ticket.assigned_admin_id &&
+          ticket.status !==
+            'resolved' &&
+          ticket.status !==
+            'closed'
+      ).length;
+
     return (
       <Stack spacing={3}>
         {/* SUPPORT SUMMARY */}
@@ -3045,10 +3567,13 @@ const AdminDashboard: React.FC = () => {
           />
 
           <SupportStat
-            title="Resolved"
-            value={resolvedCount}
-            subtitle="Completed support"
-            icon="✓"
+            title="Admin Escalations"
+            value={escalationCount}
+            subtitle="Awaiting Administration"
+            icon="↗"
+            danger={
+              escalationCount > 0
+            }
           />
         </Grid>
 
@@ -3060,14 +3585,17 @@ const AdminDashboard: React.FC = () => {
           action={
             <Button
               variant="outlined"
-              onClick={
-                loadSupportTickets
-              }
+              onClick={() => {
+                loadSupportTickets();
+                loadEscalatedTickets();
+              }}
               disabled={
-                supportLoading
+                supportLoading ||
+                escalationLoading
               }
             >
-              {supportLoading
+              {supportLoading ||
+              escalationLoading
                 ? 'Refreshing...'
                 : 'Refresh'}
             </Button>
@@ -3285,7 +3813,7 @@ const AdminDashboard: React.FC = () => {
             <TableContainer>
               <Table
                 sx={{
-                  minWidth: 1050,
+                  minWidth: 1100,
                 }}
               >
                 <TableHead>
@@ -3348,6 +3876,18 @@ const AdminDashboard: React.FC = () => {
                               ticket.ticket_number
                             }
                           </Typography>
+
+                          {ticket.escalated_to_admin && (
+                            <Chip
+                              size="small"
+                              label="Admin Escalated"
+                              color="error"
+                              sx={{
+                                mt: 0.7,
+                                fontSize: 10,
+                              }}
+                            />
+                          )}
                         </TableCell>
 
                         <TableCell>
@@ -3431,12 +3971,20 @@ const AdminDashboard: React.FC = () => {
                         <TableCell>
                           <Chip
                             size="small"
-                            label={formatSupportStatus(
-                              ticket.status
-                            )}
-                            color={supportStatusColor(
-                              ticket.status
-                            )}
+                            label={
+                              ticket.escalated_to_admin
+                                ? 'Escalated to Administration'
+                                : formatSupportStatus(
+                                    ticket.status
+                                  )
+                            }
+                            color={
+                              ticket.escalated_to_admin
+                                ? 'error'
+                                : supportStatusColor(
+                                    ticket.status
+                                  )
+                            }
                           />
                         </TableCell>
 
@@ -3488,6 +4036,462 @@ const AdminDashboard: React.FC = () => {
               {supportTickets.length ===
                 0 && (
                 <EmptyState text="No customer support tickets found." />
+              )}
+            </TableContainer>
+          )}
+        </AdminCard>
+
+        {/* ======================================================
+            ADMINISTRATION ESCALATIONS
+            ====================================================== */}
+
+        <AdminCard
+          title="Administration Escalations"
+          subtitle="Cases forwarded by Customer Care that require administrative action."
+          action={
+            <Button
+              variant="outlined"
+              onClick={
+                loadEscalatedTickets
+              }
+              disabled={
+                escalationLoading
+              }
+            >
+              {escalationLoading
+                ? 'Loading...'
+                : 'Refresh Escalations'}
+            </Button>
+          }
+        >
+          <Paper
+            variant="outlined"
+            sx={{
+              mb: 2.5,
+              p: 2,
+              borderRadius: 2,
+              borderColor:
+                '#f0d5d2',
+              background:
+                '#fff8f7',
+            }}
+          >
+            <Stack
+              direction={{
+                xs: 'column',
+                md: 'row',
+              }}
+              spacing={2}
+              alignItems={{
+                xs: 'flex-start',
+                md: 'center',
+              }}
+            >
+              <Box
+                sx={{
+                  width: 44,
+                  height: 44,
+                  borderRadius:
+                    '12px',
+                  background:
+                    '#fff0ee',
+                  color:
+                    '#b42318',
+                  display:
+                    'flex',
+                  alignItems:
+                    'center',
+                  justifyContent:
+                    'center',
+                  fontSize: 20,
+                  fontWeight: 900,
+                  flexShrink: 0,
+                }}
+              >
+                ↗
+              </Box>
+
+              <Box sx={{ flex: 1 }}>
+                <Typography
+                  fontWeight={900}
+                  color="#7a2119"
+                >
+                  Administration Queue
+                </Typography>
+
+                <Typography
+                  fontSize={12}
+                  color="text.secondary"
+                >
+                  Customer Care has forwarded
+                  these cases because they require
+                  administrative investigation or
+                  an administrative action.
+                </Typography>
+              </Box>
+
+              <Chip
+                label={`${escalationCount} awaiting takeover`}
+                color={
+                  escalationCount >
+                  0
+                    ? 'error'
+                    : 'success'
+                }
+                sx={{
+                  fontWeight:
+                    800,
+                }}
+              />
+            </Stack>
+          </Paper>
+
+          <TextField
+            fullWidth
+            size="small"
+            label="Search escalations"
+            placeholder="Ticket number, customer, subject..."
+            value={
+              escalationSearch
+            }
+            onChange={(
+              event
+            ) =>
+              setEscalationSearch(
+                event.target.value
+              )
+            }
+            onKeyDown={(
+              event
+            ) => {
+              if (
+                event.key ===
+                'Enter'
+              ) {
+                loadEscalatedTickets();
+              }
+            }}
+            sx={{
+              mb: 2.5,
+            }}
+          />
+
+          {escalationLoading ? (
+            <Box
+              sx={{
+                py: 8,
+                display:
+                  'flex',
+                justifyContent:
+                  'center',
+              }}
+            >
+              <Stack
+                spacing={1.5}
+                alignItems="center"
+              >
+                <CircularProgress
+                  size={30}
+                  sx={{
+                    color:
+                      '#087f5b',
+                  }}
+                />
+
+                <Typography
+                  color="text.secondary"
+                  fontSize={13}
+                >
+                  Loading Administration queue...
+                </Typography>
+              </Stack>
+            </Box>
+          ) : (
+            <TableContainer>
+              <Table
+                sx={{
+                  minWidth: 1150,
+                }}
+              >
+                <TableHead>
+                  <TableRow>
+                    <TableCell>
+                      Ticket
+                    </TableCell>
+
+                    <TableCell>
+                      Customer
+                    </TableCell>
+
+                    <TableCell>
+                      Complaint
+                    </TableCell>
+
+                    <TableCell>
+                      Forwarded By
+                    </TableCell>
+
+                    <TableCell>
+                      Escalation Reason
+                    </TableCell>
+
+                    <TableCell>
+                      Priority
+                    </TableCell>
+
+                    <TableCell>
+                      Status
+                    </TableCell>
+
+                    <TableCell>
+                      Action
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {escalatedTickets.map(
+                    (
+                      ticket
+                    ) => {
+                      const taken =
+                        Boolean(
+                          ticket.assigned_admin_id
+                        );
+
+                      return (
+                        <TableRow
+                          key={
+                            ticket.id
+                          }
+                          hover
+                        >
+                          <TableCell>
+                            <Typography
+                              fontWeight={900}
+                              fontSize={12}
+                            >
+                              {
+                                ticket.ticket_number
+                              }
+                            </Typography>
+
+                            <Typography
+                              fontSize={10}
+                              color="text.secondary"
+                              sx={{
+                                mt: 0.5,
+                              }}
+                            >
+                              {formatDate(
+                                ticket.escalated_at ||
+                                  ticket.updated_at
+                              )}
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography
+                              fontWeight={800}
+                              fontSize={13}
+                            >
+                              {
+                                ticket.customer_name ||
+                                'Unknown customer'
+                              }
+                            </Typography>
+
+                            <Typography
+                              fontSize={11}
+                              color="text.secondary"
+                            >
+                              {
+                                ticket.customer_email ||
+                                '—'
+                              }
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography
+                              fontWeight={800}
+                              fontSize={13}
+                              sx={{
+                                maxWidth: 230,
+                              }}
+                            >
+                              {
+                                ticket.subject
+                              }
+                            </Typography>
+
+                            <Typography
+                              fontSize={11}
+                              color="text.secondary"
+                              sx={{
+                                mt: 0.5,
+                              }}
+                            >
+                              {
+                                ticket.category_name ||
+                                'General Support'
+                              }
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography
+                              fontWeight={800}
+                              fontSize={12}
+                            >
+                              {
+                                ticket.escalated_by_name ||
+                                'Customer Care'
+                              }
+                            </Typography>
+
+                            <Typography
+                              fontSize={10}
+                              color="text.secondary"
+                            >
+                              Customer Care Agent
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            <Typography
+                              fontSize={12}
+                              sx={{
+                                maxWidth: 250,
+                                whiteSpace:
+                                  'normal',
+                              }}
+                            >
+                              {
+                                ticket.escalation_reason ||
+                                'No reason supplied'
+                              }
+                            </Typography>
+                          </TableCell>
+
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={formatSupportPriority(
+                                ticket.priority
+                              )}
+                              color={supportPriorityColor(
+                                ticket.priority
+                              )}
+                            />
+                          </TableCell>
+
+                          <TableCell>
+                            <Stack
+                              spacing={
+                                0.7
+                              }
+                            >
+                              <Chip
+                                size="small"
+                                label={
+                                  taken
+                                    ? 'Administration In Progress'
+                                    : 'Awaiting Takeover'
+                                }
+                                color={
+                                  taken
+                                    ? 'warning'
+                                    : 'error'
+                                }
+                              />
+
+                              {taken &&
+                                ticket.assigned_admin_name && (
+                                  <Typography
+                                    fontSize={10}
+                                    color="text.secondary"
+                                  >
+                                    {
+                                      ticket.assigned_admin_name
+                                    }
+                                  </Typography>
+                                )}
+                            </Stack>
+                          </TableCell>
+
+                          <TableCell>
+                            <Stack
+                              spacing={
+                                0.8
+                              }
+                            >
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() =>
+                                  openEscalatedTicket(
+                                    ticket.id
+                                  )
+                                }
+                                disabled={
+                                  escalationActionLoading
+                                }
+                                sx={{
+                                  textTransform:
+                                    'none',
+                                  fontWeight:
+                                    800,
+                                  borderColor:
+                                    '#087f5b',
+                                  color:
+                                    '#087f5b',
+                                }}
+                              >
+                                Review
+                              </Button>
+
+                              {!taken && (
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  onClick={async () => {
+                                    await openEscalatedTicket(
+                                      ticket.id
+                                    );
+                                  }}
+                                  disabled={
+                                    escalationActionLoading
+                                  }
+                                  sx={{
+                                    background:
+                                      '#087f5b',
+                                    '&:hover':
+                                      {
+                                        background:
+                                          '#066a4b',
+                                      },
+                                    textTransform:
+                                      'none',
+                                    fontWeight:
+                                      800,
+                                  }}
+                                >
+                                  Take Case
+                                </Button>
+                              )}
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+                  )}
+                </TableBody>
+              </Table>
+
+              {escalatedTickets.length ===
+                0 && (
+                <EmptyState text="No cases are currently waiting for Administration." />
               )}
             </TableContainer>
           )}
@@ -3552,12 +4556,17 @@ const AdminDashboard: React.FC = () => {
                   fontSize={12}
                   color="text.secondary"
                 >
-                  Customer Care can communicate
-                  with customers and manage
-                  support tickets. Financial
-                  balances and transactions are
-                  not directly modified through
-                  the support module.
+                  Customer Care handles normal
+                  support cases and read-only
+                  investigation. Customer Care
+                  cannot change balances, reverse
+                  transactions, approve KYC,
+                  suspend accounts or perform
+                  administrative actions. Cases
+                  requiring administrative action
+                  are forwarded to Administration
+                  through the secure escalation
+                  workflow.
                 </Typography>
               </Box>
             </Stack>
@@ -4501,8 +5510,6 @@ const AdminDashboard: React.FC = () => {
         >
           {selectedSupportTicket && (
             <Stack spacing={3}>
-              {/* CUSTOMER + TICKET HEADER */}
-
               <Grid
                 container
                 spacing={2}
@@ -4612,12 +5619,22 @@ const AdminDashboard: React.FC = () => {
                     >
                       <Chip
                         size="small"
-                        label={formatSupportStatus(
-                          selectedSupportTicket.ticket.status
-                        )}
-                        color={supportStatusColor(
-                          selectedSupportTicket.ticket.status
-                        )}
+                        label={
+                          selectedSupportTicket.ticket
+                            .escalated_to_admin
+                            ? 'Escalated to Administration'
+                            : formatSupportStatus(
+                                selectedSupportTicket.ticket.status
+                              )
+                        }
+                        color={
+                          selectedSupportTicket.ticket
+                            .escalated_to_admin
+                            ? 'error'
+                            : supportStatusColor(
+                                selectedSupportTicket.ticket.status
+                              )
+                        }
                       />
 
                       <Chip
@@ -4643,7 +5660,68 @@ const AdminDashboard: React.FC = () => {
                 </Grid>
               </Grid>
 
-              {/* CONTROLS */}
+              {selectedSupportTicket.ticket.escalated_to_admin && (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    borderColor:
+                      '#f0d5d2',
+                    background:
+                      '#fff8f7',
+                  }}
+                >
+                  <Typography
+                    fontWeight={900}
+                    color="#7a2119"
+                  >
+                    Forwarded to Administration
+                  </Typography>
+
+                  <Typography
+                    fontSize={13}
+                    sx={{
+                      mt: 0.7,
+                    }}
+                  >
+                    Reason:{' '}
+                    {
+                      selectedSupportTicket.ticket
+                        .escalation_reason
+                    }
+                  </Typography>
+
+                  <Typography
+                    fontSize={11}
+                    color="text.secondary"
+                    sx={{
+                      mt: 0.7,
+                    }}
+                  >
+                    Forwarded by:{' '}
+                    {
+                      selectedSupportTicket.ticket
+                        .escalated_by_name ||
+                      'Customer Care'
+                    }
+                  </Typography>
+
+                  {selectedSupportTicket.ticket
+                    .assigned_admin_name && (
+                    <Typography
+                      fontSize={11}
+                      color="text.secondary"
+                    >
+                      Taken by Administration:{' '}
+                      {
+                        selectedSupportTicket.ticket
+                          .assigned_admin_name
+                      }
+                    </Typography>
+                  )}
+                </Paper>
+              )}
 
               <Paper
                 variant="outlined"
@@ -4763,8 +5841,6 @@ const AdminDashboard: React.FC = () => {
                 </Grid>
               </Paper>
 
-              {/* CUSTOMER REQUEST */}
-
               <Paper
                 variant="outlined"
                 sx={{
@@ -4806,8 +5882,6 @@ const AdminDashboard: React.FC = () => {
                   )}
                 </Typography>
               </Paper>
-
-              {/* LINKED TRANSACTION */}
 
               {selectedSupportTicket.transaction && (
                 <Paper
@@ -4911,8 +5985,6 @@ const AdminDashboard: React.FC = () => {
                 </Paper>
               )}
 
-              {/* CONVERSATION */}
-
               <Box>
                 <Typography
                   fontWeight={900}
@@ -4989,7 +6061,7 @@ const AdminDashboard: React.FC = () => {
                                   }
                                 >
                                   {isAdmin
-                                    ? 'ZENIMONIES ADMIN'
+                                    ? 'ZENIMONIES ADMINISTRATION'
                                     : message.sender_name ||
                                       'CUSTOMER'}
                                 </Typography>
@@ -5025,8 +6097,6 @@ const AdminDashboard: React.FC = () => {
                   )}
                 </Stack>
               </Box>
-
-              {/* ADMIN REPLY */}
 
               {String(
                 selectedSupportTicket.ticket.status ||
@@ -5109,8 +6179,6 @@ const AdminDashboard: React.FC = () => {
                 </Paper>
               )}
 
-              {/* ACTIVITY HISTORY */}
-
               <Box>
                 <Typography
                   fontWeight={900}
@@ -5174,6 +6242,20 @@ const AdminDashboard: React.FC = () => {
                                   }
                                 </Typography>
                               )}
+
+                              {event.note && (
+                                <Typography
+                                  fontSize={11}
+                                  color="text.secondary"
+                                  sx={{
+                                    mt: 0.5,
+                                  }}
+                                >
+                                  {
+                                    event.note
+                                  }
+                                </Typography>
+                              )}
                             </Box>
 
                             <Typography
@@ -5209,6 +6291,926 @@ const AdminDashboard: React.FC = () => {
             disabled={
               supportReplyLoading ||
               supportActionLoading
+            }
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ========================================================
+          ADMINISTRATION ESCALATED CASE DIALOG
+          ======================================================== */}
+
+      <Dialog
+        open={
+          escalationDialogOpen
+        }
+        onClose={
+          closeEscalationDialog
+        }
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 900,
+            color: '#12382d',
+          }}
+        >
+          {selectedEscalatedTicket
+            ? `Administration — ${selectedEscalatedTicket.ticket.ticket_number}`
+            : 'Administration Case'}
+        </DialogTitle>
+
+        <DialogContent
+          dividers
+        >
+          {selectedEscalatedTicket && (
+            <Stack spacing={3}>
+              {/* CASE HEADER */}
+
+              <Grid
+                container
+                spacing={2}
+              >
+                <Grid
+                  item
+                  xs={12}
+                  md={7}
+                >
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      borderColor:
+                        '#e2ebe6',
+                    }}
+                  >
+                    <Typography
+                      fontSize={11}
+                      color="text.secondary"
+                      fontWeight={800}
+                      sx={{
+                        textTransform:
+                          'uppercase',
+                        letterSpacing:
+                          0.7,
+                      }}
+                    >
+                      Customer
+                    </Typography>
+
+                    <Typography
+                      fontWeight={900}
+                      sx={{
+                        mt: 0.5,
+                      }}
+                    >
+                      {selectedEscalatedTicket.ticket.customer_name ||
+                        'Unknown customer'}
+                    </Typography>
+
+                    <Typography
+                      fontSize={13}
+                      color="text.secondary"
+                    >
+                      {selectedEscalatedTicket.ticket.customer_email ||
+                        '—'}
+                    </Typography>
+
+                    <Typography
+                      fontSize={13}
+                      color="text.secondary"
+                    >
+                      {selectedEscalatedTicket.ticket.customer_phone ||
+                        '—'}
+                    </Typography>
+                  </Paper>
+                </Grid>
+
+                <Grid
+                  item
+                  xs={12}
+                  md={5}
+                >
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      borderColor:
+                        '#e2ebe6',
+                    }}
+                  >
+                    <Typography
+                      fontSize={11}
+                      color="text.secondary"
+                      fontWeight={800}
+                      sx={{
+                        textTransform:
+                          'uppercase',
+                        letterSpacing:
+                          0.7,
+                      }}
+                    >
+                      Administration Case
+                    </Typography>
+
+                    <Typography
+                      fontWeight={900}
+                      sx={{
+                        mt: 0.5,
+                      }}
+                    >
+                      {
+                        selectedEscalatedTicket.ticket.subject
+                      }
+                    </Typography>
+
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      flexWrap="wrap"
+                      sx={{
+                        mt: 1,
+                      }}
+                    >
+                      <Chip
+                        size="small"
+                        label={
+                          selectedEscalatedTicket.ticket
+                            .assigned_admin_id
+                            ? 'Administration In Progress'
+                            : 'Awaiting Takeover'
+                        }
+                        color={
+                          selectedEscalatedTicket.ticket
+                            .assigned_admin_id
+                            ? 'warning'
+                            : 'error'
+                        }
+                      />
+
+                      <Chip
+                        size="small"
+                        label={formatSupportPriority(
+                          selectedEscalatedTicket.ticket.priority
+                        )}
+                        color={supportPriorityColor(
+                          selectedEscalatedTicket.ticket.priority
+                        )}
+                      />
+                    </Stack>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              {/* ESCALATION DETAILS */}
+
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  borderColor:
+                    '#f0d5d2',
+                  background:
+                    '#fff8f7',
+                }}
+              >
+                <Typography
+                  fontWeight={900}
+                  color="#7a2119"
+                  sx={{
+                    mb: 1.5,
+                  }}
+                >
+                  Escalation Details
+                </Typography>
+
+                <Grid
+                  container
+                  spacing={2}
+                >
+                  <Grid
+                    item
+                    xs={12}
+                    md={4}
+                  >
+                    <InfoDisplay
+                      label="Forwarded By"
+                      value={
+                        selectedEscalatedTicket.ticket
+                          .escalated_by_name ||
+                        'Customer Care'
+                      }
+                    />
+                  </Grid>
+
+                  <Grid
+                    item
+                    xs={12}
+                    md={4}
+                  >
+                    <InfoDisplay
+                      label="Forwarded At"
+                      value={formatDate(
+                        selectedEscalatedTicket.ticket
+                          .escalated_at
+                      )}
+                    />
+                  </Grid>
+
+                  <Grid
+                    item
+                    xs={12}
+                    md={4}
+                  >
+                    <InfoDisplay
+                      label="Taken By"
+                      value={
+                        selectedEscalatedTicket.ticket
+                          .assigned_admin_name ||
+                        'Not yet taken'
+                      }
+                    />
+                  </Grid>
+
+                  <Grid
+                    item
+                    xs={12}
+                  >
+                    <InfoDisplay
+                      label="Reason for Escalation"
+                      value={
+                        selectedEscalatedTicket.ticket
+                          .escalation_reason ||
+                        'No escalation reason supplied.'
+                      }
+                    />
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* ADMIN CONTROL */}
+
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  borderColor:
+                    '#e2ebe6',
+                }}
+              >
+                <Typography
+                  fontWeight={900}
+                  sx={{
+                    mb: 1.5,
+                  }}
+                >
+                  Administration Control
+                </Typography>
+
+                {!selectedEscalatedTicket.ticket
+                  .assigned_admin_id ? (
+                  <Stack
+                    spacing={1.5}
+                  >
+                    <Alert
+                      severity="warning"
+                    >
+                      This case has been
+                      forwarded by Customer
+                      Care but has not yet
+                      been taken by an
+                      Administrator.
+                    </Alert>
+
+                    <Button
+                      variant="contained"
+                      onClick={
+                        takeEscalatedCase
+                      }
+                      disabled={
+                        escalationActionLoading
+                      }
+                      sx={{
+                        alignSelf:
+                          'flex-start',
+                        background:
+                          '#087f5b',
+                        '&:hover':
+                          {
+                            background:
+                              '#066a4b',
+                          },
+                        textTransform:
+                          'none',
+                        fontWeight:
+                          900,
+                      }}
+                    >
+                      {escalationActionLoading
+                        ? 'Taking Case...'
+                        : 'Take Case'}
+                    </Button>
+                  </Stack>
+                ) : (
+                  <Alert
+                    severity="success"
+                  >
+                    This case is currently
+                    owned by Administration
+                    {selectedEscalatedTicket.ticket
+                      .assigned_admin_name
+                      ? ` — ${selectedEscalatedTicket.ticket.assigned_admin_name}.`
+                      : '.'}
+                  </Alert>
+                )}
+
+                <Grid
+                  container
+                  spacing={2}
+                  sx={{
+                    mt: 1,
+                  }}
+                >
+                  <Grid
+                    item
+                    xs={12}
+                    sm={6}
+                  >
+                    <TextField
+                      select
+                      SelectProps={{
+                        native: true,
+                      }}
+                      fullWidth
+                      size="small"
+                      label="Status"
+                      value={
+                        selectedEscalatedTicket.ticket.status
+                      }
+                      disabled={
+                        escalationActionLoading ||
+                        !selectedEscalatedTicket.ticket
+                          .assigned_admin_id
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateEscalatedStatus(
+                          event.target.value
+                        )
+                      }
+                    >
+                      <option value="in_progress">
+                        In Progress
+                      </option>
+
+                      <option value="pending">
+                        Pending
+                      </option>
+
+                      <option value="resolved">
+                        Resolved
+                      </option>
+
+                      <option value="closed">
+                        Closed
+                      </option>
+                    </TextField>
+                  </Grid>
+
+                  <Grid
+                    item
+                    xs={12}
+                    sm={6}
+                  >
+                    <TextField
+                      select
+                      SelectProps={{
+                        native: true,
+                      }}
+                      fullWidth
+                      size="small"
+                      label="Priority"
+                      value={
+                        selectedEscalatedTicket.ticket.priority
+                      }
+                      disabled={
+                        escalationActionLoading ||
+                        !selectedEscalatedTicket.ticket
+                          .assigned_admin_id
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        updateEscalatedPriority(
+                          event.target.value
+                        )
+                      }
+                    >
+                      <option value="low">
+                        Low
+                      </option>
+
+                      <option value="normal">
+                        Normal
+                      </option>
+
+                      <option value="high">
+                        High
+                      </option>
+
+                      <option value="urgent">
+                        Urgent
+                      </option>
+                    </TextField>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* CUSTOMER REQUEST */}
+
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  borderColor:
+                    '#e2ebe6',
+                }}
+              >
+                <Typography
+                  fontWeight={900}
+                  sx={{
+                    mb: 1,
+                  }}
+                >
+                  Customer Complaint
+                </Typography>
+
+                <Typography
+                  whiteSpace="pre-wrap"
+                  fontSize={14}
+                  lineHeight={1.7}
+                >
+                  {
+                    selectedEscalatedTicket.ticket.description
+                  }
+                </Typography>
+
+                <Typography
+                  fontSize={11}
+                  color="text.secondary"
+                  sx={{
+                    mt: 1.5,
+                  }}
+                >
+                  Submitted:{' '}
+                  {formatDate(
+                    selectedEscalatedTicket.ticket.created_at
+                  )}
+                </Typography>
+              </Paper>
+
+              {/* TRANSACTION */}
+
+              {selectedEscalatedTicket.transaction && (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    borderColor:
+                      '#e2ebe6',
+                  }}
+                >
+                  <Typography
+                    fontWeight={900}
+                    sx={{
+                      mb: 1.5,
+                    }}
+                  >
+                    Linked Transaction
+                  </Typography>
+
+                  <Grid
+                    container
+                    spacing={2}
+                  >
+                    <Grid
+                      item
+                      xs={12}
+                      sm={6}
+                      md={3}
+                    >
+                      <InfoDisplay
+                        label="Reference"
+                        value={
+                          selectedEscalatedTicket
+                            .transaction
+                            .reference ||
+                          '—'
+                        }
+                      />
+                    </Grid>
+
+                    <Grid
+                      item
+                      xs={12}
+                      sm={6}
+                      md={3}
+                    >
+                      <InfoDisplay
+                        label="Type"
+                        value={
+                          selectedEscalatedTicket
+                            .transaction
+                            .type ||
+                          '—'
+                        }
+                      />
+                    </Grid>
+
+                    <Grid
+                      item
+                      xs={12}
+                      sm={6}
+                      md={3}
+                    >
+                      <InfoDisplay
+                        label="Amount"
+                        value={
+                          selectedEscalatedTicket
+                            .transaction
+                            .amount !=
+                          null
+                            ? formatMoney(
+                                selectedEscalatedTicket
+                                  .transaction
+                                  .amount
+                              )
+                            : '—'
+                        }
+                      />
+                    </Grid>
+
+                    <Grid
+                      item
+                      xs={12}
+                      sm={6}
+                      md={3}
+                    >
+                      <InfoDisplay
+                        label="Status"
+                        value={
+                          getStatusLabel(
+                            selectedEscalatedTicket
+                              .transaction
+                              .status ||
+                              ''
+                          )
+                        }
+                      />
+                    </Grid>
+                  </Grid>
+                </Paper>
+              )}
+
+              {/* CONVERSATION */}
+
+              <Box>
+                <Typography
+                  fontWeight={900}
+                  sx={{
+                    mb: 1.5,
+                  }}
+                >
+                  Customer Conversation
+                </Typography>
+
+                <Stack
+                  spacing={1.5}
+                >
+                  {selectedEscalatedTicket.messages
+                    ?.length ? (
+                    selectedEscalatedTicket.messages.map(
+                      (
+                        message
+                      ) => {
+                        const senderType =
+                          String(
+                            message.sender_type ||
+                              ''
+                          ).toLowerCase();
+
+                        const isAdmin =
+                          senderType ===
+                          'admin';
+
+                        const isAssistant =
+                          senderType ===
+                          'assistant';
+
+                        return (
+                          <Box
+                            key={
+                              message.id
+                            }
+                            sx={{
+                              display:
+                                'flex',
+                              justifyContent:
+                                isAdmin
+                                  ? 'flex-end'
+                                  : 'flex-start',
+                            }}
+                          >
+                            <Paper
+                              elevation={
+                                0
+                              }
+                              sx={{
+                                p: 1.8,
+                                maxWidth:
+                                  '82%',
+                                borderRadius:
+                                  2.5,
+                                background:
+                                  isAdmin
+                                    ? '#eaf7f1'
+                                    : isAssistant
+                                      ? '#f5f7f6'
+                                      : '#f4f6f5',
+                                border:
+                                  '1px solid #e2ebe6',
+                              }}
+                            >
+                              <Stack
+                                direction="row"
+                                justifyContent="space-between"
+                                spacing={2}
+                                sx={{
+                                  mb: 0.7,
+                                }}
+                              >
+                                <Typography
+                                  fontSize={11}
+                                  fontWeight={900}
+                                  color={
+                                    isAdmin
+                                      ? '#087f5b'
+                                      : '#12382d'
+                                  }
+                                >
+                                  {isAdmin
+                                    ? 'ZENIMONIES ADMINISTRATION'
+                                    : isAssistant
+                                      ? 'ZENIMONIES SUPPORT ASSISTANT'
+                                      : message.sender_name ||
+                                        'CUSTOMER'}
+                                </Typography>
+
+                                <Typography
+                                  fontSize={10}
+                                  color="text.secondary"
+                                >
+                                  {formatDate(
+                                    message.created_at
+                                  )}
+                                </Typography>
+                              </Stack>
+
+                              <Typography
+                                fontSize={13}
+                                whiteSpace="pre-wrap"
+                                lineHeight={
+                                  1.65
+                                }
+                              >
+                                {
+                                  message.message
+                                }
+                              </Typography>
+                            </Paper>
+                          </Box>
+                        );
+                      }
+                    )
+                  ) : (
+                    <EmptyState text="No messages in this case yet." />
+                  )}
+                </Stack>
+              </Box>
+
+              {/* ADMIN RESPONSE */}
+
+              {selectedEscalatedTicket.ticket
+                .assigned_admin_id &&
+                String(
+                  selectedEscalatedTicket.ticket
+                    .status ||
+                    ''
+                ).toLowerCase() !==
+                  'closed' && (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      borderColor:
+                        '#e2ebe6',
+                    }}
+                  >
+                    <Typography
+                      fontWeight={900}
+                      sx={{
+                        mb: 1.5,
+                      }}
+                    >
+                      Administration Response
+                    </Typography>
+
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={4}
+                      placeholder="Write the official Administration response to the customer..."
+                      value={
+                        adminReply
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setAdminReply(
+                          event.target.value
+                        )
+                      }
+                      disabled={
+                        adminReplyLoading
+                      }
+                    />
+
+                    <Stack
+                      direction="row"
+                      justifyContent="flex-end"
+                      sx={{
+                        mt: 1.5,
+                      }}
+                    >
+                      <Button
+                        variant="contained"
+                        onClick={
+                          replyToEscalatedCase
+                        }
+                        disabled={
+                          adminReplyLoading ||
+                          !adminReply.trim()
+                        }
+                        sx={{
+                          background:
+                            '#087f5b',
+                          '&:hover':
+                            {
+                              background:
+                                '#066a4b',
+                            },
+                          textTransform:
+                            'none',
+                          fontWeight:
+                            800,
+                        }}
+                      >
+                        {adminReplyLoading
+                          ? 'Sending...'
+                          : 'Send Administration Reply'}
+                      </Button>
+                    </Stack>
+                  </Paper>
+                )}
+
+              {/* AUDIT HISTORY */}
+
+              <Box>
+                <Typography
+                  fontWeight={900}
+                  sx={{
+                    mb: 1.5,
+                  }}
+                >
+                  Administration Audit History
+                </Typography>
+
+                <Stack
+                  spacing={1}
+                >
+                  {selectedEscalatedTicket.events
+                    ?.length ? (
+                    selectedEscalatedTicket.events.map(
+                      (
+                        event
+                      ) => (
+                        <Paper
+                          key={
+                            event.id
+                          }
+                          variant="outlined"
+                          sx={{
+                            p: 1.5,
+                            borderRadius:
+                              2,
+                            borderColor:
+                              '#e2ebe6',
+                          }}
+                        >
+                          <Stack
+                            direction={{
+                              xs: 'column',
+                              sm: 'row',
+                            }}
+                            justifyContent="space-between"
+                            spacing={1}
+                          >
+                            <Box>
+                              <Typography
+                                fontSize={12}
+                                fontWeight={800}
+                              >
+                                {
+                                  formatSupportEvent(
+                                    event
+                                  )
+                                }
+                              </Typography>
+
+                              {event.actor_name && (
+                                <Typography
+                                  fontSize={11}
+                                  color="text.secondary"
+                                >
+                                  By{' '}
+                                  {
+                                    event.actor_name
+                                  }
+                                  {event.actor_role
+                                    ? ` • ${event.actor_role}`
+                                    : ''}
+                                </Typography>
+                              )}
+
+                              {event.note && (
+                                <Typography
+                                  fontSize={11}
+                                  color="text.secondary"
+                                  sx={{
+                                    mt: 0.5,
+                                  }}
+                                >
+                                  {
+                                    event.note
+                                  }
+                                </Typography>
+                              )}
+                            </Box>
+
+                            <Typography
+                              fontSize={10}
+                              color="text.secondary"
+                            >
+                              {formatDate(
+                                event.created_at
+                              )}
+                            </Typography>
+                          </Stack>
+                        </Paper>
+                      )
+                    )
+                  ) : (
+                    <EmptyState text="No audit history recorded." />
+                  )}
+                </Stack>
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            p: 2,
+          }}
+        >
+          <Button
+            onClick={
+              closeEscalationDialog
+            }
+            disabled={
+              escalationActionLoading ||
+              adminReplyLoading
             }
           >
             Close
