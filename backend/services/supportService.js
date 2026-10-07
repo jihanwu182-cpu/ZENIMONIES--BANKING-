@@ -6,21 +6,21 @@ const { generateTicketNumber } = require('../utils/generateTicketNumber');
 // CUSTOMER CARE SERVICE
 // ============================================================
 //
-// Workflow:
+// CUSTOMER SUPPORT WORKFLOW
 //
 // Customer complaint
 //      ↓
 // Ticket created
 //      ↓
-// Automatic Support Assistant response
+// Automatic Support Assistant acknowledgement
 //      ↓
-// Customer chooses "Connect me to Customer Care"
+// Customer chooses Customer Care
 //      ↓
 // Customer Care queue
 //      ↓
 // Agent takes case
 //      ↓
-// Agent/customer conversation
+// Customer ↔ Agent conversation
 //      ↓
 // Waiting for Customer
 //      ↓
@@ -28,14 +28,35 @@ const { generateTicketNumber } = require('../utils/generateTicketNumber');
 //      ↓
 // Automatic closure if customer does not respond
 //
-// IMPORTANT:
-// - No passwords
-// - No PINs
-// - No OTPs
-// - No CVV
-// - No session IDs
-// - Transaction references may only be requested
-//   inside the secure conversation when necessary.
+// ESCALATION
+//
+// Customer Care
+//      ↓
+// Forward to Administration
+//      ↓
+// Administration queue
+//      ↓
+// Administrator takes case
+//      ↓
+// Administration owns case
+//
+// IMPORTANT SECURITY:
+//
+// Customer Care must NEVER receive:
+// - full account numbers
+// - account balances
+// - available balances
+// - ledger balances
+// - balance_before
+// - balance_after
+// - PIN
+// - password
+// - OTP
+// - CVV
+// - session ID
+//
+// Transaction investigation is handled separately through
+// secure database views.
 // ============================================================
 
 
@@ -43,16 +64,26 @@ const { generateTicketNumber } = require('../utils/generateTicketNumber');
 // CONSTANTS
 // ============================================================
 
-const CUSTOMER_RESPONSE_TIMEOUT_HOURS = 24;
+const CUSTOMER_RESPONSE_TIMEOUT_HOURS =
+  Number(
+    process.env.SUPPORT_CUSTOMER_RESPONSE_TIMEOUT_HOURS ||
+      24
+  );
 
-const CUSTOMER_RESPONSE_REMINDER_HOURS = 12;
+const CUSTOMER_RESPONSE_REMINDER_HOURS =
+  Number(
+    process.env.SUPPORT_CUSTOMER_REMINDER_HOURS ||
+      12
+  );
 
 
 // ============================================================
 // AUTOMATED ASSISTANT MESSAGES
 // ============================================================
 
-function buildInitialAssistantMessage(ticketNumber) {
+function buildInitialAssistantMessage(
+  ticketNumber
+) {
   return [
     '🤖 ZENIMONIES Support Assistant',
     '',
@@ -100,7 +131,9 @@ function buildAutoClosedMessage() {
 }
 
 
-function buildAgentJoinedMessage(agentName) {
+function buildAgentJoinedMessage(
+  agentName
+) {
   return [
     `👤 ${agentName}`,
     '',
@@ -115,21 +148,31 @@ function buildAgentJoinedMessage(agentName) {
 // GENERATE UNIQUE TICKET NUMBER
 // ============================================================
 
-async function generateUniqueTicketNumber(client) {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const candidate = generateTicketNumber();
+async function generateUniqueTicketNumber(
+  client
+) {
+  for (
+    let attempt = 0;
+    attempt < 10;
+    attempt += 1
+  ) {
+    const candidate =
+      generateTicketNumber();
 
-    const result = await client.query(
-      `
+    const result =
+      await client.query(
+        `
         SELECT id
         FROM support_tickets
         WHERE ticket_number = $1
         LIMIT 1
-      `,
-      [candidate]
-    );
+        `,
+        [candidate]
+      );
 
-    if (result.rows.length === 0) {
+    if (
+      result.rows.length === 0
+    ) {
       return candidate;
     }
   }
@@ -152,60 +195,85 @@ async function createTicket({
   priority = 'normal',
 }) {
   if (!userId) {
-    throw new Error('Customer ID is required.');
+    throw new Error(
+      'Customer ID is required.'
+    );
   }
 
-  if (!subject || !subject.trim()) {
-    throw new Error('Support ticket subject is required.');
+  if (
+    !subject ||
+    !subject.trim()
+  ) {
+    throw new Error(
+      'Support ticket subject is required.'
+    );
   }
 
-  if (!description || !description.trim()) {
-    throw new Error('Support ticket description is required.');
+  if (
+    !description ||
+    !description.trim()
+  ) {
+    throw new Error(
+      'Support ticket description is required.'
+    );
   }
 
-  const client = await pool.connect();
+  const client =
+    await pool.connect();
 
   try {
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
     // --------------------------------------------------------
-    // Verify category if supplied.
+    // Validate category
     // --------------------------------------------------------
 
     if (categoryId) {
-      const categoryResult = await client.query(
-        `
+      const categoryResult =
+        await client.query(
+          `
           SELECT id
           FROM support_categories
           WHERE id = $1
             AND is_active = TRUE
           LIMIT 1
-        `,
-        [categoryId]
-      );
+          `,
+          [categoryId]
+        );
 
-      if (categoryResult.rows.length === 0) {
-        throw new Error('Invalid support category.');
+      if (
+        categoryResult.rows.length ===
+        0
+      ) {
+        throw new Error(
+          'Invalid support category.'
+        );
       }
     }
 
     // --------------------------------------------------------
-    // Generate ticket number.
+    // Ticket number
     // --------------------------------------------------------
 
     const ticketNumber =
-      await generateUniqueTicketNumber(client);
+      await generateUniqueTicketNumber(
+        client
+      );
 
     // --------------------------------------------------------
-    // Create ticket.
+    // Create ticket
     //
     // IMPORTANT:
-    // Transaction reference is intentionally NOT collected
-    // from the customer at ticket creation.
+    // Customer does NOT provide transaction_id here.
+    // Transaction references are requested securely later
+    // when required by Customer Care.
     // --------------------------------------------------------
 
-    const ticketResult = await client.query(
-      `
+    const ticketResult =
+      await client.query(
+        `
         INSERT INTO support_tickets (
           ticket_number,
           user_id,
@@ -233,39 +301,40 @@ async function createTicket({
           CURRENT_TIMESTAMP
         )
         RETURNING *
-      `,
-      [
-        ticketNumber,
-        userId,
-        categoryId || null,
-        subject.trim(),
-        description.trim(),
-        priority,
-      ]
-    );
+        `,
+        [
+          ticketNumber,
+          userId,
+          categoryId || null,
+          subject.trim(),
+          description.trim(),
+          priority,
+        ]
+      );
 
-    const ticket = ticketResult.rows[0];
+    const ticket =
+      ticketResult.rows[0];
 
     // --------------------------------------------------------
-    // Customer's original complaint.
+    // Customer complaint message
     // --------------------------------------------------------
 
     await client.query(
       `
-        INSERT INTO support_messages (
-          ticket_id,
-          sender_user_id,
-          sender_type,
-          message,
-          is_internal
-        )
-        VALUES (
-          $1,
-          $2,
-          'customer',
-          $3,
-          FALSE
-        )
+      INSERT INTO support_messages (
+        ticket_id,
+        sender_user_id,
+        sender_type,
+        message,
+        is_internal
+      )
+      VALUES (
+        $1,
+        $2,
+        'customer',
+        $3,
+        FALSE
+      )
       `,
       [
         ticket.id,
@@ -275,25 +344,25 @@ async function createTicket({
     );
 
     // --------------------------------------------------------
-    // Automatic robot response.
+    // Automatic assistant acknowledgement
     // --------------------------------------------------------
 
     await client.query(
       `
-        INSERT INTO support_messages (
-          ticket_id,
-          sender_user_id,
-          sender_type,
-          message,
-          is_internal
-        )
-        VALUES (
-          $1,
-          NULL,
-          'assistant',
-          $2,
-          FALSE
-        )
+      INSERT INTO support_messages (
+        ticket_id,
+        sender_user_id,
+        sender_type,
+        message,
+        is_internal
+      )
+      VALUES (
+        $1,
+        NULL,
+        'assistant',
+        $2,
+        FALSE
+      )
       `,
       [
         ticket.id,
@@ -304,25 +373,25 @@ async function createTicket({
     );
 
     // --------------------------------------------------------
-    // Ticket creation event.
+    // Ticket event
     // --------------------------------------------------------
 
     await client.query(
       `
-        INSERT INTO support_ticket_events (
-          ticket_id,
-          actor_user_id,
-          event_type,
-          new_value,
-          note
-        )
-        VALUES (
-          $1,
-          $2,
-          'ticket_created',
-          'open',
-          'Customer created a Customer Care complaint.'
-        )
+      INSERT INTO support_ticket_events (
+        ticket_id,
+        actor_user_id,
+        event_type,
+        new_value,
+        note
+      )
+      VALUES (
+        $1,
+        $2,
+        'ticket_created',
+        'open',
+        'Customer created a Customer Care complaint.'
+      )
       `,
       [
         ticket.id,
@@ -331,34 +400,41 @@ async function createTicket({
     );
 
     // --------------------------------------------------------
-    // Automatic assistant event.
+    // Assistant event
     // --------------------------------------------------------
 
     await client.query(
       `
-        INSERT INTO support_ticket_events (
-          ticket_id,
-          actor_user_id,
-          event_type,
-          new_value,
-          note
-        )
-        VALUES (
-          $1,
-          NULL,
-          'assistant_acknowledgement',
-          'assistant',
-          'ZENIMONIES Support Assistant automatically acknowledged the complaint.'
-        )
+      INSERT INTO support_ticket_events (
+        ticket_id,
+        actor_user_id,
+        event_type,
+        new_value,
+        note
+      )
+      VALUES (
+        $1,
+        NULL,
+        'assistant_acknowledgement',
+        'assistant',
+        'ZENIMONIES Support Assistant automatically acknowledged the complaint.'
+      )
       `,
       [ticket.id]
     );
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
     return ticket;
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query(
+        'ROLLBACK'
+      );
+    } catch {}
+
     throw error;
   } finally {
     client.release();
@@ -370,27 +446,50 @@ async function createTicket({
 // GET CUSTOMER TICKETS
 // ============================================================
 
-async function getCustomerTickets(userId) {
-  const result = await pool.query(
-    `
+async function getCustomerTickets(
+  userId
+) {
+  const result =
+    await pool.query(
+      `
       SELECT
         st.*,
+
         sc.name AS category_name,
-        assigned_user.full_name AS assigned_agent_name
+
+        assigned_user.full_name
+          AS assigned_agent_name,
+
+        escalated_user.full_name
+          AS escalated_by_name,
+
+        assigned_admin.full_name
+          AS assigned_admin_name
+
       FROM support_tickets st
 
       LEFT JOIN support_categories sc
         ON sc.id = st.category_id
 
       LEFT JOIN users assigned_user
-        ON assigned_user.id = st.assigned_to
+        ON assigned_user.id =
+           st.assigned_to
+
+      LEFT JOIN users escalated_user
+        ON escalated_user.id =
+           st.escalated_by
+
+      LEFT JOIN users assigned_admin
+        ON assigned_admin.id =
+           st.assigned_admin_id
 
       WHERE st.user_id = $1
 
-      ORDER BY st.created_at DESC
-    `,
-    [userId]
-  );
+      ORDER BY
+        st.created_at DESC
+      `,
+      [userId]
+    );
 
   return result.rows;
 }
@@ -404,43 +503,72 @@ async function getCustomerTicket(
   userId,
   ticketId
 ) {
-  const ticketResult = await pool.query(
-    `
+  const ticketResult =
+    await pool.query(
+      `
       SELECT
         st.*,
+
         sc.name AS category_name,
-        assigned_user.full_name AS assigned_agent_name
+
+        assigned_user.full_name
+          AS assigned_agent_name,
+
+        escalated_user.full_name
+          AS escalated_by_name,
+
+        assigned_admin.full_name
+          AS assigned_admin_name
+
       FROM support_tickets st
 
       LEFT JOIN support_categories sc
         ON sc.id = st.category_id
 
       LEFT JOIN users assigned_user
-        ON assigned_user.id = st.assigned_to
+        ON assigned_user.id =
+           st.assigned_to
 
-      WHERE st.id = $1
+      LEFT JOIN users escalated_user
+        ON escalated_user.id =
+           st.escalated_by
+
+      LEFT JOIN users assigned_admin
+        ON assigned_admin.id =
+           st.assigned_admin_id
+
+      WHERE
+        st.id = $1
         AND st.user_id = $2
 
       LIMIT 1
-    `,
-    [
-      ticketId,
-      userId,
-    ]
-  );
+      `,
+      [
+        ticketId,
+        userId,
+      ]
+    );
 
-  if (ticketResult.rows.length === 0) {
+  if (
+    ticketResult.rows.length ===
+    0
+  ) {
     return null;
   }
 
-  const ticket = ticketResult.rows[0];
+  const ticket =
+    ticketResult.rows[0];
 
   // ----------------------------------------------------------
-  // Conversation
+  // Customer-visible conversation only
+  // ----------------------------------------------------------
+  //
+  // Internal messages are NEVER returned to the customer.
   // ----------------------------------------------------------
 
-  const messagesResult = await pool.query(
-    `
+  const messagesResult =
+    await pool.query(
+      `
       SELECT
         sm.id,
         sm.ticket_id,
@@ -473,28 +601,38 @@ async function getCustomerTicket(
       FROM support_messages sm
 
       LEFT JOIN users customer
-        ON customer.id = sm.sender_user_id
-       AND sm.sender_type = 'customer'
+        ON customer.id =
+           sm.sender_user_id
+       AND sm.sender_type =
+           'customer'
 
       LEFT JOIN users agent
-        ON agent.id = sm.sender_user_id
-       AND sm.sender_type = 'agent'
+        ON agent.id =
+           sm.sender_user_id
+       AND sm.sender_type =
+           'agent'
 
       LEFT JOIN users admin_user
-        ON admin_user.id = sm.sender_user_id
-       AND sm.sender_type = 'admin'
+        ON admin_user.id =
+           sm.sender_user_id
+       AND sm.sender_type =
+           'admin'
 
-      WHERE sm.ticket_id = $1
+      WHERE
+        sm.ticket_id = $1
         AND sm.is_internal = FALSE
 
-      ORDER BY sm.created_at ASC
-    `,
-    [ticketId]
-  );
+      ORDER BY
+        sm.created_at ASC
+      `,
+      [ticketId]
+    );
 
   return {
     ...ticket,
-    messages: messagesResult.rows,
+
+    messages:
+      messagesResult.rows,
   };
 }
 
@@ -508,98 +646,146 @@ async function connectToCustomerCare({
   ticketId,
 }) {
   if (!userId) {
-    throw new Error('Customer ID is required.');
+    throw new Error(
+      'Customer ID is required.'
+    );
   }
 
-  const client = await pool.connect();
+  const client =
+    await pool.connect();
 
   try {
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
-    const ticketResult = await client.query(
-      `
+    const ticketResult =
+      await client.query(
+        `
         SELECT
           id,
           ticket_number,
           status,
-          connected_to_customer_care
+          connected_to_customer_care,
+          escalated_to_admin
+
         FROM support_tickets
 
-        WHERE id = $1
+        WHERE
+          id = $1
           AND user_id = $2
 
         FOR UPDATE
-      `,
-      [
-        ticketId,
-        userId,
-      ]
-    );
+        `,
+        [
+          ticketId,
+          userId,
+        ]
+      );
 
-    if (ticketResult.rows.length === 0) {
-      throw new Error('Support ticket not found.');
+    if (
+      ticketResult.rows.length ===
+      0
+    ) {
+      throw new Error(
+        'Support ticket not found.'
+      );
     }
 
-    const ticket = ticketResult.rows[0];
+    const ticket =
+      ticketResult.rows[0];
 
-    if (ticket.status === 'closed') {
+    if (
+      ticket.status ===
+      'closed'
+    ) {
       throw new Error(
         'This support ticket is closed.'
       );
     }
 
-    // Already connected.
-    if (ticket.connected_to_customer_care) {
-      await client.query('COMMIT');
+    // --------------------------------------------------------
+    // Already escalated
+    //
+    // Customer does not need to "connect" again.
+    // Administration is already handling the case.
+    // --------------------------------------------------------
+
+    if (
+      ticket.escalated_to_admin
+    ) {
+      await client.query(
+        'COMMIT'
+      );
+
+      return ticket;
+    }
+
+    if (
+      ticket.connected_to_customer_care
+    ) {
+      await client.query(
+        'COMMIT'
+      );
 
       return ticket;
     }
 
     // --------------------------------------------------------
-    // Mark as waiting for Customer Care.
-    //
-    // We use "pending" for the existing database workflow.
+    // Connect to Customer Care
     // --------------------------------------------------------
 
-    const updatedTicketResult = await client.query(
-      `
+    const updatedTicketResult =
+      await client.query(
+        `
         UPDATE support_tickets
 
         SET
-          connected_to_customer_care = TRUE,
-          status = 'pending',
-          waiting_since = NULL,
-          reminder_sent_at = NULL,
-          customer_response_due_at = NULL,
-          updated_at = CURRENT_TIMESTAMP
+          connected_to_customer_care =
+            TRUE,
+
+          status =
+            'pending',
+
+          waiting_since =
+            NULL,
+
+          reminder_sent_at =
+            NULL,
+
+          customer_response_due_at =
+            NULL,
+
+          updated_at =
+            CURRENT_TIMESTAMP
 
         WHERE id = $1
 
         RETURNING *
-      `,
-      [ticketId]
-    );
+        `,
+        [ticketId]
+      );
 
     // --------------------------------------------------------
-    // Assistant message.
+    // Assistant message
     // --------------------------------------------------------
 
     await client.query(
       `
-        INSERT INTO support_messages (
-          ticket_id,
-          sender_user_id,
-          sender_type,
-          message,
-          is_internal
-        )
-        VALUES (
-          $1,
-          NULL,
-          'assistant',
-          $2,
-          FALSE
-        )
+      INSERT INTO support_messages (
+        ticket_id,
+        sender_user_id,
+        sender_type,
+        message,
+        is_internal
+      )
+      VALUES (
+        $1,
+        NULL,
+        'assistant',
+        $2,
+        FALSE
+      )
       `,
       [
         ticketId,
@@ -608,27 +794,27 @@ async function connectToCustomerCare({
     );
 
     // --------------------------------------------------------
-    // Event.
+    // Event
     // --------------------------------------------------------
 
     await client.query(
       `
-        INSERT INTO support_ticket_events (
-          ticket_id,
-          actor_user_id,
-          event_type,
-          old_value,
-          new_value,
-          note
-        )
-        VALUES (
-          $1,
-          $2,
-          'customer_connected_to_care',
-          $3,
-          'pending',
-          'Customer requested connection to Customer Care.'
-        )
+      INSERT INTO support_ticket_events (
+        ticket_id,
+        actor_user_id,
+        event_type,
+        old_value,
+        new_value,
+        note
+      )
+      VALUES (
+        $1,
+        $2,
+        'customer_connected_to_care',
+        $3,
+        'pending',
+        'Customer requested connection to Customer Care.'
+      )
       `,
       [
         ticketId,
@@ -637,11 +823,18 @@ async function connectToCustomerCare({
       ]
     );
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
     return updatedTicketResult.rows[0];
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query(
+        'ROLLBACK'
+      );
+    } catch {}
+
     throw error;
   } finally {
     client.release();
@@ -658,66 +851,109 @@ async function addCustomerMessage({
   ticketId,
   message,
 }) {
-  if (!message || !message.trim()) {
-    throw new Error('Message is required.');
+  if (
+    !message ||
+    !message.trim()
+  ) {
+    throw new Error(
+      'Message is required.'
+    );
   }
 
-  const client = await pool.connect();
+  const client =
+    await pool.connect();
 
   try {
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
-    const ticketResult = await client.query(
-      `
+    const ticketResult =
+      await client.query(
+        `
         SELECT
           id,
           status,
           assigned_to,
-          connected_to_customer_care
+          connected_to_customer_care,
+          escalated_to_admin,
+          assigned_admin_id
+
         FROM support_tickets
 
-        WHERE id = $1
+        WHERE
+          id = $1
           AND user_id = $2
 
         FOR UPDATE
-      `,
-      [
-        ticketId,
-        userId,
-      ]
-    );
+        `,
+        [
+          ticketId,
+          userId,
+        ]
+      );
 
-    if (ticketResult.rows.length === 0) {
+    if (
+      ticketResult.rows.length ===
+      0
+    ) {
       throw new Error(
         'Support ticket not found.'
       );
     }
 
-    const ticket = ticketResult.rows[0];
+    const ticket =
+      ticketResult.rows[0];
 
-    if (ticket.status === 'closed') {
+    if (
+      ticket.status ===
+      'closed'
+    ) {
       throw new Error(
         'This support ticket is closed.'
       );
     }
 
     // --------------------------------------------------------
-    // Customer replying to resolved case reopens it.
+    // IMPORTANT:
+    //
+    // If Administration has taken the case, the customer's
+    // reply must remain with Administration.
+    //
+    // Never move it back to Customer Care.
     // --------------------------------------------------------
 
-    const newStatus =
-      ticket.status === 'resolved'
-        ? 'open'
-        : ticket.status === 'pending'
+    let newStatus;
+
+    if (
+      ticket.escalated_to_admin
+    ) {
+      newStatus =
+        ticket.status ===
+          'resolved'
           ? 'in_progress'
-          : ticket.status;
+          : ticket.status ===
+              'pending'
+            ? 'in_progress'
+            : ticket.status;
+    } else {
+      newStatus =
+        ticket.status ===
+          'resolved'
+          ? 'open'
+          : ticket.status ===
+              'pending'
+            ? 'in_progress'
+            : ticket.status;
+    }
 
     // --------------------------------------------------------
-    // Customer message.
+    // Customer message
     // --------------------------------------------------------
 
-    const messageResult = await client.query(
-      `
+    const messageResult =
+      await client.query(
+        `
         INSERT INTO support_messages (
           ticket_id,
           sender_user_id,
@@ -733,34 +969,53 @@ async function addCustomerMessage({
           FALSE
         )
         RETURNING *
-      `,
-      [
-        ticketId,
-        userId,
-        message.trim(),
-      ]
-    );
+        `,
+        [
+          ticketId,
+          userId,
+          message.trim(),
+        ]
+      );
 
     // --------------------------------------------------------
-    // Customer response cancels waiting timer.
+    // Customer response resets timeout.
+    //
+    // This is correct whether the case is with Customer Care
+    // or Administration.
     // --------------------------------------------------------
 
     await client.query(
       `
-        UPDATE support_tickets
+      UPDATE support_tickets
 
-        SET
-          status = $2,
-          last_message_at = CURRENT_TIMESTAMP,
-          last_customer_message_at = CURRENT_TIMESTAMP,
-          waiting_since = NULL,
-          reminder_sent_at = NULL,
-          customer_response_due_at = NULL,
-          auto_closed_at = NULL,
-          auto_close_reason = NULL,
-          updated_at = CURRENT_TIMESTAMP
+      SET
+        status = $2,
 
-        WHERE id = $1
+        last_message_at =
+          CURRENT_TIMESTAMP,
+
+        last_customer_message_at =
+          CURRENT_TIMESTAMP,
+
+        waiting_since =
+          NULL,
+
+        reminder_sent_at =
+          NULL,
+
+        customer_response_due_at =
+          NULL,
+
+        auto_closed_at =
+          NULL,
+
+        auto_close_reason =
+          NULL,
+
+        updated_at =
+          CURRENT_TIMESTAMP
+
+      WHERE id = $1
       `,
       [
         ticketId,
@@ -769,27 +1024,27 @@ async function addCustomerMessage({
     );
 
     // --------------------------------------------------------
-    // Event.
+    // Event
     // --------------------------------------------------------
 
     await client.query(
       `
-        INSERT INTO support_ticket_events (
-          ticket_id,
-          actor_user_id,
-          event_type,
-          old_value,
-          new_value,
-          note
-        )
-        VALUES (
-          $1,
-          $2,
-          'customer_message',
-          $3,
-          $4,
-          'Customer replied to the Customer Care case.'
-        )
+      INSERT INTO support_ticket_events (
+        ticket_id,
+        actor_user_id,
+        event_type,
+        old_value,
+        new_value,
+        note
+      )
+      VALUES (
+        $1,
+        $2,
+        'customer_message',
+        $3,
+        $4,
+        'Customer replied to the support case.'
+      )
       `,
       [
         ticketId,
@@ -799,11 +1054,18 @@ async function addCustomerMessage({
       ]
     );
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
     return messageResult.rows[0];
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query(
+        'ROLLBACK'
+      );
+    } catch {}
+
     throw error;
   } finally {
     client.release();
@@ -820,71 +1082,122 @@ async function startWaitingForCustomer({
   agentId,
 }) {
   if (!agentId) {
-    throw new Error('Agent ID is required.');
+    throw new Error(
+      'Agent ID is required.'
+    );
   }
 
-  const client = await pool.connect();
+  const client =
+    await pool.connect();
 
   try {
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
-    const result = await client.query(
-      `
+    const result =
+      await client.query(
+        `
         SELECT
           id,
           status,
-          assigned_to
+          assigned_to,
+          escalated_to_admin,
+          assigned_admin_id
+
         FROM support_tickets
 
         WHERE id = $1
 
         FOR UPDATE
-      `,
-      [ticketId]
-    );
+        `,
+        [ticketId]
+      );
 
-    if (result.rows.length === 0) {
+    if (
+      result.rows.length ===
+      0
+    ) {
       throw new Error(
         'Support ticket not found.'
       );
     }
 
-    const ticket = result.rows[0];
+    const ticket =
+      result.rows[0];
+
+    // --------------------------------------------------------
+    // Administration owns escalated cases.
+    // --------------------------------------------------------
 
     if (
-      ticket.assigned_to !== agentId
+      ticket.escalated_to_admin
+    ) {
+      throw new Error(
+        'This case has been forwarded to Administration.'
+      );
+    }
+
+    if (
+      String(ticket.assigned_to) !==
+      String(agentId)
     ) {
       throw new Error(
         'You are not assigned to this case.'
       );
     }
 
-    const reminderAt = new Date();
+    if (
+      ticket.status ===
+      'closed'
+    ) {
+      throw new Error(
+        'This support case is closed.'
+      );
+    }
 
-    reminderAt.setHours(
-      reminderAt.getHours() +
-      CUSTOMER_RESPONSE_REMINDER_HOURS
-    );
+    const now =
+      new Date();
 
-    const responseDueAt = new Date();
+    const reminderAt =
+      new Date(
+        now.getTime() +
+          CUSTOMER_RESPONSE_REMINDER_HOURS *
+            60 *
+            60 *
+            1000
+      );
 
-    responseDueAt.setHours(
-      responseDueAt.getHours() +
-      CUSTOMER_RESPONSE_TIMEOUT_HOURS
-    );
+    const responseDueAt =
+      new Date(
+        now.getTime() +
+          CUSTOMER_RESPONSE_TIMEOUT_HOURS *
+            60 *
+            60 *
+            1000
+      );
 
     await client.query(
       `
-        UPDATE support_tickets
+      UPDATE support_tickets
 
-        SET
-          status = 'pending',
-          waiting_since = CURRENT_TIMESTAMP,
-          reminder_sent_at = NULL,
-          customer_response_due_at = $2,
-          updated_at = CURRENT_TIMESTAMP
+      SET
+        status =
+          'pending',
 
-        WHERE id = $1
+        waiting_since =
+          CURRENT_TIMESTAMP,
+
+        reminder_sent_at =
+          NULL,
+
+        customer_response_due_at =
+          $2,
+
+        updated_at =
+          CURRENT_TIMESTAMP
+
+      WHERE id = $1
       `,
       [
         ticketId,
@@ -894,22 +1207,22 @@ async function startWaitingForCustomer({
 
     await client.query(
       `
-        INSERT INTO support_ticket_events (
-          ticket_id,
-          actor_user_id,
-          event_type,
-          old_value,
-          new_value,
-          note
-        )
-        VALUES (
-          $1,
-          $2,
-          'waiting_for_customer',
-          $3,
-          'pending',
-          'Customer Care agent is waiting for a customer response.'
-        )
+      INSERT INTO support_ticket_events (
+        ticket_id,
+        actor_user_id,
+        event_type,
+        old_value,
+        new_value,
+        note
+      )
+      VALUES (
+        $1,
+        $2,
+        'waiting_for_customer',
+        $3,
+        'pending',
+        'Customer Care agent is waiting for a customer response.'
+      )
       `,
       [
         ticketId,
@@ -918,7 +1231,9 @@ async function startWaitingForCustomer({
       ]
     );
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
     return {
       success: true,
@@ -926,7 +1241,12 @@ async function startWaitingForCustomer({
       responseDueAt,
     };
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query(
+        'ROLLBACK'
+      );
+    } catch {}
+
     throw error;
   } finally {
     client.release();
@@ -941,69 +1261,99 @@ async function startWaitingForCustomer({
 async function sendCustomerResponseReminder(
   ticketId
 ) {
-  const client = await pool.connect();
+  const client =
+    await pool.connect();
 
   try {
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
-    const result = await client.query(
-      `
+    const result =
+      await client.query(
+        `
         SELECT
           id,
           status,
           reminder_sent_at,
-          customer_response_due_at
+          waiting_since,
+          customer_response_due_at,
+          escalated_to_admin,
+          assigned_admin_id
+
         FROM support_tickets
 
         WHERE id = $1
 
         FOR UPDATE
-      `,
-      [ticketId]
-    );
+        `,
+        [ticketId]
+      );
 
-    if (result.rows.length === 0) {
+    if (
+      result.rows.length ===
+      0
+    ) {
       throw new Error(
         'Support ticket not found.'
       );
     }
 
-    const ticket = result.rows[0];
+    const ticket =
+      result.rows[0];
 
-    if (ticket.status !== 'pending') {
-      await client.query('COMMIT');
-
-      return {
-        sent: false,
-        reason: 'Ticket is not waiting for customer.',
-      };
-    }
-
-    if (ticket.reminder_sent_at) {
-      await client.query('COMMIT');
+    if (
+      ticket.status !==
+      'pending'
+    ) {
+      await client.query(
+        'COMMIT'
+      );
 
       return {
         sent: false,
-        reason: 'Reminder already sent.',
+        reason:
+          'Ticket is not waiting for customer.',
       };
     }
+
+    if (
+      ticket.reminder_sent_at
+    ) {
+      await client.query(
+        'COMMIT'
+      );
+
+      return {
+        sent: false,
+        reason:
+          'Reminder already sent.',
+      };
+    }
+
+    // --------------------------------------------------------
+    // The reminder may be used for both Customer Care and
+    // Administration cases.
+    //
+    // It is a neutral automated reminder.
+    // --------------------------------------------------------
 
     await client.query(
       `
-        INSERT INTO support_messages (
-          ticket_id,
-          sender_user_id,
-          sender_type,
-          message,
-          is_internal
-        )
-        VALUES (
-          $1,
-          NULL,
-          'assistant',
-          $2,
-          FALSE
-        )
+      INSERT INTO support_messages (
+        ticket_id,
+        sender_user_id,
+        sender_type,
+        message,
+        is_internal
+      )
+      VALUES (
+        $1,
+        NULL,
+        'assistant',
+        $2,
+        FALSE
+      )
       `,
       [
         ticketId,
@@ -1013,44 +1363,54 @@ async function sendCustomerResponseReminder(
 
     await client.query(
       `
-        UPDATE support_tickets
+      UPDATE support_tickets
 
-        SET
-          reminder_sent_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
+      SET
+        reminder_sent_at =
+          CURRENT_TIMESTAMP,
 
-        WHERE id = $1
+        updated_at =
+          CURRENT_TIMESTAMP
+
+      WHERE id = $1
       `,
       [ticketId]
     );
 
     await client.query(
       `
-        INSERT INTO support_ticket_events (
-          ticket_id,
-          actor_user_id,
-          event_type,
-          new_value,
-          note
-        )
-        VALUES (
-          $1,
-          NULL,
-          'customer_response_reminder',
-          'reminder_sent',
-          'Automatic reminder sent because the customer has not responded.'
-        )
+      INSERT INTO support_ticket_events (
+        ticket_id,
+        actor_user_id,
+        event_type,
+        new_value,
+        note
+      )
+      VALUES (
+        $1,
+        NULL,
+        'customer_response_reminder',
+        'reminder_sent',
+        'Automatic reminder sent because the customer has not responded.'
+      )
       `,
       [ticketId]
     );
 
-    await client.query('COMMIT');
+    await client.query(
+      'COMMIT'
+    );
 
     return {
       sent: true,
     };
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query(
+        'ROLLBACK'
+      );
+    } catch {}
+
     throw error;
   } finally {
     client.release();
@@ -1065,76 +1425,97 @@ async function sendCustomerResponseReminder(
 async function autoCloseInactiveTicket(
   ticketId
 ) {
-  const client = await pool.connect();
+  const client =
+    await pool.connect();
 
   try {
-    await client.query('BEGIN');
+    await client.query(
+      'BEGIN'
+    );
 
-    const result = await client.query(
-      `
+    const result =
+      await client.query(
+        `
         SELECT
           id,
           status,
-          customer_response_due_at
+          customer_response_due_at,
+          escalated_to_admin,
+          assigned_admin_id
+
         FROM support_tickets
 
         WHERE id = $1
 
         FOR UPDATE
-      `,
-      [ticketId]
-    );
+        `,
+        [ticketId]
+      );
 
-    if (result.rows.length === 0) {
+    if (
+      result.rows.length ===
+      0
+    ) {
       throw new Error(
         'Support ticket not found.'
       );
     }
 
-    const ticket = result.rows[0];
+    const ticket =
+      result.rows[0];
 
-    if (ticket.status !== 'pending') {
-      await client.query('COMMIT');
+    if (
+      ticket.status !==
+      'pending'
+    ) {
+      await client.query(
+        'COMMIT'
+      );
 
       return {
         closed: false,
-        reason: 'Ticket is no longer waiting for customer.',
+        reason:
+          'Ticket is no longer waiting for customer.',
       };
     }
 
     if (
       !ticket.customer_response_due_at ||
-      new Date(ticket.customer_response_due_at) >
-        new Date()
+      new Date(
+        ticket.customer_response_due_at
+      ) > new Date()
     ) {
-      await client.query('COMMIT');
+      await client.query(
+        'COMMIT'
+      );
 
       return {
         closed: false,
-        reason: 'Customer response period has not expired.',
+        reason:
+          'Customer response period has not expired.',
       };
     }
 
     // --------------------------------------------------------
-    // Automatic closure message.
+    // Automatic closure message
     // --------------------------------------------------------
 
     await client.query(
       `
-        INSERT INTO support_messages (
-          ticket_id,
-          sender_user_id,
-          sender_type,
-          message,
-          is_internal
-        )
-        VALUES (
-          $1,
-          NULL,
-          'assistant',
-          $2,
-          FALSE
-        )
+      INSERT INTO support_messages (
+        ticket_id,
+        sender_user_id,
+        sender_type,
+        message,
+        is_internal
+      )
+      VALUES (
+        $1,
+        NULL,
+        'assistant',
+        $2,
+        FALSE
+      )
       `,
       [
         ticketId,
@@ -1143,59 +1524,74 @@ async function autoCloseInactiveTicket(
     );
 
     // --------------------------------------------------------
-    // Close case.
+    // Close case
     // --------------------------------------------------------
 
     await client.query(
       `
-        UPDATE support_tickets
+      UPDATE support_tickets
 
-        SET
-          status = 'closed',
-          auto_closed_at = CURRENT_TIMESTAMP,
-          auto_close_reason =
-            'Customer did not respond within the required response period.',
-          updated_at = CURRENT_TIMESTAMP,
-          closed_at = CURRENT_TIMESTAMP
-
-        WHERE id = $1
-      `,
-      [ticketId]
-    );
-
-    // --------------------------------------------------------
-    // Audit event.
-    // --------------------------------------------------------
-
-    await client.query(
-      `
-        INSERT INTO support_ticket_events (
-          ticket_id,
-          actor_user_id,
-          event_type,
-          old_value,
-          new_value,
-          note
-        )
-        VALUES (
-          $1,
-          NULL,
-          'automatic_closure',
-          'pending',
+      SET
+        status =
           'closed',
-          'Case automatically closed because the customer did not respond within the required response period.'
-        )
+
+        auto_closed_at =
+          CURRENT_TIMESTAMP,
+
+        auto_close_reason =
+          'Customer did not respond within the required response period.',
+
+        updated_at =
+          CURRENT_TIMESTAMP,
+
+        closed_at =
+          CURRENT_TIMESTAMP
+
+      WHERE id = $1
       `,
       [ticketId]
     );
 
-    await client.query('COMMIT');
+    // --------------------------------------------------------
+    // Audit event
+    // --------------------------------------------------------
+
+    await client.query(
+      `
+      INSERT INTO support_ticket_events (
+        ticket_id,
+        actor_user_id,
+        event_type,
+        old_value,
+        new_value,
+        note
+      )
+      VALUES (
+        $1,
+        NULL,
+        'automatic_closure',
+        'pending',
+        'closed',
+        'Case automatically closed because the customer did not respond within the required response period.'
+      )
+      `,
+      [ticketId]
+    );
+
+    await client.query(
+      'COMMIT'
+    );
 
     return {
       closed: true,
     };
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query(
+        'ROLLBACK'
+      );
+    } catch {}
+
     throw error;
   } finally {
     client.release();
