@@ -3,7 +3,11 @@ const express = require('express');
 const router = express.Router();
 
 const adminMiddleware = require('../middleware/adminMiddleware');
-
+const {
+  getEscalatedSupportTickets,
+  getEscalatedSupportTicket,
+  takeEscalatedSupportTicket,
+} = require('../controllers/adminSupportEscalationController');
 // ============================================================
 // EXISTING ADMIN CONTROLLERS
 // ============================================================
@@ -31,18 +35,6 @@ const {
   assignCustomerCareRole,
   removeCustomerCareRole,
 } = require('../controllers/customerCareAdminController');
-
-
-// ============================================================
-// CUSTOMER CARE → ADMINISTRATION ESCALATION
-// ============================================================
-
-const {
-  getEscalatedSupportTickets,
-  getEscalatedSupportTicket,
-  takeEscalatedSupportTicket,
-} = require('../controllers/adminSupportEscalationController');
-
 
 // ============================================================
 // ADMIN AUTHENTICATION
