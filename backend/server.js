@@ -755,6 +755,28 @@ await pool.query(`
 console.log(
   'Database migration completed: transaction_pins table is available'
 );
+ // ========================================================
+// FIRST CUSTOMER CARE AGENT PROVISIONING
+// ========================================================
+//
+// This provisions the initial Customer Care account without
+// requiring direct PostgreSQL shell access.
+//
+// It changes ONLY the role of the existing account.
+// ========================================================
+
+await pool.query(`
+  UPDATE users
+  SET
+    role = 'customer_care',
+    updated_at = CURRENT_TIMESTAMP
+  WHERE LOWER(email) = LOWER('ekpegharrison7@gmail.com')
+    AND role <> 'admin'
+`);
+
+console.log(
+  'Customer Care provisioning check completed'
+);
 // ========================================================
 // CUSTOMER CARE / SUPPORT DATABASE
 // ========================================================
