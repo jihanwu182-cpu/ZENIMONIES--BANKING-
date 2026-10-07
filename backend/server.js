@@ -1049,6 +1049,150 @@ await pool.query(`
 console.log(
   'Database migration completed: Customer Care support system is available'
 );
+    // ========================================================
+// CUSTOMER CARE WORKFLOW COMPATIBILITY MIGRATION
+// ========================================================
+//
+// IMPORTANT:
+// The support_tickets table may already exist in production.
+// CREATE TABLE IF NOT EXISTS does NOT add new columns to an
+// existing table.
+//
+// This migration safely adds the Customer Care workflow fields
+// to the existing production table.
+//
+// Existing tickets and customer data are preserved.
+// ========================================================
+
+await pool.query(`
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS assigned_to UUID;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS connected_to_customer_care BOOLEAN
+    NOT NULL DEFAULT FALSE;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS waiting_since TIMESTAMP;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS customer_response_due_at TIMESTAMP;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS auto_closed_at TIMESTAMP;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS auto_close_reason TEXT;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS last_customer_message_at TIMESTAMP;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS last_agent_message_at TIMESTAMP;
+`);
+
+console.log(
+  'Database migration completed: Customer Care workflow columns are available'
+);
+
+// ========================================================
+// CUSTOMER CARE ASSIGNED AGENT FOREIGN KEY
+// ========================================================
+
+await pool.query(`
+  DO $$
+  BEGIN
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname =
+        'support_tickets_assigned_to_fkey'
+    ) THEN
+
+      ALTER TABLE support_tickets
+      ADD CONSTRAINT support_tickets_assigned_to_fkey
+      FOREIGN KEY (assigned_to)
+      REFERENCES users(id)
+      ON DELETE SET NULL;
+
+    END IF;
+
+  END
+  $$;
+`);
+
+console.log(
+  'Database migration completed: Customer Care agent assignment is available'
+);
+
+// ========================================================
+// CUSTOMER CARE INDEXES
+// ========================================================
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS
+  idx_support_tickets_assigned_to
+  ON support_tickets(assigned_to);
+
+  CREATE INDEX IF NOT EXISTS
+  idx_support_tickets_customer_care
+  ON support_tickets(connected_to_customer_care);
+
+  CREATE INDEX IF NOT EXISTS
+  idx_support_tickets_waiting_customer
+  ON support_tickets(
+    status,
+    waiting_since,
+    customer_response_due_at
+  );
+`);
+
+console.log(
+  'Database migration completed: Customer Care workflow indexes are available'
+);
+
+// ========================================================
+// SUPPORT MESSAGE SENDER TYPES
+// ========================================================
+//
+// The original table allowed only:
+//   customer
+//   admin
+//
+// Customer Care now also uses:
+//   assistant
+//   agent
+//
+// Update the constraint safely.
+// ========================================================
+
+await pool.query(`
+  ALTER TABLE support_messages
+  DROP CONSTRAINT IF EXISTS
+  support_messages_sender_type_check;
+`);
+
+await pool.query(`
+  ALTER TABLE support_messages
+  ADD CONSTRAINT
+  support_messages_sender_type_check
+  CHECK (
+    sender_type IN (
+      'customer',
+      'assistant',
+      'agent',
+      'admin'
+    )
+  );
+`);
+
+console.log(
+  'Database migration completed: Customer Care message sender types are available'
+);
     
     // ========================================================
     // NOTIFICATIONS DATABASE
