@@ -755,28 +755,92 @@ await pool.query(`
 console.log(
   'Database migration completed: transaction_pins table is available'
 );
- // ========================================================
-// FIRST CUSTOMER CARE AGENT PROVISIONING
-// ========================================================
+ // ============================================================
+// ZENIMONIES CUSTOMER CARE ACCOUNT PROVISIONING
+// ============================================================
 //
-// This provisions the initial Customer Care account without
-// requiring direct PostgreSQL shell access.
+// This is a controlled bootstrap for the designated
+// Customer Care account.
 //
-// It changes ONLY the role of the existing account.
-// ========================================================
+// IMPORTANT:
+// - Does NOT create an account.
+// - Does NOT change an admin account.
+// - Does NOT affect normal customers.
+// - Only the exact email below can be promoted.
+// ============================================================
 
-await pool.query(`
-  UPDATE users
-  SET
-    role = 'customer_care',
-    updated_at = CURRENT_TIMESTAMP
-  WHERE LOWER(email) = LOWER('ekpegharrison7@gmail.com')
-    AND role <> 'admin'
-`);
+try {
+  const customerCareEmail =
+    'ekpeghreharrison7@gmail.com';
 
-console.log(
-  'Customer Care provisioning check completed'
-);
+  const customerCareResult =
+    await pool.query(
+      `
+      UPDATE users
+      SET
+        role = 'customer_care',
+        updated_at = CURRENT_TIMESTAMP
+      WHERE LOWER(email) = LOWER($1)
+        AND role <> 'admin'
+      RETURNING
+        id,
+        email,
+        full_name,
+        role,
+        status
+      `,
+      [customerCareEmail]
+    );
+
+  if (
+    customerCareResult.rows.length > 0
+  ) {
+    console.log(
+      '============================================================'
+    );
+
+    console.log(
+      'ZENIMONIES CUSTOMER CARE PROVISIONING'
+    );
+
+    console.log(
+      'Email:',
+      customerCareResult.rows[0].email
+    );
+
+    console.log(
+      'Name:',
+      customerCareResult.rows[0].full_name
+    );
+
+    console.log(
+      'Role:',
+      customerCareResult.rows[0].role
+    );
+
+    console.log(
+      'Status:',
+      customerCareResult.rows[0].status
+    );
+
+    console.log(
+      'Customer Care account provisioning completed.'
+    );
+
+    console.log(
+      '============================================================'
+    );
+  } else {
+    console.log(
+      'Customer Care provisioning: designated account was not found or is an admin account.'
+    );
+  }
+} catch (customerCareProvisioningError) {
+  console.error(
+    'Customer Care provisioning failed:',
+    customerCareProvisioningError
+  );
+}
 // ========================================================
 // CUSTOMER CARE / SUPPORT DATABASE
 // ========================================================
