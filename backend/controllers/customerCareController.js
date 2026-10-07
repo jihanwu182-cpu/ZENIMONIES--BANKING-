@@ -2,8 +2,6 @@ const pool = require('../config/database');
 
 const {
   buildAgentJoinedMessage,
-  addCustomerMessage,
-  startWaitingForCustomer,
 } = require('../services/supportService');
 
 // ============================================================
@@ -16,6 +14,7 @@ const {
 //
 // CUSTOMER CARE CAN:
 //     - view available support cases
+//     - open available support cases
 //     - take cases
 //     - view customer information
 //     - view masked account information
@@ -47,8 +46,6 @@ const {
 //     escalated_to_admin = TRUE
 //
 // Customer Care loses modification control.
-//
-// Administration must take the case before modifying it.
 // ============================================================
 
 
@@ -76,6 +73,11 @@ function getAgentId(req) {
 // - not assigned to an agent
 // - not escalated to Administration
 // - not closed/resolved
+//
+// IMPORTANT:
+// An available case may still have an old/inconsistent status such
+// as "in_progress" while assigned_to is NULL. It must still be
+// possible for Customer Care to open and take the case.
 // ============================================================
 
 async function getAvailableCases(req, res) {
@@ -90,10 +92,15 @@ async function getAvailableCases(req, res) {
       String(req.query.priority || '').trim();
 
     const values = [];
+
     const conditions = [
       `st.connected_to_customer_care = TRUE`,
-      `(st.escalated_to_admin = FALSE OR st.escalated_to_admin IS NULL)`,
+
+      `(st.escalated_to_admin = FALSE
+        OR st.escalated_to_admin IS NULL)`,
+
       `st.assigned_to IS NULL`,
+
       `st.status NOT IN ('resolved', 'closed')`,
     ];
 
@@ -102,10 +109,6 @@ async function getAvailableCases(req, res) {
 
       conditions.push(
         `st.status = $${values.length}`
-      );
-    } else {
-      conditions.push(
-        `st.status IN ('open', 'pending', 'in_progress')`
       );
     }
 
@@ -151,14 +154,26 @@ async function getAvailableCases(req, res) {
         st.priority,
 
         st.assigned_to,
+
         assigned_user.full_name
           AS assigned_agent_name,
+
+        st.connected_to_customer_care,
 
         st.escalated_to_admin,
         st.escalated_at,
         st.escalated_by,
+
+        escalated_user.full_name
+          AS escalated_by_name,
+
         st.escalation_reason,
+
         st.assigned_admin_id,
+
+        assigned_admin.full_name
+          AS assigned_admin_name,
+
         st.admin_taken_at,
 
         st.created_at,
@@ -175,6 +190,12 @@ async function getAvailableCases(req, res) {
 
       LEFT JOIN users assigned_user
         ON assigned_user.id = st.assigned_to
+
+      LEFT JOIN users escalated_user
+        ON escalated_user.id = st.escalated_by
+
+      LEFT JOIN users assigned_admin
+        ON assigned_admin.id = st.assigned_admin_id
 
       WHERE ${conditions.join(' AND ')}
 
@@ -252,18 +273,23 @@ async function getMyCases(req, res) {
         st.priority,
 
         st.assigned_to,
+
         assigned_user.full_name
           AS assigned_agent_name,
+
+        st.connected_to_customer_care,
 
         st.escalated_to_admin,
         st.escalated_at,
         st.escalated_by,
+
         escalated_user.full_name
           AS escalated_by_name,
 
         st.escalation_reason,
 
         st.assigned_admin_id,
+
         assigned_admin.full_name
           AS assigned_admin_name,
 
@@ -272,7 +298,8 @@ async function getMyCases(req, res) {
         st.created_at,
         st.updated_at,
         st.resolved_at,
-        st.closed_at
+        st.closed_at,
+        st.last_message_at
 
       FROM support_tickets st
 
@@ -361,7 +388,7 @@ async function takeCase(req, res) {
     await client.query('BEGIN');
 
     // ----------------------------------------------------------
-    // Verify agent
+    // VERIFY AGENT
     // ----------------------------------------------------------
 
     const agentResult =
@@ -414,7 +441,7 @@ async function takeCase(req, res) {
     }
 
     // ----------------------------------------------------------
-    // Lock ticket
+    // LOCK TICKET
     // ----------------------------------------------------------
 
     const ticketResult =
@@ -455,7 +482,7 @@ async function takeCase(req, res) {
       ticketResult.rows[0];
 
     // ----------------------------------------------------------
-    // Administration ownership protection
+    // ADMINISTRATION PROTECTION
     // ----------------------------------------------------------
 
     if (ticket.escalated_to_admin) {
@@ -478,13 +505,16 @@ async function takeCase(req, res) {
       });
     }
 
-    if (ticket.status === 'closed') {
+    if (
+      ticket.status === 'closed' ||
+      ticket.status === 'resolved'
+    ) {
       await client.query('ROLLBACK');
 
       return res.status(409).json({
         success: false,
         message:
-          'This support case is closed.',
+          'This support case is already closed or resolved.',
       });
     }
 
@@ -499,7 +529,7 @@ async function takeCase(req, res) {
     }
 
     // ----------------------------------------------------------
-    // Assign case
+    // ASSIGN CASE
     // ----------------------------------------------------------
 
     const updateResult =
@@ -528,7 +558,7 @@ async function takeCase(req, res) {
       );
 
     // ----------------------------------------------------------
-    // Agent joined message
+    // AGENT JOINED MESSAGE
     // ----------------------------------------------------------
 
     const agentMessage =
@@ -567,7 +597,7 @@ async function takeCase(req, res) {
       );
 
     // ----------------------------------------------------------
-    // Event
+    // EVENT
     // ----------------------------------------------------------
 
     await client.query(
@@ -604,10 +634,13 @@ async function takeCase(req, res) {
 
     return res.status(200).json({
       success: true,
+
       message:
         'Customer Care case taken successfully.',
+
       ticket:
         updateResult.rows[0],
+
       agent_message:
         messageResult.rows[0],
     });
@@ -637,11 +670,29 @@ async function takeCase(req, res) {
 // GET /api/customer-care/tickets/:ticketId
 // ============================================================
 //
-// Customer Care may read:
-// - cases assigned to them
-// - cases they escalated to Administration
+// IMPORTANT FIX:
 //
-// After escalation, this becomes READ-ONLY for Customer Care.
+// An AVAILABLE case has:
+//     connected_to_customer_care = TRUE
+//     assigned_to = NULL
+//     escalated_to_admin = FALSE
+//
+// Customer Care MUST be able to OPEN that case before taking it.
+//
+// Previously this endpoint only allowed:
+//     assigned_to = current agent
+//     OR
+//     escalated_by = current agent
+//
+// That caused the exact error you saw:
+//
+// "You do not have access to this Customer Care case."
+//
+// This version allows:
+//     1. available cases
+//     2. cases assigned to current agent
+//     3. cases previously escalated by current agent
+//
 // ============================================================
 
 async function getCaseDetails(req, res) {
@@ -657,67 +708,187 @@ async function getCaseDetails(req, res) {
       });
     }
 
+    if (!ticketId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Ticket ID is required.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // VERIFY CURRENT USER IS CUSTOMER CARE
+    // ----------------------------------------------------------
+
+    const agentResult =
+      await pool.query(
+        `
+        SELECT
+          id,
+          full_name,
+          email,
+          role,
+          status
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+        `,
+        [agentId]
+      );
+
+    if (agentResult.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Customer Care agent account not found.',
+      });
+    }
+
+    const agent =
+      agentResult.rows[0];
+
+    if (agent.role !== 'customer_care') {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Customer Care access is required.',
+      });
+    }
+
+    if (
+      agent.status &&
+      String(agent.status).toLowerCase() !==
+        'active'
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Your Customer Care account is not active.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // LOAD TICKET
+    // ----------------------------------------------------------
+    //
+    // DO NOT use st.*.
+    //
+    // We deliberately select only fields that Customer Care
+    // is allowed to see.
+    // ----------------------------------------------------------
+
     const ticketResult =
       await pool.query(
         `
         SELECT
-          st.*,
+          st.id,
+          st.ticket_number,
+          st.user_id,
+          st.category_id,
 
-          u.full_name AS customer_name,
-          u.email AS customer_email,
-          u.phone AS customer_phone,
-          u.status AS customer_status,
-          u.kyc_status,
+          st.subject,
+          st.description,
+          st.status,
+          st.priority,
+
+          st.assigned_to,
+          st.connected_to_customer_care,
+
+          st.waiting_since,
+          st.reminder_sent_at,
+          st.customer_response_due_at,
+
+          st.auto_closed_at,
+          st.auto_close_reason,
+
+          st.last_customer_message_at,
+          st.last_agent_message_at,
+
+          st.escalated_to_admin,
+          st.escalated_at,
+          st.escalated_by,
+          st.admin_taken_at,
+          st.escalation_reason,
+          st.assigned_admin_id,
+
+          st.created_at,
+          st.updated_at,
+          st.resolved_at,
+          st.closed_at,
+          st.last_message_at,
 
           sc.name AS category_name,
 
-          assigned_user.full_name
+          customer.id AS customer_id,
+          customer.full_name AS customer_name,
+          customer.email AS customer_email,
+          customer.phone AS customer_phone,
+          customer.kyc_status AS customer_kyc_status,
+
+          assigned_agent.full_name
             AS assigned_agent_name,
 
-          escalated_user.full_name
+          escalated_agent.full_name
             AS escalated_by_name,
 
-          assigned_admin.full_name
-            AS assigned_admin_name
+          admin_user.full_name
+            AS assigned_admin_name,
+
+          customer_account.account_number
+            AS masked_account_number
 
         FROM support_tickets st
 
-        INNER JOIN users u
-          ON u.id = st.user_id
+        INNER JOIN users customer
+          ON customer.id = st.user_id
 
         LEFT JOIN support_categories sc
           ON sc.id = st.category_id
 
-        LEFT JOIN users assigned_user
-          ON assigned_user.id = st.assigned_to
+        LEFT JOIN users assigned_agent
+          ON assigned_agent.id = st.assigned_to
 
-        LEFT JOIN users escalated_user
-          ON escalated_user.id = st.escalated_by
+        LEFT JOIN users escalated_agent
+          ON escalated_agent.id = st.escalated_by
 
-        LEFT JOIN users assigned_admin
-          ON assigned_admin.id = st.assigned_admin_id
+        LEFT JOIN users admin_user
+          ON admin_user.id = st.assigned_admin_id
 
-        WHERE
-          st.id = $1
+        LEFT JOIN LATERAL (
+          SELECT
+            CASE
+              WHEN account_number IS NULL THEN NULL
 
-          AND (
-            st.assigned_to = $2
-            OR st.escalated_by = $2
-          )
+              WHEN LENGTH(account_number) <= 4
+                THEN '****'
+
+              ELSE
+                '****' ||
+                RIGHT(account_number, 4)
+            END AS account_number
+
+          FROM accounts
+
+          WHERE user_id = customer.id
+
+          ORDER BY created_at ASC
+
+          LIMIT 1
+        ) customer_account
+          ON TRUE
+
+        WHERE st.id = $1
 
         LIMIT 1
         `,
-        [
-          ticketId,
-          agentId,
-        ]
+        [ticketId]
       );
 
     if (ticketResult.rows.length === 0) {
-      return res.status(403).json({
+      return res.status(404).json({
         success: false,
         message:
-          'You do not have access to this Customer Care case.',
+          'Customer Care case not found.',
       });
     }
 
@@ -725,7 +896,68 @@ async function getCaseDetails(req, res) {
       ticketResult.rows[0];
 
     // ----------------------------------------------------------
-    // Messages
+    // ACCESS CONTROL
+    // ----------------------------------------------------------
+    //
+    // AVAILABLE CASE
+    //
+    // Customer Care can OPEN the case even though:
+    //
+    // assigned_to = NULL
+    //
+    // because the agent needs to inspect it before choosing
+    // "Take Case".
+    // ----------------------------------------------------------
+
+    const isAvailableCase =
+      ticket.connected_to_customer_care ===
+        true &&
+      !ticket.assigned_to &&
+      !ticket.escalated_to_admin &&
+      !['resolved', 'closed'].includes(
+        ticket.status
+      );
+
+    // ----------------------------------------------------------
+    // ASSIGNED TO CURRENT AGENT
+    // ----------------------------------------------------------
+
+    const isAssignedToThisAgent =
+      ticket.assigned_to &&
+      String(ticket.assigned_to) ===
+        String(agentId);
+
+    // ----------------------------------------------------------
+    // CASE WAS ESCALATED BY CURRENT AGENT
+    //
+    // This permits read-only historical access.
+    // It does NOT give modification permission.
+    // ----------------------------------------------------------
+
+    const isEscalatedByThisAgent =
+      ticket.escalated_to_admin === true &&
+      ticket.escalated_by &&
+      String(ticket.escalated_by) ===
+        String(agentId);
+
+    const hasAccess =
+      isAvailableCase ||
+      isAssignedToThisAgent ||
+      isEscalatedByThisAgent;
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'You do not have access to this Customer Care case.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // CUSTOMER-VISIBLE MESSAGES
+    //
+    // Internal messages must NEVER be shown to Customer Care
+    // through this conversation endpoint.
     // ----------------------------------------------------------
 
     const messagesResult =
@@ -737,27 +969,29 @@ async function getCaseDetails(req, res) {
           sm.sender_user_id,
           sm.sender_type,
           sm.message,
+          sm.is_internal,
           sm.created_at,
 
           sender.full_name
-            AS sender_name,
-          sender.email
-            AS sender_email
+            AS sender_name
 
         FROM support_messages sm
 
         LEFT JOIN users sender
           ON sender.id = sm.sender_user_id
 
-        WHERE sm.ticket_id = $1
+        WHERE
+          sm.ticket_id = $1
+          AND sm.is_internal = FALSE
 
-        ORDER BY sm.created_at ASC
+        ORDER BY
+          sm.created_at ASC
         `,
         [ticketId]
       );
 
     // ----------------------------------------------------------
-    // Events
+    // CASE EVENTS
     // ----------------------------------------------------------
 
     const eventsResult =
@@ -774,6 +1008,7 @@ async function getCaseDetails(req, res) {
 
           actor.full_name
             AS actor_name,
+
           actor.role
             AS actor_role
 
@@ -784,38 +1019,172 @@ async function getCaseDetails(req, res) {
 
         WHERE ste.ticket_id = $1
 
-        ORDER BY ste.created_at ASC
+        ORDER BY
+          ste.created_at ASC
         `,
         [ticketId]
       );
 
     // ----------------------------------------------------------
-    // SECURE TRANSACTION
+    // SAFE CUSTOMER OBJECT
     // ----------------------------------------------------------
+
+    const customer = {
+      id:
+        ticket.customer_id,
+
+      full_name:
+        ticket.customer_name,
+
+      email:
+        ticket.customer_email,
+
+      phone:
+        ticket.customer_phone,
+
+      kyc_status:
+        ticket.customer_kyc_status,
+
+      // MASKED ONLY
+      account_number:
+        ticket.masked_account_number ||
+        null,
+    };
+
+    // ----------------------------------------------------------
+    // SAFE TICKET OBJECT
     //
-    // IMPORTANT:
-    // Do NOT query transactions directly here.
-    //
-    // Customer Care receives transaction information ONLY
-    // through the secure investigation endpoint.
+    // NEVER expose:
+    // - balances
+    // - balance_before
+    // - balance_after
+    // - full account numbers
+    // - passwords
+    // - PINs
+    // - OTPs
+    // - session IDs
+    // ----------------------------------------------------------
+
+    const safeTicket = {
+      id:
+        ticket.id,
+
+      ticket_number:
+        ticket.ticket_number,
+
+      subject:
+        ticket.subject,
+
+      description:
+        ticket.description,
+
+      status:
+        ticket.status,
+
+      priority:
+        ticket.priority,
+
+      category_name:
+        ticket.category_name,
+
+      customer_name:
+        ticket.customer_name,
+
+      full_name:
+        ticket.customer_name,
+
+      email:
+        ticket.customer_email,
+
+      phone:
+        ticket.customer_phone,
+
+      assigned_to:
+        ticket.assigned_to,
+
+      assigned_agent_name:
+        ticket.assigned_agent_name,
+
+      connected_to_customer_care:
+        ticket.connected_to_customer_care,
+
+      waiting_since:
+        ticket.waiting_since,
+
+      reminder_sent_at:
+        ticket.reminder_sent_at,
+
+      customer_response_due_at:
+        ticket.customer_response_due_at,
+
+      auto_closed_at:
+        ticket.auto_closed_at,
+
+      auto_close_reason:
+        ticket.auto_close_reason,
+
+      last_customer_message_at:
+        ticket.last_customer_message_at,
+
+      last_agent_message_at:
+        ticket.last_agent_message_at,
+
+      last_message_at:
+        ticket.last_message_at,
+
+      escalated_to_admin:
+        ticket.escalated_to_admin,
+
+      escalated_at:
+        ticket.escalated_at,
+
+      escalated_by:
+        ticket.escalated_by,
+
+      escalated_by_name:
+        ticket.escalated_by_name,
+
+      escalation_reason:
+        ticket.escalation_reason,
+
+      assigned_admin_id:
+        ticket.assigned_admin_id,
+
+      assigned_admin_name:
+        ticket.assigned_admin_name,
+
+      admin_taken_at:
+        ticket.admin_taken_at,
+
+      created_at:
+        ticket.created_at,
+
+      updated_at:
+        ticket.updated_at,
+
+      resolved_at:
+        ticket.resolved_at,
+
+      closed_at:
+        ticket.closed_at,
+
+      read_only_after_admin_escalation:
+        Boolean(
+          ticket.escalated_to_admin
+        ),
+    };
+
+    // ----------------------------------------------------------
+    // RESPONSE
     // ----------------------------------------------------------
 
     return res.status(200).json({
       success: true,
 
-      ticket: {
-        ...ticket,
+      ticket:
+        safeTicket,
 
-        // Never expose financial balance fields even if
-        // they are added to the ticket query in the future.
-        balance: undefined,
-        available_balance: undefined,
-        balance_before: undefined,
-        balance_after: undefined,
-
-        read_only_after_admin_escalation:
-          Boolean(ticket.escalated_to_admin),
-      },
+      customer,
 
       messages:
         messagesResult.rows,
@@ -823,7 +1192,13 @@ async function getCaseDetails(req, res) {
       events:
         eventsResult.rows,
 
+      // Transaction investigation remains separate.
       transaction: null,
+
+      read_only:
+        Boolean(
+          ticket.escalated_to_admin
+        ),
     });
   } catch (error) {
     console.error(
@@ -917,10 +1292,6 @@ async function replyToCustomer(req, res) {
     const ticket =
       ticketResult.rows[0];
 
-    // ----------------------------------------------------------
-    // ESCALATION PROTECTION
-    // ----------------------------------------------------------
-
     if (ticket.escalated_to_admin) {
       await client.query('ROLLBACK');
 
@@ -954,10 +1325,6 @@ async function replyToCustomer(req, res) {
       });
     }
 
-    // ----------------------------------------------------------
-    // MESSAGE
-    // ----------------------------------------------------------
-
     const messageResult =
       await client.query(
         `
@@ -988,10 +1355,6 @@ async function replyToCustomer(req, res) {
         ]
       );
 
-    // ----------------------------------------------------------
-    // UPDATE CASE
-    // ----------------------------------------------------------
-
     await client.query(
       `
       UPDATE support_tickets
@@ -1006,10 +1369,6 @@ async function replyToCustomer(req, res) {
       `,
       [ticketId]
     );
-
-    // ----------------------------------------------------------
-    // EVENT
-    // ----------------------------------------------------------
 
     await client.query(
       `
@@ -1045,8 +1404,10 @@ async function replyToCustomer(req, res) {
 
     return res.status(201).json({
       success: true,
+
       message:
         'Reply sent successfully.',
+
       support_message:
         messageResult.rows[0],
     });
@@ -1126,10 +1487,6 @@ async function waitForCustomer(req, res) {
     const ticket =
       ticketResult.rows[0];
 
-    // ----------------------------------------------------------
-    // ESCALATION PROTECTION
-    // ----------------------------------------------------------
-
     if (ticket.escalated_to_admin) {
       await client.query('ROLLBACK');
 
@@ -1162,10 +1519,6 @@ async function waitForCustomer(req, res) {
           'This support case is closed.',
       });
     }
-
-    // ----------------------------------------------------------
-    // WAITING TIMER
-    // ----------------------------------------------------------
 
     const reminderHours = Number(
       process.env.SUPPORT_CUSTOMER_REMINDER_HOURS ||
@@ -1256,10 +1609,13 @@ async function waitForCustomer(req, res) {
 
     return res.status(200).json({
       success: true,
+
       message:
         'Case is now waiting for the customer.',
+
       reminder_at:
         reminderAt.toISOString(),
+
       response_due_at:
         responseDueAt.toISOString(),
     });
@@ -1651,23 +2007,6 @@ async function closeCase(req, res) {
 // SECURE TRANSACTION INVESTIGATION
 // GET /api/customer-care/transactions/investigate
 // ============================================================
-//
-// IMPORTANT:
-//
-// Customer Care receives ONLY data from secure database views.
-//
-// NEVER return:
-// - full account number
-// - account balance
-// - available balance
-// - ledger balance
-// - balance_before
-// - balance_after
-// - PIN
-// - password
-// - OTP
-// - session ID
-// ============================================================
 
 async function investigateTransaction(req, res) {
   try {
@@ -1680,12 +2019,12 @@ async function investigateTransaction(req, res) {
       return res.status(400).json({
         success: false,
         message:
-          'Transaction reference is required',
+          'Transaction reference is required.',
       });
     }
 
     // ----------------------------------------------------------
-    // 1. SEARCH SECURE TRANSACTION VIEW
+    // TRANSACTION VIEW
     // ----------------------------------------------------------
 
     const transactionResult =
@@ -1740,7 +2079,7 @@ async function investigateTransaction(req, res) {
     let bankTransfer = null;
 
     // ----------------------------------------------------------
-    // 2. BANK TRANSFER VIEW FALLBACK
+    // BANK TRANSFER FALLBACK
     // ----------------------------------------------------------
 
     if (!transaction) {
@@ -1791,10 +2130,6 @@ async function investigateTransaction(req, res) {
         null;
     }
 
-    // ----------------------------------------------------------
-    // 3. NOTHING FOUND
-    // ----------------------------------------------------------
-
     if (
       !transaction &&
       !bankTransfer
@@ -1802,12 +2137,12 @@ async function investigateTransaction(req, res) {
       return res.status(404).json({
         success: false,
         message:
-          'Transaction could not be found',
+          'Transaction could not be found.',
       });
     }
 
     // ----------------------------------------------------------
-    // 4. NORMALIZE
+    // NORMALIZE
     // ----------------------------------------------------------
 
     const source =
@@ -1836,86 +2171,154 @@ async function investigateTransaction(req, res) {
       reference;
 
     // ----------------------------------------------------------
-    // 5. READ-ONLY TRANSACTION FLOW
+    // TRANSACTION FLOW
     // ----------------------------------------------------------
 
     const flow = [
       {
-        step: 'Transfer initiated',
-        status: 'completed',
+        step:
+          'Transfer initiated',
+
+        label:
+          'Transfer initiated',
+
+        status:
+          'completed',
       },
     ];
 
     if (transaction) {
       flow.push({
-        step: 'Account debit recorded',
-        status: 'completed',
-      });
-    } else {
-      flow.push({
-        step: 'Account debit record',
-        status: 'not_available',
+        step:
+          'Account debit recorded',
+
+        label:
+          'Account debit recorded',
+
+        status:
+          'completed',
       });
     }
 
-    if (status === 'failed') {
+    if (
+      status === 'failed'
+    ) {
       flow.push({
-        step: 'Bank transfer submitted',
-        status: 'completed',
+        step:
+          'Bank transfer submitted',
+
+        label:
+          'Bank transfer submitted',
+
+        status:
+          'completed',
       });
 
       flow.push({
-        step: 'Interbank processing',
-        status: 'failed',
+        step:
+          'Interbank processing',
+
+        label:
+          'Interbank processing',
+
+        status:
+          'failed',
       });
 
       flow.push({
-        step: 'Recipient credit',
-        status: 'failed',
+        step:
+          'Recipient credit',
+
+        label:
+          'Recipient credit',
+
+        status:
+          'failed',
       });
     } else if (
       status === 'completed' ||
       status === 'successful'
     ) {
       flow.push({
-        step: 'Bank transfer submitted',
-        status: 'completed',
+        step:
+          'Bank transfer submitted',
+
+        label:
+          'Bank transfer submitted',
+
+        status:
+          'completed',
       });
 
       flow.push({
-        step: 'Interbank processing',
-        status: 'completed',
+        step:
+          'Interbank processing',
+
+        label:
+          'Interbank processing',
+
+        status:
+          'completed',
       });
 
       flow.push({
-        step: 'Recipient credit',
-        status: 'completed',
+        step:
+          'Recipient credit',
+
+        label:
+          'Recipient credit',
+
+        status:
+          'completed',
       });
     } else {
       flow.push({
-        step: 'Bank transfer submitted',
-        status: 'completed',
+        step:
+          'Bank transfer submitted',
+
+        label:
+          'Bank transfer submitted',
+
+        status:
+          'completed',
       });
 
       flow.push({
-        step: 'Interbank processing',
-        status: 'processing',
+        step:
+          'Interbank processing',
+
+        label:
+          'Interbank processing',
+
+        status:
+          'processing',
       });
 
       flow.push({
-        step: 'Recipient credit',
-        status: 'pending',
+        step:
+          'Recipient credit',
+
+        label:
+          'Recipient credit',
+
+        status:
+          'pending',
       });
     }
 
     // ----------------------------------------------------------
-    // 6. SECURE RESPONSE
+    // SECURE RESPONSE
     // ----------------------------------------------------------
 
-    return res.json({
+    return res.status(200).json({
       success: true,
 
       transaction: {
+        id:
+          transaction?.transaction_id ||
+          bankTransfer?.bank_transfer_id ||
+          null,
+
         reference:
           transactionReference,
 
@@ -1924,9 +2327,22 @@ async function investigateTransaction(req, res) {
           'bank_transfer',
 
         amount,
+
         currency,
 
         status,
+
+        status_label:
+          status === 'completed' ||
+          status === 'successful'
+            ? 'Completed'
+            : status === 'processing'
+            ? 'Processing'
+            : status === 'pending'
+            ? 'Pending'
+            : status === 'failed'
+            ? 'Failed'
+            : 'Unknown',
 
         description:
           transaction?.transaction_description ||
@@ -1934,6 +2350,11 @@ async function investigateTransaction(req, res) {
           null,
 
         created_at:
+          transaction?.transaction_created_at ||
+          bankTransfer?.created_at ||
+          null,
+
+        initiated_at:
           transaction?.transaction_created_at ||
           bankTransfer?.created_at ||
           null,
@@ -2010,7 +2431,7 @@ async function investigateTransaction(req, res) {
     return res.status(500).json({
       success: false,
       message:
-        'Unable to investigate transaction',
+        'Unable to investigate transaction.',
     });
   }
 }
