@@ -10,42 +10,35 @@ const {
 // CUSTOMER CARE TIMEOUT WORKER
 // ============================================================
 //
-// PURPOSE:
+// PURPOSE
 //
-// Automatically manages cases that are waiting for a customer.
+// Automatically manages Customer Care cases that are waiting
+// for a customer response.
 //
-// Workflow:
+// WORKFLOW
 //
 // Agent asks customer for information
-//          ↓
-// Ticket = pending
-//          ↓
-// 12 hours
-//          ↓
-// Automatic reminder
-//          ↓
-// 24 hours
-//          ↓
-// Automatic closure
+//              ↓
+//       Waiting for Customer
+//              ↓
+//          12 hours
+//              ↓
+//       Automatic Reminder
+//              ↓
+//          24 hours
+//              ↓
+//       Automatic Closure
 //
-// IMPORTANT:
+// IMPORTANT
 //
 // This worker does NOT close cases simply because an agent
-// has not replied.
+// has not responded.
 //
-// It only processes cases where:
+// It only processes tickets that are explicitly waiting for
+// a customer response.
 //
-//     status = pending
-//
-// AND:
-//
-//     waiting_since IS NOT NULL
-//
-// AND:
-//
-//     customer_response_due_at IS NOT NULL
-//
-// Customer replies reset the waiting timers.
+// Customer replies reset the waiting timers through the
+// support service.
 // ============================================================
 
 
@@ -53,9 +46,26 @@ const {
 // CONFIGURATION
 // ============================================================
 
+// How often the worker checks the database.
+//
+// Default:
+// 5 minutes = 300000 milliseconds
+//
 const WORKER_INTERVAL_MS = Number(
   process.env.SUPPORT_TIMEOUT_WORKER_INTERVAL_MS ||
     5 * 60 * 1000
+);
+
+
+// How many hours before the customer receives an automatic
+// reminder.
+//
+// Default:
+// 12 hours
+//
+const REMINDER_HOURS = Number(
+  process.env.SUPPORT_CUSTOMER_REMINDER_HOURS ||
+    12
 );
 
 
@@ -69,13 +79,32 @@ let workerRunning = false;
 
 
 // ============================================================
-// FIND CASES REQUIRING REMINDER
+// FIND TICKETS THAT NEED A REMINDER
+// ============================================================
+//
+// A ticket qualifies when:
+//
+// - status is pending
+// - waiting_since exists
+// - customer_response_due_at exists
+// - reminder has not already been sent
+// - reminder time has passed
+// - final response deadline has not yet passed
+//
+// We intentionally do NOT select tickets that are already
+// past the final response deadline here.
+//
+// Those are handled by the auto-close process.
 // ============================================================
 
 async function findTicketsForReminder() {
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     SELECT
-      id
+      id,
+      waiting_since,
+      reminder_sent_at,
+      customer_response_due_at
 
     FROM support_tickets
 
@@ -90,7 +119,7 @@ async function findTicketsForReminder() {
 
       AND waiting_since <=
         CURRENT_TIMESTAMP
-        - INTERVAL '12 hours'
+        - ($1 * INTERVAL '1 hour')
 
       AND customer_response_due_at >
         CURRENT_TIMESTAMP
@@ -98,20 +127,37 @@ async function findTicketsForReminder() {
     ORDER BY waiting_since ASC
 
     LIMIT 100
-  `);
+    `,
+    [REMINDER_HOURS]
+  );
 
   return result.rows;
 }
 
 
 // ============================================================
-// FIND CASES READY FOR AUTO-CLOSURE
+// FIND TICKETS THAT ARE READY FOR AUTOMATIC CLOSURE
+// ============================================================
+//
+// A ticket qualifies when:
+//
+// - status is pending
+// - waiting_since exists
+// - response deadline exists
+// - response deadline has passed
+//
+// The autoCloseInactiveTicket service performs the final
+// safety checks before closing the case.
 // ============================================================
 
 async function findTicketsForAutoClose() {
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     SELECT
-      id
+      id,
+      waiting_since,
+      reminder_sent_at,
+      customer_response_due_at
 
     FROM support_tickets
 
@@ -128,14 +174,15 @@ async function findTicketsForAutoClose() {
     ORDER BY customer_response_due_at ASC
 
     LIMIT 100
-  `);
+    `
+  );
 
   return result.rows;
 }
 
 
 // ============================================================
-// PROCESS REMINDERS
+// PROCESS CUSTOMER REMINDERS
 // ============================================================
 
 async function processReminders() {
@@ -182,6 +229,52 @@ async function processAutoClosures() {
 
   for (const ticket of tickets) {
     try {
+      // ------------------------------------------------------
+      // SAFETY CHECK
+      // ------------------------------------------------------
+      //
+      // If the customer has not received the reminder yet,
+      // do NOT immediately close the ticket.
+      //
+      // Send the reminder first.
+      //
+      // This protects the customer if the worker was offline
+      // during the reminder window.
+      // ------------------------------------------------------
+
+      if (!ticket.reminder_sent_at) {
+        try {
+          const reminderResult =
+            await sendCustomerResponseReminder(
+              ticket.id
+            );
+
+          if (reminderResult?.sent) {
+            console.log(
+              `[Customer Care Worker] Late reminder sent before closure for ticket ${ticket.id}`
+            );
+          }
+        } catch (reminderError) {
+          console.error(
+            `[Customer Care Worker] Unable to send late reminder for ticket ${ticket.id}:`,
+            reminderError
+          );
+        }
+
+        // ----------------------------------------------------
+        // Do not close during this same cycle.
+        //
+        // The customer must receive the reminder first.
+        // ----------------------------------------------------
+
+        continue;
+      }
+
+
+      // ------------------------------------------------------
+      // FINAL AUTO-CLOSE
+      // ------------------------------------------------------
+
       const result =
         await autoCloseInactiveTicket(
           ticket.id
@@ -211,9 +304,13 @@ async function processAutoClosures() {
 // ============================================================
 
 async function runSupportTimeoutWorker() {
+  // ----------------------------------------------------------
+  // PREVENT OVERLAPPING WORKER RUNS
+  // ----------------------------------------------------------
+
   if (workerRunning) {
     console.log(
-      '[Customer Care Worker] Previous cycle is still running. Skipping.'
+      '[Customer Care Worker] Previous cycle is still running. Skipping this cycle.'
     );
 
     return;
@@ -222,11 +319,25 @@ async function runSupportTimeoutWorker() {
   workerRunning = true;
 
   try {
+    // --------------------------------------------------------
+    // PROCESS REMINDERS FIRST
+    // --------------------------------------------------------
+
     const reminderCount =
       await processReminders();
 
+
+    // --------------------------------------------------------
+    // PROCESS AUTOMATIC CLOSURES
+    // --------------------------------------------------------
+
     const autoClosedCount =
       await processAutoClosures();
+
+
+    // --------------------------------------------------------
+    // LOG ONLY WHEN SOMETHING HAPPENED
+    // --------------------------------------------------------
 
     if (
       reminderCount > 0 ||
@@ -248,10 +359,14 @@ async function runSupportTimeoutWorker() {
 
 
 // ============================================================
-// START WORKER
+// START CUSTOMER CARE TIMEOUT WORKER
 // ============================================================
 
 function startSupportTimeoutWorker() {
+  // ----------------------------------------------------------
+  // PREVENT DUPLICATE WORKERS
+  // ----------------------------------------------------------
+
   if (workerTimer) {
     console.log(
       '[Customer Care Worker] Worker is already running.'
@@ -260,11 +375,20 @@ function startSupportTimeoutWorker() {
     return;
   }
 
+
   console.log(
     `[Customer Care Worker] Starting timeout worker. Interval: ${WORKER_INTERVAL_MS}ms`
   );
 
-  // Run once shortly after the server starts.
+
+  // ----------------------------------------------------------
+  // INITIAL CHECK
+  // ----------------------------------------------------------
+  //
+  // Wait a few seconds after the server starts so that the
+  // database and application are fully ready.
+  // ----------------------------------------------------------
+
   setTimeout(() => {
     runSupportTimeoutWorker().catch(
       (error) => {
@@ -276,7 +400,11 @@ function startSupportTimeoutWorker() {
     );
   }, 5000);
 
-  // Continue running periodically.
+
+  // ----------------------------------------------------------
+  // REPEATED CHECK
+  // ----------------------------------------------------------
+
   workerTimer = setInterval(() => {
     runSupportTimeoutWorker().catch(
       (error) => {
@@ -287,11 +415,28 @@ function startSupportTimeoutWorker() {
       }
     );
   }, WORKER_INTERVAL_MS);
+
+
+  // ----------------------------------------------------------
+  // ALLOW NODE TO EXIT CLEANLY
+  // ----------------------------------------------------------
+
+  if (
+    workerTimer &&
+    typeof workerTimer.unref === 'function'
+  ) {
+    workerTimer.unref();
+  }
+
+
+  console.log(
+    '[Customer Care Worker] Timeout worker is active.'
+  );
 }
 
 
 // ============================================================
-// STOP WORKER
+// STOP CUSTOMER CARE TIMEOUT WORKER
 // ============================================================
 
 function stopSupportTimeoutWorker() {
