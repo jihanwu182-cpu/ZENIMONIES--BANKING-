@@ -42,6 +42,8 @@ const bettingRoutes = require('./routes/betting');
 const insuranceRoutes = require('./routes/insurance');
 const giftcardRoutes = require('./routes/giftcardRoutes');
 const supportRoutes = require('./routes/supportRoutes');
+const customerCareRoutes =
+  require('./routes/customerCareRoutes');
 const statementRoutes = require('./routes/statementRoutes');
 const posRoutes = require('./routes/posRoutes');
 const smsPreferencesRoutes = require('./routes/smsPreferences');
@@ -347,6 +349,11 @@ app.use(
 app.use(
   '/api/support', 
   supportRoutes
+);
+
+app.use(
+  '/api/customer-care',
+  customerCareRoutes
 );
 // ============================================================
 // PASSKEY
