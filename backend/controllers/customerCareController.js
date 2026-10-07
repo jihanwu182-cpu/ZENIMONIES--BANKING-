@@ -877,7 +877,11 @@ async function getCaseDetails(req, res) {
         ) customer_account
           ON TRUE
 
-        WHERE st.id = $1
+        WHERE
+  (
+    st.id::text = $1
+    OR st.ticket_number = $1
+  )
 
         LIMIT 1
         `,
