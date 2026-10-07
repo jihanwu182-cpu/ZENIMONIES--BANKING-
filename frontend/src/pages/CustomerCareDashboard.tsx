@@ -1548,7 +1548,8 @@ const CustomerCareDashboard: React.FC =
     // ========================================================
 
     return (
-      <Box
+     <>
+       <Box
         sx={{
           minHeight:
             '100vh',
@@ -5411,9 +5412,10 @@ const CustomerCareDashboard: React.FC =
           {error}
         </Alert>
       </Snackbar>
-    </Box>
-  );
-};
+        </Box>
+      </>
+   );
+ };
 
 // ============================================================
 // INFO ROW
