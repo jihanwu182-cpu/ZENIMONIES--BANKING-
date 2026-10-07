@@ -423,20 +423,6 @@ const AdminRoutes: React.FC = () => {
 // ============================================================
 
 const CustomerCareRoute: React.FC = () => {
-  const token =
-    localStorage.getItem('zenimonies_token') ||
-    localStorage.getItem('token') ||
-    localStorage.getItem('accessToken');
-
-  if (!token) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-      />
-    );
-  }
-
   let user: any = null;
 
   try {
@@ -459,25 +445,33 @@ const CustomerCareRoute: React.FC = () => {
     .trim()
     .toLowerCase();
 
-  if (role !== 'customer_care') {
-    if (role === 'admin') {
-      return (
-        <Navigate
-          to="/admin/dashboard"
-          replace
-        />
-      );
+  console.log(
+    'ZENIMONIES Customer Care route check:',
+    {
+      role,
+      user,
     }
+  );
 
+  if (role === 'customer_care') {
+    return <CustomerCareDashboard />;
+  }
+
+  if (role === 'admin') {
     return (
       <Navigate
-        to="/"
+        to="/admin/dashboard"
         replace
       />
     );
   }
 
-  return <CustomerCareDashboard />;
+  return (
+    <Navigate
+      to="/"
+      replace
+    />
+  );
 };
 // ============================================================
 // CUSTOMER ROUTES
