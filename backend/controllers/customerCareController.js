@@ -1852,9 +1852,6 @@ async function closeCase(req, res) {
 //   - password
 //   - session ID
 // ============================================================
-// INVESTIGATE TRANSACTION
-// CUSTOMER CARE — READ ONLY
-// ============================================================
 
 async function investigateTransaction(req, res) {
   try {
