@@ -52,6 +52,9 @@ const businessRoutes =
 const {
   startSavingsMaturityJob,
 } = require('./jobs/savingsMaturityJob');
+const {
+  startSupportTimeoutWorker,
+} = require('./services/supportTimeoutWorker');
 
 // ============================================================
 // PAYSTACK
@@ -1247,7 +1250,315 @@ await pool.query(`
 console.log(
   'Database migration completed: Customer Care workflow indexes are available'
 );
+// ========================================================
+// CUSTOMER CARE → ADMINISTRATION ESCALATION
+// ========================================================
+//
+// Adds the Administration escalation fields to existing
+// production support tickets.
+//
+// Customer Care and Administration remain separate roles.
+//
+// Customer Care:
+//   - investigates
+//   - chats
+//   - resolves normal cases
+//   - forwards cases requiring administrative action
+//
+// Administration:
+//   - takes escalated cases
+//   - performs permitted administrative actions
+//   - resolves/closes escalated cases
+// ========================================================
 
+await pool.query(`
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS
+  escalated_to_admin BOOLEAN
+    NOT NULL DEFAULT FALSE;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS
+  escalated_at TIMESTAMP;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS
+  escalated_by UUID;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS
+  admin_taken_at TIMESTAMP;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS
+  escalation_reason TEXT;
+
+  ALTER TABLE support_tickets
+  ADD COLUMN IF NOT EXISTS
+  assigned_admin_id UUID;
+`);
+
+console.log(
+  'Database migration completed: Administration escalation columns are available'
+);
+
+
+// ========================================================
+// ESCALATION FOREIGN KEYS
+// ========================================================
+
+await pool.query(`
+  DO $$
+  BEGIN
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname =
+        'support_tickets_escalated_by_fkey'
+        AND conrelid =
+        'support_tickets'::regclass
+    ) THEN
+
+      ALTER TABLE support_tickets
+      ADD CONSTRAINT
+      support_tickets_escalated_by_fkey
+      FOREIGN KEY (escalated_by)
+      REFERENCES users(id)
+      ON DELETE SET NULL;
+
+    END IF;
+
+  END
+  $$;
+`);
+
+
+await pool.query(`
+  DO $$
+  BEGIN
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname =
+        'support_tickets_assigned_admin_id_fkey'
+        AND conrelid =
+        'support_tickets'::regclass
+    ) THEN
+
+      ALTER TABLE support_tickets
+      ADD CONSTRAINT
+      support_tickets_assigned_admin_id_fkey
+      FOREIGN KEY (assigned_admin_id)
+      REFERENCES users(id)
+      ON DELETE SET NULL;
+
+    END IF;
+
+  END
+  $$;
+`);
+
+console.log(
+  'Database migration completed: Administration escalation foreign keys are available'
+);
+
+
+// ========================================================
+// ADMINISTRATION ESCALATION INDEXES
+// ========================================================
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS
+  idx_support_tickets_escalated_to_admin
+  ON support_tickets(escalated_to_admin);
+
+  CREATE INDEX IF NOT EXISTS
+  idx_support_tickets_assigned_admin_id
+  ON support_tickets(assigned_admin_id);
+
+  CREATE INDEX IF NOT EXISTS
+  idx_support_tickets_escalated_at
+  ON support_tickets(escalated_at);
+
+  CREATE INDEX IF NOT EXISTS
+  idx_support_tickets_admin_queue
+  ON support_tickets(
+    escalated_to_admin,
+    assigned_admin_id,
+    status
+  );
+`);
+
+console.log(
+  'Database migration completed: Administration escalation indexes are available'
+);
+    // ========================================================
+// CUSTOMER CARE SECURE TRANSACTION VIEWS
+// ========================================================
+//
+// Customer Care can investigate transactions without seeing:
+//
+// - account balance
+// - available balance
+// - ledger balance
+// - balance_before
+// - balance_after
+// - full account number
+// - security secrets
+//
+// Only masked account information and transaction information
+// required for support investigation are exposed.
+// ========================================================
+
+await pool.query(`
+  CREATE OR REPLACE VIEW agent_transactions_view AS
+  SELECT
+      t.id AS transaction_id,
+
+      a.user_id AS customer_id,
+
+      u.full_name AS customer_name,
+
+      u.email AS customer_email,
+
+      u.phone AS customer_phone,
+
+      u.kyc_status,
+
+      CASE
+          WHEN a.account_number IS NULL THEN NULL
+          WHEN LENGTH(a.account_number) <= 4 THEN '****'
+          ELSE '****' || RIGHT(a.account_number, 4)
+      END AS masked_account_number,
+
+      t.reference AS transaction_reference,
+
+      t.type AS transaction_type,
+
+      t.amount AS transaction_amount,
+
+      t.currency AS transaction_currency,
+
+      t.description AS transaction_description,
+
+      t.status AS transaction_status,
+
+      t.created_at AS transaction_created_at,
+
+      bt.id AS bank_transfer_id,
+
+      bt.recipient_name,
+
+      CASE
+          WHEN bt.recipient_account_number IS NULL THEN NULL
+          WHEN LENGTH(bt.recipient_account_number) <= 4 THEN '****'
+          ELSE '****' ||
+            RIGHT(bt.recipient_account_number, 4)
+      END AS masked_recipient_account_number,
+
+      bt.recipient_bank_name,
+
+      bt.recipient_bank_code,
+
+      bt.status AS bank_transfer_status,
+
+      bt.provider_reference,
+
+      bt.failure_reason,
+
+      bt.created_at AS transfer_created_at,
+
+      bt.completed_at AS transfer_completed_at
+
+  FROM transactions t
+
+  INNER JOIN accounts a
+      ON a.id = t.account_id
+
+  INNER JOIN users u
+      ON u.id = a.user_id
+
+  LEFT JOIN bank_transfers bt
+      ON bt.reference = t.reference
+      OR bt.provider_reference = t.reference;
+`);
+
+console.log(
+  'Database migration completed: secure Customer Care transaction view is available'
+);
+
+
+// ========================================================
+// SECURE BANK TRANSFER VIEW
+// ========================================================
+
+await pool.query(`
+  CREATE OR REPLACE VIEW agent_bank_transfers_view AS
+  SELECT
+
+      bt.id AS bank_transfer_id,
+
+      a.user_id AS customer_id,
+
+      u.full_name AS customer_name,
+
+      u.email AS customer_email,
+
+      u.phone AS customer_phone,
+
+      u.kyc_status,
+
+      CASE
+          WHEN a.account_number IS NULL THEN NULL
+          WHEN LENGTH(a.account_number) <= 4 THEN '****'
+          ELSE '****' || RIGHT(a.account_number, 4)
+      END AS masked_account_number,
+
+      bt.reference AS transaction_reference,
+
+      bt.provider_reference,
+
+      bt.recipient_name,
+
+      CASE
+          WHEN bt.recipient_account_number IS NULL THEN NULL
+          WHEN LENGTH(bt.recipient_account_number) <= 4 THEN '****'
+          ELSE '****' ||
+            RIGHT(bt.recipient_account_number, 4)
+      END AS masked_recipient_account_number,
+
+      bt.recipient_bank_name,
+
+      bt.recipient_bank_code,
+
+      bt.amount,
+
+      bt.currency,
+
+      bt.narration,
+
+      bt.status,
+
+      bt.failure_reason,
+
+      bt.created_at,
+
+      bt.completed_at
+
+  FROM bank_transfers bt
+
+  INNER JOIN accounts a
+      ON a.id = bt.account_id
+
+  INNER JOIN users u
+      ON u.id = a.user_id;
+`);
+
+console.log(
+  'Database migration completed: secure Customer Care bank transfer view is available'
+);
 // ========================================================
 // SUPPORT MESSAGE SENDER TYPES
 // ========================================================
@@ -1427,6 +1738,25 @@ console.log(
   'Automatic Savings Maturity Scheduler is active.'
 );
 
+
+// ========================================================
+// START CUSTOMER CARE TIMEOUT WORKER
+// ========================================================
+//
+// Checks Customer Care cases every 5 minutes.
+//
+// Handles:
+// - customer response reminders
+// - automatic closure after response timeout
+//
+// The worker does not modify balances or transactions.
+// ========================================================
+
+startSupportTimeoutWorker();
+
+console.log(
+  'Customer Care Timeout Worker is active.'
+);
     // ========================================================
     // START SERVER
     // ========================================================
