@@ -1434,145 +1434,154 @@ const investigateTransaction =
       // No full account number is added here.
       // ----------------------------------------------------
 
-      const normalized: InvestigationTransaction =
-        {
-          id:
-            raw.id ||
-            raw.transaction_id ||
-            raw.bank_transfer_id ||
-            '',
+      const normalized: InvestigationTransaction = {
+  id:
+    raw.id ||
+    raw.transaction_id ||
+    raw.bank_transfer_id ||
+    '',
 
-          reference:
-            raw.reference ||
-            raw.transaction_reference ||
-            reference,
+  reference:
+    raw.reference ||
+    raw.transaction_reference ||
+    reference,
 
-          provider_reference:
-            raw.provider_reference ||
-            null,
+  provider_reference:
+    raw.provider_reference ||
+    null,
 
-          type:
-            raw.type ||
-            raw.transaction_type ||
-            'transaction',
+  type:
+    raw.type ||
+    raw.transaction_type ||
+    'transaction',
 
-          amount:
-            Number(
-              raw.amount ??
-                raw.transaction_amount ??
-                0
-            ),
+  amount:
+    Number(
+      raw.amount ??
+        raw.transaction_amount ??
+        0
+    ),
 
-          currency:
-            raw.currency ||
-            raw.transaction_currency ||
-            'NGN',
+  currency:
+    raw.currency ||
+    raw.transaction_currency ||
+    'NGN',
 
-          status:
-            raw.status ||
-            raw.transaction_status ||
-            'unknown',
+  status:
+    raw.status ||
+    raw.transaction_status ||
+    'unknown',
 
-          status_label:
-            raw.status_label ||
-            titleCase(
-              raw.status ||
-                raw.transaction_status ||
-                'unknown'
-            ),
+  status_label:
+    raw.status_label ||
+    titleCase(
+      raw.status ||
+        raw.transaction_status ||
+        'unknown'
+    ),
 
-          narration:
-            raw.narration ||
-            raw.transaction_description ||
-            null,
+  narration:
+    raw.narration ||
+    raw.transaction_description ||
+    null,
 
-          initiated_at:
-            raw.initiated_at ||
-            raw.transaction_created_at ||
-            raw.transfer_created_at ||
-            null,
+  initiated_at:
+    raw.initiated_at ||
+    raw.transaction_created_at ||
+    raw.transfer_created_at ||
+    null,
 
-          completed_at:
-            raw.completed_at ||
-            raw.transfer_completed_at ||
-            null,
+  completed_at:
+    raw.completed_at ||
+    raw.transfer_completed_at ||
+    null,
 
-          failure_reason:
-            raw.failure_reason ||
-            null,
+  failure_reason:
+    raw.failure_reason ||
+    null,
 
-          // ------------------------------------------------
-          // CUSTOMER
-          // ------------------------------------------------
+  // ========================================================
+  // CUSTOMER
+  // Supports both nested and flat backend responses.
+  // ========================================================
 
-          customer: {
-            id:
-              raw.customer_id ||
-              undefined,
+  customer: {
+    id:
+      raw.customer?.id ||
+      raw.customer_id ||
+      undefined,
 
-            full_name:
-              raw.customer_name ||
-              undefined,
+    full_name:
+      raw.customer?.full_name ||
+      raw.customer_name ||
+      undefined,
 
-            email:
-              raw.customer_email ||
-              undefined,
+    email:
+      raw.customer?.email ||
+      raw.customer_email ||
+      undefined,
 
-            phone:
-              raw.customer_phone ||
-              undefined,
+    phone:
+      raw.customer?.phone ||
+      raw.customer_phone ||
+      undefined,
 
-            kyc_status:
-              raw.kyc_status ||
-              undefined,
+    kyc_status:
+      raw.customer?.kyc_status ||
+      raw.kyc_status ||
+      undefined,
 
-            // IMPORTANT:
-            // Backend already returns the account masked.
-            account_number:
-              raw.masked_account_number ||
-              undefined,
-          },
+    // Backend must provide this already masked.
+    account_number:
+      raw.customer?.account_number ||
+      raw.masked_account_number ||
+      undefined,
+  },
 
-          // ------------------------------------------------
-          // RECIPIENT
-          // ------------------------------------------------
+  // ========================================================
+  // RECIPIENT
+  // Supports both nested and flat backend responses.
+  // ========================================================
 
-          recipient: {
-            name:
-              raw.recipient_name ||
-              undefined,
+  recipient: {
+    name:
+      raw.recipient?.name ||
+      raw.recipient_name ||
+      undefined,
 
-            account_number:
-              raw.masked_recipient_account_number ||
-              undefined,
+    account_number:
+      raw.recipient?.account_number ||
+      raw.masked_recipient_account_number ||
+      undefined,
 
-            bank_name:
-              raw.recipient_bank_name ||
-              undefined,
+    bank_name:
+      raw.recipient?.bank_name ||
+      raw.recipient_bank_name ||
+      undefined,
 
-            bank_code:
-              raw.recipient_bank_code ||
-              undefined,
-          },
+    bank_code:
+      raw.recipient?.bank_code ||
+      raw.recipient_bank_code ||
+      undefined,
+  },
 
-          // ------------------------------------------------
-          // DO NOT INCLUDE LEDGER BALANCES
-          // ------------------------------------------------
+  // ========================================================
+  // SECURITY
+  // NEVER expose balances or balance_before/balance_after.
+  // ========================================================
 
-          ledger: null,
+  ledger: null,
 
-          // ------------------------------------------------
-          // TRANSACTION FLOW
-          // ------------------------------------------------
+  // ========================================================
+  // TRANSACTION FLOW
+  // ========================================================
 
-          flow:
-            Array.isArray(raw.flow) &&
-            raw.flow.length > 0
-              ? raw.flow
-              : buildInvestigationFlow(
-                  raw
-                ),
-        };
+  flow:
+    Array.isArray(raw.flow) &&
+    raw.flow.length > 0
+      ? raw.flow
+      : buildInvestigationFlow(raw),
+};
 
       setInvestigation(
         normalized
