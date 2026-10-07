@@ -76,7 +76,19 @@ function maskPhone(phone) {
 
   return '****' + value.slice(-4);
 }
+// ============================================================
+// TITLE CASE
+// ============================================================
 
+function titleCase(value) {
+  if (!value) return 'Unknown';
+
+  return String(value)
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
 // ============================================================
 // GET AVAILABLE CUSTOMER CARE CASES
