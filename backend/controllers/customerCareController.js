@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+ const pool = require('../config/database');
 
 const {
   buildAgentJoinedMessage,
@@ -1791,12 +1791,12 @@ async function resolveCase(req, res) {
         $4
       )
       `,
-      [
-        ticket.user_id,
-        `Customer Care resolved support ticket ${ticket.ticket_number}.`,
-        req.ip || null,
-        req.get('user-agent') || null,
-      ]
+ [
+  agentId,
+  `Customer Care resolved support ticket ${ticket.ticket_number}.`,
+  req.ip || null,
+  req.get('user-agent') || null,
+]
     );
 
     await client.query('COMMIT');
@@ -1971,12 +1971,12 @@ async function closeCase(req, res) {
         $4
       )
       `,
-      [
-        ticket.user_id,
-        `Customer Care closed support ticket ${ticket.ticket_number}.`,
-        req.ip || null,
-        req.get('user-agent') || null,
-      ]
+[
+  agentId,
+  `Customer Care closed support ticket ${ticket.ticket_number}.`,
+  req.ip || null,
+  req.get('user-agent') || null,
+]
     );
 
     await client.query('COMMIT');
