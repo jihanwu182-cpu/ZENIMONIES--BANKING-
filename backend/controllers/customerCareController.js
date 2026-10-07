@@ -664,57 +664,676 @@ async function takeCase(req, res) {
   }
 }
 
-
 // ============================================================
-// GET CASE DETAILS
-// GET /api/customer-care/tickets/:ticketId
+// SECURE TRANSACTION INVESTIGATION
+// GET /api/customer-care/transactions/investigate
 // ============================================================
 //
-// IMPORTANT FIX:
+// Supports:
+//   - internal_transfer
+//   - internal_transfer_received
+//   - external bank transfer
+//   - pending
+//   - processing
+//   - completed
+//   - failed
 //
-// An AVAILABLE case has:
-//     connected_to_customer_care = TRUE
-//     assigned_to = NULL
-//     escalated_to_admin = FALSE
+// SECURITY:
+// Customer Care receives ONLY information required to investigate
+// the transaction.
 //
-// Customer Care MUST be able to OPEN that case before taking it.
-//
-// Previously this endpoint only allowed:
-//     assigned_to = current agent
-//     OR
-//     escalated_by = current agent
-//
-// That caused the exact error you saw:
-//
-// "You do not have access to this Customer Care case."
-//
-// This version allows:
-//     1. available cases
-//     2. cases assigned to current agent
-//     3. cases previously escalated by current agent
-//
+// NEVER RETURN:
+//   - balance
+//   - balance_before
+//   - balance_after
+//   - full account number
+//   - PIN
+//   - OTP
+//   - password
+//   - session ID
 // ============================================================
 
-async function getCaseDetails(req, res) {
+async function investigateTransaction(req, res) {
   try {
-    const agentId = getAgentId(req);
-    const { ticketId } = req.params;
+    const reference =
+      String(
+        req.query.reference || ''
+      ).trim();
 
-    if (!agentId) {
-      return res.status(401).json({
-        success: false,
-        message:
-          'Customer Care identity could not be determined.',
-      });
-    }
-
-    if (!ticketId) {
+    if (!reference) {
       return res.status(400).json({
         success: false,
         message:
-          'Ticket ID is required.',
+          'Transaction reference is required.',
       });
     }
+
+    // ----------------------------------------------------------
+    // FIND TRANSACTION
+    // ----------------------------------------------------------
+
+    const transactionResult =
+      await pool.query(
+        `
+        SELECT
+          transaction_id,
+          customer_id,
+          customer_name,
+          customer_email,
+          customer_phone,
+          kyc_status,
+          masked_account_number,
+
+          transaction_reference,
+          transaction_type,
+          transaction_amount,
+          transaction_currency,
+          transaction_description,
+          transaction_status,
+          transaction_created_at,
+
+          bank_transfer_id,
+          recipient_name,
+          masked_recipient_account_number,
+          recipient_bank_name,
+          recipient_bank_code,
+          bank_transfer_status,
+          provider_reference,
+          failure_reason,
+          transfer_created_at,
+          transfer_completed_at
+
+        FROM agent_transactions_view
+
+        WHERE
+          transaction_reference = $1
+          OR provider_reference = $1
+
+        ORDER BY
+          transaction_created_at DESC
+
+        LIMIT 1
+        `,
+        [reference]
+      );
+
+    let transaction =
+      transactionResult.rows[0] ||
+      null;
+
+    let bankTransfer = null;
+
+    // ----------------------------------------------------------
+    // BANK TRANSFER FALLBACK
+    // ----------------------------------------------------------
+
+    if (!transaction) {
+      const transferResult =
+        await pool.query(
+          `
+          SELECT
+            bank_transfer_id,
+            customer_id,
+            customer_name,
+            customer_email,
+            customer_phone,
+            kyc_status,
+            masked_account_number,
+
+            transaction_reference,
+            provider_reference,
+
+            recipient_name,
+            masked_recipient_account_number,
+            recipient_bank_name,
+            recipient_bank_code,
+
+            amount,
+            currency,
+            narration,
+            status,
+            failure_reason,
+            created_at,
+            completed_at
+
+          FROM agent_bank_transfers_view
+
+          WHERE
+            transaction_reference = $1
+            OR provider_reference = $1
+
+          ORDER BY
+            created_at DESC
+
+          LIMIT 1
+          `,
+          [reference]
+        );
+
+      bankTransfer =
+        transferResult.rows[0] ||
+        null;
+    }
+
+    // ----------------------------------------------------------
+    // NOT FOUND
+    // ----------------------------------------------------------
+
+    if (
+      !transaction &&
+      !bankTransfer
+    ) {
+      return res.status(404).json({
+        success: false,
+        message:
+          'Transaction could not be found.',
+      });
+    }
+
+    // ----------------------------------------------------------
+    // BASIC NORMALIZED VALUES
+    // ----------------------------------------------------------
+
+    const source =
+      transaction ||
+      bankTransfer;
+
+    const transactionType =
+      transaction?.transaction_type ||
+      'bank_transfer';
+
+    const status =
+      transaction?.transaction_status ||
+      transaction?.bank_transfer_status ||
+      bankTransfer?.status ||
+      'unknown';
+
+    const amount =
+      transaction?.transaction_amount ??
+      bankTransfer?.amount ??
+      null;
+
+    const currency =
+      transaction?.transaction_currency ||
+      bankTransfer?.currency ||
+      'NGN';
+
+    const transactionReference =
+      transaction?.transaction_reference ||
+      bankTransfer?.transaction_reference ||
+      reference;
+
+    // ----------------------------------------------------------
+    // INTERNAL TRANSFER DETECTION
+    // ----------------------------------------------------------
+
+    const isInternalTransfer =
+      transactionType === 'internal_transfer' ||
+      transactionType === 'internal_transfer_received';
+
+    // ----------------------------------------------------------
+    // RECIPIENT DETAILS
+    // ----------------------------------------------------------
+
+    let recipient = {
+      name:
+        transaction?.recipient_name ||
+        bankTransfer?.recipient_name ||
+        null,
+
+      account_number:
+        transaction?.masked_recipient_account_number ||
+        bankTransfer?.masked_recipient_account_number ||
+        null,
+
+      bank_name:
+        transaction?.recipient_bank_name ||
+        bankTransfer?.recipient_bank_name ||
+        null,
+
+      bank_code:
+        transaction?.recipient_bank_code ||
+        bankTransfer?.recipient_bank_code ||
+        null,
+    };
+
+    // ----------------------------------------------------------
+    // INTERNAL TRANSFER COUNTERPART
+    // ----------------------------------------------------------
+    //
+    // Internal transfers do not use bank_transfers.
+    //
+    // We therefore find the other transaction belonging to the
+    // same reference.
+    //
+    // IMPORTANT:
+    // We only return the recipient's:
+    //   - name
+    //   - masked account number
+    //
+    // No recipient balance is selected.
+    // ----------------------------------------------------------
+
+    if (
+      isInternalTransfer &&
+      !recipient.name
+    ) {
+      const counterpartResult =
+        await pool.query(
+          `
+          SELECT
+            t.id AS transaction_id,
+
+            u.id AS customer_id,
+            u.full_name AS customer_name,
+
+            CASE
+              WHEN a.account_number IS NULL
+                THEN NULL
+
+              WHEN LENGTH(a.account_number) <= 4
+                THEN '****'
+
+              ELSE
+                '****' ||
+                RIGHT(a.account_number, 4)
+            END AS masked_account_number,
+
+            t.type,
+            t.amount,
+            t.currency,
+            t.reference,
+            t.status,
+            t.created_at
+
+          FROM transactions t
+
+          INNER JOIN accounts a
+            ON a.id = t.account_id
+
+          INNER JOIN users u
+            ON u.id = a.user_id
+
+          WHERE
+            t.reference = $1
+
+            AND a.user_id <> $2
+
+          ORDER BY
+            t.created_at ASC
+
+          LIMIT 1
+          `,
+          [
+            transactionReference,
+            source.customer_id,
+          ]
+        );
+
+      if (
+        counterpartResult.rows.length > 0
+      ) {
+        const counterpart =
+          counterpartResult.rows[0];
+
+        recipient = {
+          name:
+            counterpart.customer_name ||
+            null,
+
+          account_number:
+            counterpart.masked_account_number ||
+            null,
+
+          bank_name:
+            'ZENIMONIES',
+
+          bank_code:
+            null,
+        };
+      }
+    }
+
+    // ----------------------------------------------------------
+    // MASK CUSTOMER PHONE
+    // ----------------------------------------------------------
+
+    const customerPhone =
+      source.customer_phone
+        ? (
+            String(
+              source.customer_phone
+            ).length <= 4
+              ? '****'
+              : '****' +
+                String(
+                  source.customer_phone
+                ).slice(-4)
+          )
+        : null;
+
+    // ----------------------------------------------------------
+    // TRANSACTION FLOW
+    // ----------------------------------------------------------
+
+    let flow = [];
+
+    // ----------------------------------------------------------
+    // INTERNAL TRANSFER FLOW
+    // ----------------------------------------------------------
+
+    if (isInternalTransfer) {
+      flow = [
+        {
+          step:
+            'Transfer initiated',
+
+          label:
+            'Transfer initiated',
+
+          status:
+            'completed',
+        },
+
+        {
+          step:
+            'ZENIMONIES account transfer processed',
+
+          label:
+            'ZENIMONIES account transfer processed',
+
+          status:
+            status === 'failed'
+              ? 'failed'
+              : 'completed',
+        },
+
+        {
+          step:
+            'Recipient account credited',
+
+          label:
+            'Recipient account credited',
+
+          status:
+            status === 'completed' ||
+            status === 'successful'
+              ? 'completed'
+              : status === 'failed'
+              ? 'failed'
+              : 'pending',
+        },
+      ];
+    }
+
+    // ----------------------------------------------------------
+    // EXTERNAL BANK TRANSFER FLOW
+    // ----------------------------------------------------------
+
+    else {
+      flow = [
+        {
+          step:
+            'Transfer initiated',
+
+          label:
+            'Transfer initiated',
+
+          status:
+            'completed',
+        },
+
+        {
+          step:
+            'Account debit recorded',
+
+          label:
+            'Account debit recorded',
+
+          status:
+            transaction
+              ? 'completed'
+              : 'pending',
+        },
+      ];
+
+      if (
+        status === 'failed'
+      ) {
+        flow.push({
+          step:
+            'Bank transfer submitted',
+
+          label:
+            'Bank transfer submitted',
+
+          status:
+            'completed',
+        });
+
+        flow.push({
+          step:
+            'Interbank processing',
+
+          label:
+            'Interbank processing',
+
+          status:
+            'failed',
+        });
+
+        flow.push({
+          step:
+            'Recipient credit',
+
+          label:
+            'Recipient credit',
+
+          status:
+            'failed',
+        });
+      }
+
+      else if (
+        status === 'completed' ||
+        status === 'successful'
+      ) {
+        flow.push({
+          step:
+            'Bank transfer submitted',
+
+          label:
+            'Bank transfer submitted',
+
+          status:
+            'completed',
+        });
+
+        flow.push({
+          step:
+            'Interbank processing',
+
+          label:
+            'Interbank processing',
+
+          status:
+            'completed',
+        });
+
+        flow.push({
+          step:
+            'Recipient credit',
+
+          label:
+            'Recipient credit',
+
+          status:
+            'completed',
+        });
+      }
+
+      else {
+        flow.push({
+          step:
+            'Bank transfer submitted',
+
+          label:
+            'Bank transfer submitted',
+
+          status:
+            'completed',
+        });
+
+        flow.push({
+          step:
+            'Interbank processing',
+
+          label:
+            'Interbank processing',
+
+          status:
+            'processing',
+        });
+
+        flow.push({
+          step:
+            'Recipient credit',
+
+          label:
+            'Recipient credit',
+
+          status:
+            'pending',
+        });
+      }
+    }
+
+    // ----------------------------------------------------------
+    // SECURE RESPONSE
+    // ----------------------------------------------------------
+
+    return res.status(200).json({
+      success: true,
+
+      transaction: {
+        id:
+          transaction?.transaction_id ||
+          bankTransfer?.bank_transfer_id ||
+          null,
+
+        reference:
+          transactionReference,
+
+        type:
+          transactionType,
+
+        amount,
+
+        currency,
+
+        status,
+
+        status_label:
+          status === 'completed' ||
+          status === 'successful'
+            ? 'Completed'
+            : status === 'processing'
+            ? 'Processing'
+            : status === 'pending'
+            ? 'Pending'
+            : status === 'failed'
+            ? 'Failed'
+            : 'Unknown',
+
+        description:
+          transaction?.transaction_description ||
+          bankTransfer?.narration ||
+          null,
+
+        created_at:
+          transaction?.transaction_created_at ||
+          bankTransfer?.created_at ||
+          null,
+
+        initiated_at:
+          transaction?.transaction_created_at ||
+          bankTransfer?.created_at ||
+          null,
+
+        provider_reference:
+          transaction?.provider_reference ||
+          bankTransfer?.provider_reference ||
+          null,
+
+        failure_reason:
+          transaction?.failure_reason ||
+          bankTransfer?.failure_reason ||
+          null,
+
+        completed_at:
+          transaction?.transfer_completed_at ||
+          bankTransfer?.completed_at ||
+          null,
+      },
+
+      // --------------------------------------------------------
+      // SAFE CUSTOMER INFORMATION
+      // --------------------------------------------------------
+
+      customer: {
+        id:
+          source.customer_id,
+
+        full_name:
+          source.customer_name,
+
+        email:
+          source.customer_email,
+
+        // MASKED
+        phone:
+          customerPhone,
+
+        kyc_status:
+          source.kyc_status,
+
+        // MASKED ONLY
+        account_number:
+          source.masked_account_number ||
+          null,
+      },
+
+      // --------------------------------------------------------
+      // SAFE RECIPIENT INFORMATION
+      // --------------------------------------------------------
+
+      recipient,
+
+      // --------------------------------------------------------
+      // TRANSACTION FLOW
+      // --------------------------------------------------------
+
+      flow,
+
+      // --------------------------------------------------------
+      // SECURITY FLAG
+      // --------------------------------------------------------
+
+      read_only: true,
+    });
+  } catch (error) {
+    console.error(
+      'Customer Care transaction investigation error:',
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Unable to investigate transaction.',
+    });
+  }
+}
 
     // ----------------------------------------------------------
     // VERIFY CURRENT USER IS CUSTOMER CARE
