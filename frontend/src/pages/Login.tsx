@@ -202,6 +202,66 @@ function saveAuthenticatedSession(
 }
 
 // ============================================================
+// ROLE-BASED LOGIN DESTINATION
+// ============================================================
+//
+// IMPORTANT:
+//
+// Customer Care is NOT the Admin Dashboard.
+//
+// customer_care -> /customer-care
+// admin         -> /admin/dashboard
+// user          -> /
+//
+// ============================================================
+
+function navigateAfterLogin(
+  navigate: ReturnType<typeof useNavigate>,
+  user: any
+) {
+  const role =
+    String(
+      user?.role || ''
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    role ===
+    'customer_care'
+  ) {
+    navigate(
+      '/customer-care',
+      {
+        replace: true,
+      }
+    );
+
+    return;
+  }
+
+  if (
+    role === 'admin'
+  ) {
+    navigate(
+      '/admin/dashboard',
+      {
+        replace: true,
+      }
+    );
+
+    return;
+  }
+
+  navigate(
+    '/',
+    {
+      replace: true,
+    }
+  );
+}
+
+// ============================================================
 // ZENIMONIES LOGO
 // ============================================================
 
@@ -264,7 +324,6 @@ const LoginIllustration: React.FC = () => (
       fill="none"
       aria-hidden="true"
     >
-      {/* Soft background */}
       <circle
         cx="95"
         cy="95"
@@ -272,7 +331,6 @@ const LoginIllustration: React.FC = () => (
         fill="#EDF9F3"
       />
 
-      {/* Decorative marks */}
       <path
         d="M30 70L22 63"
         stroke="#79D5AB"
@@ -308,7 +366,6 @@ const LoginIllustration: React.FC = () => (
         strokeLinecap="round"
       />
 
-      {/* Phone */}
       <rect
         x="55"
         y="29"
@@ -320,7 +377,6 @@ const LoginIllustration: React.FC = () => (
         strokeWidth="7"
       />
 
-      {/* Phone speaker */}
       <rect
         x="80"
         y="38"
@@ -330,7 +386,6 @@ const LoginIllustration: React.FC = () => (
         fill="#9DDBBB"
       />
 
-      {/* Login card */}
       <rect
         x="69"
         y="66"
@@ -340,7 +395,6 @@ const LoginIllustration: React.FC = () => (
         fill="#0A9A55"
       />
 
-      {/* Dots */}
       <circle
         cx="84"
         cy="86"
@@ -362,13 +416,11 @@ const LoginIllustration: React.FC = () => (
         fill="#FFFFFF"
       />
 
-      {/* Speech tail */}
       <path
         d="M82 119L82 132L96 119H82Z"
         fill="#0A9A55"
       />
 
-      {/* Bottom phone button */}
       <circle
         cx="94"
         cy="148"
@@ -376,7 +428,6 @@ const LoginIllustration: React.FC = () => (
         fill="#D7F0E3"
       />
 
-      {/* Security shield */}
       <path
         d="M137 104L160 113V132C160 148 150 157 137 162C124 157 114 148 114 132V113L137 104Z"
         fill="#0A9A55"
@@ -806,6 +857,10 @@ const Login: React.FC = () => {
         return;
       }
 
+      // ========================================================
+      // SAVE SESSION
+      // ========================================================
+
       saveAuthenticatedSession({
         token,
         user:
@@ -814,7 +869,23 @@ const Login: React.FC = () => {
           data.accounts,
       });
 
-      navigate('/');
+      // ========================================================
+      // ROLE-BASED DESTINATION
+      // ========================================================
+      //
+      // Customer Care does NOT enter the normal banking
+      // dashboard.
+      //
+      // Admin does NOT enter the normal banking dashboard.
+      //
+      // Normal customers continue to "/".
+      // ========================================================
+
+      navigateAfterLogin(
+        navigate,
+        data.user
+      );
+
     } catch (err: unknown) {
       console.error(
         'Zenimonies password login error:',
@@ -1092,6 +1163,10 @@ const Login: React.FC = () => {
           );
         }
 
+        // ======================================================
+        // SAVE PASSKEY SESSION
+        // ======================================================
+
         saveAuthenticatedSession({
           token,
           user:
@@ -1157,7 +1232,15 @@ const Login: React.FC = () => {
           false
         );
 
-        navigate('/');
+        // ======================================================
+        // ROLE-BASED PASSKEY DESTINATION
+        // ======================================================
+
+        navigateAfterLogin(
+          navigate,
+          responseData.user
+        );
+
       } catch (err: unknown) {
         console.error(
           'Zenimonies passkey login error:',
@@ -1231,10 +1314,6 @@ const Login: React.FC = () => {
           margin: '0 auto',
         }}
       >
-        {/* ====================================================
-            MAIN WHITE CARD
-            ==================================================== */}
-
         <div
           style={{
             background:
@@ -1361,9 +1440,7 @@ const Login: React.FC = () => {
             }
             noValidate
           >
-            {/* =================================================
-                EMAIL
-                ================================================= */}
+            {/* EMAIL */}
 
             <label
               htmlFor="email"
@@ -1452,9 +1529,7 @@ const Login: React.FC = () => {
               />
             </div>
 
-            {/* =================================================
-                PASSWORD
-                ================================================= */}
+            {/* PASSWORD */}
 
             <div
               style={{
@@ -1628,9 +1703,7 @@ const Login: React.FC = () => {
               </button>
             </div>
 
-            {/* =================================================
-                SIGN IN
-                ================================================= */}
+            {/* SIGN IN */}
 
             <button
               type="submit"
@@ -1821,7 +1894,7 @@ const Login: React.FC = () => {
                       '#A15C00',
                     fontSize:
                       '12px',
-                    fontWeight:
+                      fontWeight:
                       650,
                   }}
                 >
