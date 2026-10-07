@@ -4,6 +4,99 @@ const pool = require('../config/database');
 // ZENIMONIES BANKING
 // ADMIN CUSTOMER CARE CONTROLLER
 // ============================================================
+//
+// ADMINISTRATION SUPPORT RULES
+//
+// 1. Admins can view support cases.
+// 2. Customer Care escalated cases appear in the Administration
+//    queue.
+// 3. An administrator must TAKE an escalated case before
+//    modifying it.
+// 4. Once an administrator takes an escalated case, ONLY that
+//    administrator can:
+//      - reply
+//      - change status
+//      - change priority
+//      - resolve
+//      - close
+//
+// 5. Other administrators can still VIEW the case.
+// 6. This controller does NOT give Customer Care admin access.
+// ============================================================
+
+
+// ============================================================
+// ADMIN CASE OWNERSHIP SECURITY
+// ============================================================
+//
+// For normal support tickets:
+//     Any administrator may manage the ticket.
+//
+// For escalated tickets:
+//
+//     escalated_to_admin = true
+//
+//     assigned_admin_id = NULL
+//         -> No administrator has taken the case yet.
+//         -> Administrator must TAKE CASE first.
+//
+//     assigned_admin_id = adminId
+//         -> This administrator owns the case.
+//
+//     assigned_admin_id = another admin
+//         -> Modification is rejected.
+//
+// ============================================================
+
+async function assertAdminCanOperateOnTicket(
+  client,
+  ticket,
+  adminId
+) {
+  // ----------------------------------------------------------
+  // Normal non-escalated support ticket.
+  // ----------------------------------------------------------
+
+  if (!ticket.escalated_to_admin) {
+    return {
+      allowed: true,
+    };
+  }
+
+  // ----------------------------------------------------------
+  // Escalated case has not been taken yet.
+  // ----------------------------------------------------------
+
+  if (!ticket.assigned_admin_id) {
+    return {
+      allowed: false,
+      status: 409,
+      message:
+        'This escalated case must be taken by an administrator before it can be modified.',
+    };
+  }
+
+  // ----------------------------------------------------------
+  // Another administrator owns the case.
+  // ----------------------------------------------------------
+
+  if (
+    String(ticket.assigned_admin_id) !==
+    String(adminId)
+  ) {
+    return {
+      allowed: false,
+      status: 403,
+      message:
+        'This escalated case is currently assigned to another administrator.',
+    };
+  }
+
+  return {
+    allowed: true,
+  };
+}
+
 
 // ============================================================
 // GET SUPPORT TICKETS
@@ -85,6 +178,20 @@ const getSupportTickets = async (req, res) => {
         assigned_user.full_name
           AS assigned_agent_name,
 
+        st.escalated_to_admin,
+        st.escalated_at,
+        st.escalated_by,
+        escalated_user.full_name
+          AS escalated_by_name,
+
+        st.escalation_reason,
+
+        st.assigned_admin_id,
+        assigned_admin.full_name
+          AS assigned_admin_name,
+
+        st.admin_taken_at,
+
         st.created_at,
         st.updated_at,
         st.resolved_at,
@@ -101,9 +208,21 @@ const getSupportTickets = async (req, res) => {
       LEFT JOIN users assigned_user
         ON assigned_user.id = st.assigned_to
 
+      LEFT JOIN users escalated_user
+        ON escalated_user.id = st.escalated_by
+
+      LEFT JOIN users assigned_admin
+        ON assigned_admin.id = st.assigned_admin_id
+
       ${whereClause}
 
       ORDER BY
+        CASE
+          WHEN st.escalated_to_admin = TRUE
+            THEN 0
+          ELSE 1
+        END,
+
         CASE
           WHEN st.priority = 'urgent'
             THEN 1
@@ -178,6 +297,22 @@ const getSupportTicket = async (req, res) => {
         assigned_user.full_name
           AS assigned_agent_name,
 
+        st.escalated_to_admin,
+        st.escalated_at,
+        st.escalated_by,
+
+        escalated_user.full_name
+          AS escalated_by_name,
+
+        st.escalation_reason,
+
+        st.assigned_admin_id,
+
+        assigned_admin.full_name
+          AS assigned_admin_name,
+
+        st.admin_taken_at,
+
         st.created_at,
         st.updated_at,
         st.resolved_at,
@@ -194,6 +329,12 @@ const getSupportTicket = async (req, res) => {
       LEFT JOIN users assigned_user
         ON assigned_user.id = st.assigned_to
 
+      LEFT JOIN users escalated_user
+        ON escalated_user.id = st.escalated_by
+
+      LEFT JOIN users assigned_admin
+        ON assigned_admin.id = st.assigned_admin_id
+
       WHERE st.id = $1
 
       LIMIT 1
@@ -204,71 +345,83 @@ const getSupportTicket = async (req, res) => {
     if (ticketResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Support ticket not found',
+        message:
+          'Support ticket not found',
       });
     }
 
-    const ticket = ticketResult.rows[0];
+    const ticket =
+      ticketResult.rows[0];
 
     // ----------------------------------------------------------
     // MESSAGES
     // ----------------------------------------------------------
 
-    const messagesResult = await pool.query(
-      `
-      SELECT
-        sm.id,
-        sm.ticket_id,
-        sm.sender_user_id,
-        sm.sender_type,
-        sm.message,
-        sm.created_at,
+    const messagesResult =
+      await pool.query(
+        `
+        SELECT
+          sm.id,
+          sm.ticket_id,
+          sm.sender_user_id,
+          sm.sender_type,
+          sm.message,
+          sm.created_at,
 
-        sender.full_name AS sender_name
+          sender.full_name
+            AS sender_name
 
-      FROM support_messages sm
+        FROM support_messages sm
 
-      LEFT JOIN users sender
-        ON sender.id = sm.sender_user_id
+        LEFT JOIN users sender
+          ON sender.id = sm.sender_user_id
 
-      WHERE sm.ticket_id = $1
+        WHERE sm.ticket_id = $1
 
-      ORDER BY sm.created_at ASC
-      `,
-      [id]
-    );
+        ORDER BY sm.created_at ASC
+        `,
+        [id]
+      );
 
     // ----------------------------------------------------------
     // EVENTS
     // ----------------------------------------------------------
 
-    const eventsResult = await pool.query(
-      `
-      SELECT
-        ste.id,
-        ste.ticket_id,
-        ste.event_type,
-        ste.old_value,
-        ste.new_value,
-        ste.metadata,
-        ste.created_at,
+    const eventsResult =
+      await pool.query(
+        `
+        SELECT
+          ste.id,
+          ste.ticket_id,
+          ste.event_type,
+          ste.old_value,
+          ste.new_value,
+          ste.metadata,
+          ste.created_at,
 
-        actor.full_name AS actor_name
+          actor.full_name
+            AS actor_name
 
-      FROM support_ticket_events ste
+        FROM support_ticket_events ste
 
-      LEFT JOIN users actor
-        ON actor.id = ste.actor_user_id
+        LEFT JOIN users actor
+          ON actor.id = ste.actor_user_id
 
-      WHERE ste.ticket_id = $1
+        WHERE ste.ticket_id = $1
 
-      ORDER BY ste.created_at ASC
-      `,
-      [id]
-    );
+        ORDER BY ste.created_at ASC
+        `,
+        [id]
+      );
 
     // ----------------------------------------------------------
     // LINKED TRANSACTION
+    // ----------------------------------------------------------
+    //
+    // Admins may see the linked transaction.
+    // Customer Care security restrictions do NOT apply here.
+    //
+    // This remains read-only.
     // ----------------------------------------------------------
 
     let transaction = null;
@@ -285,7 +438,9 @@ const getSupportTicket = async (req, res) => {
             t.currency,
             t.description,
             t.status,
-            t.created_at
+            t.created_at,
+            t.balance_before,
+            t.balance_after
 
           FROM transactions t
 
@@ -309,10 +464,13 @@ const getSupportTicket = async (req, res) => {
 
       ticket: {
         ...ticket,
+
         messages:
           messagesResult.rows,
+
         events:
           eventsResult.rows,
+
         transaction,
       },
     });
@@ -359,7 +517,8 @@ const replyToSupportTicket = async (
 
     const adminId =
       req.user?.id ||
-      req.user?.userId;
+      req.user?.userId ||
+      req.userId;
 
     if (!adminId) {
       return res.status(401).json({
@@ -378,15 +537,22 @@ const replyToSupportTicket = async (
           id,
           ticket_number,
           user_id,
-          status
+          status,
+          escalated_to_admin,
+          assigned_admin_id
+
         FROM support_tickets
+
         WHERE id = $1
+
         FOR UPDATE
         `,
         [id]
       );
 
-    if (ticketResult.rows.length === 0) {
+    if (
+      ticketResult.rows.length === 0
+    ) {
       await client.query('ROLLBACK');
 
       return res.status(404).json({
@@ -398,6 +564,29 @@ const replyToSupportTicket = async (
 
     const ticket =
       ticketResult.rows[0];
+
+    // ----------------------------------------------------------
+    // ADMIN OWNERSHIP CHECK
+    // ----------------------------------------------------------
+
+    const permission =
+      await assertAdminCanOperateOnTicket(
+        client,
+        ticket,
+        adminId
+      );
+
+    if (!permission.allowed) {
+      await client.query('ROLLBACK');
+
+      return res.status(
+        permission.status
+      ).json({
+        success: false,
+        message:
+          permission.message,
+      });
+    }
 
     if (ticket.status === 'closed') {
       await client.query('ROLLBACK');
@@ -456,6 +645,7 @@ const replyToSupportTicket = async (
       SET
         status = 'in_progress',
         updated_at = CURRENT_TIMESTAMP
+
       WHERE id = $1
       `,
       [id]
@@ -530,6 +720,7 @@ const replyToSupportTicket = async (
       success: true,
       message:
         'Reply sent successfully',
+
       support_message:
         messageResult.rows[0],
     });
@@ -580,7 +771,9 @@ const updateSupportTicketStatus = async (
       'closed',
     ];
 
-    if (!allowedStatuses.includes(status)) {
+    if (
+      !allowedStatuses.includes(status)
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -590,7 +783,8 @@ const updateSupportTicketStatus = async (
 
     const adminId =
       req.user?.id ||
-      req.user?.userId;
+      req.user?.userId ||
+      req.userId;
 
     if (!adminId) {
       return res.status(401).json({
@@ -609,9 +803,14 @@ const updateSupportTicketStatus = async (
           id,
           ticket_number,
           user_id,
-          status
+          status,
+          escalated_to_admin,
+          assigned_admin_id
+
         FROM support_tickets
+
         WHERE id = $1
+
         FOR UPDATE
         `,
         [id]
@@ -632,6 +831,29 @@ const updateSupportTicketStatus = async (
     const existing =
       existingResult.rows[0];
 
+    // ----------------------------------------------------------
+    // ADMIN OWNERSHIP CHECK
+    // ----------------------------------------------------------
+
+    const permission =
+      await assertAdminCanOperateOnTicket(
+        client,
+        existing,
+        adminId
+      );
+
+    if (!permission.allowed) {
+      await client.query('ROLLBACK');
+
+      return res.status(
+        permission.status
+      ).json({
+        success: false,
+        message:
+          permission.message,
+      });
+    }
+
     if (
       existing.status === status
     ) {
@@ -646,26 +868,14 @@ const updateSupportTicketStatus = async (
     }
 
     // ----------------------------------------------------------
-    // STATUS TIMESTAMPS
+    // UPDATE STATUS
     // ----------------------------------------------------------
-
-    let resolvedAt = null;
-    let closedAt = null;
-
-    if (status === 'resolved') {
-      resolvedAt =
-        new Date();
-    }
-
-    if (status === 'closed') {
-      closedAt =
-        new Date();
-    }
 
     const result =
       await client.query(
         `
         UPDATE support_tickets
+
         SET
           status = $1,
 
@@ -673,8 +883,14 @@ const updateSupportTicketStatus = async (
             CASE
               WHEN $1 = 'resolved'
                 THEN CURRENT_TIMESTAMP
-              WHEN $1 IN ('open', 'pending', 'in_progress')
+
+              WHEN $1 IN (
+                'open',
+                'pending',
+                'in_progress'
+              )
                 THEN NULL
+
               ELSE resolved_at
             END,
 
@@ -682,12 +898,20 @@ const updateSupportTicketStatus = async (
             CASE
               WHEN $1 = 'closed'
                 THEN CURRENT_TIMESTAMP
-              WHEN $1 IN ('open', 'pending', 'in_progress', 'resolved')
+
+              WHEN $1 IN (
+                'open',
+                'pending',
+                'in_progress',
+                'resolved'
+              )
                 THEN NULL
+
               ELSE closed_at
             END,
 
-          updated_at = CURRENT_TIMESTAMP
+          updated_at =
+            CURRENT_TIMESTAMP
 
         WHERE id = $2
 
@@ -772,6 +996,7 @@ const updateSupportTicketStatus = async (
       success: true,
       message:
         'Support ticket status updated successfully',
+
       ticket:
         result.rows[0],
     });
@@ -835,7 +1060,8 @@ const updateSupportTicketPriority = async (
 
     const adminId =
       req.user?.id ||
-      req.user?.userId;
+      req.user?.userId ||
+      req.userId;
 
     if (!adminId) {
       return res.status(401).json({
@@ -854,9 +1080,14 @@ const updateSupportTicketPriority = async (
           id,
           ticket_number,
           user_id,
-          priority
+          priority,
+          escalated_to_admin,
+          assigned_admin_id
+
         FROM support_tickets
+
         WHERE id = $1
+
         FOR UPDATE
         `,
         [id]
@@ -877,14 +1108,45 @@ const updateSupportTicketPriority = async (
     const existing =
       existingResult.rows[0];
 
+    // ----------------------------------------------------------
+    // ADMIN OWNERSHIP CHECK
+    // ----------------------------------------------------------
+
+    const permission =
+      await assertAdminCanOperateOnTicket(
+        client,
+        existing,
+        adminId
+      );
+
+    if (!permission.allowed) {
+      await client.query('ROLLBACK');
+
+      return res.status(
+        permission.status
+      ).json({
+        success: false,
+        message:
+          permission.message,
+      });
+    }
+
+    // ----------------------------------------------------------
+    // UPDATE PRIORITY
+    // ----------------------------------------------------------
+
     const result =
       await client.query(
         `
         UPDATE support_tickets
+
         SET
           priority = $1,
-          updated_at = CURRENT_TIMESTAMP
+          updated_at =
+            CURRENT_TIMESTAMP
+
         WHERE id = $2
+
         RETURNING
           id,
           ticket_number,
@@ -896,6 +1158,10 @@ const updateSupportTicketPriority = async (
           id,
         ]
       );
+
+    // ----------------------------------------------------------
+    // EVENT
+    // ----------------------------------------------------------
 
     await client.query(
       `
@@ -923,6 +1189,10 @@ const updateSupportTicketPriority = async (
         priority,
       ]
     );
+
+    // ----------------------------------------------------------
+    // AUDIT
+    // ----------------------------------------------------------
 
     await client.query(
       `
@@ -955,6 +1225,7 @@ const updateSupportTicketPriority = async (
       success: true,
       message:
         'Support ticket priority updated successfully',
+
       ticket:
         result.rows[0],
     });
