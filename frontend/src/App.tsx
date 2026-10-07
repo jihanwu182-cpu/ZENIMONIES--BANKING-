@@ -479,11 +479,6 @@ const CustomerCareRoute: React.FC = () => {
 
   return <CustomerCareDashboard />;
 };
-{/* ================= CUSTOMER CARE ================= */}
-
-<Route
-  path="/customer-care"
-  element={<CustomerCareRoute />}
 />
 // ============================================================
 // CUSTOMER ROUTES
@@ -494,6 +489,11 @@ const CustomerRoutes: React.FC = () => {
     <SessionGuard>
       <Routes>
 
+     {/* ================= CUSTOMER CARE ================= */}
+    <Route
+     path="/customer-care"
+     element={<CustomerCareRoute />}
+   />
         {/* ================= AUTHENTICATION ================= */}
 
         <Route
