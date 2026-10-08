@@ -19,7 +19,9 @@ const AdminLogin: React.FC = () => {
       localStorage.getItem('adminToken');
 
     if (existingAdminToken) {
-      navigate('/admin/dashboard', { replace: true });
+      navigate('/admin/dashboard', {
+        replace: true,
+      });
     }
   }, [navigate]);
 
@@ -30,36 +32,58 @@ const AdminLogin: React.FC = () => {
 
     setError('');
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail =
+      email.trim().toLowerCase();
 
     if (!cleanEmail) {
-      setError('Please enter the administrator email.');
+      setError(
+        'Please enter the administrator email.'
+      );
       return;
     }
 
     if (!password) {
-      setError('Please enter the administrator password.');
+      setError(
+        'Please enter the administrator password.'
+      );
       return;
     }
 
     try {
       setLoading(true);
 
+      /*
+       * IMPORTANT
+       *
+       * Administration uses the same secure
+       * authentication system as the rest of
+       * ZENIMONIES.
+       *
+       * The backend determines whether the
+       * authenticated user is an administrator
+       * by checking:
+       *
+       * user.role === "admin"
+       */
+
       const response = await fetch(
-        `${API_BASE}/admin/login`,
+        `${API_BASE}/auth/login`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            email: cleanEmail,
+            identifier: cleanEmail,
             password,
           }),
         }
       );
 
-      const data = await response.json().catch(() => ({}));
+      const data =
+        await response
+          .json()
+          .catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(
@@ -68,41 +92,102 @@ const AdminLogin: React.FC = () => {
         );
       }
 
+      /*
+       * Existing ZENIMONIES auth controller
+       * returns the authentication token.
+       */
+
       const token =
-        data?.accessToken ||
-        data?.token;
+        data?.token ||
+        data?.accessToken;
 
       if (!token) {
         throw new Error(
-          'Administrator login succeeded, but no access token was returned.'
+          'Login succeeded, but no authentication token was returned.'
         );
       }
 
       /*
-       * IMPORTANT:
-       * Admin authentication is stored separately from
-       * the normal customer session.
+       * The normal auth controller returns
+       * the authenticated user here.
        */
+
+      const authenticatedUser =
+        data?.user;
+
+      if (!authenticatedUser) {
+        throw new Error(
+          'Login succeeded, but administrator information was not returned.'
+        );
+      }
+
+      /*
+       * SECURITY CHECK
+       *
+       * Never allow a normal customer or
+       * Customer Care agent into the Admin
+       * Dashboard.
+       */
+
+      if (
+        authenticatedUser.role !==
+        'admin'
+      ) {
+        throw new Error(
+          'Administrator access is required for this portal.'
+        );
+      }
+
+      /*
+       * Store the same JWT returned by the
+       * central authentication system.
+       *
+       * Admin middleware will validate this
+       * token and confirm role === "admin".
+       */
+
       localStorage.setItem(
         'adminToken',
         token
       );
 
-      if (data?.admin) {
+      localStorage.setItem(
+        'admin',
+        JSON.stringify(
+          authenticatedUser
+        )
+      );
+
+      /*
+       * Store session information if the
+       * authentication API returned it.
+       */
+
+      if (
+        data?.session_expires_at
+      ) {
         localStorage.setItem(
-          'admin',
-          JSON.stringify(data.admin)
+          'adminSessionExpiresAt',
+          data.session_expires_at
         );
       }
 
       /*
-       * Do NOT remove the customer's normal session.
-       * Admin and customer authentication remain separate.
+       * IMPORTANT:
+       *
+       * Do NOT remove the normal customer
+       * authentication keys.
+       *
+       * Customer and Admin sessions remain
+       * logically separate on the frontend.
        */
 
-      navigate('/admin/dashboard', {
-        replace: true,
-      });
+      navigate(
+        '/admin/dashboard',
+        {
+          replace: true,
+        }
+      );
     } catch (err: any) {
       setError(
         err?.message ||
@@ -218,15 +303,15 @@ const AdminLogin: React.FC = () => {
 
             <p
               style={{
-                margin:
-                  '8px 0 0',
+                margin: '8px 0 0',
                 fontSize: '13px',
                 lineHeight: 1.5,
                 color: '#75847e',
               }}
             >
-              Secure access to the Zenimonies
-              administration portal.
+              Secure access to the
+              Zenimonies administration
+              portal.
             </p>
           </div>
 
@@ -249,7 +334,9 @@ const AdminLogin: React.FC = () => {
               type="email"
               value={email}
               onChange={(event) =>
-                setEmail(event.target.value)
+                setEmail(
+                  event.target.value
+                )
               }
               placeholder="admin@example.com"
               autoComplete="username"
@@ -261,8 +348,7 @@ const AdminLogin: React.FC = () => {
                 border:
                   '1px solid #d8e3de',
                 borderRadius: '13px',
-                padding:
-                  '0 15px',
+                padding: '0 15px',
                 outline: 'none',
                 fontSize: '15px',
                 color: '#17362c',
@@ -334,7 +420,8 @@ const AdminLogin: React.FC = () => {
                 type="button"
                 onClick={() =>
                   setShowPassword(
-                    (value) => !value
+                    (value) =>
+                      !value
                   )
                 }
                 disabled={loading}
