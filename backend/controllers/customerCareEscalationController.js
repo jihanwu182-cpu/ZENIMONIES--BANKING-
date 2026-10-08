@@ -125,18 +125,22 @@ async function escalateCaseToAdministration(req, res) {
       });
     }
 
-    // ----------------------------------------------------------
-    // CLOSED CASE
-    // ----------------------------------------------------------
+// ----------------------------------------------------------
+// RESOLVED / CLOSED CASE
+// ----------------------------------------------------------
 
-    if (ticket.status === 'closed') {
-      await client.query('ROLLBACK');
+if (
+  ticket.status === 'resolved' ||
+  ticket.status === 'closed'
+) {
+  await client.query('ROLLBACK');
 
-      return res.status(409).json({
-        success: false,
-        message: 'Closed cases cannot be escalated',
-      });
-    }
+  return res.status(409).json({
+    success: false,
+    message:
+      'Resolved or closed cases cannot be escalated',
+  });
+}
 
     // ----------------------------------------------------------
     // ALREADY ESCALATED
