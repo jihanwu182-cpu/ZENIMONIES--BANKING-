@@ -7,25 +7,23 @@ const {
 
 // ============================================================
 // ZENIMONIES BANKING
-// CUSTOMER CARE AUTHENTICATION MIDDLEWARE
+// ADMIN AUTHENTICATION MIDDLEWARE
 // ============================================================
-//
-// Customer Care is deliberately separated from Admin.
 //
 // Allowed:
-//   role = customer_care
+//   role = admin
 //
 // Not allowed:
-//   role = admin
+//   role = customer_care
 //   role = user
 //
-// This middleware protects Customer Care APIs only.
+// This middleware protects Administration APIs only.
 //
 // IMPORTANT:
-// Customer Care agents do NOT receive Admin Dashboard access.
+// Admin and Customer Care are completely separate roles.
 // ============================================================
 
-const customerCareMiddleware = async (
+const adminMiddleware = async (
   req,
   res,
   next
@@ -45,7 +43,7 @@ const customerCareMiddleware = async (
       return res.status(401).json({
         success: false,
         message:
-          'Customer Care authentication required.',
+          'Administrator authentication required.',
       });
     }
 
@@ -92,7 +90,7 @@ const customerCareMiddleware = async (
         );
     } catch (error) {
       console.error(
-        'Customer Care JWT verification failed:',
+        'Admin JWT verification failed:',
         error?.message
       );
 
@@ -141,7 +139,7 @@ const customerCareMiddleware = async (
     }
 
     // ========================================================
-    // LOAD CUSTOMER CARE USER
+    // LOAD ADMIN USER
     // ========================================================
 
     const result =
@@ -165,7 +163,7 @@ const customerCareMiddleware = async (
       return res.status(401).json({
         success: false,
         message:
-          'Customer Care account could not be found.',
+          'Administrator account could not be found.',
       });
     }
 
@@ -173,16 +171,16 @@ const customerCareMiddleware = async (
       result.rows[0];
 
     // ========================================================
-    // CUSTOMER CARE ROLE
+    // ADMIN ROLE
     // ========================================================
 
     if (
-      user.role !== 'customer_care'
+      user.role !== 'admin'
     ) {
       return res.status(403).json({
         success: false,
         message:
-          'Customer Care access required.',
+          'Administrator access required.',
       });
     }
 
@@ -196,7 +194,7 @@ const customerCareMiddleware = async (
       return res.status(403).json({
         success: false,
         message:
-          'Customer Care account is not active.',
+          'Administrator account is not active.',
       });
     }
 
@@ -247,7 +245,7 @@ const customerCareMiddleware = async (
     }
 
     // ========================================================
-    // ATTACH CUSTOMER CARE USER
+    // ATTACH ADMIN USER
     // ========================================================
 
     req.user = user;
@@ -269,17 +267,17 @@ const customerCareMiddleware = async (
 
   } catch (error) {
     console.error(
-      'Customer Care authentication error:',
+      'Admin authentication error:',
       error
     );
 
     return res.status(500).json({
       success: false,
       message:
-        'Unable to authenticate Customer Care agent.',
+        'Unable to authenticate administrator.',
     });
   }
 };
 
 module.exports =
-  customerCareMiddleware;
+  adminMiddleware;
