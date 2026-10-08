@@ -4216,8 +4216,11 @@ const investigateTransaction =
                           )}
 
                           {selectedCase
-                            .ticket
-                            .assigned_to && (
+                           .ticket
+                            .assigned_to &&
+                            selectedCase.ticket.status !== 'resolved' &&
+                            selectedCase.ticket.status !== 'closed' &&
+                            !selectedCase.ticket.escalated_to_admin && (
                             <Button
                               variant="outlined"
                               startIcon={
