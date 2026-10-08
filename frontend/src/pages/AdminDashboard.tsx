@@ -2418,7 +2418,413 @@ const AdminDashboard: React.FC = () => {
       )}
     </Box>
   );
+/* ============================================================
+   PART 3 — CUSTOMER / ACCOUNT / KYC OPERATIONS
+   ============================================================ */
 
+/* ============================================================
+   USER STATUS UPDATE
+   ============================================================ */
+
+const updateUserStatus = async (
+  userId: string,
+  status: string
+) => {
+  try {
+    setActionLoading(userId);
+    setError('');
+
+    const response = await fetch(
+      `${API_BASE_URL}/admin/users/${userId}/status`,
+      {
+        method: 'PATCH',
+        headers: authHeaders,
+        body: JSON.stringify({
+          status,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message ||
+          'Unable to update customer status.'
+      );
+    }
+
+    setUsers(current =>
+      current.map(user =>
+        user.id === userId
+          ? {
+              ...user,
+              status,
+            }
+          : user
+      )
+    );
+
+    await loadDashboard();
+
+    setSuccessMessage(
+      `Customer status updated to ${getStatusLabel(
+        status
+      )}.`
+    );
+  } catch (err: any) {
+    console.error(
+      'Customer status update error:',
+      err
+    );
+
+    setError(
+      err?.message ||
+        'Unable to update customer status.'
+    );
+  } finally {
+    setActionLoading(null);
+  }
+};
+
+/* ============================================================
+   KYC HELPERS
+   ============================================================ */
+
+const getKycTypeLabel = (
+  type: KycType
+) => {
+  if (type === 'bvn') {
+    return 'BVN';
+  }
+
+  if (type === 'tier2') {
+    return 'Tier 2';
+  }
+
+  return 'Tier 3';
+};
+
+const getKycStatus = (
+  record: KycRecord,
+  type: KycType
+) => {
+  if (type === 'bvn') {
+    return record.bvn_verification_status;
+  }
+
+  if (type === 'tier2') {
+    return record.id_verification_status;
+  }
+
+  return record.tier_3_verification_status;
+};
+
+const isKycPending = (
+  record: KycRecord,
+  type: KycType
+) => {
+  return (
+    String(
+      getKycStatus(
+        record,
+        type
+      )
+    ).toLowerCase() ===
+    'pending'
+  );
+};
+
+const isKycVerified = (
+  record: KycRecord,
+  type: KycType
+) => {
+  return (
+    String(
+      getKycStatus(
+        record,
+        type
+      )
+    ).toLowerCase() ===
+    'verified'
+  );
+};
+
+/* ============================================================
+   OPEN KYC REVIEW
+   ============================================================ */
+
+const openKycReview = (
+  record: KycRecord,
+  type: KycType
+) => {
+  setSelectedKyc(record);
+  setSelectedType(type);
+  setDecisionMessage('');
+  setRejectionReason('');
+  setReviewOpen(true);
+};
+
+const closeKycReview = () => {
+  if (actionLoading) {
+    return;
+  }
+
+  setReviewOpen(false);
+  setSelectedKyc(null);
+  setSelectedType(null);
+  setDecisionMessage('');
+  setRejectionReason('');
+};
+
+const openRejectDialog = () => {
+  setRejectionReason('');
+  setRejectOpen(true);
+};
+
+const closeRejectDialog = () => {
+  if (actionLoading) {
+    return;
+  }
+
+  setRejectOpen(false);
+  setRejectionReason('');
+};
+
+/* ============================================================
+   KYC DECISION
+   ============================================================ */
+
+const submitKycDecision = async (
+  decision: KycDecision
+) => {
+  if (
+    !selectedKyc ||
+    !selectedType
+  ) {
+    return;
+  }
+
+  if (
+    decision === 'reject' &&
+    !rejectionReason.trim()
+  ) {
+    setError(
+      'Please enter a rejection reason.'
+    );
+
+    return;
+  }
+
+  try {
+    const loadingKey =
+      `${selectedKyc.id}-${selectedType}`;
+
+    setActionLoading(
+      loadingKey
+    );
+
+    setError('');
+    setDecisionMessage('');
+
+    const endpoint =
+      `${API_BASE_URL}/admin/kyc/${selectedKyc.id}/${selectedType}/${decision}`;
+
+    const response =
+      await fetch(
+        endpoint,
+        {
+          method: 'POST',
+          headers:
+            authHeaders,
+
+          body:
+            decision ===
+            'reject'
+              ? JSON.stringify({
+                  reason:
+                    rejectionReason.trim(),
+                })
+              : JSON.stringify({}),
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message ||
+          `Unable to ${decision} KYC verification.`
+      );
+    }
+
+    setDecisionMessage(
+      data?.message ||
+        `${getKycTypeLabel(
+          selectedType
+        )} ${
+          decision ===
+          'verify'
+            ? 'verified'
+            : 'rejected'
+        } successfully.`
+    );
+
+    setRejectOpen(false);
+
+    await Promise.all([
+      loadKyc(),
+      loadDashboard(),
+      loadUsers(),
+    ]);
+
+    setTimeout(() => {
+      setReviewOpen(false);
+      setSelectedKyc(null);
+      setSelectedType(null);
+      setDecisionMessage('');
+      setRejectionReason('');
+    }, 900);
+  } catch (err: any) {
+    console.error(
+      'KYC decision error:',
+      err
+    );
+
+    setError(
+      err?.message ||
+        `Unable to ${decision} KYC submission.`
+    );
+  } finally {
+    setActionLoading(null);
+  }
+};
+
+/* ============================================================
+   CUSTOMER SEARCH
+   ============================================================ */
+
+const [customerSearch, setCustomerSearch] =
+  useState('');
+
+const [customerStatusFilter, setCustomerStatusFilter] =
+  useState('all');
+
+const [customerKycFilter, setCustomerKycFilter] =
+  useState('all');
+
+const filteredCustomers =
+  useMemo(() => {
+    const search =
+      customerSearch
+        .trim()
+        .toLowerCase();
+
+    return users.filter(
+      user => {
+        const matchesSearch =
+          !search ||
+          user.full_name
+            ?.toLowerCase()
+            .includes(search) ||
+          user.email
+            ?.toLowerCase()
+            .includes(search) ||
+          user.phone
+            ?.toLowerCase()
+            .includes(search) ||
+          user.id
+            ?.toLowerCase()
+            .includes(search);
+
+        const matchesStatus =
+          customerStatusFilter ===
+            'all' ||
+          String(
+            user.status
+          ).toLowerCase() ===
+            customerStatusFilter.toLowerCase();
+
+        const matchesKyc =
+          customerKycFilter ===
+            'all' ||
+          String(
+            user.kyc_status
+          ).toLowerCase() ===
+            customerKycFilter.toLowerCase();
+
+        return (
+          matchesSearch &&
+          matchesStatus &&
+          matchesKyc
+        );
+      }
+    );
+  }, [
+    users,
+    customerSearch,
+    customerStatusFilter,
+    customerKycFilter,
+  ]);
+
+/* ============================================================
+   KYC QUEUE
+   ============================================================ */
+
+const pendingKycRecords =
+  useMemo(() => {
+    return kycRecords.filter(
+      record =>
+        isKycPending(
+          record,
+          'bvn'
+        ) ||
+        isKycPending(
+          record,
+          'tier2'
+        ) ||
+        isKycPending(
+          record,
+          'tier3'
+        )
+    );
+  }, [kycRecords]);
+
+/* ============================================================
+   ACCOUNT SUMMARY
+   ============================================================ */
+
+const accountCustomerCount =
+  users.length;
+
+const verifiedCustomerCount =
+  users.filter(
+    user =>
+      user.is_verified ||
+      String(
+        user.kyc_status
+      ).toLowerCase() ===
+        'approved'
+  ).length;
+
+const suspendedCustomerCount =
+  users.filter(
+    user =>
+      String(
+        user.status
+      ).toLowerCase() ===
+      'suspended'
+  ).length;
+
+const blockedCustomerCount =
+  users.filter(
+    user =>
+      String(
+        user.status
+      ).toLowerCase() ===
+      'blocked'
+  ).length;
   /* ============================================================
      IMPORTANT
      ============================================================ */
@@ -2544,39 +2950,7615 @@ const AdminDashboard: React.FC = () => {
               <OperationsStatusCard />
 
               {/* PART 2+ SECTION RENDERERS GO HERE */}
-              <AdminCard>
-                <CardContent
+              {/* ============================================================
+                  PART 2 — PREMIUM OVERVIEW & FINANCIAL OPERATIONS
+                ============================================================ */}
+
+            {section === 'overview' && (
+          <Box>
+    {/* ========================================================
+        PAGE INTRO
+        ======================================================== */}
+
+    <SectionHeading
+      title="Operations Overview"
+      description="Monitor ZENIMONIES banking activity, customer operations and financial flows."
+      action={
+        <Stack
+          direction="row"
+          spacing={1}
+        >
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<Refresh />}
+            onClick={loadAllData}
+            disabled={refreshing}
+            sx={{
+              textTransform: 'none',
+              borderColor:
+                ZENIMONIES.border,
+              color:
+                ZENIMONIES.text,
+              borderRadius: 1.75,
+              fontWeight: 700,
+            }}
+          >
+            Refresh
+          </Button>
+        </Stack>
+      }
+    />
+
+    {/* ========================================================
+        PRIMARY KPI GRID
+        ======================================================== */}
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{
+        mb: 2,
+      }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="Total Customers"
+          value={totalCustomers.toLocaleString()}
+          subtitle={`${activeCustomers.toLocaleString()} active accounts`}
+          icon={
+            <Groups
+              sx={{
+                fontSize: 21,
+              }}
+            />
+          }
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="Pending KYC"
+          value={pendingKycCount.toLocaleString()}
+          subtitle="Requires verification"
+          icon={
+            <VerifiedUser
+              sx={{
+                fontSize: 21,
+              }}
+            />
+          }
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="Total Deposits"
+          value={formatMoney(
+            depositTotal
+          )}
+          subtitle={`${(
+            dashboard?.deposits
+              ?.count || 0
+          ).toLocaleString()} deposits`}
+          icon={
+            <ArrowDownward
+              sx={{
+                fontSize: 21,
+              }}
+            />
+          }
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="Total Withdrawals"
+          value={formatMoney(
+            withdrawalTotal
+          )}
+          subtitle={`${(
+            dashboard?.withdrawals
+              ?.count || 0
+          ).toLocaleString()} withdrawals`}
+          icon={
+            <ArrowUpward
+              sx={{
+                fontSize: 21,
+              }}
+            />
+          }
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="Bank Transfers"
+          value={formatMoney(
+            transferTotal
+          )}
+          subtitle={`${(
+            dashboard?.transfers
+              ?.count || 0
+          ).toLocaleString()} transfers`}
+          icon={
+            <AccountBalance
+              sx={{
+                fontSize: 21,
+              }}
+            />
+          }
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="Pending Transactions"
+          value={pendingTransactionCount.toLocaleString()}
+          subtitle="Needs operational review"
+          icon={
+            <SyncAlt
+              sx={{
+                fontSize: 21,
+              }}
+            />
+          }
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="Failed Transactions"
+          value={failedTransactionCount.toLocaleString()}
+          subtitle="Requires investigation"
+          icon={
+            <ErrorOutline
+              sx={{
+                fontSize: 21,
+              }}
+            />
+          }
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="KYC Approved"
+          value={(
+            dashboard?.kyc
+              ?.approved || 0
+          ).toLocaleString()}
+          subtitle="Verified customers"
+          icon={
+            <CheckCircle
+              sx={{
+                fontSize: 21,
+              }}
+            />
+          }
+        />
+      </Grid>
+    </Grid>
+
+    {/* ========================================================
+        PENDING ACTIONS
+        ======================================================== */}
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{
+        mb: 2,
+      }}
+    >
+      <Grid
+        item
+        xs={12}
+        md={8}
+      >
+        <AdminCard
+          sx={{
+            height: '100%',
+          }}
+        >
+          <CardContent
+            sx={{
+              p: 2.25,
+              '&:last-child': {
+                pb: 2.25,
+              },
+            }}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{
+                mb: 1.75,
+              }}
+            >
+              <Box>
+                <Typography
                   sx={{
-                    py: 8,
-                    textAlign:
-                      'center',
+                    fontSize: 15,
+                    fontWeight: 850,
+                    color:
+                      ZENIMONIES.text,
+                  }}
+                >
+                  Pending Actions
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.25,
+                    fontSize: 11,
+                    color:
+                      ZENIMONIES.textSecondary,
+                  }}
+                >
+                  Items requiring
+                  Administration attention
+                </Typography>
+              </Box>
+
+              <MoreHoriz
+                sx={{
+                  color:
+                    ZENIMONIES.textMuted,
+                }}
+              />
+            </Stack>
+
+            <Stack spacing={1}>
+              {/* KYC */}
+
+              <Box
+                onClick={() =>
+                  handleNavigation(
+                    'kyc'
+                  )
+                }
+                sx={{
+                  p: 1.35,
+                  borderRadius: 2,
+                  border:
+                    `1px solid ${ZENIMONIES.border}`,
+                  cursor: 'pointer',
+                  transition:
+                    'all .18s ease',
+
+                  '&:hover': {
+                    borderColor:
+                      ZENIMONIES.green,
+                    background:
+                      ZENIMONIES.greenSoft,
+                  },
+                }}
+              >
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  gap={2}
+                >
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    gap={1.25}
+                  >
+                    <Box
+                      sx={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 1.5,
+                        background:
+                          ZENIMONIES.warningSoft,
+                        color:
+                          ZENIMONIES.warning,
+                        display:
+                          'flex',
+                        alignItems:
+                          'center',
+                        justifyContent:
+                          'center',
+                      }}
+                    >
+                      <VerifiedUser
+                        sx={{
+                          fontSize: 18,
+                        }}
+                      />
+                    </Box>
+
+                    <Box>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 750,
+                        }}
+                      >
+                        KYC reviews
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color:
+                            ZENIMONIES.textSecondary,
+                        }}
+                      >
+                        Customer
+                        verification
+                        queue
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  <Chip
+                    label={pendingKycCount}
+                    size="small"
+                    sx={{
+                      fontWeight: 800,
+                      background:
+                        ZENIMONIES.warningSoft,
+                      color:
+                        ZENIMONIES.warning,
+                    }}
+                  />
+                </Stack>
+              </Box>
+
+              {/* TRANSACTIONS */}
+
+              <Box
+                onClick={() =>
+                  handleNavigation(
+                    'pending-transactions'
+                  )
+                }
+                sx={{
+                  p: 1.35,
+                  borderRadius: 2,
+                  border:
+                    `1px solid ${ZENIMONIES.border}`,
+                  cursor: 'pointer',
+                  transition:
+                    'all .18s ease',
+
+                  '&:hover': {
+                    borderColor:
+                      ZENIMONIES.green,
+                    background:
+                      ZENIMONIES.greenSoft,
+                  },
+                }}
+              >
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  gap={2}
+                >
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    gap={1.25}
+                  >
+                    <Box
+                      sx={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 1.5,
+                        background:
+                          ZENIMONIES.blueSoft,
+                        color:
+                          ZENIMONIES.blue,
+                        display:
+                          'flex',
+                        alignItems:
+                          'center',
+                        justifyContent:
+                          'center',
+                      }}
+                    >
+                      <SyncAlt
+                        sx={{
+                          fontSize: 18,
+                        }}
+                      />
+                    </Box>
+
+                    <Box>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 750,
+                        }}
+                      >
+                        Pending transactions
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color:
+                            ZENIMONIES.textSecondary,
+                        }}
+                      >
+                        Financial operations
+                        requiring review
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  <Chip
+                    label={
+                      pendingTransactionCount
+                    }
+                    size="small"
+                    sx={{
+                      fontWeight: 800,
+                      background:
+                        ZENIMONIES.blueSoft,
+                      color:
+                        ZENIMONIES.blue,
+                    }}
+                  />
+                </Stack>
+              </Box>
+
+              {/* FAILED */}
+
+              <Box
+                onClick={() =>
+                  handleNavigation(
+                    'transactions'
+                  )
+                }
+                sx={{
+                  p: 1.35,
+                  borderRadius: 2,
+                  border:
+                    `1px solid ${ZENIMONIES.border}`,
+                  cursor: 'pointer',
+                  transition:
+                    'all .18s ease',
+
+                  '&:hover': {
+                    borderColor:
+                      ZENIMONIES.danger,
+                    background:
+                      ZENIMONIES.dangerSoft,
+                  },
+                }}
+              >
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  gap={2}
+                >
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    gap={1.25}
+                  >
+                    <Box
+                      sx={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 1.5,
+                        background:
+                          ZENIMONIES.dangerSoft,
+                        color:
+                          ZENIMONIES.danger,
+                        display:
+                          'flex',
+                        alignItems:
+                          'center',
+                        justifyContent:
+                          'center',
+                      }}
+                    >
+                      <ErrorOutline
+                        sx={{
+                          fontSize: 18,
+                        }}
+                      />
+                    </Box>
+
+                    <Box>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 750,
+                        }}
+                      >
+                        Failed transactions
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color:
+                            ZENIMONIES.textSecondary,
+                        }}
+                      >
+                        Failed financial
+                        operations
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  <Chip
+                    label={
+                      failedTransactionCount
+                    }
+                    size="small"
+                    sx={{
+                      fontWeight: 800,
+                      background:
+                        ZENIMONIES.dangerSoft,
+                      color:
+                        ZENIMONIES.danger,
+                    }}
+                  />
+                </Stack>
+              </Box>
+            </Stack>
+          </CardContent>
+        </AdminCard>
+      </Grid>
+
+      {/* SYSTEM STATUS */}
+
+      <Grid
+        item
+        xs={12}
+        md={4}
+      >
+        <AdminCard
+          sx={{
+            height: '100%',
+          }}
+        >
+          <CardContent
+            sx={{
+              p: 2.25,
+              '&:last-child': {
+                pb: 2.25,
+              },
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: 15,
+                fontWeight: 850,
+              }}
+            >
+              System Status
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.25,
+                mb: 2,
+                fontSize: 11,
+                color:
+                  ZENIMONIES.textSecondary,
+              }}
+            >
+              Core banking services
+            </Typography>
+
+            {[
+              [
+                'Core banking',
+                'Operational',
+              ],
+              [
+                'Customer accounts',
+                'Operational',
+              ],
+              [
+                'KYC services',
+                'Operational',
+              ],
+              [
+                'Payments',
+                'Operational',
+              ],
+              [
+                'Bank transfers',
+                'Operational',
+              ],
+            ].map(
+              ([label, status]) => (
+                <Stack
+                  key={label}
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  sx={{
+                    py: 1,
+                    borderBottom:
+                      `1px solid ${ZENIMONIES.border}`,
                   }}
                 >
                   <Typography
                     sx={{
-                      fontSize: 18,
-                      fontWeight: 800,
-                    }}
-                  >
-                    Administration
-                    workspace
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      mt: 1,
-                      fontSize: 13,
+                      fontSize: 11,
                       color:
                         ZENIMONIES.textSecondary,
                     }}
                   >
-                    The premium
-                    operations sections
-                    continue in the next
-                    replacement part.
+                    {label}
                   </Typography>
-                </CardContent>
-              </AdminCard>
+
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    gap={0.7}
+                  >
+                    <Box
+                      sx={{
+                        width: 7,
+                        height: 7,
+                        borderRadius:
+                          '50%',
+                        background:
+                          '#16A34A',
+                      }}
+                    />
+
+                    <Typography
+                      sx={{
+                        fontSize: 10,
+                        fontWeight: 750,
+                        color:
+                          ZENIMONIES.green,
+                      }}
+                    >
+                      {status}
+                    </Typography>
+                  </Stack>
+                </Stack>
+              )
+            )}
+
+            <Box
+              sx={{
+                mt: 1.75,
+                p: 1.25,
+                borderRadius: 2,
+                background:
+                  ZENIMONIES.greenSoft,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 10,
+                  color:
+                    ZENIMONIES.green,
+                  fontWeight: 700,
+                }}
+              >
+                No active system
+                incidents detected.
+              </Typography>
+            </Box>
+          </CardContent>
+        </AdminCard>
+      </Grid>
+    </Grid>
+
+    {/* ========================================================
+        RECENT TRANSACTIONS
+        ======================================================== */}
+
+    <AdminCard
+      sx={{
+        mb: 2,
+      }}
+    >
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <Box
+          sx={{
+            px: 2.25,
+            py: 1.75,
+            borderBottom:
+              `1px solid ${ZENIMONIES.border}`,
+          }}
+        >
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <Box>
+              <Typography
+                sx={{
+                  fontSize: 15,
+                  fontWeight: 850,
+                }}
+              >
+                Recent Transactions
+              </Typography>
+
+              <Typography
+                sx={{
+                  mt: 0.25,
+                  fontSize: 11,
+                  color:
+                    ZENIMONIES.textSecondary,
+                }}
+              >
+                Latest financial activity
+                across customer accounts
+              </Typography>
+            </Box>
+
+            <Button
+              size="small"
+              endIcon={
+                <ChevronRight />
+              }
+              onClick={() =>
+                handleNavigation(
+                  'transactions'
+                )
+              }
+              sx={{
+                textTransform:
+                  'none',
+                color:
+                  ZENIMONIES.green,
+                fontWeight: 750,
+              }}
+            >
+              View all
+            </Button>
+          </Stack>
+        </Box>
+
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 850,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Transaction',
+                  'Customer',
+                  'Type',
+                  'Amount',
+                  'Status',
+                  'Date',
+                  '',
+                ].map(
+                  heading => (
+                    <TableCell
+                      key={
+                        heading
+                      }
+                      sx={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color:
+                          ZENIMONIES.textMuted,
+                        textTransform:
+                          'uppercase',
+                        letterSpacing:
+                          '0.05em',
+                        background:
+                          '#FAFBFA',
+                        borderBottom:
+                          `1px solid ${ZENIMONIES.border}`,
+                      }}
+                    >
+                      {heading}
+                    </TableCell>
+                  )
+                )}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {transactions
+                .slice(0, 8)
+                .map(
+                  transaction => (
+                    <TableRow
+                      key={
+                        transaction.id
+                      }
+                      hover
+                      sx={{
+                        '&:last-child td':
+                          {
+                            borderBottom:
+                              0,
+                          },
+                      }}
+                    >
+                      <TableCell>
+                        <TablePrimary
+                          title={
+                            transaction.reference
+                          }
+                          subtitle={
+                            transaction.id
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <TablePrimary
+                          title={
+                            transaction.full_name
+                          }
+                          subtitle={
+                            transaction.account_number
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 11,
+                            fontWeight: 650,
+                            textTransform:
+                              'capitalize',
+                          }}
+                        >
+                          {String(
+                            transaction.type ||
+                              ''
+                          ).replaceAll(
+                            '_',
+                            ' '
+                          )}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 12,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {formatMoney(
+                            transaction.amount,
+                            transaction.currency
+                          )}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <StatusChip
+                          status={
+                            transaction.status
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 10,
+                            color:
+                              ZENIMONIES.textSecondary,
+                            whiteSpace:
+                              'nowrap',
+                          }}
+                        >
+                          {formatDate(
+                            transaction.created_at
+                          )}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          startIcon={
+                            <Visibility
+                              sx={{
+                                fontSize:
+                                  15,
+                              }}
+                            />
+                          }
+                          onClick={() =>
+                            openTransaction(
+                              transaction.id
+                            )
+                          }
+                          sx={{
+                            textTransform:
+                              'none',
+                            color:
+                              ZENIMONIES.green,
+                            fontWeight: 750,
+                            fontSize: 11,
+                          }}
+                        >
+                          View
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                )}
+
+              {!transactions.length && (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                  >
+                    <EmptyState
+                      title="No transactions yet"
+                      description="Recent transaction activity will appear here."
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+
+    {/* ========================================================
+        FINANCIAL SNAPSHOT
+        ======================================================== */}
+
+    <Grid
+      container
+      spacing={1.75}
+    >
+      <Grid
+        item
+        xs={12}
+        md={4}
+      >
+        <AdminCard>
+          <CardContent>
+            <Stack
+              direction="row"
+              alignItems="center"
+              gap={1}
+            >
+              <Box
+                sx={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 1.5,
+                  background:
+                    ZENIMONIES.greenLight,
+                  color:
+                    ZENIMONIES.green,
+                  display:
+                    'flex',
+                  alignItems:
+                    'center',
+                  justifyContent:
+                    'center',
+                }}
+              >
+                <ArrowDownward
+                  sx={{
+                    fontSize: 18,
+                  }}
+                />
+              </Box>
+
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    color:
+                      ZENIMONIES.textSecondary,
+                  }}
+                >
+                  Deposit volume
+                </Typography>
+
+                <Typography
+                  sx={{
+                    fontSize: 18,
+                    fontWeight: 850,
+                  }}
+                >
+                  {formatMoney(
+                    depositTotal
+                  )}
+                </Typography>
+              </Box>
+            </Stack>
+          </CardContent>
+        </AdminCard>
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        md={4}
+      >
+        <AdminCard>
+          <CardContent>
+            <Stack
+              direction="row"
+              alignItems="center"
+              gap={1}
+            >
+              <Box
+                sx={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 1.5,
+                  background:
+                    ZENIMONIES.warningSoft,
+                  color:
+                    ZENIMONIES.warning,
+                  display:
+                    'flex',
+                  alignItems:
+                    'center',
+                  justifyContent:
+                    'center',
+                }}
+              >
+                <ArrowUpward
+                  sx={{
+                    fontSize: 18,
+                  }}
+                />
+              </Box>
+
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    color:
+                      ZENIMONIES.textSecondary,
+                  }}
+                >
+                  Withdrawal volume
+                </Typography>
+
+                <Typography
+                  sx={{
+                    fontSize: 18,
+                    fontWeight: 850,
+                  }}
+                >
+                  {formatMoney(
+                    withdrawalTotal
+                  )}
+                </Typography>
+              </Box>
+            </Stack>
+          </CardContent>
+        </AdminCard>
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        md={4}
+      >
+        <AdminCard>
+          <CardContent>
+            <Stack
+              direction="row"
+              alignItems="center"
+              gap={1}
+            >
+              <Box
+                sx={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 1.5,
+                  background:
+                    ZENIMONIES.blueSoft,
+                  color:
+                    ZENIMONIES.blue,
+                  display:
+                    'flex',
+                  alignItems:
+                    'center',
+                  justifyContent:
+                    'center',
+                }}
+              >
+                <SwapHoriz
+                  sx={{
+                    fontSize: 18,
+                  }}
+                />
+              </Box>
+
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    color:
+                      ZENIMONIES.textSecondary,
+                  }}
+                >
+                  Transfer volume
+                </Typography>
+
+                <Typography
+                  sx={{
+                    fontSize: 18,
+                    fontWeight: 850,
+                  }}
+                >
+                  {formatMoney(
+                    transferTotal
+                  )}
+                </Typography>
+              </Box>
+            </Stack>
+          </CardContent>
+        </AdminCard>
+      </Grid>
+    </Grid>
+  </Box>
+)}
+
+{/* ============================================================
+    PART 2 — TRANSACTIONS
+    ============================================================ */}
+
+{section === 'transactions' && (
+  <Box>
+    <SectionHeading
+      title="Transactions"
+      description="Monitor all customer financial transactions across ZENIMONIES."
+      action={
+        <Button
+          size="small"
+          startIcon={<Refresh />}
+          onClick={loadTransactions}
+          sx={{
+            textTransform: 'none',
+            color:
+              ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Refresh
+        </Button>
+      }
+    />
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 2,
+          '&:last-child': {
+            pb: 2,
+          },
+        }}
+      >
+        <Grid
+          container
+          spacing={1.25}
+          sx={{
+            mb: 2,
+          }}
+        >
+          <Grid
+            item
+            xs={12}
+            md={5}
+          >
+            <TextField
+              fullWidth
+              size="small"
+              value={
+                transactionSearch
+              }
+              onChange={event =>
+                setTransactionSearch(
+                  event.target.value
+                )
+              }
+              placeholder="Search reference, customer, email or account"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search
+                      sx={{
+                        fontSize: 18,
+                        color:
+                          ZENIMONIES.textMuted,
+                      }}
+                    />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root':
+                  {
+                    borderRadius: 1.75,
+                    fontSize: 12,
+                  },
+              }}
+            />
+          </Grid>
+
+          <Grid
+            item
+            xs={12}
+            sm={6}
+            md={3}
+          >
+            <Select
+              fullWidth
+              size="small"
+              value={
+                transactionStatusFilter
+              }
+              onChange={event =>
+                setTransactionStatusFilter(
+                  event.target.value
+                )
+              }
+              sx={{
+                borderRadius: 1.75,
+                fontSize: 12,
+              }}
+            >
+              <MenuItem value="all">
+                All statuses
+              </MenuItem>
+
+              <MenuItem value="pending">
+                Pending
+              </MenuItem>
+
+              <MenuItem value="processing">
+                Processing
+              </MenuItem>
+
+              <MenuItem value="completed">
+                Completed
+              </MenuItem>
+
+              <MenuItem value="failed">
+                Failed
+              </MenuItem>
+
+              <MenuItem value="reversed">
+                Reversed
+              </MenuItem>
+
+              <MenuItem value="refunded">
+                Refunded
+              </MenuItem>
+            </Select>
+          </Grid>
+
+          <Grid
+            item
+            xs={12}
+            sm={6}
+            md={4}
+          >
+            <Select
+              fullWidth
+              size="small"
+              value={
+                transactionTypeFilter
+              }
+              onChange={event =>
+                setTransactionTypeFilter(
+                  event.target.value
+                )
+              }
+              sx={{
+                borderRadius: 1.75,
+                fontSize: 12,
+              }}
+            >
+              <MenuItem value="all">
+                All transaction types
+              </MenuItem>
+
+              {Array.from(
+                new Set(
+                  transactions
+                    .map(
+                      transaction =>
+                        transaction.type
+                    )
+                    .filter(Boolean)
+                )
+              ).map(type => (
+                <MenuItem
+                  key={type}
+                  value={type}
+                >
+                  {String(
+                    type
+                  ).replaceAll(
+                    '_',
+                    ' '
+                  )}
+                </MenuItem>
+              ))}
+            </Select>
+          </Grid>
+        </Grid>
+
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 1000,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Reference',
+                  'Customer',
+                  'Account',
+                  'Type',
+                  'Amount',
+                  'Status',
+                  'Date',
+                  'Actions',
+                ].map(
+                  heading => (
+                    <TableCell
+                      key={
+                        heading
+                      }
+                      sx={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        textTransform:
+                          'uppercase',
+                        color:
+                          ZENIMONIES.textMuted,
+                        background:
+                          '#FAFBFA',
+                      }}
+                    >
+                      {heading}
+                    </TableCell>
+                  )
+                )}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {filteredTransactions.map(
+                transaction => (
+                  <TableRow
+                    key={
+                      transaction.id
+                    }
+                    hover
+                  >
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.reference
+                        }
+                        subtitle={
+                          transaction.id
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.full_name
+                        }
+                        subtitle={
+                          transaction.email
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {
+                          transaction.account_number
+                        }
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          textTransform:
+                            'capitalize',
+                        }}
+                      >
+                        {String(
+                          transaction.type ||
+                            ''
+                        ).replaceAll(
+                          '_',
+                          ' '
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {formatMoney(
+                          transaction.amount,
+                          transaction.currency
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          transaction.status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          whiteSpace:
+                            'nowrap',
+                          color:
+                            ZENIMONIES.textSecondary,
+                        }}
+                      >
+                        {formatDate(
+                          transaction.created_at
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        startIcon={
+                          <Visibility
+                            sx={{
+                              fontSize:
+                                15,
+                            }}
+                          />
+                        }
+                        onClick={() =>
+                          openTransaction(
+                            transaction.id
+                          )
+                        }
+                        sx={{
+                          textTransform:
+                            'none',
+                          color:
+                            ZENIMONIES.green,
+                          fontWeight: 750,
+                          fontSize: 11,
+                        }}
+                      >
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              )}
+
+              {!filteredTransactions.length && (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                  >
+                    <EmptyState
+                      title="No transactions found"
+                      description="Try changing your search or filters."
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+{/* ============================================================
+    PART 2 — PENDING TRANSACTIONS
+    ============================================================ */}
+
+{section === 'pending-transactions' && (
+  <Box>
+    <SectionHeading
+      title="Pending Transactions"
+      description="Transactions awaiting operational processing or completion."
+    />
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{
+        mb: 2,
+      }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Pending"
+          value={pendingTransactionCount.toLocaleString()}
+          subtitle="Awaiting action"
+          icon={
+            <SyncAlt />
+          }
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Processing"
+          value={
+            transactions.filter(
+              transaction =>
+                transaction.status ===
+                'processing'
+            ).length.toLocaleString()
+          }
+          subtitle="Currently processing"
+          icon={
+            <Refresh />
+          }
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Failed"
+          value={failedTransactionCount.toLocaleString()}
+          subtitle="Requires review"
+          icon={
+            <ErrorOutline />
+          }
+        />
+      </Grid>
+    </Grid>
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 900,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Reference',
+                  'Customer',
+                  'Type',
+                  'Amount',
+                  'Status',
+                  'Created',
+                  'Actions',
+                ].map(
+                  heading => (
+                    <TableCell
+                      key={
+                        heading
+                      }
+                      sx={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color:
+                          ZENIMONIES.textMuted,
+                        background:
+                          '#FAFBFA',
+                        textTransform:
+                          'uppercase',
+                      }}
+                    >
+                      {heading}
+                    </TableCell>
+                  )
+                )}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {transactions
+                .filter(
+                  transaction =>
+                    [
+                      'pending',
+                      'processing',
+                    ].includes(
+                      String(
+                        transaction.status
+                      ).toLowerCase()
+                    )
+                )
+                .map(
+                  transaction => (
+                    <TableRow
+                      key={
+                        transaction.id
+                      }
+                      hover
+                    >
+                      <TableCell>
+                        <TablePrimary
+                          title={
+                            transaction.reference
+                          }
+                          subtitle={
+                            transaction.id
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <TablePrimary
+                          title={
+                            transaction.full_name
+                          }
+                          subtitle={
+                            transaction.account_number
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 11,
+                            textTransform:
+                              'capitalize',
+                          }}
+                        >
+                          {String(
+                            transaction.type ||
+                              ''
+                          ).replaceAll(
+                            '_',
+                            ' '
+                          )}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 12,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {formatMoney(
+                            transaction.amount,
+                            transaction.currency
+                          )}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <StatusChip
+                          status={
+                            transaction.status
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 10,
+                            color:
+                              ZENIMONIES.textSecondary,
+                          }}
+                        >
+                          {formatDate(
+                            transaction.created_at
+                          )}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <Button
+                          size="small"
+                          startIcon={
+                            <Visibility
+                              sx={{
+                                fontSize:
+                                  15,
+                              }}
+                            />
+                          }
+                          onClick={() =>
+                            openTransaction(
+                              transaction.id
+                            )
+                          }
+                          sx={{
+                            textTransform:
+                              'none',
+                            color:
+                              ZENIMONIES.green,
+                            fontWeight: 750,
+                          }}
+                        >
+                          Review
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                )}
+
+              {!transactions.some(
+                transaction =>
+                  [
+                    'pending',
+                    'processing',
+                  ].includes(
+                    String(
+                      transaction.status
+                    ).toLowerCase()
+                  )
+              ) && (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                  >
+                    <EmptyState
+                      title="No pending transactions"
+                      description="There are currently no transactions waiting for operational review."
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+   /* ============================================================
+   PART 4 — CUSTOMERS / KYC / CUSTOMER OPERATIONS
+   ============================================================ */
+
+{section === 'customers' && (
+  <Box>
+    <SectionHeading
+      title="Customers"
+      description="Manage ZENIMONIES customers, account status and verification activity."
+      action={
+        <Button
+          size="small"
+          startIcon={<Refresh />}
+          onClick={async () => {
+            try {
+              setRefreshing(true);
+              await Promise.all([
+                loadUsers(),
+                loadDashboard(),
+              ]);
+            } catch (err: any) {
+              setError(
+                err?.message ||
+                  'Unable to refresh customers.'
+              );
+            } finally {
+              setRefreshing(false);
+            }
+          }}
+          disabled={refreshing}
+          sx={{
+            textTransform: 'none',
+            color: ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Refresh
+        </Button>
+      }
+    />
+
+    {/* CUSTOMER KPI CARDS */}
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="Total Customers"
+          value={accountCustomerCount.toLocaleString()}
+          subtitle="Registered customers"
+          icon={<Groups />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="Verified"
+          value={verifiedCustomerCount.toLocaleString()}
+          subtitle="Verified customers"
+          icon={<VerifiedUser />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="Suspended"
+          value={suspendedCustomerCount.toLocaleString()}
+          subtitle="Restricted accounts"
+          icon={<Lock />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={6}
+        md={3}
+      >
+        <StatCard
+          title="Blocked"
+          value={blockedCustomerCount.toLocaleString()}
+          subtitle="Blocked accounts"
+          icon={<Security />}
+        />
+      </Grid>
+    </Grid>
+
+    {/* CUSTOMER DIRECTORY */}
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        {/* FILTER BAR */}
+
+        <Box
+          sx={{
+            p: 2,
+            borderBottom:
+              `1px solid ${ZENIMONIES.border}`,
+          }}
+        >
+          <Grid
+            container
+            spacing={1.25}
+          >
+            <Grid
+              item
+              xs={12}
+              md={5}
+            >
+              <TextField
+                fullWidth
+                size="small"
+                value={customerSearch}
+                onChange={event =>
+                  setCustomerSearch(
+                    event.target.value
+                  )
+                }
+                placeholder="Search name, email, phone or customer ID"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search
+                        sx={{
+                          fontSize: 18,
+                          color:
+                            ZENIMONIES.textMuted,
+                        }}
+                      />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root':
+                    {
+                      borderRadius: 1.75,
+                      fontSize: 12,
+                    },
+                }}
+              />
+            </Grid>
+
+            <Grid
+              item
+              xs={12}
+              sm={6}
+              md={3.5}
+            >
+              <Select
+                fullWidth
+                size="small"
+                value={
+                  customerStatusFilter
+                }
+                onChange={event =>
+                  setCustomerStatusFilter(
+                    event.target.value
+                  )
+                }
+                sx={{
+                  borderRadius: 1.75,
+                  fontSize: 12,
+                }}
+              >
+                <MenuItem value="all">
+                  All account statuses
+                </MenuItem>
+
+                <MenuItem value="active">
+                  Active
+                </MenuItem>
+
+                <MenuItem value="suspended">
+                  Suspended
+                </MenuItem>
+
+                <MenuItem value="blocked">
+                  Blocked
+                </MenuItem>
+
+                <MenuItem value="pending">
+                  Pending
+                </MenuItem>
+              </Select>
+            </Grid>
+
+            <Grid
+              item
+              xs={12}
+              sm={6}
+              md={3.5}
+            >
+              <Select
+                fullWidth
+                size="small"
+                value={
+                  customerKycFilter
+                }
+                onChange={event =>
+                  setCustomerKycFilter(
+                    event.target.value
+                  )
+                }
+                sx={{
+                  borderRadius: 1.75,
+                  fontSize: 12,
+                }}
+              >
+                <MenuItem value="all">
+                  All KYC statuses
+                </MenuItem>
+
+                <MenuItem value="approved">
+                  Approved
+                </MenuItem>
+
+                <MenuItem value="pending">
+                  Pending
+                </MenuItem>
+
+                <MenuItem value="rejected">
+                  Rejected
+                </MenuItem>
+
+                <MenuItem value="not_verified">
+                  Not Verified
+                </MenuItem>
+              </Select>
+            </Grid>
+          </Grid>
+        </Box>
+
+        {/* CUSTOMER TABLE */}
+
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 1050,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Customer',
+                  'Contact',
+                  'KYC',
+                  'Tier',
+                  'Account status',
+                  'Joined',
+                  'Actions',
+                ].map(
+                  heading => (
+                    <TableCell
+                      key={heading}
+                      sx={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color:
+                          ZENIMONIES.textMuted,
+                        textTransform:
+                          'uppercase',
+                        letterSpacing:
+                          '0.05em',
+                        background:
+                          '#FAFBFA',
+                        borderBottom:
+                          `1px solid ${ZENIMONIES.border}`,
+                      }}
+                    >
+                      {heading}
+                    </TableCell>
+                  )
+                )}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {filteredCustomers.map(
+                user => (
+                  <TableRow
+                    key={user.id}
+                    hover
+                  >
+                    <TableCell>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        gap={1.1}
+                      >
+                        <Avatar
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            background:
+                              ZENIMONIES.greenLight,
+                            color:
+                              ZENIMONIES.green,
+                            fontSize: 12,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {user.full_name
+                            ?.charAt(0)
+                            ?.toUpperCase() ||
+                            'C'}
+                        </Avatar>
+
+                        <Box>
+                          <Typography
+                            sx={{
+                              fontSize: 12,
+                              fontWeight: 800,
+                              color:
+                                ZENIMONIES.text,
+                            }}
+                          >
+                            {user.full_name}
+                          </Typography>
+
+                          <Typography
+                            sx={{
+                              mt: 0.2,
+                              fontSize: 10,
+                              color:
+                                ZENIMONIES.textMuted,
+                            }}
+                          >
+                            {user.id}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </TableCell>
+
+                    <TableCell>
+                      <Box>
+                        <Typography
+                          sx={{
+                            fontSize: 11,
+                            fontWeight: 650,
+                          }}
+                        >
+                          {user.email}
+                        </Typography>
+
+                        <Typography
+                          sx={{
+                            mt: 0.25,
+                            fontSize: 10,
+                            color:
+                              ZENIMONIES.textSecondary,
+                          }}
+                        >
+                          {user.phone}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          user.kyc_status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 750,
+                        }}
+                      >
+                        Tier{' '}
+                        {user.kyc_tier ??
+                          0}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          user.status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color:
+                            ZENIMONIES.textSecondary,
+                          whiteSpace:
+                            'nowrap',
+                        }}
+                      >
+                        {formatDate(
+                          user.created_at
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Stack
+                        direction="row"
+                        spacing={0.5}
+                      >
+                        <Tooltip title="Suspend customer">
+                          <IconButton
+                            size="small"
+                            disabled={
+                              actionLoading ===
+                              user.id
+                            }
+                            onClick={() =>
+                              updateUserStatus(
+                                user.id,
+                                'suspended'
+                              )
+                            }
+                            sx={{
+                              color:
+                                ZENIMONIES.warning,
+                            }}
+                          >
+                            <Lock
+                              sx={{
+                                fontSize: 17,
+                              }}
+                            />
+                          </IconButton>
+                        </Tooltip>
+
+                        <Tooltip title="Activate customer">
+                          <IconButton
+                            size="small"
+                            disabled={
+                              actionLoading ===
+                              user.id
+                            }
+                            onClick={() =>
+                              updateUserStatus(
+                                user.id,
+                                'active'
+                              )
+                            }
+                            sx={{
+                              color:
+                                ZENIMONIES.green,
+                            }}
+                          >
+                            <CheckCircle
+                              sx={{
+                                fontSize: 17,
+                              }}
+                            />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                )
+              )}
+
+              {!filteredCustomers.length && (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                  >
+                    <EmptyState
+                      title="No customers found"
+                      description="Try changing your search or customer filters."
+                      icon={
+                        <Groups />
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+{/* ============================================================
+    ACCOUNTS
+    ============================================================ */}
+
+{section === 'accounts' && (
+  <Box>
+    <SectionHeading
+      title="Accounts"
+      description="Customer account administration and account status monitoring."
+    />
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <Box
+          sx={{
+            p: 2,
+            borderBottom:
+              `1px solid ${ZENIMONIES.border}`,
+          }}
+        >
+          <Alert
+            severity="info"
+            sx={{
+              borderRadius: 2,
+              fontSize: 11,
+            }}
+          >
+            Account-level information is
+            restricted to authorized
+            Administration users. Customer
+            Care does not have access to
+            balances or full account
+            numbers.
+          </Alert>
+        </Box>
+
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 950,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Customer',
+                  'Customer ID',
+                  'Account status',
+                  'KYC',
+                  'KYC tier',
+                  'Daily transfer limit',
+                  'Daily transfer used',
+                  'Actions',
+                ].map(
+                  heading => (
+                    <TableCell
+                      key={heading}
+                      sx={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color:
+                          ZENIMONIES.textMuted,
+                        background:
+                          '#FAFBFA',
+                        textTransform:
+                          'uppercase',
+                      }}
+                    >
+                      {heading}
+                    </TableCell>
+                  )
+                )}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {users.map(
+                user => (
+                  <TableRow
+                    key={user.id}
+                    hover
+                  >
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          user.full_name
+                        }
+                        subtitle={
+                          user.email
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          fontFamily:
+                            'monospace',
+                          color:
+                            ZENIMONIES.textSecondary,
+                        }}
+                      >
+                        {user.id}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          user.status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          user.kyc_status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 750,
+                        }}
+                      >
+                        Tier{' '}
+                        {user.kyc_tier ??
+                          0}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {formatMoney(
+                          user.daily_transfer_limit
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {formatMoney(
+                          user.daily_transfer_used
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          setSection(
+                            'customers'
+                          )
+                        }
+                        sx={{
+                          textTransform:
+                            'none',
+                          color:
+                            ZENIMONIES.green,
+                          fontWeight: 750,
+                        }}
+                      >
+                        Customer
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              )}
+
+              {!users.length && (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                  >
+                    <EmptyState
+                      title="No accounts available"
+                      description="Account records will appear when customers are available."
+                      icon={
+                        <AccountBalanceWallet />
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+{/* ============================================================
+    KYC & VERIFICATION
+    ============================================================ */}
+
+{section === 'kyc' && (
+  <Box>
+    <SectionHeading
+      title="KYC & Verification"
+      description="Review customer identity verification and manage authorized KYC decisions."
+      action={
+        <Button
+          size="small"
+          startIcon={<Refresh />}
+          onClick={async () => {
+            try {
+              setRefreshing(true);
+
+              await Promise.all([
+                loadKyc(),
+                loadDashboard(),
+              ]);
+            } catch (err: any) {
+              setError(
+                err?.message ||
+                  'Unable to refresh KYC records.'
+              );
+            } finally {
+              setRefreshing(false);
+            }
+          }}
+          disabled={refreshing}
+          sx={{
+            textTransform: 'none',
+            color:
+              ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Refresh
+        </Button>
+      }
+    />
+
+    {/* KYC KPI */}
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{
+        mb: 2,
+      }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Pending Reviews"
+          value={
+            pendingKycRecords.length.toLocaleString()
+          }
+          subtitle="Requires Administration review"
+          icon={
+            <WarningAmber />
+          }
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Approved"
+          value={(
+            dashboard?.kyc
+              ?.approved || 0
+          ).toLocaleString()}
+          subtitle="Verified KYC records"
+          icon={
+            <VerifiedUser />
+          }
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Rejected"
+          value={(
+            dashboard?.kyc
+              ?.rejected || 0
+          ).toLocaleString()}
+          subtitle="Rejected verification records"
+          icon={
+            <ReportProblem />
+          }
+        />
+      </Grid>
+    </Grid>
+
+    {/* KYC TABLE */}
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 1050,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Customer',
+                  'KYC tier',
+                  'BVN',
+                  'Identity',
+                  'Tier 3',
+                  'Overall',
+                  'Submitted',
+                  'Review',
+                ].map(
+                  heading => (
+                    <TableCell
+                      key={heading}
+                      sx={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color:
+                          ZENIMONIES.textMuted,
+                        background:
+                          '#FAFBFA',
+                        textTransform:
+                          'uppercase',
+                      }}
+                    >
+                      {heading}
+                    </TableCell>
+                  )
+                )}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {kycRecords.map(
+                record => (
+                  <TableRow
+                    key={record.id}
+                    hover
+                  >
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          record.full_name
+                        }
+                        subtitle={
+                          record.email
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={`Tier ${
+                          record.kyc_tier ??
+                          0
+                        }`}
+                        sx={{
+                          height: 26,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          background:
+                            ZENIMONIES.greenSoft,
+                          color:
+                            ZENIMONIES.green,
+                        }}
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          record.bvn_verification_status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          record.id_verification_status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          record.tier_3_verification_status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          record.verification_status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color:
+                            ZENIMONIES.textSecondary,
+                          whiteSpace:
+                            'nowrap',
+                        }}
+                      >
+                        {formatDate(
+                          record.created_at
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        startIcon={
+                          <Visibility
+                            sx={{
+                              fontSize:
+                                15,
+                            }}
+                          />
+                        }
+                        onClick={() =>
+                          openKycReview(
+                            record,
+                            isKycPending(
+                              record,
+                              'bvn'
+                            )
+                              ? 'bvn'
+                              : isKycPending(
+                                  record,
+                                  'tier2'
+                                )
+                              ? 'tier2'
+                              : 'tier3'
+                          )
+                        }
+                        sx={{
+                          textTransform:
+                            'none',
+                          color:
+                            ZENIMONIES.green,
+                          fontWeight: 750,
+                          fontSize: 11,
+                        }}
+                      >
+                        Review
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              )}
+
+              {!kycRecords.length && (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                  >
+                    <EmptyState
+                      title="No KYC records"
+                      description="Customer verification records will appear here."
+                      icon={
+                        <VerifiedUser />
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+
+    {/* ========================================================
+        KYC REVIEW DIALOG
+        ======================================================== */}
+
+    <Dialog
+      open={reviewOpen}
+      onClose={
+        closeKycReview
+      }
+      fullWidth
+      maxWidth="md"
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          fontWeight: 850,
+          borderBottom:
+            `1px solid ${ZENIMONIES.border}`,
+        }}
+      >
+        KYC Verification Review
+      </DialogTitle>
+
+      <DialogContent
+        sx={{
+          pt: 2.5,
+        }}
+      >
+        {selectedKyc &&
+          selectedType && (
+            <Stack
+              spacing={2}
+            >
+              {/* CUSTOMER */}
+
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  background:
+                    ZENIMONIES.greenSoft,
+                  border:
+                    `1px solid ${ZENIMONIES.border}`,
+                }}
+              >
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  gap={1.25}
+                >
+                  <Avatar
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      background:
+                        ZENIMONIES.green,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {selectedKyc.full_name
+                      ?.charAt(0)
+                      ?.toUpperCase() ||
+                      'C'}
+                  </Avatar>
+
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 850,
+                      }}
+                    >
+                      {
+                        selectedKyc.full_name
+                      }
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        fontSize: 11,
+                        color:
+                          ZENIMONIES.textSecondary,
+                      }}
+                    >
+                      {
+                        selectedKyc.email
+                      }
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.25,
+                        fontSize: 11,
+                        color:
+                          ZENIMONIES.textSecondary,
+                      }}
+                    >
+                      {
+                        selectedKyc.phone
+                      }
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Box>
+
+              {/* VERIFICATION TYPE */}
+
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    textTransform:
+                      'uppercase',
+                    color:
+                      ZENIMONIES.textMuted,
+                    mb: 0.75,
+                  }}
+                >
+                  Verification
+                </Typography>
+
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  sx={{
+                    p: 1.5,
+                    border:
+                      `1px solid ${ZENIMONIES.border}`,
+                    borderRadius: 2,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {getKycTypeLabel(
+                      selectedType
+                    )}
+                  </Typography>
+
+                  <StatusChip
+                    status={getKycStatus(
+                      selectedKyc,
+                      selectedType
+                    )}
+                  />
+                </Stack>
+              </Box>
+
+              {/* BVN */}
+
+              {selectedType ===
+                'bvn' && (
+                <Box
+                  sx={{
+                    p: 1.5,
+                    border:
+                      `1px solid ${ZENIMONIES.border}`,
+                    borderRadius: 2,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color:
+                        ZENIMONIES.textMuted,
+                      textTransform:
+                        'uppercase',
+                    }}
+                  >
+                    BVN
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.5,
+                      fontSize: 15,
+                      fontWeight: 800,
+                      fontFamily:
+                        'monospace',
+                    }}
+                  >
+                    {selectedKyc.bvn ||
+                      'Not available'}
+                  </Typography>
+
+                  {selectedKyc.bvn_rejection_reason && (
+                    <Alert
+                      severity="error"
+                      sx={{
+                        mt: 1.5,
+                        fontSize: 11,
+                      }}
+                    >
+                      {
+                        selectedKyc.bvn_rejection_reason
+                      }
+                    </Alert>
+                  )}
+                </Box>
+              )}
+
+              {/* IDENTITY */}
+
+              {selectedType ===
+                'tier2' && (
+                <Grid
+                  container
+                  spacing={1.5}
+                >
+                  <Grid
+                    item
+                    xs={12}
+                    sm={6}
+                  >
+                    <InfoDisplay
+                      label="Document type"
+                      value={getDocumentTypeLabel(
+                        selectedKyc.document_type
+                      )}
+                    />
+                  </Grid>
+
+                  <Grid
+                    item
+                    xs={12}
+                    sm={6}
+                  >
+                    <InfoDisplay
+                      label="Document number"
+                      value={
+                        selectedKyc.document_number ||
+                        'Not available'
+                      }
+                    />
+                  </Grid>
+
+                  <Grid
+                    item
+                    xs={12}
+                  >
+                    <InfoDisplay
+                      label="Liveness"
+                      value={
+                        selectedKyc.liveness_status ||
+                        'Not available'
+                      }
+                    />
+                  </Grid>
+                </Grid>
+              )}
+
+              {/* TIER 3 */}
+
+              {selectedType ===
+                'tier3' && (
+                <Grid
+                  container
+                  spacing={1.5}
+                >
+                  <Grid
+                    item
+                    xs={12}
+                    sm={6}
+                  >
+                    <InfoDisplay
+                      label="Verification method"
+                      value={getTier3MethodLabel(
+                        selectedKyc.tier_3_method
+                      )}
+                    />
+                  </Grid>
+
+                  <Grid
+                    item
+                    xs={12}
+                    sm={6}
+                  >
+                    <InfoDisplay
+                      label="Status"
+                      value={getStatusLabel(
+                        selectedKyc.tier_3_verification_status
+                      )}
+                    />
+                  </Grid>
+                </Grid>
+              )}
+
+              {decisionMessage && (
+                <Alert
+                  severity="success"
+                  sx={{
+                    fontSize: 11,
+                  }}
+                >
+                  {decisionMessage}
+                </Alert>
+              )}
+            </Stack>
+          )}
+      </DialogContent>
+
+      <DialogActions
+        sx={{
+          p: 2,
+          borderTop:
+            `1px solid ${ZENIMONIES.border}`,
+        }}
+      >
+        <Button
+          onClick={
+            closeKycReview
+          }
+          sx={{
+            textTransform:
+              'none',
+            color:
+              ZENIMONIES.textSecondary,
+          }}
+        >
+          Close
+        </Button>
+
+        {selectedKyc &&
+          selectedType &&
+          isKycPending(
+            selectedKyc,
+            selectedType
+          ) && (
+            <>
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={
+                  openRejectDialog
+                }
+                disabled={
+                  Boolean(
+                    actionLoading
+                  )
+                }
+                sx={{
+                  textTransform:
+                    'none',
+                  borderRadius:
+                    1.5,
+                  fontWeight: 750,
+                }}
+              >
+                Reject
+              </Button>
+
+              <Button
+                variant="contained"
+                onClick={() =>
+                  submitKycDecision(
+                    'verify'
+                  )
+                }
+                disabled={
+                  Boolean(
+                    actionLoading
+                  )
+                }
+                sx={{
+                  textTransform:
+                    'none',
+                  borderRadius:
+                    1.5,
+                  fontWeight: 750,
+                  background:
+                    ZENIMONIES.green,
+                  '&:hover': {
+                    background:
+                      ZENIMONIES.greenDark,
+                  },
+                }}
+              >
+                {actionLoading ? (
+                  <CircularProgress
+                    size={18}
+                    sx={{
+                      color:
+                        '#fff',
+                    }}
+                  />
+                ) : (
+                  'Verify'
+                )}
+              </Button>
+            </>
+          )}
+      </DialogActions>
+    </Dialog>
+
+    {/* ========================================================
+        KYC REJECTION DIALOG
+        ======================================================== */}
+
+    <Dialog
+      open={rejectOpen}
+      onClose={
+        closeRejectDialog
+      }
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          fontWeight: 850,
+        }}
+      >
+        Reject Verification
+      </DialogTitle>
+
+      <DialogContent>
+        <Alert
+          severity="warning"
+          sx={{
+            mb: 2,
+            fontSize: 11,
+          }}
+        >
+          A rejection reason is required.
+          This reason will be recorded in
+          the Administration audit trail.
+        </Alert>
+
+        <TextField
+          fullWidth
+          multiline
+          minRows={4}
+          label="Rejection reason"
+          value={
+            rejectionReason
+          }
+          onChange={event =>
+            setRejectionReason(
+              event.target.value
+            )
+          }
+          placeholder="Enter the reason for rejecting this verification."
+        />
+      </DialogContent>
+
+      <DialogActions
+        sx={{
+          p: 2,
+        }}
+      >
+        <Button
+          onClick={
+            closeRejectDialog
+          }
+          sx={{
+            textTransform:
+              'none',
+          }}
+        >
+          Cancel
+        </Button>
+
+        <Button
+          variant="contained"
+          color="error"
+          onClick={() =>
+            submitKycDecision(
+              'reject'
+            )
+          }
+          disabled={
+            !rejectionReason.trim() ||
+            Boolean(
+              actionLoading
+            )
+          }
+          sx={{
+            textTransform:
+              'none',
+            borderRadius: 1.5,
+            fontWeight: 750,
+          }}
+        >
+          Reject Verification
+        </Button>
+      </DialogActions>
+    </Dialog>
+  </Box>
+)}  
+            /* ============================================================
+   PART 5 — FINANCIAL OPERATIONS
+   TRANSFERS / DEPOSITS / WITHDRAWALS
+   ============================================================ */
+
+{section === 'transfers' && (
+  <Box>
+    <SectionHeading
+      title="Bank Transfers"
+      description="Monitor customer bank transfer activity and payment processing."
+      action={
+        <Button
+          size="small"
+          startIcon={<Refresh />}
+          onClick={loadTransactions}
+          disabled={refreshing}
+          sx={{
+            textTransform: 'none',
+            color: ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Refresh
+        </Button>
+      }
+    />
+
+    {/* TRANSFER SUMMARY */}
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Transfer Volume"
+          value={formatMoney(
+            dashboard?.transfers
+              ?.total_amount || 0
+          )}
+          subtitle={`${(
+            dashboard?.transfers
+              ?.count || 0
+          ).toLocaleString()} transfers`}
+          icon={<AccountBalance />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Processing"
+          value={transactions
+            .filter(
+              transaction =>
+                String(
+                  transaction.status
+                ).toLowerCase() ===
+                'processing'
+            )
+            .length.toLocaleString()}
+          subtitle="Transfers in progress"
+          icon={<SyncAlt />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Failed"
+          value={transactions
+            .filter(
+              transaction =>
+                String(
+                  transaction.status
+                ).toLowerCase() ===
+                'failed'
+            )
+            .length.toLocaleString()}
+          subtitle="Requires investigation"
+          icon={<ErrorOutline />}
+        />
+      </Grid>
+    </Grid>
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 1050,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Transfer',
+                  'Customer',
+                  'Type',
+                  'Amount',
+                  'Status',
+                  'Created',
+                  'Actions',
+                ].map(heading => (
+                  <TableCell
+                    key={heading}
+                    sx={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color:
+                        ZENIMONIES.textMuted,
+                      background:
+                        '#FAFBFA',
+                      textTransform:
+                        'uppercase',
+                    }}
+                  >
+                    {heading}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {transactions
+                .filter(transaction =>
+                  [
+                    'transfer',
+                    'bank_transfer',
+                    'external_transfer',
+                    'internal_transfer',
+                    'internal_transfer_sent',
+                    'internal_transfer_received',
+                  ].includes(
+                    String(
+                      transaction.type
+                    ).toLowerCase()
+                  )
+                )
+                .map(transaction => (
+                  <TableRow
+                    key={transaction.id}
+                    hover
+                  >
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.reference
+                        }
+                        subtitle={
+                          transaction.id
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.full_name
+                        }
+                        subtitle={
+                          transaction.email
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          textTransform:
+                            'capitalize',
+                        }}
+                      >
+                        {String(
+                          transaction.type ||
+                            'transfer'
+                        ).replaceAll(
+                          '_',
+                          ' '
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {formatMoney(
+                          transaction.amount,
+                          transaction.currency
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          transaction.status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color:
+                            ZENIMONIES.textSecondary,
+                          whiteSpace:
+                            'nowrap',
+                        }}
+                      >
+                        {formatDate(
+                          transaction.created_at
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        startIcon={
+                          <Visibility
+                            sx={{
+                              fontSize: 15,
+                            }}
+                          />
+                        }
+                        onClick={() =>
+                          openTransaction(
+                            transaction.id
+                          )
+                        }
+                        sx={{
+                          textTransform:
+                            'none',
+                          color:
+                            ZENIMONIES.green,
+                          fontWeight: 750,
+                        }}
+                      >
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+              {!transactions.some(
+                transaction =>
+                  [
+                    'transfer',
+                    'bank_transfer',
+                    'external_transfer',
+                    'internal_transfer',
+                    'internal_transfer_sent',
+                    'internal_transfer_received',
+                  ].includes(
+                    String(
+                      transaction.type
+                    ).toLowerCase()
+                  )
+              ) && (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                  >
+                    <EmptyState
+                      title="No bank transfers"
+                      description="Bank transfer activity will appear here."
+                      icon={
+                        <AccountBalance />
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+{/* ============================================================
+   DEPOSITS
+   ============================================================ */}
+
+{section === 'deposits' && (
+  <Box>
+    <SectionHeading
+      title="Deposits"
+      description="Monitor customer deposits and incoming account funding."
+      action={
+        <Button
+          size="small"
+          startIcon={<Refresh />}
+          onClick={loadTransactions}
+          disabled={refreshing}
+          sx={{
+            textTransform: 'none',
+            color: ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Refresh
+        </Button>
+      }
+    />
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={6}
+      >
+        <StatCard
+          title="Deposit Volume"
+          value={formatMoney(
+            dashboard?.deposits
+              ?.total_amount || 0
+          )}
+          subtitle={`${(
+            dashboard?.deposits
+              ?.count || 0
+          ).toLocaleString()} deposits`}
+          icon={<ArrowDownward />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={6}
+      >
+        <StatCard
+          title="Pending Deposits"
+          value={transactions
+            .filter(
+              transaction =>
+                String(
+                  transaction.type
+                ).toLowerCase() ===
+                  'deposit' &&
+                [
+                  'pending',
+                  'processing',
+                ].includes(
+                  String(
+                    transaction.status
+                  ).toLowerCase()
+                )
+            )
+            .length.toLocaleString()}
+          subtitle="Awaiting completion"
+          icon={<SyncAlt />}
+        />
+      </Grid>
+    </Grid>
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 950,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Deposit',
+                  'Customer',
+                  'Amount',
+                  'Status',
+                  'Balance Before',
+                  'Balance After',
+                  'Date',
+                  'Actions',
+                ].map(heading => (
+                  <TableCell
+                    key={heading}
+                    sx={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color:
+                        ZENIMONIES.textMuted,
+                      background:
+                        '#FAFBFA',
+                      textTransform:
+                        'uppercase',
+                    }}
+                  >
+                    {heading}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {transactions
+                .filter(
+                  transaction =>
+                    String(
+                      transaction.type
+                    ).toLowerCase() ===
+                    'deposit'
+                )
+                .map(transaction => (
+                  <TableRow
+                    key={transaction.id}
+                    hover
+                  >
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.reference
+                        }
+                        subtitle={
+                          transaction.id
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.full_name
+                        }
+                        subtitle={
+                          transaction.account_number
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                          color:
+                            ZENIMONIES.green,
+                        }}
+                      >
+                        +{' '}
+                        {formatMoney(
+                          transaction.amount,
+                          transaction.currency
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          transaction.status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 650,
+                        }}
+                      >
+                        {formatMoney(
+                          transaction.balance_before,
+                          transaction.currency
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 750,
+                        }}
+                      >
+                        {formatMoney(
+                          transaction.balance_after,
+                          transaction.currency
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          whiteSpace:
+                            'nowrap',
+                          color:
+                            ZENIMONIES.textSecondary,
+                        }}
+                      >
+                        {formatDate(
+                          transaction.created_at
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        startIcon={
+                          <Visibility
+                            sx={{
+                              fontSize: 15,
+                            }}
+                          />
+                        }
+                        onClick={() =>
+                          openTransaction(
+                            transaction.id
+                          )
+                        }
+                        sx={{
+                          textTransform:
+                            'none',
+                          color:
+                            ZENIMONIES.green,
+                          fontWeight: 750,
+                        }}
+                      >
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+              {!transactions.some(
+                transaction =>
+                  String(
+                    transaction.type
+                  ).toLowerCase() ===
+                  'deposit'
+              ) && (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                  >
+                    <EmptyState
+                      title="No deposits found"
+                      description="Deposit activity will appear here."
+                      icon={
+                        <ArrowDownward />
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+{/* ============================================================
+   WITHDRAWALS
+   ============================================================ */}
+
+{section === 'withdrawals' && (
+  <Box>
+    <SectionHeading
+      title="Withdrawals"
+      description="Monitor customer withdrawal activity and outgoing account funds."
+      action={
+        <Button
+          size="small"
+          startIcon={<Refresh />}
+          onClick={loadTransactions}
+          disabled={refreshing}
+          sx={{
+            textTransform: 'none',
+            color: ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Refresh
+        </Button>
+      }
+    />
+
+    {/* WITHDRAWAL KPI */}
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Withdrawal Volume"
+          value={formatMoney(
+            dashboard?.withdrawals
+              ?.total_amount || 0
+          )}
+          subtitle={`${(
+            dashboard?.withdrawals
+              ?.count || 0
+          ).toLocaleString()} withdrawals`}
+          icon={<ArrowUpward />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Pending Withdrawals"
+          value={transactions
+            .filter(
+              transaction =>
+                String(
+                  transaction.type
+                ).toLowerCase() ===
+                  'withdrawal' &&
+                [
+                  'pending',
+                  'processing',
+                ].includes(
+                  String(
+                    transaction.status
+                  ).toLowerCase()
+                )
+            )
+            .length.toLocaleString()}
+          subtitle="Awaiting processing"
+          icon={<Schedule />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Failed Withdrawals"
+          value={transactions
+            .filter(
+              transaction =>
+                String(
+                  transaction.type
+                ).toLowerCase() ===
+                  'withdrawal' &&
+                String(
+                  transaction.status
+                ).toLowerCase() ===
+                  'failed'
+            )
+            .length.toLocaleString()}
+          subtitle="Requires investigation"
+          icon={<ErrorOutline />}
+        />
+      </Grid>
+    </Grid>
+
+    {/* WITHDRAWAL NOTICE */}
+
+    <Alert
+      severity="info"
+      sx={{
+        mb: 2,
+        borderRadius: 2,
+        fontSize: 11,
+      }}
+    >
+      Withdrawal records are displayed
+      from the banking transaction ledger.
+      Financial actions must be processed
+      through authorized backend operations;
+      the Administration dashboard does not
+      perform frontend-only balance changes.
+    </Alert>
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 1100,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Withdrawal',
+                  'Customer',
+                  'Account',
+                  'Amount',
+                  'Status',
+                  'Balance Before',
+                  'Balance After',
+                  'Date',
+                  'Actions',
+                ].map(heading => (
+                  <TableCell
+                    key={heading}
+                    sx={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color:
+                        ZENIMONIES.textMuted,
+                      background:
+                        '#FAFBFA',
+                      textTransform:
+                        'uppercase',
+                    }}
+                  >
+                    {heading}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {transactions
+                .filter(
+                  transaction =>
+                    String(
+                      transaction.type
+                    ).toLowerCase() ===
+                    'withdrawal'
+                )
+                .map(transaction => (
+                  <TableRow
+                    key={transaction.id}
+                    hover
+                  >
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.reference
+                        }
+                        subtitle={
+                          transaction.id
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.full_name
+                        }
+                        subtitle={
+                          transaction.email
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {
+                          transaction.account_number
+                        }
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 850,
+                          color:
+                            ZENIMONIES.danger,
+                        }}
+                      >
+                        −{' '}
+                        {formatMoney(
+                          transaction.amount,
+                          transaction.currency
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          transaction.status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 650,
+                        }}
+                      >
+                        {formatMoney(
+                          transaction.balance_before,
+                          transaction.currency
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 750,
+                        }}
+                      >
+                        {formatMoney(
+                          transaction.balance_after,
+                          transaction.currency
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color:
+                            ZENIMONIES.textSecondary,
+                          whiteSpace:
+                            'nowrap',
+                        }}
+                      >
+                        {formatDate(
+                          transaction.created_at
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        startIcon={
+                          <Visibility
+                            sx={{
+                              fontSize: 15,
+                            }}
+                          />
+                        }
+                        onClick={() =>
+                          openTransaction(
+                            transaction.id
+                          )
+                        }
+                        sx={{
+                          textTransform:
+                            'none',
+                          color:
+                            ZENIMONIES.green,
+                          fontWeight: 750,
+                        }}
+                      >
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+              {!transactions.some(
+                transaction =>
+                  String(
+                    transaction.type
+                  ).toLowerCase() ===
+                  'withdrawal'
+              ) && (
+                <TableRow>
+                  <TableCell
+                    colSpan={9}
+                  >
+                    <EmptyState
+                      title="No withdrawals found"
+                      description="Customer withdrawal activity will appear here."
+                      icon={
+                        <ArrowUpward />
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}  
+             /* ============================================================
+   PART 6 — SERVICES / BUSINESS BANKING / POS
+   ============================================================ */
+
+/* ============================================================
+   BILLS
+   ============================================================ */
+
+{section === 'bills' && (
+  <Box>
+    <SectionHeading
+      title="Bills"
+      description="Monitor customer bill-payment activity across the ZENIMONIES platform."
+      action={
+        <Button
+          size="small"
+          startIcon={<Refresh />}
+          onClick={loadTransactions}
+          disabled={refreshing}
+          sx={{
+            textTransform: 'none',
+            color: ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Refresh
+        </Button>
+      }
+    />
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Bill Payments"
+          value={transactions
+            .filter(transaction =>
+              String(
+                transaction.type
+              )
+                .toLowerCase()
+                .includes('bill')
+            )
+            .length.toLocaleString()}
+          subtitle="Recorded bill transactions"
+          icon={<ReceiptLong />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Completed"
+          value={transactions
+            .filter(
+              transaction =>
+                String(
+                  transaction.type
+                )
+                  .toLowerCase()
+                  .includes('bill') &&
+                String(
+                  transaction.status
+                ).toLowerCase() ===
+                  'completed'
+            )
+            .length.toLocaleString()}
+          subtitle="Successful payments"
+          icon={<CheckCircle />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Failed"
+          value={transactions
+            .filter(
+              transaction =>
+                String(
+                  transaction.type
+                )
+                  .toLowerCase()
+                  .includes('bill') &&
+                String(
+                  transaction.status
+                ).toLowerCase() ===
+                  'failed'
+            )
+            .length.toLocaleString()}
+          subtitle="Requires investigation"
+          icon={<ErrorOutline />}
+        />
+      </Grid>
+    </Grid>
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 950,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Reference',
+                  'Customer',
+                  'Service',
+                  'Amount',
+                  'Status',
+                  'Date',
+                  'Actions',
+                ].map(heading => (
+                  <TableCell
+                    key={heading}
+                    sx={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color:
+                        ZENIMONIES.textMuted,
+                      background:
+                        '#FAFBFA',
+                      textTransform:
+                        'uppercase',
+                    }}
+                  >
+                    {heading}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {transactions
+                .filter(transaction =>
+                  String(
+                    transaction.type
+                  )
+                    .toLowerCase()
+                    .includes('bill')
+                )
+                .map(transaction => (
+                  <TableRow
+                    key={transaction.id}
+                    hover
+                  >
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.reference
+                        }
+                        subtitle={
+                          transaction.id
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.full_name
+                        }
+                        subtitle={
+                          transaction.email
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          textTransform:
+                            'capitalize',
+                        }}
+                      >
+                        {String(
+                          transaction.type ||
+                            'bill'
+                        ).replaceAll(
+                          '_',
+                          ' '
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {formatMoney(
+                          transaction.amount,
+                          transaction.currency
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          transaction.status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color:
+                            ZENIMONIES.textSecondary,
+                          whiteSpace:
+                            'nowrap',
+                        }}
+                      >
+                        {formatDate(
+                          transaction.created_at
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        startIcon={
+                          <Visibility
+                            sx={{
+                              fontSize: 15,
+                            }}
+                          />
+                        }
+                        onClick={() =>
+                          openTransaction(
+                            transaction.id
+                          )
+                        }
+                        sx={{
+                          textTransform:
+                            'none',
+                          color:
+                            ZENIMONIES.green,
+                          fontWeight: 750,
+                        }}
+                      >
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+              {!transactions.some(
+                transaction =>
+                  String(
+                    transaction.type
+                  )
+                    .toLowerCase()
+                    .includes('bill')
+              ) && (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                  >
+                    <EmptyState
+                      title="No bill payments"
+                      description="Bill-payment activity will appear here."
+                      icon={
+                        <ReceiptLong />
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+/* ============================================================
+   AIRTIME & DATA
+   ============================================================ */
+
+{section === 'airtime' && (
+  <Box>
+    <SectionHeading
+      title="Airtime & Data"
+      description="Monitor airtime and mobile-data service transactions."
+      action={
+        <Button
+          size="small"
+          startIcon={<Refresh />}
+          onClick={loadTransactions}
+          disabled={refreshing}
+          sx={{
+            textTransform: 'none',
+            color: ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Refresh
+        </Button>
+      }
+    />
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Airtime & Data"
+          value={transactions
+            .filter(transaction => {
+              const type =
+                String(
+                  transaction.type
+                ).toLowerCase();
+
+              return (
+                type.includes(
+                  'airtime'
+                ) ||
+                type.includes(
+                  'data'
+                )
+              );
+            })
+            .length.toLocaleString()}
+          subtitle="Service transactions"
+          icon={<PhoneAndroid />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Completed"
+          value={transactions
+            .filter(transaction => {
+              const type =
+                String(
+                  transaction.type
+                ).toLowerCase();
+
+              return (
+                (
+                  type.includes(
+                    'airtime'
+                  ) ||
+                  type.includes(
+                    'data'
+                  )
+                ) &&
+                String(
+                  transaction.status
+                ).toLowerCase() ===
+                  'completed'
+              );
+            })
+            .length.toLocaleString()}
+          subtitle="Successful services"
+          icon={<CheckCircle />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Failed"
+          value={transactions
+            .filter(transaction => {
+              const type =
+                String(
+                  transaction.type
+                ).toLowerCase();
+
+              return (
+                (
+                  type.includes(
+                    'airtime'
+                  ) ||
+                  type.includes(
+                    'data'
+                  )
+                ) &&
+                String(
+                  transaction.status
+                ).toLowerCase() ===
+                  'failed'
+              );
+            })
+            .length.toLocaleString()}
+          subtitle="Failed service transactions"
+          icon={<ErrorOutline />}
+        />
+      </Grid>
+    </Grid>
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 950,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Reference',
+                  'Customer',
+                  'Service',
+                  'Amount',
+                  'Status',
+                  'Date',
+                  'Actions',
+                ].map(heading => (
+                  <TableCell
+                    key={heading}
+                    sx={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color:
+                        ZENIMONIES.textMuted,
+                      background:
+                        '#FAFBFA',
+                      textTransform:
+                        'uppercase',
+                    }}
+                  >
+                    {heading}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {transactions
+                .filter(transaction => {
+                  const type =
+                    String(
+                      transaction.type
+                    ).toLowerCase();
+
+                  return (
+                    type.includes(
+                      'airtime'
+                    ) ||
+                    type.includes(
+                      'data'
+                    )
+                  );
+                })
+                .map(transaction => (
+                  <TableRow
+                    key={transaction.id}
+                    hover
+                  >
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.reference
+                        }
+                        subtitle={
+                          transaction.id
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.full_name
+                        }
+                        subtitle={
+                          transaction.email
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          textTransform:
+                            'capitalize',
+                        }}
+                      >
+                        {String(
+                          transaction.type ||
+                            ''
+                        ).replaceAll(
+                          '_',
+                          ' '
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {formatMoney(
+                          transaction.amount,
+                          transaction.currency
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          transaction.status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color:
+                            ZENIMONIES.textSecondary,
+                        }}
+                      >
+                        {formatDate(
+                          transaction.created_at
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          openTransaction(
+                            transaction.id
+                          )
+                        }
+                        sx={{
+                          textTransform:
+                            'none',
+                          color:
+                            ZENIMONIES.green,
+                          fontWeight: 750,
+                        }}
+                      >
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+              {!transactions.some(
+                transaction => {
+                  const type =
+                    String(
+                      transaction.type
+                    ).toLowerCase();
+
+                  return (
+                    type.includes(
+                      'airtime'
+                    ) ||
+                    type.includes(
+                      'data'
+                    )
+                  );
+                }
+              ) && (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                  >
+                    <EmptyState
+                      title="No airtime or data transactions"
+                      description="Airtime and data activity will appear here."
+                      icon={
+                        <PhoneAndroid />
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+/* ============================================================
+   GIFT CARDS
+   ============================================================ */
+
+{section === 'giftcards' && (
+  <Box>
+    <SectionHeading
+      title="Gift Cards"
+      description="Monitor gift-card purchases, sales and related transaction activity."
+      action={
+        <Button
+          size="small"
+          startIcon={<Refresh />}
+          onClick={loadTransactions}
+          disabled={refreshing}
+          sx={{
+            textTransform: 'none',
+            color: ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Refresh
+        </Button>
+      }
+    />
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Gift Card Activity"
+          value={transactions
+            .filter(transaction =>
+              String(
+                transaction.type
+              )
+                .toLowerCase()
+                .includes(
+                  'gift'
+                )
+            )
+            .length.toLocaleString()}
+          subtitle="Recorded transactions"
+          icon={<CardGiftcard />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Completed"
+          value={transactions
+            .filter(
+              transaction =>
+                String(
+                  transaction.type
+                )
+                  .toLowerCase()
+                  .includes(
+                    'gift'
+                  ) &&
+                String(
+                  transaction.status
+                ).toLowerCase() ===
+                  'completed'
+            )
+            .length.toLocaleString()}
+          subtitle="Completed activity"
+          icon={<CheckCircle />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Failed"
+          value={transactions
+            .filter(
+              transaction =>
+                String(
+                  transaction.type
+                )
+                  .toLowerCase()
+                  .includes(
+                    'gift'
+                  ) &&
+                String(
+                  transaction.status
+                ).toLowerCase() ===
+                  'failed'
+            )
+            .length.toLocaleString()}
+          subtitle="Failed activity"
+          icon={<ErrorOutline />}
+        />
+      </Grid>
+    </Grid>
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 950,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Reference',
+                  'Customer',
+                  'Type',
+                  'Amount',
+                  'Status',
+                  'Date',
+                  'Actions',
+                ].map(heading => (
+                  <TableCell
+                    key={heading}
+                    sx={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color:
+                        ZENIMONIES.textMuted,
+                      background:
+                        '#FAFBFA',
+                      textTransform:
+                        'uppercase',
+                    }}
+                  >
+                    {heading}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {transactions
+                .filter(transaction =>
+                  String(
+                    transaction.type
+                  )
+                    .toLowerCase()
+                    .includes(
+                      'gift'
+                    )
+                )
+                .map(transaction => (
+                  <TableRow
+                    key={transaction.id}
+                    hover
+                  >
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.reference
+                        }
+                        subtitle={
+                          transaction.id
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <TablePrimary
+                        title={
+                          transaction.full_name
+                        }
+                        subtitle={
+                          transaction.email
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          textTransform:
+                            'capitalize',
+                        }}
+                      >
+                        {String(
+                          transaction.type ||
+                            'gift card'
+                        ).replaceAll(
+                          '_',
+                          ' '
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {formatMoney(
+                          transaction.amount,
+                          transaction.currency
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          transaction.status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color:
+                            ZENIMONIES.textSecondary,
+                        }}
+                      >
+                        {formatDate(
+                          transaction.created_at
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          openTransaction(
+                            transaction.id
+                          )
+                        }
+                        sx={{
+                          textTransform:
+                            'none',
+                          color:
+                            ZENIMONIES.green,
+                          fontWeight: 750,
+                        }}
+                      >
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+              {!transactions.some(
+                transaction =>
+                  String(
+                    transaction.type
+                  )
+                    .toLowerCase()
+                    .includes(
+                      'gift'
+                    )
+              ) && (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                  >
+                    <EmptyState
+                      title="No gift-card transactions"
+                      description="Gift-card activity will appear here."
+                      icon={
+                        <CardGiftcard />
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+/* ============================================================
+   BUSINESS BANKING
+   ============================================================ */
+
+{section === 'business' && (
+  <Box>
+    <SectionHeading
+      title="Business Banking"
+      description="Administration workspace for ZENIMONIES business customers."
+    />
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Business Customers"
+          value={users
+            .filter(
+              user =>
+                String(
+                  user.account_type ||
+                    ''
+                ).toLowerCase() ===
+                'business'
+            )
+            .length.toLocaleString()}
+          subtitle="Registered business accounts"
+          icon={<Business />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Business KYC"
+          value={users
+            .filter(
+              user =>
+                String(
+                  user.account_type ||
+                    ''
+                ).toLowerCase() ===
+                'business' &&
+                String(
+                  user.kyc_status
+                ).toLowerCase() ===
+                  'pending'
+            )
+            .length.toLocaleString()}
+          subtitle="Business verification requiring review"
+          icon={<VerifiedUser />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="POS Access"
+          value="Separate"
+          subtitle="POS application is independently managed"
+          icon={<PointOfSale />}
+        />
+      </Grid>
+    </Grid>
+
+    <Grid
+      container
+      spacing={2}
+    >
+      <Grid
+        item
+        xs={12}
+        md={7}
+      >
+        <AdminCard>
+          <CardContent>
+            <Typography
+              sx={{
+                fontSize: 15,
+                fontWeight: 850,
+              }}
+            >
+              Business banking controls
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.75,
+                fontSize: 11,
+                lineHeight: 1.7,
+                color:
+                  ZENIMONIES.textSecondary,
+              }}
+            >
+              Business customers use the
+              same core banking experience
+              as personal customers, with
+              additional business verification
+              and POS functionality.
+            </Typography>
+
+            <Divider
+              sx={{
+                my: 2,
+              }}
+            />
+
+            <Stack
+              spacing={1.1}
+            >
+              {[
+                [
+                  'Business verification',
+                  'Levels 1–5',
+                ],
+                [
+                  'CAC documentation',
+                  'Required at Level 4 upgrade',
+                ],
+                [
+                  'POS',
+                  'Separate application and approval',
+                ],
+                [
+                  'Business dashboard',
+                  'Core banking features retained',
+                ],
+              ].map(
+                ([label, value]) => (
+                  <Stack
+                    key={label}
+                    direction="row"
+                    justifyContent="space-between"
+                    gap={2}
+                    sx={{
+                      py: 0.8,
+                      borderBottom:
+                        `1px solid ${ZENIMONIES.border}`,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {label}
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        fontSize: 11,
+                        color:
+                          ZENIMONIES.textSecondary,
+                        textAlign:
+                          'right',
+                      }}
+                    >
+                      {value}
+                    </Typography>
+                  </Stack>
+                )
+              )}
+            </Stack>
+          </CardContent>
+        </AdminCard>
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        md={5}
+      >
+        <AdminCard>
+          <CardContent>
+            <Typography
+              sx={{
+                fontSize: 15,
+                fontWeight: 850,
+              }}
+            >
+              Business operations
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.75,
+                mb: 2,
+                fontSize: 11,
+                color:
+                  ZENIMONIES.textSecondary,
+              }}
+            >
+              Use the dedicated operational
+              areas for customer verification
+              and POS administration.
+            </Typography>
+
+            <Stack
+              spacing={1}
+            >
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={() =>
+                  setSection(
+                    'kyc'
+                  )
+                }
+                sx={{
+                  justifyContent:
+                    'space-between',
+                  textTransform:
+                    'none',
+                  borderRadius: 1.75,
+                  color:
+                    ZENIMONIES.green,
+                  borderColor:
+                    ZENIMONIES.border,
+                  fontWeight: 750,
+                }}
+              >
+                Business KYC
+                <ArrowForward />
+              </Button>
+
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={() =>
+                  setSection(
+                    'pos'
+                  )
+                }
+                sx={{
+                  justifyContent:
+                    'space-between',
+                  textTransform:
+                    'none',
+                  borderRadius: 1.75,
+                  color:
+                    ZENIMONIES.green,
+                  borderColor:
+                    ZENIMONIES.border,
+                  fontWeight: 750,
+                }}
+              >
+                POS Administration
+                <ArrowForward />
+              </Button>
+            </Stack>
+          </CardContent>
+        </AdminCard>
+      </Grid>
+    </Grid>
+  </Box>
+)}
+
+/* ============================================================
+   POS
+   ============================================================ */
+
+{section === 'pos' && (
+  <Box>
+    <SectionHeading
+      title="POS"
+      description="Manage ZENIMONIES business POS operations and terminal administration."
+    />
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="POS Model"
+          value="Android"
+          subtitle="Card reader + receipt printer"
+          icon={<PointOfSale />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Approval"
+          value="Separate"
+          subtitle="POS approval does not block business account access"
+          icon={<Verified />}
+        />
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        sm={4}
+      >
+        <StatCard
+          title="Operations"
+          value="Ready"
+          subtitle="Dedicated POS administration"
+          icon={<Settings />}
+        />
+      </Grid>
+    </Grid>
+
+    <Grid
+      container
+      spacing={2}
+    >
+      <Grid
+        item
+        xs={12}
+        md={7}
+      >
+        <AdminCard>
+          <CardContent>
+            <Typography
+              sx={{
+                fontSize: 15,
+                fontWeight: 850,
+              }}
+            >
+              POS administration
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.75,
+                fontSize: 11,
+                lineHeight: 1.7,
+                color:
+                  ZENIMONIES.textSecondary,
+              }}
+            >
+              POS applications and terminal
+              approvals are managed separately
+              from business-account registration.
+              A business customer can access
+              their account without waiting for
+              POS approval.
+            </Typography>
+
+            <Divider
+              sx={{
+                my: 2,
+              }}
+            />
+
+            <Stack
+              spacing={1}
+            >
+              {[
+                [
+                  'Terminal',
+                  'Android POS',
+                ],
+                [
+                  'Card acceptance',
+                  'Card reader',
+                ],
+                [
+                  'Receipt',
+                  'Integrated receipt printer',
+                ],
+                [
+                  'Business access',
+                  'Not dependent on POS approval',
+                ],
+              ].map(
+                ([label, value]) => (
+                  <Stack
+                    key={label}
+                    direction="row"
+                    justifyContent="space-between"
+                    sx={{
+                      py: 0.8,
+                      borderBottom:
+                        `1px solid ${ZENIMONIES.border}`,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {label}
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        fontSize: 11,
+                        color:
+                          ZENIMONIES.textSecondary,
+                      }}
+                    >
+                      {value}
+                    </Typography>
+                  </Stack>
+                )
+              )}
+            </Stack>
+          </CardContent>
+        </AdminCard>
+      </Grid>
+
+      <Grid
+        item
+        xs={12}
+        md={5}
+      >
+        <AdminCard>
+          <CardContent>
+            <Typography
+              sx={{
+                fontSize: 15,
+                fontWeight: 850,
+              }}
+            >
+              POS controls
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.75,
+                fontSize: 11,
+                lineHeight: 1.7,
+                color:
+                  ZENIMONIES.textSecondary,
+              }}
+            >
+              Terminal approval, assignment,
+              activation, suspension and
+              operational monitoring should be
+              performed through authorized
+              backend workflows.
+            </Typography>
+
+            <Alert
+              severity="info"
+              sx={{
+                mt: 2,
+                fontSize: 11,
+                borderRadius: 2,
+              }}
+            >
+              No frontend-only terminal approval
+              or financial action is performed
+              from this dashboard.
+            </Alert>
+          </CardContent>
+        </AdminCard>
+      </Grid>
+    </Grid>
+  </Box>
+)} 
+             /* ============================================================
+   PART 7 — CUSTOMER CARE / RISK / COMPLIANCE
+   ============================================================ */
+
+/* ============================================================
+   CUSTOMER CARE
+   ============================================================ */
+
+{section === 'support' && (
+  <Box>
+    <SectionHeading
+      title="Customer Care"
+      description="Manage authenticated customer support cases and operational assistance."
+      action={
+        <Button
+          size="small"
+          startIcon={<Refresh />}
+          onClick={loadSupportTickets}
+          disabled={supportLoading}
+          sx={{
+            textTransform: 'none',
+            color: ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Refresh
+        </Button>
+      }
+    />
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="Open Cases"
+          value={supportTickets
+            .filter(
+              ticket =>
+                ![
+                  'resolved',
+                  'closed',
+                ].includes(
+                  String(
+                    ticket.status
+                  ).toLowerCase()
+                )
+            )
+            .length.toLocaleString()}
+          subtitle="Cases requiring attention"
+          icon={<SupportAgent />}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="Escalated"
+          value={escalatedTickets.length.toLocaleString()}
+          subtitle="Awaiting Administration"
+          icon={<Warning />}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="Resolved"
+          value={supportTickets
+            .filter(
+              ticket =>
+                [
+                  'resolved',
+                  'closed',
+                ].includes(
+                  String(
+                    ticket.status
+                  ).toLowerCase()
+                )
+            )
+            .length.toLocaleString()}
+          subtitle="Completed support cases"
+          icon={<CheckCircle />}
+        />
+      </Grid>
+    </Grid>
+
+    <AdminCard>
+      <CardContent>
+        <Stack
+          direction={{
+            xs: 'column',
+            md: 'row',
+          }}
+          spacing={1.5}
+          sx={{ mb: 2 }}
+        >
+          <TextField
+            fullWidth
+            size="small"
+            label="Search cases"
+            placeholder="Ticket ID, customer or subject"
+            value={supportSearch}
+            onChange={event =>
+              setSupportSearch(
+                event.target.value
+              )
+            }
+            onKeyDown={event => {
+              if (
+                event.key ===
+                'Enter'
+              ) {
+                loadSupportTickets();
+              }
+            }}
+          />
+
+          <TextField
+            select
+            size="small"
+            label="Status"
+            value={supportStatusFilter}
+            onChange={event =>
+              setSupportStatusFilter(
+                event.target.value
+              )
+            }
+            sx={{
+              minWidth: {
+                xs: '100%',
+                md: 180,
+              },
+            }}
+          >
+            <MenuItem value="all">
+              All statuses
+            </MenuItem>
+            <MenuItem value="open">
+              Open
+            </MenuItem>
+            <MenuItem value="pending">
+              Pending
+            </MenuItem>
+            <MenuItem value="in_progress">
+              In Progress
+            </MenuItem>
+            <MenuItem value="resolved">
+              Resolved
+            </MenuItem>
+            <MenuItem value="closed">
+              Closed
+            </MenuItem>
+          </TextField>
+
+          <Button
+            variant="outlined"
+            onClick={loadSupportTickets}
+            disabled={supportLoading}
+            sx={{
+              minWidth: 110,
+              textTransform: 'none',
+              borderColor:
+                ZENIMONIES.border,
+              color:
+                ZENIMONIES.green,
+              fontWeight: 750,
+            }}
+          >
+            Search
+          </Button>
+        </Stack>
+
+        {supportLoading ? (
+          <Box
+            sx={{
+              py: 8,
+              display: 'flex',
+              justifyContent:
+                'center',
+            }}
+          >
+            <CircularProgress
+              size={30}
+              sx={{
+                color:
+                  ZENIMONIES.green,
+              }}
+            />
+          </Box>
+        ) : (
+          <TableContainer>
+            <Table
+              size="small"
+              sx={{
+                minWidth: 950,
+              }}
+            >
+              <TableHead>
+                <TableRow>
+                  {[
+                    'Ticket',
+                    'Customer',
+                    'Subject',
+                    'Priority',
+                    'Status',
+                    'Created',
+                    'Action',
+                  ].map(heading => (
+                    <TableCell
+                      key={heading}
+                      sx={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color:
+                          ZENIMONIES.textMuted,
+                        background:
+                          '#FAFBFA',
+                        textTransform:
+                          'uppercase',
+                      }}
+                    >
+                      {heading}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {supportTickets.map(
+                  ticket => (
+                    <TableRow
+                      key={ticket.id}
+                      hover
+                    >
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 11,
+                            fontWeight: 800,
+                            color:
+                              ZENIMONIES.green,
+                          }}
+                        >
+                          {ticket.ticket_number ||
+                            ticket.id}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {ticket.customer_name ||
+                            ticket.full_name ||
+                            'Customer'}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 11,
+                          }}
+                        >
+                          {ticket.subject ||
+                            'Support case'}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={
+                            ticket.priority ||
+                            'normal'
+                          }
+                          sx={{
+                            fontSize: 9,
+                            fontWeight: 800,
+                            textTransform:
+                              'capitalize',
+                          }}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <StatusChip
+                          status={
+                            ticket.status
+                          }
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 10,
+                            color:
+                              ZENIMONIES.textSecondary,
+                            whiteSpace:
+                              'nowrap',
+                          }}
+                        >
+                          {formatDate(
+                            ticket.created_at
+                          )}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            openSupportTicket(
+                              ticket.id
+                            )
+                          }
+                          sx={{
+                            textTransform:
+                              'none',
+                            color:
+                              ZENIMONIES.green,
+                            fontWeight: 750,
+                          }}
+                        >
+                          Review
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                )}
+
+                {supportTickets.length ===
+                  0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                    >
+                      <EmptyState
+                        title="No customer-care cases"
+                        description="There are no support cases matching the current filters."
+                        icon={
+                          <SupportAgent />
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+/* ============================================================
+   ESCALATED CASES
+   ============================================================ */
+
+{section === 'escalated-cases' && (
+  <Box>
+    <SectionHeading
+      title="Escalated Cases"
+      description="Cases forwarded by Customer Care because administrative investigation or action is required."
+      action={
+        <Button
+          size="small"
+          startIcon={<Refresh />}
+          onClick={loadEscalatedTickets}
+          disabled={escalationLoading}
+          sx={{
+            textTransform: 'none',
+            color: ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Refresh
+        </Button>
+      }
+    />
+
+    <Alert
+      severity="warning"
+      sx={{
+        mb: 2,
+        borderRadius: 2,
+        fontSize: 11,
+      }}
+    >
+      Taking an escalated case transfers
+      administrative responsibility from
+      Customer Care to Administration.
+      All administrative actions must be
+      authenticated and audited.
+    </Alert>
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 1000,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Ticket',
+                  'Customer',
+                  'Complaint',
+                  'Status',
+                  'Escalated',
+                  'Action',
+                ].map(heading => (
+                  <TableCell
+                    key={heading}
+                    sx={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color:
+                        ZENIMONIES.textMuted,
+                      background:
+                        '#FAFBFA',
+                      textTransform:
+                        'uppercase',
+                    }}
+                  >
+                    {heading}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {escalatedTickets.map(
+                ticket => (
+                  <TableRow
+                    key={ticket.id}
+                    hover
+                  >
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          color:
+                            ZENIMONIES.green,
+                        }}
+                      >
+                        {ticket.ticket_number ||
+                          ticket.id}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {ticket.customer_name ||
+                          ticket.full_name ||
+                          'Customer'}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 11,
+                        }}
+                      >
+                        {ticket.subject ||
+                          'Escalated case'}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <StatusChip
+                        status={
+                          ticket.status
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color:
+                            ZENIMONIES.textSecondary,
+                        }}
+                      >
+                        {formatDate(
+                          ticket.escalated_at ||
+                            ticket.created_at
+                        )}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() =>
+                          openEscalatedTicket(
+                            ticket.id
+                          )
+                        }
+                        disabled={
+                          escalationLoading
+                        }
+                        sx={{
+                          textTransform:
+                            'none',
+                          color:
+                            ZENIMONIES.green,
+                          borderColor:
+                            ZENIMONIES.border,
+                          fontWeight: 750,
+                        }}
+                      >
+                        Review
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              )}
+
+              {escalatedTickets.length ===
+                0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                  >
+                    <EmptyState
+                      title="No escalated cases"
+                      description="Customer Care has not forwarded any cases requiring Administration."
+                      icon={
+                        <Warning />
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+/* ============================================================
+   CUSTOMER CARE AGENTS
+   ============================================================ */
+
+{section === 'customer-care-agents' && (
+  <Box>
+    <SectionHeading
+      title="Customer Care Agents"
+      description="Monitor the Customer Care team and keep administrative permissions separated."
+    />
+
+    <AdminCard>
+      <CardContent>
+        <Stack
+          direction={{
+            xs: 'column',
+            md: 'row',
+          }}
+          spacing={2}
+          alignItems={{
+            xs: 'flex-start',
+            md: 'center',
+          }}
+        >
+          <Box
+            sx={{
+              width: 52,
+              height: 52,
+              borderRadius: 2,
+              background:
+                '#eaf7f1',
+              color:
+                ZENIMONIES.green,
+              display: 'flex',
+              alignItems:
+                'center',
+              justifyContent:
+                'center',
+              fontSize: 23,
+              fontWeight: 900,
+            }}
+          >
+            ?
+          </Box>
+
+          <Box>
+            <Typography
+              sx={{
+                fontSize: 15,
+                fontWeight: 850,
+              }}
+            >
+              Customer Care access boundary
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 11,
+                lineHeight: 1.7,
+                color:
+                  ZENIMONIES.textSecondary,
+              }}
+            >
+              Customer Care agents are
+              authenticated separately and
+              must not have access to
+              customer balances, full account
+              numbers, PINs, OTPs, passwords,
+              card secrets, KYC approval,
+              transaction reversal or
+              administrative controls.
+            </Typography>
+          </Box>
+        </Stack>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Alert
+          severity="success"
+          sx={{
+            fontSize: 11,
+            borderRadius: 2,
+          }}
+        >
+          Customer Care and Administration
+          remain separate security roles.
+          Administrative actions stay inside
+          the Administration workspace.
+        </Alert>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+/* ============================================================
+   FRAUD
+   ============================================================ */
+
+{section === 'fraud' && (
+  <Box>
+    <SectionHeading
+      title="Fraud & Investigations"
+      description="Central risk workspace for reported transactions, investigations and compliance escalation."
+    />
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="Transaction Reports"
+          value="Review"
+          subtitle="Reported payment activity"
+          icon={<Warning />}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="Investigations"
+          value="Active"
+          subtitle="Administrative investigation queue"
+          icon={<Search />}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="Legal Escalation"
+          value="Controlled"
+          subtitle="Escalate only after investigation"
+          icon={<Gavel />}
+        />
+      </Grid>
+    </Grid>
+
+    <AdminCard>
+      <CardContent>
+        <Typography
+          sx={{
+            fontSize: 16,
+            fontWeight: 850,
+          }}
+        >
+          Fraud investigation workflow
+        </Typography>
+
+        <Typography
+          sx={{
+            mt: 0.75,
+            fontSize: 11,
+            lineHeight: 1.7,
+            color:
+              ZENIMONIES.textSecondary,
+          }}
+        >
+          Customer-reported transactions
+          should enter an investigation case.
+          A report does not automatically mean
+          that the customer or transaction is
+          fraudulent.
+        </Typography>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Grid
+          container
+          spacing={1.5}
+        >
+          {[
+            [
+              '01',
+              'Reported',
+              'Transaction has been reported for investigation.',
+            ],
+            [
+              '02',
+              'Investigating',
+              'Administration reviews transaction details, timeline and related activity.',
+            ],
+            [
+              '03',
+              'Compliance Review',
+              'Suspicious activity can be escalated to Compliance.',
+            ],
+            [
+              '04',
+              'Legal Escalation',
+              'Confirmed matters may be escalated through the approved legal workflow.',
+            ],
+          ].map(
+            ([number, title, description]) => (
+              <Grid
+                item
+                xs={12}
+                sm={6}
+                key={number}
+              >
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 1.75,
+                    borderRadius: 2,
+                    borderColor:
+                      ZENIMONIES.border,
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    spacing={1.25}
+                  >
+                    <Box
+                      sx={{
+                        width: 30,
+                        height: 30,
+                        borderRadius:
+                          '9px',
+                        background:
+                          '#eaf7f1',
+                        color:
+                          ZENIMONIES.green,
+                        display:
+                          'flex',
+                        alignItems:
+                          'center',
+                        justifyContent:
+                          'center',
+                        fontSize: 10,
+                        fontWeight: 900,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {number}
+                    </Box>
+
+                    <Box>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {title}
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          mt: 0.35,
+                          fontSize: 10,
+                          lineHeight: 1.6,
+                          color:
+                            ZENIMONIES.textSecondary,
+                        }}
+                      >
+                        {description}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Paper>
+              </Grid>
+            )
+          )}
+        </Grid>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+/* ============================================================
+   COMPLIANCE
+   ============================================================ */
+
+{section === 'compliance' && (
+  <Box>
+    <SectionHeading
+      title="Compliance"
+      description="Monitor KYC, transaction risk and regulatory-control workflows."
+    />
+
+    <Grid
+      container
+      spacing={1.75}
+      sx={{ mb: 2 }}
+    >
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="KYC Queue"
+          value={kycRecords
+            .filter(
+              record =>
+                String(
+                  record.bvn_verification_status ||
+                    record.id_verification_status ||
+                    record.tier_3_verification_status ||
+                    ''
+                ).toLowerCase() ===
+                'pending'
+            )
+            .length.toLocaleString()}
+          subtitle="Verification records requiring review"
+          icon={<VerifiedUser />}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="Risk Controls"
+          value="Active"
+          subtitle="Administrative controls enabled"
+          icon={<Security />}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="Auditability"
+          value="Enabled"
+          subtitle="Administrative actions are logged"
+          icon={<History />}
+        />
+      </Grid>
+    </Grid>
+
+    <AdminCard>
+      <CardContent>
+        <Typography
+          sx={{
+            fontSize: 16,
+            fontWeight: 850,
+          }}
+        >
+          Compliance control centre
+        </Typography>
+
+        <Typography
+          sx={{
+            mt: 0.75,
+            fontSize: 11,
+            lineHeight: 1.7,
+            color:
+              ZENIMONIES.textSecondary,
+          }}
+        >
+          Compliance activity should remain
+          evidence-based and auditable. KYC
+          decisions, fraud investigations,
+          administrative actions and relevant
+          escalations should have a clear
+          history.
+        </Typography>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Stack spacing={1}>
+          {[
+            'KYC verification and rejection decisions',
+            'Suspicious transaction investigation',
+            'Fraud and legal escalation',
+            'Administrative account actions',
+            'Customer Care administrative escalations',
+            'Audit history and investigation notes',
+          ].map(item => (
+            <Stack
+              key={item}
+              direction="row"
+              spacing={1}
+              alignItems="center"
+            >
+              <CheckCircle
+                sx={{
+                  fontSize: 16,
+                  color:
+                    ZENIMONIES.green,
+                }}
+              />
+
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 650,
+                }}
+              >
+                {item}
+              </Typography>
+            </Stack>
+          ))}
+        </Stack>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+/* ============================================================
+   AUDIT LOGS
+   ============================================================ */
+
+{section === 'audit' && (
+  <Box>
+    <SectionHeading
+      title="Audit Logs"
+      description="Administrative activity and security events recorded for accountability."
+    />
+
+    <AdminCard>
+      <CardContent>
+        <Stack
+          direction={{
+            xs: 'column',
+            md: 'row',
+          }}
+          spacing={1.5}
+          alignItems={{
+            xs: 'flex-start',
+            md: 'center',
+          }}
+        >
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              borderRadius: 2,
+              background:
+                '#eaf7f1',
+              color:
+                ZENIMONIES.green,
+              display: 'flex',
+              alignItems:
+                'center',
+              justifyContent:
+                'center',
+              fontSize: 21,
+              fontWeight: 900,
+            }}
+          >
+            #
+          </Box>
+
+          <Box>
+            <Typography
+              sx={{
+                fontSize: 15,
+                fontWeight: 850,
+              }}
+            >
+              Audit trail
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 11,
+                lineHeight: 1.7,
+                color:
+                  ZENIMONIES.textSecondary,
+              }}
+            >
+              Administrative actions such as
+              account status changes, KYC
+              decisions, fraud reports and
+              support escalations should be
+              retained in the audit system.
+            </Typography>
+          </Box>
+        </Stack>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Alert
+          severity="info"
+          sx={{
+            fontSize: 11,
+            borderRadius: 2,
+          }}
+        >
+          Audit records are not customer
+          transaction records. They document
+          who performed an administrative
+          action, when it occurred and what
+          action was taken.
+        </Alert>
+
+        <Box
+          sx={{
+            mt: 2,
+            p: 2,
+            borderRadius: 2,
+            background:
+              '#FAFBFA',
+            border:
+              `1px solid ${ZENIMONIES.border}`,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 11,
+              fontWeight: 800,
+            }}
+          >
+            Recommended audit events
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.75,
+              fontSize: 10,
+              lineHeight: 1.7,
+              color:
+                ZENIMONIES.textSecondary,
+            }}
+          >
+            Login • Logout • KYC decision •
+            Account status change • Transaction
+            fraud report • Customer Care
+            escalation • Administrative
+            takeover • Financial reversal •
+            Revenue settlement • Security
+            configuration.
+          </Typography>
+        </Box>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)} 
+           /* ============================================================
+   PART 8 — REVENUE / REVENUE LEDGER / SECURITY / SETTINGS
+   ============================================================ */
+
+/* ============================================================
+   REVENUE & PROFIT
+   ============================================================ */
+
+{section === 'revenue' && (
+  <Box>
+    <SectionHeading
+      title="Revenue & Profit"
+      description="Monitor ZENIMONIES service revenue, provider costs, margins and settlement availability."
+    />
+
+    <Alert
+      severity="info"
+      sx={{
+        mb: 2,
+        borderRadius: 2,
+        fontSize: 11,
+      }}
+    >
+      Revenue is separate from customer funds.
+      Customer charges, provider costs and
+      ZENIMONIES revenue must be tracked
+      independently. Gross fees must not be
+      treated as profit automatically.
+    </Alert>
+
+    <Grid
+      container
+      spacing={1.5}
+      sx={{ mb: 2 }}
+    >
+      <Grid item xs={12} sm={6} md={3}>
+        <StatCard
+          title="Today's Revenue"
+          value="₦0.00"
+          subtitle="Net recorded service revenue"
+          icon={<TrendingUp />}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={6} md={3}>
+        <StatCard
+          title="This Month"
+          value="₦0.00"
+          subtitle="Month-to-date revenue"
+          icon={<CalendarToday />}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={6} md={3}>
+        <StatCard
+          title="Provider Costs"
+          value="₦0.00"
+          subtitle="Recorded provider expenses"
+          icon={<AccountBalance />}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={6} md={3}>
+        <StatCard
+          title="Available Settlement"
+          value="₦0.00"
+          subtitle="Approved revenue available for settlement"
+          icon={<Payments />}
+        />
+      </Grid>
+    </Grid>
+
+    <AdminCard>
+      <CardContent>
+        <Typography
+          sx={{
+            fontSize: 16,
+            fontWeight: 850,
+            color: ZENIMONIES.textPrimary,
+          }}
+        >
+          Revenue sources
+        </Typography>
+
+        <Typography
+          sx={{
+            mt: 0.5,
+            mb: 2,
+            fontSize: 11,
+            color: ZENIMONIES.textSecondary,
+          }}
+        >
+          Revenue should be calculated from
+          approved financial records rather than
+          frontend estimates.
+        </Typography>
+
+        <Grid
+          container
+          spacing={1.25}
+        >
+          {[
+            [
+              'Transfer Fees',
+              'Bank transfer service charges',
+            ],
+            [
+              'Withdrawal Fees',
+              'Customer withdrawal service charges',
+            ],
+            [
+              'Bill Payment Fees',
+              'Electricity, cable, internet and other bill services',
+            ],
+            [
+              'Airtime & Data',
+              'Airtime and data service margin',
+            ],
+            [
+              'Gift Cards',
+              'Approved gift-card margin or service fee',
+            ],
+            [
+              'POS Fees',
+              'Approved POS service charges',
+            ],
+          ].map(
+            ([title, description]) => (
+              <Grid
+                item
+                xs={12}
+                sm={6}
+                md={4}
+                key={title}
+              >
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 1.75,
+                    height: '100%',
+                    borderRadius: 2,
+                    borderColor:
+                      ZENIMONIES.border,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {title}
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.5,
+                      fontSize: 10,
+                      lineHeight: 1.6,
+                      color:
+                        ZENIMONIES.textSecondary,
+                    }}
+                  >
+                    {description}
+                  </Typography>
+                </Paper>
+              </Grid>
+            )
+          )}
+        </Grid>
+
+        <Divider sx={{ my: 2.5 }} />
+
+        <Stack
+          direction={{
+            xs: 'column',
+            md: 'row',
+          }}
+          spacing={1.5}
+        >
+          <Button
+            variant="outlined"
+            onClick={() =>
+              handleNavigation(
+                'revenue-ledger'
+              )
+            }
+            sx={{
+              textTransform: 'none',
+              borderColor:
+                ZENIMONIES.border,
+              color:
+                ZENIMONIES.green,
+              fontWeight: 750,
+            }}
+          >
+            Open Revenue Ledger
+          </Button>
+
+          <Button
+            variant="contained"
+            disabled
+            sx={{
+              textTransform: 'none',
+              background:
+                ZENIMONIES.green,
+              fontWeight: 750,
+            }}
+          >
+            Withdraw Revenue
+          </Button>
+        </Stack>
+
+        <Typography
+          sx={{
+            mt: 1,
+            fontSize: 10,
+            color:
+              ZENIMONIES.textMuted,
+          }}
+        >
+          Revenue withdrawal will be enabled
+          only after the secure backend settlement
+          workflow is connected.
+        </Typography>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+/* ============================================================
+   REVENUE LEDGER
+   ============================================================ */
+
+{section === 'revenue-ledger' && (
+  <Box>
+    <SectionHeading
+      title="Revenue Ledger"
+      description="Detailed ledger of customer charges, provider costs and ZENIMONIES revenue."
+      action={
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() =>
+            handleNavigation(
+              'revenue'
+            )
+          }
+          sx={{
+            textTransform: 'none',
+            borderColor:
+              ZENIMONIES.border,
+            color:
+              ZENIMONIES.green,
+            fontWeight: 750,
+          }}
+        >
+          Revenue Overview
+        </Button>
+      }
+    />
+
+    <AdminCard>
+      <CardContent
+        sx={{
+          p: 0,
+          '&:last-child': {
+            pb: 0,
+          },
+        }}
+      >
+        <TableContainer>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 1050,
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                {[
+                  'Revenue Ref',
+                  'Source',
+                  'Customer Charge',
+                  'Provider Cost',
+                  'ZENIMONIES Revenue',
+                  'Transaction',
+                  'Date',
+                ].map(heading => (
+                  <TableCell
+                    key={heading}
+                    sx={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color:
+                        ZENIMONIES.textMuted,
+                      background:
+                        '#FAFBFA',
+                      textTransform:
+                        'uppercase',
+                    }}
+                  >
+                    {heading}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              <TableRow>
+                <TableCell
+                  colSpan={7}
+                >
+                  <EmptyState
+                    title="Revenue ledger is ready"
+                    description="Live revenue records will appear here once the revenue ledger backend is connected."
+                    icon={
+                      <AccountBalanceWallet />
+                    }
+                  />
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+/* ============================================================
+   SECURITY
+   ============================================================ */
+
+{section === 'security' && (
+  <Box>
+    <SectionHeading
+      title="Security"
+      description="Monitor administrator security events, suspicious activity and access controls."
+    />
+
+    <Grid
+      container
+      spacing={1.5}
+      sx={{ mb: 2 }}
+    >
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="Admin Access"
+          value="Protected"
+          subtitle="Administrator role validation"
+          icon={<Security />}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="Audit Trail"
+          value="Enabled"
+          subtitle="Administrative activity logging"
+          icon={<History />}
+        />
+      </Grid>
+
+      <Grid item xs={12} sm={4}>
+        <StatCard
+          title="2FA"
+          value="Next Phase"
+          subtitle="Admin two-factor security"
+          icon={<Lock />}
+        />
+      </Grid>
+    </Grid>
+
+    <AdminCard>
+      <CardContent>
+        <Stack
+          direction={{
+            xs: 'column',
+            md: 'row',
+          }}
+          spacing={2}
+        >
+          <Box
+            sx={{
+              width: 54,
+              height: 54,
+              borderRadius: 2,
+              background:
+                '#eaf7f1',
+              color:
+                ZENIMONIES.green,
+              display: 'flex',
+              alignItems:
+                'center',
+              justifyContent:
+                'center',
+              fontSize: 23,
+              fontWeight: 900,
+              flexShrink: 0,
+            }}
+          >
+            🔐
+          </Box>
+
+          <Box>
+            <Typography
+              sx={{
+                fontSize: 16,
+                fontWeight: 850,
+              }}
+            >
+              Administrator security
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 11,
+                lineHeight: 1.7,
+                color:
+                  ZENIMONIES.textSecondary,
+              }}
+            >
+              The Administration portal uses
+              administrator authentication and
+              role validation. Financial and
+              account-changing actions should
+              also be protected with audit logging,
+              current-state validation and
+              appropriate backend authorization.
+            </Typography>
+          </Box>
+        </Stack>
+
+        <Divider sx={{ my: 2 }} />
+
+        <Grid
+          container
+          spacing={1.25}
+        >
+          {[
+            [
+              'Admin authentication',
+              'JWT and administrator role validation',
+            ],
+            [
+              'Server sessions',
+              'Authenticated administrator sessions',
+            ],
+            [
+              'Audit logging',
+              'Important administrative operations are recorded',
+            ],
+            [
+              'Financial controls',
+              'Financial actions must be validated server-side',
+            ],
+            [
+              '2FA',
+              'Two-factor authentication will be added next',
+            ],
+            [
+              'Security monitoring',
+              'Suspicious administrative activity should be investigated',
+            ],
+          ].map(
+            ([title, description]) => (
+              <Grid
+                item
+                xs={12}
+                sm={6}
+                key={title}
+              >
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    borderColor:
+                      ZENIMONIES.border,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {title}
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.35,
+                      fontSize: 10,
+                      lineHeight: 1.6,
+                      color:
+                        ZENIMONIES.textSecondary,
+                    }}
+                  >
+                    {description}
+                  </Typography>
+                </Paper>
+              </Grid>
+            )
+          )}
+        </Grid>
+      </CardContent>
+    </AdminCard>
+  </Box>
+)}
+
+/* ============================================================
+   ADMIN SETTINGS
+   ============================================================ */
+
+{section === 'settings' && (
+  <Box>
+    <SectionHeading
+      title="Admin Settings"
+      description="Manage administrator preferences, security configuration and operational controls."
+    />
+
+    <Grid
+      container
+      spacing={1.75}
+    >
+      <Grid item xs={12} md={7}>
+        <AdminCard>
+          <CardContent>
+            <Typography
+              sx={{
+                fontSize: 16,
+                fontWeight: 850,
+              }}
+            >
+              Administrator profile
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                mb: 2,
+                fontSize: 11,
+                color:
+                  ZENIMONIES.textSecondary,
+              }}
+            >
+              Your administrator identity is
+              authenticated through the secure
+              Administration login.
+            </Typography>
+
+            <Stack spacing={1.25}>
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  borderColor:
+                    ZENIMONIES.border,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: 10,
+                    color:
+                      ZENIMONIES.textMuted,
+                  }}
+                >
+                  Role
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.25,
+                    fontSize: 13,
+                    fontWeight: 800,
+                  }}
+                >
+                  Administrator
+                </Typography>
+              </Paper>
+
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  borderColor:
+                    ZENIMONIES.border,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: 10,
+                    color:
+                      ZENIMONIES.textMuted,
+                  }}
+                >
+                  Portal
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.25,
+                    fontSize: 13,
+                    fontWeight: 800,
+                  }}
+                >
+                  ZENIMONIES Banking Administration
+                </Typography>
+              </Paper>
+            </Stack>
+          </CardContent>
+        </AdminCard>
+      </Grid>
+
+      <Grid item xs={12} md={5}>
+        <AdminCard>
+          <CardContent>
+            <Typography
+              sx={{
+                fontSize: 16,
+                fontWeight: 850,
+              }}
+            >
+              Security settings
+            </Typography>
+
+            <Stack
+              spacing={1}
+              sx={{ mt: 2 }}
+            >
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  borderColor:
+                    ZENIMONIES.border,
+                }}
+              >
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                >
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: 12,
+                        fontWeight: 800,
+                      }}
+                    >
+                      Administrator 2FA
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.25,
+                        fontSize: 10,
+                        color:
+                          ZENIMONIES.textSecondary,
+                      }}
+                    >
+                      Coming next
+                    </Typography>
+                  </Box>
+
+                  <Chip
+                    size="small"
+                    label="Planned"
+                    sx={{
+                      fontWeight: 800,
+                      color:
+                        ZENIMONIES.green,
+                      background:
+                        '#eaf7f1',
+                    }}
+                  />
+                </Stack>
+              </Paper>
+
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  borderColor:
+                    ZENIMONIES.border,
+                }}
+              >
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                >
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: 12,
+                        fontWeight: 800,
+                      }}
+                    >
+                      Audit logging
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.25,
+                        fontSize: 10,
+                        color:
+                          ZENIMONIES.textSecondary,
+                      }}
+                    >
+                      Administrative actions
+                    </Typography>
+                  </Box>
+
+                  <Chip
+                    size="small"
+                    label="Active"
+                    color="success"
+                    sx={{
+                      fontWeight: 800,
+                    }}
+                  />
+                </Stack>
+              </Paper>
+            </Stack>
+          </CardContent>
+        </AdminCard>
+      </Grid>
+    </Grid>
+  </Box>
+)}   
             </>
           )}
         </Container>
