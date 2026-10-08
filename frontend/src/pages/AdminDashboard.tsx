@@ -873,6 +873,16 @@ const AdminDashboard: React.FC<{
     loadAll();
   }, [loadAll]);
 
+  useEffect(() => {
+  if (
+    section === 'administrators' ||
+    section === 'security' ||
+    section === 'settings'
+  ) {
+    loadAdministrationData();
+  }
+}, [section]);
+
   /* ==========================================================
      FILTERED CUSTOMERS
      ========================================================== */
@@ -9725,6 +9735,993 @@ const renderRevenueSection =
         return renderRevenueProfit();
     }
   };
+  // ============================================================
+// ZENIMONIES BANKING — PART 7
+// ADMINISTRATION
+// Administrators • Security • Settings
+// ============================================================
+
+type AdminRecord = {
+  id?: string;
+  full_name?: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  status?: string;
+  last_login?: string;
+  lastLogin?: string;
+  created_at?: string;
+  createdAt?: string;
+};
+
+type SecurityEvent = {
+  id?: string;
+  event_type?: string;
+  event?: string;
+  description?: string;
+  severity?: string;
+  created_at?: string;
+  createdAt?: string;
+};
+
+const [adminRecords, setAdminRecords] = useState<AdminRecord[]>([]);
+const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
+const [administrationLoading, setAdministrationLoading] = useState(false);
+const [adminSearch, setAdminSearch] = useState('');
+const [adminStatusFilter, setAdminStatusFilter] = useState('all');
+
+const getAdminRoleLabel = (role?: string) => {
+  switch (String(role || '').toLowerCase()) {
+    case 'admin':
+      return 'Administrator';
+    case 'super_admin':
+      return 'Super Administrator';
+    case 'compliance':
+      return 'Compliance';
+    case 'finance':
+      return 'Finance';
+    case 'customer_care':
+      return 'Customer Care';
+    default:
+      return role || 'Administrator';
+  }
+};
+
+const getAdminStatusLabel = (status?: string) => {
+  const normalized = String(status || '').toLowerCase();
+
+  if (normalized === 'active') return 'Active';
+  if (normalized === 'suspended') return 'Suspended';
+  if (normalized === 'disabled') return 'Disabled';
+
+  return status || 'Unknown';
+};
+
+const getAdminStatusClass = (status?: string) => {
+  const normalized = String(status || '').toLowerCase();
+
+  if (normalized === 'active') {
+    return {
+      background: '#E8F5EF',
+      color: '#0B6B4F',
+    };
+  }
+
+  if (normalized === 'suspended' || normalized === 'disabled') {
+    return {
+      background: '#FDECEC',
+      color: '#B42318',
+    };
+  }
+
+  return {
+    background: '#F2F4F3',
+    color: BRAND.muted,
+  };
+};
+
+const formatAdminDate = (value?: string) => {
+  if (!value) return '—';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString();
+};
+
+const filteredAdminRecords = useMemo(() => {
+  const search = adminSearch.trim().toLowerCase();
+
+  return adminRecords.filter((admin) => {
+    const matchesSearch =
+      !search ||
+      String(admin.full_name || admin.name || '')
+        .toLowerCase()
+        .includes(search) ||
+      String(admin.email || '')
+        .toLowerCase()
+        .includes(search) ||
+      String(admin.role || '')
+        .toLowerCase()
+        .includes(search);
+
+    const normalizedStatus = String(admin.status || '').toLowerCase();
+
+    const matchesStatus =
+      adminStatusFilter === 'all' ||
+      normalizedStatus === adminStatusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+});
+
+const loadAdministrationData = async () => {
+  try {
+    setAdministrationLoading(true);
+
+    const token = localStorage.getItem('adminToken');
+
+    if (!token) {
+      setAdminRecords([]);
+      setSecurityEvents([]);
+      return;
+    }
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+
+    /*
+     * These endpoints are intentionally treated as optional here.
+     * The Administration UI must not invent administrator/security
+     * data if the backend has not exposed those endpoints yet.
+     */
+
+    try {
+      const adminResponse = await fetch(
+        `${API_BASE}/admin/administrators`,
+        {
+          headers,
+        }
+      );
+
+      if (adminResponse.ok) {
+        const adminData = await adminResponse.json();
+
+        setAdminRecords(
+          Array.isArray(adminData)
+            ? adminData
+            : Array.isArray(adminData?.administrators)
+            ? adminData.administrators
+            : Array.isArray(adminData?.admins)
+            ? adminData.admins
+            : []
+        );
+      }
+    } catch {
+      setAdminRecords([]);
+    }
+
+    try {
+      const securityResponse = await fetch(
+        `${API_BASE}/admin/security/events`,
+        {
+          headers,
+        }
+      );
+
+      if (securityResponse.ok) {
+        const securityData = await securityResponse.json();
+
+        setSecurityEvents(
+          Array.isArray(securityData)
+            ? securityData
+            : Array.isArray(securityData?.events)
+            ? securityData.events
+            : Array.isArray(securityData?.security_events)
+            ? securityData.security_events
+            : []
+        );
+      }
+    } catch {
+      setSecurityEvents([]);
+    }
+  } finally {
+    setAdministrationLoading(false);
+  }
+};
+
+const renderAdministrationHeader = (
+  title: string,
+  description: string
+) => {
+  return (
+    <Box
+      sx={{
+        mb: 3,
+        display: 'flex',
+        alignItems: {
+          xs: 'flex-start',
+          md: 'center',
+        },
+        justifyContent: 'space-between',
+        gap: 2,
+        flexDirection: {
+          xs: 'column',
+          md: 'row',
+        },
+      }}
+    >
+      <Box>
+        <Typography
+          sx={{
+            fontSize: {
+              xs: 22,
+              md: 26,
+            },
+            fontWeight: 800,
+            color: BRAND.text,
+          }}
+        >
+          {title}
+        </Typography>
+
+        <Typography
+          sx={{
+            mt: 0.5,
+            color: BRAND.muted,
+            fontSize: 14,
+          }}
+        >
+          {description}
+        </Typography>
+      </Box>
+
+      <Box
+        sx={{
+          px: 1.5,
+          py: 0.8,
+          borderRadius: 2,
+          background: BRAND.greenLight,
+          color: BRAND.green,
+          fontSize: 12,
+          fontWeight: 700,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        ZENIMONIES ADMINISTRATION
+      </Box>
+    </Box>
+  );
+};
+
+const renderAdministrators = () => {
+  return (
+    <Box>
+      {renderAdministrationHeader(
+        'Administrators',
+        'Manage authorized ZENIMONIES administration accounts and access.'
+      )}
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(3, 1fr)',
+          },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2,
+            border: `1px solid ${BRAND.border}`,
+            borderRadius: 3,
+            background: BRAND.white,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 12,
+              color: BRAND.muted,
+              fontWeight: 700,
+            }}
+          >
+            ADMINISTRATORS
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.5,
+              fontSize: 25,
+              fontWeight: 800,
+              color: BRAND.text,
+            }}
+          >
+            {adminRecords.length}
+          </Typography>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2,
+            border: `1px solid ${BRAND.border}`,
+            borderRadius: 3,
+            background: BRAND.white,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 12,
+              color: BRAND.muted,
+              fontWeight: 700,
+            }}
+          >
+            ACTIVE
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.5,
+              fontSize: 25,
+              fontWeight: 800,
+              color: BRAND.green,
+            }}
+          >
+            {
+              adminRecords.filter(
+                (admin) =>
+                  String(admin.status || '').toLowerCase() ===
+                  'active'
+              ).length
+            }
+          </Typography>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2,
+            border: `1px solid ${BRAND.border}`,
+            borderRadius: 3,
+            background: BRAND.white,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 12,
+              color: BRAND.muted,
+              fontWeight: 700,
+            }}
+          >
+            SECURITY EVENTS
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.5,
+              fontSize: 25,
+              fontWeight: 800,
+              color: BRAND.text,
+            }}
+          >
+            {securityEvents.length}
+          </Typography>
+        </Paper>
+      </Box>
+
+      <Paper
+        elevation={0}
+        sx={{
+          border: `1px solid ${BRAND.border}`,
+          borderRadius: 3,
+          overflow: 'hidden',
+          background: BRAND.white,
+        }}
+      >
+        <Box
+          sx={{
+            p: 2,
+            display: 'flex',
+            gap: 1.5,
+            flexDirection: {
+              xs: 'column',
+              md: 'row',
+            },
+          }}
+        >
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Search administrator..."
+            value={adminSearch}
+            onChange={(event) =>
+              setAdminSearch(event.target.value)
+            }
+          />
+
+          <TextField
+            select
+            size="small"
+            value={adminStatusFilter}
+            onChange={(event) =>
+              setAdminStatusFilter(event.target.value)
+            }
+            sx={{
+              minWidth: {
+                xs: '100%',
+                md: 170,
+              },
+            }}
+          >
+            <MenuItem value="all">All statuses</MenuItem>
+            <MenuItem value="active">Active</MenuItem>
+            <MenuItem value="suspended">Suspended</MenuItem>
+            <MenuItem value="disabled">Disabled</MenuItem>
+          </TextField>
+        </Box>
+
+        <Divider />
+
+        {administrationLoading ? (
+          <Box
+            sx={{
+              p: 5,
+              textAlign: 'center',
+            }}
+          >
+            <CircularProgress
+              size={26}
+              sx={{ color: BRAND.green }}
+            />
+          </Box>
+        ) : filteredAdminRecords.length === 0 ? (
+          <Box
+            sx={{
+              p: 5,
+              textAlign: 'center',
+            }}
+          >
+            <Typography
+              sx={{
+                fontWeight: 700,
+                color: BRAND.text,
+              }}
+            >
+              No administrator records available
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 13,
+                color: BRAND.muted,
+              }}
+            >
+              Administrator management will appear here once
+              the administration API is connected.
+            </Typography>
+          </Box>
+        ) : (
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Administrator</TableCell>
+                  <TableCell>Role</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Last Login</TableCell>
+                  <TableCell>Created</TableCell>
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {filteredAdminRecords.map((admin, index) => {
+                  const statusStyle =
+                    getAdminStatusClass(admin.status);
+
+                  return (
+                    <TableRow key={admin.id || index}>
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontWeight: 700,
+                            color: BRAND.text,
+                          }}
+                        >
+                          {admin.full_name ||
+                            admin.name ||
+                            'Administrator'}
+                        </Typography>
+
+                        <Typography
+                          sx={{
+                            fontSize: 12,
+                            color: BRAND.muted,
+                          }}
+                        >
+                          {admin.email || '—'}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        {getAdminRoleLabel(admin.role)}
+                      </TableCell>
+
+                      <TableCell>
+                        <Box
+                          sx={{
+                            display: 'inline-flex',
+                            px: 1,
+                            py: 0.45,
+                            borderRadius: 1.5,
+                            background:
+                              statusStyle.background,
+                            color: statusStyle.color,
+                            fontSize: 12,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {getAdminStatusLabel(admin.status)}
+                        </Box>
+                      </TableCell>
+
+                      <TableCell>
+                        {formatAdminDate(
+                          admin.last_login ||
+                            admin.lastLogin
+                        )}
+                      </TableCell>
+
+                      <TableCell>
+                        {formatAdminDate(
+                          admin.created_at ||
+                            admin.createdAt
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </Box>
+        )}
+      </Paper>
+    </Box>
+  );
+};
+
+const renderSecurity = () => {
+  return (
+    <Box>
+      {renderAdministrationHeader(
+        'Security',
+        'Monitor administrator authentication, sessions and security controls.'
+      )}
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            md: 'repeat(3, 1fr)',
+          },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2.2,
+            borderRadius: 3,
+            border: `1px solid ${BRAND.border}`,
+            background: BRAND.white,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: BRAND.muted,
+            }}
+          >
+            ADMIN 2FA
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 1,
+              fontSize: 18,
+              fontWeight: 800,
+              color: '#B54708',
+            }}
+          >
+            Setup Required
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.5,
+              fontSize: 12,
+              color: BRAND.muted,
+            }}
+          >
+            Backend-enforced TOTP will be connected in the
+            security phase.
+          </Typography>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2.2,
+            borderRadius: 3,
+            border: `1px solid ${BRAND.border}`,
+            background: BRAND.white,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: BRAND.muted,
+            }}
+          >
+            SESSION SECURITY
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 1,
+              fontSize: 18,
+              fontWeight: 800,
+              color: BRAND.green,
+            }}
+          >
+            Protected
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.5,
+              fontSize: 12,
+              color: BRAND.muted,
+            }}
+          >
+            Administrator sessions are protected by the
+            existing server-side session middleware.
+          </Typography>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2.2,
+            borderRadius: 3,
+            border: `1px solid ${BRAND.border}`,
+            background: BRAND.white,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: BRAND.muted,
+            }}
+          >
+            AUDIT TRAIL
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 1,
+              fontSize: 18,
+              fontWeight: 800,
+              color: BRAND.green,
+            }}
+          >
+            Enabled
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.5,
+              fontSize: 12,
+              color: BRAND.muted,
+            }}
+          >
+            Administrative activity should remain auditable.
+          </Typography>
+        </Paper>
+      </Box>
+
+      <Paper
+        elevation={0}
+        sx={{
+          border: `1px solid ${BRAND.border}`,
+          borderRadius: 3,
+          background: BRAND.white,
+          overflow: 'hidden',
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Typography
+            sx={{
+              fontWeight: 800,
+              color: BRAND.text,
+            }}
+          >
+            Recent Security Events
+          </Typography>
+
+          <Typography
+            sx={{
+              mt: 0.4,
+              fontSize: 13,
+              color: BRAND.muted,
+            }}
+          >
+            Authentication and administrative security activity.
+          </Typography>
+        </Box>
+
+        <Divider />
+
+        {securityEvents.length === 0 ? (
+          <Box
+            sx={{
+              p: 5,
+              textAlign: 'center',
+            }}
+          >
+            <Typography
+              sx={{
+                fontWeight: 700,
+                color: BRAND.text,
+              }}
+            >
+              No security events available
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 13,
+                color: BRAND.muted,
+              }}
+            >
+              Security events will appear here once the
+              security-events backend is connected.
+            </Typography>
+          </Box>
+        ) : (
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Event</TableCell>
+                  <TableCell>Description</TableCell>
+                  <TableCell>Severity</TableCell>
+                  <TableCell>Date</TableCell>
+                </TableRow>
+              </TableHead>
+
+              <TableBody>
+                {securityEvents.map((event, index) => (
+                  <TableRow key={event.id || index}>
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          fontWeight: 700,
+                          color: BRAND.text,
+                        }}
+                      >
+                        {event.event_type ||
+                          event.event ||
+                          'Security Event'}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell>
+                      {event.description || '—'}
+                    </TableCell>
+
+                    <TableCell>
+                      {event.severity || '—'}
+                    </TableCell>
+
+                    <TableCell>
+                      {formatAdminDate(
+                        event.created_at ||
+                          event.createdAt
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
+        )}
+      </Paper>
+    </Box>
+  );
+};
+
+const renderSettings = () => {
+  return (
+    <Box>
+      {renderAdministrationHeader(
+        'Settings',
+        'Manage ZENIMONIES administration and operational configuration.'
+      )}
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            md: 'repeat(2, 1fr)',
+          },
+          gap: 2,
+        }}
+      >
+        {[
+          {
+            title: 'Security Settings',
+            description:
+              'Administrator authentication, sessions, 2FA and security policies.',
+          },
+          {
+            title: 'Transaction Controls',
+            description:
+              'Operational rules governing transaction review and approval workflows.',
+          },
+          {
+            title: 'Service Configuration',
+            description:
+              'Configuration areas for airtime, bills, gift cards, POS and other services.',
+          },
+          {
+            title: 'Revenue Configuration',
+            description:
+              'Fee, provider-cost, partner-share and revenue accounting configuration.',
+          },
+          {
+            title: 'Notification Settings',
+            description:
+              'Administrative alerts, operational notifications and security alerts.',
+          },
+          {
+            title: 'System Preferences',
+            description:
+              'General administration preferences and system-level configuration.',
+          },
+        ].map((item) => (
+          <Paper
+            key={item.title}
+            elevation={0}
+            sx={{
+              p: 2.5,
+              borderRadius: 3,
+              border: `1px solid ${BRAND.border}`,
+              background: BRAND.white,
+            }}
+          >
+            <Typography
+              sx={{
+                fontWeight: 800,
+                color: BRAND.text,
+              }}
+            >
+              {item.title}
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.7,
+                fontSize: 13,
+                lineHeight: 1.6,
+                color: BRAND.muted,
+              }}
+            >
+              {item.description}
+            </Typography>
+
+            <Button
+              variant="outlined"
+              size="small"
+              sx={{
+                mt: 2,
+                borderColor: BRAND.border,
+                color: BRAND.green,
+                textTransform: 'none',
+                fontWeight: 700,
+              }}
+              onClick={() =>
+                setSuccessMessage(
+                  `${item.title} will be connected to the backend configuration module.`
+                )
+              }
+            >
+              Configure
+            </Button>
+          </Paper>
+        ))}
+      </Box>
+
+      <Paper
+        elevation={0}
+        sx={{
+          mt: 3,
+          p: 2.5,
+          borderRadius: 3,
+          border: `1px solid ${BRAND.border}`,
+          background: BRAND.greenLight,
+        }}
+      >
+        <Typography
+          sx={{
+            fontWeight: 800,
+            color: BRAND.green,
+          }}
+        >
+          Administrative Security Boundary
+        </Typography>
+
+        <Typography
+          sx={{
+            mt: 0.7,
+            fontSize: 13,
+            lineHeight: 1.7,
+            color: BRAND.text,
+          }}
+        >
+          Administrator settings must never provide a mechanism
+          to arbitrarily withdraw, transfer or debit customer
+          funds. Customer balances remain protected by the
+          financial ledger and backend authorization rules.
+          Company revenue settlement is handled separately from
+          customer funds.
+        </Typography>
+      </Paper>
+    </Box>
+  );
+};
+
+const renderAdministrationSection = () => {
+  useEffect(() => {
+    if (
+      section === 'administrators' ||
+      section === 'security' ||
+      section === 'settings'
+    ) {
+      loadAdministrationData();
+    }
+  }, [section]);
+
+  switch (section) {
+    case 'administrators':
+      return renderAdministrators();
+
+    case 'security':
+      return renderSecurity();
+
+    case 'settings':
+      return renderSettings();
+
+    default:
+      return renderAdministrators();
+  }
+};
   /* ============================================================
      RENDER SECTION
      ============================================================ */
@@ -9772,8 +10769,13 @@ case 'revenue':
 case 'revenue-ledger':
 case 'settlements':
   return renderRevenueSection();
+
+case 'administrators':
+case 'security':
+case 'settings':
+  return renderAdministrationSection();
      
-     default:
+      default:
         return renderOverview();
     }
   };
