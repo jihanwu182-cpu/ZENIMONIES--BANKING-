@@ -2397,24 +2397,15 @@ if (
 
       INNER JOIN users u
         ON u.id = a.user_id
-
-      WHERE
-        t.reference = $1
-
-        AND a.user_id <> $2
-
-        AND (
-          t.type = 'internal_transfer_received'
-          OR t.type = 'internal_transfer'
+        
         )
+      WHERE
+  t.reference = $1
 
-      ORDER BY
-        CASE
-          WHEN t.type = 'internal_transfer_received'
-            THEN 1
-          ELSE 2
-        END,
-        t.created_at ASC
+  AND a.user_id <> $2
+
+ORDER BY
+  t.created_at ASC
 
       LIMIT 1
       `,
