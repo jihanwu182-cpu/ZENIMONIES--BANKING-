@@ -41,6 +41,13 @@ import {
   Typography,
   useMediaQuery,
   useTheme,
+  Schedule,
+PointOfSale,
+ArrowForward,
+Verified,
+Warning,
+Gavel,
+CalendarToday,
 } from '@mui/material';
 
 import {
@@ -766,7 +773,42 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     ],
   },
 ];
+/* ============================================================
+   INFO DISPLAY
+   ============================================================ */
 
+const InfoDisplay: React.FC<{
+  label: string;
+  value: string;
+}> = ({
+  label,
+  value,
+}) => (
+  <Box>
+    <Typography
+      fontSize={11}
+      color="text.secondary"
+      fontWeight={700}
+      sx={{
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+      }}
+    >
+      {label}
+    </Typography>
+
+    <Typography
+      fontSize={14}
+      fontWeight={800}
+      sx={{
+        mt: 0.4,
+        wordBreak: 'break-word',
+      }}
+    >
+      {value}
+    </Typography>
+  </Box>
+);
 /* ============================================================
    MAIN COMPONENT
    ============================================================ */
