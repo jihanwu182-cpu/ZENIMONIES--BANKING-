@@ -2400,7 +2400,7 @@ if (
         
         )
       WHERE
-  t.reference = $1
+  t.reference = $1 || '-R'
 
   AND a.user_id <> $2
   
