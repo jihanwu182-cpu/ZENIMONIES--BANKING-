@@ -2403,6 +2403,8 @@ if (
   t.reference = $1
 
   AND a.user_id <> $2
+  
+AND t.type = 'internal_transfer_received'
 
 ORDER BY
   t.created_at ASC
