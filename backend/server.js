@@ -844,6 +844,174 @@ try {
     customerCareProvisioningError
   );
 }
+   // ============================================================
+// ZENIMONIES ADMIN ACCOUNT PROVISIONING
+// ============================================================
+//
+// Controlled bootstrap for the designated Administration
+// account.
+//
+// IMPORTANT:
+// - Only this exact email can be provisioned.
+// - Existing admin accounts are not changed.
+// - Password is stored as a bcrypt hash.
+// - This does not affect normal customers.
+// ============================================================
+
+try {
+  const adminEmail =
+    'admin@zenimonies.com';
+
+  const adminPassword =
+    'ZenAdmin#2026!Secure';
+
+  const bcrypt = require('bcryptjs');
+
+  const adminResult =
+    await pool.query(
+      `
+      SELECT
+        id,
+        email,
+        full_name,
+        role,
+        status,
+        password_hash
+      FROM users
+      WHERE LOWER(email) = LOWER($1)
+      LIMIT 1
+      `,
+      [adminEmail]
+    );
+
+  if (
+    adminResult.rows.length === 0
+  ) {
+    const passwordHash =
+      await bcrypt.hash(
+        adminPassword,
+        12
+      );
+
+    const insertResult =
+      await pool.query(
+        `
+        INSERT INTO users (
+          full_name,
+          email,
+          phone,
+          password_hash,
+          role,
+          status,
+          kyc_status,
+          is_verified
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          'admin',
+          'active',
+          'approved',
+          TRUE
+        )
+        RETURNING
+          id,
+          email,
+          full_name,
+          role,
+          status
+        `,
+        [
+          'ZENIMONIES Administrator',
+          adminEmail,
+          '08000000000',
+          passwordHash,
+        ]
+      );
+
+    console.log(
+      '============================================================'
+    );
+
+    console.log(
+      'ZENIMONIES ADMIN ACCOUNT CREATED'
+    );
+
+    console.log(
+      'Email:',
+      adminEmail
+    );
+
+    console.log(
+      'Role:',
+      adminResult.rows[0]?.role ||
+        insertResult.rows[0].role
+    );
+
+    console.log(
+      'Status:',
+      insertResult.rows[0].status
+    );
+
+    console.log(
+      '============================================================'
+    );
+  } else {
+    const existingAdmin =
+      adminResult.rows[0];
+
+    if (
+      existingAdmin.role !== 'admin'
+    ) {
+      console.error(
+        'ADMIN PROVISIONING STOPPED: designated email already belongs to a non-admin account.'
+      );
+    } else {
+      console.log(
+        '============================================================'
+      );
+
+      console.log(
+        'ZENIMONIES ADMIN ACCOUNT'
+      );
+
+      console.log(
+        'Email:',
+        existingAdmin.email
+      );
+
+      console.log(
+        'Name:',
+        existingAdmin.full_name
+      );
+
+      console.log(
+        'Role:',
+        existingAdmin.role
+      );
+
+      console.log(
+        'Status:',
+        existingAdmin.status
+      );
+
+      console.log(
+        'Admin account already exists. No changes made.'
+      );
+
+      console.log(
+        '============================================================'
+      );
+    }
+  }
+} catch (adminProvisioningError) {
+  console.error(
+    'Admin provisioning failed:',
+    adminProvisioningError
+  );
+} 
 // ========================================================
 // CUSTOMER CARE / SUPPORT DATABASE
 // ========================================================
