@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 
 import {
   Alert,
-  Avatar,
-  Badge,
   Box,
   Button,
   Card,
@@ -19,16 +21,10 @@ import {
   Drawer,
   Grid,
   IconButton,
-  InputAdornment,
   List,
   ListItemButton,
-  ListItemIcon,
   ListItemText,
-  MenuItem,
   Paper,
-  Select,
-  SelectChangeEvent,
-  Snackbar,
   Stack,
   Table,
   TableBody,
@@ -37,18 +33,22 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
-  Schedule,
-PointOfSale,
-ArrowForward,
-Verified,
-Warning,
-Gavel,
-CalendarToday,
 } from '@mui/material';
+
+import {
+  Schedule,
+  PointOfSale,
+  ArrowForward,
+  Verified,
+  Warning,
+  Gavel,
+  CalendarToday,
+} from '@mui/icons-material';
+
+import { useNavigate } from 'react-router-dom';
 
 import {
   AccountBalance,
