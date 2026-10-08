@@ -1176,7 +1176,316 @@ const getTransactions = async (req, res) => {
     });
   }
 };
+// ============================================================
+// GET SINGLE TRANSACTION
+// GET /api/admin/transactions/:id
+// ============================================================
 
+const getTransaction = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `
+      SELECT
+        t.id,
+        t.account_id,
+
+        a.account_number,
+        a.account_type,
+        a.currency AS account_currency,
+        a.status AS account_status,
+
+        u.id AS user_id,
+        u.full_name,
+        u.email,
+        u.phone,
+        u.kyc_status,
+        u.kyc_tier,
+        u.status AS user_status,
+
+        t.type,
+        t.amount,
+        t.currency,
+        t.reference,
+        t.description,
+        t.status,
+
+        t.balance_before,
+        t.balance_after,
+
+        t.created_at
+
+      FROM transactions t
+
+      INNER JOIN accounts a
+        ON a.id = t.account_id
+
+      INNER JOIN users u
+        ON u.id = a.user_id
+
+      WHERE t.id = $1
+
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      transaction: result.rows[0],
+    });
+  } catch (error) {
+    console.error(
+      'Admin get transaction error:',
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to load transaction',
+    });
+  }
+};
+
+
+// ============================================================
+// REPORT TRANSACTION AS FRAUD / SUSPICIOUS
+// POST /api/admin/transactions/:id/report-fraud
+// ============================================================
+
+const reportTransactionFraud = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { id } = req.params;
+
+    const reason = String(
+      req.body?.reason || ''
+    ).trim();
+
+    if (!reason) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'A reason is required when reporting a transaction.',
+      });
+    }
+
+    await client.query('BEGIN');
+
+    // ----------------------------------------------------------
+    // LOCK TRANSACTION
+    // ----------------------------------------------------------
+
+    const transactionResult =
+      await client.query(
+        `
+        SELECT
+          t.id,
+          t.account_id,
+          t.type,
+          t.amount,
+          t.currency,
+          t.reference,
+          t.description,
+          t.status,
+
+          a.account_number,
+          u.id AS customer_user_id,
+          u.full_name,
+          u.email
+
+        FROM transactions t
+
+        INNER JOIN accounts a
+          ON a.id = t.account_id
+
+        INNER JOIN users u
+          ON u.id = a.user_id
+
+        WHERE t.id = $1
+
+        FOR UPDATE
+        `,
+        [id]
+      );
+
+    if (
+      transactionResult.rows.length === 0
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found',
+      });
+    }
+
+    const transaction =
+      transactionResult.rows[0];
+
+    // ----------------------------------------------------------
+    // PREVENT DUPLICATE ACTIVE FRAUD CASE
+    // ----------------------------------------------------------
+
+    const existingCase =
+      await client.query(
+        `
+        SELECT
+          id,
+          case_number,
+          status
+        FROM fraud_cases
+        WHERE transaction_id = $1
+          AND status NOT IN (
+            'resolved',
+            'closed'
+          )
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [id]
+      );
+
+    if (existingCase.rows.length > 0) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        message:
+          'An active fraud investigation already exists for this transaction.',
+        fraud_case:
+          existingCase.rows[0],
+      });
+    }
+
+    // ----------------------------------------------------------
+    // GENERATE CASE NUMBER
+    // ----------------------------------------------------------
+
+    const caseNumber =
+      `ZEN-FRD-${Date.now()}-${Math.floor(
+        1000 + Math.random() * 9000
+      )}`;
+
+    const fraudResult =
+      await client.query(
+        `
+        INSERT INTO fraud_cases (
+          case_number,
+          transaction_id,
+          reported_by,
+          customer_user_id,
+          reason,
+          status,
+          compliance_status,
+          legal_status
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          'reported',
+          'not_reviewed',
+          'not_escalated'
+        )
+        RETURNING
+          id,
+          case_number,
+          transaction_id,
+          customer_user_id,
+          reason,
+          status,
+          compliance_status,
+          legal_status,
+          created_at
+        `,
+        [
+          caseNumber,
+          transaction.id,
+          req.userId,
+          transaction.customer_user_id,
+          reason,
+        ]
+      );
+
+    // ----------------------------------------------------------
+    // AUDIT LOG
+    // ----------------------------------------------------------
+
+    await client.query(
+      `
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description,
+        ip_address,
+        user_agent
+      )
+      VALUES (
+        $1,
+        'admin_transaction_fraud_reported',
+        $2,
+        $3,
+        $4
+      )
+      `,
+      [
+        req.userId,
+
+        `Transaction ${transaction.reference || transaction.id} was reported for fraud investigation. Fraud case: ${caseNumber}. Reason: ${reason}`,
+
+        req.ip || null,
+
+        req.get('user-agent') || null,
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      success: true,
+
+      message:
+        'Transaction reported successfully. A fraud investigation case has been created.',
+
+      fraud_case:
+        fraudResult.rows[0],
+    });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error(
+        'Fraud report rollback error:',
+        rollbackError
+      );
+    }
+
+    console.error(
+      'Admin transaction fraud report error:',
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Unable to report transaction for fraud investigation',
+    });
+  } finally {
+    client.release();
+  }
+};
 
 // ============================================================
 // GET AUDIT LOGS
@@ -1248,6 +1557,11 @@ module.exports = {
   verifyTier3,
   rejectTier3,
 
+  // Transactions
   getTransactions,
+  getTransaction,
+  reportTransactionFraud,
+
+  // Audit
   getAuditLogs,
 };
