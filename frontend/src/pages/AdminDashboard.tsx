@@ -1396,35 +1396,28 @@ const AdminDashboard: React.FC<{
 
   const renderOverview = () => {
     const customerCount =
-      dashboard?.totalUsers ??
-      customers.length;
+      dashboard?.totalUsers ?? customers.length;
 
-    const pendingCount =
-      pendingActions.reduce(
-        (total, item) =>
-          total + item.count,
-        0
-      );
+    const transactionCount =
+      dashboard?.totalTransactions ?? recentTransactions.length;
 
-    const transferVolume =
-      dashboard?.totalTransfers ??
-      0;
+    const pendingCount = pendingActions.reduce(
+      (total, item) => total + item.count,
+      0
+    );
+
+    const completedTransferTotal =
+      dashboard?.completedWithdrawals ??
+      dashboard?.totalWithdrawals;
 
     return (
-      <Stack spacing={2.5}>
-        {/* HEADER */}
-
+      <Stack spacing={{ xs: 2, md: 2.5 }} sx={{ minWidth: 0 }}>
+        {/* OVERVIEW HEADER */}
         <Stack
-          direction={{
-            xs: 'column',
-            lg: 'row',
-          }}
+          direction={{ xs: 'column', md: 'row' }}
           justifyContent="space-between"
-          alignItems={{
-            xs: 'flex-start',
-            lg: 'center',
-          }}
-          spacing={2}
+          alignItems={{ xs: 'flex-start', md: 'center' }}
+          spacing={1.5}
         >
           <Box>
             <Typography
@@ -1442,154 +1435,163 @@ const AdminDashboard: React.FC<{
             <Typography
               sx={{
                 mt: 0.4,
-                fontSize: {
-                  xs: 25,
-                  sm: 31,
-                },
+                fontSize: { xs: 23, sm: 28, md: 30 },
                 fontWeight: 850,
                 color: BRAND.text,
                 letterSpacing: -0.7,
+                lineHeight: 1.2,
               }}
             >
-              Good afternoon, Administrator.
+              Welcome back, Administrator
             </Typography>
 
             <Typography
               sx={{
-                mt: 0.45,
+                mt: 0.7,
                 fontSize: 13,
                 color: BRAND.muted,
+                lineHeight: 1.6,
               }}
             >
-              Monitor ZENIMONIES operations,
-              customers and financial activity
-              from one secure workspace.
+              Monitor customers, transactions and operational activity.
             </Typography>
           </Box>
 
           <SystemStatus />
         </Stack>
 
-        {/* KPI ROW */}
+        {/* COMPACT KPI CARDS */}
+        <Grid container spacing={1.5}>
+          {[
+            {
+              title: 'Customers',
+              value: formatNumber(customerCount),
+              subtitle: 'Registered customers',
+              icon: <Groups fontSize="small" />,
+              tone: BRAND.green,
+            },
+            {
+              title: 'Transactions',
+              value: formatNumber(transactionCount),
+              subtitle: 'Recorded transactions',
+              icon: <SwapHoriz fontSize="small" />,
+              tone: BRAND.dark,
+            },
+            {
+              title: 'Pending Actions',
+              value: formatNumber(pendingCount),
+              subtitle: 'Require attention',
+              icon: <WarningAmber fontSize="small" />,
+              tone: '#B54708',
+            },
+            {
+              title: 'Revenue',
+              value: '—',
+              subtitle: 'Awaiting verified revenue data',
+              icon: <TrendingUp fontSize="small" />,
+              tone: BRAND.green,
+            },
+          ].map((item) => (
+            <Grid item xs={6} md={3} key={item.title}>
+              <Card
+                sx={{
+                  ...pageCardSx,
+                  height: '100%',
+                  minWidth: 0,
+                  borderRadius: 2.5,
+                  transition: 'box-shadow 160ms ease, transform 160ms ease',
+                  '&:hover': {
+                    boxShadow: '0 8px 24px rgba(18, 56, 45, 0.08)',
+                    transform: 'translateY(-2px)',
+                  },
+                }}
+              >
+                <CardContent
+                  sx={{
+                    p: { xs: 1.5, sm: 2 },
+                    '&:last-child': { pb: { xs: 1.5, sm: 2 } },
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="flex-start"
+                    spacing={1}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: BRAND.muted,
+                        }}
+                      >
+                        {item.title}
+                      </Typography>
 
-        <Grid
-          container
-          spacing={1.75}
-        >
-          <Grid
-            item
-            xs={12}
-            sm={6}
-            lg={3}
-          >
-            <KpiCard
-              title="Customers"
-              value={formatNumber(
-                customerCount
-              )}
-              subtitle="Registered customers"
-              icon={<Groups fontSize="small" />}
-              trend="+8.4%"
-            />
-          </Grid>
+                      <Typography
+                        sx={{
+                          mt: 1,
+                          fontSize: { xs: 22, sm: 27 },
+                          lineHeight: 1.1,
+                          fontWeight: 850,
+                          color: BRAND.text,
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {item.value}
+                      </Typography>
+                    </Box>
 
-          <Grid
-            item
-            xs={12}
-            sm={6}
-            lg={3}
-          >
-            <KpiCard
-              title="Pending Actions"
-              value={formatNumber(
-                pendingCount
-              )}
-              subtitle="Requires attention"
-              icon={
-                <WarningAmber fontSize="small" />
-              }
-            />
-          </Grid>
+                    <Box
+                      sx={{
+                        width: 36,
+                        height: 36,
+                        flexShrink: 0,
+                        borderRadius: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: item.tone,
+                        backgroundColor: BRAND.greenLight,
+                      }}
+                    >
+                      {item.icon}
+                    </Box>
+                  </Stack>
 
-          <Grid
-            item
-            xs={12}
-            sm={6}
-            lg={3}
-          >
-            <KpiCard
-              title="Transfers"
-              value={formatMoney(
-                transferVolume
-              )}
-              subtitle="Transfer activity"
-              icon={
-                <SwapHoriz fontSize="small" />
-              }
-            />
-          </Grid>
-
-          <Grid
-            item
-            xs={12}
-            sm={6}
-            lg={3}
-          >
-            <KpiCard
-              title="Revenue"
-              value="—"
-              subtitle="Monthly performance"
-              icon={
-                <TrendingUp fontSize="small" />
-              }
-              trend="Target data connected in Revenue"
-            />
-          </Grid>
+                  <Typography
+                    sx={{
+                      mt: 1.25,
+                      fontSize: 10.5,
+                      color: BRAND.muted,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {item.subtitle}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
         </Grid>
 
-        {/* MAIN CENTER AREA */}
-
-        <Grid
-          container
-          spacing={1.75}
-          alignItems="stretch"
-        >
-          {/* CENTER REVENUE CHART */}
-
-          <Grid
-            item
-            xs={12}
-            lg={8}
-          >
+        {/* FINANCIAL PERFORMANCE + PENDING ACTIONS */}
+        <Grid container spacing={1.5} alignItems="stretch">
+          <Grid item xs={12} lg={8}>
             <Card
               sx={{
                 ...pageCardSx,
-                minHeight: {
-                  xs: 350,
-                  md: 420,
-                },
+                height: '100%',
+                borderRadius: 2.5,
               }}
             >
-              <CardContent
-                sx={{
-                  p: {
-                    xs: 2,
-                    md: 2.5,
-                  },
-                  height: '100%',
-                }}
-              >
+              <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
                 <Stack
-                  direction={{
-                    xs: 'column',
-                    sm: 'row',
-                  }}
+                  direction={{ xs: 'column', sm: 'row' }}
                   justifyContent="space-between"
-                  alignItems={{
-                    xs: 'flex-start',
-                    sm: 'center',
-                  }}
-                  spacing={1.5}
+                  alignItems={{ xs: 'flex-start', sm: 'center' }}
+                  spacing={1}
                 >
                   <Box>
                     <Typography
@@ -1598,8 +1600,7 @@ const AdminDashboard: React.FC<{
                         fontWeight: 800,
                         letterSpacing: 1,
                         color: BRAND.green,
-                        textTransform:
-                          'uppercase',
+                        textTransform: 'uppercase',
                       }}
                     >
                       Financial Performance
@@ -1607,235 +1608,140 @@ const AdminDashboard: React.FC<{
 
                     <Typography
                       sx={{
-                        mt: 0.4,
-                        fontSize: 20,
+                        mt: 0.5,
+                        fontSize: 19,
                         fontWeight: 800,
                         color: BRAND.text,
                       }}
                     >
-                      Revenue, Margin & Profit
+                      Revenue and costs
                     </Typography>
 
                     <Typography
-                      sx={{
-                        mt: 0.35,
-                        fontSize: 12,
-                        color: BRAND.muted,
-                      }}
+                      sx={{ mt: 0.5, fontSize: 12, color: BRAND.muted }}
                     >
-                      Revenue and provider-cost
-                      performance.
+                      Financial reporting will appear here when verified
+                      revenue data is connected.
                     </Typography>
                   </Box>
 
-                  <Stack
-                    direction="row"
-                    spacing={0.5}
-                  >
-                    {[
-                      '7D',
-                      '30D',
-                      '90D',
-                      'YTD',
-                    ].map((period, index) => (
-                      <Button
-                        key={period}
-                        size="small"
-                        variant={
-                          index === 1
-                            ? 'contained'
-                            : 'text'
-                        }
-                        sx={{
-                          minWidth: 45,
-                          px: 1,
-                          borderRadius: 1.5,
-                          fontSize: 11,
-                          fontWeight: 800,
-                          textTransform:
-                            'none',
-                          ...(index === 1
-                            ? {
-                                backgroundColor:
-                                  BRAND.dark,
-                                '&:hover': {
-                                  backgroundColor:
-                                    BRAND.green,
-                                },
-                              }
-                            : {
-                                color:
-                                  BRAND.muted,
-                              }),
-                        }}
-                      >
-                        {period}
-                      </Button>
-                    ))}
-                  </Stack>
+                  <Chip
+                    size="small"
+                    label="Data not connected"
+                    sx={{
+                      color: BRAND.muted,
+                      backgroundColor: '#F2F5F3',
+                      fontWeight: 700,
+                    }}
+                  />
                 </Stack>
 
                 <Box
                   sx={{
-                    mt: 3,
-                    minHeight: 230,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent:
-                      'center',
-                    borderRadius: 2.5,
+                    mt: 2.5,
+                    minHeight: 210,
+                    px: 2,
+                    py: 3,
+                    borderRadius: 2,
+                    border: `1px solid ${BRAND.border}`,
                     background:
                       'linear-gradient(180deg, #FAFCFB 0%, #F5F9F7 100%)',
-                    border: `1px solid ${BRAND.border}`,
-                    position: 'relative',
-                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
                   }}
                 >
-                  {/* Subtle chart grid */}
-
                   <Box
                     sx={{
-                      position: 'absolute',
-                      inset: 0,
-                      backgroundImage:
-                        'linear-gradient(rgba(11,107,79,0.055) 1px, transparent 1px), linear-gradient(90deg, rgba(11,107,79,0.055) 1px, transparent 1px)',
-                      backgroundSize:
-                        '44px 44px',
-                    }}
-                  />
-
-                  <Stack
-                    alignItems="center"
-                    spacing={1}
-                    sx={{
-                      position:
-                        'relative',
-                      zIndex: 1,
+                      width: 48,
+                      height: 48,
+                      borderRadius: 3,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: BRAND.greenLight,
+                      color: BRAND.green,
                     }}
                   >
-                    <TrendingUp
-                      sx={{
-                        fontSize: 38,
-                        color: BRAND.green,
-                        opacity: 0.75,
-                      }}
-                    />
+                    <TrendingUp />
+                  </Box>
 
-                    <Typography
-                      sx={{
-                        fontSize: 13,
-                        fontWeight: 800,
-                        color: BRAND.text,
-                      }}
-                    >
-                      Revenue analytics
-                    </Typography>
+                  <Typography
+                    sx={{
+                      mt: 1.5,
+                      fontSize: 14,
+                      fontWeight: 800,
+                      color: BRAND.text,
+                    }}
+                  >
+                    Revenue analytics
+                  </Typography>
 
-                    <Typography
-                      sx={{
-                        maxWidth: 330,
-                        textAlign: 'center',
-                        fontSize: 12,
-                        lineHeight: 1.6,
-                        color: BRAND.muted,
-                      }}
-                    >
-                      Live revenue, provider
-                      costs, net profit and
-                      net margin will appear
-                      here once the financial
-                      analytics endpoint is
-                      connected.
-                    </Typography>
-                  </Stack>
+                  <Typography
+                    sx={{
+                      mt: 0.75,
+                      maxWidth: 340,
+                      fontSize: 12,
+                      lineHeight: 1.7,
+                      color: BRAND.muted,
+                    }}
+                  >
+                    No revenue figures are shown until the backend
+                    provides verified fees, provider costs and net revenue.
+                    Customer funds are not company revenue.
+                  </Typography>
                 </Box>
 
-                <Stack
-                  direction={{
-                    xs: 'column',
-                    sm: 'row',
-                  }}
-                  spacing={{
-                    xs: 1,
-                    sm: 3,
-                  }}
-                  sx={{ mt: 2 }}
-                >
+                <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
                   {[
-                    [
-                      'Revenue',
-                      '—',
-                    ],
-                    [
-                      'Provider Costs',
-                      '—',
-                    ],
-                    [
-                      'Net Profit',
-                      '—',
-                    ],
-                    [
-                      'Net Margin',
-                      '—',
-                    ],
-                  ].map(
-                    ([label, value]) => (
+                    'Revenue',
+                    'Provider Costs',
+                    'Net Profit',
+                    'Net Margin',
+                  ].map((label) => (
+                    <Grid item xs={6} sm={3} key={label}>
                       <Box
-                        key={label}
                         sx={{
-                          flex: 1,
+                          p: 1.25,
+                          borderRadius: 2,
+                          backgroundColor: '#F8FAF9',
                         }}
                       >
                         <Typography
-                          sx={{
-                            fontSize: 11,
-                            color:
-                              BRAND.muted,
-                          }}
+                          sx={{ fontSize: 11, color: BRAND.muted }}
                         >
                           {label}
                         </Typography>
 
                         <Typography
                           sx={{
-                            mt: 0.25,
-                            fontSize: 15,
+                            mt: 0.5,
+                            fontSize: 16,
                             fontWeight: 800,
-                            color:
-                              BRAND.text,
+                            color: BRAND.text,
                           }}
                         >
-                          {value}
+                          —
                         </Typography>
                       </Box>
-                    )
-                  )}
-                </Stack>
+                    </Grid>
+                  ))}
+                </Grid>
               </CardContent>
             </Card>
           </Grid>
 
-          {/* PENDING ACTIONS */}
-
-          <Grid
-            item
-            xs={12}
-            lg={4}
-          >
+          <Grid item xs={12} lg={4}>
             <Card
               sx={{
                 ...pageCardSx,
                 height: '100%',
+                borderRadius: 2.5,
               }}
             >
-              <CardContent
-                sx={{
-                  p: {
-                    xs: 2,
-                    md: 2.5,
-                  },
-                }}
-              >
+              <CardContent sx={{ p: { xs: 2, md: 2.25 } }}>
                 <Stack
                   direction="row"
                   justifyContent="space-between"
@@ -1847,10 +1753,8 @@ const AdminDashboard: React.FC<{
                         fontSize: 11,
                         fontWeight: 800,
                         letterSpacing: 1,
-                        color:
-                          BRAND.green,
-                        textTransform:
-                          'uppercase',
+                        color: BRAND.green,
+                        textTransform: 'uppercase',
                       }}
                     >
                       Operations
@@ -1858,11 +1762,10 @@ const AdminDashboard: React.FC<{
 
                     <Typography
                       sx={{
-                        mt: 0.4,
+                        mt: 0.5,
                         fontSize: 19,
                         fontWeight: 800,
-                        color:
-                          BRAND.text,
+                        color: BRAND.text,
                       }}
                     >
                       Pending Actions
@@ -1874,104 +1777,91 @@ const AdminDashboard: React.FC<{
                     label={pendingCount}
                     sx={{
                       fontWeight: 800,
-                      color:
-                        BRAND.green,
-                      backgroundColor:
-                        BRAND.greenLight,
+                      color: BRAND.green,
+                      backgroundColor: BRAND.greenLight,
                     }}
                   />
                 </Stack>
 
-                <Stack
-                  spacing={0.7}
-                  sx={{ mt: 2 }}
-                >
-                  {pendingActions.map(
-                    (item) => (
-                      <Button
-                        key={
-                          item.label
-                        }
-                        onClick={() =>
-                          selectSection(
-                            item.section
-                          )
-                        }
+                <Stack spacing={0.5} sx={{ mt: 1.75 }}>
+                  {pendingActions.map((item) => (
+                    <Button
+                      key={item.label}
+                      onClick={() => selectSection(item.section)}
+                      sx={{
+                        justifyContent: 'flex-start',
+                        textAlign: 'left',
+                        px: 1,
+                        py: 1,
+                        borderRadius: 2,
+                        color: BRAND.text,
+                        textTransform: 'none',
+                        '&:hover': { backgroundColor: '#F5F8F6' },
+                      }}
+                    >
+                      <Box
                         sx={{
-                          justifyContent:
-                            'flex-start',
-                          textAlign:
-                            'left',
-                          px: 1.25,
-                          py: 1.15,
-                          borderRadius: 2,
+                          width: 34,
+                          height: 34,
+                          flexShrink: 0,
+                          borderRadius: 1.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          mr: 1.25,
+                          backgroundColor:
+                            item.tone === 'error'
+                              ? '#FEF3F2'
+                              : item.tone === 'warning'
+                              ? '#FFF8EB'
+                              : '#EEF7F4',
                           color:
-                            BRAND.text,
-                          textTransform:
-                            'none',
-                          '&:hover': {
-                            backgroundColor:
-                              '#F5F8F6',
-                          },
+                            item.tone === 'error'
+                              ? '#B42318'
+                              : item.tone === 'warning'
+                              ? '#B54708'
+                              : BRAND.green,
                         }}
                       >
-                        <Box
-                          sx={{
-                            width: 34,
-                            height: 34,
-                            borderRadius:
-                              1.5,
-                            display:
-                              'flex',
-                            alignItems:
-                              'center',
-                            justifyContent:
-                              'center',
-                            mr: 1.25,
-                            backgroundColor:
-                              item.tone ===
-                              'error'
-                                ? '#FEF3F2'
-                                : item.tone ===
-                                  'warning'
-                                ? '#FFF8EB'
-                                : '#EEF7F4',
-                            color:
-                              item.tone ===
-                              'error'
-                                ? '#B42318'
-                                : item.tone ===
-                                  'warning'
-                                ? '#B54708'
-                                : BRAND.green,
-                          }}
-                        >
-                          {item.icon}
-                        </Box>
+                        {item.icon}
+                      </Box>
 
-                        <Box sx={{ flex: 1 }}>
-                          <Typography
-                            sx={{
-                              fontSize: 13,
-                              fontWeight: 700,
-                            }}
-                          >
-                            {item.label}
-                          </Typography>
-                        </Box>
-
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography
                           sx={{
-                            fontSize: 13,
-                            fontWeight: 800,
-                            color:
-                              BRAND.text,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            whiteSpace: 'normal',
                           }}
                         >
-                          {item.count}
+                          {item.label}
                         </Typography>
-                      </Button>
-                    )
+                      </Box>
+
+                      <Typography
+                        sx={{
+                          ml: 1,
+                          fontSize: 13,
+                          fontWeight: 800,
+                          color: BRAND.text,
+                        }}
+                      >
+                        {item.count}
+                      </Typography>
+                    </Button>
+                  ))}
+
+                  {pendingActions.length === 0 && (
+                    <Typography
+                      sx={{
+                        py: 4,
+                        textAlign: 'center',
+                        fontSize: 12,
+                        color: BRAND.muted,
+                      }}
+                    >
+                      No pending actions to display.
+                    </Typography>
                   )}
                 </Stack>
               </CardContent>
@@ -1980,26 +1870,12 @@ const AdminDashboard: React.FC<{
         </Grid>
 
         {/* RECENT TRANSACTIONS */}
-
-        <Card sx={pageCardSx}>
-          <CardContent
-            sx={{
-              p: {
-                xs: 1.5,
-                md: 2.25,
-              },
-            }}
-          >
+        <Card sx={{ ...pageCardSx, borderRadius: 2.5, minWidth: 0 }}>
+          <CardContent sx={{ p: { xs: 1.5, md: 2.25 } }}>
             <Stack
-              direction={{
-                xs: 'column',
-                sm: 'row',
-              }}
+              direction={{ xs: 'column', sm: 'row' }}
               justifyContent="space-between"
-              alignItems={{
-                xs: 'flex-start',
-                sm: 'center',
-              }}
+              alignItems={{ xs: 'flex-start', sm: 'center' }}
               spacing={1}
             >
               <Box>
@@ -2009,8 +1885,7 @@ const AdminDashboard: React.FC<{
                     fontWeight: 800,
                     letterSpacing: 1,
                     color: BRAND.green,
-                    textTransform:
-                      'uppercase',
+                    textTransform: 'uppercase',
                   }}
                 >
                   Activity
@@ -2018,7 +1893,7 @@ const AdminDashboard: React.FC<{
 
                 <Typography
                   sx={{
-                    mt: 0.35,
+                    mt: 0.5,
                     fontSize: 19,
                     fontWeight: 800,
                     color: BRAND.text,
@@ -2030,36 +1905,20 @@ const AdminDashboard: React.FC<{
 
               <Button
                 size="small"
-                onClick={() =>
-                  selectSection(
-                    'transactions'
-                  )
-                }
-                endIcon={
-                  <ChevronRight />
-                }
+                onClick={() => selectSection('transactions')}
+                endIcon={<ChevronRight />}
                 sx={{
                   color: BRAND.green,
                   fontWeight: 800,
-                  textTransform:
-                    'none',
+                  textTransform: 'none',
                 }}
               >
                 View all
               </Button>
             </Stack>
 
-            <TableContainer
-              sx={{
-                mt: 1.5,
-              }}
-            >
-              <Table
-                size="small"
-                sx={{
-                  minWidth: 760,
-                }}
-              >
+            <TableContainer sx={{ mt: 1.5, overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: 700 }}>
                 <TableHead>
                   <TableRow>
                     {[
@@ -2073,17 +1932,14 @@ const AdminDashboard: React.FC<{
                       <TableCell
                         key={heading}
                         sx={{
-                          borderBottom:
-                            `1px solid ${BRAND.border}`,
-                          color:
-                            BRAND.muted,
+                          borderBottom: `1px solid ${BRAND.border}`,
+                          color: BRAND.muted,
                           fontSize: 10,
                           fontWeight: 800,
-                          textTransform:
-                            'uppercase',
-                          letterSpacing:
-                            0.55,
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.55,
                           py: 1.2,
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {heading}
@@ -2093,177 +1949,140 @@ const AdminDashboard: React.FC<{
                 </TableHead>
 
                 <TableBody>
-                  {recentTransactions.map(
-                    (transaction) => (
-                      <TableRow
-                        key={
-                          transaction.id
-                        }
-                        hover
-                        sx={{
-                          '&:last-child td':
-                            {
-                              borderBottom: 0,
-                            },
-                        }}
-                      >
-                        <TableCell>
-                          <Stack
-                            direction="row"
-                            alignItems="center"
-                            spacing={1}
+                  {recentTransactions.map((transaction) => (
+                    <TableRow
+                      key={transaction.id}
+                      hover
+                      sx={{
+                        '&:last-child td': { borderBottom: 0 },
+                      }}
+                    >
+                      <TableCell>
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          spacing={1}
+                        >
+                          <Avatar
+                            sx={{
+                              width: 30,
+                              height: 30,
+                              fontSize: 11,
+                              fontWeight: 800,
+                              backgroundColor: BRAND.greenLight,
+                              color: BRAND.green,
+                            }}
                           >
-                            <Avatar
+                            {(customerName(transaction) || 'U')
+                              .charAt(0)
+                              .toUpperCase()}
+                          </Avatar>
+
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography
                               sx={{
-                                width: 30,
-                                height: 30,
-                                fontSize: 11,
-                                fontWeight: 800,
-                                backgroundColor:
-                                  BRAND.greenLight,
-                                color:
-                                  BRAND.green,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: BRAND.text,
                               }}
                             >
-                              {customerName(
-                                transaction
-                              )
-                                .charAt(0)
-                                .toUpperCase()}
-                            </Avatar>
+                              {customerName(transaction) || '—'}
+                            </Typography>
 
-                            <Box>
-                              <Typography
-                                sx={{
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                  color:
-                                    BRAND.text,
-                                }}
-                              >
-                                {customerName(
-                                  transaction
-                                )}
-                              </Typography>
+                            <Typography
+                              sx={{
+                                fontSize: 10,
+                                color: BRAND.muted,
+                              }}
+                            >
+                              {transaction.email || '—'}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                      </TableCell>
 
-                              <Typography
-                                sx={{
-                                  fontSize: 10,
-                                  color:
-                                    BRAND.muted,
-                                }}
-                              >
-                                {transaction.email ||
-                                  '—'}
-                              </Typography>
-                            </Box>
-                          </Stack>
-                        </TableCell>
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: BRAND.text,
+                          }}
+                        >
+                          {transaction.reference || '—'}
+                        </Typography>
+                      </TableCell>
 
-                        <TableCell>
-                          <Typography
-                            sx={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color:
-                                BRAND.text,
-                            }}
-                          >
-                            {transaction.reference ||
-                              '—'}
-                          </Typography>
-                        </TableCell>
+                      <TableCell>
+                        <Typography
+                          sx={{ fontSize: 12, color: BRAND.text }}
+                        >
+                          {statusLabel(
+                            transaction.type ||
+                              transaction.transaction_type ||
+                              transaction.transactionType
+                          )}
+                        </Typography>
+                      </TableCell>
 
-                        <TableCell>
-                          <Typography
-                            sx={{
-                              fontSize: 12,
-                              color:
-                                BRAND.text,
-                            }}
-                          >
-                            {statusLabel(
-                              transaction.type ||
-                                transaction.transaction_type ||
-                                transaction.transactionType
-                            )}
-                          </Typography>
-                        </TableCell>
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            fontSize: 12,
+                            fontWeight: 800,
+                            color: BRAND.text,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {formatMoney(
+                            transaction.amount,
+                            transaction.currency || 'NGN'
+                          )}
+                        </Typography>
+                      </TableCell>
 
-                        <TableCell>
-                          <Typography
-                            sx={{
-                              fontSize: 12,
-                              fontWeight: 800,
-                              color:
-                                BRAND.text,
-                            }}
-                          >
-                            {formatMoney(
-                              transaction.amount,
-                              transaction.currency ||
-                                'NGN'
-                            )}
-                          </Typography>
-                        </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={statusLabel(transaction.status)}
+                          color={statusColor(transaction.status)}
+                          sx={{
+                            height: 24,
+                            fontSize: 10,
+                            fontWeight: 800,
+                          }}
+                        />
+                      </TableCell>
 
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            label={statusLabel(
-                              transaction.status
-                            )}
-                            color={statusColor(
-                              transaction.status
-                            )}
-                            sx={{
-                              height: 24,
-                              fontSize: 10,
-                              fontWeight: 800,
-                            }}
-                          />
-                        </TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          onClick={() => openTransaction(transaction)}
+                          sx={{
+                            minWidth: 'auto',
+                            color: BRAND.green,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            textTransform: 'none',
+                          }}
+                        >
+                          View
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
 
-                        <TableCell>
-                          <Button
-                            size="small"
-                            onClick={() =>
-                              openTransaction(
-                                transaction
-                              )
-                            }
-                            sx={{
-                              minWidth:
-                                'auto',
-                              color:
-                                BRAND.green,
-                              fontSize: 11,
-                              fontWeight: 800,
-                              textTransform:
-                                'none',
-                            }}
-                          >
-                            View
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  )}
-
-                  {recentTransactions.length ===
-                    0 && (
+                  {recentTransactions.length === 0 && (
                     <TableRow>
                       <TableCell
                         colSpan={6}
                         align="center"
                         sx={{
                           py: 5,
-                          color:
-                            BRAND.muted,
+                          color: BRAND.muted,
                         }}
                       >
-                        No recent transactions
-                        available.
+                        No recent transactions available.
                       </TableCell>
                     </TableRow>
                   )}
@@ -2275,7 +2094,6 @@ const AdminDashboard: React.FC<{
       </Stack>
     );
   };
-
   /* ============================================================
      CUSTOMERS
      ============================================================ */
