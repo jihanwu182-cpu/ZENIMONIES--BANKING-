@@ -1635,10 +1635,10 @@ const AdminDashboard: React.FC<{
 
                 <Box
                   sx={{
-                    mt: 2.5,
-                    minHeight: 210,
-                    px: 2,
-                    py: 3,
+                    mt: 1.5,
+                    minHeight: { xs: 135, sm: 160 },
+                    px: 1.5,
+                    py: 1.5,
                     borderRadius: 2,
                     border: `1px solid ${BRAND.border}`,
                     background:
@@ -1691,7 +1691,7 @@ const AdminDashboard: React.FC<{
                   </Typography>
                 </Box>
 
-                <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
+                <Grid container spacing={1} sx={{ mt: 0 }}>
                   {[
                     'Revenue',
                     'Provider Costs',
