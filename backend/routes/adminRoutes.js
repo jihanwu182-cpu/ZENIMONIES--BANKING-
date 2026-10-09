@@ -69,6 +69,11 @@ const {
 } = require('../controllers/adminSupportEscalationController');
 
 
+const {
+  getRevenueSummary,
+  getRevenueEntries,
+} = require('../controllers/adminRevenueController');
+
 // ============================================================
 // ADMIN AUTHENTICATION
 //
@@ -322,6 +327,20 @@ router.get(
   getAuditLogs
 );
 
+
+ // ============================================================
+// REVENUE REPORTING — READ ONLY
+// ============================================================
+
+router.get(
+  '/revenue/summary',
+  getRevenueSummary
+);
+
+router.get(
+  '/revenue/entries',
+  getRevenueEntries
+);
 
 // ============================================================
 // EXPORT
