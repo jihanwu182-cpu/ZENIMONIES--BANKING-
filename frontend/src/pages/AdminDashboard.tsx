@@ -1713,7 +1713,6 @@ const AdminDashboard: React.FC<{
       The revenue chart will appear when verified financial data is connected.
     </Typography>
   </Box>
-</Box>
 
                 <Grid container spacing={1} sx={{ mt: 0 }}>
                   {[
