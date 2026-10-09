@@ -1650,46 +1650,70 @@ const AdminDashboard: React.FC<{
                     textAlign: 'center',
                   }}
                 >
-                  <Box
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 3,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: BRAND.greenLight,
-                      color: BRAND.green,
-                    }}
-                  >
-                    <TrendingUp />
-                  </Box>
+                  
+<Box
+  sx={{
+    mt: 2,
+    height: { xs: 150, sm: 190 },
+    px: 1.5,
+    py: 1.5,
+    borderRadius: 2,
+    border: `1px solid ${BRAND.border}`,
+    backgroundColor: '#FAFCFB',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    gap: 1,
+  }}
+>
+  <Stack
+    direction="row"
+    justifyContent="space-between"
+    alignItems="center"
+  >
+    <Typography
+      sx={{
+        fontSize: 13,
+        fontWeight: 800,
+        color: BRAND.text,
+      }}
+    >
+      Revenue trend
+    </Typography>
 
-                  <Typography
-                    sx={{
-                      mt: 1.5,
-                      fontSize: 14,
-                      fontWeight: 800,
-                      color: BRAND.text,
-                    }}
-                  >
-                    Revenue analytics
-                  </Typography>
+    <Chip
+      size="small"
+      label="Awaiting verified data"
+      sx={{
+        height: 24,
+        fontSize: 10,
+        color: BRAND.muted,
+        backgroundColor: '#F2F5F3',
+      }}
+    />
+  </Stack>
 
-                  <Typography
-                    sx={{
-                      mt: 0.75,
-                      maxWidth: 340,
-                      fontSize: 12,
-                      lineHeight: 1.7,
-                      color: BRAND.muted,
-                    }}
-                  >
-                    No revenue figures are shown until the backend
-                    provides verified fees, provider costs and net revenue.
-                    Customer funds are not company revenue.
-                  </Typography>
-                </Box>
+  <Box
+    sx={{
+      flex: 1,
+      minHeight: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderBottom: `1px solid ${BRAND.border}`,
+    }}
+  >
+    <Typography
+      sx={{
+        fontSize: 12,
+        color: BRAND.muted,
+        textAlign: 'center',
+      }}
+    >
+      The revenue chart will appear when verified financial data is connected.
+    </Typography>
+  </Box>
+</Box>
 
                 <Grid container spacing={1} sx={{ mt: 0 }}>
                   {[
