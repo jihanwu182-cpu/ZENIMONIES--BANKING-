@@ -1406,10 +1406,7 @@ const AdminDashboard: React.FC<{
       0
     );
 
-    const completedTransferTotal =
-      dashboard?.completedWithdrawals ??
-      dashboard?.totalWithdrawals;
-
+    
     return (
       <Stack spacing={{ xs: 2, md: 2.5 }} sx={{ minWidth: 0 }}>
         {/* OVERVIEW HEADER */}
