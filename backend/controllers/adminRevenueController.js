@@ -1,13 +1,13 @@
-
 const pool = require('../config/database');
 
 // ============================================================
 // ZENIMONIES BANKING
 // ADMIN REVENUE CONTROLLER
 //
-// Revenue is not customer transaction principal.
-// Unknown costs remain unknown; they are never assumed to be 0.
-// This controller is read-only.
+// READ ONLY.
+// Customer transaction principal is never company revenue.
+// Reversal entries use signed amounts to cancel prior entries.
+// Unknown costs remain unknown and are never assumed to be zero.
 // ============================================================
 
 const getRevenueSummary = async (req, res) => {
@@ -15,38 +15,53 @@ const getRevenueSummary = async (req, res) => {
     const result = await pool.query(`
       SELECT
         currency,
+
         COUNT(*)::int AS total_entries,
+
         COUNT(*) FILTER (
           WHERE accounting_status = 'posted'
-        )::int AS posted_entries,
+            AND entry_kind = 'original'
+        )::int AS posted_original_entries,
+
+        COUNT(*) FILTER (
+          WHERE accounting_status = 'posted'
+            AND entry_kind = 'reversal'
+        )::int AS posted_reversal_entries,
+
         COUNT(*) FILTER (
           WHERE accounting_status = 'incomplete'
         )::int AS incomplete_entries,
+
         COALESCE(
           SUM(gross_fee) FILTER (
             WHERE accounting_status = 'posted'
           ), 0
-        )::numeric(18,2) AS gross_fees,
+        )::numeric(18,2) AS net_gross_fees,
+
         COALESCE(
           SUM(provider_cost) FILTER (
             WHERE accounting_status = 'posted'
           ), 0
-        )::numeric(18,2) AS provider_costs,
+        )::numeric(18,2) AS net_provider_costs,
+
         COALESCE(
           SUM(partner_share) FILTER (
             WHERE accounting_status = 'posted'
           ), 0
-        )::numeric(18,2) AS partner_shares,
+        )::numeric(18,2) AS net_partner_shares,
+
         COALESCE(
           SUM(other_direct_cost) FILTER (
             WHERE accounting_status = 'posted'
           ), 0
-        )::numeric(18,2) AS other_direct_costs,
+        )::numeric(18,2) AS net_other_direct_costs,
+
         COALESCE(
           SUM(zenimonies_revenue) FILTER (
             WHERE accounting_status = 'posted'
           ), 0
-        )::numeric(18,2) AS zenimonies_revenue
+        )::numeric(18,2) AS net_zenimonies_revenue
+
       FROM revenue_ledger
       GROUP BY currency
       ORDER BY currency
@@ -72,11 +87,13 @@ const getRevenueSummary = async (req, res) => {
 const getRevenueEntries = async (req, res) => {
   try {
     const limitValue = Number.parseInt(req.query.limit, 10);
+
     const limit = Number.isInteger(limitValue)
       ? Math.min(Math.max(limitValue, 1), 100)
       : 50;
 
     const offsetValue = Number.parseInt(req.query.offset, 10);
+
     const offset = Number.isInteger(offsetValue)
       ? Math.max(offsetValue, 0)
       : 0;
@@ -86,10 +103,16 @@ const getRevenueEntries = async (req, res) => {
         SELECT
           id,
           revenue_reference,
+          entry_kind,
+          reversal_of_id,
+          replaces_id,
           service_type,
           source_type,
+          source_id,
           source_reference,
+          customer_user_id,
           partner_id,
+          partner_terms_id,
           currency,
           gross_fee,
           provider_cost,
@@ -99,8 +122,11 @@ const getRevenueEntries = async (req, res) => {
           accounting_status,
           transaction_status,
           description,
+          reversal_reason,
           created_at,
-          posted_at
+          posted_at,
+          reversed_at
+
         FROM revenue_ledger
         ORDER BY created_at DESC, id DESC
         LIMIT $1 OFFSET $2
