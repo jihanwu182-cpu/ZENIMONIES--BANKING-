@@ -301,7 +301,36 @@ interface PendingAction {
    API
    ============================================================ */
 
-const api = apiClient;
+const API_BASE =
+  process.env.REACT_APP_API_URL ||
+  'https://zenimonies-banking.onrender.com/api';
+
+const api = {
+  get: async (path: string) => {
+    const token = localStorage.getItem('adminToken');
+
+    const response = await fetch(
+      `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token
+            ? { Authorization: `Bearer ${token}` }
+            : {}),
+        },
+      }
+    );
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data?.message || 'Request failed.');
+    }
+
+    return { data };
+  },
+};
 
 /* ============================================================
    CONSTANTS
