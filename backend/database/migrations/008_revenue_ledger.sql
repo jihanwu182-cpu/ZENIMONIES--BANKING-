@@ -427,16 +427,6 @@ BEFORE INSERT OR UPDATE
 ON revenue_partner_terms
 FOR EACH ROW
 EXECUTE FUNCTION validate_revenue_partner_term();
-    partner_id,
-    status,
-    created_by,
-    approved_by,
-    approved_at,
-    effective_from,
-    effective_until
-ON revenue_partner_terms
-FOR EACH ROW
-EXECUTE FUNCTION validate_revenue_partner_term();
 -- ============================================================
 -- 8. LEDGER IMMUTABILITY, REVERSALS AND REPLACEMENTS
 -- ============================================================
