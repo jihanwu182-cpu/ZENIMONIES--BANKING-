@@ -420,11 +420,13 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_validate_revenue_partner_term
 ON revenue_partner_terms;
 CREATE TRIGGER trg_validate_revenue_partner_term
-BEFORE INSERT OR UPDATE OF
+BEFORE INSERT OR UPDATE
+ON revenue_partner_terms
+FOR EACH ROW
+EXECUTE FUNCTION validate_revenue_partner_term();
     partner_id,
     status,
     created_by,
