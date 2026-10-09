@@ -371,6 +371,7 @@ ON revenue_audit_events(created_at DESC);
 -- ============================================================
 -- 7. PARTNER-TERM APPROVAL PROTECTION
 -- ============================================================
+
 CREATE OR REPLACE FUNCTION validate_revenue_partner_term()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -378,34 +379,48 @@ AS $$
 DECLARE
     partner_status VARCHAR(30);
 BEGIN
+    -- Approved terms are immutable.
+    -- Create a new terms record for any future change.
+    IF TG_OP = 'UPDATE' AND OLD.status = 'approved' THEN
+        RAISE EXCEPTION
+            'Approved partner terms cannot be edited. Create a new terms record.';
+    END IF;
+
+    -- Validate terms when they are approved.
     IF NEW.status = 'approved' THEN
         SELECT status
         INTO partner_status
         FROM revenue_partners
         WHERE id = NEW.partner_id
         FOR SHARE;
+
         IF partner_status IS DISTINCT FROM 'active' THEN
             RAISE EXCEPTION
                 'Partner terms require an active partner.';
         END IF;
+
         IF NEW.approved_by IS NULL OR NEW.approved_at IS NULL THEN
             RAISE EXCEPTION
                 'Approved terms require an approver and timestamp.';
         END IF;
+
         IF NEW.created_by IS NOT NULL
            AND NEW.created_by = NEW.approved_by THEN
             RAISE EXCEPTION
                 'The term creator cannot approve their own terms.';
         END IF;
+
         IF NEW.effective_until IS NOT NULL
            AND NEW.effective_until <= NEW.effective_from THEN
             RAISE EXCEPTION
                 'Partner terms have an invalid effective period.';
         END IF;
     END IF;
+
     RETURN NEW;
 END;
 $$;
+
 DROP TRIGGER IF EXISTS trg_validate_revenue_partner_term
 ON revenue_partner_terms;
 CREATE TRIGGER trg_validate_revenue_partner_term
@@ -583,24 +598,57 @@ EXECUTE FUNCTION protect_revenue_ledger();
 -- ============================================================
 -- 9. SETTLEMENT AND COMPANY-MOVEMENT WORKFLOW PROTECTION
 -- ============================================================
+
 CREATE OR REPLACE FUNCTION validate_revenue_workflow_transition()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
+DECLARE
+    old_status TEXT;
+    new_status TEXT;
 BEGIN
+    new_status := NEW.status;
+
     IF TG_OP = 'UPDATE' THEN
-        IF OLD.status = 'completed' THEN
+        old_status := OLD.status;
+
+        -- Completed records cannot be changed.
+        IF old_status = 'completed' THEN
             RAISE EXCEPTION
-                'Completed records are immutable.';
+                'Completed financial records are immutable.';
         END IF;
-        -- Once approved, financial details and destination are frozen.
-        IF OLD.status IN ('approved', 'processing') THEN
+
+        -- Enforce forward-only workflow transitions.
+        IF new_status IS DISTINCT FROM old_status THEN
+            IF NOT (
+                (old_status = 'pending'
+                    AND new_status IN ('approved', 'cancelled'))
+                OR
+                (old_status = 'approved'
+                    AND new_status IN ('processing', 'cancelled'))
+                OR
+                (old_status = 'processing'
+                    AND new_status IN ('completed', 'failed'))
+                OR
+                (old_status = 'failed'
+                    AND new_status = 'cancelled')
+            ) THEN
+                RAISE EXCEPTION
+                    'Invalid financial workflow transition: % to %.',
+                    old_status, new_status;
+            END IF;
+        END IF;
+
+        -- Freeze financial details after approval.
+        IF old_status IN ('approved', 'processing') THEN
             IF NEW.amount IS DISTINCT FROM OLD.amount
                OR NEW.currency IS DISTINCT FROM OLD.currency
-               OR NEW.created_by IS DISTINCT FROM OLD.created_by THEN
+               OR NEW.created_by IS DISTINCT FROM OLD.created_by
+               OR NEW.reason IS DISTINCT FROM OLD.reason THEN
                 RAISE EXCEPTION
                     'Approved financial details cannot be changed.';
             END IF;
+
             IF TG_TABLE_NAME = 'revenue_settlements' THEN
                 IF NEW.partner_id IS DISTINCT FROM OLD.partner_id
                    OR NEW.period_start IS DISTINCT FROM OLD.period_start
@@ -610,10 +658,9 @@ BEGIN
                    OR NEW.destination_bank_name IS DISTINCT FROM OLD.destination_bank_name
                    OR NEW.destination_bank_code IS DISTINCT FROM OLD.destination_bank_code THEN
                     RAISE EXCEPTION
-                        'Approved settlement details and destination cannot be changed.';
+                        'Approved settlement details cannot be changed.';
                 END IF;
-            END IF;
-            IF TG_TABLE_NAME = 'company_revenue_movements' THEN
+            ELSE
                 IF NEW.movement_type IS DISTINCT FROM OLD.movement_type
                    OR NEW.counterparty_name IS DISTINCT FROM OLD.counterparty_name
                    OR NEW.destination_account_number IS DISTINCT FROM OLD.destination_account_number
@@ -625,33 +672,40 @@ BEGIN
             END IF;
         END IF;
     END IF;
-    IF NEW.status IN ('approved', 'processing', 'completed') THEN
+
+    -- Require separate approval for financial records.
+    IF new_status IN ('approved', 'processing', 'completed') THEN
         IF NEW.approved_by IS NULL OR NEW.approved_at IS NULL THEN
             RAISE EXCEPTION
-                'Approval details are required before processing or completion.';
+                'Approval details are required.';
         END IF;
+
         IF NEW.created_by IS NOT NULL
            AND NEW.created_by = NEW.approved_by THEN
             RAISE EXCEPTION
                 'The creator cannot approve their own financial record.';
         END IF;
     END IF;
-    IF NEW.status = 'completed' THEN
+
+    IF new_status = 'completed' THEN
         IF NEW.completed_at IS NULL THEN
             RAISE EXCEPTION
                 'A completion timestamp is required.';
         END IF;
+
         IF TG_TABLE_NAME = 'revenue_settlements'
            AND NULLIF(BTRIM(NEW.payment_reference), '') IS NULL THEN
             RAISE EXCEPTION
                 'A completed settlement requires a payment reference.';
         END IF;
+
         IF TG_TABLE_NAME = 'company_revenue_movements'
            AND NULLIF(BTRIM(NEW.external_reference), '') IS NULL THEN
             RAISE EXCEPTION
                 'A completed company movement requires an external reference.';
         END IF;
     END IF;
+
     NEW.updated_at := CURRENT_TIMESTAMP;
     RETURN NEW;
 END;
@@ -675,6 +729,7 @@ EXECUTE FUNCTION validate_revenue_workflow_transition();
 -- Database-generated events record inserts, updates and deletes.
 -- Bank account numbers and destination details are excluded.
 -- ============================================================
+
 CREATE OR REPLACE FUNCTION record_revenue_audit_event()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -684,55 +739,90 @@ DECLARE
     event_name TEXT;
     metadata_json JSONB;
     actor_uuid UUID;
+    row_data JSONB;
 BEGIN
     IF TG_OP = 'DELETE' THEN
+        row_data := to_jsonb(OLD);
         entity_uuid := OLD.id;
         event_name := TG_TABLE_NAME || '.delete';
+
         metadata_json := jsonb_build_object(
             'reference',
             COALESCE(
-                to_jsonb(OLD)->>'revenue_reference',
-                to_jsonb(OLD)->>'settlement_reference',
-                to_jsonb(OLD)->>'movement_reference'
+                row_data->>'revenue_reference',
+                row_data->>'settlement_reference',
+                row_data->>'movement_reference'
             ),
-            'status', to_jsonb(OLD)->>'status',
-            'amount', to_jsonb(OLD)->>'amount',
-            'currency', to_jsonb(OLD)->>'currency'
+            'status',
+            COALESCE(
+                row_data->>'accounting_status',
+                row_data->>'status'
+            ),
+            'amount', row_data->>'amount',
+            'currency', row_data->>'currency'
         );
+
+        actor_uuid := COALESCE(
+            NULLIF(row_data->>'recorded_by', '')::UUID,
+            NULLIF(row_data->>'created_by', '')::UUID,
+            NULLIF(row_data->>'approved_by', '')::UUID
+        );
+
+        INSERT INTO revenue_audit_events (
+            actor_user_id,
+            event_type,
+            entity_type,
+            entity_id,
+            metadata
+        )
+        VALUES (
+            actor_uuid,
+            event_name,
+            TG_TABLE_NAME,
+            entity_uuid,
+            metadata_json
+        );
+
         RETURN OLD;
     END IF;
+
+    row_data := to_jsonb(NEW);
     entity_uuid := NEW.id;
+
     IF TG_OP = 'INSERT' THEN
         event_name := TG_TABLE_NAME || '.insert';
     ELSE
         event_name := TG_TABLE_NAME || '.update';
     END IF;
+
     actor_uuid := COALESCE(
-        NULLIF(to_jsonb(NEW)->>'recorded_by', '')::UUID,
-        NULLIF(to_jsonb(NEW)->>'created_by', '')::UUID,
-        NULLIF(to_jsonb(NEW)->>'approved_by', '')::UUID
+        NULLIF(row_data->>'recorded_by', '')::UUID,
+        NULLIF(row_data->>'created_by', '')::UUID,
+        NULLIF(row_data->>'approved_by', '')::UUID
     );
+
     metadata_json := jsonb_build_object(
         'reference',
         COALESCE(
-            to_jsonb(NEW)->>'revenue_reference',
-            to_jsonb(NEW)->>'settlement_reference',
-            to_jsonb(NEW)->>'movement_reference'
+            row_data->>'revenue_reference',
+            row_data->>'settlement_reference',
+            row_data->>'movement_reference'
         ),
-        'entry_kind', to_jsonb(NEW)->>'entry_kind',
-        'reversal_of_id', to_jsonb(NEW)->>'reversal_of_id',
-        'replaces_id', to_jsonb(NEW)->>'replaces_id',
-        'status', to_jsonb(NEW)->>'accounting_status',
-        'workflow_status', to_jsonb(NEW)->>'status',
-        'transaction_status', to_jsonb(NEW)->>'transaction_status',
-        'amount', to_jsonb(NEW)->>'amount',
-        'gross_fee', to_jsonb(NEW)->>'gross_fee',
-        'provider_cost', to_jsonb(NEW)->>'provider_cost',
-        'partner_share', to_jsonb(NEW)->>'partner_share',
-        'other_direct_cost', to_jsonb(NEW)->>'other_direct_cost',
-        'zenimonies_revenue', to_jsonb(NEW)->>'zenimonies_revenue',
-        'currency', to_jsonb(NEW)->>'currency'
+        'entry_kind', row_data->>'entry_kind',
+        'reversal_of_id', row_data->>'reversal_of_id',
+        'replaces_id', row_data->>'replaces_id',
+        'status', row_data->>'accounting_status',
+        'workflow_status', row_data->>'status',
+        'transaction_status', row_data->>'transaction_status',
+        'amount', row_data->>'amount',
+        'gross_fee', row_data->>'gross_fee',
+        'provider_cost', row_data->>'provider_cost',
+        'partner_share', row_data->>'partner_share',
+        'other_direct_cost', row_data->>'other_direct_cost',
+        'zenimonies_revenue', row_data->>'zenimonies_revenue',
+        'currency', row_data->>'currency'
     );
+
     INSERT INTO revenue_audit_events (
         actor_user_id,
         event_type,
@@ -747,9 +837,11 @@ BEGIN
         entity_uuid,
         metadata_json
     );
+
     RETURN NEW;
 END;
 $$;
+
 DROP TRIGGER IF EXISTS trg_audit_revenue_ledger
 ON revenue_ledger;
 CREATE TRIGGER trg_audit_revenue_ledger
