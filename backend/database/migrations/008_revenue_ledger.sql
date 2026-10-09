@@ -607,6 +607,11 @@ DECLARE
     old_status TEXT;
     new_status TEXT;
 BEGIN
+        -- New financial records must start pending.
+    IF TG_OP = 'INSERT' AND NEW.status <> 'pending' THEN
+        RAISE EXCEPTION
+            'New financial records must start with pending status.';
+    END IF;
     new_status := NEW.status;
 
     IF TG_OP = 'UPDATE' THEN
