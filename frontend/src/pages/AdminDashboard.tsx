@@ -10727,15 +10727,6 @@ const renderSettings = () => {
 };
 
 const renderAdministrationSection = () => {
-  useEffect(() => {
-    if (
-      section === 'administrators' ||
-      section === 'security' ||
-      section === 'settings'
-    ) {
-      loadAdministrationData();
-    }
-  }, [section]);
 
   switch (section) {
     case 'administrators':
