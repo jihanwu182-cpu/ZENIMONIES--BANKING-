@@ -1461,35 +1461,36 @@ const AdminDashboard: React.FC<{
         <Grid container spacing={1.5}>
           {[
             {
-              title: 'Customers',
-              value: formatNumber(customerCount),
-              subtitle: 'Registered customers',
-              icon: <Groups fontSize="small" />,
-              tone: BRAND.green,
-            },
-            {
-              title: 'Transactions',
-              value: formatNumber(transactionCount),
-              subtitle: 'Recorded transactions',
-              icon: <SwapHoriz fontSize="small" />,
-              tone: BRAND.dark,
-            },
-            {
-              title: 'Pending Actions',
-              value: formatNumber(pendingCount),
-              subtitle: 'Require attention',
-              icon: <WarningAmber fontSize="small" />,
-              tone: '#B54708',
-            },
-            {
-              title: 'Revenue',
-              value: '—',
-              subtitle: 'Awaiting verified revenue data',
-              icon: <TrendingUp fontSize="small" />,
-              tone: BRAND.green,
+        
+    title: 'Total Users',
+    value: formatNumber(customerCount),
+    subtitle: 'All registered customers',
+    icon: <Groups fontSize="small" />,
+    tone: BRAND.green,
+  },
+  {
+    title: 'Active Users',
+    value: formatNumber(dashboard?.activeUsers ?? 0),
+    subtitle: 'Active customer accounts',
+    icon: <Groups fontSize="small" />,
+    tone: BRAND.green,
+  },
+  {
+    title: 'Recent Registrations',
+    value: formatNumber(dashboard?.recentRegistrations ?? 0),
+    subtitle: 'Newly registered customers',
+    icon: <Groups fontSize="small" />,
+    tone: BRAND.green,
+  },
+  {
+    title: 'Revenue',
+    value: '—',
+    subtitle: 'Verified company revenue',
+    icon: <TrendingUp fontSize="small" />,
+    tone: BRAND.green,
             },
           ].map((item) => (
-            <Grid item xs={6} md={3} key={item.title}>
+            <Grid item xs={3} md={3} key={item.title}>
               <Card
                 sx={{
                   ...pageCardSx,
@@ -1628,90 +1629,116 @@ const AdminDashboard: React.FC<{
           }}
         />
       </Stack>
-      {/* Revenue chart area */}
+      
+{/* REVENUE CHART AREA */}
+<Box
+  sx={{
+    mt: 2,
+    minHeight: 230,
+    px: 1.5,
+    py: 1.5,
+    borderRadius: 2,
+    border: `1px solid ${BRAND.border}`,
+    background: 'linear-gradient(180deg, #FAFCFB 0%, #F5F9F7 100%)',
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+  }}
+>
+  <Typography
+    sx={{
+      fontSize: 13,
+      fontWeight: 800,
+      color: BRAND.text,
+    }}
+  >
+    Revenue trend
+  </Typography>
+
+  <Stack
+    direction="row"
+    spacing={0.75}
+    sx={{
+      mt: 1.5,
+      flexWrap: 'nowrap',
+      overflowX: 'auto',
+      pb: 0.5,
+    }}
+  >
+    {['Daily', 'Weekly', 'Monthly', 'Yearly'].map((period) => (
+      <Chip
+        key={period}
+        label={period}
+        size="small"
+        sx={{
+          flex: '1 0 auto',
+          fontWeight: 700,
+          color: BRAND.green,
+          backgroundColor: BRAND.greenLight,
+        }}
+      />
+    ))}
+  </Stack>
+
+  <Box
+    sx={{
+      flex: 1,
+      mt: 1.5,
+      minHeight: 120,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderBottom: `1px solid ${BRAND.border}`,
+    }}
+  >
+    <Typography
+      sx={{
+        maxWidth: 300,
+        fontSize: 12,
+        color: BRAND.muted,
+        textAlign: 'center',
+      }}
+    >
+      Verified revenue history will appear here when the financial data source is connected.
+    </Typography>
+  </Box>
+</Box>
+
+{/* FINANCIAL KPI CARDS */}
+<Grid container spacing={1} sx={{ mt: 1 }}>
+  {[
+    'Revenue',
+    'Provider Costs',
+    'Net Profit',
+    'Net Margin',
+  ].map((label) => (
+    <Grid item xs={6} sm={3} key={label}>
       <Box
         sx={{
-          mt: 2,
-          height: { xs: 170, sm: 210 },
-          px: 1.5,
-          py: 1.5,
+          p: 1.25,
           borderRadius: 2,
-          border: `1px solid ${BRAND.border}`,
-          background:
-            'linear-gradient(180deg, #FAFCFB 0%, #F5F9F7 100%)',
-          display: 'flex',
-          flexDirection: 'column',
+          backgroundColor: '#F8FAF9',
         }}
       >
+        <Typography sx={{ fontSize: 11, color: BRAND.muted }}>
+          {label}
+        </Typography>
         <Typography
           sx={{
-            fontSize: 13,
+            mt: 0.5,
+            fontSize: 16,
             fontWeight: 800,
             color: BRAND.text,
           }}
         >
-          Revenue trend
+          —
         </Typography>
-        <Box
-          sx={{
-            flex: 1,
-            mt: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderBottom: `1px solid ${BRAND.border}`,
-          }}
-        >
-          <Typography
-            sx={{
-              maxWidth: 300,
-              fontSize: 12,
-              color: BRAND.muted,
-              textAlign: 'center',
-            }}
-          >
-            Historical revenue will appear here after the financial
-            data source has been verified.
-          </Typography>
-        </Box>
       </Box>
-      {/* Financial KPI cards */}
-      <Grid container spacing={1} sx={{ mt: 1 }}>
-        {[
-          'Revenue',
-          'Provider Costs',
-          'Net Profit',
-          'Net Margin',
-        ].map((label) => (
-          <Grid item xs={6} sm={3} key={label}>
-            <Box
-              sx={{
-                p: 1.25,
-                borderRadius: 2,
-                backgroundColor: '#F8FAF9',
-              }}
-            >
-              <Typography
-                sx={{ fontSize: 11, color: BRAND.muted }}
-              >
-                {label}
-              </Typography>
-              <Typography
-                sx={{
-                  mt: 0.5,
-                  fontSize: 16,
-                  fontWeight: 800,
-                  color: BRAND.text,
-                }}
-              >
-                —
-              </Typography>
-            </Box>
-          </Grid>
-        ))}
-      </Grid>
-    </CardContent>
-  </Card>
+    </Grid>
+  ))}
+</Grid>
+</CardContent>
+</Card>
 </Grid>
 
           <Grid item xs={12} lg={4}>
