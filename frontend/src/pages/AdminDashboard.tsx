@@ -1543,21 +1543,27 @@ const AdminDashboard: React.FC<{
                       </Typography>
                     </Box>
 
-                    <Box
-                      sx={{
-                        width: 36,
-                        height: 36,
-                        flexShrink: 0,
-                        borderRadius: 2,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: item.tone,
-                        backgroundColor: BRAND.greenLight,
-                      }}
-                    >
-                      {item.icon}
-                    </Box>
+                    
+<Box
+  sx={{
+    width: { xs: 28, sm: 36 },
+    height: { xs: 28, sm: 36 },
+    flexShrink: 0,
+    borderRadius: 2,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: item.tone,
+    backgroundColor: BRAND.greenLight,
+    '& .MuiSvgIcon-root': {
+      fontSize: { xs: 17, sm: 20 },
+    },
+  }}
+>
+  {item.icon}
+</Box>
+
+          
                   </Stack>
 
                   <Typography
