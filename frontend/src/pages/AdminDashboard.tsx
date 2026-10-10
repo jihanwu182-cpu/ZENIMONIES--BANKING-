@@ -8294,12 +8294,23 @@ type RevenuePeriod =
 
 type RevenueRecord = {
   id: string;
+  revenue_reference?: string;
   reference?: string;
-  source?: string;
+  service_type?: string;
+  source_type?: string;
+  source_reference?: string | null;
+  currency?: string;
+  gross_fee?: string | number;
   customer_charge?: string | number;
-  provider_cost?: string | number;
-  zenimonies_revenue?: string | number;
+  provider_cost?: string | number | null;
+  partner_share?: string | number | null;
+  other_direct_cost?: string | number | null;
+  zenimonies_revenue?: string | number | null;
+  accounting_status?: string;
+  transaction_status?: string;
   transaction_date?: string;
+  created_at?: string;
+  posted_at?: string | null;
   status?: string;
 };
 
@@ -8397,72 +8408,51 @@ const calculateRevenuePerformance =
    REVENUE SUMMARY
    ============================================================ */
 
-const revenueSummary =
-  useMemo(() => {
-    const records =
-      revenueRecords;
 
-    const customerCharges =
-      records.reduce(
-        (
-          total,
-          record
-        ) =>
-          total +
-          revenueValue(
-            record.customer_charge
-          ),
-        0
-      );
+const revenueSummary = useMemo(() => {
+  const postedRecords = revenueRecords.filter(
+    (record) =>
+      String(record.accounting_status || '').toLowerCase() ===
+        'posted' &&
+      ['completed', 'reversed', 'refunded'].includes(
+        String(record.transaction_status || '').toLowerCase()
+      )
+  );
 
-    const providerCosts =
-      records.reduce(
-        (
-          total,
-          record
-        ) =>
-          total +
-          revenueValue(
-            record.provider_cost
-          ),
-        0
-      );
+  const customerCharges = postedRecords.reduce(
+    (total, record) =>
+      total + revenueValue(record.gross_fee),
+    0
+  );
 
-    const zenimoniesRevenue =
-      records.reduce(
-        (
-          total,
-          record
-        ) =>
-          total +
-          revenueValue(
-            record.zenimonies_revenue
-          ),
-        0
-      );
+  const providerCosts = postedRecords.reduce(
+    (total, record) =>
+      total + revenueValue(record.provider_cost),
+    0
+  );
 
-    const netProfit =
-      zenimoniesRevenue -
-      providerCosts;
+  const zenimoniesRevenue = postedRecords.reduce(
+    (total, record) =>
+      total + revenueValue(record.zenimonies_revenue),
+    0
+  );
 
-    const netMargin =
-      zenimoniesRevenue >
-      0
-        ? (netProfit /
-            zenimoniesRevenue) *
-          100
-        : 0;
+  const netProfit = zenimoniesRevenue;
 
-    return {
-      customerCharges,
-      providerCosts,
-      zenimoniesRevenue,
-      netProfit,
-      netMargin,
-    };
-  }, [
-    revenueRecords,
-  ]);
+  const netMargin =
+    customerCharges > 0
+      ? (zenimoniesRevenue / customerCharges) * 100
+      : 0;
+
+  return {
+    customerCharges,
+    providerCosts,
+    zenimoniesRevenue,
+    netProfit,
+    netMargin,
+  };
+}, [revenueRecords]);
+
 
 /* ============================================================
    REVENUE TARGET PERFORMANCE
