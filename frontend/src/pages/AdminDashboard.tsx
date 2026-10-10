@@ -1847,7 +1847,8 @@ const AdminDashboard: React.FC<{
 
           <Button
             fullWidth
-            onClick={() => selectSection('transactions')}
+            onClick={() => selectSection('pendingTransactions')}
+
             endIcon={<ChevronRight />}
             sx={{
               mt: 1,
