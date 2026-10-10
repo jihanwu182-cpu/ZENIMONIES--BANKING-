@@ -83,7 +83,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  ChartTooltip,
 } from 'recharts';
 
 import { useNavigate } from 'react-router-dom';
