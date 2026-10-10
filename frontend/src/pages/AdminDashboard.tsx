@@ -1582,308 +1582,387 @@ const AdminDashboard: React.FC<{
           ))}
         </Grid>
 
-        {/* FINANCIAL PERFORMANCE + PENDING ACTIONS */}
-        <Grid container spacing={1.5} alignItems="stretch">
-          <Grid item xs={12} lg={8}>
-  <Card
-    sx={{
-      ...pageCardSx,
-      height: '100%',
-      borderRadius: 2.5,
-    }}
-  >
-    <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        justifyContent="space-between"
-        alignItems={{ xs: 'flex-start', sm: 'center' }}
-        spacing={1}
-      >
-        <Box>
-          <Typography
+        
+{/* FINANCIAL PERFORMANCE + RIGHT OPERATIONS SIDEBAR */}
+<Grid container spacing={1.5} alignItems="stretch">
+  {/* MAIN REVENUE PANEL */}
+  <Grid item xs={12} lg={8}>
+    <Card
+      sx={{
+        ...pageCardSx,
+        height: '100%',
+        borderRadius: 2.5,
+      }}
+    >
+      <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          justifyContent="space-between"
+          alignItems={{ xs: 'flex-start', sm: 'center' }}
+          spacing={1}
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: 1,
+                color: BRAND.green,
+                textTransform: 'uppercase',
+              }}
+            >
+              Financial Performance
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 19,
+                fontWeight: 800,
+                color: BRAND.text,
+              }}
+            >
+              Revenue and costs
+            </Typography>
+
+            <Typography
+              sx={{ mt: 0.5, fontSize: 12, color: BRAND.muted }}
+            >
+              Track verified revenue, provider costs and net profit.
+            </Typography>
+          </Box>
+
+          <Chip
+            size="small"
+            label="Awaiting verified data"
             sx={{
-              fontSize: 11,
-              fontWeight: 800,
-              letterSpacing: 1,
-              color: BRAND.green,
-              textTransform: 'uppercase',
+              color: BRAND.muted,
+              backgroundColor: '#F2F5F3',
+              fontWeight: 700,
             }}
-          >
-            Financial Performance
-          </Typography>
+          />
+        </Stack>
+
+        {/* REVENUE CHART */}
+        <Box
+          sx={{
+            mt: 2,
+            minHeight: 230,
+            px: 1.5,
+            py: 1.5,
+            borderRadius: 2,
+            border: `1px solid ${BRAND.border}`,
+            background:
+              'linear-gradient(180deg, #FAFCFB 0%, #F5F9F7 100%)',
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 0,
+          }}
+        >
           <Typography
             sx={{
-              mt: 0.5,
-              fontSize: 19,
+              fontSize: 13,
               fontWeight: 800,
               color: BRAND.text,
             }}
           >
-            Revenue and costs
+            Revenue trend
           </Typography>
-          <Typography
-            sx={{ mt: 0.5, fontSize: 12, color: BRAND.muted }}
+
+          <Stack
+            direction="row"
+            spacing={0.75}
+            sx={{
+              mt: 1.5,
+              flexWrap: 'nowrap',
+              overflowX: 'auto',
+              pb: 0.5,
+            }}
           >
-            Track verified revenue, provider costs and net profit.
-          </Typography>
-        </Box>
-        <Chip
-          size="small"
-          label="Awaiting verified data"
-          sx={{
-            color: BRAND.muted,
-            backgroundColor: '#F2F5F3',
-            fontWeight: 700,
-          }}
-        />
-      </Stack>
-      
-{/* REVENUE CHART AREA */}
-<Box
-  sx={{
-    mt: 2,
-    minHeight: 230,
-    px: 1.5,
-    py: 1.5,
-    borderRadius: 2,
-    border: `1px solid ${BRAND.border}`,
-    background: 'linear-gradient(180deg, #FAFCFB 0%, #F5F9F7 100%)',
-    display: 'flex',
-    flexDirection: 'column',
-    minWidth: 0,
-  }}
->
-  <Typography
-    sx={{
-      fontSize: 13,
-      fontWeight: 800,
-      color: BRAND.text,
-    }}
-  >
-    Revenue trend
-  </Typography>
+            {['Daily', 'Weekly', 'Monthly', 'Yearly'].map((period) => (
+              <Chip
+                key={period}
+                label={period}
+                size="small"
+                sx={{
+                  flex: '1 0 auto',
+                  fontWeight: 700,
+                  color: BRAND.green,
+                  backgroundColor: BRAND.greenLight,
+                }}
+              />
+            ))}
+          </Stack>
 
-  <Stack
-    direction="row"
-    spacing={0.75}
-    sx={{
-      mt: 1.5,
-      flexWrap: 'nowrap',
-      overflowX: 'auto',
-      pb: 0.5,
-    }}
-  >
-    {['Daily', 'Weekly', 'Monthly', 'Yearly'].map((period) => (
-      <Chip
-        key={period}
-        label={period}
-        size="small"
-        sx={{
-          flex: '1 0 auto',
-          fontWeight: 700,
-          color: BRAND.green,
-          backgroundColor: BRAND.greenLight,
-        }}
-      />
-    ))}
-  </Stack>
-
-  <Box
-    sx={{
-      flex: 1,
-      mt: 1.5,
-      minHeight: 120,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderBottom: `1px solid ${BRAND.border}`,
-    }}
-  >
-    <Typography
-      sx={{
-        maxWidth: 300,
-        fontSize: 12,
-        color: BRAND.muted,
-        textAlign: 'center',
-      }}
-    >
-      Verified revenue history will appear here when the financial data source is connected.
-    </Typography>
-  </Box>
-</Box>
-
-{/* FINANCIAL KPI CARDS */}
-<Grid container spacing={1} sx={{ mt: 1 }}>
-  {[
-    'Revenue',
-    'Provider Costs',
-    'Net Profit',
-    'Net Margin',
-  ].map((label) => (
-    <Grid item xs={6} sm={3} key={label}>
-      <Box
-        sx={{
-          p: 1.25,
-          borderRadius: 2,
-          backgroundColor: '#F8FAF9',
-        }}
-      >
-        <Typography sx={{ fontSize: 11, color: BRAND.muted }}>
-          {label}
-        </Typography>
-        <Typography
-          sx={{
-            mt: 0.5,
-            fontSize: 16,
-            fontWeight: 800,
-            color: BRAND.text,
-          }}
-        >
-          —
-        </Typography>
-      </Box>
-    </Grid>
-  ))}
-</Grid>
-</CardContent>
-</Card>
-</Grid>
-
-          <Grid item xs={12} lg={4}>
-            <Card
+          <Box
+            sx={{
+              flex: 1,
+              mt: 1.5,
+              minHeight: 120,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderBottom: `1px solid ${BRAND.border}`,
+            }}
+          >
+            <Typography
               sx={{
-                ...pageCardSx,
-                height: '100%',
-                borderRadius: 2.5,
+                maxWidth: 300,
+                fontSize: 12,
+                color: BRAND.muted,
+                textAlign: 'center',
               }}
             >
-              <CardContent sx={{ p: { xs: 2, md: 2.25 } }}>
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
+              Verified revenue history will appear here when the financial
+              data source is connected.
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* FINANCIAL SUMMARY */}
+        <Grid container spacing={1} sx={{ mt: 1 }}>
+          {[
+            'Revenue',
+            'Provider Costs',
+            'Net Profit',
+            'Net Margin',
+          ].map((label) => (
+            <Grid item xs={6} sm={3} key={label}>
+              <Box
+                sx={{
+                  p: 1.25,
+                  borderRadius: 2,
+                  backgroundColor: '#F8FAF9',
+                }}
+              >
+                <Typography
+                  sx={{ fontSize: 11, color: BRAND.muted }}
                 >
-                  <Box>
-                    <Typography
-                      sx={{
-                        fontSize: 11,
-                        fontWeight: 800,
-                        letterSpacing: 1,
-                        color: BRAND.green,
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      Operations
-                    </Typography>
+                  {label}
+                </Typography>
 
-                    <Typography
-                      sx={{
-                        mt: 0.5,
-                        fontSize: 19,
-                        fontWeight: 800,
-                        color: BRAND.text,
-                      }}
-                    >
-                      Pending Actions
-                    </Typography>
-                  </Box>
-
-                  <Chip
-                    size="small"
-                    label={pendingCount}
-                    sx={{
-                      fontWeight: 800,
-                      color: BRAND.green,
-                      backgroundColor: BRAND.greenLight,
-                    }}
-                  />
-                </Stack>
-
-                <Stack spacing={0.5} sx={{ mt: 1.75 }}>
-                  {pendingActions.map((item) => (
-                    <Button
-                      key={item.label}
-                      onClick={() => selectSection(item.section)}
-                      sx={{
-                        justifyContent: 'flex-start',
-                        textAlign: 'left',
-                        px: 1,
-                        py: 1,
-                        borderRadius: 2,
-                        color: BRAND.text,
-                        textTransform: 'none',
-                        '&:hover': { backgroundColor: '#F5F8F6' },
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 34,
-                          height: 34,
-                          flexShrink: 0,
-                          borderRadius: 1.5,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          mr: 1.25,
-                          backgroundColor:
-                            item.tone === 'error'
-                              ? '#FEF3F2'
-                              : item.tone === 'warning'
-                              ? '#FFF8EB'
-                              : '#EEF7F4',
-                          color:
-                            item.tone === 'error'
-                              ? '#B42318'
-                              : item.tone === 'warning'
-                              ? '#B54708'
-                              : BRAND.green,
-                        }}
-                      >
-                        {item.icon}
-                      </Box>
-
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography
-                          sx={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            whiteSpace: 'normal',
-                          }}
-                        >
-                          {item.label}
-                        </Typography>
-                      </Box>
-
-                      <Typography
-                        sx={{
-                          ml: 1,
-                          fontSize: 13,
-                          fontWeight: 800,
-                          color: BRAND.text,
-                        }}
-                      >
-                        {item.count}
-                      </Typography>
-                    </Button>
-                  ))}
-
-                  {pendingActions.length === 0 && (
-                    <Typography
-                      sx={{
-                        py: 4,
-                        textAlign: 'center',
-                        fontSize: 12,
-                        color: BRAND.muted,
-                      }}
-                    >
-                      No pending actions to display.
-                    </Typography>
-                  )}
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
+                <Typography
+                  sx={{
+                    mt: 0.5,
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: BRAND.text,
+                  }}
+                >
+                  —
+                </Typography>
+              </Box>
+            </Grid>
+          ))}
         </Grid>
+      </CardContent>
+    </Card>
+  </Grid>
+
+  {/* RIGHT SIDEBAR: PENDING TRANSACTIONS + KYC REVIEW */}
+  <Grid item xs={12} lg={4}>
+    <Stack spacing={1.5} sx={{ height: '100%' }}>
+      {/* PENDING TRANSACTIONS */}
+      <Card
+        sx={{
+          ...pageCardSx,
+          borderRadius: 2.5,
+          flex: 1,
+        }}
+      >
+        <CardContent sx={{ p: 2 }}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            spacing={1}
+          >
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Box
+                sx={{
+                  width: 36,
+                  height: 36,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 2,
+                  color: BRAND.green,
+                  backgroundColor: BRAND.greenLight,
+                }}
+              >
+                <SwapHoriz fontSize="small" />
+              </Box>
+
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    color: BRAND.green,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Transactions
+                </Typography>
+
+                <Typography
+                  sx={{
+                    fontSize: 15,
+                    fontWeight: 800,
+                    color: BRAND.text,
+                  }}
+                >
+                  Pending Transactions
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Chip
+              size="small"
+              label={
+                pendingActions.find(
+                  (item) =>
+                    /transaction/i.test(item.label) &&
+                    /pending/i.test(item.label)
+                )?.count ?? '—'
+              }
+              sx={{
+                fontWeight: 800,
+                color: BRAND.green,
+                backgroundColor: BRAND.greenLight,
+              }}
+            />
+          </Stack>
+
+          <Typography
+            sx={{
+              mt: 1.5,
+              fontSize: 12,
+              color: BRAND.muted,
+              lineHeight: 1.6,
+            }}
+          >
+            Review transactions that require attention.
+          </Typography>
+
+          <Button
+            fullWidth
+            onClick={() => selectSection('transactions')}
+            endIcon={<ChevronRight />}
+            sx={{
+              mt: 1,
+              justifyContent: 'space-between',
+              color: BRAND.green,
+              fontWeight: 800,
+              textTransform: 'none',
+            }}
+          >
+            Review transactions
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* KYC REVIEW */}
+      <Card
+        sx={{
+          ...pageCardSx,
+          borderRadius: 2.5,
+          flex: 1,
+        }}
+      >
+        <CardContent sx={{ p: 2 }}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            spacing={1}
+          >
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Box
+                sx={{
+                  width: 36,
+                  height: 36,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 2,
+                  color: BRAND.green,
+                  backgroundColor: BRAND.greenLight,
+                }}
+              >
+                <Groups fontSize="small" />
+              </Box>
+
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    color: BRAND.green,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Verification
+                </Typography>
+
+                <Typography
+                  sx={{
+                    fontSize: 15,
+                    fontWeight: 800,
+                    color: BRAND.text,
+                  }}
+                >
+                  KYC Review
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Chip
+              size="small"
+              label={
+                pendingActions.find(
+                  (item) => /kyc|verification/i.test(item.label)
+                )?.count ?? '—'
+              }
+              sx={{
+                fontWeight: 800,
+                color: BRAND.green,
+                backgroundColor: BRAND.greenLight,
+              }}
+            />
+          </Stack>
+
+          <Typography
+            sx={{
+              mt: 1.5,
+              fontSize: 12,
+              color: BRAND.muted,
+              lineHeight: 1.6,
+            }}
+          >
+            Review customer identity verification cases.
+          </Typography>
+
+          <Button
+            fullWidth
+            onClick={() => selectSection('kyc')}
+            endIcon={<ChevronRight />}
+            sx={{
+              mt: 1,
+              justifyContent: 'space-between',
+              color: BRAND.green,
+              fontWeight: 800,
+              textTransform: 'none',
+            }}
+          >
+            Review KYC cases
+          </Button>
+        </CardContent>
+      </Card>
+    </Stack>
+  </Grid>
+</Grid>
+
 
         {/* RECENT TRANSACTIONS */}
         <Card sx={{ ...pageCardSx, borderRadius: 2.5, minWidth: 0 }}>
