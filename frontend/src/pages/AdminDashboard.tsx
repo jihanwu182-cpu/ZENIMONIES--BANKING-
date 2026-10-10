@@ -1513,11 +1513,10 @@ const AdminDashboard: React.FC<{
           }}
                 >
                   <Stack
-                    direction="row"
-                    justifyContent="space-between"
-                    alignItems="flex-start"
+                    direction="column"
+                   alignItems="flex-start"
                     spacing={1}
-                  >
+                   >
                     <Box sx={{ minWidth: 0 }}>
                       <Typography
                         sx={{
@@ -1549,6 +1548,7 @@ const AdminDashboard: React.FC<{
     width: { xs: 28, sm: 36 },
     height: { xs: 28, sm: 36 },
     flexShrink: 0,
+    alignSelf: 'flex-end',
     borderRadius: 2,
     display: 'flex',
     alignItems: 'center',
