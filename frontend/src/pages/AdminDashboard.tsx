@@ -1530,9 +1530,12 @@ const AdminDashboard: React.FC<{
                     <Box sx={{ minWidth: 0 }}>
                       <Typography
                         sx={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: BRAND.muted,
+                         fontSize: { xs: 10, sm: 12 },
+                         fontWeight: 700,
+                         color: BRAND.muted,
+                          lineHeight: 1.35,
+                          overflowWrap: 'anywhere',
+
                         }}
                       >
                         {item.title}
