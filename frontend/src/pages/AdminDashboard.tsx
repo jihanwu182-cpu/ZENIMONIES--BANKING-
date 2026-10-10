@@ -1740,7 +1740,31 @@ const AdminDashboard: React.FC<{
                 px: 2,
               }}
             >
-              Revenue data is not available yet.
+              
+<ResponsiveContainer width="100%" height="100%">
+  <LineChart data={revenueChartData}>
+    <CartesianGrid strokeDasharray="3 3" stroke={BRAND.border} />
+    <XAxis
+      dataKey="label"
+      tick={{ fontSize: 11, fill: BRAND.muted }}
+    />
+    <YAxis
+      tick={{ fontSize: 11, fill: BRAND.muted }}
+      width={45}
+    />
+    <Tooltip />
+    <Line
+      type="monotone"
+      dataKey="revenue"
+      name="Revenue (NGN)"
+      stroke={BRAND.green}
+      strokeWidth={3}
+      dot={false}
+      connectNulls={false}
+    />
+  </LineChart>
+</ResponsiveContainer>
+
             </Box>
           </Box>
         </Box>
