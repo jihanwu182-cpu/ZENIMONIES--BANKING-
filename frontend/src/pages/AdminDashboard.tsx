@@ -1490,7 +1490,7 @@ const AdminDashboard: React.FC<{
     tone: BRAND.green,
             },
           ].map((item) => (
-            <Grid item xs={3} md={3} key={item.title}>
+            <Grid item xs={6} sm={3} md={3} key={item.title}>
               <Card
                 sx={{
                   ...pageCardSx,
