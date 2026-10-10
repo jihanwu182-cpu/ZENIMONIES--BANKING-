@@ -8368,6 +8368,59 @@ const [
 ] =
   useState(false);
 
+  
+useEffect(() => {
+  let cancelled = false;
+
+  const loadRevenueEntries = async () => {
+    try {
+      const response = await api.get(
+        '/admin/revenue/entries'
+      );
+
+      const data = response.data;
+
+      const entries: RevenueRecord[] =
+        Array.isArray(data?.entries)
+          ? data.entries
+          : Array.isArray(data?.records)
+            ? data.records
+            : Array.isArray(data?.revenueEntries)
+              ? data.revenueEntries
+              : [];
+
+      if (!cancelled) {
+        setRevenueRecords(entries);
+
+        setRevenueDataAvailable(
+          entries.some(
+            (record) =>
+              String(
+                record.accounting_status || ''
+              ).toLowerCase() === 'posted'
+          )
+        );
+      }
+    } catch (error) {
+      if (!cancelled) {
+        setRevenueRecords([]);
+        setRevenueDataAvailable(false);
+      }
+
+      console.error(
+        'Failed to load revenue entries:',
+        error
+      );
+    }
+  };
+
+  void loadRevenueEntries();
+
+  return () => {
+    cancelled = true;
+  };
+}, []);
+
 /* ============================================================
    REVENUE HELPERS
    ============================================================ */
