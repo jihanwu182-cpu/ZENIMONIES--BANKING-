@@ -1960,7 +1960,7 @@ const AdminDashboard: React.FC<{
               textTransform: 'none',
             }}
           >
-            Review KYC cases
+            View KYC cases
           </Button>
         </CardContent>
       </Card>
