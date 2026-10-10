@@ -76,6 +76,16 @@ import {
   Wallet,
 } from '@mui/icons-material';
 
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} from 'recharts';
+
 import { useNavigate } from 'react-router-dom';
 
 
