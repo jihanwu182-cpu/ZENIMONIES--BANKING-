@@ -737,10 +737,7 @@ const AdminDashboard: React.FC<{
 
   const [success, setSuccess] =
     useState('');
-  const [revenuePeriod, setRevenuePeriod] = useState<
-  'Daily' | 'Weekly' | 'Monthly' | 'Yearly'
->('Monthly');
-
+  
   const [dashboard, setDashboard] =
     useState<DashboardData | null>(null);
 
