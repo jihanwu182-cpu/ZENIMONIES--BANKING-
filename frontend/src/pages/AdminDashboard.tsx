@@ -1506,9 +1506,11 @@ const AdminDashboard: React.FC<{
               >
                 <CardContent
                   sx={{
-                    p: { xs: 1.5, sm: 2 },
-                    '&:last-child': { pb: { xs: 1.5, sm: 2 } },
-                  }}
+              p: { xs: 1, sm: 2 },
+               '&:last-child': {
+              pb: { xs: 1, sm: 2 },
+           },
+          }}
                 >
                   <Stack
                     direction="row"
