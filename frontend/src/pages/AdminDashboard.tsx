@@ -737,6 +737,9 @@ const AdminDashboard: React.FC<{
 
   const [success, setSuccess] =
     useState('');
+  const [revenuePeriod, setRevenuePeriod] = useState<
+  'Daily' | 'Weekly' | 'Monthly' | 'Yearly'
+>('Monthly');
 
   const [dashboard, setDashboard] =
     useState<DashboardData | null>(null);
@@ -1682,7 +1685,7 @@ const AdminDashboard: React.FC<{
           >
             Revenue trend
           </Typography>
-
+            
           <Stack
             direction="row"
             spacing={0.75}
@@ -1693,45 +1696,55 @@ const AdminDashboard: React.FC<{
               pb: 0.5,
             }}
           >
-            {['Daily', 'Weekly', 'Monthly', 'Yearly'].map((period) => (
-              <Chip
-                key={period}
-                label={period}
-                size="small"
-                sx={{
-                  flex: '0 0 auto',
-                  fontWeight: 700,
-                  color: BRAND.green,
-                  backgroundColor: BRAND.greenLight,
-                }}
-              />
-            ))}
+            {(['Daily', 'Weekly', 'Monthly', 'Yearly'] as const).map(
+              (period) => (
+                <Chip
+                  key={period}
+                  label={period}
+                  size="small"
+                  onClick={() => setRevenuePeriod(period)}
+                  variant={revenuePeriod === period ? 'filled' : 'outlined'}
+                  sx={{
+                    flex: '0 0 auto',
+                    fontWeight: 700,
+                    color: BRAND.green,
+                    backgroundColor:
+                      revenuePeriod === period
+                        ? BRAND.greenLight
+                        : 'transparent',
+                    borderColor: BRAND.green,
+                    cursor: 'pointer',
+                  }}
+                />
+              )
+            )}
           </Stack>
 
           <Box
             sx={{
-              flex: 1,
               mt: 1.5,
-              minHeight: 120,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              height: 160,
+              minWidth: 0,
               borderBottom: `1px solid ${BRAND.border}`,
             }}
           >
-            <Typography
+            <Box
               sx={{
-                maxWidth: 300,
-                fontSize: 12,
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 color: BRAND.muted,
+                fontSize: 12,
                 textAlign: 'center',
+                px: 2,
               }}
             >
-              Verified revenue history will appear here when the financial
-              data source is connected.
-            </Typography>
+              Revenue data is not available yet.
+            </Box>
           </Box>
         </Box>
+
 
         {/* FINANCIAL SUMMARY */}
         <Grid container spacing={1} sx={{ mt: 1 }}>
