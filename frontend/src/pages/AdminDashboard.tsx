@@ -1490,7 +1490,7 @@ const AdminDashboard: React.FC<{
     tone: BRAND.green,
             },
           ].map((item) => (
-            <Grid item xs={6} sm={3} md={3} key={item.title}>
+            <Grid item xs={6} sm={3} md={3} lg={3} key={item.title}>
               <Card
                 sx={{
                   ...pageCardSx,
@@ -1506,9 +1506,9 @@ const AdminDashboard: React.FC<{
               >
                 <CardContent
                   sx={{
-              p: { xs: 1, sm: 2 },
+              p: { xs: 1.5, sm: 2 },
                '&:last-child': {
-              pb: { xs: 1, sm: 2 },
+              pb: { xs: 1.5, sm: 2 },
            },
           }}
                 >
@@ -1584,7 +1584,11 @@ const AdminDashboard: React.FC<{
 
         
 {/* FINANCIAL PERFORMANCE + RIGHT OPERATIONS SIDEBAR */}
-<Grid container spacing={1.5} alignItems="stretch">
+<Grid
+  container
+  spacing={{ xs: 2, md: 2.5 }}
+  alignItems="stretch"
+>
   {/* MAIN REVENUE PANEL */}
   <Grid item xs={12} lg={8}>
     <Card
@@ -1685,7 +1689,7 @@ const AdminDashboard: React.FC<{
                 label={period}
                 size="small"
                 sx={{
-                  flex: '1 0 auto',
+                  flex: '0 0 auto',
                   fontWeight: 700,
                   color: BRAND.green,
                   backgroundColor: BRAND.greenLight,
