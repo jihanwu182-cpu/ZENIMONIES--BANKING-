@@ -811,65 +811,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$$;
-
-
-    row_data := to_jsonb(NEW);
-    entity_uuid := NEW.id;
-
-    IF TG_OP = 'INSERT' THEN
-        event_name := TG_TABLE_NAME || '.insert';
-    ELSE
-        event_name := TG_TABLE_NAME || '.update';
-    END IF;
-
-    actor_uuid := COALESCE(
-        NULLIF(row_data->>'recorded_by', '')::UUID,
-        NULLIF(row_data->>'created_by', '')::UUID,
-        NULLIF(row_data->>'approved_by', '')::UUID
-    );
-
-    metadata_json := jsonb_build_object(
-        'reference',
-        COALESCE(
-            row_data->>'revenue_reference',
-            row_data->>'settlement_reference',
-            row_data->>'movement_reference'
-        ),
-        'entry_kind', row_data->>'entry_kind',
-        'reversal_of_id', row_data->>'reversal_of_id',
-        'replaces_id', row_data->>'replaces_id',
-        'status', row_data->>'accounting_status',
-        'workflow_status', row_data->>'status',
-        'transaction_status', row_data->>'transaction_status',
-        'amount', row_data->>'amount',
-        'gross_fee', row_data->>'gross_fee',
-        'provider_cost', row_data->>'provider_cost',
-        'partner_share', row_data->>'partner_share',
-        'other_direct_cost', row_data->>'other_direct_cost',
-        'zenimonies_revenue', row_data->>'zenimonies_revenue',
-        'currency', row_data->>'currency'
-    );
-
-    INSERT INTO revenue_audit_events (
-        actor_user_id,
-        event_type,
-        entity_type,
-        entity_id,
-        metadata
-    )
-    VALUES (
-        actor_uuid,
-        event_name,
-        TG_TABLE_NAME,
-        entity_uuid,
-        metadata_json
-    );
-
-    RETURN NEW;
-END;
-$$;
-
+$$; 
 DROP TRIGGER IF EXISTS trg_audit_revenue_ledger
 ON revenue_ledger;
 CREATE TRIGGER trg_audit_revenue_ledger
