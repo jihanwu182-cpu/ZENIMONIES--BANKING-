@@ -809,13 +809,18 @@ const AdminDashboard: React.FC<{
         '/admin/dashboard'
       );
 
-      setDashboard(
-        response.data?.dashboard ||
-          response.data ||
-          null
-      );
-    }, []);
+      
+      const data =
+        response.data?.dashboard || response.data || {};
 
+      setDashboard({
+        ...data,
+        totalUsers: data?.totalUsers ?? data?.users?.total,
+        activeUsers: data?.activeUsers ?? data?.users?.active,
+        suspendedUsers: data?.suspendedUsers ?? data?.users?.suspended,
+      });
+
+     
   /* ==========================================================
      LOAD CUSTOMERS
      ========================================================== */
