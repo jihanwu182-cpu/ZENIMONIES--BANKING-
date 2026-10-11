@@ -748,15 +748,20 @@ async function prepareRevenueApproval({ entryId, preparedBy }) {
 
     const entry = result.rows[0];
 
-    if (
-      entry.entry_kind !== 'original' ||
-      entry.accounting_status !== 'ready' ||
-      entry.transaction_status !== 'completed'
-    ) {
-      throw new Error(
-        'Only ready, completed original entries can be submitted for approval.'
-      );
-    }
+    const eligibleForApproval =
+  entry.accounting_status === 'ready' &&
+  (
+    (entry.entry_kind === 'original' &&
+      entry.transaction_status === 'completed') ||
+    (entry.entry_kind === 'reversal' &&
+      ['reversed', 'refunded'].includes(entry.transaction_status))
+  );
+
+if (!eligibleForApproval) {
+  throw new Error(
+    'Only ready original entries or ready reversals can be submitted for approval.'
+  );
+}
 
     if (
       entry.provider_cost === null ||
