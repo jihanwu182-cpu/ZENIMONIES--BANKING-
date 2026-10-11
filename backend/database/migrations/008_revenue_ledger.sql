@@ -702,12 +702,16 @@ END IF;
                 'Reversal amounts must exactly negate the original amounts.';
         END IF;
 
-        IF NEW.accounting_status <> 'posted'
-           OR NEW.transaction_status NOT IN ('reversed', 'refunded')
-           OR NEW.posted_at IS NULL THEN
-            RAISE EXCEPTION
-                'A reversal must be posted and marked reversed or refunded.';
-        END IF;
+            IF NEW.transaction_status NOT IN ('reversed', 'refunded') THEN
+        RAISE EXCEPTION
+            'A reversal must be marked reversed or refunded.';
+    END IF;
+
+    IF NEW.accounting_status = 'posted'
+       AND NEW.posted_at IS NULL THEN
+        RAISE EXCEPTION
+            'A posted reversal requires a posting timestamp.';
+    END IF;
 
         IF NULLIF(BTRIM(NEW.reversal_reason), '') IS NULL THEN
             RAISE EXCEPTION
