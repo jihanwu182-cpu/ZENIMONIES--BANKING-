@@ -324,18 +324,15 @@ async function createRevenueEntry(input, options = {}) {
       await client.query('BEGIN');
     }
 
-    if (normalized.accountingStatus === 'posted') {
-      if (normalized.transactionStatus !== 'completed') {
-        throw new Error(
-          'Original revenue entries can be posted only for completed transactions.'
-        );
-      }
-    }
+    // Direct posting is disabled.
+// Revenue must go through the separate approval workflow.
+if (normalized.accountingStatus === 'posted') {
+  throw new Error(
+    'Direct posting is disabled. Prepare the entry and obtain approval from a different administrator before posting.'
+  );
+}
 
-    const postedAt =
-      normalized.accountingStatus === 'posted'
-        ? new Date()
-        : null;
+const postedAt = null;
 
     const result = await client.query(
       `
