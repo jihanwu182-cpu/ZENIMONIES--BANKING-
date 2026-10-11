@@ -1,24 +1,32 @@
 
+
 const pool = require('../config/database');
 
 const {
   prepareRevenueApproval: prepareApproval,
   decideRevenueApproval: decideApproval,
   postRevenueEntry: postEntry,
+  reverseRevenueEntry: reverseEntry,
 } = require('../services/revenueService');
 
 // ============================================================
 // ZENIMONIES BANKING — ADMIN REVENUE CONTROLLER
+//
 // All routes must be protected by adminMiddleware.
-// Actor IDs come only from the authenticated req.userId.
+// Actor IDs come only from authenticated req.userId.
+// Reversals require independent approval before posting.
 // ============================================================
 
 function sendError(res, error, action) {
-  console.error(`Admin revenue ${action} error:`, error.message);
+  console.error(
+    `Admin revenue ${action} error:`,
+    error.message
+  );
 
   const knownErrors = [
     'was not found',
     'required',
+    'recordedBy',
     'must be',
     'cannot',
     'Only ',
@@ -37,8 +45,8 @@ function sendError(res, error, action) {
     'Revenue entry could not',
   ];
 
-  const isValidationError = knownErrors.some(
-    (message) => error.message.startsWith(message)
+  const isValidationError = knownErrors.some((message) =>
+    error.message.startsWith(message)
   );
 
   return res.status(isValidationError ? 400 : 500).json({
@@ -49,49 +57,61 @@ function sendError(res, error, action) {
   });
 }
 
+// ============================================================
 // GET /api/admin/revenue/summary
+// ============================================================
+
 const getRevenueSummary = async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
         currency,
         COUNT(*)::int AS total_entries,
+
         COUNT(*) FILTER (
           WHERE accounting_status = 'posted'
             AND entry_kind = 'original'
         )::int AS posted_original_entries,
+
         COUNT(*) FILTER (
           WHERE accounting_status = 'posted'
             AND entry_kind = 'reversal'
         )::int AS posted_reversal_entries,
+
         COUNT(*) FILTER (
           WHERE accounting_status = 'incomplete'
         )::int AS incomplete_entries,
+
         COALESCE(
           SUM(gross_fee) FILTER (
             WHERE accounting_status = 'posted'
           ), 0
         )::numeric(18,2) AS net_gross_fees,
+
         COALESCE(
           SUM(provider_cost) FILTER (
             WHERE accounting_status = 'posted'
           ), 0
         )::numeric(18,2) AS net_provider_costs,
+
         COALESCE(
           SUM(partner_share) FILTER (
             WHERE accounting_status = 'posted'
           ), 0
         )::numeric(18,2) AS net_partner_shares,
+
         COALESCE(
           SUM(other_direct_cost) FILTER (
             WHERE accounting_status = 'posted'
           ), 0
         )::numeric(18,2) AS net_other_direct_costs,
+
         COALESCE(
           SUM(zenimonies_revenue) FILTER (
             WHERE accounting_status = 'posted'
           ), 0
         )::numeric(18,2) AS net_zenimonies_revenue
+
       FROM revenue_ledger
       GROUP BY currency
       ORDER BY currency
@@ -106,7 +126,10 @@ const getRevenueSummary = async (req, res) => {
   }
 };
 
+// ============================================================
 // GET /api/admin/revenue/entries
+// ============================================================
+
 const getRevenueEntries = async (req, res) => {
   try {
     const limitValue = Number.parseInt(req.query.limit, 10);
@@ -122,15 +145,30 @@ const getRevenueEntries = async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-         id, revenue_reference, entry_kind,
-         reversal_of_id, replaces_id,
-         service_type, source_type, source_id,
-         source_reference, customer_user_id,
-         partner_id, partner_terms_id, currency,
-         gross_fee, provider_cost, partner_share,
-         other_direct_cost, zenimonies_revenue,
-         accounting_status, transaction_status,
-         description, reversal_reason, created_at, posted_at
+         id,
+         revenue_reference,
+         entry_kind,
+         reversal_of_id,
+         replaces_id,
+         service_type,
+         source_type,
+         source_id,
+         source_reference,
+         customer_user_id,
+         partner_id,
+         partner_terms_id,
+         currency,
+         gross_fee,
+         provider_cost,
+         partner_share,
+         other_direct_cost,
+         zenimonies_revenue,
+         accounting_status,
+         transaction_status,
+         description,
+         reversal_reason,
+         created_at,
+         posted_at
        FROM revenue_ledger
        ORDER BY created_at DESC, id DESC
        LIMIT $1 OFFSET $2`,
@@ -148,7 +186,10 @@ const getRevenueEntries = async (req, res) => {
   }
 };
 
+// ============================================================
 // GET /api/admin/revenue/approvals/pending
+// ============================================================
+
 const getPendingRevenueApprovals = async (req, res) => {
   try {
     const result = await pool.query(
@@ -187,7 +228,10 @@ const getPendingRevenueApprovals = async (req, res) => {
   }
 };
 
+// ============================================================
 // POST /api/admin/revenue/entries/:id/prepare-approval
+// ============================================================
+
 const prepareRevenueApproval = async (req, res) => {
   try {
     const approval = await prepareApproval({
@@ -205,7 +249,10 @@ const prepareRevenueApproval = async (req, res) => {
   }
 };
 
+// ============================================================
 // PATCH /api/admin/revenue/approvals/:id/decision
+// ============================================================
+
 const decideRevenueApproval = async (req, res) => {
   try {
     const decision = req.body?.decision;
@@ -235,7 +282,10 @@ const decideRevenueApproval = async (req, res) => {
   }
 };
 
+// ============================================================
 // POST /api/admin/revenue/entries/:id/post
+// ============================================================
+
 const postRevenueEntry = async (req, res) => {
   try {
     const entry = await postEntry({
@@ -253,6 +303,59 @@ const postRevenueEntry = async (req, res) => {
   }
 };
 
+// ============================================================
+// POST /api/admin/revenue/entries/:id/reverse
+//
+// Creates a reversal for a posted original entry.
+// The reversal remains ready for independent approval;
+// this endpoint does not post it or change customer funds.
+// ============================================================
+
+const reverseRevenueEntry = async (req, res) => {
+  try {
+    const { reversalReason, transactionStatus } = req.body || {};
+
+    if (
+      typeof reversalReason !== 'string' ||
+      !reversalReason.trim()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'A reversal reason is required.',
+      });
+    }
+
+    const status = transactionStatus || 'refunded';
+
+    if (!['reversed', 'refunded'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'transactionStatus must be reversed or refunded.',
+      });
+    }
+
+    const reversal = await reverseEntry({
+      originalEntryId: req.params.id,
+      reversalReason: reversalReason.trim(),
+      transactionStatus: status,
+      recordedBy: req.userId,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message:
+        'Revenue reversal created and submitted for independent approval.',
+      data: reversal,
+    });
+  } catch (error) {
+    return sendError(res, error, 'create revenue reversal');
+  }
+};
+
+// ============================================================
+// EXPORTS
+// ============================================================
+
 module.exports = {
   getRevenueSummary,
   getRevenueEntries,
@@ -260,4 +363,5 @@ module.exports = {
   prepareRevenueApproval,
   decideRevenueApproval,
   postRevenueEntry,
+  reverseRevenueEntry,
 };
