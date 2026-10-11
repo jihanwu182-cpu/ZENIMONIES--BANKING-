@@ -537,6 +537,17 @@ BEGIN
                 'The posted reversal does not match the original entry.';
         END IF;
 
+          
+        IF reversal_row.gross_fee <> -replacement_row.gross_fee
+           OR reversal_row.provider_cost IS DISTINCT FROM -replacement_row.provider_cost
+           OR reversal_row.partner_share IS DISTINCT FROM -replacement_row.partner_share
+           OR reversal_row.other_direct_cost IS DISTINCT FROM -replacement_row.other_direct_cost
+           OR reversal_row.zenimonies_revenue IS DISTINCT FROM -replacement_row.zenimonies_revenue THEN
+            RAISE EXCEPTION
+                'The posted reversal amounts must exactly negate the original entry.';
+        END IF;
+
+
         IF NEW.currency <> replacement_row.currency
            OR NEW.service_type <> replacement_row.service_type
            OR NEW.source_type <> replacement_row.source_type
