@@ -722,12 +722,12 @@ async function markRevenueEntryReady({
 // ============================================================
 
 
-async function prepareRevenueApproval({ entryId, preparedBy }) {
+async function postRevenueEntry({ entryId, recordedBy }) {
   const id = optionalUuid(entryId, 'entryId');
-  const actorId = optionalUuid(preparedBy, 'preparedBy');
+  const actorId = optionalUuid(recordedBy, 'recordedBy');
 
   if (!id || !actorId) {
-    throw new Error('entryId and preparedBy are required.');
+    throw new Error('entryId and recordedBy are required.');
   }
 
   const client = await pool.connect();
@@ -735,7 +735,7 @@ async function prepareRevenueApproval({ entryId, preparedBy }) {
   try {
     await client.query('BEGIN');
 
-    const result = await client.query(
+    const entryResult = await client.query(
       `SELECT *
        FROM revenue_ledger
        WHERE id = $1
@@ -743,11 +743,11 @@ async function prepareRevenueApproval({ entryId, preparedBy }) {
       [id]
     );
 
-    if (result.rowCount !== 1) {
+    if (entryResult.rowCount !== 1) {
       throw new Error('Revenue entry was not found.');
     }
 
-    const entry = result.rows[0];
+    const entry = entryResult.rows[0];
 
     if (
       entry.entry_kind !== 'original' ||
@@ -755,7 +755,7 @@ async function prepareRevenueApproval({ entryId, preparedBy }) {
       entry.transaction_status !== 'completed'
     ) {
       throw new Error(
-        'Only ready, completed original entries can be submitted for approval.'
+        'Only ready, completed original entries can be posted.'
       );
     }
 
@@ -768,152 +768,59 @@ async function prepareRevenueApproval({ entryId, preparedBy }) {
       throw new Error('All accounting amounts must be known.');
     }
 
-    const existing = await client.query(
-      `SELECT id
-       FROM revenue_ledger_approvals
-       WHERE revenue_ledger_id = $1
-         AND status = 'pending'
-       LIMIT 1`,
-      [id]
-    );
-
-    if (existing.rowCount > 0) {
-      throw new Error('This entry already has a pending approval request.');
-    }
-
-    const approval = await client.query(
-      `INSERT INTO revenue_ledger_approvals (
-         revenue_ledger_id, prepared_by, status,
-         gross_fee, provider_cost, partner_share,
-         other_direct_cost, zenimonies_revenue
-       )
-       VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7)
-       RETURNING *`,
-      [
-        id,
-        actorId,
-        entry.gross_fee,
-        entry.provider_cost,
-        entry.partner_share,
-        entry.other_direct_cost,
-        entry.zenimonies_revenue,
-      ]
-    );
-
-    await client.query('COMMIT');
-    return approval.rows[0];
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-async function decideRevenueApproval({
-  approvalId,
-  approvedBy,
-  decision,
-  reason,
-}) {
-  const id = optionalUuid(approvalId, 'approvalId');
-  const actorId = optionalUuid(approvedBy, 'approvedBy');
-
-  if (!id || !actorId) {
-    throw new Error('approvalId and approvedBy are required.');
-  }
-
-  if (!['approved', 'rejected'].includes(decision)) {
-    throw new Error('Decision must be approved or rejected.');
-  }
-
-  const decisionReason =
-    typeof reason === 'string' ? reason.trim() : '';
-
-  if (decision === 'rejected' && !decisionReason) {
-    throw new Error('A rejection reason is required.');
-  }
-
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN');
-
     const approvalResult = await client.query(
       `SELECT *
        FROM revenue_ledger_approvals
-       WHERE id = $1
+       WHERE revenue_ledger_id = $1
+         AND status = 'approved'
+         AND prepared_by <> approved_by
+       ORDER BY decided_at DESC
+       LIMIT 1
        FOR UPDATE`,
       [id]
     );
 
     if (approvalResult.rowCount !== 1) {
-      throw new Error('Approval request was not found.');
+      throw new Error(
+        'A separate administrator must approve this entry before posting.'
+      );
     }
 
     const approval = approvalResult.rows[0];
 
-    if (approval.status !== 'pending') {
-      throw new Error('This request has already been decided.');
-    }
+    const amountsMatch =
+      String(entry.gross_fee) === String(approval.gross_fee) &&
+      String(entry.provider_cost) === String(approval.provider_cost) &&
+      String(entry.partner_share) === String(approval.partner_share) &&
+      String(entry.other_direct_cost) === String(approval.other_direct_cost) &&
+      String(entry.zenimonies_revenue) ===
+        String(approval.zenimonies_revenue);
 
-    if (approval.prepared_by === actorId) {
+    if (!amountsMatch) {
       throw new Error(
-        'The administrator who prepared this entry cannot decide its approval.'
+        'The entry amounts do not match the approved snapshot.'
       );
     }
 
-    const entryResult = await client.query(
-      `SELECT *
-       FROM revenue_ledger
+    const result = await client.query(
+      `UPDATE revenue_ledger
+       SET accounting_status = 'posted',
+           posted_at = CURRENT_TIMESTAMP,
+           recorded_by = $2,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
-       FOR UPDATE`,
-      [approval.revenue_ledger_id]
-    );
-
-    if (entryResult.rowCount !== 1) {
-      throw new Error('Revenue entry was not found.');
-    }
-
-    const entry = entryResult.rows[0];
-
-    if (
-      entry.accounting_status !== 'ready' ||
-      entry.transaction_status !== 'completed' ||
-      String(entry.gross_fee) !== String(approval.gross_fee) ||
-      String(entry.provider_cost) !== String(approval.provider_cost) ||
-      String(entry.partner_share) !== String(approval.partner_share) ||
-      String(entry.other_direct_cost) !== String(approval.other_direct_cost) ||
-      String(entry.zenimonies_revenue) !== String(approval.zenimonies_revenue)
-    ) {
-      throw new Error(
-        'The entry changed after submission. Prepare a new approval request.'
-      );
-    }
-
-    const update = await client.query(
-      `UPDATE revenue_ledger_approvals
-       SET status = $2,
-           approved_by = $3,
-           decided_at = CURRENT_TIMESTAMP,
-           decision_reason = $4
-       WHERE id = $1
-         AND status = 'pending'
+         AND accounting_status = 'ready'
+         AND transaction_status = 'completed'
        RETURNING *`,
-      [
-        id,
-        decision,
-        actorId,
-        decision === 'rejected' ? decisionReason : null,
-      ]
+      [id, actorId]
     );
 
-    if (update.rowCount !== 1) {
-      throw new Error('Could not save the approval decision.');
+    if (result.rowCount !== 1) {
+      throw new Error('Revenue entry could not be posted.');
     }
 
     await client.query('COMMIT');
-    return update.rows[0];
+    return result.rows[0];
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
@@ -921,8 +828,6 @@ async function decideRevenueApproval({
     client.release();
   }
 }
-
-
 
 module.exports = {
   calculateZenimoniesRevenue,
