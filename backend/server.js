@@ -636,7 +636,26 @@ const startServer = async () => {
     console.log(
       'Database initialization completed.'
     );
+ // ========================================================
+// READ-ONLY REVENUE LEDGER CHECK
+// ========================================================
 
+try {
+  const result = await pool.query(`
+    SELECT to_regclass('public.revenue_ledger')
+      IS NOT NULL AS table_exists;
+  `);
+
+  console.log(
+    'Revenue ledger table exists:',
+    result.rows[0].table_exists
+  );
+} catch (error) {
+  console.error(
+    'Revenue ledger check failed:',
+    error.message
+  );
+}
     // ========================================================
     // BANK TRANSFERS COMPATIBILITY MIGRATION
     // ========================================================
