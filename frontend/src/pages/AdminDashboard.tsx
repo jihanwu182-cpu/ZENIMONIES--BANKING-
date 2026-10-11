@@ -1415,6 +1415,11 @@ const AdminDashboard: React.FC<{
       (total, item) => total + item.count,
       0
     );
+   
+const revenueChartData: Array<{
+  label: string;
+  revenue: number;
+}> = [];
 
     
     return (
