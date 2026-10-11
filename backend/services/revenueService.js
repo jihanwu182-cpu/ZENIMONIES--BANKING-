@@ -888,9 +888,18 @@ async function decideRevenueApproval({
 
     const entry = entryResult.rows[0];
 
-    if (
-  entry.accounting_status !== 'ready' ||
-  entry.transaction_status !== 'completed' ||
+    
+const eligibleForDecision =
+  entry.accounting_status === 'ready' &&
+  (
+    (entry.entry_kind === 'original' &&
+      entry.transaction_status === 'completed') ||
+    (entry.entry_kind === 'reversal' &&
+      ['reversed', 'refunded'].includes(entry.transaction_status))
+  );
+
+if (
+  !eligibleForDecision ||
   String(entry.gross_fee) !== String(approval.gross_fee) ||
   String(entry.provider_cost) !== String(approval.provider_cost) ||
   String(entry.partner_share) !== String(approval.partner_share) ||
@@ -901,6 +910,7 @@ async function decideRevenueApproval({
     'The entry changed after submission. Prepare a new approval request.'
   );
 }
+
 
     const update = await client.query(
       `UPDATE revenue_ledger_approvals
