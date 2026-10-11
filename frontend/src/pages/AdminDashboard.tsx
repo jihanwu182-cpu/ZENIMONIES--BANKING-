@@ -84,7 +84,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  ChartTooltip,
+  Tooltip as ChartTooltip,
   PieChart,
   Pie,
   Cell,
