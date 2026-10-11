@@ -1012,19 +1012,32 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    -- Every new request must start pending.
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.status <> 'pending'
+           OR NEW.approved_by IS NOT NULL
+           OR NEW.decided_at IS NOT NULL THEN
+            RAISE EXCEPTION
+                'New revenue approval requests must start pending without a decision.';
+        END IF;
+
+        RETURN NEW;
+    END IF;
+
+    -- Approval history cannot be deleted.
     IF TG_OP = 'DELETE' THEN
         RAISE EXCEPTION
             'Revenue approval records cannot be deleted.';
     END IF;
 
-    -- Only a pending request may receive one decision.
+    -- A pending request can receive exactly one final decision.
     IF OLD.status <> 'pending'
        OR NEW.status NOT IN ('approved', 'rejected') THEN
         RAISE EXCEPTION
             'Only a pending revenue approval can receive a final decision.';
     END IF;
 
-    -- The decision cannot change the request or its financial snapshot.
+    -- The request and its financial snapshot cannot change.
     IF NEW.id IS DISTINCT FROM OLD.id
        OR NEW.revenue_ledger_id IS DISTINCT FROM OLD.revenue_ledger_id
        OR NEW.prepared_by IS DISTINCT FROM OLD.prepared_by
@@ -1042,11 +1055,12 @@ BEGIN
 END;
 $$;
 
+
 DROP TRIGGER IF EXISTS trg_protect_revenue_ledger_approval
 ON revenue_ledger_approvals;
 
 CREATE TRIGGER trg_protect_revenue_ledger_approval
-BEFORE UPDATE OR DELETE
+BEFORE INSERT OR UPDATE OR DELETE
 ON revenue_ledger_approvals
 FOR EACH ROW
 EXECUTE FUNCTION protect_revenue_ledger_approval();
