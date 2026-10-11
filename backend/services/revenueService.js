@@ -63,40 +63,48 @@ const AMOUNT_FIELDS = [
   'otherDirectCost',
   'zenimoniesRevenue',
 ];
-
-const MONEY_PATTERN = /^\d{1,16}(\.\d{1,2})?$/;
-
 // ============================================================
-// VALIDATION HELPERS
+// EXACT MONEY HELPERS — NO FLOATING-POINT ARITHMETIC
+// Supports PostgreSQL NUMERIC(18,2) amounts.
 // ============================================================
 
-function requiredText(value, field, maxLength = 150) {
-  if (
-    typeof value !== 'string' ||
-    value.trim().length === 0 ||
-    value.trim().length > maxLength
-  ) {
-    throw new Error(`Invalid ${field}.`);
+const MONEY_PATTERN = /^-?\d{1,16}(?:\.\d{1,2})?$/;
+
+/**
+ * Convert a decimal amount into integer kobo using BigInt.
+ * Never use JavaScript Number for financial calculations.
+ */
+function decimalToCents(value, field = 'amount') {
+  const text = String(value);
+
+  if (!MONEY_PATTERN.test(text)) {
+    throw new Error(
+      `Invalid ${field}. Use up to 16 whole-number digits and 2 decimal places.`
+    );
   }
 
-  return value.trim();
+  const negative = text.startsWith('-');
+  const unsigned = negative ? text.slice(1) : text;
+  const [whole, fraction = ''] = unsigned.split('.');
+
+  const cents =
+    BigInt(whole) * 100n +
+    BigInt((fraction + '00').slice(0, 2));
+
+  return negative ? -cents : cents;
 }
 
-function optionalUuid(value, field) {
-  if (value === undefined || value === null || value === '') {
-    return null;
-  }
+/**
+ * Convert integer kobo into an exact decimal string.
+ * Example: 12345n becomes "123.45".
+ */
+function centsToDecimal(cents) {
+  const negative = cents < 0n;
+  const absolute = negative ? -cents : cents;
+  const whole = absolute / 100n;
+  const fraction = String(absolute % 100n).padStart(2, '0');
 
-  if (
-    typeof value !== 'string' ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      value
-    )
-  ) {
-    throw new Error(`Invalid ${field}.`);
-  }
-
-  return value;
+  return `${negative ? '-' : ''}${whole}.${fraction}`;
 }
 
 function money(value, field, options = {}) {
@@ -107,23 +115,13 @@ function money(value, field, options = {}) {
     throw new Error(`${field} is required.`);
   }
 
-  const stringValue = String(value);
+  const cents = decimalToCents(value, field);
 
-  if (!MONEY_PATTERN.test(stringValue)) {
-    throw new Error(`Invalid ${field}. Use an amount with up to 2 decimals.`);
-  }
-
-  const amount = Number(stringValue);
-
-  if (!Number.isFinite(amount)) {
-    throw new Error(`Invalid ${field}.`);
-  }
-
-  if (!allowNegative && amount < 0) {
+  if (!allowNegative && cents < 0n) {
     throw new Error(`${field} cannot be negative.`);
   }
 
-  return amount.toFixed(2);
+  return centsToDecimal(cents);
 }
 
 function calculateZenimoniesRevenue({
@@ -132,29 +130,29 @@ function calculateZenimoniesRevenue({
   partnerShare,
   otherDirectCost,
 }) {
-  // We cannot calculate final company revenue until every cost
-  // component is known. Never silently assume missing costs are zero.
+  // Unknown costs must remain unknown, never silently become zero.
   if (
     grossFee === null ||
+    grossFee === undefined ||
     providerCost === null ||
+    providerCost === undefined ||
     partnerShare === null ||
-    otherDirectCost === null
+    partnerShare === undefined ||
+    otherDirectCost === null ||
+    otherDirectCost === undefined
   ) {
     return null;
   }
 
-  const result =
-    Number(grossFee) -
-    Number(providerCost) -
-    Number(partnerShare) -
-    Number(otherDirectCost);
+  const revenueCents =
+    decimalToCents(grossFee, 'grossFee') -
+    decimalToCents(providerCost, 'providerCost') -
+    decimalToCents(partnerShare, 'partnerShare') -
+    decimalToCents(otherDirectCost, 'otherDirectCost');
 
-  if (!Number.isFinite(result)) {
-    throw new Error('Unable to calculate revenue.');
-  }
-
-  return result.toFixed(2);
+  return centsToDecimal(revenueCents);
 }
+
 
 function validateEnums(input) {
   if (!ALLOWED_CURRENCIES.has(input.currency)) {
