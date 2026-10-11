@@ -819,8 +819,7 @@ const AdminDashboard: React.FC<{
         activeUsers: data?.activeUsers ?? data?.users?.active,
         suspendedUsers: data?.suspendedUsers ?? data?.users?.suspended,
       });
-
-     
+    }, []);
   /* ==========================================================
      LOAD CUSTOMERS
      ========================================================== */
