@@ -655,23 +655,42 @@ DECLARE
     old_status TEXT;
     new_status TEXT;
 BEGIN
-        -- New financial records must start pending.
-    IF TG_OP = 'INSERT' AND NEW.status <> 'pending' THEN
+    -- Only the two supported financial tables are allowed.
+    IF TG_TABLE_NAME NOT IN (
+        'revenue_settlements',
+        'company_revenue_movements'
+    ) THEN
         RAISE EXCEPTION
-            'New financial records must start with pending status.';
+            'Unsupported financial workflow table.';
     END IF;
+
     new_status := NEW.status;
+
+    -- New financial records must start pending.
+    IF TG_OP = 'INSERT' THEN
+        IF new_status <> 'pending' THEN
+            RAISE EXCEPTION
+                'New financial records must start with pending status.';
+        END IF;
+
+        IF NEW.approved_by IS NOT NULL
+           OR NEW.approved_at IS NOT NULL
+           OR NEW.completed_at IS NOT NULL THEN
+            RAISE EXCEPTION
+                'New financial records cannot contain approval or completion details.';
+        END IF;
+    END IF;
 
     IF TG_OP = 'UPDATE' THEN
         old_status := OLD.status;
 
-        -- Completed records cannot be changed.
+        -- Completed records are immutable.
         IF old_status = 'completed' THEN
             RAISE EXCEPTION
                 'Completed financial records are immutable.';
         END IF;
 
-        -- Enforce forward-only workflow transitions.
+        -- Enforce permitted status transitions.
         IF new_status IS DISTINCT FROM old_status THEN
             IF NOT (
                 (old_status = 'pending'
@@ -692,8 +711,15 @@ BEGIN
             END IF;
         END IF;
 
-        -- Freeze financial details after approval.
+        -- Approval metadata cannot be changed after approval.
         IF old_status IN ('approved', 'processing') THEN
+            IF NEW.approved_by IS DISTINCT FROM OLD.approved_by
+               OR NEW.approved_at IS DISTINCT FROM OLD.approved_at THEN
+                RAISE EXCEPTION
+                    'Approval details cannot be changed after approval.';
+            END IF;
+
+            -- Freeze shared financial details.
             IF NEW.amount IS DISTINCT FROM OLD.amount
                OR NEW.currency IS DISTINCT FROM OLD.currency
                OR NEW.created_by IS DISTINCT FROM OLD.created_by
@@ -702,6 +728,7 @@ BEGIN
                     'Approved financial details cannot be changed.';
             END IF;
 
+            -- Freeze table-specific details.
             IF TG_TABLE_NAME = 'revenue_settlements' THEN
                 IF NEW.partner_id IS DISTINCT FROM OLD.partner_id
                    OR NEW.period_start IS DISTINCT FROM OLD.period_start
@@ -724,9 +751,16 @@ BEGIN
                 END IF;
             END IF;
         END IF;
+
+        -- Completion time cannot be changed once recorded.
+        IF OLD.completed_at IS NOT NULL
+           AND NEW.completed_at IS DISTINCT FROM OLD.completed_at THEN
+            RAISE EXCEPTION
+                'A recorded completion timestamp cannot be changed.';
+        END IF;
     END IF;
 
-    -- Require separate approval for financial records.
+    -- Approval requires a separate approver.
     IF new_status IN ('approved', 'processing', 'completed') THEN
         IF NEW.approved_by IS NULL OR NEW.approved_at IS NULL THEN
             RAISE EXCEPTION
@@ -740,6 +774,7 @@ BEGIN
         END IF;
     END IF;
 
+    -- Completed records require proof of completion.
     IF new_status = 'completed' THEN
         IF NEW.completed_at IS NULL THEN
             RAISE EXCEPTION
@@ -760,18 +795,23 @@ BEGIN
     END IF;
 
     NEW.updated_at := CURRENT_TIMESTAMP;
+
     RETURN NEW;
 END;
 $$;
+
 DROP TRIGGER IF EXISTS trg_validate_revenue_settlement
 ON revenue_settlements;
+
 CREATE TRIGGER trg_validate_revenue_settlement
 BEFORE INSERT OR UPDATE
 ON revenue_settlements
 FOR EACH ROW
 EXECUTE FUNCTION validate_revenue_workflow_transition();
+
 DROP TRIGGER IF EXISTS trg_validate_company_revenue_movement
 ON company_revenue_movements;
+
 CREATE TRIGGER trg_validate_company_revenue_movement
 BEFORE INSERT OR UPDATE
 ON company_revenue_movements
