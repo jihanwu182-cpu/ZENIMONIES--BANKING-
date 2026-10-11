@@ -826,11 +826,13 @@ async function postRevenueEntry({ entryId, recordedBy }) {
   }
 }
 
-
 module.exports = {
   calculateZenimoniesRevenue,
   createRevenueEntry,
   markRevenueEntryReady,
+  prepareRevenueApproval,
+  decideRevenueApproval,
   postRevenueEntry,
   reverseRevenueEntry,
 };
+
