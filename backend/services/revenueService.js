@@ -721,26 +721,25 @@ async function markRevenueEntryReady({
 // checks of source transaction, fee collection and cost evidence.
 // ============================================================
 
+
 async function postRevenueEntry({ entryId, recordedBy }) {
   const id = optionalUuid(entryId, 'entryId');
+  const actorId = optionalUuid(recordedBy, 'recordedBy');
 
-  if (!id) {
-    throw new Error('entryId is required.');
+  if (!id || !actorId) {
+    throw new Error('entryId and recordedBy are required.');
   }
 
-  const actorId = optionalUuid(recordedBy, 'recordedBy');
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
     const current = await client.query(
-      `
-        SELECT *
-        FROM revenue_ledger
-        WHERE id = $1
-        FOR UPDATE
-      `,
+      `SELECT *
+       FROM revenue_ledger
+       WHERE id = $1
+       FOR UPDATE`,
       [id]
     );
 
@@ -751,7 +750,7 @@ async function postRevenueEntry({ entryId, recordedBy }) {
     const entry = current.rows[0];
 
     if (entry.entry_kind !== 'original') {
-      throw new Error('Only original entries can be posted by this method.');
+      throw new Error('Only original entries can be posted.');
     }
 
     if (entry.accounting_status !== 'ready') {
@@ -771,18 +770,45 @@ async function postRevenueEntry({ entryId, recordedBy }) {
       throw new Error('All accounting amounts are required.');
     }
 
+    // A separate administrator must approve these exact amounts.
+    const approval = await client.query(
+      `SELECT id
+       FROM revenue_ledger_approvals
+       WHERE revenue_ledger_id = $1
+         AND status = 'approved'
+         AND prepared_by <> approved_by
+         AND gross_fee = $2
+         AND provider_cost = $3
+         AND partner_share = $4
+         AND other_direct_cost = $5
+         AND zenimonies_revenue = $6
+       ORDER BY decided_at DESC
+       LIMIT 1`,
+      [
+        id,
+        entry.gross_fee,
+        entry.provider_cost,
+        entry.partner_share,
+        entry.other_direct_cost,
+        entry.zenimonies_revenue,
+      ]
+    );
+
+    if (approval.rowCount !== 1) {
+      throw new Error(
+        'A different administrator must approve these exact amounts before posting.'
+      );
+    }
+
     const result = await client.query(
-      `
-        UPDATE revenue_ledger
-        SET
-          accounting_status = 'posted',
-          posted_at = CURRENT_TIMESTAMP,
-          recorded_by = COALESCE($2, recorded_by),
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-          AND accounting_status = 'ready'
-        RETURNING *
-      `,
+      `UPDATE revenue_ledger
+       SET accounting_status = 'posted',
+           posted_at = CURRENT_TIMESTAMP,
+           recorded_by = $2,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND accounting_status = 'ready'
+       RETURNING *`,
       [id, actorId]
     );
 
@@ -791,7 +817,6 @@ async function postRevenueEntry({ entryId, recordedBy }) {
     }
 
     await client.query('COMMIT');
-
     return result.rows[0];
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -800,6 +825,7 @@ async function postRevenueEntry({ entryId, recordedBy }) {
     client.release();
   }
 }
+
 
 module.exports = {
   calculateZenimoniesRevenue,
