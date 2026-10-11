@@ -567,6 +567,37 @@ BEGIN
         END IF;
     END IF;
 
+    -- Require independent approval before posting an original entry.
+IF NEW.accounting_status = 'posted'
+   AND NEW.entry_kind = 'original' THEN
+    IF TG_OP <> 'UPDATE'
+       OR OLD.accounting_status = 'posted' THEN
+        RAISE EXCEPTION
+            'Original revenue must be posted through an approved update.';
+    END IF;
+    IF NEW.recorded_by IS NULL THEN
+        RAISE EXCEPTION
+            'A recording administrator is required.';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1
+        FROM revenue_ledger_approvals a
+        WHERE a.revenue_ledger_id = NEW.id
+          AND a.status = 'approved'
+          AND a.approved_by IS NOT NULL
+          AND a.approved_by <> a.prepared_by
+          AND a.approved_by <> NEW.recorded_by
+          AND a.gross_fee = NEW.gross_fee
+          AND a.provider_cost = NEW.provider_cost
+          AND a.partner_share = NEW.partner_share
+          AND a.other_direct_cost = NEW.other_direct_cost
+          AND a.zenimonies_revenue = NEW.zenimonies_revenue
+    ) THEN
+        RAISE EXCEPTION
+            'Posting requires a matching independent approval.';
+    END IF;
+END IF;
+
     -- Validate replacement entries.
     IF NEW.entry_kind = 'original'
        AND NEW.replaces_id IS NOT NULL THEN
