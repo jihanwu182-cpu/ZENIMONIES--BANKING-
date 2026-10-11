@@ -516,7 +516,7 @@ async function reverseRevenueEntry({
       partnerShare: (-Number(original.partner_share)).toFixed(2),
       otherDirectCost: (-Number(original.other_direct_cost)).toFixed(2),
       transactionStatus,
-      accountingStatus: 'posted',
+      accountingStatus: 'ready',
       reversalReason: reason,
       recordedBy: actorId,
       description: `Reversal of ${original.revenue_reference}`,
@@ -557,8 +557,8 @@ async function reverseRevenueEntry({
         )
         VALUES (
           $1, 'reversal', $2, $3, $4, $5, $6, $7, $8, $9,
-          $10, $11, $12, $13, $14, $15, 'posted', $16, $17,
-          $18, CURRENT_TIMESTAMP, $19
+          $10, $11, $12, $13, $14, $15, 'ready', $16, $17,
+          $18, NULL, $19
         )
         RETURNING *
       `,
