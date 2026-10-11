@@ -503,7 +503,7 @@ async function reverseRevenueEntry({
       );
     }
     const negativeAmount = (value) =>
-      (-Number(value)).toFixed(2);
+  centsToDecimal(-decimalToCents(value, 'reversal amount'));in
     const reversalReference = `REV-${crypto.randomUUID()}`;
     const reversalResult = await client.query(
       `
@@ -1009,9 +1009,10 @@ if (!eligibleForPosting) {
     });
 
     if (
-      calculatedRevenue === null ||
-      calculatedRevenue !== Number(entry.zenimonies_revenue).toFixed(2)
-    ) {
+  calculatedRevenue === null ||
+  decimalToCents(calculatedRevenue, 'calculated revenue') !==
+    decimalToCents(entry.zenimonies_revenue, 'ledger revenue')
+   ) {
       throw new Error(
         'The revenue calculation does not match the ledger amounts.'
       );
