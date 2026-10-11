@@ -884,18 +884,18 @@ async function decideRevenueApproval({
     const entry = entryResult.rows[0];
 
     if (
-      entry.accounting_status !== 'ready' ||
-      entry.transaction_status !== 'completed' ||
-      entry.gross_fee !== approval.gross_fee ||
-      entry.provider_cost !== approval.provider_cost ||
-      entry.partner_share !== approval.partner_share ||
-      entry.other_direct_cost !== approval.other_direct_cost ||
-      entry.zenimonies_revenue !== approval.zenimonies_revenue
-    ) {
-      throw new Error(
-        'The entry changed after submission. Prepare a new approval request.'
-      );
-    }
+  entry.accounting_status !== 'ready' ||
+  entry.transaction_status !== 'completed' ||
+  String(entry.gross_fee) !== String(approval.gross_fee) ||
+  String(entry.provider_cost) !== String(approval.provider_cost) ||
+  String(entry.partner_share) !== String(approval.partner_share) ||
+  String(entry.other_direct_cost) !== String(approval.other_direct_cost) ||
+  String(entry.zenimonies_revenue) !== String(approval.zenimonies_revenue)
+) {
+  throw new Error(
+    'The entry changed after submission. Prepare a new approval request.'
+  );
+}
 
     const update = await client.query(
       `UPDATE revenue_ledger_approvals
