@@ -1064,9 +1064,15 @@ if (!eligibleForPosting) {
            posted_at = CURRENT_TIMESTAMP,
            recorded_by = $2,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1
-         AND accounting_status = 'ready'
-         AND transaction_status = 'completed'
+       
+WHERE id = $1
+  AND accounting_status = 'ready'
+  AND (
+    (entry_kind = 'original' AND transaction_status = 'completed')
+    OR
+    (entry_kind = 'reversal' AND transaction_status IN ('reversed', 'refunded'))
+  )
+
        RETURNING *`,
       [id, actorId]
     );
