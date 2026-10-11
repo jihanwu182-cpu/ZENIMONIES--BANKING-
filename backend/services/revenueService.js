@@ -379,7 +379,7 @@ const postedAt = null;
           currency,
           gross_fee,
           provider_cost,
-          partner_shareu,
+          partner_share,
           other_direct_cost,
           zenimonies_revenue,
           accounting_status,
