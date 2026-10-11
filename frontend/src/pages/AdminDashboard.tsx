@@ -76,6 +76,7 @@ import {
   Wallet,
 } from '@mui/icons-material';
 
+
 import {
   ResponsiveContainer,
   LineChart,
@@ -84,7 +85,14 @@ import {
   YAxis,
   CartesianGrid,
   ChartTooltip,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+  BarChart,
+  Bar,
 } from 'recharts';
+
 
 import { useNavigate } from 'react-router-dom';
 
@@ -1422,6 +1430,35 @@ const revenueChartData: Array<{
 }> = [];
 
     
+  const transactionTypeData = [
+    { name: 'Transfers', value: transactions.filter(t => /transfer|bank/i.test(String(t.type || t.transaction_type || t.transactionType || ''))).length, color: '#10B981' },
+    { name: 'Bills', value: transactions.filter(t => /bill|electricity|tv|internet/i.test(String(t.type || t.transaction_type || t.transactionType || ''))).length, color: '#3B82F6' },
+    { name: 'Airtime/Data', value: transactions.filter(t => /airtime|data|top.?up/i.test(String(t.type || t.transaction_type || t.transactionType || ''))).length, color: '#8B5CF6' },
+    { name: 'Merchant', value: transactions.filter(t => /merchant|pos|purchase/i.test(String(t.type || t.transaction_type || t.transactionType || ''))).length, color: '#F59E0B' },
+    { name: 'Others', value: transactions.filter(t => !/transfer|bank|bill|electricity|tv|internet|airtime|data|top.?up|merchant|pos|purchase/i.test(String(t.type || t.transaction_type || t.transactionType || ''))).length, color: '#94A3B8' },
+  ].filter(item => item.value > 0);
+
+  const userGrowthData = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date();
+    day.setHours(0, 0, 0, 0);
+    day.setDate(day.getDate() - (6 - index));
+
+    const nextDay = new Date(day);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    const registrations = customers.filter(customer => {
+      const createdAt = customer.created_at || customer.createdAt;
+      if (!createdAt) return false;
+      const date = new Date(createdAt);
+      return !Number.isNaN(date.getTime()) && date >= day && date < nextDay;
+    }).length;
+
+    return {
+      label: day.toLocaleDateString('en-NG', { weekday: 'short' }),
+      registrations,
+    };
+  });
+
     return (
       <Stack spacing={{ xs: 2, md: 2.5 }} sx={{ minWidth: 0 }}>
         {/* OVERVIEW HEADER */}
@@ -2019,6 +2056,75 @@ const revenueChartData: Array<{
     </Stack>
   </Grid>
 </Grid>
+
+
+        {/* TRANSACTION TYPES + USER GROWTH */}
+        <Grid container spacing={2.5}>
+          <Grid item xs={12} md={6}>
+            <Card sx={{ ...pageCardSx, borderRadius: 2.5, height: '100%' }}>
+              <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+                <Typography sx={{ fontSize: 19, fontWeight: 800, color: BRAND.text }}>
+                  Transaction Types
+                </Typography>
+                <Typography sx={{ mt: 0.5, fontSize: 12, color: BRAND.muted }}>
+                  Distribution by category
+                </Typography>
+
+                <Box sx={{ width: '100%', height: 290, mt: 1 }}>
+                  {transactionTypeData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={transactionTypeData}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius="48%"
+                          outerRadius="72%"
+                          paddingAngle={1}
+                        >
+                          {transactionTypeData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <ChartTooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: BRAND.muted, fontSize: 13 }}>
+                      No transaction records available yet.
+                    </Box>
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card sx={{ ...pageCardSx, borderRadius: 2.5, height: '100%' }}>
+              <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+                <Typography sx={{ fontSize: 19, fontWeight: 800, color: BRAND.text }}>
+                  User Growth
+                </Typography>
+                <Typography sx={{ mt: 0.5, fontSize: 12, color: BRAND.muted }}>
+                  New registrations over the last seven days
+                </Typography>
+
+                <Box sx={{ width: '100%', height: 290, mt: 2 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={userGrowthData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={BRAND.border} />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: BRAND.muted }} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: BRAND.muted }} />
+                      <ChartTooltip />
+                      <Bar dataKey="registrations" name="New registrations" fill={BRAND.green} radius={[7, 7, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
 
 
         {/* RECENT TRANSACTIONS */}
