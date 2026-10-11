@@ -175,10 +175,11 @@ const AdminRoute: React.FC = () => {
     );
   }
 
-  return (
-  <AdminErrorBoundary>
-    <Admin />
-  </AdminErrorBoundary>
+   return (
+    <AdminErrorBoundary>
+      <Admin />
+    </AdminErrorBoundary>
+  );
 };
 
 // ============================================================
