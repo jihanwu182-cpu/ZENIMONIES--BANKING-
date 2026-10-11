@@ -96,6 +96,68 @@ import CustomerCareDashboard from './pages/CustomerCareDashboard.tsx';
 
 import SessionGuard from './components/SessionGuard.tsx';
 
+
+class AdminErrorBoundary extends React.Component<
+  React.PropsWithChildren,
+  { hasError: boolean; message: string }
+> {
+  state = { hasError: false, message: '' };
+
+  static getDerivedStateFromError(error: unknown) {
+    return {
+      hasError: true,
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Unexpected admin dashboard error.',
+    };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error(
+      'ZENIMONIES admin dashboard render error:',
+      error,
+      info
+    );
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            padding: 24,
+            margin: 20,
+            background: '#ffffff',
+            color: '#173b2d',
+            border: '1px solid #dce9e2',
+            borderRadius: 12,
+            fontFamily: 'Arial, sans-serif',
+          }}
+        >
+          <h2>ZENIMONIES Admin Dashboard</h2>
+          <p>The dashboard encountered a display error.</p>
+          <p
+            style={{
+              padding: 12,
+              background: '#fff4f2',
+              color: '#9b2c1c',
+              overflowWrap: 'anywhere',
+            }}
+          >
+            <strong>Error details:</strong> {this.state.message}
+          </p>
+          <button onClick={() => window.location.reload()}>
+            Reload dashboard
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // ============================================================
 // ADMIN ROUTE GUARD
 // ============================================================
@@ -113,7 +175,10 @@ const AdminRoute: React.FC = () => {
     );
   }
 
-  return <Admin />;
+  return (
+  <AdminErrorBoundary>
+    <Admin />
+  </AdminErrorBoundary>
 };
 
 // ============================================================
