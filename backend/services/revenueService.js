@@ -64,6 +64,36 @@ const AMOUNT_FIELDS = [
   'zenimoniesRevenue',
 ];
 // ============================================================
+// VALIDATION HELPERS
+// ============================================================
+
+function requiredText(value, field, maxLength = 150) {
+  if (
+    typeof value !== 'string' ||
+    value.trim().length === 0 ||
+    value.trim().length > maxLength
+  ) {
+    throw new Error(`Invalid ${field}.`);
+  }
+
+  return value.trim();
+}
+
+function optionalUuid(value, field) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  if (
+    typeof value !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  ) {
+    throw new Error(`Invalid ${field}.`);
+  }
+
+  return value;
+}
+// ============================================================
 // EXACT MONEY HELPERS — NO FLOATING-POINT ARITHMETIC
 // Supports PostgreSQL NUMERIC(18,2) amounts.
 // ============================================================
@@ -349,7 +379,7 @@ const postedAt = null;
           currency,
           gross_fee,
           provider_cost,
-          partner_share,
+          partner_shareu,
           other_direct_cost,
           zenimonies_revenue,
           accounting_status,
@@ -503,7 +533,7 @@ async function reverseRevenueEntry({
       );
     }
     const negativeAmount = (value) =>
-  centsToDecimal(-decimalToCents(value, 'reversal amount'));in
+  centsToDecimal(-decimalToCents(value, 'reversal amount'));
     const reversalReference = `REV-${crypto.randomUUID()}`;
     const reversalResult = await client.query(
       `
