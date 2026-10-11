@@ -968,17 +968,22 @@ async function postRevenueEntry({ entryId, recordedBy }) {
 
     const entry = current.rows[0];
 
-    if (entry.entry_kind !== 'original') {
-      throw new Error('Only original entries can be posted.');
-    }
+    
+const eligibleForPosting =
+  entry.accounting_status === 'ready' &&
+  (
+    (entry.entry_kind === 'original' &&
+      entry.transaction_status === 'completed') ||
+    (entry.entry_kind === 'reversal' &&
+      ['reversed', 'refunded'].includes(entry.transaction_status))
+  );
 
-    if (entry.accounting_status !== 'ready') {
-      throw new Error('Only ready entries can be posted.');
-    }
+if (!eligibleForPosting) {
+  throw new Error(
+    'Only ready original entries or ready reversals can be posted.'
+  );
+}
 
-    if (entry.transaction_status !== 'completed') {
-      throw new Error('Only completed transactions can be posted.');
-    }
 
     if (
       entry.provider_cost === null ||
