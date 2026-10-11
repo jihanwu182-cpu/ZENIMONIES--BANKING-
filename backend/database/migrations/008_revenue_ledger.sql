@@ -450,8 +450,9 @@ AS $$
 DECLARE
     original_row revenue_ledger%ROWTYPE;
     replacement_row revenue_ledger%ROWTYPE;
-    reversal_exists BOOLEAN;
+    reversal_row revenue_ledger%ROWTYPE;
 BEGIN
+    -- Prevent deletion of posted or referenced entries.
     IF TG_OP = 'DELETE' THEN
         IF OLD.accounting_status = 'posted'
            OR OLD.entry_kind = 'reversal'
@@ -459,58 +460,83 @@ BEGIN
                SELECT 1
                FROM revenue_ledger r
                WHERE r.reversal_of_id = OLD.id
-           )
-           OR EXISTS (
-               SELECT 1
-               FROM revenue_ledger r
-               WHERE r.replaces_id = OLD.id
+                  OR r.replaces_id = OLD.id
            ) THEN
             RAISE EXCEPTION
                 'Posted or referenced revenue entries cannot be deleted.';
         END IF;
+
         RETURN OLD;
     END IF;
+
+    -- Posted entries and reversals are immutable.
     IF TG_OP = 'UPDATE' THEN
         IF OLD.accounting_status = 'posted'
            OR OLD.entry_kind = 'reversal' THEN
             RAISE EXCEPTION
-                'Posted entries and reversals are immutable. Create a reversal and corrected replacement instead.';
+                'Posted entries and reversals are immutable.';
         END IF;
-        -- A replacement link cannot be changed after creation.
+
         IF OLD.replaces_id IS NOT NULL
            AND NEW.replaces_id IS DISTINCT FROM OLD.replaces_id THEN
             RAISE EXCEPTION
                 'A replacement link cannot be changed.';
         END IF;
+
+        IF OLD.reversal_of_id IS NOT NULL
+           AND NEW.reversal_of_id IS DISTINCT FROM OLD.reversal_of_id THEN
+            RAISE EXCEPTION
+                'A reversal link cannot be changed.';
+        END IF;
+
+        IF OLD.entry_kind IS DISTINCT FROM NEW.entry_kind THEN
+            RAISE EXCEPTION
+                'An entry kind cannot be changed after creation.';
+        END IF;
     END IF;
-    -- Validate a corrected replacement.
+
+    -- Validate replacement entries.
     IF NEW.entry_kind = 'original'
        AND NEW.replaces_id IS NOT NULL THEN
+
         SELECT *
         INTO replacement_row
         FROM revenue_ledger
         WHERE id = NEW.replaces_id
         FOR SHARE;
+
         IF NOT FOUND THEN
             RAISE EXCEPTION
                 'The entry being replaced does not exist.';
         END IF;
+
         IF replacement_row.entry_kind <> 'original'
            OR replacement_row.accounting_status <> 'posted' THEN
             RAISE EXCEPTION
                 'Only a posted original entry can be replaced.';
         END IF;
-        SELECT EXISTS (
-            SELECT 1
-            FROM revenue_ledger r
-            WHERE r.reversal_of_id = replacement_row.id
-              AND r.accounting_status = 'posted'
-        )
-        INTO reversal_exists;
-        IF NOT reversal_exists THEN
+
+        SELECT *
+        INTO reversal_row
+        FROM revenue_ledger
+        WHERE reversal_of_id = replacement_row.id
+          AND accounting_status = 'posted'
+        FOR SHARE;
+
+        IF NOT FOUND THEN
             RAISE EXCEPTION
-                'The entry must have a posted reversal before replacement.';
+                'The original entry must have a posted reversal before replacement.';
         END IF;
+
+        IF reversal_row.entry_kind <> 'reversal'
+           OR reversal_row.currency <> replacement_row.currency
+           OR reversal_row.service_type <> replacement_row.service_type
+           OR reversal_row.source_type <> replacement_row.source_type
+           OR reversal_row.source_id IS DISTINCT FROM replacement_row.source_id THEN
+            RAISE EXCEPTION
+                'The posted reversal does not match the original entry.';
+        END IF;
+
         IF NEW.currency <> replacement_row.currency
            OR NEW.service_type <> replacement_row.service_type
            OR NEW.source_type <> replacement_row.source_type
@@ -519,26 +545,32 @@ BEGIN
                 'A replacement must match the original currency, service and source.';
         END IF;
     END IF;
-    -- Validate a reversal.
+
+    -- Validate reversal entries.
     IF NEW.entry_kind = 'reversal' THEN
+
         IF TG_OP <> 'INSERT' THEN
             RAISE EXCEPTION
                 'Reversal entries cannot be edited.';
         END IF;
+
         SELECT *
         INTO original_row
         FROM revenue_ledger
         WHERE id = NEW.reversal_of_id
         FOR SHARE;
+
         IF NOT FOUND THEN
             RAISE EXCEPTION
                 'The original revenue entry was not found.';
         END IF;
+
         IF original_row.entry_kind <> 'original'
            OR original_row.accounting_status <> 'posted' THEN
             RAISE EXCEPTION
                 'Only a posted original entry can be reversed.';
         END IF;
+
         IF original_row.currency <> NEW.currency
            OR original_row.service_type <> NEW.service_type
            OR original_row.source_type <> NEW.source_type
@@ -546,6 +578,7 @@ BEGIN
             RAISE EXCEPTION
                 'The reversal must match the original currency, service and source.';
         END IF;
+
         IF NEW.gross_fee <> -original_row.gross_fee
            OR NEW.provider_cost IS DISTINCT FROM -original_row.provider_cost
            OR NEW.partner_share IS DISTINCT FROM -original_row.partner_share
@@ -554,19 +587,23 @@ BEGIN
             RAISE EXCEPTION
                 'Reversal amounts must exactly negate the original amounts.';
         END IF;
+
         IF NEW.accounting_status <> 'posted'
            OR NEW.transaction_status NOT IN ('reversed', 'refunded')
            OR NEW.posted_at IS NULL THEN
             RAISE EXCEPTION
                 'A reversal must be posted and marked reversed or refunded.';
         END IF;
+
         IF NULLIF(BTRIM(NEW.reversal_reason), '') IS NULL THEN
             RAISE EXCEPTION
                 'A reversal reason is required.';
         END IF;
     END IF;
-    -- Validate any entry being posted.
+
+    -- Validate accounting before posting.
     IF NEW.accounting_status = 'posted' THEN
+
         IF NEW.provider_cost IS NULL
            OR NEW.partner_share IS NULL
            OR NEW.other_direct_cost IS NULL
@@ -575,6 +612,7 @@ BEGIN
             RAISE EXCEPTION
                 'Posting requires all accounting amounts and posted_at.';
         END IF;
+
         IF NEW.zenimonies_revenue <>
            NEW.gross_fee
            - NEW.provider_cost
@@ -583,18 +621,23 @@ BEGIN
             RAISE EXCEPTION
                 'Revenue does not match the accounting formula.';
         END IF;
+
         IF NEW.entry_kind = 'original'
            AND NEW.transaction_status <> 'completed' THEN
             RAISE EXCEPTION
                 'Original revenue can be posted only for a completed transaction.';
         END IF;
     END IF;
+
     NEW.updated_at := CURRENT_TIMESTAMP;
+
     RETURN NEW;
 END;
 $$;
+
 DROP TRIGGER IF EXISTS trg_protect_revenue_ledger
 ON revenue_ledger;
+
 CREATE TRIGGER trg_protect_revenue_ledger
 BEFORE INSERT OR UPDATE OR DELETE
 ON revenue_ledger
