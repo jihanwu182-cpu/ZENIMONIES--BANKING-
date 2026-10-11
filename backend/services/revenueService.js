@@ -414,12 +414,16 @@ const postedAt = null;
 }
 
 // ============================================================
-// REVERSE A POSTED ENTRY
+// REVERSE A POSTED REVENUE ENTRY
+// ZENIMONIES BANKING
 //
-// The database trigger remains responsible for checking that
-// the reversal exactly negates the original entry.
+// - Requires an identified administrator.
+// - Only reverses a posted original entry.
+// - Prevents duplicate reversals.
+// - Uses exact negative amounts.
+// - Creates the reversal as READY, never POSTED.
+// - Posting must use the separate approval workflow.
 // ============================================================
-
 async function reverseRevenueEntry({
   originalEntryId,
   reversalReason,
@@ -430,27 +434,29 @@ async function reverseRevenueEntry({
     originalEntryId,
     'originalEntryId'
   );
-
   if (!originalId) {
     throw new Error('originalEntryId is required.');
   }
-
-  if (!['reversed', 'refunded'].includes(transactionStatus)) {
-    throw new Error('Invalid reversal transaction status.');
+  const actorId = optionalUuid(recordedBy, 'recordedBy');
+  if (!actorId) {
+    throw new Error(
+      'recordedBy is required to create an auditable reversal.'
+    );
   }
-
+  if (!['reversed', 'refunded'].includes(transactionStatus)) {
+    throw new Error(
+      'transactionStatus must be reversed or refunded.'
+    );
+  }
   const reason = requiredText(
     reversalReason,
     'reversalReason',
     1000
   );
-
-  const actorId = optionalUuid(recordedBy, 'recordedBy');
   const client = await pool.connect();
-
   try {
     await client.query('BEGIN');
-
+    // Lock the original to prevent concurrent reversal attempts.
     const originalResult = await client.query(
       `
         SELECT *
@@ -460,21 +466,20 @@ async function reverseRevenueEntry({
       `,
       [originalId]
     );
-
     if (originalResult.rowCount !== 1) {
       throw new Error('Original revenue entry was not found.');
     }
-
     const original = originalResult.rows[0];
-
     if (
       original.entry_kind !== 'original' ||
       original.accounting_status !== 'posted'
     ) {
-      throw new Error('Only a posted original entry can be reversed.');
+      throw new Error(
+        'Only a posted original revenue entry can be reversed.'
+      );
     }
-
     if (
+      original.gross_fee === null ||
       original.provider_cost === null ||
       original.partner_share === null ||
       original.other_direct_cost === null ||
@@ -484,7 +489,7 @@ async function reverseRevenueEntry({
         'The original entry is missing accounting amounts.'
       );
     }
-
+    // A posted or pending reversal must not be duplicated.
     const existingReversal = await client.query(
       `
         SELECT id
@@ -494,47 +499,21 @@ async function reverseRevenueEntry({
       `,
       [originalId]
     );
-
     if (existingReversal.rowCount > 0) {
-      throw new Error('This revenue entry already has a reversal.');
+      throw new Error(
+        'This revenue entry already has a reversal.'
+      );
     }
-
-    const reversedInput = {
-      revenueReference: `REV-${crypto.randomUUID()}`,
-      entryKind: 'reversal',
-      reversalOfId: original.id,
-      serviceType: original.service_type,
-      sourceType: original.source_type,
-      sourceId: original.source_id,
-      sourceReference: original.source_reference,
-      customerUserId: original.customer_user_id,
-      partnerId: original.partner_id,
-      partnerTermsId: original.partner_terms_id,
-      currency: original.currency,
-      grossFee: (-Number(original.gross_fee)).toFixed(2),
-      providerCost: (-Number(original.provider_cost)).toFixed(2),
-      partnerShare: (-Number(original.partner_share)).toFixed(2),
-      otherDirectCost: (-Number(original.other_direct_cost)).toFixed(2),
-      transactionStatus,
-      accountingStatus: 'ready',
-      reversalReason: reason,
-      recordedBy: actorId,
-      description: `Reversal of ${original.revenue_reference}`,
-    };
-
-    // A reversal's negative values are required. The normal
-    // original-entry normalizer intentionally rejects negatives,
-    // so the reversal uses a dedicated validated insert below.
-    const reversedRevenue = (
-      -Number(original.zenimonies_revenue)
-    ).toFixed(2);
-
+    const negativeAmount = (value) =>
+      (-Number(value)).toFixed(2);
+    const reversalReference = `REV-${crypto.randomUUID()}`;
     const reversalResult = await client.query(
       `
         INSERT INTO revenue_ledger (
           revenue_reference,
           entry_kind,
           reversal_of_id,
+          replaces_id,
           service_type,
           source_type,
           source_id,
@@ -556,14 +535,15 @@ async function reverseRevenueEntry({
           reversal_reason
         )
         VALUES (
-          $1, 'reversal', $2, $3, $4, $5, $6, $7, $8, $9,
-          $10, $11, $12, $13, $14, $15, 'ready', $16, $17,
-          $18, NULL, $19
+          $1, 'reversal', $2, NULL,
+          $3, $4, $5, $6, $7, $8, $9,
+          $10, $11, $12, $13, $14, $15,
+          'ready', $16, $17, $18, NULL, $19
         )
         RETURNING *
       `,
       [
-        reversedInput.revenueReference,
+        reversalReference,
         original.id,
         original.service_type,
         original.source_type,
@@ -573,20 +553,18 @@ async function reverseRevenueEntry({
         original.partner_id,
         original.partner_terms_id,
         original.currency,
-        reversedInput.grossFee,
-        reversedInput.providerCost,
-        reversedInput.partnerShare,
-        reversedInput.otherDirectCost,
-        reversedRevenue,
+        negativeAmount(original.gross_fee),
+        negativeAmount(original.provider_cost),
+        negativeAmount(original.partner_share),
+        negativeAmount(original.other_direct_cost),
+        negativeAmount(original.zenimonies_revenue),
         transactionStatus,
-        reversedInput.description,
+        `Reversal of ${original.revenue_reference}`,
         actorId,
         reason,
       ]
     );
-
     await client.query('COMMIT');
-
     return reversalResult.rows[0];
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
