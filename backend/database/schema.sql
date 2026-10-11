@@ -2375,6 +2375,609 @@ ON revenue_audit_events(created_at DESC);
 -- END REVENUE ACCOUNTING TABLE DEFINITIONS
 -- ============================================================
 
+CREATE OR REPLACE FUNCTION validate_revenue_partner_term()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    partner_status VARCHAR(30);
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.status = 'approved' THEN
+            RAISE EXCEPTION 'Approved partner terms cannot be deleted.';
+        END IF;
+        RETURN OLD;
+    END IF;
+
+    IF TG_OP = 'UPDATE' AND OLD.status = 'approved' THEN
+        RAISE EXCEPTION
+            'Approved partner terms cannot be edited. Create a new terms record.';
+    END IF;
+
+    IF NEW.status = 'approved' THEN
+        SELECT status INTO partner_status
+        FROM revenue_partners
+        WHERE id = NEW.partner_id
+        FOR SHARE;
+
+        IF partner_status IS DISTINCT FROM 'active' THEN
+            RAISE EXCEPTION 'Partner terms require an active partner.';
+        END IF;
+
+        IF NEW.approved_by IS NULL OR NEW.approved_at IS NULL THEN
+            RAISE EXCEPTION 'Approved terms require an approver and timestamp.';
+        END IF;
+
+        IF NEW.created_by IS NOT NULL
+           AND NEW.created_by = NEW.approved_by THEN
+            RAISE EXCEPTION 'The term creator cannot approve their own terms.';
+        END IF;
+
+        IF NEW.effective_until IS NOT NULL
+           AND NEW.effective_until <= NEW.effective_from THEN
+            RAISE EXCEPTION 'Partner terms have an invalid effective period.';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION protect_revenue_ledger()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    original_row revenue_ledger%ROWTYPE;
+    replacement_row revenue_ledger%ROWTYPE;
+    reversal_row revenue_ledger%ROWTYPE;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.accounting_status = 'posted'
+           OR OLD.entry_kind = 'reversal'
+           OR EXISTS (
+               SELECT 1
+               FROM revenue_ledger r
+               WHERE r.reversal_of_id = OLD.id
+                  OR r.replaces_id = OLD.id
+           ) THEN
+            RAISE EXCEPTION
+                'Posted or referenced revenue entries cannot be deleted.';
+        END IF;
+        RETURN OLD;
+    END IF;
+
+    IF TG_OP = 'UPDATE' THEN
+        IF OLD.accounting_status = 'posted' THEN
+            RAISE EXCEPTION 'Posted revenue entries are immutable.';
+        END IF;
+
+        IF OLD.entry_kind IS DISTINCT FROM NEW.entry_kind THEN
+            RAISE EXCEPTION 'An entry kind cannot be changed after creation.';
+        END IF;
+
+        IF OLD.reversal_of_id IS DISTINCT FROM NEW.reversal_of_id THEN
+            RAISE EXCEPTION 'A reversal link cannot be changed.';
+        END IF;
+
+        IF OLD.replaces_id IS DISTINCT FROM NEW.replaces_id THEN
+            RAISE EXCEPTION 'A replacement link cannot be changed.';
+        END IF;
+
+        IF OLD.entry_kind = 'reversal' THEN
+            IF OLD.accounting_status <> 'ready'
+               OR NEW.accounting_status <> 'posted' THEN
+                RAISE EXCEPTION
+                    'A reversal can only transition from ready to posted.';
+            END IF;
+
+            IF NEW.id IS DISTINCT FROM OLD.id
+               OR NEW.revenue_reference IS DISTINCT FROM OLD.revenue_reference
+               OR NEW.entry_kind IS DISTINCT FROM OLD.entry_kind
+               OR NEW.reversal_of_id IS DISTINCT FROM OLD.reversal_of_id
+               OR NEW.replaces_id IS DISTINCT FROM OLD.replaces_id
+               OR NEW.service_type IS DISTINCT FROM OLD.service_type
+               OR NEW.source_type IS DISTINCT FROM OLD.source_type
+               OR NEW.source_id IS DISTINCT FROM OLD.source_id
+               OR NEW.source_reference IS DISTINCT FROM OLD.source_reference
+               OR NEW.customer_user_id IS DISTINCT FROM OLD.customer_user_id
+               OR NEW.partner_id IS DISTINCT FROM OLD.partner_id
+               OR NEW.partner_terms_id IS DISTINCT FROM OLD.partner_terms_id
+               OR NEW.currency IS DISTINCT FROM OLD.currency
+               OR NEW.gross_fee IS DISTINCT FROM OLD.gross_fee
+               OR NEW.provider_cost IS DISTINCT FROM OLD.provider_cost
+               OR NEW.partner_share IS DISTINCT FROM OLD.partner_share
+               OR NEW.other_direct_cost IS DISTINCT FROM OLD.other_direct_cost
+               OR NEW.zenimonies_revenue IS DISTINCT FROM OLD.zenimonies_revenue
+               OR NEW.transaction_status IS DISTINCT FROM OLD.transaction_status
+               OR NEW.description IS DISTINCT FROM OLD.description
+               OR NEW.reversal_reason IS DISTINCT FROM OLD.reversal_reason
+               OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+                RAISE EXCEPTION
+                    'Reversal identity, source, amounts and reason are immutable.';
+            END IF;
+        END IF;
+    END IF;
+
+    IF TG_OP = 'INSERT' AND NEW.entry_kind = 'reversal' THEN
+        IF NEW.accounting_status <> 'ready' OR NEW.posted_at IS NOT NULL THEN
+            RAISE EXCEPTION 'A new reversal must start ready and unposted.';
+        END IF;
+
+        IF NEW.reversal_of_id IS NULL THEN
+            RAISE EXCEPTION 'A reversal must reference its original entry.';
+        END IF;
+
+        SELECT * INTO original_row
+        FROM revenue_ledger
+        WHERE id = NEW.reversal_of_id
+        FOR SHARE;
+
+        IF NOT FOUND
+           OR original_row.entry_kind <> 'original'
+           OR original_row.accounting_status <> 'posted' THEN
+            RAISE EXCEPTION
+                'A reversal must reference a posted original entry.';
+        END IF;
+
+        IF NEW.currency IS DISTINCT FROM original_row.currency
+           OR NEW.service_type IS DISTINCT FROM original_row.service_type
+           OR NEW.source_type IS DISTINCT FROM original_row.source_type
+           OR NEW.source_id IS DISTINCT FROM original_row.source_id THEN
+            RAISE EXCEPTION
+                'Reversal source, service and currency must match the original.';
+        END IF;
+
+        IF NEW.gross_fee IS DISTINCT FROM -original_row.gross_fee
+           OR NEW.provider_cost IS DISTINCT FROM -original_row.provider_cost
+           OR NEW.partner_share IS DISTINCT FROM -original_row.partner_share
+           OR NEW.other_direct_cost IS DISTINCT FROM -original_row.other_direct_cost
+           OR NEW.zenimonies_revenue IS DISTINCT FROM -original_row.zenimonies_revenue THEN
+            RAISE EXCEPTION
+                'Reversal amounts must exactly negate the original entry.';
+        END IF;
+
+        IF NEW.transaction_status NOT IN ('reversed', 'refunded') THEN
+            RAISE EXCEPTION
+                'A reversal must have reversed or refunded transaction status.';
+        END IF;
+
+        IF NEW.reversal_reason IS NULL OR BTRIM(NEW.reversal_reason) = '' THEN
+            RAISE EXCEPTION 'A reversal reason is required.';
+        END IF;
+    END IF;
+
+    IF NEW.accounting_status = 'posted' THEN
+        IF TG_OP <> 'UPDATE' THEN
+            RAISE EXCEPTION
+                'Revenue entries must be posted through an approved update.';
+        END IF;
+
+        IF OLD.accounting_status <> 'ready' THEN
+            RAISE EXCEPTION 'Only ready revenue entries can be posted.';
+        END IF;
+
+        IF NEW.recorded_by IS NULL THEN
+            RAISE EXCEPTION 'A recording administrator is required.';
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM revenue_ledger_approvals a
+            WHERE a.revenue_ledger_id = NEW.id
+              AND a.status = 'approved'
+              AND a.prepared_by IS NOT NULL
+              AND a.approved_by IS NOT NULL
+              AND a.approved_by <> a.prepared_by
+              AND a.prepared_by <> NEW.recorded_by
+              AND a.approved_by <> NEW.recorded_by
+              AND a.gross_fee = NEW.gross_fee
+              AND a.provider_cost = NEW.provider_cost
+              AND a.partner_share = NEW.partner_share
+              AND a.other_direct_cost = NEW.other_direct_cost
+              AND a.zenimonies_revenue = NEW.zenimonies_revenue
+        ) THEN
+            RAISE EXCEPTION
+                'Posting requires a matching independent approval.';
+        END IF;
+    END IF;
+
+    IF NEW.entry_kind = 'original' AND NEW.replaces_id IS NOT NULL THEN
+        SELECT * INTO replacement_row
+        FROM revenue_ledger
+        WHERE id = NEW.replaces_id
+        FOR SHARE;
+
+        IF NOT FOUND
+           OR replacement_row.entry_kind <> 'original'
+           OR replacement_row.accounting_status <> 'posted' THEN
+            RAISE EXCEPTION
+                'A replacement must reference a posted original entry.';
+        END IF;
+
+        SELECT * INTO reversal_row
+        FROM revenue_ledger
+        WHERE reversal_of_id = replacement_row.id
+          AND accounting_status = 'posted'
+        FOR SHARE;
+
+        IF NOT FOUND OR reversal_row.entry_kind <> 'reversal' THEN
+            RAISE EXCEPTION
+                'A replacement requires a posted reversal of the original.';
+        END IF;
+
+        IF reversal_row.currency IS DISTINCT FROM replacement_row.currency
+           OR reversal_row.service_type IS DISTINCT FROM replacement_row.service_type
+           OR reversal_row.source_type IS DISTINCT FROM replacement_row.source_type
+           OR reversal_row.source_id IS DISTINCT FROM replacement_row.source_id
+           OR reversal_row.gross_fee IS DISTINCT FROM -replacement_row.gross_fee
+           OR reversal_row.provider_cost IS DISTINCT FROM -replacement_row.provider_cost
+           OR reversal_row.partner_share IS DISTINCT FROM -replacement_row.partner_share
+           OR reversal_row.other_direct_cost IS DISTINCT FROM -replacement_row.other_direct_cost
+           OR reversal_row.zenimonies_revenue IS DISTINCT FROM -replacement_row.zenimonies_revenue THEN
+            RAISE EXCEPTION
+                'The original entry must be fully reversed before replacement.';
+        END IF;
+
+        IF NEW.currency IS DISTINCT FROM replacement_row.currency
+           OR NEW.service_type IS DISTINCT FROM replacement_row.service_type
+           OR NEW.source_type IS DISTINCT FROM replacement_row.source_type
+           OR NEW.source_id IS DISTINCT FROM replacement_row.source_id THEN
+            RAISE EXCEPTION
+                'Replacement source, service and currency must match the original.';
+        END IF;
+    END IF;
+
+    IF NEW.accounting_status = 'posted' THEN
+        IF NEW.gross_fee IS NULL
+           OR NEW.provider_cost IS NULL
+           OR NEW.partner_share IS NULL
+           OR NEW.other_direct_cost IS NULL
+           OR NEW.zenimonies_revenue IS NULL
+           OR NEW.posted_at IS NULL THEN
+            RAISE EXCEPTION
+                'Posted entries require complete amounts and a posting timestamp.';
+        END IF;
+
+        IF NEW.zenimonies_revenue <>
+           (NEW.gross_fee - NEW.provider_cost
+            - NEW.partner_share - NEW.other_direct_cost) THEN
+            RAISE EXCEPTION
+                'Zenimonies revenue does not match the accounting calculation.';
+        END IF;
+
+        IF NEW.entry_kind = 'original'
+           AND NEW.transaction_status <> 'completed' THEN
+            RAISE EXCEPTION
+                'Original revenue can only be posted for completed transactions.';
+        END IF;
+
+        IF NEW.entry_kind = 'reversal' THEN
+            IF NEW.transaction_status NOT IN ('reversed', 'refunded') THEN
+                RAISE EXCEPTION
+                    'A posted reversal must be reversed or refunded.';
+            END IF;
+
+            IF NEW.reversal_reason IS NULL OR BTRIM(NEW.reversal_reason) = '' THEN
+                RAISE EXCEPTION 'A posted reversal requires a reason.';
+            END IF;
+        END IF;
+    END IF;
+
+    NEW.updated_at := CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION validate_revenue_workflow_transition()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    old_status TEXT;
+    new_status TEXT;
+BEGIN
+    IF TG_TABLE_NAME NOT IN (
+        'revenue_settlements',
+        'company_revenue_movements'
+    ) THEN
+        RAISE EXCEPTION 'Unsupported financial workflow table.';
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION
+            'Financial workflow records cannot be deleted. Use an audited cancellation or correction process.';
+    END IF;
+
+    new_status := NEW.status;
+
+    IF TG_OP = 'INSERT' THEN
+        IF new_status <> 'pending' THEN
+            RAISE EXCEPTION
+                'New financial records must start with pending status.';
+        END IF;
+
+        IF NEW.approved_by IS NOT NULL
+           OR NEW.approved_at IS NOT NULL
+           OR NEW.completed_at IS NOT NULL THEN
+            RAISE EXCEPTION
+                'New financial records cannot contain approval or completion details.';
+        END IF;
+    END IF;
+
+    IF TG_OP = 'UPDATE' THEN
+        old_status := OLD.status;
+
+        IF old_status = 'completed' THEN
+            RAISE EXCEPTION 'Completed financial records are immutable.';
+        END IF;
+
+        IF new_status IS DISTINCT FROM old_status THEN
+            IF NOT (
+                (old_status = 'pending' AND new_status IN ('approved', 'cancelled'))
+                OR (old_status = 'approved' AND new_status IN ('processing', 'cancelled'))
+                OR (old_status = 'processing' AND new_status IN ('completed', 'failed'))
+                OR (old_status = 'failed' AND new_status = 'cancelled')
+            ) THEN
+                RAISE EXCEPTION
+                    'Invalid financial workflow transition: % to %.',
+                    old_status, new_status;
+            END IF;
+        END IF;
+
+        IF old_status IN ('approved', 'processing') THEN
+            IF NEW.approved_by IS DISTINCT FROM OLD.approved_by
+               OR NEW.approved_at IS DISTINCT FROM OLD.approved_at THEN
+                RAISE EXCEPTION 'Approval details cannot be changed after approval.';
+            END IF;
+
+            IF NEW.amount IS DISTINCT FROM OLD.amount
+               OR NEW.currency IS DISTINCT FROM OLD.currency
+               OR NEW.created_by IS DISTINCT FROM OLD.created_by
+               OR NEW.reason IS DISTINCT FROM OLD.reason THEN
+                RAISE EXCEPTION 'Approved financial details cannot be changed.';
+            END IF;
+
+            IF TG_TABLE_NAME = 'revenue_settlements' THEN
+                IF NEW.partner_id IS DISTINCT FROM OLD.partner_id
+                   OR NEW.period_start IS DISTINCT FROM OLD.period_start
+                   OR NEW.period_end IS DISTINCT FROM OLD.period_end
+                   OR NEW.destination_name IS DISTINCT FROM OLD.destination_name
+                   OR NEW.destination_account_number IS DISTINCT FROM OLD.destination_account_number
+                   OR NEW.destination_bank_name IS DISTINCT FROM OLD.destination_bank_name
+                   OR NEW.destination_bank_code IS DISTINCT FROM OLD.destination_bank_code THEN
+                    RAISE EXCEPTION 'Approved settlement details cannot be changed.';
+                END IF;
+            ELSE
+                IF NEW.movement_type IS DISTINCT FROM OLD.movement_type
+                   OR NEW.counterparty_name IS DISTINCT FROM OLD.counterparty_name
+                   OR NEW.destination_account_number IS DISTINCT FROM OLD.destination_account_number
+                   OR NEW.destination_bank_name IS DISTINCT FROM OLD.destination_bank_name
+                   OR NEW.destination_bank_code IS DISTINCT FROM OLD.destination_bank_code THEN
+                    RAISE EXCEPTION 'Approved company movement details cannot be changed.';
+                END IF;
+            END IF;
+        END IF;
+
+        IF OLD.completed_at IS NOT NULL
+           AND NEW.completed_at IS DISTINCT FROM OLD.completed_at THEN
+            RAISE EXCEPTION 'A recorded completion timestamp cannot be changed.';
+        END IF;
+    END IF;
+
+    IF new_status IN ('approved', 'processing', 'completed') THEN
+        IF NEW.approved_by IS NULL OR NEW.approved_at IS NULL THEN
+            RAISE EXCEPTION 'Approval details are required.';
+        END IF;
+
+        IF NEW.created_by IS NOT NULL
+           AND NEW.created_by = NEW.approved_by THEN
+            RAISE EXCEPTION
+                'The creator cannot approve their own financial record.';
+        END IF;
+    END IF;
+
+    IF new_status = 'completed' THEN
+        IF NEW.completed_at IS NULL THEN
+            RAISE EXCEPTION 'A completion timestamp is required.';
+        END IF;
+
+        IF TG_TABLE_NAME = 'revenue_settlements'
+           AND NULLIF(BTRIM(NEW.payment_reference), '') IS NULL THEN
+            RAISE EXCEPTION 'A completed settlement requires a payment reference.';
+        END IF;
+
+        IF TG_TABLE_NAME = 'company_revenue_movements'
+           AND NULLIF(BTRIM(NEW.external_reference), '') IS NULL THEN
+            RAISE EXCEPTION 'A completed company movement requires an external reference.';
+        END IF;
+    END IF;
+
+    NEW.updated_at := CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION record_revenue_audit_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    entity_uuid UUID;
+    event_name TEXT;
+    metadata_json JSONB;
+    actor_uuid UUID;
+    row_data JSONB;
+    actor_text TEXT;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        row_data := to_jsonb(OLD);
+        entity_uuid := OLD.id;
+        event_name := TG_TABLE_NAME || '.delete';
+    ELSE
+        row_data := to_jsonb(NEW);
+        entity_uuid := NEW.id;
+
+        IF TG_OP = 'INSERT' THEN
+            event_name := TG_TABLE_NAME || '.insert';
+        ELSE
+            event_name := TG_TABLE_NAME || '.update';
+        END IF;
+    END IF;
+
+    actor_text := COALESCE(
+        NULLIF(row_data->>'recorded_by', ''),
+        NULLIF(row_data->>'created_by', ''),
+        NULLIF(row_data->>'approved_by', ''),
+        NULLIF(row_data->>'prepared_by', '')
+    );
+
+    actor_uuid := NULL;
+
+    IF actor_text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+        actor_uuid := actor_text::UUID;
+    END IF;
+
+    metadata_json := jsonb_build_object(
+        'reference',
+        COALESCE(
+            row_data->>'revenue_reference',
+            row_data->>'settlement_reference',
+            row_data->>'movement_reference'
+        ),
+        'entry_kind', row_data->>'entry_kind',
+        'reversal_of_id', row_data->>'reversal_of_id',
+        'replaces_id', row_data->>'replaces_id',
+        'status', row_data->>'accounting_status',
+        'workflow_status', row_data->>'status',
+        'transaction_status', row_data->>'transaction_status',
+        'amount', row_data->>'amount',
+        'gross_fee', row_data->>'gross_fee',
+        'provider_cost', row_data->>'provider_cost',
+        'partner_share', row_data->>'partner_share',
+        'other_direct_cost', row_data->>'other_direct_cost',
+        'zenimonies_revenue', row_data->>'zenimonies_revenue',
+        'currency', row_data->>'currency'
+    );
+
+    INSERT INTO revenue_audit_events (
+        actor_user_id,
+        event_type,
+        entity_type,
+        entity_id,
+        metadata
+    )
+    VALUES (
+        actor_uuid,
+        event_name,
+        TG_TABLE_NAME,
+        entity_uuid,
+        metadata_json
+    );
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION protect_revenue_ledger_approval()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.status <> 'pending'
+           OR NEW.approved_by IS NOT NULL
+           OR NEW.decided_at IS NOT NULL THEN
+            RAISE EXCEPTION
+                'New revenue approval requests must start pending without a decision.';
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'Revenue approval records cannot be deleted.';
+    END IF;
+
+    IF OLD.status <> 'pending'
+       OR NEW.status NOT IN ('approved', 'rejected') THEN
+        RAISE EXCEPTION
+            'Only a pending revenue approval can receive a final decision.';
+    END IF;
+
+    IF NEW.id IS DISTINCT FROM OLD.id
+       OR NEW.revenue_ledger_id IS DISTINCT FROM OLD.revenue_ledger_id
+       OR NEW.prepared_by IS DISTINCT FROM OLD.prepared_by
+       OR NEW.gross_fee IS DISTINCT FROM OLD.gross_fee
+       OR NEW.provider_cost IS DISTINCT FROM OLD.provider_cost
+       OR NEW.partner_share IS DISTINCT FROM OLD.partner_share
+       OR NEW.other_direct_cost IS DISTINCT FROM OLD.other_direct_cost
+       OR NEW.zenimonies_revenue IS DISTINCT FROM OLD.zenimonies_revenue
+       OR NEW.prepared_at IS DISTINCT FROM OLD.prepared_at THEN
+        RAISE EXCEPTION
+            'Approval request details cannot be changed when deciding.';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validate_revenue_partner_term
+BEFORE INSERT OR UPDATE OR DELETE
+ON revenue_partner_terms
+FOR EACH ROW
+EXECUTE FUNCTION validate_revenue_partner_term();
+
+CREATE TRIGGER trg_protect_revenue_ledger
+BEFORE INSERT OR UPDATE OR DELETE
+ON revenue_ledger
+FOR EACH ROW
+EXECUTE FUNCTION protect_revenue_ledger();
+
+CREATE TRIGGER trg_validate_revenue_settlement
+BEFORE INSERT OR UPDATE OR DELETE
+ON revenue_settlements
+FOR EACH ROW
+EXECUTE FUNCTION validate_revenue_workflow_transition();
+
+CREATE TRIGGER trg_validate_company_revenue_movement
+BEFORE INSERT OR UPDATE OR DELETE
+ON company_revenue_movements
+FOR EACH ROW
+EXECUTE FUNCTION validate_revenue_workflow_transition();
+
+CREATE TRIGGER trg_protect_revenue_ledger_approval
+BEFORE INSERT OR UPDATE OR DELETE
+ON revenue_ledger_approvals
+FOR EACH ROW
+EXECUTE FUNCTION protect_revenue_ledger_approval();
+
+CREATE TRIGGER trg_audit_revenue_ledger_approvals
+AFTER INSERT OR UPDATE OR DELETE
+ON revenue_ledger_approvals
+FOR EACH ROW
+EXECUTE FUNCTION record_revenue_audit_event();
+
+CREATE TRIGGER trg_audit_revenue_ledger
+AFTER INSERT OR UPDATE OR DELETE
+ON revenue_ledger
+FOR EACH ROW
+EXECUTE FUNCTION record_revenue_audit_event();
+
+CREATE TRIGGER trg_audit_revenue_settlements
+AFTER INSERT OR UPDATE OR DELETE
+ON revenue_settlements
+FOR EACH ROW
+EXECUTE FUNCTION record_revenue_audit_event();
+
+CREATE TRIGGER trg_audit_company_revenue_movements
+AFTER INSERT OR UPDATE OR DELETE
+ON company_revenue_movements
+FOR EACH ROW
+EXECUTE FUNCTION record_revenue_audit_event();
 -- ============================================================
 -- END OF ZENIMONIES DATABASE SCHEMA
 -- ============================================================
