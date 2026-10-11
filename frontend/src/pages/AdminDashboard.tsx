@@ -2117,7 +2117,15 @@ const revenueChartData: Array<{
                       <XAxis dataKey="label" tick={{ fontSize: 11, fill: BRAND.muted }} />
                       <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: BRAND.muted }} />
                       <ChartTooltip />
-                      <Bar dataKey="registrations" name="New registrations" fill={BRAND.green} radius={[7, 7, 0, 0]} />
+                      
+<Bar
+  dataKey="registrations"
+  name="New registrations"
+  fill={BRAND.green}
+  activeBar={{ fill: BRAND.green, stroke: BRAND.green }}
+  radius={[7, 7, 0, 0]}
+/>
+
                     </BarChart>
                   </ResponsiveContainer>
                 </Box>
