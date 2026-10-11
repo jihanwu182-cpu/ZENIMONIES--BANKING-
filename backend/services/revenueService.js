@@ -797,6 +797,7 @@ if (!eligibleForApproval) {
   }
 }
 
+
 async function decideRevenueApproval({
   approvalId,
   approvedBy,
@@ -828,6 +829,39 @@ async function decideRevenueApproval({
   try {
     await client.query('BEGIN');
 
+    // Read the approval's ledger ID without locking it.
+    // Lock ordering for financial actions is:
+    // ledger entry first, approval second.
+    const referenceResult = await client.query(
+      `SELECT revenue_ledger_id
+       FROM revenue_ledger_approvals
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (referenceResult.rowCount !== 1) {
+      throw new Error('Approval request was not found.');
+    }
+
+    const ledgerId = referenceResult.rows[0].revenue_ledger_id;
+
+    // Always lock the ledger entry before the approval row.
+    const entryResult = await client.query(
+      `SELECT *
+       FROM revenue_ledger
+       WHERE id = $1
+       FOR UPDATE`,
+      [ledgerId]
+    );
+
+    if (entryResult.rowCount !== 1) {
+      throw new Error('Revenue entry was not found.');
+    }
+
+    const entry = entryResult.rows[0];
+
+    // Now lock and re-read the approval. Its status may have
+    // changed since the initial, unlocked lookup.
     const approvalResult = await client.query(
       `SELECT *
        FROM revenue_ledger_approvals
@@ -842,6 +876,10 @@ async function decideRevenueApproval({
 
     const approval = approvalResult.rows[0];
 
+    if (approval.revenue_ledger_id !== ledgerId) {
+      throw new Error('Approval request does not match its ledger entry.');
+    }
+
     if (approval.status !== 'pending') {
       throw new Error('This request has already been decided.');
     }
@@ -852,43 +890,34 @@ async function decideRevenueApproval({
       );
     }
 
-    const entryResult = await client.query(
-      `SELECT *
-       FROM revenue_ledger
-       WHERE id = $1
-       FOR UPDATE`,
-      [approval.revenue_ledger_id]
-    );
+    const eligible =
+      entry.accounting_status === 'ready' &&
+      (
+        (
+          entry.entry_kind === 'original' &&
+          entry.transaction_status === 'completed'
+        ) ||
+        (
+          entry.entry_kind === 'reversal' &&
+          ['reversed', 'refunded'].includes(
+            entry.transaction_status
+          )
+        )
+      );
 
-    if (entryResult.rowCount !== 1) {
-      throw new Error('Revenue entry was not found.');
+    const amountsMatch =
+      String(entry.gross_fee) === String(approval.gross_fee) &&
+      String(entry.provider_cost) === String(approval.provider_cost) &&
+      String(entry.partner_share) === String(approval.partner_share) &&
+      String(entry.other_direct_cost) === String(approval.other_direct_cost) &&
+      String(entry.zenimonies_revenue) ===
+        String(approval.zenimonies_revenue);
+
+    if (!eligible || !amountsMatch) {
+      throw new Error(
+        'The entry changed after submission. Prepare a new approval request.'
+      );
     }
-
-    const entry = entryResult.rows[0];
-
-    
-const eligibleForDecision =
-  entry.accounting_status === 'ready' &&
-  (
-    (entry.entry_kind === 'original' &&
-      entry.transaction_status === 'completed') ||
-    (entry.entry_kind === 'reversal' &&
-      ['reversed', 'refunded'].includes(entry.transaction_status))
-  );
-
-if (
-  !eligibleForDecision ||
-  String(entry.gross_fee) !== String(approval.gross_fee) ||
-  String(entry.provider_cost) !== String(approval.provider_cost) ||
-  String(entry.partner_share) !== String(approval.partner_share) ||
-  String(entry.other_direct_cost) !== String(approval.other_direct_cost) ||
-  String(entry.zenimonies_revenue) !== String(approval.zenimonies_revenue)
-) {
-  throw new Error(
-    'The entry changed after submission. Prepare a new approval request.'
-  );
-}
-
 
     const update = await client.query(
       `UPDATE revenue_ledger_approvals
@@ -915,7 +944,6 @@ if (
     client.release();
   }
 }
-
 
 async function postRevenueEntry({ entryId, recordedBy }) {
   const id = optionalUuid(entryId, 'entryId');
