@@ -721,6 +721,208 @@ async function markRevenueEntryReady({
 // checks of source transaction, fee collection and cost evidence.
 // ============================================================
 
+async function prepareRevenueApproval({ entryId, preparedBy }) {
+  const id = optionalUuid(entryId, 'entryId');
+  const actorId = optionalUuid(preparedBy, 'preparedBy');
+
+  if (!id || !actorId) {
+    throw new Error('entryId and preparedBy are required.');
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `SELECT *
+       FROM revenue_ledger
+       WHERE id = $1
+       FOR UPDATE`,
+      [id]
+    );
+
+    if (result.rowCount !== 1) {
+      throw new Error('Revenue entry was not found.');
+    }
+
+    const entry = result.rows[0];
+
+    if (
+      entry.entry_kind !== 'original' ||
+      entry.accounting_status !== 'ready' ||
+      entry.transaction_status !== 'completed'
+    ) {
+      throw new Error(
+        'Only ready, completed original entries can be submitted for approval.'
+      );
+    }
+
+    if (
+      entry.provider_cost === null ||
+      entry.partner_share === null ||
+      entry.other_direct_cost === null ||
+      entry.zenimonies_revenue === null
+    ) {
+      throw new Error('All accounting amounts must be known.');
+    }
+
+    const existing = await client.query(
+      `SELECT id
+       FROM revenue_ledger_approvals
+       WHERE revenue_ledger_id = $1
+         AND status = 'pending'
+       LIMIT 1`,
+      [id]
+    );
+
+    if (existing.rowCount > 0) {
+      throw new Error('This entry already has a pending approval request.');
+    }
+
+    const approval = await client.query(
+      `INSERT INTO revenue_ledger_approvals (
+         revenue_ledger_id,
+         prepared_by,
+         status,
+         gross_fee,
+         provider_cost,
+         partner_share,
+         other_direct_cost,
+         zenimonies_revenue
+       )
+       VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        id,
+        actorId,
+        entry.gross_fee,
+        entry.provider_cost,
+        entry.partner_share,
+        entry.other_direct_cost,
+        entry.zenimonies_revenue,
+      ]
+    );
+
+    await client.query('COMMIT');
+    return approval.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function decideRevenueApproval({
+  approvalId,
+  approvedBy,
+  decision,
+  reason,
+}) {
+  const id = optionalUuid(approvalId, 'approvalId');
+  const actorId = optionalUuid(approvedBy, 'approvedBy');
+
+  if (!id || !actorId) {
+    throw new Error('approvalId and approvedBy are required.');
+  }
+
+  if (!['approved', 'rejected'].includes(decision)) {
+    throw new Error('Decision must be approved or rejected.');
+  }
+
+  const decisionReason =
+    reason == null || reason.trim() === ''
+      ? null
+      : requiredText(reason, 'reason', 1000);
+
+  if (decision === 'rejected' && !decisionReason) {
+    throw new Error('A rejection reason is required.');
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const approvalResult = await client.query(
+      `SELECT *
+       FROM revenue_ledger_approvals
+       WHERE id = $1
+       FOR UPDATE`,
+      [id]
+    );
+
+    if (approvalResult.rowCount !== 1) {
+      throw new Error('Approval request was not found.');
+    }
+
+    const approval = approvalResult.rows[0];
+
+    if (approval.status !== 'pending') {
+      throw new Error('This request has already been decided.');
+    }
+
+    if (approval.prepared_by === actorId) {
+      throw new Error(
+        'The administrator who prepared this entry cannot decide its approval.'
+      );
+    }
+
+    const entryResult = await client.query(
+      `SELECT *
+       FROM revenue_ledger
+       WHERE id = $1
+       FOR UPDATE`,
+      [approval.revenue_ledger_id]
+    );
+
+    if (entryResult.rowCount !== 1) {
+      throw new Error('Revenue entry was not found.');
+    }
+
+    const entry = entryResult.rows[0];
+
+    if (
+      entry.accounting_status !== 'ready' ||
+      entry.transaction_status !== 'completed' ||
+      entry.gross_fee !== approval.gross_fee ||
+      entry.provider_cost !== approval.provider_cost ||
+      entry.partner_share !== approval.partner_share ||
+      entry.other_direct_cost !== approval.other_direct_cost ||
+      entry.zenimonies_revenue !== approval.zenimonies_revenue
+    ) {
+      throw new Error(
+        'The entry changed after submission. Prepare a new approval request.'
+      );
+    }
+
+    const update = await client.query(
+      `UPDATE revenue_ledger_approvals
+       SET status = $2,
+           approved_by = $3,
+           decided_at = CURRENT_TIMESTAMP,
+           decision_reason = $4
+       WHERE id = $1
+         AND status = 'pending'
+       RETURNING *`,
+      [id, decision, actorId, decisionReason]
+    );
+
+    if (update.rowCount !== 1) {
+      throw new Error('Could not save the approval decision.');
+    }
+
+    await client.query('COMMIT');
+    return update.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 
 async function postRevenueEntry({ entryId, recordedBy }) {
   const id = optionalUuid(entryId, 'entryId');
@@ -735,7 +937,7 @@ async function postRevenueEntry({ entryId, recordedBy }) {
   try {
     await client.query('BEGIN');
 
-    const entryResult = await client.query(
+    const current = await client.query(
       `SELECT *
        FROM revenue_ledger
        WHERE id = $1
@@ -743,20 +945,22 @@ async function postRevenueEntry({ entryId, recordedBy }) {
       [id]
     );
 
-    if (entryResult.rowCount !== 1) {
+    if (current.rowCount !== 1) {
       throw new Error('Revenue entry was not found.');
     }
 
-    const entry = entryResult.rows[0];
+    const entry = current.rows[0];
 
-    if (
-      entry.entry_kind !== 'original' ||
-      entry.accounting_status !== 'ready' ||
-      entry.transaction_status !== 'completed'
-    ) {
-      throw new Error(
-        'Only ready, completed original entries can be posted.'
-      );
+    if (entry.entry_kind !== 'original') {
+      throw new Error('Only original entries can be posted.');
+    }
+
+    if (entry.accounting_status !== 'ready') {
+      throw new Error('Only ready entries can be posted.');
+    }
+
+    if (entry.transaction_status !== 'completed') {
+      throw new Error('Only completed transactions can be posted.');
     }
 
     if (
@@ -765,40 +969,36 @@ async function postRevenueEntry({ entryId, recordedBy }) {
       entry.other_direct_cost === null ||
       entry.zenimonies_revenue === null
     ) {
-      throw new Error('All accounting amounts must be known.');
+      throw new Error('All accounting amounts are required.');
     }
 
-    const approvalResult = await client.query(
-      `SELECT *
+    // A separate administrator must approve these exact amounts.
+    const approval = await client.query(
+      `SELECT id
        FROM revenue_ledger_approvals
        WHERE revenue_ledger_id = $1
          AND status = 'approved'
          AND prepared_by <> approved_by
+         AND gross_fee = $2
+         AND provider_cost = $3
+         AND partner_share = $4
+         AND other_direct_cost = $5
+         AND zenimonies_revenue = $6
        ORDER BY decided_at DESC
-       LIMIT 1
-       FOR UPDATE`,
-      [id]
+       LIMIT 1`,
+      [
+        id,
+        entry.gross_fee,
+        entry.provider_cost,
+        entry.partner_share,
+        entry.other_direct_cost,
+        entry.zenimonies_revenue,
+      ]
     );
 
-    if (approvalResult.rowCount !== 1) {
+    if (approval.rowCount !== 1) {
       throw new Error(
-        'A separate administrator must approve this entry before posting.'
-      );
-    }
-
-    const approval = approvalResult.rows[0];
-
-    const amountsMatch =
-      String(entry.gross_fee) === String(approval.gross_fee) &&
-      String(entry.provider_cost) === String(approval.provider_cost) &&
-      String(entry.partner_share) === String(approval.partner_share) &&
-      String(entry.other_direct_cost) === String(approval.other_direct_cost) &&
-      String(entry.zenimonies_revenue) ===
-        String(approval.zenimonies_revenue);
-
-    if (!amountsMatch) {
-      throw new Error(
-        'The entry amounts do not match the approved snapshot.'
+        'A different administrator must approve these exact amounts before posting.'
       );
     }
 
@@ -810,7 +1010,6 @@ async function postRevenueEntry({ entryId, recordedBy }) {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
          AND accounting_status = 'ready'
-         AND transaction_status = 'completed'
        RETURNING *`,
       [id, actorId]
     );
