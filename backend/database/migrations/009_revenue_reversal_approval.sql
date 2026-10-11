@@ -6,13 +6,6 @@ BEGIN;
 --
 -- REVIEW DRAFT — TEST BEFORE PRODUCTION
 --
--- Purpose:
--- 1. Allow reversal entries to be posted through an approved
---    accounting workflow.
--- 2. Require independent approval before posting.
--- 3. Protect posted entries and reversal records from edits.
--- 4. Preserve replacement and accounting validations.
---
 -- Requires migration 008_revenue_ledger.sql to be applied.
 -- ============================================================
 
@@ -25,11 +18,7 @@ DECLARE
     replacement_row revenue_ledger%ROWTYPE;
     reversal_row revenue_ledger%ROWTYPE;
 BEGIN
-
-    -- --------------------------------------------------------
-    -- 1. Protect deletion
-    -- --------------------------------------------------------
-
+    -- Protect deletion of posted or referenced entries.
     IF TG_OP = 'DELETE' THEN
         IF OLD.accounting_status = 'posted'
            OR OLD.entry_kind = 'reversal'
@@ -43,40 +32,29 @@ BEGIN
             RAISE EXCEPTION
                 'Posted or referenced revenue entries cannot be deleted.';
         END IF;
-
         RETURN OLD;
     END IF;
 
-    -- --------------------------------------------------------
-    -- 2. Protect updates and immutable fields
-    -- --------------------------------------------------------
-
+    -- Protect immutable fields and posted entries.
     IF TG_OP = 'UPDATE' THEN
-
         IF OLD.accounting_status = 'posted' THEN
-            RAISE EXCEPTION
-                'Posted revenue entries are immutable.';
+            RAISE EXCEPTION 'Posted revenue entries are immutable.';
         END IF;
 
         IF OLD.entry_kind IS DISTINCT FROM NEW.entry_kind THEN
-            RAISE EXCEPTION
-                'An entry kind cannot be changed after creation.';
+            RAISE EXCEPTION 'An entry kind cannot be changed after creation.';
         END IF;
 
         IF OLD.reversal_of_id IS DISTINCT FROM NEW.reversal_of_id THEN
-            RAISE EXCEPTION
-                'A reversal link cannot be changed.';
+            RAISE EXCEPTION 'A reversal link cannot be changed.';
         END IF;
 
         IF OLD.replaces_id IS DISTINCT FROM NEW.replaces_id THEN
-            RAISE EXCEPTION
-                'A replacement link cannot be changed.';
+            RAISE EXCEPTION 'A replacement link cannot be changed.';
         END IF;
 
-        -- A reversal may only move from ready to posted.
-        -- Its financial identity and amounts must remain fixed.
+        -- A reversal may only transition from ready to posted.
         IF OLD.entry_kind = 'reversal' THEN
-
             IF OLD.accounting_status <> 'ready'
                OR NEW.accounting_status <> 'posted'
             THEN
@@ -110,19 +88,11 @@ BEGIN
                 RAISE EXCEPTION
                     'Reversal identity, source, amounts and reason are immutable.';
             END IF;
-
         END IF;
-
     END IF;
 
-    -- --------------------------------------------------------
-    -- 3. Validate reversal entries on creation
-    -- --------------------------------------------------------
-
-    IF TG_OP = 'INSERT'
-       AND NEW.entry_kind = 'reversal'
-    THEN
-
+    -- Validate reversal entries at creation.
+    IF TG_OP = 'INSERT' AND NEW.entry_kind = 'reversal' THEN
         IF NEW.accounting_status <> 'ready'
            OR NEW.posted_at IS NOT NULL
         THEN
@@ -131,8 +101,7 @@ BEGIN
         END IF;
 
         IF NEW.reversal_of_id IS NULL THEN
-            RAISE EXCEPTION
-                'A reversal must reference its original entry.';
+            RAISE EXCEPTION 'A reversal must reference its original entry.';
         END IF;
 
         SELECT *
@@ -176,31 +145,23 @@ BEGIN
         IF NEW.reversal_reason IS NULL
            OR BTRIM(NEW.reversal_reason) = ''
         THEN
-            RAISE EXCEPTION
-                'A reversal reason is required.';
+            RAISE EXCEPTION 'A reversal reason is required.';
         END IF;
-
     END IF;
 
-    -- --------------------------------------------------------
-    -- 4. Require independent approval for every posting
-    -- --------------------------------------------------------
-
+    -- Require independent approval for every posting.
     IF NEW.accounting_status = 'posted' THEN
-
         IF TG_OP <> 'UPDATE' THEN
             RAISE EXCEPTION
                 'Revenue entries must be posted through an approved update.';
         END IF;
 
         IF OLD.accounting_status <> 'ready' THEN
-            RAISE EXCEPTION
-                'Only ready revenue entries can be posted.';
+            RAISE EXCEPTION 'Only ready revenue entries can be posted.';
         END IF;
 
         IF NEW.recorded_by IS NULL THEN
-            RAISE EXCEPTION
-                'A recording administrator is required.';
+            RAISE EXCEPTION 'A recording administrator is required.';
         END IF;
 
         IF NOT EXISTS (
@@ -211,6 +172,7 @@ BEGIN
               AND a.prepared_by IS NOT NULL
               AND a.approved_by IS NOT NULL
               AND a.approved_by <> a.prepared_by
+              AND a.prepared_by <> NEW.recorded_by
               AND a.approved_by <> NEW.recorded_by
               AND a.gross_fee = NEW.gross_fee
               AND a.provider_cost = NEW.provider_cost
@@ -221,17 +183,10 @@ BEGIN
             RAISE EXCEPTION
                 'Posting requires a matching independent approval.';
         END IF;
-
     END IF;
 
-    -- --------------------------------------------------------
-    -- 5. Validate replacement entries
-    -- --------------------------------------------------------
-
-    IF NEW.entry_kind = 'original'
-       AND NEW.replaces_id IS NOT NULL
-    THEN
-
+    -- Validate replacement entries against the reversed original.
+    IF NEW.entry_kind = 'original' AND NEW.replaces_id IS NOT NULL THEN
         SELECT *
         INTO replacement_row
         FROM revenue_ledger
@@ -253,9 +208,7 @@ BEGIN
           AND accounting_status = 'posted'
         FOR SHARE;
 
-        IF NOT FOUND
-           OR reversal_row.entry_kind <> 'reversal'
-        THEN
+        IF NOT FOUND OR reversal_row.entry_kind <> 'reversal' THEN
             RAISE EXCEPTION
                 'A replacement requires a posted reversal of the original.';
         END IF;
@@ -282,15 +235,10 @@ BEGIN
             RAISE EXCEPTION
                 'Replacement source, service and currency must match the original.';
         END IF;
-
     END IF;
 
-    -- --------------------------------------------------------
-    -- 6. Validate accounting fields for posted entries
-    -- --------------------------------------------------------
-
+    -- Validate accounting fields on posted entries.
     IF NEW.accounting_status = 'posted' THEN
-
         IF NEW.gross_fee IS NULL
            OR NEW.provider_cost IS NULL
            OR NEW.partner_share IS NULL
@@ -303,12 +251,8 @@ BEGIN
         END IF;
 
         IF NEW.zenimonies_revenue <>
-           (
-               NEW.gross_fee
-               - NEW.provider_cost
-               - NEW.partner_share
-               - NEW.other_direct_cost
-           )
+           (NEW.gross_fee - NEW.provider_cost
+            - NEW.partner_share - NEW.other_direct_cost)
         THEN
             RAISE EXCEPTION
                 'Zenimonies revenue does not match the accounting calculation.';
@@ -322,7 +266,6 @@ BEGIN
         END IF;
 
         IF NEW.entry_kind = 'reversal' THEN
-
             IF NEW.transaction_status NOT IN ('reversed', 'refunded') THEN
                 RAISE EXCEPTION
                     'A posted reversal must be reversed or refunded.';
@@ -331,18 +274,13 @@ BEGIN
             IF NEW.reversal_reason IS NULL
                OR BTRIM(NEW.reversal_reason) = ''
             THEN
-                RAISE EXCEPTION
-                    'A posted reversal requires a reason.';
+                RAISE EXCEPTION 'A posted reversal requires a reason.';
             END IF;
-
         END IF;
-
     END IF;
 
     NEW.updated_at := CURRENT_TIMESTAMP;
-
     RETURN NEW;
-
 END;
 $$;
 
