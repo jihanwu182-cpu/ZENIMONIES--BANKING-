@@ -236,6 +236,78 @@ CREATE INDEX IF NOT EXISTS idx_revenue_ledger_partner
 ON revenue_ledger(partner_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_revenue_ledger_customer
 ON revenue_ledger(customer_user_id, created_at DESC);
+
+
+-- ============================================================
+-- REVENUE POSTING APPROVALS
+-- Requires a different administrator to approve each entry.
+-- Each decision is retained as a separate record.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS revenue_ledger_approvals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    revenue_ledger_id UUID NOT NULL
+        REFERENCES revenue_ledger(id) ON DELETE RESTRICT,
+
+    prepared_by UUID NOT NULL
+        REFERENCES users(id) ON DELETE RESTRICT,
+
+    approved_by UUID
+        REFERENCES users(id) ON DELETE RESTRICT,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+
+    -- Snapshot of the amounts submitted for approval.
+    gross_fee NUMERIC(18,2) NOT NULL,
+    provider_cost NUMERIC(18,2) NOT NULL,
+    partner_share NUMERIC(18,2) NOT NULL,
+    other_direct_cost NUMERIC(18,2) NOT NULL,
+    zenimonies_revenue NUMERIC(18,2) NOT NULL,
+
+    prepared_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    decided_at TIMESTAMPTZ,
+    decision_reason TEXT,
+
+    CONSTRAINT revenue_approval_status_check
+        CHECK (status IN ('pending', 'approved', 'rejected')),
+
+    CONSTRAINT revenue_approval_different_admins_check
+        CHECK (
+            approved_by IS NULL
+            OR approved_by <> prepared_by
+        ),
+
+    CONSTRAINT revenue_approval_decision_check
+        CHECK (
+            (
+                status = 'pending'
+                AND approved_by IS NULL
+                AND decided_at IS NULL
+            )
+            OR
+            (
+                status IN ('approved', 'rejected')
+                AND approved_by IS NOT NULL
+                AND decided_at IS NOT NULL
+            )
+        )
+);
+
+-- Only one outstanding approval request per ledger entry.
+CREATE UNIQUE INDEX IF NOT EXISTS
+    idx_revenue_approval_one_pending
+ON revenue_ledger_approvals(revenue_ledger_id)
+WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS
+    idx_revenue_approvals_entry_history
+ON revenue_ledger_approvals(revenue_ledger_id, prepared_at DESC);
+
+CREATE INDEX IF NOT EXISTS
+    idx_revenue_approvals_status
+ON revenue_ledger_approvals(status, prepared_at DESC);
+
 -- ============================================================
 -- 4. PARTNER SETTLEMENTS
 -- Recording a settlement does not send money.
@@ -870,11 +942,14 @@ BEGIN
     END IF;
 
     -- Safely identify the actor without an unsafe UUID cast.
-    actor_text := COALESCE(
-        NULLIF(row_data->>'recorded_by', ''),
-        NULLIF(row_data->>'created_by', ''),
-        NULLIF(row_data->>'approved_by', '')
-    );
+    
+actor_text := COALESCE(
+    NULLIF(row_data->>'recorded_by', ''),
+    NULLIF(row_data->>'created_by', ''),
+    NULLIF(row_data->>'approved_by', ''),
+    NULLIF(row_data->>'prepared_by', '')
+);
+
 
     actor_uuid := NULL;
 
@@ -926,6 +1001,66 @@ BEGIN
     RETURN NEW;
 END;
 $$; 
+
+-- ============================================================
+-- PROTECT REVENUE APPROVAL HISTORY
+-- Decisions cannot be edited or deleted after recording.
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION protect_revenue_ledger_approval()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION
+            'Revenue approval records cannot be deleted.';
+    END IF;
+
+    -- Only a pending request may receive one decision.
+    IF OLD.status <> 'pending'
+       OR NEW.status NOT IN ('approved', 'rejected') THEN
+        RAISE EXCEPTION
+            'Only a pending revenue approval can receive a final decision.';
+    END IF;
+
+    -- The decision cannot change the request or its financial snapshot.
+    IF NEW.id IS DISTINCT FROM OLD.id
+       OR NEW.revenue_ledger_id IS DISTINCT FROM OLD.revenue_ledger_id
+       OR NEW.prepared_by IS DISTINCT FROM OLD.prepared_by
+       OR NEW.gross_fee IS DISTINCT FROM OLD.gross_fee
+       OR NEW.provider_cost IS DISTINCT FROM OLD.provider_cost
+       OR NEW.partner_share IS DISTINCT FROM OLD.partner_share
+       OR NEW.other_direct_cost IS DISTINCT FROM OLD.other_direct_cost
+       OR NEW.zenimonies_revenue IS DISTINCT FROM OLD.zenimonies_revenue
+       OR NEW.prepared_at IS DISTINCT FROM OLD.prepared_at THEN
+        RAISE EXCEPTION
+            'Approval request details cannot be changed when deciding.';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_protect_revenue_ledger_approval
+ON revenue_ledger_approvals;
+
+CREATE TRIGGER trg_protect_revenue_ledger_approval
+BEFORE UPDATE OR DELETE
+ON revenue_ledger_approvals
+FOR EACH ROW
+EXECUTE FUNCTION protect_revenue_ledger_approval();
+
+-- Every creation and decision is written to the revenue audit log.
+DROP TRIGGER IF EXISTS trg_audit_revenue_ledger_approvals
+ON revenue_ledger_approvals;
+
+CREATE TRIGGER trg_audit_revenue_ledger_approvals
+AFTER INSERT OR UPDATE OR DELETE
+ON revenue_ledger_approvals
+FOR EACH ROW
+EXECUTE FUNCTION record_revenue_audit_event();
+
 DROP TRIGGER IF EXISTS trg_audit_revenue_ledger
 ON revenue_ledger;
 CREATE TRIGGER trg_audit_revenue_ledger
