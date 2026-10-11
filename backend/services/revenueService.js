@@ -937,6 +937,8 @@ async function postRevenueEntry({ entryId, recordedBy }) {
   try {
     await client.query('BEGIN');
 
+    // Lock the ledger entry so concurrent posting attempts
+    // cannot post the same entry simultaneously.
     const current = await client.query(
       `SELECT *
        FROM revenue_ledger
@@ -969,12 +971,31 @@ async function postRevenueEntry({ entryId, recordedBy }) {
       entry.other_direct_cost === null ||
       entry.zenimonies_revenue === null
     ) {
-      throw new Error('All accounting amounts are required.');
+      throw new Error(
+        'All accounting amounts must be known before posting.'
+      );
     }
 
-    // A separate administrator must approve these exact amounts.
-    const approval = await client.query(
-      `SELECT id
+    // Verify that the revenue calculation is still correct.
+    const calculatedRevenue = calculateZenimoniesRevenue({
+      grossFee: entry.gross_fee,
+      providerCost: entry.provider_cost,
+      partnerShare: entry.partner_share,
+      otherDirectCost: entry.other_direct_cost,
+    });
+
+    if (
+      calculatedRevenue === null ||
+      calculatedRevenue !== Number(entry.zenimonies_revenue).toFixed(2)
+    ) {
+      throw new Error(
+        'The revenue calculation does not match the ledger amounts.'
+      );
+    }
+
+    // Find a previously approved request for these exact amounts.
+    const approvalResult = await client.query(
+      `SELECT id, prepared_by, approved_by
        FROM revenue_ledger_approvals
        WHERE revenue_ledger_id = $1
          AND status = 'approved'
@@ -985,7 +1006,8 @@ async function postRevenueEntry({ entryId, recordedBy }) {
          AND other_direct_cost = $5
          AND zenimonies_revenue = $6
        ORDER BY decided_at DESC
-       LIMIT 1`,
+       LIMIT 1
+       FOR SHARE`,
       [
         id,
         entry.gross_fee,
@@ -996,12 +1018,26 @@ async function postRevenueEntry({ entryId, recordedBy }) {
       ]
     );
 
-    if (approval.rowCount !== 1) {
+    if (approvalResult.rowCount !== 1) {
       throw new Error(
         'A different administrator must approve these exact amounts before posting.'
       );
     }
 
+    const approval = approvalResult.rows[0];
+
+    // The person posting must be different from both the
+    // person who prepared the request and the approver.
+    if (
+      actorId === approval.prepared_by ||
+      actorId === approval.approved_by
+    ) {
+      throw new Error(
+        'The preparer and approver cannot post this revenue entry.'
+      );
+    }
+
+    // Post only if the entry is still ready.
     const result = await client.query(
       `UPDATE revenue_ledger
        SET accounting_status = 'posted',
@@ -1010,6 +1046,7 @@ async function postRevenueEntry({ entryId, recordedBy }) {
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1
          AND accounting_status = 'ready'
+         AND transaction_status = 'completed'
        RETURNING *`,
       [id, actorId]
     );
@@ -1019,6 +1056,7 @@ async function postRevenueEntry({ entryId, recordedBy }) {
     }
 
     await client.query('COMMIT');
+
     return result.rows[0];
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -1027,6 +1065,7 @@ async function postRevenueEntry({ entryId, recordedBy }) {
     client.release();
   }
 }
+
 
 module.exports = {
   calculateZenimoniesRevenue,
