@@ -1,4 +1,5 @@
 
+
 const express = require('express');
 
 const router = express.Router();
@@ -65,6 +66,7 @@ const {
   prepareRevenueApproval,
   decideRevenueApproval,
   postRevenueEntry,
+  reverseRevenueEntry,
 } = require('../controllers/adminRevenueController');
 
 // ============================================================
@@ -217,6 +219,12 @@ router.patch(
 router.post(
   '/revenue/entries/:id/post',
   postRevenueEntry
+);
+
+// POST /api/admin/revenue/entries/:id/reverse
+router.post(
+  '/revenue/entries/:id/reverse',
+  reverseRevenueEntry
 );
 
 // ============================================================
