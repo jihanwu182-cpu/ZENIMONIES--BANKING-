@@ -893,9 +893,9 @@ $$;
 DROP TRIGGER IF EXISTS trg_validate_revenue_settlement
 ON revenue_settlements;
 
-CREATE TRIGGER trg_validate_revenue_settlement
-BEFORE INSERT OR UPDATE
-ON revenue_settlements
+CREATE TRIGGER trg_validate_company_revenue_movement
+BEFORE INSERT OR UPDATE OR DELETE
+ON company_revenue_movements
 FOR EACH ROW
 EXECUTE FUNCTION validate_revenue_workflow_transition();
 
