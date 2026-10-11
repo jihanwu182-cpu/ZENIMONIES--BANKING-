@@ -675,6 +675,13 @@ BEGIN
             'Unsupported financial workflow table.';
     END IF;
 
+
+           -- Prevent deletion of financial workflow records.
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION
+            'Financial workflow records cannot be deleted. Use an audited cancellation or correction process.';
+    END IF;
+
     new_status := NEW.status;
 
     -- New financial records must start pending.
