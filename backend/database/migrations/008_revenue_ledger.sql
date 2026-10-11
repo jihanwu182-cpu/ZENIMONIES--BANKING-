@@ -379,8 +379,18 @@ AS $$
 DECLARE
     partner_status VARCHAR(30);
 BEGIN
+    -- Prevent deletion of approved partner terms.
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.status = 'approved' THEN
+            RAISE EXCEPTION
+                'Approved partner terms cannot be deleted.';
+        END IF;
+
+        RETURN OLD;
+    END IF;
+
     -- Approved terms are immutable.
-    -- Create a new terms record for any future change.
+    -- Create a new terms record for future changes.
     IF TG_OP = 'UPDATE' AND OLD.status = 'approved' THEN
         RAISE EXCEPTION
             'Approved partner terms cannot be edited. Create a new terms record.';
@@ -399,7 +409,8 @@ BEGIN
                 'Partner terms require an active partner.';
         END IF;
 
-        IF NEW.approved_by IS NULL OR NEW.approved_at IS NULL THEN
+        IF NEW.approved_by IS NULL
+           OR NEW.approved_at IS NULL THEN
             RAISE EXCEPTION
                 'Approved terms require an approver and timestamp.';
         END IF;
@@ -420,10 +431,12 @@ BEGIN
     RETURN NEW;
 END;
 $$;
+
 DROP TRIGGER IF EXISTS trg_validate_revenue_partner_term
 ON revenue_partner_terms;
+
 CREATE TRIGGER trg_validate_revenue_partner_term
-BEFORE INSERT OR UPDATE
+BEFORE INSERT OR UPDATE OR DELETE
 ON revenue_partner_terms
 FOR EACH ROW
 EXECUTE FUNCTION validate_revenue_partner_term();
