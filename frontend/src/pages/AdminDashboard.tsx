@@ -756,7 +756,7 @@ const AdminDashboard: React.FC<{
   net_partner_shares: string | number;
   net_other_direct_costs: string | number;
 };
-const [revenueSummary, setRevenueSummary] =
+const [revenueApiSummary, setRevenueApiSummary] =
   useState<RevenueSummary | null>(null);
 
   const [customers, setCustomers] =
@@ -835,13 +835,13 @@ const [revenueSummary, setRevenueSummary] =
     const ngnSummary = rows.find(
       (row: RevenueSummary) => row.currency === 'NGN'
     );
-    setRevenueSummary(ngnSummary || null);
+    setRevenueApiSummary(ngnSummary || null);
   } catch (revenueError) {
     console.error(
       'Unable to load revenue summary:',
       revenueError
     );
-    setRevenueSummary(null);
+    setRevenueApiSummary(null);
   }
 }, []);
   
@@ -1565,9 +1565,12 @@ const revenueChartData: Array<{
   },
   {
   title: 'Revenue',
-  value: revenueSummary?.currency === 'NGN'
-    ? formatMoney(revenueSummary.net_zenimonies_revenue, 'NGN')
-    : '—',
+  value: revenueApiSummary?.currency === 'NGN'
+  ? formatMoney(
+      revenueApiSummary.net_zenimonies_revenue,
+      'NGN'
+    )
+  : '—',
   subtitle: 'Verified company revenue',
   icon: <TrendingUp fontSize="small" />,
   tone: BRAND.green,
