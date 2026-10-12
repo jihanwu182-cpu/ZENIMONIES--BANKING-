@@ -1000,22 +1000,6 @@ const NIGERIAN_LGAS: Record<string, string[]> = {
 };
 
 // ============================================================
-// SOUTH AFRICA
-// ============================================================
-
-const SOUTH_AFRICAN_PROVINCES = [
-  'Eastern Cape',
-  'Free State',
-  'Gauteng',
-  'KwaZulu-Natal',
-  'Limpopo',
-  'Mpumalanga',
-  'Northern Cape',
-  'North West',
-  'Western Cape',
-];
-
-// ============================================================
 // GENDER OPTIONS
 // ============================================================
 
@@ -1267,7 +1251,6 @@ const Profile: React.FC = () => {
   const stateOptions =
     form.country === 'Nigeria'
       ? NIGERIAN_STATES
-      : SOUTH_AFRICAN_PROVINCES;
 
   const lgaOptions =
     form.country === 'Nigeria' &&
@@ -2052,9 +2035,7 @@ const Profile: React.FC = () => {
               <input
                 type="email"
                 value={form.email}
-                disabled={
-                  !editing ||
-                  profileLocked
+                disabled={!editing}
                 }
                 onChange={(
                   event
@@ -2081,9 +2062,6 @@ const Profile: React.FC = () => {
                     styles.helper
                   }
                 >
-                  🔒 Verified email
-                  cannot be changed.
-                </small>
 
               )}
 
@@ -2104,9 +2082,7 @@ const Profile: React.FC = () => {
               <input
                 type="tel"
                 value={form.phone}
-                disabled={
-                  !editing ||
-                  profileLocked
+                disabled={!editing}
                 }
                 onChange={(
                   event
@@ -2125,6 +2101,11 @@ const Profile: React.FC = () => {
                     : styles.disabledInput),
                 }}
               />
+              <small style={styles.helper}>
+              {user?.phone_verified
+              ? '✓ Phone number verified'
+             : 'Phone number not verified'}
+                </small>
 
               {profileLocked && (
 
@@ -2133,9 +2114,6 @@ const Profile: React.FC = () => {
                     styles.helper
                   }
                 >
-                  🔒 Verified phone
-                  number cannot be changed.
-                </small>
 
               )}
 
