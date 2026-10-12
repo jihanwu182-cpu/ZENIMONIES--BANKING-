@@ -51,32 +51,6 @@ const normalizePhone = (phone) => {
   return String(phone || '').trim();
 };
 
-
-// ============================================================
-// GENERATE ZENIMONIES ACCOUNT NUMBER
-// ============================================================
-//
-// IMPORTANT:
-//
-// This is a Zenimonies internal account number.
-//
-// It is NOT a bank NUBAN.
-// It is NOT a Paystack dedicated virtual account.
-//
-// A real deposit/bank account will be provisioned separately
-// when Paystack allows the business to use that feature.
-// ============================================================
-
-const generateZenimoniesAccountNumber = () => {
-  return String(
-    crypto.randomInt(
-      1000000000,
-      9999999999
-    )
-  );
-};
-
-
 // ============================================================
 // GET BEARER TOKEN
 // ============================================================
@@ -650,14 +624,6 @@ const register = async (req, res) => {
     const user =
       userResult.rows[0];
 
-    // ----------------------------------------------------------
-    // GENERATE ZENIMONIES ACCOUNT NUMBER
-    // ----------------------------------------------------------
-
-    const accountNumber =
-      await generateZenimoniesAccountNumber(
-        client,
-      );
 
     // ----------------------------------------------------------
     // CREATE ACCOUNT
