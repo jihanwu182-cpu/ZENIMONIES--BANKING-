@@ -812,24 +812,39 @@ const [revenueSummary, setRevenueSummary] =
   /* ==========================================================
      LOAD DASHBOARD
      ========================================================== */
-
-  const loadDashboard =
-    useCallback(async () => {
-      const response = await api.get(
-        '/admin/dashboard'
-      );
-
-      
-      const data =
-        response.data?.dashboard || response.data || {};
-
-      setDashboard({
-        ...data,
-        totalUsers: data?.totalUsers ?? data?.users?.total,
-        activeUsers: data?.activeUsers ?? data?.users?.active,
-        suspendedUsers: data?.suspendedUsers ?? data?.users?.suspended,
-      });
-    }, []);
+   const loadDashboard = useCallback(async () => {
+  const response = await api.get('/admin/dashboard');
+  const data =
+    response.data?.dashboard || response.data || {};
+  setDashboard({
+    ...data,
+    totalUsers: data?.totalUsers ?? data?.users?.total,
+    activeUsers: data?.activeUsers ?? data?.users?.active,
+    suspendedUsers:
+      data?.suspendedUsers ?? data?.users?.suspended,
+  });
+  // Load verified revenue separately so a revenue API
+  // failure does not stop the main dashboard.
+  try {
+    const revenueResponse = await api.get(
+      '/admin/revenue/summary'
+    );
+    const rows = Array.isArray(revenueResponse.data?.data)
+      ? revenueResponse.data.data
+      : [];
+    const ngnSummary = rows.find(
+      (row: RevenueSummary) => row.currency === 'NGN'
+    );
+    setRevenueSummary(ngnSummary || null);
+  } catch (revenueError) {
+    console.error(
+      'Unable to load revenue summary:',
+      revenueError
+    );
+    setRevenueSummary(null);
+  }
+}, []);
+  
   /* ==========================================================
      LOAD CUSTOMERS
      ========================================================== */
