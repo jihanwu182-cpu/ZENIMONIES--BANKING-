@@ -252,24 +252,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-// ============================================================
-// EXTERNAL BANK TRANSFER FEES
-// Internal ZENIMONIES transfers remain FREE.
-// ============================================================
-const getExternalTransferFee = (amount) => {
-  const value = Number(amount);
-  if (!Number.isFinite(value) || value < 1000) {
-    return 0;
-  }
-  if (value < 6000) {
-    return 20;
-  }
-  if (value < 10000) {
-    return 25;
-  }
-  return 45;
-};
-
 -- ============================================================
 -- BENEFICIARIES
 -- ============================================================
