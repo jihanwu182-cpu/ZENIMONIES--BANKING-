@@ -3,16 +3,12 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-
 import BeneficiaryTabs from '../components/BeneficiaryTabs.tsx';
-
 import {
   Link,
   useNavigate,
 } from 'react-router-dom';
-
 import { useTheme } from '../theme/Theme.tsx';
-
 interface Bank {
   name: string;
   code: string;
@@ -22,13 +18,11 @@ interface Bank {
   currency?: string;
   type?: string;
 }
-
 interface BanksResponse {
   success?: boolean;
   banks?: Bank[];
   message?: string;
 }
-
 interface ResolveResponse {
   success?: boolean;
   verified?: boolean;
@@ -38,56 +32,122 @@ interface ResolveResponse {
     account_name?: string;
   };
 }
-
-const API_URL =
+interface KycStatusResponse {
+  success?: boolean;
+  message?: string;
+  kyc?: {
+    tier?: number;
+    status?: string;
+  };
+  data?: {
+    kyc?: {
+      tier?: number;
+      status?: string;
+    };
+  };
+}
+const API_URL = (
   process.env.REACT_APP_API_URL ||
-  'https://zenimonies-banking.onrender.com';
-
+  'https://zenimonies-banking.onrender.com'
+).replace(/\/+$/, '');
+const API_BASE = API_URL.endsWith('/api')
+  ? API_URL
+  : `${API_URL}/api`;
 const ToBank: React.FC = () => {
   const navigate = useNavigate();
-
-  // ============================================================
-  // GLOBAL ZENIMONIES THEME
-  // ============================================================
-  const {
-    darkMode,
-    toggleDarkMode,
-  } = useTheme();
-
+  const { darkMode, toggleDarkMode } = useTheme();
   const [banks, setBanks] = useState<Bank[]>([]);
-  const [banksLoading, setBanksLoading] =
-    useState(true);
-
-  const [selectedBank, setSelectedBank] =
-    useState('');
-
-  const [accountNumber, setAccountNumber] =
-    useState('');
-
-  const [accountName, setAccountName] =
-    useState('');
-
-  const [accountVerified, setAccountVerified] =
-    useState(false);
-
-  const [verifying, setVerifying] =
-    useState(false);
-
-  const [amount, setAmount] =
-    useState('');
-
-  const [narration, setNarration] =
-    useState('');
-
-  const [saveAsBeneficiary, setSaveAsBeneficiary] =
-    useState(false);
-
-  const [error, setError] =
-    useState('');
-
-  const [bankSearch, setBankSearch] =
-    useState('');
-
+  const [banksLoading, setBanksLoading] = useState(true);
+  const [selectedBank, setSelectedBank] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [accountVerified, setAccountVerified] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [narration, setNarration] = useState('');
+  const [saveAsBeneficiary, setSaveAsBeneficiary] = useState(false);
+  const [error, setError] = useState('');
+  const [bankSearch, setBankSearch] = useState('');
+  // ============================================================
+  // APPROVED KYC TIER
+  // Never trust a tier supplied by the browser or submitted_tier.
+  // The authenticated backend response is the source of truth.
+  // ============================================================
+  const [kycTier, setKycTier] = useState<number | null>(null);
+  const [kycLoading, setKycLoading] = useState(true);
+  const [kycError, setKycError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    const loadKycTier = async () => {
+      setKycLoading(true);
+      setKycError('');
+      setKycTier(null);
+      try {
+        const token =
+          localStorage.getItem('zenimonies_token') ||
+          localStorage.getItem('access_token') ||
+          localStorage.getItem('token');
+        if (!token) {
+          throw new Error(
+            'Please sign in again so we can verify your account tier.'
+          );
+        }
+        const response = await fetch(
+          `${API_BASE}/kyc/status`,
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/json',
+            },
+          }
+        );
+        const data: KycStatusResponse = await response.json();
+        if (!response.ok || data.success !== true) {
+          throw new Error(
+            data.message ||
+              'Unable to confirm your verification tier.'
+          );
+        }
+        const kyc = data.kyc || data.data?.kyc;
+        const approvedTier = kyc?.tier;
+        if (
+          typeof approvedTier !== 'number' ||
+          !Number.isInteger(approvedTier) ||
+          approvedTier < 0 ||
+          approvedTier > 3
+        ) {
+          throw new Error(
+            'Your approved verification tier could not be confirmed. Please try again.'
+          );
+        }
+        if (!cancelled) {
+          setKycTier(approvedTier);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          console.error('KYC tier loading error:', err);
+          setKycTier(null);
+          setKycError(
+            err?.message ||
+              'Unable to confirm your verification tier. Please try again.'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setKycLoading(false);
+        }
+      }
+    };
+    loadKycTier();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const tierZeroBlocked = kycTier === 0;
+  const tierCheckFailed = !kycLoading && kycTier === null;
+  const transferBlocked =
+    kycLoading || kycTier === null || kycTier === 0;
   // ============================================================
   // ZENIMONIES COLORS
   // ============================================================
@@ -103,20 +163,15 @@ const ToBank: React.FC = () => {
             text: '#f3f8f5',
             muted: '#a9b8b0',
             label: '#c5d3cd',
-
             green: '#168c56',
             greenBright: '#25c477',
-
             greenSoft: '#123a29',
             greenBorder: '#1c5139',
             selectedText: '#8de0ba',
-
             dangerBg: '#2a1517',
             dangerBorder: '#5b292d',
             dangerText: '#ffb4aa',
-
-            shadow:
-              '0 14px 40px rgba(0, 0, 0, 0.28)',
+            shadow: '0 14px 40px rgba(0, 0, 0, 0.28)',
           }
         : {
             page: '#f6faf8',
@@ -127,425 +182,251 @@ const ToBank: React.FC = () => {
             text: '#14251e',
             muted: '#7b8982',
             label: '#344c46',
-
             green: '#079447',
             greenBright: '#0b995b',
-
             greenSoft: '#e9f8f1',
             greenBorder: '#d4eee1',
             selectedText: '#087c43',
-
             dangerBg: '#fff4f4',
             dangerBorder: '#f0cccc',
             dangerText: '#b42318',
-
-            shadow:
-              '0 10px 30px rgba(7, 59, 42, 0.06)',
+            shadow: '0 10px 30px rgba(7, 59, 42, 0.06)',
           },
     [darkMode]
   );
-
   // ============================================================
   // BENEFICIARY SELECT
   // ============================================================
-  const handleBeneficiarySelect = (
-    beneficiary: any
-  ) => {
-    if (
-      beneficiary.recipient_type !==
-      'bank'
-    ) {
-      return;
-    }
-
-    if (!beneficiary.account_number) {
-      return;
-    }
-
+  const handleBeneficiarySelect = (beneficiary: any) => {
+    if (beneficiary.recipient_type !== 'bank') return;
+    if (!beneficiary.account_number) return;
     if (beneficiary.bank_code) {
-      setSelectedBank(
-        beneficiary.bank_code
-      );
+      setSelectedBank(beneficiary.bank_code);
     }
-
-    setAccountNumber(
-      beneficiary.account_number
-    );
-
-    setAccountName(
-      beneficiary.name || ''
-    );
-
+    setAccountNumber(beneficiary.account_number);
+    setAccountName(beneficiary.name || '');
     setAccountVerified(true);
     setError('');
     setBankSearch('');
   };
-
   // ============================================================
   // LOAD BANKS
   // ============================================================
   useEffect(() => {
+    let cancelled = false;
     const loadBanks = async () => {
       try {
         setBanksLoading(true);
-        setError('');
-
-        const response = await fetch(
-          `${API_URL}/api/banks`
-        );
-
-        const data: BanksResponse =
-          await response.json();
-
-        if (
-          !response.ok ||
-          !data.success
-        ) {
-          throw new Error(
-            data.message ||
-              'Unable to load banks.'
+        const response = await fetch(`${API_BASE}/banks`);
+        const data: BanksResponse = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || 'Unable to load banks.');
+        }
+        const availableBanks = Array.isArray(data.banks)
+          ? data.banks
+          : [];
+        if (!cancelled) {
+          setBanks(
+            availableBanks
+              .filter((bank) => bank && bank.name && bank.code)
+              .sort((a, b) => a.name.localeCompare(b.name))
           );
         }
-
-        const availableBanks =
-          Array.isArray(data.banks)
-            ? data.banks
-            : [];
-
-        setBanks(
-          availableBanks
-            .filter(
-              (bank) =>
-                bank &&
-                bank.name &&
-                bank.code
-            )
-            .sort((a, b) =>
-              a.name.localeCompare(
-                b.name
-              )
-            )
-        );
       } catch (err: any) {
-        console.error(
-          'Bank loading error:',
-          err
-        );
-
-        setError(
-          err?.message ||
-            'Unable to load the bank list.'
-        );
+        console.error('Bank loading error:', err);
+        if (!cancelled) {
+          setError(err?.message || 'Unable to load the bank list.');
+        }
       } finally {
-        setBanksLoading(false);
+        if (!cancelled) {
+          setBanksLoading(false);
+        }
       }
     };
-
     loadBanks();
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
   // ============================================================
   // FILTER BANKS
   // ============================================================
   const filteredBanks = useMemo(() => {
-    const search =
-      bankSearch
-        .trim()
-        .toLowerCase();
-
-    if (!search) {
-      return banks;
-    }
-
+    const search = bankSearch.trim().toLowerCase();
+    if (!search) return banks;
     return banks.filter((bank) =>
-      bank.name
-        .toLowerCase()
-        .includes(search)
+      bank.name.toLowerCase().includes(search)
     );
   }, [banks, bankSearch]);
-
   // ============================================================
   // BANK CHANGE
   // ============================================================
   const handleBankChange = (
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
-    setSelectedBank(
-      event.target.value
-    );
-
+    setSelectedBank(event.target.value);
     setAccountVerified(false);
     setAccountName('');
     setError('');
   };
-
   // ============================================================
   // ACCOUNT NUMBER
   // ============================================================
   const handleAccountNumberChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const value =
-      event.target.value.replace(
-        /\D/g,
-        ''
-      );
-
-    setAccountNumber(
-      value.slice(0, 10)
-    );
-
+    const value = event.target.value.replace(/\D/g, '');
+    setAccountNumber(value.slice(0, 10));
     setAccountVerified(false);
     setAccountName('');
     setError('');
   };
-
   // ============================================================
   // VERIFY ACCOUNT
   // ============================================================
-  const handleVerifyAccount =
-    async () => {
-      setError('');
-
-      if (!selectedBank) {
-        setError(
-          'Please select a bank first.'
-        );
-        return;
-      }
-
+  const handleVerifyAccount = async () => {
+    setError('');
+    if (!selectedBank) {
+      setError('Please select a bank first.');
+      return;
+    }
+    if (!/^\d{10}$/.test(accountNumber)) {
+      setError('Please enter a valid 10-digit account number.');
+      return;
+    }
+    try {
+      setVerifying(true);
+      const response = await fetch(`${API_BASE}/banks/resolve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          account_number: accountNumber,
+          bank_code: selectedBank,
+        }),
+      });
+      const data: ResolveResponse = await response.json();
       if (
-        !/^\d{10}$/.test(
-          accountNumber
-        )
+        !response.ok ||
+        !data.success ||
+        !data.verified ||
+        !data.account?.account_name
       ) {
-        setError(
-          'Please enter a valid 10-digit account number.'
+        throw new Error(
+          data.message || 'Unable to verify this bank account.'
         );
-        return;
       }
-
-      try {
-        setVerifying(true);
-
-        const response =
-          await fetch(
-            `${API_URL}/api/banks/resolve`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type':
-                  'application/json',
-              },
-              body: JSON.stringify({
-                account_number:
-                  accountNumber,
-                bank_code:
-                  selectedBank,
-              }),
-            }
-          );
-
-        const data: ResolveResponse =
-          await response.json();
-
-        if (
-          !response.ok ||
-          !data.success ||
-          !data.verified ||
-          !data.account
-            ?.account_name
-        ) {
-          throw new Error(
-            data.message ||
-              'Unable to verify this bank account.'
-          );
-        }
-
-        setAccountName(
-          data.account.account_name
-        );
-
-        setAccountNumber(
-          data.account
-            .account_number ||
-            accountNumber
-        );
-
-        setAccountVerified(true);
-        setError('');
-      } catch (err: any) {
-        console.error(
-          'Account verification error:',
-          err
-        );
-
-        setAccountVerified(false);
-        setAccountName('');
-
-        setError(
-          err?.message ||
-            'Unable to verify this bank account. Please check the bank and account number.'
-        );
-      } finally {
-        setVerifying(false);
-      }
-    };
-  
+      setAccountName(data.account.account_name);
+      setAccountNumber(data.account.account_number || accountNumber);
+      setAccountVerified(true);
+      setError('');
+    } catch (err: any) {
+      console.error('Account verification error:', err);
+      setAccountVerified(false);
+      setAccountName('');
+      setError(
+        err?.message ||
+          'Unable to verify this bank account. Please check the bank and account number.'
+      );
+    } finally {
+      setVerifying(false);
+    }
+  };
   // ============================================================
   // EXTERNAL BANK TRANSFER FEE
   // ============================================================
   const transferAmount = Number(amount);
-
   const transactionFee = useMemo(() => {
-    if (
-      !Number.isFinite(transferAmount) ||
-      transferAmount < 1000
-    ) {
+    if (!Number.isFinite(transferAmount) || transferAmount < 1000) {
       return 0;
     }
-
-    if (transferAmount < 6000) {
-      return 20;
-    }
-
-    if (transferAmount < 10000) {
-      return 25;
-    }
-
+    if (transferAmount < 6000) return 20;
+    if (transferAmount < 10000) return 25;
     return 45;
   }, [transferAmount]);
-
   const totalDebit =
-    Number.isFinite(transferAmount) &&
-    transferAmount > 0
+    Number.isFinite(transferAmount) && transferAmount > 0
       ? transferAmount + transactionFee
       : 0;
-
   const formatNaira = (value: number) =>
     `₦${Number(value || 0).toLocaleString('en-NG', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
-
   // ============================================================
   // AMOUNT
   // ============================================================
   const handleAmountChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    let value =
-      event.target.value.replace(
-        /[^0-9.]/g,
-        ''
-      );
-
-    const firstDot =
-      value.indexOf('.');
-
+    let value = event.target.value.replace(/[^0-9.]/g, '');
+    const firstDot = value.indexOf('.');
     if (firstDot !== -1) {
       value =
-        value.slice(
-          0,
-          firstDot + 1
-        ) +
-        value
-          .slice(firstDot + 1)
-          .replace(
-            /\./g,
-            ''
-          );
+        value.slice(0, firstDot + 1) +
+        value.slice(firstDot + 1).replace(/\./g, '');
     }
-
     setAmount(value);
     setError('');
   };
-
   // ============================================================
   // CONTINUE
   // ============================================================
   const handleContinue = () => {
     setError('');
-
+    if (kycLoading || kycTier === null) {
+      setError(
+        'We could not confirm your approved verification tier. Please refresh the page or sign in again.'
+      );
+      return;
+    }
+    if (kycTier === 0) {
+      setError(
+        'External bank transfers are unavailable on Tier 0. Complete Tier 1 verification and wait for approval to unlock this feature.'
+      );
+      return;
+    }
     if (!selectedBank) {
-      setError(
-        'Please select a bank.'
-      );
+      setError('Please select a bank.');
       return;
     }
-
-    if (
-      !/^\d{10}$/.test(
-        accountNumber
-      )
-    ) {
-      setError(
-        'Please enter a valid 10-digit account number.'
-      );
+    if (!/^\d{10}$/.test(accountNumber)) {
+      setError('Please enter a valid 10-digit account number.');
       return;
     }
-
     if (!accountVerified) {
-      setError(
-        'Please verify the bank account before continuing.'
-      );
+      setError('Please verify the bank account before continuing.');
       return;
     }
-
-    const numericAmount = Number(
-      amount.replace(/,/g, '')
-    );
-
-    if (
-      !Number.isFinite(
-        numericAmount
-      ) ||
-      numericAmount <= 0
-    ) {
-      setError(
-        'Please enter a valid amount.'
-      );
+    const numericAmount = Number(amount.replace(/,/g, ''));
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setError('Please enter a valid amount.');
       return;
     }
-
-    const bank = banks.find(
-      (item) =>
-        item.code === selectedBank
-    );
-
+    const bank = banks.find((item) => item.code === selectedBank);
     if (!bank) {
-      setError(
-        'Please select a valid bank.'
-      );
+      setError('Please select a valid bank.');
       return;
     }
-
-    navigate(
-      '/transfer-confirmation',
-      {
-        state: {
-          bank,
-          accountNumber,
-          accountName,
-          amount: numericAmount,
-          narration,
-          accountVerified: true,
-          saveAsBeneficiary,
-          transactionFee,
-          totalDebit,
-          currency: 'NGN',
-        },
-      }
-    );
+    navigate('/transfer-confirmation', {
+      state: {
+        bank,
+        accountNumber,
+        accountName,
+        amount: numericAmount,
+        narration,
+        accountVerified: true,
+        saveAsBeneficiary,
+        transactionFee,
+        totalDebit,
+        currency: 'NGN',
+      },
+    });
   };
-
-  const selectedBankObject =
-    banks.find(
-      (bank) =>
-        bank.code ===
-        selectedBank
-    );
-
+  const selectedBankObject = banks.find(
+    (bank) => bank.code === selectedBank
+  );
   // ============================================================
   // BENEFICIARIES
   // ============================================================
@@ -553,19 +434,15 @@ const ToBank: React.FC = () => {
     <div
       style={{
         ...styles.beneficiarySection,
-        borderTopColor:
-          theme.border,
+        borderTopColor: theme.border,
       }}
     >
       <BeneficiaryTabs
         recipientType="bank"
-        onSelect={
-          handleBeneficiarySelect
-        }
+        onSelect={handleBeneficiarySelect}
       />
     </div>
   );
-
   // ============================================================
   // RENDER
   // ============================================================
@@ -578,136 +455,124 @@ const ToBank: React.FC = () => {
         color: theme.text,
       }}
     >
-      {/* ========================================================
-          HEADER
-      ======================================================== */}
       <header
         className="zenimonies-surface"
         style={{
           ...styles.header,
           background: theme.header,
-          borderBottomColor:
-            theme.border,
+          borderBottomColor: theme.border,
         }}
       >
         <div style={styles.headerInner}>
-          {/* BACK */}
           <button
             type="button"
-            onClick={() =>
-              navigate('/')
-            }
+            onClick={() => navigate('/')}
             style={{
               ...styles.backButton,
-              background:
-                theme.input,
-              borderColor:
-                theme.border,
-              color:
-                theme.greenBright,
+              background: theme.input,
+              borderColor: theme.border,
+              color: theme.greenBright,
             }}
             aria-label="Back"
           >
             ←
           </button>
-
-          {/* TITLE */}
-          <div
-            style={{
-              flex: 1,
-            }}
-          >
-            <div
-              style={{
-                ...styles.headerTitle,
-                color: theme.text,
-              }}
-            >
+          <div style={{ flex: 1 }}>
+            <div style={{ ...styles.headerTitle, color: theme.text }}>
               Send to Bank
             </div>
-
             <div
               style={{
                 ...styles.headerSubtitle,
                 color: theme.muted,
               }}
             >
-              Send money to another bank
-              account
+              Send money to another bank account
             </div>
           </div>
-
-          {/* GLOBAL THEME BUTTON */}
           <button
             type="button"
             onClick={toggleDarkMode}
             style={{
               ...styles.themeButton,
-              background:
-                theme.input,
-              borderColor:
-                theme.border,
-              color:
-                theme.greenBright,
+              background: theme.input,
+              borderColor: theme.border,
+              color: theme.greenBright,
             }}
             aria-label={
-              darkMode
-                ? 'Switch to light mode'
-                : 'Switch to dark mode'
+              darkMode ? 'Switch to light mode' : 'Switch to dark mode'
             }
-            title={
-              darkMode
-                ? 'Light mode'
-                : 'Dark mode'
-            }
+            title={darkMode ? 'Light mode' : 'Dark mode'}
           >
-            {darkMode
-              ? '☀'
-              : '☾'}
+            {darkMode ? '☀' : '☾'}
           </button>
         </div>
       </header>
-
-      {/* ========================================================
-          MAIN
-      ======================================================== */}
       <main style={styles.main}>
-        {/* INTRO */}
+        {/* TIER RESTRICTION AT THE TOP */}
+        {kycLoading && (
+          <div
+            style={{
+              ...styles.tierNotice,
+              background: theme.input,
+              borderColor: theme.border,
+              color: theme.muted,
+            }}
+            role="status"
+          >
+            Checking your approved verification tier. Transfers remain
+            unavailable until this check is complete.
+          </div>
+        )}
+        {tierZeroBlocked && (
+          <div
+            style={{
+              ...styles.tierNotice,
+              background: theme.dangerBg,
+              borderColor: theme.dangerBorder,
+              color: theme.dangerText,
+            }}
+            role="alert"
+          >
+            <strong>Tier 0 restriction:</strong> External bank transfers
+            are unavailable on Tier 0. Complete Tier 1 verification and
+            wait for approval to unlock transfers to other banks.
+          </div>
+        )}
+        {tierCheckFailed && (
+          <div
+            style={{
+              ...styles.tierNotice,
+              background: theme.dangerBg,
+              borderColor: theme.dangerBorder,
+              color: theme.dangerText,
+            }}
+            role="alert"
+          >
+            <strong>Verification check required:</strong>{' '}
+            {kycError || 'We could not confirm your approved tier.'}
+            {' '}Please refresh the page or sign in again. You cannot
+            continue with an external bank transfer until your tier is
+            confirmed.
+          </div>
+        )}
         <div style={styles.intro}>
           <div
             style={{
               ...styles.eyebrow,
-              color:
-                theme.greenBright,
+              color: theme.greenBright,
             }}
           >
             BANK TRANSFER
           </div>
-
-          <h1
-            style={{
-              ...styles.title,
-              color: theme.text,
-            }}
-          >
+          <h1 style={{ ...styles.title, color: theme.text }}>
             Send money
           </h1>
-
-          <p
-            style={{
-              ...styles.subtitle,
-              color: theme.muted,
-            }}
-          >
-            Enter the bank account details
-            and verify the recipient before
+          <p style={{ ...styles.subtitle, color: theme.muted }}>
+            Enter the bank account details and verify the recipient before
             sending.
           </p>
         </div>
-
-        {/* ======================================================
-            MAIN CARD
-        ====================================================== */}
         <section
           className="zenimonies-surface"
           style={{
@@ -717,174 +582,121 @@ const ToBank: React.FC = () => {
             boxShadow: theme.shadow,
           }}
         >
-          {/* BANK */}
           <label
             htmlFor="bank"
-            style={{
-              ...styles.label,
-              color: theme.label,
-            }}
+            style={{ ...styles.label, color: theme.label }}
           >
             Bank name
           </label>
-
           {banksLoading ? (
             <div
               style={{
                 ...styles.loadingBox,
-                background:
-                  theme.input,
-                borderColor:
-                  theme.border,
+                background: theme.input,
+                borderColor: theme.border,
                 color: theme.muted,
               }}
             >
               <span
                 style={{
                   ...styles.loadingDot,
-                  background:
-                    theme.greenBright,
+                  background: theme.greenBright,
                 }}
               />
-
               Loading Nigerian banks...
             </div>
           ) : (
             <>
-              {/* BANK SEARCH */}
               <input
                 type="search"
                 value={bankSearch}
-                onChange={(event) =>
-                  setBankSearch(
-                    event.target
-                      .value
-                  )
-                }
+                onChange={(event) => setBankSearch(event.target.value)}
                 placeholder="Search bank..."
                 style={{
                   ...styles.searchInput,
-                  background:
-                    theme.input,
-                  borderColor:
-                    theme.border,
+                  background: theme.input,
+                  borderColor: theme.border,
                   color: theme.text,
                 }}
                 aria-label="Search bank"
               />
-
-              {/* BANK SELECT */}
               <select
                 id="bank"
                 value={selectedBank}
-                onChange={
-                  handleBankChange
-                }
+                onChange={handleBankChange}
                 style={{
                   ...styles.select,
-                  background:
-                    theme.input,
-                  borderColor:
-                    theme.border,
+                  background: theme.input,
+                  borderColor: theme.border,
                   color: theme.text,
-                  colorScheme:
-                    darkMode
-                      ? 'dark'
-                      : 'light',
+                  colorScheme: darkMode ? 'dark' : 'light',
                 }}
               >
-                <option value="">
-                  Select bank
-                </option>
-
-                {filteredBanks.map(
-                  (bank) => (
-                    <option
-                      key={`${bank.code}-${bank.name}`}
-                      value={
-                        bank.code
-                      }
-                    >
-                      {bank.name}
-                    </option>
-                  )
-                )}
+                <option value="">Select bank</option>
+                {filteredBanks.map((bank) => (
+                  <option
+                    key={`${bank.code}-${bank.name}`}
+                    value={bank.code}
+                  >
+                    {bank.name}
+                  </option>
+                ))}
               </select>
-
               {!banks.length && (
                 <div
                   style={{
                     ...styles.smallError,
-                    color:
-                      theme.dangerText,
+                    color: theme.dangerText,
                   }}
                 >
-                  No banks are currently
-                  available.
+                  No banks are currently available.
                 </div>
               )}
-
-              {/* SELECTED BANK */}
               {selectedBankObject && (
                 <div
                   style={{
                     ...styles.selectedBank,
-                    background:
-                      theme.greenSoft,
-                    borderColor:
-                      theme.greenBorder,
+                    background: theme.greenSoft,
+                    borderColor: theme.greenBorder,
                   }}
                 >
                   <span
                     style={{
                       ...styles.selectedBankIcon,
-                      background:
-                        theme.greenBright,
+                      background: theme.greenBright,
                     }}
                   >
                     ✓
                   </span>
-
                   <div>
                     <div
                       style={{
                         ...styles.selectedBankLabel,
-                        color:
-                          theme.muted,
+                        color: theme.muted,
                       }}
                     >
                       Selected bank
                     </div>
-
                     <div
                       style={{
                         ...styles.selectedBankName,
-                        color:
-                          theme.selectedText,
+                        color: theme.selectedText,
                       }}
                     >
-                      {
-                        selectedBankObject.name
-                      }
+                      {selectedBankObject.name}
                     </div>
                   </div>
                 </div>
               )}
             </>
           )}
-
-          {/* ACCOUNT NUMBER */}
           <div style={styles.fieldSpacing}>
             <label
               htmlFor="account-number"
-              style={{
-                ...styles.label,
-                color: theme.label,
-              }}
+              style={{ ...styles.label, color: theme.label }}
             >
               Account number
             </label>
-
             <div style={styles.verifyRow}>
               <input
                 id="account-number"
@@ -892,396 +704,261 @@ const ToBank: React.FC = () => {
                 inputMode="numeric"
                 autoComplete="off"
                 maxLength={10}
-                value={
-                  accountNumber
-                }
-                onChange={
-                  handleAccountNumberChange
-                }
+                value={accountNumber}
+                onChange={handleAccountNumberChange}
                 placeholder="Enter 10-digit account number"
                 style={{
                   ...styles.accountInput,
-                  background:
-                    theme.input,
-                  borderColor:
-                    theme.border,
-                  color:
-                    theme.text,
+                  background: theme.input,
+                  borderColor: theme.border,
+                  color: theme.text,
                 }}
               />
-
               <button
                 type="button"
-                onClick={
-                  handleVerifyAccount
-                }
+                onClick={handleVerifyAccount}
                 disabled={
                   verifying ||
                   banksLoading ||
                   !selectedBank ||
-                  accountNumber.length !==
-                    10
+                  accountNumber.length !== 10
                 }
                 style={{
                   ...styles.verifyButton,
-                  background:
-                    darkMode
-                      ? '#17372d'
-                      : '#102a25',
+                  background: darkMode ? '#17372d' : '#102a25',
                   opacity:
                     verifying ||
                     banksLoading ||
                     !selectedBank ||
-                    accountNumber.length !==
-                      10
+                    accountNumber.length !== 10
                       ? 0.55
                       : 1,
                 }}
               >
-                {verifying
-                  ? 'Verifying...'
-                  : 'Verify'}
+                {verifying ? 'Verifying...' : 'Verify'}
               </button>
             </div>
-
             <div
-              style={{
-                ...styles.helperText,
-                color:
-                  theme.muted,
-              }}
+              style={{ ...styles.helperText, color: theme.muted }}
             >
-              Enter the recipient's
-              10-digit bank account
-              number.
+              Enter the recipient's 10-digit bank account number.
             </div>
           </div>
-
-          {/* BENEFICIARIES */}
-          {!accountVerified &&
-            beneficiarySection}
-
-          {/* ====================================================
-              VERIFIED ACCOUNT
-          ==================================================== */}
+          {!accountVerified && beneficiarySection}
           {accountVerified && (
             <div
               style={{
                 ...styles.verifiedCard,
-                background:
-                  theme.greenSoft,
-                borderColor:
-                  theme.greenBorder,
+                background: theme.greenSoft,
+                borderColor: theme.greenBorder,
               }}
             >
               <div
                 style={{
                   ...styles.verifiedIcon,
-                  background:
-                    theme.greenBright,
+                  background: theme.greenBright,
                 }}
               >
                 ✓
               </div>
-
-              <div
-                style={
-                  styles.verifiedInfo
-                }
-              >
+              <div style={styles.verifiedInfo}>
                 <div
                   style={{
                     ...styles.verifiedLabel,
-                    color:
-                      theme.selectedText,
+                    color: theme.selectedText,
                   }}
                 >
                   Account Verified
                 </div>
-
                 <div
-                  style={{
-                    ...styles.accountName,
-                    color:
-                      theme.text,
-                  }}
+                  style={{ ...styles.accountName, color: theme.text }}
                 >
                   {accountName}
                 </div>
-
                 <div
                   style={{
                     ...styles.accountNumberText,
-                    color:
-                      theme.muted,
+                    color: theme.muted,
                   }}
                 >
                   {accountNumber}
                 </div>
               </div>
-
               <div
                 style={{
                   ...styles.verifiedPill,
-                  background:
-                    darkMode
-                      ? '#174b38'
-                      : '#d9f4e5',
-                  color:
-                    theme.selectedText,
+                  background: darkMode ? '#174b38' : '#d9f4e5',
+                  color: theme.selectedText,
                 }}
               >
                 Verified
               </div>
             </div>
           )}
-
-          {/* ====================================================
-              AMOUNT + NARRATION
-          ==================================================== */}
           {accountVerified && (
             <>
-              {/* AMOUNT */}
-              <div
-                style={
-                  styles.fieldSpacing
-                }
-              >
+              <div style={styles.fieldSpacing}>
                 <label
                   htmlFor="amount"
-                  style={{
-                    ...styles.label,
-                    color:
-                      theme.label,
-                  }}
+                  style={{ ...styles.label, color: theme.label }}
                 >
                   Amount
                 </label>
-
                 <div
                   style={{
                     ...styles.amountWrap,
-                    background:
-                      theme.input,
-                    borderColor:
-                      theme.border,
+                    background: theme.input,
+                    borderColor: theme.border,
                   }}
                 >
                   <span
                     style={{
                       ...styles.currency,
-                      color:
-                        theme.greenBright,
+                      color: theme.greenBright,
                     }}
                   >
                     ₦
                   </span>
-
                   <input
                     id="amount"
                     type="text"
                     inputMode="decimal"
                     value={amount}
-                    onChange={
-                      handleAmountChange
-                    }
+                    onChange={handleAmountChange}
                     placeholder="0.00"
                     style={{
                       ...styles.amountInput,
-                      color:
-                        theme.text,
+                      color: theme.text,
                     }}
                   />
                 </div>
               </div>
-
-              {/* NARRATION */}
-              <div
-                style={
-                  styles.fieldSpacing
-                }
-              >
+              <div style={styles.fieldSpacing}>
                 <label
                   htmlFor="narration"
-                  style={{
-                    ...styles.label,
-                    color:
-                      theme.label,
-                  }}
+                  style={{ ...styles.label, color: theme.label }}
                 >
                   Narration
                   <span
                     style={{
                       ...styles.optional,
-                      color:
-                        theme.muted,
+                      color: theme.muted,
                     }}
                   >
-                    {' '}
-                    (optional)
+                    {' '}(optional)
                   </span>
                 </label>
-
                 <input
                   id="narration"
                   type="text"
                   maxLength={100}
                   value={narration}
-                  onChange={(event) =>
-                    setNarration(
-                      event.target
-                        .value
-                    )
-                  }
+                  onChange={(event) => setNarration(event.target.value)}
                   placeholder="What is this payment for?"
                   style={{
                     ...styles.fullInput,
-                    background:
-                      theme.input,
-                    borderColor:
-                      theme.border,
-                    color:
-                      theme.text,
+                    background: theme.input,
+                    borderColor: theme.border,
+                    color: theme.text,
                   }}
                 />
               </div>
-
-              {/* BENEFICIARY CHECKBOX */}
               <label
                 style={{
                   ...styles.beneficiaryCheckbox,
-                  color:
-                    theme.label,
+                  color: theme.label,
                 }}
               >
                 <input
                   type="checkbox"
-                  checked={
-                    saveAsBeneficiary
-                  }
+                  checked={saveAsBeneficiary}
                   onChange={(event) =>
-                    setSaveAsBeneficiary(
-                      event.target
-                        .checked
-                    )
+                    setSaveAsBeneficiary(event.target.checked)
                   }
                 />
-
-                <span>
-                  Save as beneficiary
-                </span>
+                <span>Save as beneficiary</span>
               </label>
-
-              {/* ERROR */}
               {error && (
                 <div
                   style={{
                     ...styles.errorBox,
-                    background:
-                      theme.dangerBg,
-                    borderColor:
-                      theme.dangerBorder,
-                    color:
-                      theme.dangerText,
+                    background: theme.dangerBg,
+                    borderColor: theme.dangerBorder,
+                    color: theme.dangerText,
                   }}
                   role="alert"
                 >
                   <span>!</span>
-                  <span>
-                    {error}
-                  </span>
+                  <span>{error}</span>
                 </div>
               )}
-
-              {/* CONTINUE */}
               <button
                 type="button"
-                onClick={
-                  handleContinue
-                }
+                onClick={handleContinue}
                 disabled={
                   !accountVerified ||
                   !amount ||
-                  banksLoading
+                  banksLoading ||
+                  transferBlocked
                 }
                 style={{
                   ...styles.continueButton,
-                  background:
-                    `linear-gradient(135deg, ${theme.green}, ${theme.greenBright})`,
+                  background: `linear-gradient(135deg, ${theme.green}, ${theme.greenBright})`,
                   opacity:
                     !accountVerified ||
                     !amount ||
-                    banksLoading
+                    banksLoading ||
+                    transferBlocked
                       ? 0.55
                       : 1,
-                  boxShadow:
-                    darkMode
-                      ? '0 8px 22px rgba(37, 196, 119, 0.12)'
-                      : '0 8px 20px rgba(8, 127, 91, 0.18)',
+                  boxShadow: darkMode
+                    ? '0 8px 22px rgba(37, 196, 119, 0.12)'
+                    : '0 8px 20px rgba(8, 127, 91, 0.18)',
+                  cursor: transferBlocked ? 'not-allowed' : 'pointer',
                 }}
               >
                 Continue
                 <span>→</span>
               </button>
-
               <div
                 style={{
                   ...styles.securityText,
-                  color:
-                    theme.muted,
+                  color: theme.muted,
                 }}
               >
-                🔒 Your recipient will be
-                verified before the
-                transfer continues.
+                🔒 Your recipient will be verified before the transfer
+                continues.
               </div>
-
               {beneficiarySection}
             </>
           )}
-
-          {/* ERROR BEFORE VERIFICATION */}
-          {!accountVerified &&
-            error && (
-              <div
-                style={{
-                  ...styles.errorBox,
-                  background:
-                    theme.dangerBg,
-                  borderColor:
-                    theme.dangerBorder,
-                  color:
-                    theme.dangerText,
-                }}
-                role="alert"
-              >
-                <span>!</span>
-
-                <span>
-                  {error}
-                </span>
-              </div>
-            )}
+          {!accountVerified && error && (
+            <div
+              style={{
+                ...styles.errorBox,
+                background: theme.dangerBg,
+                borderColor: theme.dangerBorder,
+                color: theme.dangerText,
+              }}
+              role="alert"
+            >
+              <span>!</span>
+              <span>{error}</span>
+            </div>
+          )}
         </section>
-
-        {/* DASHBOARD LINK */}
         <div style={styles.bottomBack}>
           <Link
             to="/"
             style={{
               ...styles.bottomBackLink,
-              color:
-                theme.greenBright,
+              color: theme.greenBright,
             }}
           >
             ← Back to dashboard
           </Link>
         </div>
       </main>
-
-      {/* ========================================================
-          SMALL GLOBAL ANIMATION
-      ======================================================== */}
       <style>
         {`
           @keyframes zenimoniesPulse {
@@ -1289,44 +966,23 @@ const ToBank: React.FC = () => {
               opacity: 0.35;
               transform: scale(0.9);
             }
-
             50% {
               opacity: 1;
               transform: scale(1);
             }
           }
-
           .zenimonies-page input::placeholder {
-            color: ${
-              darkMode
-                ? '#71857b'
-                : '#98a49f'
-            };
+            color: ${darkMode ? '#71857b' : '#98a49f'};
             opacity: 1;
           }
-
           .zenimonies-page select option {
-            background: ${
-              darkMode
-                ? '#15231c'
-                : '#ffffff'
-            };
-            color: ${
-              darkMode
-                ? '#f3f8f5'
-                : '#14251e'
-            };
+            background: ${darkMode ? '#15231c' : '#ffffff'};
+            color: ${darkMode ? '#f3f8f5' : '#14251e'};
           }
-
           .zenimonies-page input,
           .zenimonies-page select {
-            color-scheme: ${
-              darkMode
-                ? 'dark'
-                : 'light'
-            };
+            color-scheme: ${darkMode ? 'dark' : 'light'};
           }
-
           .zenimonies-page button {
             -webkit-tap-highlight-color: transparent;
           }
@@ -1335,20 +991,14 @@ const ToBank: React.FC = () => {
     </div>
   );
 };
-
-const styles: Record<
-  string,
-  React.CSSProperties
-> = {
+const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
     fontFamily:
       'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
     paddingBottom: 40,
-    transition:
-      'background 0.2s ease, color 0.2s ease',
+    transition: 'background 0.2s ease, color 0.2s ease',
   },
-
   header: {
     borderBottom: '1px solid',
     position: 'sticky',
@@ -1356,7 +1006,6 @@ const styles: Record<
     zIndex: 20,
     backdropFilter: 'blur(14px)',
   },
-
   headerInner: {
     width: 'min(700px, 92%)',
     margin: '0 auto',
@@ -1365,7 +1014,6 @@ const styles: Record<
     alignItems: 'center',
     gap: 14,
   },
-
   backButton: {
     width: 44,
     height: 44,
@@ -1376,7 +1024,6 @@ const styles: Record<
     cursor: 'pointer',
     flexShrink: 0,
   },
-
   themeButton: {
     width: 42,
     height: 42,
@@ -1386,62 +1033,60 @@ const styles: Record<
     cursor: 'pointer',
     flexShrink: 0,
   },
-
   headerTitle: {
     fontSize: 21,
     fontWeight: 850,
   },
-
   headerSubtitle: {
     fontSize: 12,
     marginTop: 3,
   },
-
   main: {
     width: 'min(700px, 92%)',
     margin: '0 auto',
     paddingTop: 25,
   },
-
+  tierNotice: {
+    marginBottom: 18,
+    padding: '13px 15px',
+    border: '1px solid',
+    borderRadius: 12,
+    fontSize: 13,
+    lineHeight: 1.55,
+    fontWeight: 650,
+  },
   intro: {
     marginBottom: 20,
   },
-
   eyebrow: {
     fontSize: 11,
     fontWeight: 800,
     letterSpacing: 1.2,
     marginBottom: 5,
   },
-
   title: {
     margin: 0,
     fontSize: 29,
     lineHeight: 1.15,
     fontWeight: 850,
   },
-
   subtitle: {
     margin: '8px 0 0',
     fontSize: 14,
     lineHeight: 1.5,
   },
-
   card: {
     borderRadius: 22,
     padding: 21,
     border: '1px solid',
-    transition:
-      'background 0.2s ease, border-color 0.2s ease',
+    transition: 'background 0.2s ease, border-color 0.2s ease',
   },
-
   label: {
     display: 'block',
     fontSize: 14,
     fontWeight: 800,
     marginBottom: 8,
   },
-
   searchInput: {
     width: '100%',
     height: 50,
@@ -1453,7 +1098,6 @@ const styles: Record<
     outline: 'none',
     marginBottom: 9,
   },
-
   select: {
     width: '100%',
     height: 55,
@@ -1465,7 +1109,6 @@ const styles: Record<
     outline: 'none',
     cursor: 'pointer',
   },
-
   loadingBox: {
     width: '100%',
     minHeight: 55,
@@ -1478,16 +1121,13 @@ const styles: Record<
     padding: '0 14px',
     fontSize: 14,
   },
-
   loadingDot: {
     width: 9,
     height: 9,
     borderRadius: '50%',
     flexShrink: 0,
-    animation:
-      'zenimoniesPulse 1.2s ease-in-out infinite',
+    animation: 'zenimoniesPulse 1.2s ease-in-out infinite',
   },
-
   selectedBank: {
     marginTop: 10,
     padding: 12,
@@ -1497,7 +1137,6 @@ const styles: Record<
     alignItems: 'center',
     gap: 10,
   },
-
   selectedBankIcon: {
     width: 30,
     height: 30,
@@ -1509,27 +1148,22 @@ const styles: Record<
     fontWeight: 800,
     flexShrink: 0,
   },
-
   selectedBankLabel: {
     fontSize: 10,
     fontWeight: 700,
   },
-
   selectedBankName: {
     fontSize: 13,
     fontWeight: 800,
     marginTop: 2,
   },
-
   fieldSpacing: {
     marginTop: 21,
   },
-
   verifyRow: {
     display: 'flex',
     gap: 9,
   },
-
   accountInput: {
     flex: 1,
     minWidth: 0,
@@ -1542,7 +1176,6 @@ const styles: Record<
     letterSpacing: 0.5,
     outline: 'none',
   },
-
   verifyButton: {
     height: 55,
     border: 'none',
@@ -1554,18 +1187,15 @@ const styles: Record<
     cursor: 'pointer',
     whiteSpace: 'nowrap',
   },
-
   helperText: {
     fontSize: 11,
     marginTop: 7,
   },
-
   beneficiarySection: {
     marginTop: 22,
     paddingTop: 4,
     borderTop: '1px solid transparent',
   },
-
   verifiedCard: {
     marginTop: 14,
     padding: 14,
@@ -1575,7 +1205,6 @@ const styles: Record<
     alignItems: 'center',
     gap: 11,
   },
-
   verifiedIcon: {
     width: 43,
     height: 43,
@@ -1588,19 +1217,16 @@ const styles: Record<
     fontWeight: 900,
     flexShrink: 0,
   },
-
   verifiedInfo: {
     flex: 1,
     minWidth: 0,
   },
-
   verifiedLabel: {
     fontSize: 10,
     fontWeight: 800,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-
   accountName: {
     fontSize: 15,
     fontWeight: 850,
@@ -1609,12 +1235,10 @@ const styles: Record<
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-
   accountNumberText: {
     fontSize: 11,
     marginTop: 2,
   },
-
   verifiedPill: {
     borderRadius: 999,
     padding: '6px 9px',
@@ -1622,7 +1246,6 @@ const styles: Record<
     fontWeight: 800,
     whiteSpace: 'nowrap',
   },
-
   amountWrap: {
     position: 'relative',
     display: 'flex',
@@ -1632,13 +1255,11 @@ const styles: Record<
     borderRadius: 13,
     overflow: 'hidden',
   },
-
   currency: {
     paddingLeft: 15,
     fontSize: 19,
     fontWeight: 850,
   },
-
   amountInput: {
     flex: 1,
     minWidth: 0,
@@ -1650,11 +1271,9 @@ const styles: Record<
     fontWeight: 800,
     background: 'transparent',
   },
-
   optional: {
     fontWeight: 500,
   },
-
   fullInput: {
     width: '100%',
     height: 55,
@@ -1665,7 +1284,6 @@ const styles: Record<
     fontSize: 14,
     outline: 'none',
   },
-
   beneficiaryCheckbox: {
     display: 'flex',
     alignItems: 'center',
@@ -1676,7 +1294,6 @@ const styles: Record<
     fontWeight: 700,
     cursor: 'pointer',
   },
-
   errorBox: {
     marginTop: 18,
     padding: '12px 14px',
@@ -1689,12 +1306,10 @@ const styles: Record<
     gap: 8,
     lineHeight: 1.4,
   },
-
   smallError: {
     marginTop: 8,
     fontSize: 12,
   },
-
   continueButton: {
     width: '100%',
     height: 55,
@@ -1710,23 +1325,19 @@ const styles: Record<
     justifyContent: 'center',
     gap: 12,
   },
-
   securityText: {
     textAlign: 'center',
     marginTop: 12,
     fontSize: 11,
   },
-
   bottomBack: {
     textAlign: 'center',
     marginTop: 21,
   },
-
   bottomBackLink: {
     textDecoration: 'none',
     fontSize: 13,
     fontWeight: 800,
   },
 };
-
 export default ToBank;
