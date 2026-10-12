@@ -221,7 +221,7 @@ const VerifyPhone: React.FC = () => {
 
     try {
       const response = await axios.post<VerifyResponse>(
-        `${API_URL}/api/auth/send-phone-otp`,
+        `${API_URL}/api/auth/resend-phone-otp`,
         {},
         {
           timeout: 30000,
