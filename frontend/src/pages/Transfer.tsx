@@ -256,31 +256,8 @@ const Transfer: React.FC = () => {
    * TRANSFER FEE
    * ==========================================================
    */
-
-  const transactionFee = useMemo(() => {
-    if (
-      !Number.isFinite(
-        transferAmount
-      ) ||
-      transferAmount < 20
-    ) {
-      return 0;
-    }
-
-    if (transferAmount < 1000) {
-      return 0;
-    }
-
-    if (transferAmount < 10000) {
-      return 20;
-    }
-
-    if (transferAmount < 100000) {
-      return 56;
-    }
-
-    return 75;
-  }, [transferAmount]);
+  
+   const transactionFee = 0;
 
   /*
    * ==========================================================
