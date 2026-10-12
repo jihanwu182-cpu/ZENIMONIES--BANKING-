@@ -216,20 +216,21 @@ const TransferConfirmation: React.FC = () => {
       const actualFee = Number(data.transfer?.transaction_fee);
       const actualTotal = Number(data.transfer?.total_debit);
 
-      setConfirmedFee(
-        data.transfer?.transaction_fee !== undefined &&
-          Number.isFinite(actualFee)
-          ? actualFee
-          : transactionFee,
-      );
+      if (
+  data.transfer?.transaction_fee === undefined ||
+  !Number.isFinite(actualFee) ||
+  actualFee < 0 ||
+  data.transfer?.total_debit === undefined ||
+  !Number.isFinite(actualTotal) ||
+  actualTotal < amount
+) {
+  throw new Error(
+    'The transfer was accepted, but the confirmed fee details are missing. Please check your transaction history before trying again.',
+  );
+}
 
-      setConfirmedTotalDebit(
-        data.transfer?.total_debit !== undefined &&
-          Number.isFinite(actualTotal)
-          ? actualTotal
-          : totalDebit,
-      );
-
+setConfirmedFee(actualFee);
+setConfirmedTotalDebit(actualTotal);
       await saveSuccessfulBankBeneficiary();
       setSuccess(true);
     } catch (err: unknown) {
