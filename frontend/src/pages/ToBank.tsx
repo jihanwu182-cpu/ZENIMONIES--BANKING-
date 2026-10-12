@@ -391,6 +391,42 @@ const ToBank: React.FC = () => {
         setVerifying(false);
       }
     };
+  
+  // ============================================================
+  // EXTERNAL BANK TRANSFER FEE
+  // ============================================================
+  const transferAmount = Number(amount);
+
+  const transactionFee = useMemo(() => {
+    if (
+      !Number.isFinite(transferAmount) ||
+      transferAmount < 1000
+    ) {
+      return 0;
+    }
+
+    if (transferAmount < 6000) {
+      return 20;
+    }
+
+    if (transferAmount < 10000) {
+      return 25;
+    }
+
+    return 45;
+  }, [transferAmount]);
+
+  const totalDebit =
+    Number.isFinite(transferAmount) &&
+    transferAmount > 0
+      ? transferAmount + transactionFee
+      : 0;
+
+  const formatNaira = (value: number) =>
+    `₦${Number(value || 0).toLocaleString('en-NG', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
 
   // ============================================================
   // AMOUNT
@@ -495,6 +531,9 @@ const ToBank: React.FC = () => {
           narration,
           accountVerified: true,
           saveAsBeneficiary,
+          transactionFee,
+          totalDebit,
+          currency: 'NGN',
         },
       }
     );
