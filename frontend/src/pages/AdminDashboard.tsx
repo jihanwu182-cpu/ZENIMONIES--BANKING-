@@ -1564,11 +1564,14 @@ const revenueChartData: Array<{
     tone: BRAND.green,
   },
   {
-    title: 'Revenue',
-    value: '—',
-    subtitle: 'Verified company revenue',
-    icon: <TrendingUp fontSize="small" />,
-    tone: BRAND.green,
+  title: 'Revenue',
+  value: revenueSummary?.currency === 'NGN'
+    ? formatMoney(revenueSummary.net_zenimonies_revenue, 'NGN')
+    : '—',
+  subtitle: 'Verified company revenue',
+  icon: <TrendingUp fontSize="small" />,
+  tone: BRAND.green,
+
             },
           ].map((item) => (
             <Grid item xs={3} sm={3} md={3} lg={3} key={item.title}>
