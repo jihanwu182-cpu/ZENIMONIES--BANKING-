@@ -13,7 +13,7 @@ const {
 const TIER_LIMITS = {
   0: {
     accountLimit: 50000,
-    dailyTransferLimit: 25000,
+    dailyTransferLimit: 20000,
   },
 
   1: {
