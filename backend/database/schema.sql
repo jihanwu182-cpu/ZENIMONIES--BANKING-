@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS users (
 
     account_limit NUMERIC(18,2) NOT NULL DEFAULT 50000.00,
 
-    daily_transfer_limit NUMERIC(18,2) NOT NULL DEFAULT 25000.00,
+    daily_transfer_limit NUMERIC(18,2) NOT NULL DEFAULT 20000.00,
 
     daily_transfer_used NUMERIC(18,2) NOT NULL DEFAULT 0.00,
 
