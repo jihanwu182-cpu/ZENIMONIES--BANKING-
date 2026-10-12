@@ -750,7 +750,7 @@ if (
           .toString('hex')}`;
 
       const newBalance =
-        currentBalance - transferAmount;
+  currentBalance - totalDebit;
 
       // ------------------------------------------------------
       // UPDATE BANK TRANSFER
@@ -795,40 +795,43 @@ if (
       // ------------------------------------------------------
 
       await client.query(
-        `
-        INSERT INTO transactions (
-          account_id,
-          type,
-          amount,
-          currency,
-          reference,
-          description,
-          status,
-          balance_before,
-          balance_after
-        )
-        VALUES (
-          $1,
-          'transfer',
-          $2,
-          'NGN',
-          $3,
-          $4,
-          'completed',
-          $5,
-          $6
-        )
-        `,
-        [
-          account.id,
-          transferAmount,
-          reference,
-          cleanNarration ||
-            `Test bank transfer to ${cleanRecipientName}`,
-          currentBalance,
-          newBalance,
-        ]
-      );
+  `
+  INSERT INTO transactions (
+    account_id,
+    type,
+    amount,
+    currency,
+    reference,
+    description,
+    status,
+    balance_before,
+    balance_after,
+    transaction_fee
+  )
+  VALUES (
+    $1,
+    'transfer',
+    $2,
+    'NGN',
+    $3,
+    $4,
+    'completed',
+    $5,
+    $6,
+    $7
+  )
+  `,
+  [
+    account.id,
+    transferAmount,
+    reference,
+    cleanNarration ||
+      `Test bank transfer to ${cleanRecipientName}`,
+    currentBalance,
+    newBalance,
+    transactionFee,
+  ]
+);
 
       await client.query('COMMIT');
       transactionStarted = false;
