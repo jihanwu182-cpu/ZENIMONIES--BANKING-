@@ -27,7 +27,7 @@ const getAccountLimit = (kycStatus, kycTier) => {
   if (!verified) return 50000;
   if (tier >= 3) return null;
   if (tier === 2) return 500000;
-  if (tier === 1) return 200000;
+  if (tier === 1) return 300000;
 
   return 50000;
 };
@@ -46,12 +46,12 @@ const getDailyTransferLimit = (kycStatus, kycTier) => {
     'completed',
   ].includes(status);
 
-  if (!verified) return 25000;
+  if (!verified) return 20000;
   if (tier >= 3) return 5000000;
   if (tier === 2) return 200000;
   if (tier === 1) return 50000;
 
-  return 25000;
+  return 20000;
 };
 
 // ============================================================
