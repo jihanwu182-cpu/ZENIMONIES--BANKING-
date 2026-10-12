@@ -69,16 +69,12 @@ const generateReference = () => {
 // TRANSFER FEES
 // ============================================================
 
-const calculateTransferFee = (amount) => {
-  const transferAmount = Number(amount);
 
-  if (!Number.isFinite(transferAmount)) return 0;
-  if (transferAmount < 1000) return 0;
-  if (transferAmount < 10000) return 20;
-  if (transferAmount < 100000) return 56;
-
-  return 75;
+const calculateTransferFee = (_amount) => {
+  // All ZENIMONIES-to-ZENIMONIES transfers are free.
+  return 0;
 };
+
 
 // ============================================================
 // PROFILE COMPLETION
