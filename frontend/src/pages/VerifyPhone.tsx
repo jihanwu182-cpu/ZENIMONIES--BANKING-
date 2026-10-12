@@ -3,7 +3,9 @@ import React, { useEffect, useState } from 'react';
 import axios, { AxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 
-const API_URL = 'https://zenimonies-banking.onrender.com';
+const API_URL =
+  process.env.REACT_APP_API_URL ||
+  'https://zenimonies-banking.onrender.com';
 
 type VerifyResponse = {
   success?: boolean;
