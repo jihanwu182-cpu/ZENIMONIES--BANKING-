@@ -8535,13 +8535,15 @@ useEffect(() => {
       const data = response.data;
 
       const entries: RevenueRecord[] =
-        Array.isArray(data?.entries)
-          ? data.entries
-          : Array.isArray(data?.records)
-            ? data.records
-            : Array.isArray(data?.revenueEntries)
-              ? data.revenueEntries
-              : [];
+  Array.isArray(data?.data)
+    ? data.data
+    : Array.isArray(data?.entries)
+      ? data.entries
+      : Array.isArray(data?.records)
+        ? data.records
+        : Array.isArray(data?.revenueEntries)
+          ? data.revenueEntries
+          : [];
 
       if (!cancelled) {
         setRevenueRecords(entries);
