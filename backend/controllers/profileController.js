@@ -94,6 +94,7 @@ const getProfile = async (req, res) => {
         full_name,
         email,
         phone,
+        phone_verified,
         date_of_birth,
         gender,
 
@@ -181,6 +182,7 @@ const getProfile = async (req, res) => {
         full_name: user.full_name,
         email: user.email,
         phone: user.phone,
+        phone_verified: user.phone_verified === true,
 
         date_of_birth: user.date_of_birth,
         gender: user.gender,
