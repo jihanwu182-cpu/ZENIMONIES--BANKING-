@@ -635,44 +635,37 @@ const register = async (req, res) => {
     // Business onboarding/POS remains a separate flow.
     // ----------------------------------------------------------
 
-    const accountResult =
-      await client.query(
-        `
-        INSERT INTO accounts (
-          user_id,
-          account_number,
-          account_name,
-          account_type,
-          currency,
-          balance,
-          status
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          'personal',
-          'NGN',
-          0.00,
-          'active'
-        )
-        RETURNING
-          id,
-          account_number,
-          account_name,
-          account_type,
-          currency,
-          balance,
-          status,
-          created_at
-        `,
-        [
-          user.id,
-          accountNumber,
-          normalizedFullName,
-        ],
-      );
-
+    const accountResult = await client.query(
+  `
+  INSERT INTO accounts (
+    user_id,
+    account_name,
+    account_type,
+    currency,
+    balance,
+    status
+  )
+  VALUES (
+    $1,
+    $2,
+    'personal',
+    'NGN',
+    0.00,
+    'active'
+  )
+  RETURNING
+    id,
+    account_number,
+    account_name,
+    account_type,
+    currency,
+    balance,
+    status,
+    created_at
+  `,
+  [user.id, normalizedFullName]
+);
+    
     const account =
       accountResult.rows[0];
 
