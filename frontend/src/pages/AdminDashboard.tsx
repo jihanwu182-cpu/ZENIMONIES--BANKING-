@@ -748,6 +748,16 @@ const AdminDashboard: React.FC<{
   
   const [dashboard, setDashboard] =
     useState<DashboardData | null>(null);
+  type RevenueSummary = {
+  currency: string;
+  net_zenimonies_revenue: string | number;
+  net_gross_fees: string | number;
+  net_provider_costs: string | number;
+  net_partner_shares: string | number;
+  net_other_direct_costs: string | number;
+};
+const [revenueSummary, setRevenueSummary] =
+  useState<RevenueSummary | null>(null);
 
   const [customers, setCustomers] =
     useState<Customer[]>([]);
