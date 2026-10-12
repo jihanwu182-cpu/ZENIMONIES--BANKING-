@@ -526,13 +526,30 @@ const transferToBank = async (req, res) => {
 
     const account = accountResult.rows[0];
 
-    const currentBalance =
-      Number(account.balance);
+    const currentBalance = Number(account.balance);
 
-    if (
-      !Number.isFinite(currentBalance) ||
-      currentBalance < transferAmount
-    ) {
+const transactionFee =
+  getExternalTransferFee(transferAmount);
+
+const totalDebit =
+  transferAmount + transactionFee;
+
+if (
+  !Number.isFinite(currentBalance) ||
+  currentBalance < totalDebit
+) {
+  await client.query('ROLLBACK');
+  transactionStarted = false;
+
+  return res.status(400).json({
+    success: false,
+    code: 'INSUFFICIENT_BALANCE',
+    message: 'Insufficient account balance for the transfer and fee.',
+    transfer_amount: transferAmount,
+    transaction_fee: transactionFee,
+    total_debit: totalDebit,
+  });
+}
       await client.query('ROLLBACK');
       transactionStarted = false;
 
