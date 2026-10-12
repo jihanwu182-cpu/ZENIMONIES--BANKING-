@@ -608,8 +608,8 @@ const register = async (req, res) => {
           false,
 
           50000.00,
-          25000.00,
-          0.00,
+          20000.00,
+           0.00,
           CURRENT_TIMESTAMP,
 
           CURRENT_TIMESTAMP
