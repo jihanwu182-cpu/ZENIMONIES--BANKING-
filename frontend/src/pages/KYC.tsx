@@ -153,11 +153,11 @@ const TIER_LIMITS: Record<
 > = {
   0: {
     account: 50000,
-    daily: 25000,
+    daily: 20000,
   },
 
   1: {
-    account: 200000,
+    account: 300000,
     daily: 50000,
   },
 
