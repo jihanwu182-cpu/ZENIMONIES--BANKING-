@@ -1020,7 +1020,7 @@ if (
     // ========================================================
 
     const newBalance =
-      currentBalance - transferAmount;
+  currentBalance - totalDebit;
 
     await client.query(
       `
@@ -1044,41 +1044,43 @@ if (
     // ========================================================
 
     await client.query(
-      `
-      INSERT INTO transactions (
-        account_id,
-        type,
-        amount,
-        currency,
-        reference,
-        description,
-        status,
-        balance_before,
-        balance_after
-      )
-      VALUES (
-        $1,
-        'transfer',
-        $2,
-        'NGN',
-        $3,
-        $4,
-        'pending',
-        $5,
-        $6
-      )
-      `,
-      [
-        account.id,
-        transferAmount,
-        reference,
-        cleanNarration ||
-          `Bank transfer to ${cleanRecipientName}`,
-        currentBalance,
-        newBalance,
-      ]
-    );
-
+  `
+  INSERT INTO transactions (
+    account_id,
+    type,
+    amount,
+    currency,
+    reference,
+    description,
+    status,
+    balance_before,
+    balance_after,
+    transaction_fee
+  )
+  VALUES (
+    $1,
+    'transfer',
+    $2,
+    'NGN',
+    $3,
+    $4,
+    'pending',
+    $5,
+    $6,
+    $7
+  )
+  `,
+  [
+    account.id,
+    transferAmount,
+    reference,
+    cleanNarration ||
+      `Bank transfer to ${cleanRecipientName}`,
+    currentBalance,
+    newBalance,
+    transactionFee,
+  ]
+);
     // ========================================================
     // COMMIT
     // ========================================================
