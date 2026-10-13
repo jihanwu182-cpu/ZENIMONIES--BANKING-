@@ -1130,7 +1130,7 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
 
-               {/* ====================================================
+       {/*====================================================
             PHONE VERIFICATION REMINDER
         ==================================================== */}
 
@@ -1138,7 +1138,7 @@ const Dashboard: React.FC = () => {
           <button
             type="button"
             style={styles.phoneVerificationAlert}
-            onClick={() => navigate('/profile')}
+            onClick={() => navigate('/verify-phone')}
           >
             <span
               style={styles.phoneVerificationIcon}
