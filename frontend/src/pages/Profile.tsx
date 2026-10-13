@@ -1248,17 +1248,12 @@ const Profile: React.FC = () => {
   // LOCATION OPTIONS
   // ==========================================================
 
-  const stateOptions =
-    form.country === 'Nigeria'
-      ? NIGERIAN_STATES
+  const stateOptions = NIGERIAN_STATES;
 
-  const lgaOptions =
-    form.country === 'Nigeria' &&
-    form.state
-      ? NIGERIAN_LGAS[
-          form.state
-        ] || []
-      : [];
+const lgaOptions =
+  form.state
+    ? NIGERIAN_LGAS[form.state] || []
+    : [];
 
   // ==========================================================
   // UPDATE FIELD
