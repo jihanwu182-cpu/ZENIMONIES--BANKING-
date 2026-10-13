@@ -2136,19 +2136,20 @@ const styles: Record<
      Do NOT make it full-width/oversized.
   ========================================================== */
 
-  balanceCard: {
-    width: 'min(100%, 680px)',
-    minHeight: 178,
-    borderRadius: 24,
+    balanceCard: {
+    width: '100%',
+    maxWidth: 680,
+    minHeight: 150,
+    padding: '18px 20px',
+    boxSizing: 'border-box',
+    borderRadius: 22,
     position: 'relative',
     overflow: 'hidden',
-    marginBottom: 17,
+    marginBottom: 14,
     background:
-      'linear-gradient(135deg, #07583f 0%, #064331 55%, #032c22 100%)',
-    boxShadow:
-      '0 15px 30px rgba(2,72,51,0.20)',
+      'linear-gradient(135deg, #07583f 0%, #063d2d 100%)',
+    boxShadow: '0 10px 24px rgba(2,72,51,0.16)',
   },
-
   balanceGlow: {
     position: 'absolute',
     width: 250,
