@@ -2017,15 +2017,11 @@ const lgaOptions =
 
             </div>
 
+            
             {/* EMAIL */}
 
-            <div
-              style={styles.field}
-            >
-
-              <label
-                style={styles.label}
-              >
+            <div style={styles.field}>
+              <label style={styles.label}>
                 Email Address
               </label>
 
@@ -2033,10 +2029,7 @@ const lgaOptions =
                 type="email"
                 value={form.email}
                 disabled={!editing}
-                }
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateField(
                     'email',
                     event.target.value
@@ -2044,13 +2037,13 @@ const lgaOptions =
                 }
                 style={{
                   ...styles.input,
-
-                  ...(editing &&
-                  !profileLocked
+                  ...(editing
                     ? styles.editableInput
                     : styles.disabledInput),
                 }}
               />
+            </div>
+
 
               {profileLocked && (
 
@@ -2066,13 +2059,8 @@ const lgaOptions =
 
             {/* PHONE */}
 
-            <div
-              style={styles.field}
-            >
-
-              <label
-                style={styles.label}
-              >
+            <div style={styles.field}>
+              <label style={styles.label}>
                 Phone Number
               </label>
 
@@ -2080,10 +2068,7 @@ const lgaOptions =
                 type="tel"
                 value={form.phone}
                 disabled={!editing}
-                }
-                onChange={(
-                  event
-                ) =>
+                onChange={(event) =>
                   updateField(
                     'phone',
                     event.target.value
@@ -2091,13 +2076,20 @@ const lgaOptions =
                 }
                 style={{
                   ...styles.input,
-
-                  ...(editing &&
-                  !profileLocked
+                  ...(editing
                     ? styles.editableInput
                     : styles.disabledInput),
                 }}
               />
+
+              <small style={styles.helper}>
+                {user?.phone_verified
+                  ? '✓ Phone number verified'
+                  : 'Phone number not verified'}
+              </small>
+            </div>
+
+            
               <small style={styles.helper}>
               {user?.phone_verified
               ? '✓ Phone number verified'
