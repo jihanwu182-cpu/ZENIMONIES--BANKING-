@@ -2045,8 +2045,6 @@ const lgaOptions =
             </div>
 
 
-            </div>
-
             {/* PHONE */}
 
             <div style={styles.field}>
