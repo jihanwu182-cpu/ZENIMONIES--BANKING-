@@ -1252,7 +1252,9 @@ const Profile: React.FC = () => {
 
 const lgaOptions =
   form.state
-    ? NIGERIAN_LGAS[form.state] || []
+    ? NIGERIAN_LGAS[
+  form.state
+  ] || []
     : [];
 
   // ==========================================================
