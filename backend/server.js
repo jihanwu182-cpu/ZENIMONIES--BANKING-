@@ -636,6 +636,19 @@ const startServer = async () => {
     console.log(
       'Database initialization completed.'
     );
+
+// ========================================================
+// ACCOUNTS: ALLOW PROVIDER ACCOUNT NUMBER PROVISIONING
+// ========================================================
+
+await pool.query(`
+  ALTER TABLE accounts
+  ALTER COLUMN account_number DROP NOT NULL;
+`);
+
+console.log(
+  'Database migration completed: account numbers may be provisioned later.'
+);
  // ========================================================
 // READ-ONLY REVENUE LEDGER CHECK
 // ========================================================
