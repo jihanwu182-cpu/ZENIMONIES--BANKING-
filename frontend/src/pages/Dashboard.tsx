@@ -166,21 +166,14 @@ const Dashboard: React.FC = () => {
   ========================================================== */
 
   const displayName = useMemo(() => {
-    const fullName =
-      user?.full_name ||
-      user?.name ||
-      '';
+  const name =
+    user?.first_name?.trim() ||
+    user?.full_name?.trim() ||
+    user?.name?.trim() ||
+    '';
 
-    if (fullName.trim()) {
-      return fullName.trim();
-    }
-
-    if (user?.first_name) {
-      return user.first_name;
-    }
-
-    return 'User';
-  }, [user]);
+  return name.split(/\s+/)[0] || 'Customer';
+}, [user]);
 
   const firstLetter =
     displayName.charAt(0).toUpperCase() ||
@@ -1130,8 +1123,8 @@ const Dashboard: React.FC = () => {
               </div>
 
               <h1 style={styles.name}>
-                {displayName}
-              </h1>
+                Hi {displayName}
+                </h1>
 
               <p style={styles.subtitle}>
                 Here's your financial overview.
@@ -1140,44 +1133,6 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
 
-       {/*====================================================
-            PHONE VERIFICATION REMINDER
-        ==================================================== */}
-
-        {user?.phone_verified !== true && (
-          <button
-            type="button"
-            style={styles.phoneVerificationAlert}
-            onClick={() => navigate('/verify-phone')}
-          >
-            <span
-              style={styles.phoneVerificationIcon}
-            >
-              <Icon
-                name="phone"
-                size={21}
-              />
-            </span>
-
-            <span
-              style={styles.phoneVerificationText}
-            >
-              <strong>
-                Verify your phone number
-              </strong>
-
-              <span>
-                Confirm your phone number to keep your contact details up to date.
-              </span>
-            </span>
-
-            <span
-              style={styles.phoneVerificationArrow}
-            >
-              ›
-            </span>
-          </button>
-        )}
 
         {/* ====================================================
             BALANCE CARD
@@ -1307,6 +1262,24 @@ const Dashboard: React.FC = () => {
           </div>
 
         </section>
+
+               {/* PHONE VERIFICATION REMINDER */}
+
+        {user?.phone_verified !== true && (
+          <button
+            type="button"
+            style={styles.phoneVerificationAlert}
+            onClick={() => navigate('/verify-phone')}
+          >
+            <span style={styles.phoneVerificationText}>
+              <strong>Verify your phone number</strong>
+            </span>
+
+            <span style={styles.phoneVerificationArrow}>
+              ›
+            </span>
+          </button>
+        )}
 
         {/* ====================================================
             KYC
@@ -2096,51 +2069,42 @@ const styles: Record<
     color: '#788780',
     fontSize: 14,
   },
-
-   /* ==========================================================
-     PHONE VERIFICATION
+  /* ==========================================================
+     PHONE VERIFICATION — SINGLE RED LINE
   ========================================================== */
 
   phoneVerificationAlert: {
     width: '100%',
     display: 'flex',
     alignItems: 'center',
-    gap: 11,
-    padding: '12px 14px',
-    marginBottom: 17,
-    border: '1px solid #cfe8da',
-    borderRadius: 15,
-    background: '#f0faf4',
-    color: '#07583f',
+    gap: 7,
+    padding: '8px 2px',
+    marginBottom: 12,
+    border: 'none',
+    borderRadius: 0,
+    background: 'transparent',
+    color: '#C62828',
     textAlign: 'left',
     cursor: 'pointer',
   },
 
   phoneVerificationIcon: {
-    width: 40,
-    height: 40,
-    flexShrink: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    background: '#d9f3e4',
-    color: '#087b48',
+    display: 'none',
   },
 
   phoneVerificationText: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
+    display: 'block',
     flex: 1,
     minWidth: 0,
     fontSize: 13,
+    lineHeight: 1.4,
+    color: '#C62828',
   },
 
   phoneVerificationArrow: {
-    fontSize: 26,
+    fontSize: 18,
     lineHeight: 1,
-    color: '#087b48',
+    color: '#C62828',
   },
 
  /* ==========================================================
