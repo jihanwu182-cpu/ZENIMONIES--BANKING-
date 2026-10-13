@@ -635,7 +635,8 @@ const register = async (req, res) => {
     // Business onboarding/POS remains a separate flow.
     // ----------------------------------------------------------
 
-    const accountResult = await client.query(
+    
+const accountResult = await client.query(
   `
   INSERT INTO accounts (
     user_id,
@@ -665,9 +666,8 @@ const register = async (req, res) => {
   `,
   [user.id, normalizedFullName]
 );
-    
-    const account =
-      accountResult.rows[0];
+
+const account = accountResult.rows[0];
 
     // ----------------------------------------------------------
     // CREATE PHONE OTP
