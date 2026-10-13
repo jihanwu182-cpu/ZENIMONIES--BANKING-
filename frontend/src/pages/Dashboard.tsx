@@ -48,13 +48,13 @@ type AccountResponse = {
 };
 
 type UserData = {
-full_name?: string;
-name?: string;
-first_name?: string;
-phone?: string;
-phone_verified?: boolean;
-profile_picture?: string;
-avatar_url?: string;
+  full_name?: string;
+  name?: string;
+  first_name?: string;
+  phone?: string;
+  phone_verified?: boolean;
+  profile_photo?: string;
+  avatar?: string;
 };
 
 /* ============================================================
@@ -1102,31 +1102,41 @@ const Dashboard: React.FC = () => {
 
       <main style={styles.main}>
 
-        {/* WELCOME */}
+                {/* WELCOME */}
 
-        <section
-          style={
-            styles.welcomeSection
-          }
-        >
-          <div>
-
-            <div
-              style={
-                styles.welcomeSmall
-              }
-            >
-              Welcome back,
+        <section style={styles.welcomeSection}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <div style={styles.dashboardAvatar}>
+              {user?.profile_photo || user?.avatar ? (
+                <img
+                  src={user.profile_photo || user.avatar}
+                  alt="Profile"
+                  style={styles.dashboardAvatarImage}
+                />
+              ) : (
+                firstLetter
+              )}
             </div>
 
-            <h1 style={styles.name}>
-              {displayName}
-            </h1>
+            <div>
+              <div style={styles.welcomeSmall}>
+                Welcome back,
+              </div>
 
-            <p style={styles.subtitle}>
-              Here's your financial overview.
-            </p>
+              <h1 style={styles.name}>
+                {displayName}
+              </h1>
 
+              <p style={styles.subtitle}>
+                Here's your financial overview.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -2131,6 +2141,32 @@ const styles: Record<
     fontSize: 26,
     lineHeight: 1,
     color: '#087b48',
+  },
+
+ /* ==========================================================
+     DASHBOARD PROFILE AVATAR
+  ========================================================== */
+
+  dashboardAvatar: {
+    width: 56,
+    height: 56,
+    minWidth: 56,
+    borderRadius: '50%',
+    background: '#e4f5ed',
+    color: '#087f47',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 20,
+    fontWeight: 900,
+    overflow: 'hidden',
+    border: '2px solid #d2eadd',
+  },
+
+  dashboardAvatarImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
   },
   /* ==========================================================
      BALANCE CARD
