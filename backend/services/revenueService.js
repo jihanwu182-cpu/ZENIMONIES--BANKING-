@@ -488,26 +488,35 @@ async function decideRevenueApproval({
       throw new Error('The approval decision could not be recorded.');
     }
 
-    // Keep an audit record of the decision.
+    // Record the approval decision using the actual audit table schema.
     await client.query(
       `INSERT INTO revenue_audit_events
-         (entity_type, entity_id, action, actor_id, details, created_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, CURRENT_TIMESTAMP)`,
+         (
+           actor_user_id,
+           event_type,
+           entity_type,
+           entity_id,
+           reason,
+           metadata,
+           created_at
+         )
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, CURRENT_TIMESTAMP)`,
       [
-        'revenue_ledger_approval',
-        id,
+        approver,
         decision === 'approved'
           ? 'revenue_approval_approved'
           : 'revenue_approval_rejected',
-        approver,
+        'revenue_ledger_approval',
+        id,
+        decisionReason,
         JSON.stringify({
           revenue_ledger_id: approval.revenue_ledger_id,
           prepared_by: approval.prepared_by,
           decision,
-          reason: decisionReason,
         }),
       ]
     );
+
 
     await client.query('COMMIT');
     return updated.rows[0];
