@@ -2213,13 +2213,13 @@ const styles: Record<
     flexShrink: 0,
   },
 
-  balanceAmount: {
+    balanceAmount: {
     color: '#ffffff',
-    fontSize: 34,
-    fontWeight: 900,
-    letterSpacing: -1.2,
+    fontSize: 28,
+    fontWeight: 500,
+    letterSpacing: -0.5,
     marginTop: 14,
-    lineHeight: 1,
+    lineHeight: 1.2,
   },
 
   balanceBottom: {
