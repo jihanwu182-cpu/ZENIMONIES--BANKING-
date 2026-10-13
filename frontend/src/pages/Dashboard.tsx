@@ -2128,19 +2128,15 @@ const styles: Record<
     height: '100%',
     objectFit: 'cover',
   },
-  /* ==========================================================
-     BALANCE CARD
-     
-     IMPORTANT:
-     This card is intentionally compact.
-     Do NOT make it full-width/oversized.
+    /* ==========================================================
+     ZENIMONIES BALANCE CARD — COMPACT DESIGN
   ========================================================== */
 
-    balanceCard: {
+  balanceCard: {
     width: '100%',
     maxWidth: 680,
-    minHeight: 150,
-    padding: '18px 20px',
+    minHeight: 0,
+    padding: 0,
     boxSizing: 'border-box',
     borderRadius: 22,
     position: 'relative',
@@ -2150,70 +2146,64 @@ const styles: Record<
       'linear-gradient(135deg, #07583f 0%, #063d2d 100%)',
     boxShadow: '0 10px 24px rgba(2,72,51,0.16)',
   },
+
   balanceGlow: {
     position: 'absolute',
-    width: 250,
-    height: 250,
+    width: 220,
+    height: 220,
     borderRadius: '50%',
-    right: -115,
-    top: -120,
-    background:
-      'rgba(66,208,148,0.10)',
+    right: -110,
+    top: -110,
+    background: 'rgba(66,208,148,0.10)',
     filter: 'blur(2px)',
+    pointerEvents: 'none',
   },
 
   balanceWatermark: {
     position: 'absolute',
     right: 16,
     bottom: -37,
-    fontSize: 145,
+    fontSize: 130,
     lineHeight: 1,
     fontWeight: 900,
-    color:
-      'rgba(78,218,157,0.07)',
+    color: 'rgba(78,218,157,0.07)',
     pointerEvents: 'none',
   },
 
   balanceContent: {
     position: 'relative',
     zIndex: 2,
-    padding:
-      '21px 22px 18px',
+    padding: '18px 20px',
+    boxSizing: 'border-box',
   },
 
   balanceTop: {
     display: 'flex',
     alignItems: 'flex-start',
-    justifyContent:
-      'space-between',
-    gap: 15,
+    justifyContent: 'space-between',
+    gap: 12,
   },
 
   balanceLabel: {
-    color:
-      'rgba(255,255,255,0.90)',
+    color: 'rgba(255,255,255,0.90)',
     fontSize: 15,
     fontWeight: 650,
   },
 
   accountType: {
     marginTop: 3,
-    color:
-      'rgba(255,255,255,0.48)',
+    color: 'rgba(255,255,255,0.48)',
     fontSize: 10,
     fontWeight: 600,
     textTransform: 'capitalize',
   },
 
   hideButton: {
-    border:
-      '1px solid rgba(255,255,255,0.20)',
-    background:
-      'rgba(255,255,255,0.07)',
+    border: '1px solid rgba(255,255,255,0.20)',
+    background: 'rgba(255,255,255,0.07)',
     color: '#ffffff',
     borderRadius: 999,
-    padding:
-      '7px 11px',
+    padding: '7px 11px',
     display: 'flex',
     alignItems: 'center',
     gap: 5,
@@ -2228,24 +2218,22 @@ const styles: Record<
     fontSize: 34,
     fontWeight: 900,
     letterSpacing: -1.2,
-    marginTop: 21,
+    marginTop: 14,
     lineHeight: 1,
   },
 
   balanceBottom: {
-    marginTop: 16,
+    marginTop: 12,
     display: 'flex',
     alignItems: 'center',
-    justifyContent:
-      'space-between',
+    justifyContent: 'space-between',
   },
 
   secureBadge: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
-    color:
-      'rgba(255,255,255,0.74)',
+    color: 'rgba(255,255,255,0.74)',
     fontSize: 10,
     fontWeight: 700,
   },
@@ -2255,17 +2243,16 @@ const styles: Record<
     height: 6,
     borderRadius: '50%',
     background: '#57d99d',
-    boxShadow:
-      '0 0 0 4px rgba(87,217,157,0.10)',
+    boxShadow: '0 0 0 4px rgba(87,217,157,0.10)',
   },
 
   currencyLabel: {
-    color:
-      'rgba(255,255,255,0.50)',
+    color: 'rgba(255,255,255,0.50)',
     fontSize: 10,
     fontWeight: 800,
     letterSpacing: 1,
   },
+    
 
   /* ==========================================================
      KYC
