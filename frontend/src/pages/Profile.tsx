@@ -2086,16 +2086,6 @@ const lgaOptions =
              : 'Phone number not verified'}
                 </small>
 
-              {profileLocked && (
-
-                <small
-                  style={
-                    styles.helper
-                  }
-                >
-
-              )}
-
             </div>
 
           </div>
