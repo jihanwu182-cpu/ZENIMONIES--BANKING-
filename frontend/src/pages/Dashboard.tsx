@@ -1509,45 +1509,6 @@ const Dashboard: React.FC = () => {
 
         </section>
 
-        <button
-  type="button"
-  style={
-    styles.moreServiceItem
-  }
-  onClick={() =>
-    navigate(
-      '/passkey-security'
-    )
-  }
->
-  <span
-    style={{
-      fontSize: 25,
-      lineHeight: 1,
-    }}
-  >
-    🔐
-  </span>
-
-  <span>
-    Passkey Security
-  </span>
-</button>
-       
-       <button
-  type="button"
-  style={styles.moreServiceItem}
-  onClick={() => navigate('/statement')}
->
-  <Icon
-    name="receipt"
-    size={25}
-  />
-
-  <span>
-    Account Statement
-  </span>
-</button>
 
         {/* ====================================================
             MORE PANEL
