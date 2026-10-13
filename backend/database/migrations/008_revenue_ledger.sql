@@ -1131,6 +1131,11 @@ AFTER INSERT OR UPDATE OR DELETE
 ON company_revenue_movements
 FOR EACH ROW
 EXECUTE FUNCTION record_revenue_audit_event();
+CREATE UNIQUE INDEX IF NOT EXISTS
+    idx_revenue_ledger_one_reversal_per_original
+ON revenue_ledger(reversal_of_id)
+WHERE entry_kind = 'reversal'
+  AND reversal_of_id IS NOT NULL;
 -- ============================================================
 -- END MIGRATION 008
 -- REVIEW AND TEST BEFORE PRODUCTION USE
