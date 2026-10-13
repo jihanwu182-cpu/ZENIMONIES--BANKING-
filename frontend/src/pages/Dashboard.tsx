@@ -48,10 +48,13 @@ type AccountResponse = {
 };
 
 type UserData = {
-  full_name?: string;
-  name?: string;
-  first_name?: string;
-  phone?: string;
+full_name?: string;
+name?: string;
+first_name?: string;
+phone?: string;
+phone_verified?: boolean;
+profile_picture?: string;
+avatar_url?: string;
 };
 
 /* ============================================================
@@ -1084,6 +1087,45 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
 
+               {/* ====================================================
+            PHONE VERIFICATION REMINDER
+        ==================================================== */}
+
+        {user?.phone_verified !== true && (
+          <button
+            type="button"
+            style={styles.phoneVerificationAlert}
+            onClick={() => navigate('/profile')}
+          >
+            <span
+              style={styles.phoneVerificationIcon}
+            >
+              <Icon
+                name="phone"
+                size={21}
+              />
+            </span>
+
+            <span
+              style={styles.phoneVerificationText}
+            >
+              <strong>
+                Verify your phone number
+              </strong>
+
+              <span>
+                Confirm your phone number to keep your contact details up to date.
+              </span>
+            </span>
+
+            <span
+              style={styles.phoneVerificationArrow}
+            >
+              ›
+            </span>
+          </button>
+        )}
+
         {/* ====================================================
             BALANCE CARD
         ==================================================== */}
@@ -2002,6 +2044,51 @@ const styles: Record<
     fontSize: 14,
   },
 
+   /* ==========================================================
+     PHONE VERIFICATION
+  ========================================================== */
+
+  phoneVerificationAlert: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 11,
+    padding: '12px 14px',
+    marginBottom: 17,
+    border: '1px solid #cfe8da',
+    borderRadius: 15,
+    background: '#f0faf4',
+    color: '#07583f',
+    textAlign: 'left',
+    cursor: 'pointer',
+  },
+
+  phoneVerificationIcon: {
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    background: '#d9f3e4',
+    color: '#087b48',
+  },
+
+  phoneVerificationText: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+  },
+
+  phoneVerificationArrow: {
+    fontSize: 26,
+    lineHeight: 1,
+    color: '#087b48',
+  },
   /* ==========================================================
      BALANCE CARD
      
