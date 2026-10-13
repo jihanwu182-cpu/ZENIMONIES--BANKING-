@@ -96,28 +96,71 @@ const Dashboard: React.FC = () => {
     process.env.REACT_APP_API_URL ||
     'https://zenimonies-banking.onrender.com';
 
-  /* ==========================================================
+    /* ==========================================================
      LOAD USER
   ========================================================== */
 
   useEffect(() => {
-    try {
-      const storedUser =
-        localStorage.getItem(
-          'zenimonies_user'
+    const loadUser = async () => {
+      try {
+        const token =
+          localStorage.getItem('zenimonies_token') ||
+          localStorage.getItem('token') ||
+          localStorage.getItem('access_token');
+
+        if (!token) {
+          return;
+        }
+
+        // Load saved user data first for a quick display.
+        const storedUser =
+          localStorage.getItem('zenimonies_user');
+
+        if (storedUser) {
+          try {
+            setUser(JSON.parse(storedUser));
+          } catch {
+            localStorage.removeItem('zenimonies_user');
+          }
+        }
+
+        // Fetch the latest phone verification status.
+        const response = await fetch(
+          `${apiBase}/api/profile`,
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
 
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      }
-    } catch (error) {
-      console.error(
-        'Unable to load user:',
-        error
-      );
-    }
-  }, []);
+        if (!response.ok) {
+          throw new Error(
+            `Profile request failed: ${response.status}`
+          );
+        }
 
+        const data = await response.json();
+
+        if (data?.success && data?.user) {
+          setUser(data.user);
+
+          localStorage.setItem(
+            'zenimonies_user',
+            JSON.stringify(data.user)
+          );
+        }
+      } catch (error) {
+        console.error(
+          'Dashboard user loading error:',
+          error
+        );
+      }
+    };
+
+    loadUser();
+  }, [apiBase]);
   /* ==========================================================
      USER NAME
   ========================================================== */
