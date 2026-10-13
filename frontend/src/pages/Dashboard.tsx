@@ -2053,13 +2053,13 @@ const styles: Record<
     fontWeight: 500,
   },
 
-    name: {
-    margin: '2px 0 0',
-    fontSize: 24,
-    lineHeight: 1.2,
-    fontWeight: 600,
-    letterSpacing: 0,
-  },
+ name: {
+  margin: '2px 0 0',
+  fontSize: 21,
+  lineHeight: 1.2,
+  fontWeight: 500,
+  letterSpacing: 0,
+},
   subtitle: {
     margin: '6px 0 0',
     color: '#788780',
