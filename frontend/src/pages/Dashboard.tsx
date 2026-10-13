@@ -1118,9 +1118,6 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div>
-              <div style={styles.welcomeSmall}>
-                Welcome back,
-              </div>
 
               <h1 style={styles.name}>
                 Hi {displayName}
@@ -2060,7 +2057,7 @@ const styles: Record<
     margin: '2px 0 0',
     fontSize: 31,
     lineHeight: 1.05,
-    fontWeight: 900,
+    fontWeight: 600,
     letterSpacing: -1,
   },
 
