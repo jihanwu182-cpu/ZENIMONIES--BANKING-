@@ -411,10 +411,10 @@ async function decideRevenueApproval({
     throw new Error('Decision must be approved or rejected.');
   }
 
-  if (
-    decision === 'rejected' &&
-    (typeof reason !== 'string' || !reason.trim())
-  ) {
+  const decisionReason =
+    typeof reason === 'string' ? requiredText(reason, 'reason', 1000) : null;
+
+  if (decision === 'rejected' && !decisionReason) {
     throw new Error('A rejection reason is required.');
   }
 
@@ -470,6 +470,8 @@ async function decideRevenueApproval({
       );
     }
 
+    // Record the decision. The database trigger must permit this
+    // one controlled transition from pending to approved/rejected.
     const updated = await client.query(
       `UPDATE revenue_ledger_approvals
        SET status = $2,
@@ -479,11 +481,31 @@ async function decideRevenueApproval({
        WHERE id = $1
          AND status = 'pending'
        RETURNING *`,
+      [id, decision, approver, decisionReason]
+    );
+
+    if (!updated.rowCount) {
+      throw new Error('The approval decision could not be recorded.');
+    }
+
+    // Keep an audit record of the decision.
+    await client.query(
+      `INSERT INTO revenue_audit_events
+         (entity_type, entity_id, action, actor_id, details, created_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, CURRENT_TIMESTAMP)`,
       [
+        'revenue_ledger_approval',
         id,
-        decision,
+        decision === 'approved'
+          ? 'revenue_approval_approved'
+          : 'revenue_approval_rejected',
         approver,
-        reason ? requiredText(reason, 'reason', 1000) : null,
+        JSON.stringify({
+          revenue_ledger_id: approval.revenue_ledger_id,
+          prepared_by: approval.prepared_by,
+          decision,
+          reason: decisionReason,
+        }),
       ]
     );
 
@@ -496,7 +518,6 @@ async function decideRevenueApproval({
     client.release();
   }
 }
-
 // ============================================================
 // MARK AN ORIGINAL ENTRY READY
 // ============================================================
