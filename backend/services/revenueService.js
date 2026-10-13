@@ -729,7 +729,34 @@ async function postRevenueEntry({ entryId, recordedBy }) {
     if (!updated.rowCount) {
       throw new Error('Revenue entry could not be posted.');
     }
-
+await client.query(
+  `INSERT INTO revenue_audit_events (
+     actor_user_id,
+     event_type,
+     entity_type,
+     entity_id,
+     reason,
+     metadata,
+     created_at
+   )
+   VALUES ($1, $2, $3, $4, $5, $6::jsonb, CURRENT_TIMESTAMP)`,
+  [
+    poster,
+    'revenue_entry_posted',
+    'revenue_ledger',
+    id,
+    null,
+    JSON.stringify({
+      entry_kind: entry.entry_kind,
+      transaction_status: entry.transaction_status,
+      approval_id: approval.id,
+      approved_by: approval.approved_by,
+      prepared_by: approval.prepared_by,
+      zenimonies_revenue: entry.zenimonies_revenue,
+      currency: entry.currency,
+    }),
+  ]
+);
     await client.query('COMMIT');
     return updated.rows[0];
   } catch (error) {
