@@ -2079,15 +2079,6 @@ const lgaOptions =
               </small>
             </div>
 
-            
-              <small style={styles.helper}>
-              {user?.phone_verified
-              ? '✓ Phone number verified'
-             : 'Phone number not verified'}
-                </small>
-
-            </div>
-
           </div>
 
         </section>
