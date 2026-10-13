@@ -546,18 +546,20 @@ async function markRevenueEntryReady({
         'Only completed transactions can be prepared for posting.'
       );
     }
+   const pendingApproval = await client.query(
+  `SELECT id
+   FROM revenue_ledger_approvals
+   WHERE revenue_ledger_id = $1
+     AND status = 'pending'
+   LIMIT 1`,
+  [id]
+);
 
-    // Invalidate pending requests before changing the amounts.
-    await client.query(
-      `UPDATE revenue_ledger_approvals
-       SET status = 'rejected',
-           decision_reason = 'Amounts changed; prepare a new request.',
-           approved_by = $2,
-           decided_at = CURRENT_TIMESTAMP
-       WHERE revenue_ledger_id = $1
-         AND status = 'pending'`,
-      [id, entry.recorded_by]
-    );
+if (pendingApproval.rowCount > 0) {
+  throw new Error(
+    'A pending approval exists. Resolve it before changing accounting amounts.'
+  );
+}
 
     const revenue = calculateZenimoniesRevenue({
       grossFee: entry.gross_fee,
