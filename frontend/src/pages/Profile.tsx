@@ -2045,16 +2045,6 @@ const lgaOptions =
             </div>
 
 
-              {profileLocked && (
-
-                <small
-                  style={
-                    styles.helper
-                  }
-                >
-
-              )}
-
             </div>
 
             {/* PHONE */}
@@ -2177,10 +2167,6 @@ const lgaOptions =
 
                 <option value="Nigeria">
                   Nigeria
-                </option>
-
-                <option value="South Africa">
-                  South Africa
                 </option>
 
               </select>
