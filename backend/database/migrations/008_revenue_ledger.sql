@@ -541,12 +541,79 @@ BEGIN
         RETURN OLD;
     END IF;
 
-    -- Posted entries and reversals are immutable.
+       -- Protect posted entries and reversal details.
     IF TG_OP = 'UPDATE' THEN
-        IF OLD.accounting_status = 'posted'
-           OR OLD.entry_kind = 'reversal' THEN
+
+        IF OLD.accounting_status = 'posted' THEN
             RAISE EXCEPTION
-                'Posted entries and reversals are immutable.';
+                'Posted revenue entries are immutable.';
+        END IF;
+
+        IF OLD.entry_kind = 'reversal' THEN
+
+            -- A reversal may only transition from ready to posted.
+            IF OLD.accounting_status <> 'ready'
+               OR NEW.accounting_status <> 'posted' THEN
+                RAISE EXCEPTION
+                    'A reversal may only transition from ready to posted.';
+            END IF;
+
+            -- Freeze all reversal details and amounts.
+            IF NEW.id IS DISTINCT FROM OLD.id
+               OR NEW.revenue_reference IS DISTINCT FROM OLD.revenue_reference
+               OR NEW.entry_kind IS DISTINCT FROM OLD.entry_kind
+               OR NEW.reversal_of_id IS DISTINCT FROM OLD.reversal_of_id
+               OR NEW.replaces_id IS DISTINCT FROM OLD.replaces_id
+               OR NEW.service_type IS DISTINCT FROM OLD.service_type
+               OR NEW.source_type IS DISTINCT FROM OLD.source_type
+               OR NEW.source_id IS DISTINCT FROM OLD.source_id
+               OR NEW.source_reference IS DISTINCT FROM OLD.source_reference
+               OR NEW.customer_user_id IS DISTINCT FROM OLD.customer_user_id
+               OR NEW.partner_id IS DISTINCT FROM OLD.partner_id
+               OR NEW.partner_terms_id IS DISTINCT FROM OLD.partner_terms_id
+               OR NEW.currency IS DISTINCT FROM OLD.currency
+               OR NEW.gross_fee IS DISTINCT FROM OLD.gross_fee
+               OR NEW.provider_cost IS DISTINCT FROM OLD.provider_cost
+               OR NEW.partner_share IS DISTINCT FROM OLD.partner_share
+               OR NEW.other_direct_cost IS DISTINCT FROM OLD.other_direct_cost
+               OR NEW.zenimonies_revenue IS DISTINCT FROM OLD.zenimonies_revenue
+               OR NEW.transaction_status IS DISTINCT FROM OLD.transaction_status
+               OR NEW.description IS DISTINCT FROM OLD.description
+               OR NEW.reversal_reason IS DISTINCT FROM OLD.reversal_reason
+               OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+                RAISE EXCEPTION
+                    'Reversal financial details cannot be changed.';
+            END IF;
+
+            IF NEW.recorded_by IS NULL THEN
+                RAISE EXCEPTION
+                    'A posting administrator is required.';
+            END IF;
+
+            IF NEW.posted_at IS NULL THEN
+                RAISE EXCEPTION
+                    'A posting timestamp is required.';
+            END IF;
+
+            -- Require approval matching the exact reversal amounts.
+            IF NOT EXISTS (
+                SELECT 1
+                FROM revenue_ledger_approvals a
+                WHERE a.revenue_ledger_id = NEW.id
+                  AND a.status = 'approved'
+                  AND a.approved_by IS NOT NULL
+                  AND a.approved_by <> a.prepared_by
+                  AND a.approved_by <> NEW.recorded_by
+                  AND a.gross_fee = NEW.gross_fee
+                  AND a.provider_cost = NEW.provider_cost
+                  AND a.partner_share = NEW.partner_share
+                  AND a.other_direct_cost = NEW.other_direct_cost
+                  AND a.zenimonies_revenue = NEW.zenimonies_revenue
+            ) THEN
+                RAISE EXCEPTION
+                    'Posting a reversal requires matching independent approval.';
+            END IF;
+
         END IF;
 
         IF OLD.replaces_id IS NOT NULL
@@ -565,6 +632,7 @@ BEGIN
             RAISE EXCEPTION
                 'An entry kind cannot be changed after creation.';
         END IF;
+
     END IF;
 
     -- Require independent approval before posting an original entry.
