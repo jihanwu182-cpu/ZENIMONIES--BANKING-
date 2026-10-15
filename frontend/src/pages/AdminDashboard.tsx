@@ -1848,6 +1848,7 @@ const revenueChartData: Array<{
 
 
         
+
 {/* FINANCIAL SUMMARY — VERIFIED BACKEND DATA */}
 {(() => {
   const hasRevenue =
@@ -1925,12 +1926,13 @@ const revenueChartData: Array<{
               }}
             >
               {item.value}
-           </Typography>
-            </CardContent>
-              </Card>
-            </Grid>
-          ))}
+            </Typography>
+          </Box>
         </Grid>
+      ))}
+    </Grid>
+  );
+})()}
 
 
   {/* RIGHT SIDEBAR: PENDING TRANSACTIONS + KYC REVIEW */}
