@@ -369,13 +369,14 @@ async function createRevenueEntry(input = {}, options = {}) {
 
     // A retry is idempotent only when the immutable source
     // and the verified fee/currency agree.
-    const sameEntry =
-      existing.source_reference === sourceReference &&
-      existing.currency === currency &&
-      Number(existing.gross_fee).toFixed(2) ===
-        Number(grossFee).toFixed(2) &&
-      String(existing.customer_user_id || '') ===
-        String(customerUserId || '');
+const sameEntry =
+  existing.source_reference === sourceReference &&
+  existing.currency === currency &&
+  existing.transaction_status === transactionStatus &&
+  Number(existing.gross_fee).toFixed(2) ===
+    Number(grossFee).toFixed(2) &&
+  String(existing.customer_user_id || '') ===
+    String(customerUserId || '');
 
     if (!sameEntry) {
       throw new Error(
