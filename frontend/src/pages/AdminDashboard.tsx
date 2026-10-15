@@ -1847,45 +1847,92 @@ const revenueChartData: Array<{
         </Box>
 
 
-        {/* FINANCIAL SUMMARY */}
-        <Grid container spacing={1} sx={{ mt: 1 }}>
-          {[
-            'Revenue',
-            'Provider Costs',
-            'Net Profit',
-            'Net Margin',
-          ].map((label) => (
-            <Grid item xs={6} sm={3} key={label}>
-              <Box
-                sx={{
-                  p: 1.25,
-                  borderRadius: 2,
-                  backgroundColor: '#F8FAF9',
-                }}
-              >
-                <Typography
-                  sx={{ fontSize: 11, color: BRAND.muted }}
-                >
-                  {label}
-                </Typography>
+        
+{/* FINANCIAL SUMMARY — VERIFIED BACKEND DATA */}
+{(() => {
+  const hasRevenue =
+    revenueApiSummary?.currency === 'NGN';
 
-                <Typography
-                  sx={{
-                    mt: 0.5,
-                    fontSize: 16,
-                    fontWeight: 800,
-                    color: BRAND.text,
-                  }}
-                >
-                  —
-                </Typography>
-              </Box>
-            </Grid>
-          ))}
+  const grossFees = hasRevenue
+    ? Number(revenueApiSummary.net_gross_fees) || 0
+    : 0;
+
+  const providerCosts = hasRevenue
+    ? Number(revenueApiSummary.net_provider_costs) || 0
+    : 0;
+
+  const netRevenue = hasRevenue
+    ? Number(revenueApiSummary.net_zenimonies_revenue) || 0
+    : 0;
+
+  const netMargin =
+    grossFees > 0
+      ? (netRevenue / grossFees) * 100
+      : 0;
+
+  const financialItems = [
+    {
+      label: 'Revenue',
+      value: hasRevenue
+        ? formatMoney(netRevenue, 'NGN')
+        : '—',
+    },
+    {
+      label: 'Provider Costs',
+      value: hasRevenue
+        ? formatMoney(providerCosts, 'NGN')
+        : '—',
+    },
+    {
+      label: 'Net Profit',
+      value: hasRevenue
+        ? formatMoney(netRevenue, 'NGN')
+        : '—',
+    },
+    {
+      label: 'Net Margin',
+      value: hasRevenue
+        ? `${netMargin.toFixed(1)}%`
+        : '—',
+    },
+  ];
+
+  return (
+    <Grid container spacing={1} sx={{ mt: 1 }}>
+      {financialItems.map((item) => (
+        <Grid item xs={6} sm={3} key={item.label}>
+          <Box
+            sx={{
+              p: 1.25,
+              borderRadius: 2,
+              backgroundColor: '#F8FAF9',
+              minWidth: 0,
+            }}
+          >
+            <Typography
+              sx={{ fontSize: 11, color: BRAND.muted }}
+            >
+              {item.label}
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.5,
+                fontSize: 16,
+                fontWeight: 800,
+                color: BRAND.text,
+                overflowWrap: 'anywhere',
+              }}
+            >
+              {item.value}
+            </Typography>
+          </Box>
         </Grid>
-      </CardContent>
-    </Card>
-  </Grid>
+      ))}
+    </Grid>
+  );
+})()}
+
 
   {/* RIGHT SIDEBAR: PENDING TRANSACTIONS + KYC REVIEW */}
   <Grid item xs={12} lg={4}>
@@ -8619,14 +8666,23 @@ const calculateRevenuePerformance =
 
 
 const revenueSummary = useMemo(() => {
-  const postedRecords = revenueRecords.filter(
-    (record) =>
-      String(record.accounting_status || '').toLowerCase() ===
-        'posted' &&
+  const postedRecords = revenueRecords.filter((record) => {
+    const accountingStatus = String(
+      record.accounting_status || ''
+    ).toLowerCase();
+
+    const transactionStatus = String(
+      record.transaction_status || ''
+    ).toLowerCase();
+
+    return (
+      accountingStatus === 'posted' &&
       ['completed', 'reversed', 'refunded'].includes(
-        String(record.transaction_status || '').toLowerCase()
-      )
-  );
+        transactionStatus
+      ) &&
+      String(record.currency || 'NGN').toUpperCase() === 'NGN'
+    );
+  });
 
   const customerCharges = postedRecords.reduce(
     (total, record) =>
@@ -8640,13 +8696,38 @@ const revenueSummary = useMemo(() => {
     0
   );
 
-  const zenimoniesRevenue = postedRecords.reduce(
+  const partnerShares = postedRecords.reduce(
     (total, record) =>
-      total + revenueValue(record.zenimonies_revenue),
+      total + revenueValue(record.partner_share),
     0
   );
 
-  const netProfit = zenimoniesRevenue;
+  const otherDirectCosts = postedRecords.reduce(
+    (total, record) =>
+      total + revenueValue(record.other_direct_cost),
+    0
+  );
+
+  const zenimoniesRevenue = postedRecords.reduce(
+    (total, record) => {
+      const recordedRevenue = record.zenimonies_revenue;
+
+      // Use the recorded ledger amount when available.
+      // Fall back to the accounting formula only if absent.
+      const revenue =
+        recordedRevenue !== null &&
+        recordedRevenue !== undefined &&
+        recordedRevenue !== ''
+          ? revenueValue(recordedRevenue)
+          : revenueValue(record.gross_fee) -
+            revenueValue(record.provider_cost) -
+            revenueValue(record.partner_share) -
+            revenueValue(record.other_direct_cost);
+
+      return total + revenue;
+    },
+    0
+  );
 
   const netMargin =
     customerCharges > 0
@@ -8656,11 +8737,14 @@ const revenueSummary = useMemo(() => {
   return {
     customerCharges,
     providerCosts,
+    partnerShares,
+    otherDirectCosts,
     zenimoniesRevenue,
-    netProfit,
+    netProfit: zenimoniesRevenue,
     netMargin,
   };
 }, [revenueRecords]);
+
 
 
 /* ============================================================
@@ -8710,11 +8794,13 @@ const filteredRevenueRecords =
           .toLowerCase()
           .includes(query) ||
         String(
-          record.source ||
-            ''
-        )
-          .toLowerCase()
-          .includes(query)
+  record.source_type ||
+    record.service_type ||
+    record.source_reference ||
+    ''
+)
+  .toLowerCase()
+  .includes(query)
     );
   }, [
     revenueRecords,
@@ -9511,17 +9597,23 @@ const renderRevenueLedger =
                           fontSize: 11,
                         }}
                       >
-                        {record.source ||
-                          '—'}
+                       
+{record.source_type ||
+  record.service_type ||
+  record.source_reference ||
+  '—'}
+
                       </Typography>
                     </TableCell>
 
-                    <TableCell>
-                      {formatMoney(
-                        record.customer_charge,
-                        'NGN'
-                      )}
-                    </TableCell>
+                  
+<TableCell>
+  {formatMoney(
+    record.gross_fee,
+    record.currency || 'NGN'
+  )}
+</TableCell>
+
 
                     <TableCell>
                       {formatMoney(
