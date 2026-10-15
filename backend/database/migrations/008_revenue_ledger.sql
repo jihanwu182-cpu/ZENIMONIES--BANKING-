@@ -788,40 +788,66 @@ END IF;
         END IF;
 
     END IF;
+    -- Validate reversal entries.
+    IF NEW.entry_kind = 'reversal' THEN
 
-    -- Validate accounting before posting.
-    IF NEW.accounting_status = 'posted' THEN
+        IF TG_OP = 'INSERT' THEN
 
-        IF NEW.provider_cost IS NULL
-           OR NEW.partner_share IS NULL
-           OR NEW.other_direct_cost IS NULL
-           OR NEW.zenimonies_revenue IS NULL
-           OR NEW.posted_at IS NULL THEN
-            RAISE EXCEPTION
-                'Posting requires all accounting amounts and posted_at.';
+            SELECT *
+            INTO original_row
+            FROM revenue_ledger
+            WHERE id = NEW.reversal_of_id
+            FOR SHARE;
+
+            IF NOT FOUND THEN
+                RAISE EXCEPTION
+                    'The original revenue entry was not found.';
+            END IF;
+
+            IF original_row.entry_kind <> 'original'
+               OR original_row.accounting_status <> 'posted' THEN
+                RAISE EXCEPTION
+                    'Only a posted original entry can be reversed.';
+            END IF;
+
+            IF original_row.currency <> NEW.currency
+               OR original_row.service_type <> NEW.service_type
+               OR original_row.source_type <> NEW.source_type
+               OR original_row.source_id IS DISTINCT FROM NEW.source_id THEN
+                RAISE EXCEPTION
+                    'The reversal must match the original currency, service and source.';
+            END IF;
+
+            IF NEW.gross_fee <> -original_row.gross_fee
+               OR NEW.provider_cost IS DISTINCT FROM -original_row.provider_cost
+               OR NEW.partner_share IS DISTINCT FROM -original_row.partner_share
+               OR NEW.other_direct_cost IS DISTINCT FROM -original_row.other_direct_cost
+               OR NEW.zenimonies_revenue IS DISTINCT FROM -original_row.zenimonies_revenue THEN
+                RAISE EXCEPTION
+                    'Reversal amounts must exactly negate the original amounts.';
+            END IF;
+
+            IF NEW.transaction_status NOT IN ('reversed', 'refunded') THEN
+                RAISE EXCEPTION
+                    'A reversal must be marked reversed or refunded.';
+            END IF;
+
+            IF NULLIF(BTRIM(NEW.reversal_reason), '') IS NULL THEN
+                RAISE EXCEPTION
+                    'A reversal reason is required.';
+            END IF;
+
+        ELSIF TG_OP = 'UPDATE' THEN
+
+            IF OLD.accounting_status <> 'ready'
+               OR NEW.accounting_status <> 'posted' THEN
+                RAISE EXCEPTION
+                    'A reversal may only transition from ready to posted.';
+            END IF;
+
         END IF;
 
-        IF NEW.zenimonies_revenue <>
-           NEW.gross_fee
-           - NEW.provider_cost
-           - NEW.partner_share
-           - NEW.other_direct_cost THEN
-            RAISE EXCEPTION
-                'Revenue does not match the accounting formula.';
-        END IF;
-
-        IF NEW.entry_kind = 'original'
-           AND NEW.transaction_status <> 'completed' THEN
-            RAISE EXCEPTION
-                'Original revenue can be posted only for a completed transaction.';
-        END IF;
     END IF;
-
-    NEW.updated_at := CURRENT_TIMESTAMP;
-
-    RETURN NEW;
-END;
-$$;
 
 DROP TRIGGER IF EXISTS trg_protect_revenue_ledger
 ON revenue_ledger;
