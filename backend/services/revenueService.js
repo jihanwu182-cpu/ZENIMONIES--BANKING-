@@ -179,9 +179,7 @@ async function createRevenueEntry(input = {}, options = {}) {
     input.accountingStatus &&
     input.accountingStatus !== 'incomplete'
   ) {
-    throw new Error(
-      'New revenue entries must start incomplete.'
-    );
+    throw new Error('New revenue entries must start incomplete.');
   }
 
   const serviceType = requiredText(
@@ -209,8 +207,21 @@ async function createRevenueEntry(input = {}, options = {}) {
 
   const actorId = optionalUuid(input.recordedBy, 'recordedBy');
 
+  const sourceId = optionalUuid(input.sourceId, 'sourceId');
+  const customerUserId = optionalUuid(
+    input.customerUserId,
+    'customerUserId'
+  );
+  const partnerId = optionalUuid(input.partnerId, 'partnerId');
+  const partnerTermsId = optionalUuid(
+    input.partnerTermsId,
+    'partnerTermsId'
+  );
+
   const grossFee = money(input.grossFee ?? '0.00', 'grossFee');
 
+  // Unknown accounting costs MUST remain NULL.
+  // Never convert unknown costs to zero here.
   const providerCost = money(
     input.providerCost,
     'providerCost',
@@ -229,6 +240,18 @@ async function createRevenueEntry(input = {}, options = {}) {
     true
   );
 
+  // Use the verified transaction currency when supplied.
+  // NGN remains only a compatibility fallback for older callers.
+  const currency = requiredText(
+    String(input.currency || 'NGN').trim().toUpperCase(),
+    'currency',
+    10
+  );
+
+  if (!/^[A-Z]{3,10}$/.test(currency)) {
+    throw new Error('Invalid revenue currency.');
+  }
+
   const revenue = calculateZenimoniesRevenue({
     grossFee,
     providerCost,
@@ -236,12 +259,28 @@ async function createRevenueEntry(input = {}, options = {}) {
     otherDirectCost,
   });
 
+  const revenueReference =
+    input.revenueReference ||
+    `REV-${crypto.randomUUID()}`;
+
+  const sourceReference = input.sourceReference
+    ? requiredText(input.sourceReference, 'sourceReference')
+    : null;
+
+  const description = input.description
+    ? requiredText(input.description, 'description', 1000)
+    : null;
+
   const client = options.client || (await pool.connect());
   const ownsClient = !options.client;
 
   try {
-    if (ownsClient) await client.query('BEGIN');
+    if (ownsClient) {
+      await client.query('BEGIN');
+    }
 
+    // A conflict is handled deliberately. Never overwrite an
+    // existing entry or silently accept a conflicting reference.
     const result = await client.query(
       `INSERT INTO revenue_ledger (
         revenue_reference,
@@ -266,44 +305,104 @@ async function createRevenueEntry(input = {}, options = {}) {
       )
       VALUES (
         $1, 'original', $2, $3, $4, $5, $6, $7, $8,
-        'NGN', $9, $10, $11, $12, $13,
-        'incomplete', $14, $15, $16
+        $9, $10, $11, $12, $13, $14,
+        'incomplete', $15, $16, $17
       )
+      ON CONFLICT DO NOTHING
       RETURNING *`,
       [
-        input.revenueReference || `REV-${crypto.randomUUID()}`,
+        revenueReference,
         serviceType,
         sourceType,
-        optionalUuid(input.sourceId, 'sourceId'),
-        input.sourceReference
-          ? requiredText(input.sourceReference, 'sourceReference')
-          : null,
-        optionalUuid(input.customerUserId, 'customerUserId'),
-        optionalUuid(input.partnerId, 'partnerId'),
-        optionalUuid(input.partnerTermsId, 'partnerTermsId'),
+        sourceId,
+        sourceReference,
+        customerUserId,
+        partnerId,
+        partnerTermsId,
+        currency,
         grossFee,
         providerCost,
         partnerShare,
         otherDirectCost,
         revenue,
         transactionStatus,
-        input.description
-          ? requiredText(input.description, 'description', 1000)
-          : null,
+        description,
         actorId,
       ]
     );
 
-    if (ownsClient) await client.query('COMMIT');
+    if (result.rowCount > 0) {
+      if (ownsClient) {
+        await client.query('COMMIT');
+      }
 
-    return result.rows[0];
+      return result.rows[0];
+    }
+
+    // A conflict may be a legitimate webhook retry or an
+    // unrelated duplicate reference. Distinguish the two.
+    if (!sourceId) {
+      throw new Error(
+        'Revenue reference conflict without a verifiable source.'
+      );
+    }
+
+    const existingResult = await client.query(
+      `SELECT *
+       FROM revenue_ledger
+       WHERE source_type = $1
+         AND source_id = $2
+         AND service_type = $3
+         AND entry_kind = 'original'
+         AND replaces_id IS NULL
+       FOR UPDATE`,
+      [sourceType, sourceId, serviceType]
+    );
+
+    if (existingResult.rowCount !== 1) {
+      throw new Error(
+        'Revenue uniqueness conflict requires reconciliation.'
+      );
+    }
+
+    const existing = existingResult.rows[0];
+
+    // A retry is idempotent only when the immutable source
+    // and the verified fee/currency agree.
+    const sameEntry =
+      existing.source_reference === sourceReference &&
+      existing.currency === currency &&
+      Number(existing.gross_fee).toFixed(2) ===
+        Number(grossFee).toFixed(2) &&
+      String(existing.customer_user_id || '') ===
+        String(customerUserId || '');
+
+    if (!sameEntry) {
+      throw new Error(
+        'Existing revenue entry conflicts with verified transaction data.'
+      );
+    }
+
+    // Return the existing record without changing its
+    // accounting status, costs, approvals or posting history.
+    if (ownsClient) {
+      await client.query('COMMIT');
+    }
+
+    return existing;
   } catch (error) {
-    if (ownsClient) await client.query('ROLLBACK').catch(() => {});
+    if (ownsClient) {
+      await client.query('ROLLBACK').catch(() => {});
+    }
+
     throw error;
   } finally {
-    if (ownsClient) client.release();
+    if (ownsClient) {
+      client.release();
+    }
   }
 }
+
 
 // ============================================================
 // PREPARE ORIGINAL ENTRY FOR INDEPENDENT APPROVAL
