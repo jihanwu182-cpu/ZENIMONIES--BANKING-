@@ -9565,6 +9565,118 @@ const renderRevenueProfit =
 const renderRevenueLedger =
   () => (
     <Stack spacing={2.25}>
+      
+      <Card sx={pageCardSx}>
+        <CardContent sx={{ p: 1.75 }}>
+          <Stack spacing={1.25}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    fontWeight: 850,
+                    color: BRAND.text,
+                  }}
+                >
+                  Pending Revenue Approvals
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.35,
+                    fontSize: 10.5,
+                    color: BRAND.muted,
+                  }}
+                >
+                  Review revenue entries awaiting an approval decision.
+                </Typography>
+              </Box>
+
+              <Button
+                size="small"
+                onClick={() => void loadRevenueApprovals()}
+                disabled={revenueApprovalsLoading}
+                sx={{ textTransform: 'none' }}
+              >
+                Refresh
+              </Button>
+            </Stack>
+
+            {revenueApprovalError && (
+              <Alert severity="error">
+                {revenueApprovalError}
+              </Alert>
+            )}
+
+            {revenueApprovalsLoading ? (
+              <Typography sx={{ fontSize: 11, color: BRAND.muted }}>
+                Loading approval requests…
+              </Typography>
+            ) : revenueApprovals.length === 0 ? (
+              <Typography sx={{ fontSize: 11, color: BRAND.muted }}>
+                No pending approval requests returned by the backend.
+              </Typography>
+            ) : (
+              revenueApprovals.map((approval) => (
+                <Box
+                  key={approval.id}
+                  sx={{
+                    p: 1.25,
+                    border: `1px solid ${BRAND.border}`,
+                    borderRadius: 2,
+                  }}
+                >
+                  <Typography sx={{ fontSize: 11, fontWeight: 800 }}>
+                    {approval.revenue_reference ||
+                      approval.reference ||
+                      approval.revenue_entry_id ||
+                      approval.entry_id ||
+                      approval.id}
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.4,
+                      fontSize: 10.5,
+                      color: BRAND.muted,
+                    }}
+                  >
+                    Status: {approval.status || 'Pending'}
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.25,
+                      fontSize: 10.5,
+                      color: BRAND.muted,
+                    }}
+                  >
+                    Prepared by: {approval.prepared_by || 'Not supplied'}
+                  </Typography>
+
+                  <Typography
+                    sx={{
+                      mt: 0.25,
+                      fontSize: 10.5,
+                      color: BRAND.muted,
+                    }}
+                  >
+                    Amount: {formatMoney(
+                      approval.amount,
+                      approval.currency || 'NGN'
+                    )}
+                  </Typography>
+                </Box>
+              ))
+            )}
+          </Stack>
+        </CardContent>
+      </Card>
+
       <SectionHeader
         eyebrow="Revenue"
         title="Revenue Ledger"
