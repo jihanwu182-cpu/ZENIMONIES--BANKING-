@@ -412,16 +412,30 @@ const handleTransferSuccess = async (eventData) => {
 
     // The fee is the only candidate for gross revenue.
     // The principal is deliberately never used as revenue.
-    const transactionFee = Number(transaction.transaction_fee);
+    
+    if (
+      transaction.transaction_fee === null ||
+      transaction.transaction_fee === undefined ||
+      transaction.transaction_fee === ''
+    ) {
+      throw new Error(
+        'Original transfer fee is missing'
+      );
+    }
+
+    const transactionFee = Number(
+      transaction.transaction_fee
+    );
 
     if (
       !Number.isFinite(transactionFee) ||
       transactionFee < 0
     ) {
       throw new Error(
-        'Original transfer fee is missing or invalid'
+        'Original transfer fee is invalid'
       );
     }
+
 
     // A previously completed transfer can be reconciled here
     // if an older webhook completed it before revenue integration.
