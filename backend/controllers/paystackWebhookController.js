@@ -426,8 +426,9 @@ const handleTransferSuccess = async (eventData) => {
     // A previously completed transfer can be reconciled here
     // if an older webhook completed it before revenue integration.
     // Do not repeat the balance debit or refund.
+    
     if (transfer.status !== 'completed') {
-      await client.query(
+      const updatedTransfer = await client.query(
         `
         UPDATE bank_transfers
         SET
@@ -437,6 +438,7 @@ const handleTransferSuccess = async (eventData) => {
           failure_reason = NULL
         WHERE id = $2
           AND status IN ('pending', 'processing')
+        RETURNING id
         `,
         [
           eventData.transfer_code ||
@@ -446,6 +448,14 @@ const handleTransferSuccess = async (eventData) => {
         ]
       );
 
+      if (updatedTransfer.rowCount !== 1) {
+        throw new Error(
+          'Transfer could not be marked completed'
+        );
+      }
+    }
+
+    if (transaction.status !== 'completed') {
       const updatedTransaction = await client.query(
         `
         UPDATE transactions
@@ -458,12 +468,7 @@ const handleTransferSuccess = async (eventData) => {
         [transaction.id]
       );
 
-      // If the transaction was not updated, it must already
-      // have been completed; otherwise stop and roll back.
-      if (
-        updatedTransaction.rowCount === 0 &&
-        transaction.status !== 'completed'
-      ) {
+      if (updatedTransaction.rowCount !== 1) {
         throw new Error(
           'Original transaction could not be marked completed'
         );
