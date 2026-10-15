@@ -8550,154 +8550,75 @@ type SettlementRecord = {
    REVENUE STATE
    ============================================================ */
 
-const [
-  revenuePeriod,
-  setRevenuePeriod,
-] = useState<RevenuePeriod>(
-  '30D'
-);
-
-const [
-  revenueSearch,
-  setRevenueSearch,
-] = useState('');
-
-const [
-  revenueRecords,
-  setRevenueRecords,
-] = useState<RevenueRecord[]>(
-  []
-);
-
-const [
-  settlementRecords,
-  setSettlementRecords,
-] = useState<
-  SettlementRecord[]
->([]);
-
-const [
-  revenueTarget,
-  setRevenueTarget,
-] = useState<
-  number | null
->(null);
-
-const [
-  revenueDataAvailable,
-  setRevenueDataAvailable,
-] =
+const [revenuePeriod, setRevenuePeriod] =
+  useState<RevenuePeriod>('30D');
+const [revenueSearch, setRevenueSearch] =
+  useState('');
+const [revenueRecords, setRevenueRecords] =
+  useState<RevenueRecord[]>([]);
+const [settlementRecords, setSettlementRecords] =
+  useState<SettlementRecord[]>([]);
+const [revenueTarget, setRevenueTarget] =
+  useState<number | null>(null);
+const [revenueDataAvailable, setRevenueDataAvailable] =
   useState(false);
-
-const [
-  revenueApprovals,
-  setRevenueApprovals,
-] = useState<RevenueApproval[]>([]);
-
-const [
-  revenueApprovalsLoading,
-  setRevenueApprovalsLoading,
-] = useState(false);
-
-const [
-  revenueApprovalError,
-  setRevenueApprovalError,
-] = useState('');
-
-
-  
+const [revenueLoading, setRevenueLoading] =
+  useState(false);
+const [revenueLoadError, setRevenueLoadError] =
+  useState('');
+const [revenueApprovals, setRevenueApprovals] =
+  useState<RevenueApproval[]>([]);
+const [revenueApprovalsLoading, setRevenueApprovalsLoading] =
+  useState(false);
+const [revenueApprovalError, setRevenueApprovalError] =
+  useState('');
 useEffect(() => {
   let cancelled = false;
-
   const loadRevenueEntries = async () => {
+    setRevenueLoading(true);
+    setRevenueLoadError('');
     try {
-      const response = await api.get(
-        '/admin/revenue/entries'
-      );
-
+      const response = await api.get('/admin/revenue/entries');
       const data = response.data;
-
       const entries: RevenueRecord[] =
-  Array.isArray(data?.data)
-    ? data.data
-    : Array.isArray(data?.entries)
-      ? data.entries
-      : Array.isArray(data?.records)
-        ? data.records
-        : Array.isArray(data?.revenueEntries)
-          ? data.revenueEntries
-          : [];
-
-      if (!cancelled) {
-        setRevenueRecords(entries);
-
-        setRevenueDataAvailable(
-          entries.some(
-            (record) =>
-              String(
-                record.accounting_status || ''
-              ).toLowerCase() === 'posted'
-          )
-        );
-      }
+        Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.entries)
+            ? data.entries
+            : Array.isArray(data?.records)
+              ? data.records
+              : Array.isArray(data?.revenueEntries)
+                ? data.revenueEntries
+                : [];
+      if (cancelled) return;
+      setRevenueRecords(entries);
+      setRevenueDataAvailable(
+        entries.some(
+          (record) =>
+            String(
+              record.accounting_status || record.status || ''
+            ).toLowerCase() === 'posted'
+        )
+      );
     } catch (error) {
+      console.error('Failed to load revenue entries:', error);
       if (!cancelled) {
         setRevenueRecords([]);
         setRevenueDataAvailable(false);
+        setRevenueLoadError(
+          'Unable to load revenue records. Please try again.'
+        );
       }
-
-      console.error(
-        'Failed to load revenue entries:',
-        error
-      );
+    } finally {
+      if (!cancelled) {
+        setRevenueLoading(false);
+      }
     }
   };
-
   void loadRevenueEntries();
-
   return () => {
     cancelled = true;
   };
-}, []);
-  
-const loadRevenueApprovals = async () => {
-  try {
-    setRevenueApprovalsLoading(true);
-    setRevenueApprovalError('');
-
-    const response = await api.get(
-      '/admin/revenue/approvals/pending'
-    );
-
-    const data = response.data;
-
-    const approvals: RevenueApproval[] =
-      Array.isArray(data?.data)
-        ? data.data
-        : Array.isArray(data?.approvals)
-          ? data.approvals
-          : Array.isArray(data?.records)
-            ? data.records
-            : [];
-
-    setRevenueApprovals(approvals);
-  } catch (error) {
-    console.error(
-      'Failed to load revenue approvals:',
-      error
-    );
-
-    setRevenueApprovalError(
-      'Unable to load pending revenue approvals. Please try again.'
-    );
-  } finally {
-    setRevenueApprovalsLoading(false);
-  }
-};
-
-
-useEffect(() => {
-  void loadRevenueApprovals();
 }, []);
 
 /* ============================================================
@@ -8849,39 +8770,31 @@ const revenueTargetPerformance =
 /* ============================================================
    FILTER REVENUE LEDGER
    ============================================================ */
-
-const filteredRevenueRecords =
-  useMemo(() => {
-    const query =
-      revenueSearch
-        .trim()
-        .toLowerCase();
-
-    if (!query) {
-      return revenueRecords;
-    }
-
-    return revenueRecords.filter(
-      (record) =>
-        String(
-          record.reference ||
-            ''
-        )
-          .toLowerCase()
-          .includes(query) ||
-        String(
-  record.source_type ||
-    record.service_type ||
-    record.source_reference ||
-    ''
-)
-  .toLowerCase()
-  .includes(query)
+const filteredRevenueRecords = useMemo(() => {
+  const query = revenueSearch.trim().toLowerCase();
+  if (!query) {
+    return revenueRecords;
+  }
+  return revenueRecords.filter((record) => {
+    const searchableFields = [
+      record.revenue_reference,
+      record.reference,
+      record.id,
+      record.source_type,
+      record.service_type,
+      record.source_reference,
+      record.accounting_status,
+      record.transaction_status,
+      record.currency,
+    ];
+    return searchableFields.some((value) =>
+      String(value ?? '')
+        .toLowerCase()
+        .includes(query)
     );
-  }, [
-    revenueRecords,
-    revenueSearch,
-  ]);
+  });
+}, [revenueRecords, revenueSearch]);
+
 
 /* ============================================================
    REVENUE KPI
@@ -8958,949 +8871,724 @@ const RevenueKpi = ({
    REVENUE PERFORMANCE CHART
    ============================================================ */
 
-const RevenuePerformanceChart =
-  () => {
-    const chartData =
-      revenueRecords
-        .slice(-12)
-        .map(
-          (
-            record,
-            index
-          ) => ({
-            index:
-              index + 1,
-            revenue:
-              revenueValue(
-                record.zenimonies_revenue
-              ),
-            provider:
-              revenueValue(
-                record.provider_cost
-              ),
-          })
-        );
+const RevenuePerformanceChart = () => {
+  const now = new Date();
 
-    const maximum =
-      Math.max(
-        ...chartData.map(
-          (item) =>
-            Math.max(
-              item.revenue,
-              item.provider
-            )
-        ),
-        1
+  const getRecordDate = (record: RevenueRecord): Date | null => {
+    const rawDate =
+      record.transaction_date ||
+      record.posted_at ||
+      record.created_at;
+
+    if (!rawDate) return null;
+
+    const date = new Date(rawDate);
+
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const startDate = new Date(now);
+
+  switch (revenuePeriod) {
+    case '7D':
+      startDate.setDate(now.getDate() - 6);
+      break;
+
+    case '30D':
+      startDate.setDate(now.getDate() - 29);
+      break;
+
+    case '90D':
+      startDate.setDate(now.getDate() - 89);
+      break;
+
+    case 'YTD':
+      startDate.setMonth(0, 1);
+      startDate.setHours(0, 0, 0, 0);
+      break;
+  }
+
+  const chartRecords = revenueRecords
+    .filter((record) => {
+      const status = String(
+        record.accounting_status || record.status || ''
+      ).toLowerCase();
+
+      const date = getRecordDate(record);
+
+      return (
+        status === 'posted' &&
+        date !== null &&
+        date >= startDate &&
+        date <= now
       );
+    })
+    .sort((a, b) => {
+      const dateA = getRecordDate(a)?.getTime() || 0;
+      const dateB = getRecordDate(b)?.getTime() || 0;
+      return dateA - dateB;
+    });
 
-    return (
-      <Card
-        sx={{
-          ...pageCardSx,
-          minHeight: 330,
-        }}
-      >
-        <CardContent
+  const chartData = chartRecords.map((record, index) => ({
+    index: index + 1,
+    revenue: revenueValue(record.zenimonies_revenue),
+    provider: revenueValue(record.provider_cost),
+  }));
+
+  const maximum = Math.max(
+    ...chartData.map((item) =>
+      Math.max(item.revenue, item.provider)
+    ),
+    1
+  );
+
+  return (
+    <Card
+      sx={{
+        ...pageCardSx,
+        minHeight: 330,
+      }}
+    >
+      <CardContent sx={{ p: 2 }}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="flex-start"
+          flexWrap="wrap"
+          gap={1}
+        >
+          <Box>
+            <Typography
+              sx={{
+                fontSize: 13,
+                fontWeight: 850,
+                color: BRAND.text,
+              }}
+            >
+              Revenue, Margin & Profit
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.35,
+                fontSize: 10.5,
+                color: BRAND.muted,
+              }}
+            >
+              Posted ZENIMONIES revenue versus provider costs.
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={0.5}>
+            {(['7D', '30D', '90D', 'YTD'] as RevenuePeriod[]).map(
+              (period) => (
+                <Button
+                  key={period}
+                  size="small"
+                  onClick={() => setRevenuePeriod(period)}
+                  sx={{
+                    minWidth: 38,
+                    px: 0.8,
+                    borderRadius: 1.25,
+                    textTransform: 'none',
+                    fontSize: 9.5,
+                    fontWeight: 800,
+                    color:
+                      revenuePeriod === period
+                        ? BRAND.white
+                        : BRAND.muted,
+                    backgroundColor:
+                      revenuePeriod === period
+                        ? BRAND.dark
+                        : '#F3F6F4',
+                    '&:hover': {
+                      backgroundColor:
+                        revenuePeriod === period
+                          ? BRAND.green
+                          : '#EAF1ED',
+                    },
+                  }}
+                >
+                  {period}
+                </Button>
+              )
+            )}
+          </Stack>
+        </Stack>
+
+        {chartData.length === 0 ? (
+          <Box
+            sx={{
+              minHeight: 230,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Stack alignItems="center" spacing={1}>
+              <Typography
+                sx={{
+                  fontSize: 28,
+                  fontWeight: 900,
+                  color: '#AAB8B2',
+                }}
+              >
+                —
+              </Typography>
+
+              <Typography
+                sx={{
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: BRAND.text,
+                }}
+              >
+                No posted revenue for this period
+              </Typography>
+
+              <Typography
+                sx={{
+                  maxWidth: 390,
+                  textAlign: 'center',
+                  fontSize: 10.5,
+                  lineHeight: 1.6,
+                  color: BRAND.muted,
+                }}
+              >
+                Verified posted ledger entries within the selected
+                period will appear here. No revenue or provider
+                costs are fabricated.
+              </Typography>
+            </Stack>
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              mt: 3,
+              height: 220,
+              display: 'flex',
+              alignItems: 'flex-end',
+              gap: 1,
+              overflowX: 'auto',
+              px: 1,
+            }}
+          >
+            {chartData.map((item) => (
+              <Box
+                key={item.index}
+                sx={{
+                  minWidth: 34,
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  gap: 0.5,
+                }}
+              >
+                <Box
+                  title={`ZENIMONIES revenue: ${item.revenue}`}
+                  sx={{
+                    width: 13,
+                    height: `${(item.revenue / maximum) * 100}%`,
+                    minHeight: 3,
+                    borderRadius: '4px 4px 0 0',
+                    backgroundColor: BRAND.green,
+                  }}
+                />
+
+                <Box
+                  title={`Provider cost: ${item.provider}`}
+                  sx={{
+                    width: 13,
+                    height: `${(item.provider / maximum) * 100}%`,
+                    minHeight: 3,
+                    borderRadius: '4px 4px 0 0',
+                    backgroundColor: '#B9C8C2',
+                  }}
+                />
+              </Box>
+            ))}
+          </Box>
+        )}
+
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{ mt: 1.5 }}
+        >
+          <Stack direction="row" spacing={0.6} alignItems="center">
+            <Box
+              sx={{
+                width: 9,
+                height: 9,
+                borderRadius: '50%',
+                backgroundColor: BRAND.green,
+              }}
+            />
+
+            <Typography sx={{ fontSize: 9.5, color: BRAND.muted }}>
+              ZENIMONIES revenue
+            </Typography>
+          </Stack>
+
+          <Stack direction="row" spacing={0.6} alignItems="center">
+            <Box
+              sx={{
+                width: 9,
+                height: 9,
+                borderRadius: '50%',
+                backgroundColor: '#B9C8C2',
+              }}
+            />
+
+            <Typography sx={{ fontSize: 9.5, color: BRAND.muted }}>
+              Provider cost
+            </Typography>
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+};
+/* ============================================================
+   REVENUE & PROFIT
+   ============================================================ */
+const renderRevenueProfit = () => (
+  <Stack spacing={2.25}>
+    <SectionHeader
+      eyebrow="Revenue"
+      title="Revenue & Profit"
+      description="Separate customer charges, provider costs and ZENIMONIES revenue so operational revenue is not confused with customer funds."
+    />
+
+    <Grid container spacing={1.25}>
+      <Grid item xs={6} md={3}>
+        <RevenueKpi
+          title="Customer Charges"
+          value={formatMoney(revenueSummary.customerCharges, 'NGN')}
+          subtitle="Charges collected from customers"
+        />
+      </Grid>
+
+      <Grid item xs={6} md={3}>
+        <RevenueKpi
+          title="Provider Costs"
+          value={formatMoney(revenueSummary.providerCosts, 'NGN')}
+          subtitle="Costs payable to service providers"
+        />
+      </Grid>
+
+      <Grid item xs={6} md={3}>
+        <RevenueKpi
+          title="ZENIMONIES Revenue"
+          value={formatMoney(revenueSummary.zenimoniesRevenue, 'NGN')}
+          subtitle="Recognised operational revenue"
+        />
+      </Grid>
+
+      <Grid item xs={6} md={3}>
+        <RevenueKpi
+          title="Net Profit"
+          value={formatMoney(revenueSummary.netProfit, 'NGN')}
+          subtitle={`Net margin ${revenueSummary.netMargin.toFixed(2)}%`}
+          positive={revenueSummary.netProfit >= 0}
+        />
+      </Grid>
+    </Grid>
+
+    <Grid container spacing={1.5}>
+      <Grid item xs={12} lg={8}>
+        <RevenuePerformanceChart />
+      </Grid>
+
+      <Grid item xs={12} lg={4}>
+        <Card
           sx={{
-            p: 2,
+            ...pageCardSx,
+            height: '100%',
           }}
         >
+          <CardContent sx={{ p: 2 }}>
+            <Typography
+              sx={{
+                fontSize: 13,
+                fontWeight: 850,
+                color: BRAND.text,
+              }}
+            >
+              Monthly Target
+            </Typography>
+
+            <Typography
+              sx={{
+                mt: 0.4,
+                fontSize: 10.5,
+                color: BRAND.muted,
+              }}
+            >
+              Revenue performance against the approved monthly target.
+            </Typography>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Stack spacing={1.5}>
+              <Box>
+                <Typography sx={{ fontSize: 10, color: BRAND.muted }}>
+                  Current revenue
+                </Typography>
+
+                <Typography sx={{ fontSize: 19, fontWeight: 850 }}>
+                  {formatMoney(revenueSummary.zenimoniesRevenue, 'NGN')}
+                </Typography>
+              </Box>
+
+              <Box>
+                <Typography sx={{ fontSize: 10, color: BRAND.muted }}>
+                  Monthly target
+                </Typography>
+
+                <Typography sx={{ fontSize: 19, fontWeight: 850 }}>
+                  {revenueTarget === null
+                    ? 'Not configured'
+                    : formatMoney(revenueTarget, 'NGN')}
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  backgroundColor: BRAND.greenLight,
+                }}
+              >
+                <Typography sx={{ fontSize: 10, color: BRAND.muted }}>
+                  Performance
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.3,
+                    fontSize: 22,
+                    fontWeight: 900,
+                    color:
+                      revenueTargetPerformance === null
+                        ? BRAND.muted
+                        : revenueTargetPerformance >= 0
+                          ? BRAND.green
+                          : '#B42318',
+                  }}
+                >
+                  {revenueTargetPerformance === null
+                    ? '—'
+                    : `${revenueTargetPerformance >= 0 ? '+' : ''}${revenueTargetPerformance.toFixed(1)}%`}
+                </Typography>
+
+                <Typography
+                  sx={{
+                    mt: 0.3,
+                    fontSize: 10,
+                    color: BRAND.muted,
+                  }}
+                >
+                  Compared with monthly target
+                </Typography>
+              </Box>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
+
+    {!revenueDataAvailable && (
+      <Alert
+        severity="info"
+        sx={{
+          borderRadius: 2,
+          fontSize: 11,
+        }}
+      >
+        No verified revenue ledger data is currently available.
+        Revenue, provider costs and profit will be reported only
+        from verified backend records. Customer funds are never
+        counted as ZENIMONIES revenue.
+      </Alert>
+    )}
+  </Stack>
+);
+/* ============================================================
+   REVENUE LEDGER
+   ============================================================ */
+
+const renderRevenueLedger = () => (
+  <Stack spacing={2.25}>
+    {/* PENDING REVENUE APPROVALS */}
+    <Card sx={pageCardSx}>
+      <CardContent sx={{ p: 1.75 }}>
+        <Stack spacing={1.25}>
           <Stack
             direction="row"
+            alignItems="center"
             justifyContent="space-between"
-            alignItems="flex-start"
           >
             <Box>
               <Typography
                 sx={{
                   fontSize: 13,
                   fontWeight: 850,
-                  color:
-                    BRAND.text,
+                  color: BRAND.text,
                 }}
               >
-                Revenue, Margin & Profit
+                Pending Revenue Approvals
               </Typography>
-
               <Typography
                 sx={{
                   mt: 0.35,
                   fontSize: 10.5,
-                  color:
-                    BRAND.muted,
+                  color: BRAND.muted,
                 }}
               >
-                Revenue versus provider
-                costs across the selected
-                period.
+                Review revenue entries awaiting an approval decision.
               </Typography>
             </Box>
-
-            <Stack
-              direction="row"
-              spacing={0.5}
+            <Button
+              size="small"
+              onClick={() => void loadRevenueApprovals()}
+              disabled={revenueApprovalsLoading}
+              sx={{ textTransform: 'none' }}
             >
-              {(
-                [
-                  '7D',
-                  '30D',
-                  '90D',
-                  'YTD',
-                ] as RevenuePeriod[]
-              ).map(
-                (period) => (
-                  <Button
-                    key={
-                      period
-                    }
-                    size="small"
-                    onClick={() =>
-                      setRevenuePeriod(
-                        period
-                      )
-                    }
-                    sx={{
-                      minWidth: 38,
-                      px: 0.8,
-                      borderRadius:
-                        1.25,
-                      textTransform:
-                        'none',
-                      fontSize: 9.5,
-                      fontWeight: 800,
-                      color:
-                        revenuePeriod ===
-                        period
-                          ? BRAND.white
-                          : BRAND.muted,
-                      backgroundColor:
-                        revenuePeriod ===
-                        period
-                          ? BRAND.dark
-                          : '#F3F6F4',
-                      '&:hover': {
-                        backgroundColor:
-                          revenuePeriod ===
-                          period
-                            ? BRAND.green
-                            : '#EAF1ED',
-                      },
-                    }}
-                  >
-                    {period}
-                  </Button>
-                )
-              )}
-            </Stack>
+              Refresh
+            </Button>
           </Stack>
-
-          {!revenueDataAvailable ||
-          chartData.length ===
-            0 ? (
-            <Box
-              sx={{
-                minHeight: 230,
-                display: 'flex',
-                alignItems:
-                  'center',
-                justifyContent:
-                  'center',
-              }}
-            >
-              <Stack
-                alignItems="center"
-                spacing={1}
-              >
-                <Typography
-                  sx={{
-                    fontSize: 28,
-                    fontWeight: 900,
-                    color:
-                      '#AAB8B2',
-                  }}
-                >
-                  —
-                </Typography>
-
-                <Typography
-                  sx={{
-                    fontSize: 12,
-                    fontWeight: 800,
-                    color:
-                      BRAND.text,
-                  }}
-                >
-                  Revenue analytics
-                  awaiting backend data
-                </Typography>
-
-                <Typography
-                  sx={{
-                    maxWidth: 390,
-                    textAlign:
-                      'center',
-                    fontSize: 10.5,
-                    lineHeight: 1.6,
-                    color:
-                      BRAND.muted,
-                  }}
-                >
-                  No revenue, provider-cost
-                  or profit figures are
-                  fabricated. The chart will
-                  use the ZENIMONIES revenue
-                  ledger once its dedicated
-                  backend analytics endpoint
-                  is connected.
-                </Typography>
-              </Stack>
-            </Box>
-          ) : (
-            <Box
-              sx={{
-                mt: 3,
-                height: 220,
-                display: 'flex',
-                alignItems:
-                  'flex-end',
-                gap: 1,
-                overflowX:
-                  'auto',
-                px: 1,
-              }}
-            >
-              {chartData.map(
-                (item) => (
-                  <Box
-                    key={
-                      item.index
-                    }
-                    sx={{
-                      minWidth: 34,
-                      height: '100%',
-                      display: 'flex',
-                      alignItems:
-                        'flex-end',
-                      gap: 0.5,
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        width: 13,
-                        height: `${
-                          (item.revenue /
-                            maximum) *
-                          100
-                        }%`,
-                        minHeight: 3,
-                        borderRadius:
-                          '4px 4px 0 0',
-                        backgroundColor:
-                          BRAND.green,
-                      }}
-                    />
-
-                    <Box
-                      sx={{
-                        width: 13,
-                        height: `${
-                          (item.provider /
-                            maximum) *
-                          100
-                        }%`,
-                        minHeight: 3,
-                        borderRadius:
-                          '4px 4px 0 0',
-                        backgroundColor:
-                          '#B9C8C2',
-                      }}
-                    />
-                  </Box>
-                )
-              )}
-            </Box>
+          {revenueApprovalError && (
+            <Alert severity="error">
+              {revenueApprovalError}
+            </Alert>
           )}
-
-          <Stack
-            direction="row"
-            spacing={2}
-            sx={{
-              mt: 1.5,
-            }}
-          >
-            <Stack
-              direction="row"
-              spacing={0.6}
-              alignItems="center"
-            >
+          {revenueApprovalsLoading ? (
+            <Typography sx={{ fontSize: 11, color: BRAND.muted }}>
+              Loading approval requests…
+            </Typography>
+          ) : revenueApprovals.length === 0 ? (
+            <Typography sx={{ fontSize: 11, color: BRAND.muted }}>
+              No pending approval requests returned by the backend.
+            </Typography>
+          ) : (
+            revenueApprovals.map((approval) => (
               <Box
+                key={approval.approval_id || approval.id}
                 sx={{
-                  width: 9,
-                  height: 9,
-                  borderRadius:
-                    '50%',
-                  backgroundColor:
-                    BRAND.green,
-                }}
-              />
-
-              <Typography
-                sx={{
-                  fontSize: 9.5,
-                  color:
-                    BRAND.muted,
+                  p: 1.25,
+                  border: `1px solid ${BRAND.border}`,
+                  borderRadius: 2,
                 }}
               >
-                ZENIMONIES revenue
-              </Typography>
-            </Stack>
-
-            <Stack
-              direction="row"
-              spacing={0.6}
-              alignItems="center"
-            >
-              <Box
-                sx={{
-                  width: 9,
-                  height: 9,
-                  borderRadius:
-                    '50%',
-                  backgroundColor:
-                    '#B9C8C2',
-                }}
-              />
-
-              <Typography
-                sx={{
-                  fontSize: 9.5,
-                  color:
-                    BRAND.muted,
-                }}
-              >
-                Provider cost
-              </Typography>
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
-    );
-  };
-
-/* ============================================================
-   REVENUE & PROFIT
-   ============================================================ */
-
-const renderRevenueProfit =
-  () => (
-    <Stack spacing={2.25}>
-      <SectionHeader
-        eyebrow="Revenue"
-        title="Revenue & Profit"
-        description="Separate customer charges, provider costs and ZENIMONIES revenue so operational revenue is not confused with customer funds."
-      />
-
-      <Grid
-        container
-        spacing={1.25}
-      >
-        <Grid
-          item
-          xs={6}
-          md={3}
-        >
-          <RevenueKpi
-            title="Customer Charges"
-            value={formatMoney(
-              revenueSummary.customerCharges,
-              'NGN'
-            )}
-            subtitle="Charges collected from customers"
-          />
-        </Grid>
-
-        <Grid
-          item
-          xs={6}
-          md={3}
-        >
-          <RevenueKpi
-            title="Provider Costs"
-            value={formatMoney(
-              revenueSummary.providerCosts,
-              'NGN'
-            )}
-            subtitle="Costs payable to service providers"
-          />
-        </Grid>
-
-        <Grid
-          item
-          xs={6}
-          md={3}
-        >
-          <RevenueKpi
-            title="ZENIMONIES Revenue"
-            value={formatMoney(
-              revenueSummary.zenimoniesRevenue,
-              'NGN'
-            )}
-            subtitle="Recognised operational revenue"
-          />
-        </Grid>
-
-        <Grid
-          item
-          xs={6}
-          md={3}
-        >
-          <RevenueKpi
-            title="Net Profit"
-            value={formatMoney(
-              revenueSummary.netProfit,
-              'NGN'
-            )}
-            subtitle={`Net margin ${revenueSummary.netMargin.toFixed(
-              2
-            )}%`}
-            positive={
-              revenueSummary.netProfit >=
-              0
-            }
-          />
-        </Grid>
-      </Grid>
-
-      <Grid
-        container
-        spacing={1.5}
-      >
-        <Grid
-          item
-          xs={12}
-          lg={8}
-        >
-          <RevenuePerformanceChart />
-        </Grid>
-
-        <Grid
-          item
-          xs={12}
-          lg={4}
-        >
-          <Card
-            sx={{
-              ...pageCardSx,
-              height: '100%',
-            }}
-          >
-            <CardContent
-              sx={{
-                p: 2,
-              }}
-            >
-              <Typography
-                sx={{
-                  fontSize: 13,
-                  fontWeight: 850,
-                  color:
-                    BRAND.text,
-                }}
-              >
-                Monthly Target
-              </Typography>
-
-              <Typography
-                sx={{
-                  mt: 0.4,
-                  fontSize: 10.5,
-                  color:
-                    BRAND.muted,
-                }}
-              >
-                Revenue performance against
-                the approved monthly target.
-              </Typography>
-
-              <Divider
-                sx={{
-                  my: 2,
-                }}
-              />
-
-              <Stack spacing={1.5}>
-                <Box>
-                  <Typography
-                    sx={{
-                      fontSize: 10,
-                      color:
-                        BRAND.muted,
-                    }}
-                  >
-                    Current revenue
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      fontSize: 19,
-                      fontWeight: 850,
-                    }}
-                  >
-                    {formatMoney(
-                      revenueSummary.zenimoniesRevenue,
-                      'NGN'
-                    )}
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Typography
-                    sx={{
-                      fontSize: 10,
-                      color:
-                        BRAND.muted,
-                    }}
-                  >
-                    Monthly target
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      fontSize: 19,
-                      fontWeight: 850,
-                    }}
-                  >
-                    {revenueTarget ===
-                    null
-                      ? 'Not configured'
-                      : formatMoney(
-                          revenueTarget,
-                          'NGN'
-                        )}
-                  </Typography>
-                </Box>
-
-                <Box
-                  sx={{
-                    p: 1.5,
-                    borderRadius: 2,
-                    backgroundColor:
-                      BRAND.greenLight,
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      fontSize: 10,
-                      color:
-                        BRAND.muted,
-                    }}
-                  >
-                    Performance
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      mt: 0.3,
-                      fontSize: 22,
-                      fontWeight: 900,
-                      color:
-                        revenueTargetPerformance ===
-                        null
-                          ? BRAND.muted
-                          : revenueTargetPerformance >=
-                            0
-                          ? BRAND.green
-                          : '#B42318',
-                    }}
-                  >
-                    {revenueTargetPerformance ===
-                    null
-                      ? '—'
-                      : `${
-                          revenueTargetPerformance >=
-                          0
-                            ? '+'
-                            : ''
-                        }${revenueTargetPerformance.toFixed(
-                          1
-                        )}%`}
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      mt: 0.3,
-                      fontSize: 10,
-                      color:
-                        BRAND.muted,
-                    }}
-                  >
-                    Compared with monthly
-                    target
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {!revenueDataAvailable && (
-        <Alert
-          severity="info"
-          sx={{
-            borderRadius: 2,
-            fontSize: 11,
-          }}
-        >
-          Revenue analytics is intentionally
-          showing zero/empty operational data
-          until the dedicated revenue ledger
-          backend is connected. This prevents
-          customer funds, gross charges or
-          provider costs from being incorrectly
-          labelled as ZENIMONIES profit.
-        </Alert>
-      )}
-    </Stack>
-  );
-
-/* ============================================================
-   REVENUE LEDGER
-   ============================================================ */
-
-const renderRevenueLedger =
-  () => (
-    <Stack spacing={2.25}>
-      
-      <Card sx={pageCardSx}>
-        <CardContent sx={{ p: 1.75 }}>
-          <Stack spacing={1.25}>
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-            >
-              <Box>
-                <Typography
-                  sx={{
-                    fontSize: 13,
-                    fontWeight: 850,
-                    color: BRAND.text,
-                  }}
-                >
-                  Pending Revenue Approvals
+                <Typography sx={{ fontSize: 11, fontWeight: 800 }}>
+                  {approval.revenue_reference ||
+                    approval.reference ||
+                    approval.revenue_ledger_id ||
+                    approval.revenue_entry_id ||
+                    approval.approval_id ||
+                    approval.id ||
+                    'Revenue approval'}
                 </Typography>
-
                 <Typography
                   sx={{
-                    mt: 0.35,
+                    mt: 0.4,
                     fontSize: 10.5,
                     color: BRAND.muted,
                   }}
                 >
-                  Review revenue entries awaiting an approval decision.
+                  Status: {approval.status || 'Pending'}
                 </Typography>
-              </Box>
-
-              <Button
-                size="small"
-                onClick={() => void loadRevenueApprovals()}
-                disabled={revenueApprovalsLoading}
-                sx={{ textTransform: 'none' }}
-              >
-                Refresh
-              </Button>
-            </Stack>
-
-            {revenueApprovalError && (
-              <Alert severity="error">
-                {revenueApprovalError}
-              </Alert>
-            )}
-
-            {revenueApprovalsLoading ? (
-              <Typography sx={{ fontSize: 11, color: BRAND.muted }}>
-                Loading approval requests…
-              </Typography>
-            ) : revenueApprovals.length === 0 ? (
-              <Typography sx={{ fontSize: 11, color: BRAND.muted }}>
-                No pending approval requests returned by the backend.
-              </Typography>
-            ) : (
-              revenueApprovals.map((approval) => (
-                <Box
-                  key={approval.id}
+                <Typography
                   sx={{
-                    p: 1.25,
-                    border: `1px solid ${BRAND.border}`,
-                    borderRadius: 2,
+                    mt: 0.25,
+                    fontSize: 10.5,
+                    color: BRAND.muted,
                   }}
                 >
-                  <Typography sx={{ fontSize: 11, fontWeight: 800 }}>
-                    {approval.revenue_reference ||
-                      approval.reference ||
-                      approval.revenue_entry_id ||
-                      approval.entry_id ||
-                      approval.id}
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      mt: 0.4,
-                      fontSize: 10.5,
-                      color: BRAND.muted,
-                    }}
-                  >
-                    Status: {approval.status || 'Pending'}
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      mt: 0.25,
-                      fontSize: 10.5,
-                      color: BRAND.muted,
-                    }}
-                  >
-                    Prepared by: {approval.prepared_by || 'Not supplied'}
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      mt: 0.25,
-                      fontSize: 10.5,
-                      color: BRAND.muted,
-                    }}
-                  >
-                    Amount: {formatMoney(
-                      approval.amount,
-                      approval.currency || 'NGN'
-                    )}
-                  </Typography>
-                </Box>
-              ))
-            )}
-          </Stack>
-        </CardContent>
-      </Card>
-
-      <SectionHeader
-        eyebrow="Revenue"
-        title="Revenue Ledger"
-        description="Track customer charges, provider costs and the resulting ZENIMONIES revenue for each service transaction."
-      />
-
-      <Card sx={pageCardSx}>
-        <CardContent
+                  Prepared by: {approval.prepared_by || 'Not supplied'}
+                </Typography>
+                <Typography
+                  sx={{
+                    mt: 0.25,
+                    fontSize: 10.5,
+                    color: BRAND.muted,
+                  }}
+                >
+                  Gross fee: {formatMoney(
+                    approval.gross_fee,
+                    approval.currency || 'NGN'
+                  )}
+                </Typography>
+              </Box>
+            ))
+          )}
+        </Stack>
+      </CardContent>
+    </Card>
+    {/* REVENUE LEDGER HEADER */}
+    <SectionHeader
+      eyebrow="Revenue"
+      title="Revenue Ledger"
+      description="Track customer charges, provider costs and the resulting ZENIMONIES revenue for each service transaction."
+    />
+    {/* SEARCH */}
+    <Card sx={pageCardSx}>
+      <CardContent sx={{ p: 1.75 }}>
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Search revenue reference or source..."
+          value={revenueSearch}
+          onChange={(event) => setRevenueSearch(event.target.value)}
+        />
+      </CardContent>
+    </Card>
+    {/* REVENUE RECORDS */}
+    <Card sx={pageCardSx}>
+      <TableContainer>
+        <Table
+          size="small"
           sx={{
-            p: 1.75,
+            minWidth: 1000,
           }}
         >
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Search revenue reference or source..."
-            value={
-              revenueSearch
-            }
-            onChange={(
-              event
-            ) =>
-              setRevenueSearch(
-                event.target
-                  .value
-              )
-            }
-          />
-        </CardContent>
-      </Card>
-
-      <Card sx={pageCardSx}>
-        <TableContainer>
-          <Table
-            size="small"
-            sx={{
-              minWidth: 1000,
-            }}
-          >
-            <TableHead>
-              <TableRow>
-                {[
-                  'Reference',
-                  'Source',
-                  'Customer Charge',
-                  'Provider Cost',
-                  'ZENIMONIES Revenue',
-                  'Date',
-                  'Status',
-                ].map(
-                  (heading) => (
-                    <TableCell
-                      key={
-                        heading
-                      }
-                      sx={{
-                        fontSize: 10,
-                        fontWeight: 800,
-                        color:
-                          BRAND.muted,
-                        textTransform:
-                          'uppercase',
-                        whiteSpace:
-                          'nowrap',
-                      }}
-                    >
-                      {heading}
-                    </TableCell>
-                  )
-                )}
-              </TableRow>
-            </TableHead>
-
-            <TableBody>
-              {filteredRevenueRecords.map(
-                (
-                  record
-                ) => (
-                  <TableRow
-                    hover
-                    key={
-                      record.id
-                    }
-                  >
-                    <TableCell>
-                      <Typography
-                        sx={{
-                          fontSize: 11,
-                          fontWeight: 800,
-                        }}
-                      >
-                        {record.reference ||
-                          record.id}
-                      </Typography>
-                    </TableCell>
-
-                    <TableCell>
-                      <Typography
-                        sx={{
-                          fontSize: 11,
-                        }}
-                      >
-                       
-{record.source_type ||
-  record.service_type ||
-  record.source_reference ||
-  '—'}
-
-                      </Typography>
-                    </TableCell>
-
-                  
-<TableCell>
-  {formatMoney(
-    record.gross_fee,
-    record.currency || 'NGN'
-  )}
-</TableCell>
-
-
-                    <TableCell>
-                      {formatMoney(
-                        record.provider_cost,
-                        'NGN'
-                      )}
-                    </TableCell>
-
-                    <TableCell>
-                      <Typography
-                        sx={{
-                          fontSize: 12,
-                          fontWeight: 850,
-                          color:
-                            BRAND.green,
-                        }}
-                      >
-                      
-{formatMoney(
-  record.provider_cost,
-  record.currency || 'NGN'
-)}
-
-                      </Typography>
-                    </TableCell>
-
-                    <TableCell>
-                     
-{formatDate(
-  record.transaction_date ||
-  record.posted_at ||
-  record.created_at
-)}
-
-                    </TableCell>
-
-                    <TableCell>
-                    
-<Chip
-  size="small"
-  label={
-    record.accounting_status ||
-    record.status ||
-    'Recorded'
-  }
-  sx={{
-    fontSize: 9.5,
-    fontWeight: 800,
-  }}
-/>
-
-                    </TableCell>
-                  </TableRow>
-                )
-              )}
-
-              {filteredRevenueRecords.length ===
-                0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    align="center"
+          <TableHead>
+            <TableRow>
+              {[
+                'Reference',
+                'Source',
+                'Customer Charge',
+                'Provider Cost',
+                'ZENIMONIES Revenue',
+                'Date',
+                'Status',
+              ].map((heading) => (
+                <TableCell
+                  key={heading}
+                  sx={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    color: BRAND.muted,
+                    textTransform: 'uppercase',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {heading}
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredRevenueRecords.map((record) => (
+              <TableRow hover key={record.id}>
+                <TableCell>
+                  <Typography
                     sx={{
-                      py: 7,
+                      fontSize: 11,
+                      fontWeight: 800,
                     }}
                   >
-                    <Typography
-                      sx={{
-                        fontSize: 13,
-                        fontWeight: 800,
-                        color:
-                          BRAND.text,
-                      }}
-                    >
-                      Revenue ledger awaiting
-                      backend data
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        mt: 0.5,
-                        fontSize: 10.5,
-                        color:
-                          BRAND.muted,
-                      }}
-                    >
-                      No revenue records have
-                      been supplied to this
-                      dashboard yet.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Card>
-    </Stack>
-  );
+                    {record.revenue_reference ||
+                      record.reference ||
+                      record.id}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Typography sx={{ fontSize: 11 }}>
+                    {record.source_type ||
+                      record.service_type ||
+                      record.source_reference ||
+                      '—'}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  {formatMoney(
+                    record.gross_fee,
+                    record.currency || 'NGN'
+                  )}
+                </TableCell>
+                <TableCell>
+                  {formatMoney(
+                    record.provider_cost,
+                    record.currency || 'NGN'
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Typography
+                    sx={{
+                      fontSize: 12,
+                      fontWeight: 850,
+                      color: BRAND.green,
+                    }}
+                  >
+                    {formatMoney(
+                      record.zenimonies_revenue,
+                      record.currency || 'NGN'
+                    )}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  {formatDate(
+                    record.transaction_date ||
+                      record.posted_at ||
+                      record.created_at
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    size="small"
+                    label={
+                      record.accounting_status ||
+                      record.status ||
+                      'Recorded'
+                    }
+                    sx={{
+                      fontSize: 9.5,
+                      fontWeight: 800,
+                    }}
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
+            {filteredRevenueRecords.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={7}
+                  align="center"
+                  sx={{ py: 7 }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 800,
+                      color: BRAND.text,
+                    }}
+                  >
+                    {revenueSearch.trim()
+                      ? 'No matching revenue records'
+                      : 'No revenue records available'}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      mt: 0.5,
+                      fontSize: 10.5,
+                      color: BRAND.muted,
+                    }}
+                  >
+                    {revenueSearch.trim()
+                      ? 'Try a different reference or source search.'
+                      : 'Revenue records will appear here when supplied by the backend.'}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Card>
+  </Stack>
+);
 
 /* ============================================================
    SETTLEMENTS
