@@ -515,6 +515,7 @@ EXECUTE FUNCTION validate_revenue_partner_term();
 -- ============================================================
 -- 8. LEDGER IMMUTABILITY, REVERSALS AND REPLACEMENTS
 -- ============================================================
+
 CREATE OR REPLACE FUNCTION protect_revenue_ledger()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -523,8 +524,9 @@ DECLARE
     original_row revenue_ledger%ROWTYPE;
     replacement_row revenue_ledger%ROWTYPE;
     reversal_row revenue_ledger%ROWTYPE;
+    approval_exists BOOLEAN;
 BEGIN
-    -- Prevent deletion of posted or referenced entries.
+    -- Never delete posted or referenced entries.
     IF TG_OP = 'DELETE' THEN
         IF OLD.accounting_status = 'posted'
            OR OLD.entry_kind = 'reversal'
@@ -541,150 +543,97 @@ BEGIN
         RETURN OLD;
     END IF;
 
-       -- Protect posted entries and reversal details.
+    -- Posted entries cannot be edited.
+    IF TG_OP = 'UPDATE' AND OLD.accounting_status = 'posted' THEN
+        RAISE EXCEPTION 'Posted revenue entries are immutable.';
+    END IF;
+
+    -- Freeze entry identity and links after creation.
     IF TG_OP = 'UPDATE' THEN
-
-        IF OLD.accounting_status = 'posted' THEN
-            RAISE EXCEPTION
-                'Posted revenue entries are immutable.';
+        IF NEW.id IS DISTINCT FROM OLD.id
+           OR NEW.entry_kind IS DISTINCT FROM OLD.entry_kind
+           OR NEW.reversal_of_id IS DISTINCT FROM OLD.reversal_of_id
+           OR NEW.replaces_id IS DISTINCT FROM OLD.replaces_id
+           OR NEW.revenue_reference IS DISTINCT FROM OLD.revenue_reference THEN
+            RAISE EXCEPTION 'Revenue entry identity and links cannot be changed.';
         END IF;
-
-        IF OLD.entry_kind = 'reversal' THEN
-
-            -- A reversal may only transition from ready to posted.
-            IF OLD.accounting_status <> 'ready'
-               OR NEW.accounting_status <> 'posted' THEN
-                RAISE EXCEPTION
-                    'A reversal may only transition from ready to posted.';
-            END IF;
-
-            -- Freeze all reversal details and amounts.
-            IF NEW.id IS DISTINCT FROM OLD.id
-               OR NEW.revenue_reference IS DISTINCT FROM OLD.revenue_reference
-               OR NEW.entry_kind IS DISTINCT FROM OLD.entry_kind
-               OR NEW.reversal_of_id IS DISTINCT FROM OLD.reversal_of_id
-               OR NEW.replaces_id IS DISTINCT FROM OLD.replaces_id
-               OR NEW.service_type IS DISTINCT FROM OLD.service_type
-               OR NEW.source_type IS DISTINCT FROM OLD.source_type
-               OR NEW.source_id IS DISTINCT FROM OLD.source_id
-               OR NEW.source_reference IS DISTINCT FROM OLD.source_reference
-               OR NEW.customer_user_id IS DISTINCT FROM OLD.customer_user_id
-               OR NEW.partner_id IS DISTINCT FROM OLD.partner_id
-               OR NEW.partner_terms_id IS DISTINCT FROM OLD.partner_terms_id
-               OR NEW.currency IS DISTINCT FROM OLD.currency
-               OR NEW.gross_fee IS DISTINCT FROM OLD.gross_fee
-               OR NEW.provider_cost IS DISTINCT FROM OLD.provider_cost
-               OR NEW.partner_share IS DISTINCT FROM OLD.partner_share
-               OR NEW.other_direct_cost IS DISTINCT FROM OLD.other_direct_cost
-               OR NEW.zenimonies_revenue IS DISTINCT FROM OLD.zenimonies_revenue
-               OR NEW.transaction_status IS DISTINCT FROM OLD.transaction_status
-               OR NEW.description IS DISTINCT FROM OLD.description
-               OR NEW.reversal_reason IS DISTINCT FROM OLD.reversal_reason
-               OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
-                RAISE EXCEPTION
-                    'Reversal financial details cannot be changed.';
-            END IF;
-
-            IF NEW.recorded_by IS NULL THEN
-                RAISE EXCEPTION
-                    'A posting administrator is required.';
-            END IF;
-
-            IF NEW.posted_at IS NULL THEN
-                RAISE EXCEPTION
-                    'A posting timestamp is required.';
-            END IF;
-
-            -- Require approval matching the exact reversal amounts.
-            IF NOT EXISTS (
-                SELECT 1
-                FROM revenue_ledger_approvals a
-                WHERE a.revenue_ledger_id = NEW.id
-                  AND a.status = 'approved'
-                  AND a.approved_by IS NOT NULL
-                  AND a.approved_by <> a.prepared_by
-                  AND a.approved_by <> NEW.recorded_by
-                  AND a.gross_fee = NEW.gross_fee
-                  AND a.provider_cost = NEW.provider_cost
-                  AND a.partner_share = NEW.partner_share
-                  AND a.other_direct_cost = NEW.other_direct_cost
-                  AND a.zenimonies_revenue = NEW.zenimonies_revenue
-            ) THEN
-                RAISE EXCEPTION
-                    'Posting a reversal requires matching independent approval.';
-            END IF;
-
-        END IF;
-
-        IF OLD.replaces_id IS NOT NULL
-           AND NEW.replaces_id IS DISTINCT FROM OLD.replaces_id THEN
-            RAISE EXCEPTION
-                'A replacement link cannot be changed.';
-        END IF;
-
-        IF OLD.reversal_of_id IS NOT NULL
-           AND NEW.reversal_of_id IS DISTINCT FROM OLD.reversal_of_id THEN
-            RAISE EXCEPTION
-                'A reversal link cannot be changed.';
-        END IF;
-
-        IF OLD.entry_kind IS DISTINCT FROM NEW.entry_kind THEN
-            RAISE EXCEPTION
-                'An entry kind cannot be changed after creation.';
-        END IF;
-
     END IF;
 
-    -- Require independent approval before posting an original entry.
-IF NEW.accounting_status = 'posted'
-   AND NEW.entry_kind = 'original' THEN
-    IF TG_OP <> 'UPDATE'
-       OR OLD.accounting_status = 'posted' THEN
-        RAISE EXCEPTION
-            'Original revenue must be posted through an approved update.';
+    -- Validate a new reversal against its posted original.
+    IF NEW.entry_kind = 'reversal' AND TG_OP = 'INSERT' THEN
+        SELECT *
+        INTO original_row
+        FROM revenue_ledger
+        WHERE id = NEW.reversal_of_id
+        FOR SHARE;
+
+        IF NOT FOUND
+           OR original_row.entry_kind <> 'original'
+           OR original_row.accounting_status <> 'posted' THEN
+            RAISE EXCEPTION 'Only a posted original entry can be reversed.';
+        END IF;
+
+        IF NEW.currency <> original_row.currency
+           OR NEW.service_type <> original_row.service_type
+           OR NEW.source_type <> original_row.source_type
+           OR NEW.source_id IS DISTINCT FROM original_row.source_id THEN
+            RAISE EXCEPTION 'Reversal source details must match the original.';
+        END IF;
+
+        IF NEW.gross_fee <> -original_row.gross_fee
+           OR NEW.provider_cost IS DISTINCT FROM -original_row.provider_cost
+           OR NEW.partner_share IS DISTINCT FROM -original_row.partner_share
+           OR NEW.other_direct_cost IS DISTINCT FROM -original_row.other_direct_cost
+           OR NEW.zenimonies_revenue IS DISTINCT FROM -original_row.zenimonies_revenue THEN
+            RAISE EXCEPTION 'Reversal amounts must negate the original amounts.';
+        END IF;
+
+        IF NEW.transaction_status NOT IN ('reversed', 'refunded')
+           OR NULLIF(BTRIM(NEW.reversal_reason), '') IS NULL THEN
+            RAISE EXCEPTION 'A reversal requires a valid status and reason.';
+        END IF;
     END IF;
-    IF NEW.recorded_by IS NULL THEN
-        RAISE EXCEPTION
-            'A recording administrator is required.';
+
+    -- Reversal updates may only post a ready reversal.
+    IF TG_OP = 'UPDATE' AND OLD.entry_kind = 'reversal' THEN
+        IF OLD.accounting_status <> 'ready'
+           OR NEW.accounting_status <> 'posted' THEN
+            RAISE EXCEPTION 'A reversal may only transition from ready to posted.';
+        END IF;
+
+        IF NEW.service_type IS DISTINCT FROM OLD.service_type
+           OR NEW.source_type IS DISTINCT FROM OLD.source_type
+           OR NEW.source_id IS DISTINCT FROM OLD.source_id
+           OR NEW.source_reference IS DISTINCT FROM OLD.source_reference
+           OR NEW.customer_user_id IS DISTINCT FROM OLD.customer_user_id
+           OR NEW.partner_id IS DISTINCT FROM OLD.partner_id
+           OR NEW.partner_terms_id IS DISTINCT FROM OLD.partner_terms_id
+           OR NEW.currency IS DISTINCT FROM OLD.currency
+           OR NEW.gross_fee IS DISTINCT FROM OLD.gross_fee
+           OR NEW.provider_cost IS DISTINCT FROM OLD.provider_cost
+           OR NEW.partner_share IS DISTINCT FROM OLD.partner_share
+           OR NEW.other_direct_cost IS DISTINCT FROM OLD.other_direct_cost
+           OR NEW.zenimonies_revenue IS DISTINCT FROM OLD.zenimonies_revenue
+           OR NEW.transaction_status IS DISTINCT FROM OLD.transaction_status
+           OR NEW.description IS DISTINCT FROM OLD.description
+           OR NEW.reversal_reason IS DISTINCT FROM OLD.reversal_reason
+           OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+            RAISE EXCEPTION 'Reversal financial details cannot be changed.';
+        END IF;
     END IF;
-    IF NOT EXISTS (
-        SELECT 1
-        FROM revenue_ledger_approvals a
-        WHERE a.revenue_ledger_id = NEW.id
-          AND a.status = 'approved'
-          AND a.approved_by IS NOT NULL
-          AND a.approved_by <> a.prepared_by
-          AND a.approved_by <> NEW.recorded_by
-          AND a.gross_fee = NEW.gross_fee
-          AND a.provider_cost = NEW.provider_cost
-          AND a.partner_share = NEW.partner_share
-          AND a.other_direct_cost = NEW.other_direct_cost
-          AND a.zenimonies_revenue = NEW.zenimonies_revenue
-    ) THEN
-        RAISE EXCEPTION
-            'Posting requires a matching independent approval.';
-    END IF;
-END IF;
 
     -- Validate replacement entries.
-    IF NEW.entry_kind = 'original'
-       AND NEW.replaces_id IS NOT NULL THEN
-
+    IF NEW.entry_kind = 'original' AND NEW.replaces_id IS NOT NULL THEN
         SELECT *
         INTO replacement_row
         FROM revenue_ledger
         WHERE id = NEW.replaces_id
         FOR SHARE;
 
-        IF NOT FOUND THEN
-            RAISE EXCEPTION
-                'The entry being replaced does not exist.';
-        END IF;
-
-        IF replacement_row.entry_kind <> 'original'
+        IF NOT FOUND
+           OR replacement_row.entry_kind <> 'original'
            OR replacement_row.accounting_status <> 'posted' THEN
-            RAISE EXCEPTION
-                'Only a posted original entry can be replaced.';
+            RAISE EXCEPTION 'Only a posted original entry can be replaced.';
         END IF;
 
         SELECT *
@@ -695,159 +644,73 @@ END IF;
         FOR SHARE;
 
         IF NOT FOUND THEN
-            RAISE EXCEPTION
-                'The original entry must have a posted reversal before replacement.';
+            RAISE EXCEPTION 'A posted reversal is required before replacement.';
         END IF;
 
-        IF reversal_row.entry_kind <> 'reversal'
-           OR reversal_row.currency <> replacement_row.currency
-           OR reversal_row.service_type <> replacement_row.service_type
-           OR reversal_row.source_type <> replacement_row.source_type
-           OR reversal_row.source_id IS DISTINCT FROM replacement_row.source_id THEN
-            RAISE EXCEPTION
-                'The posted reversal does not match the original entry.';
-        END IF;
-
-          
         IF reversal_row.gross_fee <> -replacement_row.gross_fee
            OR reversal_row.provider_cost IS DISTINCT FROM -replacement_row.provider_cost
            OR reversal_row.partner_share IS DISTINCT FROM -replacement_row.partner_share
            OR reversal_row.other_direct_cost IS DISTINCT FROM -replacement_row.other_direct_cost
            OR reversal_row.zenimonies_revenue IS DISTINCT FROM -replacement_row.zenimonies_revenue THEN
-            RAISE EXCEPTION
-                'The posted reversal amounts must exactly negate the original entry.';
+            RAISE EXCEPTION 'The reversal must negate the original amounts exactly.';
         END IF;
-
 
         IF NEW.currency <> replacement_row.currency
            OR NEW.service_type <> replacement_row.service_type
            OR NEW.source_type <> replacement_row.source_type
            OR NEW.source_id IS DISTINCT FROM replacement_row.source_id THEN
-            RAISE EXCEPTION
-                'A replacement must match the original currency, service and source.';
+            RAISE EXCEPTION 'Replacement source details must match the original.';
         END IF;
     END IF;
 
-    -- Validate reversal entries.
-    IF NEW.entry_kind = 'reversal' THEN
-
-        IF TG_OP = 'INSERT' THEN
-
-            SELECT *
-            INTO original_row
-            FROM revenue_ledger
-            WHERE id = NEW.reversal_of_id
-            FOR SHARE;
-
-            IF NOT FOUND THEN
-                RAISE EXCEPTION
-                    'The original revenue entry was not found.';
-            END IF;
-
-            IF original_row.entry_kind <> 'original'
-               OR original_row.accounting_status <> 'posted' THEN
-                RAISE EXCEPTION
-                    'Only a posted original entry can be reversed.';
-            END IF;
-
-            IF original_row.currency <> NEW.currency
-               OR original_row.service_type <> NEW.service_type
-               OR original_row.source_type <> NEW.source_type
-               OR original_row.source_id IS DISTINCT FROM NEW.source_id THEN
-                RAISE EXCEPTION
-                    'The reversal must match the original currency, service and source.';
-            END IF;
-
-            IF NEW.gross_fee <> -original_row.gross_fee
-               OR NEW.provider_cost IS DISTINCT FROM -original_row.provider_cost
-               OR NEW.partner_share IS DISTINCT FROM -original_row.partner_share
-               OR NEW.other_direct_cost IS DISTINCT FROM -original_row.other_direct_cost
-               OR NEW.zenimonies_revenue IS DISTINCT FROM -original_row.zenimonies_revenue THEN
-                RAISE EXCEPTION
-                    'Reversal amounts must exactly negate the original amounts.';
-            END IF;
-
-            IF NEW.transaction_status NOT IN ('reversed', 'refunded') THEN
-                RAISE EXCEPTION
-                    'A reversal must be marked reversed or refunded.';
-            END IF;
-
-            IF NULLIF(BTRIM(NEW.reversal_reason), '') IS NULL THEN
-                RAISE EXCEPTION
-                    'A reversal reason is required.';
-            END IF;
-
-        ELSIF TG_OP = 'UPDATE' THEN
-
-            IF OLD.accounting_status <> 'ready'
-               OR NEW.accounting_status <> 'posted' THEN
-                RAISE EXCEPTION
-                    'A reversal may only transition from ready to posted.';
-            END IF;
-
+    -- All posted entries need complete, mathematically consistent accounting.
+    IF NEW.accounting_status = 'posted' THEN
+        IF NEW.provider_cost IS NULL
+           OR NEW.partner_share IS NULL
+           OR NEW.other_direct_cost IS NULL
+           OR NEW.zenimonies_revenue IS NULL
+           OR NEW.posted_at IS NULL
+           OR NEW.recorded_by IS NULL THEN
+            RAISE EXCEPTION 'Posting requires complete amounts, timestamp and administrator.';
         END IF;
 
-    END IF;
-    -- Validate reversal entries.
-    IF NEW.entry_kind = 'reversal' THEN
-
-        IF TG_OP = 'INSERT' THEN
-
-            SELECT *
-            INTO original_row
-            FROM revenue_ledger
-            WHERE id = NEW.reversal_of_id
-            FOR SHARE;
-
-            IF NOT FOUND THEN
-                RAISE EXCEPTION
-                    'The original revenue entry was not found.';
-            END IF;
-
-            IF original_row.entry_kind <> 'original'
-               OR original_row.accounting_status <> 'posted' THEN
-                RAISE EXCEPTION
-                    'Only a posted original entry can be reversed.';
-            END IF;
-
-            IF original_row.currency <> NEW.currency
-               OR original_row.service_type <> NEW.service_type
-               OR original_row.source_type <> NEW.source_type
-               OR original_row.source_id IS DISTINCT FROM NEW.source_id THEN
-                RAISE EXCEPTION
-                    'The reversal must match the original currency, service and source.';
-            END IF;
-
-            IF NEW.gross_fee <> -original_row.gross_fee
-               OR NEW.provider_cost IS DISTINCT FROM -original_row.provider_cost
-               OR NEW.partner_share IS DISTINCT FROM -original_row.partner_share
-               OR NEW.other_direct_cost IS DISTINCT FROM -original_row.other_direct_cost
-               OR NEW.zenimonies_revenue IS DISTINCT FROM -original_row.zenimonies_revenue THEN
-                RAISE EXCEPTION
-                    'Reversal amounts must exactly negate the original amounts.';
-            END IF;
-
-            IF NEW.transaction_status NOT IN ('reversed', 'refunded') THEN
-                RAISE EXCEPTION
-                    'A reversal must be marked reversed or refunded.';
-            END IF;
-
-            IF NULLIF(BTRIM(NEW.reversal_reason), '') IS NULL THEN
-                RAISE EXCEPTION
-                    'A reversal reason is required.';
-            END IF;
-
-        ELSIF TG_OP = 'UPDATE' THEN
-
-            IF OLD.accounting_status <> 'ready'
-               OR NEW.accounting_status <> 'posted' THEN
-                RAISE EXCEPTION
-                    'A reversal may only transition from ready to posted.';
-            END IF;
-
+        IF NEW.zenimonies_revenue <>
+           NEW.gross_fee - NEW.provider_cost
+           - NEW.partner_share - NEW.other_direct_cost THEN
+            RAISE EXCEPTION 'Revenue does not match the accounting formula.';
         END IF;
 
+        IF NEW.entry_kind = 'original'
+           AND NEW.transaction_status <> 'completed' THEN
+            RAISE EXCEPTION 'Original revenue requires a completed transaction.';
+        END IF;
+
+        -- Require an exact approval by someone other than preparer and poster.
+        SELECT EXISTS (
+            SELECT 1
+            FROM revenue_ledger_approvals a
+            WHERE a.revenue_ledger_id = NEW.id
+              AND a.status = 'approved'
+              AND a.approved_by IS NOT NULL
+              AND a.approved_by <> a.prepared_by
+              AND a.approved_by <> NEW.recorded_by
+              AND a.gross_fee = NEW.gross_fee
+              AND a.provider_cost = NEW.provider_cost
+              AND a.partner_share = NEW.partner_share
+              AND a.other_direct_cost = NEW.other_direct_cost
+              AND a.zenimonies_revenue = NEW.zenimonies_revenue
+        )
+        INTO approval_exists;
+
+        IF NOT approval_exists THEN
+            RAISE EXCEPTION 'Posting requires matching independent approval.';
+        END IF;
     END IF;
+
+    NEW.updated_at := CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$;
 
 DROP TRIGGER IF EXISTS trg_protect_revenue_ledger
 ON revenue_ledger;
