@@ -1930,8 +1930,6 @@ const revenueChartData: Array<{
         </Grid>
       ))}
     </Grid>
-  );
-})()}
 
 
   {/* RIGHT SIDEBAR: PENDING TRANSACTIONS + KYC REVIEW */}
