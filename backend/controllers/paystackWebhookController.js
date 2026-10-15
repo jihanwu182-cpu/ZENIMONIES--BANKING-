@@ -59,7 +59,7 @@ const getAccountLimit = (kycStatus, kycTier) => {
   if (!verified) return 50000;
   if (tier >= 3) return null;
   if (tier === 2) return 500000;
-  if (tier === 1) return 200000;
+  if (tier === 1) return 300000;
   return 50000;
 };
 // ============================================================
