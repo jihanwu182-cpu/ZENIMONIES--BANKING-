@@ -1925,11 +1925,12 @@ const revenueChartData: Array<{
               }}
             >
               {item.value}
-            </Typography>
-          </Box>
+           </Typography>
+            </CardContent>
+              </Card>
+            </Grid>
+          ))}
         </Grid>
-      ))}
-    </Grid>
 
 
   {/* RIGHT SIDEBAR: PENDING TRANSACTIONS + KYC REVIEW */}
