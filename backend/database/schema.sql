@@ -1607,7 +1607,7 @@ SET
     kyc_status = 'not_verified',
     kyc_tier = 0,
     account_limit = 50000.00,
-    daily_transfer_limit = 25000.00
+    daily_transfer_limit = 20000.00
 WHERE COALESCE(bvn_verified, false) = false
   AND COALESCE(id_verified, false) = false
   AND COALESCE(tier_3_verified, false) = false
@@ -1628,7 +1628,7 @@ UPDATE users
 SET
     kyc_status = 'approved',
     kyc_tier = 1,
-    account_limit = 200000.00,
+    account_limit = 300000.00,
     daily_transfer_limit = 50000.00
 WHERE bvn_verified = true
   AND id_verified = false
