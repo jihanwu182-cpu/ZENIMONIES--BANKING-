@@ -2374,6 +2374,70 @@ ON revenue_audit_events(created_at DESC);
 -- ============================================================
 
 -- ============================================================
+-- REVENUE FUNCTION 1: PARTNER TERMS PROTECTION
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION validate_revenue_partner_term()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    partner_status VARCHAR(30);
+BEGIN
+    -- Prevent deletion of approved partner terms.
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.status = 'approved' THEN
+            RAISE EXCEPTION
+                'Approved partner terms cannot be deleted.';
+        END IF;
+
+        RETURN OLD;
+    END IF;
+
+    -- Approved terms cannot be edited.
+    IF TG_OP = 'UPDATE' AND OLD.status = 'approved' THEN
+        RAISE EXCEPTION
+            'Approved partner terms cannot be edited. Create a new terms record.';
+    END IF;
+
+    -- Validate terms when approved.
+    IF NEW.status = 'approved' THEN
+        SELECT status
+        INTO partner_status
+        FROM revenue_partners
+        WHERE id = NEW.partner_id
+        FOR SHARE;
+
+        IF partner_status IS DISTINCT FROM 'active' THEN
+            RAISE EXCEPTION
+                'Partner terms require an active partner.';
+        END IF;
+
+        IF NEW.approved_by IS NULL
+           OR NEW.approved_at IS NULL THEN
+            RAISE EXCEPTION
+                'Approved terms require an approver and timestamp.';
+        END IF;
+
+        IF NEW.created_by IS NOT NULL
+           AND NEW.created_by = NEW.approved_by THEN
+            RAISE EXCEPTION
+                'The term creator cannot approve their own terms.';
+        END IF;
+
+        IF NEW.effective_until IS NOT NULL
+           AND NEW.effective_until <= NEW.effective_from THEN
+            RAISE EXCEPTION
+                'Partner terms have an invalid effective period.';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+-- ============================================================
 -- RECREATE REVENUE TRIGGERS SAFELY
 -- Existing financial records are preserved.
 -- ============================================================
