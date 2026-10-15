@@ -8515,6 +8515,20 @@ type RevenueRecord = {
   status?: string;
 };
 
+type RevenueApproval = {
+  id: string;
+  revenue_entry_id?: string;
+  entry_id?: string;
+  status?: string;
+  prepared_by?: string;
+  approved_by?: string | null;
+  created_at?: string;
+  revenue_reference?: string;
+  reference?: string;
+  currency?: string;
+  amount?: string | number;
+};
+
 type SettlementRecord = {
   id: string;
   reference?: string;
@@ -8569,6 +8583,22 @@ const [
 ] =
   useState(false);
 
+const [
+  revenueApprovals,
+  setRevenueApprovals,
+] = useState<RevenueApproval[]>([]);
+
+const [
+  revenueApprovalsLoading,
+  setRevenueApprovalsLoading,
+] = useState(false);
+
+const [
+  revenueApprovalError,
+  setRevenueApprovalError,
+] = useState('');
+
+
   
 useEffect(() => {
   let cancelled = false;
@@ -8622,6 +8652,46 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
+}, []);
+  
+const loadRevenueApprovals = async () => {
+  try {
+    setRevenueApprovalsLoading(true);
+    setRevenueApprovalError('');
+
+    const response = await api.get(
+      '/admin/revenue/approvals/pending'
+    );
+
+    const data = response.data;
+
+    const approvals: RevenueApproval[] =
+      Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data?.approvals)
+          ? data.approvals
+          : Array.isArray(data?.records)
+            ? data.records
+            : [];
+
+    setRevenueApprovals(approvals);
+  } catch (error) {
+    console.error(
+      'Failed to load revenue approvals:',
+      error
+    );
+
+    setRevenueApprovalError(
+      'Unable to load pending revenue approvals. Please try again.'
+    );
+  } finally {
+    setRevenueApprovalsLoading(false);
+  }
+};
+
+
+useEffect(() => {
+  void loadRevenueApprovals();
 }, []);
 
 /* ============================================================
@@ -9631,31 +9701,40 @@ const renderRevenueLedger =
                             BRAND.green,
                         }}
                       >
-                        {formatMoney(
-                          record.zenimonies_revenue,
-                          'NGN'
-                        )}
+                      
+{formatMoney(
+  record.provider_cost,
+  record.currency || 'NGN'
+)}
+
                       </Typography>
                     </TableCell>
 
                     <TableCell>
-                      {formatDate(
-                        record.transaction_date
-                      )}
+                     
+{formatDate(
+  record.transaction_date ||
+  record.posted_at ||
+  record.created_at
+)}
+
                     </TableCell>
 
                     <TableCell>
-                      <Chip
-                        size="small"
-                        label={
-                          record.status ||
-                          'Recorded'
-                        }
-                        sx={{
-                          fontSize: 9.5,
-                          fontWeight: 800,
-                        }}
-                      />
+                    
+<Chip
+  size="small"
+  label={
+    record.accounting_status ||
+    record.status ||
+    'Recorded'
+  }
+  sx={{
+    fontSize: 9.5,
+    fontWeight: 800,
+  }}
+/>
+
                     </TableCell>
                   </TableRow>
                 )
