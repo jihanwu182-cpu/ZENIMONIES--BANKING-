@@ -248,16 +248,23 @@ const handleSuccessfulCharge = async (eventData) => {
 // ============================================================
 // TRANSFER SUCCESS
 // ============================================================
+
 const handleTransferSuccess = async (eventData) => {
   const reference = eventData?.reference;
+
   if (!reference) {
     return {
       message: 'Transfer webhook received without reference',
     };
   }
+
   const client = await pool.connect();
+
   try {
     await client.query('BEGIN');
+
+    // Lock the provider transfer first. Keep the existing
+    // protection against duplicate and late webhooks.
     const transferResult = await client.query(
       `
       SELECT
@@ -274,74 +281,264 @@ const handleTransferSuccess = async (eventData) => {
       `,
       [reference]
     );
+
     if (transferResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return { message: 'Transfer reference not found' };
     }
+
     const transfer = transferResult.rows[0];
-    if (transfer.status === 'completed') {
-      await client.query('ROLLBACK');
-      return { message: 'Transfer already processed' };
-    }
+
     if (
       ['failed', 'reversed', 'cancelled'].includes(transfer.status)
     ) {
       await client.query('ROLLBACK');
+
       console.error(
         `Paystack success received for terminal transfer ${reference}, status=${transfer.status}`
       );
+
       return {
         message:
           'Transfer is already in a terminal state; manual reconciliation required',
       };
     }
+
     if (
-      transfer.status !== 'processing' &&
-      transfer.status !== 'pending'
+      !['pending', 'processing', 'completed'].includes(
+        transfer.status
+      )
     ) {
       await client.query('ROLLBACK');
-      return { message: 'Transfer is not awaiting confirmation' };
+
+      return {
+        message: 'Transfer is not awaiting confirmation',
+      };
     }
-    await client.query(
+
+    // Lock the original financial transaction and retrieve
+    // its verified customer fee, currency and account owner.
+    const transactionResult = await client.query(
       `
-      UPDATE bank_transfers
-      SET
-        status = 'completed',
-        provider_reference = $1,
-        completed_at = CURRENT_TIMESTAMP,
-        failure_reason = NULL
-      WHERE id = $2
-      `,
-      [
-        eventData.transfer_code || eventData.reference || reference,
-        transfer.id,
-      ]
-    );
-    await client.query(
-      `
-      UPDATE transactions
-      SET status = 'completed'
-      WHERE reference = $1
-        AND type = 'transfer'
-        AND status IN ('pending', 'processing')
+      SELECT
+        t.id,
+        t.account_id,
+        t.amount,
+        t.transaction_fee,
+        t.currency,
+        t.reference,
+        t.status,
+        a.user_id,
+        a.currency AS account_currency
+      FROM transactions t
+      INNER JOIN accounts a
+        ON a.id = t.account_id
+      WHERE t.reference = $1
+        AND t.type = 'transfer'
+      FOR UPDATE OF t
       `,
       [reference]
     );
+
+    if (transactionResult.rows.length !== 1) {
+      throw new Error(
+        'Original transfer transaction not found or ambiguous'
+      );
+    }
+
+    const transaction = transactionResult.rows[0];
+
+    if (
+      String(transaction.account_id) !==
+      String(transfer.account_id)
+    ) {
+      throw new Error(
+        'Transfer account does not match original transaction'
+      );
+    }
+
+    if (
+      !['pending', 'processing', 'completed'].includes(
+        transaction.status
+      )
+    ) {
+      throw new Error(
+        `Original transaction has unexpected status: ${transaction.status}`
+      );
+    }
+
+    // Prefer the currency recorded on the original transaction.
+    // Never silently substitute a different currency.
+    const transactionCurrency = String(
+      transaction.currency || ''
+    ).trim().toUpperCase();
+
+    const transferCurrency = String(
+      transfer.currency || ''
+    ).trim().toUpperCase();
+
+    const accountCurrency = String(
+      transaction.account_currency || ''
+    ).trim().toUpperCase();
+
+    if (
+      transactionCurrency &&
+      transferCurrency &&
+      transactionCurrency !== transferCurrency
+    ) {
+      throw new Error(
+        'Transfer currency does not match original transaction currency'
+      );
+    }
+
+    if (
+      transactionCurrency &&
+      accountCurrency &&
+      transactionCurrency !== accountCurrency
+    ) {
+      throw new Error(
+        'Original transaction currency does not match account currency'
+      );
+    }
+
+    const verifiedCurrency =
+      transactionCurrency || transferCurrency || accountCurrency;
+
+    if (!/^[A-Z]{3,10}$/.test(verifiedCurrency)) {
+      throw new Error(
+        'Verified transfer currency is missing or invalid'
+      );
+    }
+
+    // The fee is the only candidate for gross revenue.
+    // The principal is deliberately never used as revenue.
+    const transactionFee = Number(transaction.transaction_fee);
+
+    if (
+      !Number.isFinite(transactionFee) ||
+      transactionFee < 0
+    ) {
+      throw new Error(
+        'Original transfer fee is missing or invalid'
+      );
+    }
+
+    // A previously completed transfer can be reconciled here
+    // if an older webhook completed it before revenue integration.
+    // Do not repeat the balance debit or refund.
+    if (transfer.status !== 'completed') {
+      await client.query(
+        `
+        UPDATE bank_transfers
+        SET
+          status = 'completed',
+          provider_reference = $1,
+          completed_at = CURRENT_TIMESTAMP,
+          failure_reason = NULL
+        WHERE id = $2
+          AND status IN ('pending', 'processing')
+        `,
+        [
+          eventData.transfer_code ||
+            eventData.reference ||
+            reference,
+          transfer.id,
+        ]
+      );
+
+      const updatedTransaction = await client.query(
+        `
+        UPDATE transactions
+        SET status = 'completed'
+        WHERE id = $1
+          AND type = 'transfer'
+          AND status IN ('pending', 'processing')
+        RETURNING id
+        `,
+        [transaction.id]
+      );
+
+      // If the transaction was not updated, it must already
+      // have been completed; otherwise stop and roll back.
+      if (
+        updatedTransaction.rowCount === 0 &&
+        transaction.status !== 'completed'
+      ) {
+        throw new Error(
+          'Original transaction could not be marked completed'
+        );
+      }
+    }
+
+    // A zero-fee transfer has no verified customer fee to record.
+    // Do not create a zero-value revenue record just to represent
+    // a completed transfer.
+    if (transactionFee > 0) {
+      await createRevenueEntry(
+        {
+          serviceType: 'transfer',
+          sourceType: 'transfer',
+          sourceId: transaction.id,
+          sourceReference: reference,
+          customerUserId: transaction.user_id,
+          currency: verifiedCurrency,
+          grossFee: transactionFee,
+
+          // These are intentionally unknown until accounting
+          // verifies provider costs and partner/direct costs.
+          providerCost: null,
+          partnerShare: null,
+          otherDirectCost: null,
+
+          transactionStatus: 'completed',
+          description:
+            `Verified customer transfer fee for ${reference}`,
+
+          // New entries must remain incomplete.
+          accountingStatus: 'incomplete',
+        },
+        { client }
+      );
+    }
+
+    // Transfer completion and revenue entry creation commit
+    // together. Any revenue error rolls the whole transaction back.
     await client.query('COMMIT');
-    console.log(`Paystack transfer ${reference} completed`);
-    return { message: 'Transfer success processed' };
+
+    console.log(
+      `Paystack transfer ${reference} completed. ` +
+      `Verified fee: ${transactionFee.toFixed(2)} ` +
+      `${verifiedCurrency}. ` +
+      `Revenue entry: ${
+        transactionFee > 0 ? 'recorded or already exists' : 'not applicable (zero fee)'
+      }.`
+    );
+
+    return {
+      message:
+        'Transfer success processed and revenue ledger reconciled',
+    };
   } catch (error) {
     try {
       await client.query('ROLLBACK');
     } catch (rollbackError) {
-      console.error('Transfer success rollback error:', rollbackError);
+      console.error(
+        'Transfer success rollback error:',
+        rollbackError
+      );
     }
-    console.error('Transfer success processing error:', error);
+
+    console.error(
+      'Transfer success processing error:',
+      error
+    );
+
     throw error;
   } finally {
     client.release();
   }
 };
+
 // ============================================================
 // TRANSFER FAILED — REFUND PRINCIPAL AND FEE
 // ============================================================
