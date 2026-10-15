@@ -1931,8 +1931,13 @@ const revenueChartData: Array<{
         </Grid>
       ))}
     </Grid>
-  );
-})()}
+    );
+  })()}
+   
+      </CardContent>
+   </Card>
+  </Grid>
+
 
 
   {/* RIGHT SIDEBAR: PENDING TRANSACTIONS + KYC REVIEW */}
