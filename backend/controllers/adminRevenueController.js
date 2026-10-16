@@ -57,6 +57,47 @@ function sendError(res, error, action) {
   });
 }
 
+
+const checkRevenueLedgerSchema = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        to_regclass('public.revenue_ledger') AS revenue_ledger,
+        to_regclass('public.revenue_ledger_approvals')
+          AS revenue_ledger_approvals,
+        to_regclass('public.revenue_partners')
+          AS revenue_partners,
+        to_regclass('public.revenue_partner_terms')
+          AS revenue_partner_terms
+    `);
+
+    const tables = result.rows[0];
+
+    return res.status(200).json({
+      success: true,
+      message: 'Read-only revenue schema check completed.',
+      data: {
+        revenueLedgerExists: Boolean(tables.revenue_ledger),
+        revenueApprovalsExist: Boolean(
+          tables.revenue_ledger_approvals
+        ),
+        revenuePartnersExist: Boolean(tables.revenue_partners),
+        revenuePartnerTermsExist: Boolean(
+          tables.revenue_partner_terms
+        ),
+      },
+      readOnly: true,
+    });
+  } catch (error) {
+    console.error('Revenue schema check failed:', error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to check the revenue database schema.',
+    });
+  }
+};
+
 // ============================================================
 // GET /api/admin/revenue/summary
 // ============================================================
