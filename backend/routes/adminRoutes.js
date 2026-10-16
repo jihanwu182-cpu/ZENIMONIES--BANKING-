@@ -67,6 +67,7 @@ const {
   decideRevenueApproval,
   postRevenueEntry,
   reverseRevenueEntry,
+  reconcileHistoricalTransferRevenue,
 } = require('../controllers/adminRevenueController');
 
 // ============================================================
@@ -119,7 +120,10 @@ router.post(
   '/transactions/:id/report-fraud',
   reportTransactionFraud
 );
-
+router.post(
+  '/revenue/reconcile-transfers',
+  reconcileHistoricalTransferRevenue
+);
 // ============================================================
 // CUSTOMER CARE AGENTS
 // ============================================================
