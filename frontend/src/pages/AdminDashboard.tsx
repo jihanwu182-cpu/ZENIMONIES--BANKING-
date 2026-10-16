@@ -402,6 +402,33 @@ const formatMoney = (
   }
 };
 
+// Accounting values that are not supplied must remain visibly unverified.
+// Do not display missing provider/partner costs as ₦0.00.
+const formatMoneyOrPending = (
+  value: unknown,
+  currency = 'NGN'
+): string => {
+  if (value === null || value === undefined || value === '') {
+    return 'Pending verification';
+  }
+  return formatMoney(value, currency);
+};
+
+const getRevenueStatusLabel = (record: RevenueRecord): string => {
+  const accountingStatus = String(
+    record.accounting_status || record.status || ''
+  ).toLowerCase();
+
+  if (accountingStatus === 'posted') return 'Posted';
+  if (accountingStatus === 'ready') return 'Ready for approval';
+  if (accountingStatus === 'incomplete') return 'Pending verification';
+  if (accountingStatus === 'reversed') return 'Reversed';
+  if (accountingStatus === 'refunded') return 'Refunded';
+  return accountingStatus
+    ? accountingStatus.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : 'Not posted';
+};
+
 const formatDate = (value?: string): string => {
   if (!value) {
     return '—';
@@ -8603,6 +8630,7 @@ type RevenueRecord = {
   created_at?: string;
   posted_at?: string | null;
   status?: string;
+  description?: string;
 };
 
 type RevenueApproval = {
@@ -8747,6 +8775,33 @@ const calculateRevenuePerformance =
 
 
 const revenueSummary = useMemo(() => {
+  const incompleteRecords = revenueRecords.filter((record) => {
+    const status = String(
+      record.accounting_status || record.status || ''
+    ).toLowerCase();
+    return status !== 'posted';
+  });
+
+  const pendingCostRecords = revenueRecords.filter((record) => {
+    const status = String(
+      record.accounting_status || record.status || ''
+    ).toLowerCase();
+    return (
+      status !== 'posted' &&
+      (
+        record.provider_cost === null ||
+        record.provider_cost === undefined ||
+        record.provider_cost === '' ||
+        record.partner_share === null ||
+        record.partner_share === undefined ||
+        record.partner_share === '' ||
+        record.other_direct_cost === null ||
+        record.other_direct_cost === undefined ||
+        record.other_direct_cost === ''
+      )
+    );
+  });
+
   const postedRecords = revenueRecords.filter((record) => {
     const accountingStatus = String(
       record.accounting_status || ''
@@ -8823,6 +8878,8 @@ const revenueSummary = useMemo(() => {
     zenimoniesRevenue,
     netProfit: zenimoniesRevenue,
     netMargin,
+    incompleteCount: incompleteRecords.length,
+    pendingCostCount: pendingCostRecords.length,
   };
 }, [revenueRecords]);
 
@@ -9244,6 +9301,15 @@ const renderRevenueProfit = () => (
       description="Separate customer charges, provider costs and ZENIMONIES revenue so operational revenue is not confused with customer funds."
     />
 
+    {revenueSummary.incompleteCount > 0 && (
+      <Alert severity="warning">
+        {revenueSummary.incompleteCount} revenue entr{revenueSummary.incompleteCount === 1 ? 'y is' : 'ies are'} not posted and excluded from recognised revenue and profit.
+        {revenueSummary.pendingCostCount > 0
+          ? ` ${revenueSummary.pendingCostCount} entr${revenueSummary.pendingCostCount === 1 ? 'y has' : 'ies have'} missing accounting costs awaiting verification.`
+          : ''}
+      </Alert>
+    )}
+
     <Grid container spacing={1.25}>
       <Grid item xs={6} md={3}>
         <RevenueKpi
@@ -9521,6 +9587,23 @@ const renderRevenueLedger = () => (
         />
       </CardContent>
     </Card>
+    {revenueSummary.incompleteCount > 0 && (
+      <Alert severity="warning">
+        Showing {revenueSummary.incompleteCount} unposted entr{revenueSummary.incompleteCount === 1 ? 'y' : 'ies'} in the ledger. They are not included in posted revenue or profit.
+        {revenueSummary.pendingCostCount > 0
+          ? ` Missing provider, partner or direct costs: ${revenueSummary.pendingCostCount}. These are marked Pending verification, not treated as zero.`
+          : ''}
+      </Alert>
+    )}
+    {revenueLoadError && (
+      <Alert severity="error" action={
+        <Button color="inherit" size="small" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      }>
+        {revenueLoadError}
+      </Alert>
+    )}
     {/* REVENUE RECORDS */}
     <Card sx={pageCardSx}>
       <TableContainer>
@@ -9586,7 +9669,7 @@ const renderRevenueLedger = () => (
                   )}
                 </TableCell>
                 <TableCell>
-                  {formatMoney(
+                  {formatMoneyOrPending(
                     record.provider_cost,
                     record.currency || 'NGN'
                   )}
@@ -9599,10 +9682,12 @@ const renderRevenueLedger = () => (
                       color: BRAND.green,
                     }}
                   >
-                    {formatMoney(
-                      record.zenimonies_revenue,
-                      record.currency || 'NGN'
-                    )}
+                    {String(record.accounting_status || record.status || '').toLowerCase() === 'posted'
+                      ? formatMoneyOrPending(
+                          record.zenimonies_revenue,
+                          record.currency || 'NGN'
+                        )
+                      : 'Not posted'}
                   </Typography>
                 </TableCell>
                 <TableCell>
@@ -9615,11 +9700,7 @@ const renderRevenueLedger = () => (
                 <TableCell>
                   <Chip
                     size="small"
-                    label={
-                      record.accounting_status ||
-                      record.status ||
-                      'Recorded'
-                    }
+                    label={getRevenueStatusLabel(record)}
                     sx={{
                       fontSize: 9.5,
                       fontWeight: 800,
@@ -9655,7 +9736,9 @@ const renderRevenueLedger = () => (
                   >
                     {revenueSearch.trim()
                       ? 'Try a different reference or source search.'
-                      : 'Revenue records will appear here when supplied by the backend.'}
+                      : revenueLoadError
+                        ? 'The backend could not be reached. Use Retry above after checking the service.'
+                        : 'No entries were returned by the backend. A successful fee-bearing transaction must create a ledger entry before it can appear here.'}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -11687,7 +11770,7 @@ case 'settings':
         </Box>
       </Box>
 
-      {/* TRANSACTION DETAILS */}
+      w{/* TRANSACTION DETAILS */}
 
       {renderTransactionPanel()}
     </Box>
