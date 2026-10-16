@@ -1,4 +1,4 @@
-import React, {
+ import React, {
   useCallback,
   useEffect,
   useMemo,
@@ -214,28 +214,41 @@ interface KycRecord {
   id: string;
   user_id?: string;
   userId?: string;
-
   full_name?: string;
   fullName?: string;
-
   email?: string;
   phone?: string;
-
   kyc_status?: string;
   kycStatus?: string;
-
   verification_type?: string;
   verificationType?: string;
-
   tier?: string | number;
-
   status?: string;
-
+  verification_status?: string;
+  kyc_tier?: number | string;
+  bvn?: string;
+  bvn_verification_status?: string;
+  bvn_verified_at?: string;
+  bvn_rejection_reason?: string;
+  document_type?: string;
+  document_number?: string;
+  document_front_url?: string;
+  document_back_url?: string;
+  selfie_url?: string;
+  id_verification_status?: string;
+  id_verified_at?: string;
+  id_rejection_reason?: string;
+  tier_3_method?: string;
+  tier_3_document_url?: string;
+  tier_3_verification_status?: string;
+  tier_3_verified_at?: string;
+  tier_3_rejection_reason?: string;
+  liveness_status?: string;
   rejection_reason?: string;
   rejectionReason?: string;
-
   created_at?: string;
   createdAt?: string;
+  updated_at?: string;
 }
 
 interface Transaction {
