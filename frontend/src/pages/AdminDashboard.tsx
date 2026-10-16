@@ -361,6 +361,35 @@ const api = {
 
     return { data };
   },
+
+  post: async (
+    path: string,
+    body: Record<string, unknown> = {}
+  ) => {
+    const token = localStorage.getItem('adminToken');
+
+    const response = await fetch(
+      `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token
+            ? { Authorization: `Bearer ${token}` }
+            : {}),
+        },
+        body: JSON.stringify(body),
+      }
+    );
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data?.message || 'Request failed.');
+    }
+
+    return { data };
+  },
 };
 
 /* ============================================================
