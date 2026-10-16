@@ -911,19 +911,21 @@ const [revenueApiSummary, setRevenueApiSummary] =
      LOAD KYC
      ========================================================== */
 
-  const loadKyc =
-    useCallback(async () => {
-      const response = await api.get(
-        '/admin/kyc'
-      );
+  const loadKyc = useCallback(async () => {
+    const response = await api.get('/admin/kyc');
 
-      setKycRecords(
-        response.data?.requests ||
-          response.data?.records ||
-          []
-      );
-    }, []);
+    const records =
+      response.data?.kyc_records ||
+      response.data?.requests ||
+      response.data?.records ||
+      [];
 
+    setKycRecords(
+      Array.isArray(records) ? records : []
+    );
+  }, []);
+
+  
   /* ==========================================================
      LOAD TRANSACTIONS
      ========================================================== */
