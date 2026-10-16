@@ -1440,7 +1440,7 @@ const [revenueApiSummary, setRevenueApiSummary] =
           sx={{
             fontSize: {
               xs: 23,
-              sm: 28,
+              sm: 28, 
             },
             fontWeight: 800,
             color: BRAND.text,
