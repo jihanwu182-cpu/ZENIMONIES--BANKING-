@@ -351,7 +351,148 @@ const reverseRevenueEntry = async (req, res) => {
     return sendError(res, error, 'create revenue reversal');
   }
 };
+// ============================================================
+// RECOVER HISTORICAL TRANSFER FEES
+// Admin-only, duplicate-safe, and never auto-posts revenue.
+// ============================================================
 
+const reconcileHistoricalTransferRevenue = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(`
+      SELECT
+        t.id AS transaction_id,
+        t.reference,
+        t.transaction_fee,
+        t.currency,
+        a.user_id AS customer_user_id,
+        a.currency AS account_currency,
+        bt.currency AS transfer_currency
+      FROM transactions t
+      JOIN bank_transfers bt
+        ON bt.reference = t.reference
+       AND bt.account_id = t.account_id
+      JOIN accounts a ON a.id = t.account_id
+      WHERE t.type = 'transfer'
+        AND t.status = 'completed'
+        AND bt.status = 'completed'
+        AND t.transaction_fee > 0
+      ORDER BY t.created_at ASC
+      FOR UPDATE OF t
+    `);
+
+    let created = 0;
+    let alreadyRecorded = 0;
+    let skipped = 0;
+
+    for (const row of result.rows) {
+      const currency = String(row.currency || '').toUpperCase();
+      const fee = Number(row.transaction_fee);
+
+      if (
+        !Number.isFinite(fee) ||
+        fee <= 0 ||
+        !currency ||
+        (row.account_currency &&
+          currency !== String(row.account_currency).toUpperCase()) ||
+        (row.transfer_currency &&
+          currency !== String(row.transfer_currency).toUpperCase())
+      ) {
+        skipped++;
+        continue;
+      }
+
+      const existing = await client.query(
+        `SELECT id
+         FROM revenue_ledger
+         WHERE source_type = 'transfer'
+           AND source_id = $1
+           AND service_type = 'transfer'
+           AND entry_kind = 'original'
+           AND replaces_id IS NULL
+         LIMIT 1`,
+        [row.transaction_id]
+      );
+
+      if (existing.rowCount > 0) {
+        alreadyRecorded++;
+        continue;
+      }
+
+      const reference = String(row.reference || row.transaction_id);
+
+      const insert = await client.query(
+        `INSERT INTO revenue_ledger (
+          revenue_reference,
+          entry_kind,
+          source_type,
+          source_id,
+          source_reference,
+          customer_user_id,
+          service_type,
+          currency,
+          gross_fee,
+          provider_cost,
+          partner_share,
+          other_direct_cost,
+          zenimonies_revenue,
+          transaction_status,
+          accounting_status,
+          description
+        )
+        VALUES (
+          $1, 'original', 'transfer', $2, $3, $4,
+          'transfer', $5, $6, NULL, NULL, NULL,
+          NULL, 'completed', 'incomplete', $7
+        )
+        ON CONFLICT (revenue_reference) DO NOTHING
+        RETURNING id`,
+        [
+          `RECOVERED-TRANSFER-${row.transaction_id}`,
+          row.transaction_id,
+          reference,
+          row.customer_user_id,
+          currency,
+          fee.toFixed(2),
+          `Recovered historical transfer fee for ${reference}`,
+        ]
+      );
+
+      if (insert.rowCount > 0) {
+        created++;
+      } else {
+        alreadyRecorded++;
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Historical transfer fee reconciliation completed.',
+      data: {
+        eligibleTransfers: result.rowCount,
+        entriesCreated: created,
+        alreadyRecorded,
+        skippedForReview: skipped,
+        entriesRemainIncomplete: true,
+      },
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Historical transfer reconciliation failed:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Reconciliation failed. No recovery was committed.',
+    });
+  } finally {
+    client.release();
+  }
+};
 // ============================================================
 // EXPORTS
 // ============================================================
@@ -364,4 +505,5 @@ module.exports = {
   decideRevenueApproval,
   postRevenueEntry,
   reverseRevenueEntry,
+  reconcileHistoricalTransferRevenue,
 };
