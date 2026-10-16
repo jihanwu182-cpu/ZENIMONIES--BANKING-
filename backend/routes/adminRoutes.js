@@ -68,6 +68,7 @@ const {
   postRevenueEntry,
   reverseRevenueEntry,
   reconcileHistoricalTransferRevenue,
+  checkRevenueLedgerSchema,
 } = require('../controllers/adminRevenueController');
 
 // ============================================================
@@ -124,6 +125,10 @@ router.post(
   '/revenue/reconcile-transfers',
   reconcileHistoricalTransferRevenue
 );
+  
+router.get('/revenue/schema-check', checkRevenueLedgerSchema
+);
+
 // ============================================================
 // CUSTOMER CARE AGENTS
 // ============================================================
