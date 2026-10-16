@@ -553,4 +553,5 @@ module.exports = {
   postRevenueEntry,
   reverseRevenueEntry,
   reconcileHistoricalTransferRevenue,
+   checkRevenueLedgerSchema,
 };
