@@ -1456,7 +1456,67 @@ const [revenueApiSummary, setRevenueApiSummary] =
 const revenueChartData: Array<{
   label: string;
   revenue: number;
-}> = [];
+}> = (() => {
+  const now = new Date();
+  const start = new Date(now);
+  if (revenuePeriod === '7D') {
+    start.setDate(now.getDate() - 6);
+  } else if (revenuePeriod === '30D') {
+    start.setDate(now.getDate() - 29);
+  } else if (revenuePeriod === '90D') {
+    start.setDate(now.getDate() - 89);
+  } else {
+    start.setMonth(0, 1);
+  }
+  start.setHours(0, 0, 0, 0);
+
+  const totals = new Map<string, number>();
+  for (const record of revenueRecords) {
+    const accountingStatus = String(record.accounting_status || '').toLowerCase();
+    const transactionStatus = String(record.transaction_status || '').toLowerCase();
+    const currency = String(record.currency || 'NGN').toUpperCase();
+
+    // Only posted, completed/settled accounting entries count as verified revenue.
+    if (
+      accountingStatus !== 'posted' ||
+      !['completed', 'reversed', 'refunded'].includes(transactionStatus) ||
+      currency !== 'NGN'
+    ) continue;
+
+    const rawDate = record.transaction_date || record.posted_at || record.created_at;
+    if (!rawDate) continue;
+    const date = new Date(rawDate);
+    if (Number.isNaN(date.getTime())) continue;
+    date.setHours(0, 0, 0, 0);
+    if (date < start || date > now) continue;
+
+    const amount = Number(record.zenimonies_revenue);
+    if (!Number.isFinite(amount)) continue;
+
+    // Group by day for 7D/30D; by month for 90D/YTD.
+    const key = (revenuePeriod === '90D' || revenuePeriod === 'YTD')
+      ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    totals.set(key, (totals.get(key) || 0) + amount);
+  }
+
+  return Array.from(totals.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, revenue]) => {
+      const parts = key.split('-').map(Number);
+      const date = parts.length === 2
+        ? new Date(parts[0], parts[1] - 1, 1)
+        : new Date(parts[0], parts[1] - 1, parts[2]);
+      return {
+        label: date.toLocaleDateString('en-NG', {
+          day: parts.length === 3 ? 'numeric' : undefined,
+          month: 'short',
+          year: revenuePeriod === 'YTD' ? '2-digit' : undefined,
+        }),
+        revenue,
+      };
+    });
+})();
 
     
   const transactionTypeData = [
@@ -1773,14 +1833,19 @@ const revenueChartData: Array<{
               pb: 0.5,
             }}
           >
-            {(['Daily', 'Weekly', 'Monthly', 'Yearly'] as const).map(
+            {([
+              { label: '7 Days', value: '7D' },
+              { label: '30 Days', value: '30D' },
+              { label: '90 Days', value: '90D' },
+              { label: 'Year to date', value: 'YTD' },
+            ] as const).map(
               (period) => (
                 <Chip
-                  key={period}
-                  label={period}
+                  key={period.value}
+                  label={period.label}
                   size="small"
-                  onClick={() => setRevenuePeriod(period)}
-                  variant={revenuePeriod === period ? 'filled' : 'outlined'}
+                  onClick={() => setRevenuePeriod(period.value)}
+                  variant={revenuePeriod === period.value ? 'filled' : 'outlined'}
                   sx={{
                     flex: '0 0 auto',
                     fontWeight: 700,
@@ -1818,29 +1883,48 @@ const revenueChartData: Array<{
               }}
             >
               
-<ResponsiveContainer width="100%" height="100%">
-  <LineChart data={revenueChartData}>
-    <CartesianGrid strokeDasharray="3 3" stroke={BRAND.border} />
-    <XAxis
-      dataKey="label"
-      tick={{ fontSize: 11, fill: BRAND.muted }}
-    />
-    <YAxis
-      tick={{ fontSize: 11, fill: BRAND.muted }}
-      width={45}
-    />
-    <Tooltip />
-    <Line
-      type="monotone"
-      dataKey="revenue"
-      name="Revenue (NGN)"
-      stroke={BRAND.green}
-      strokeWidth={3}
-      dot={false}
-      connectNulls={false}
-    />
-  </LineChart>
-</ResponsiveContainer>
+{revenueLoading ? (
+  <Typography sx={{ fontSize: 12, color: BRAND.muted }}>
+    Loading verified revenue…
+  </Typography>
+) : revenueLoadError ? (
+  <Typography sx={{ fontSize: 12, color: 'error.main' }}>
+    {revenueLoadError}
+  </Typography>
+) : revenueChartData.length === 0 ? (
+  <Typography sx={{ fontSize: 12, color: BRAND.muted }}>
+    No verified ZENIMONIES revenue is available for this period yet.
+  </Typography>
+) : (
+  <ResponsiveContainer width="100%" height="100%">
+    <LineChart data={revenueChartData}>
+      <CartesianGrid strokeDasharray="3 3" stroke={BRAND.border} />
+      <XAxis
+        dataKey="label"
+        tick={{ fontSize: 11, fill: BRAND.muted }}
+      />
+      <YAxis
+        tick={{ fontSize: 11, fill: BRAND.muted }}
+        width={45}
+      />
+      <Tooltip
+        formatter={(value: number | string) => [
+          formatMoney(Number(value) || 0, 'NGN'),
+          'Verified revenue',
+        ]}
+      />
+      <Line
+        type="monotone"
+        dataKey="revenue"
+        name="Verified ZENIMONIES revenue (NGN)"
+        stroke={BRAND.green}
+        strokeWidth={3}
+        dot={false}
+        connectNulls={false}
+      />
+    </LineChart>
+  </ResponsiveContainer>
+)}
 
             </Box>
           </Box>
