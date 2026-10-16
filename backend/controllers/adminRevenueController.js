@@ -356,6 +356,7 @@ const reverseRevenueEntry = async (req, res) => {
 // Admin-only, duplicate-safe, and never auto-posts revenue.
 // ============================================================
 
+
 const reconcileHistoricalTransferRevenue = async (req, res) => {
   const client = await pool.connect();
 
@@ -375,7 +376,8 @@ const reconcileHistoricalTransferRevenue = async (req, res) => {
       JOIN bank_transfers bt
         ON bt.reference = t.reference
        AND bt.account_id = t.account_id
-      JOIN accounts a ON a.id = t.account_id
+      JOIN accounts a
+        ON a.id = t.account_id
       WHERE t.type = 'transfer'
         AND t.status = 'completed'
         AND bt.status = 'completed'
@@ -386,10 +388,17 @@ const reconcileHistoricalTransferRevenue = async (req, res) => {
 
     let created = 0;
     let alreadyRecorded = 0;
-    let skipped = 0;
+    let skippedForReview = 0;
+
+    const {
+      createRevenueEntry,
+    } = require('../services/revenueService');
 
     for (const row of result.rows) {
-      const currency = String(row.currency || '').toUpperCase();
+      const currency = String(row.currency || '')
+        .trim()
+        .toUpperCase();
+
       const fee = Number(row.transaction_fee);
 
       if (
@@ -397,11 +406,11 @@ const reconcileHistoricalTransferRevenue = async (req, res) => {
         fee <= 0 ||
         !currency ||
         (row.account_currency &&
-          currency !== String(row.account_currency).toUpperCase()) ||
+          currency !== String(row.account_currency).trim().toUpperCase()) ||
         (row.transfer_currency &&
-          currency !== String(row.transfer_currency).toUpperCase())
+          currency !== String(row.transfer_currency).trim().toUpperCase())
       ) {
-        skipped++;
+        skippedForReview++;
         continue;
       }
 
@@ -422,49 +431,39 @@ const reconcileHistoricalTransferRevenue = async (req, res) => {
         continue;
       }
 
-      const reference = String(row.reference || row.transaction_id);
-
-      const insert = await client.query(
-        `INSERT INTO revenue_ledger (
-          revenue_reference,
-          entry_kind,
-          source_type,
-          source_id,
-          source_reference,
-          customer_user_id,
-          service_type,
-          currency,
-          gross_fee,
-          provider_cost,
-          partner_share,
-          other_direct_cost,
-          zenimonies_revenue,
-          transaction_status,
-          accounting_status,
-          description
-        )
-        VALUES (
-          $1, 'original', 'transfer', $2, $3, $4,
-          'transfer', $5, $6, NULL, NULL, NULL,
-          NULL, 'completed', 'incomplete', $7
-        )
-        ON CONFLICT (revenue_reference) DO NOTHING
-        RETURNING id`,
-        [
-          `RECOVERED-TRANSFER-${row.transaction_id}`,
-          row.transaction_id,
-          reference,
-          row.customer_user_id,
-          currency,
-          fee.toFixed(2),
-          `Recovered historical transfer fee for ${reference}`,
-        ]
+      const reference = String(
+        row.reference || row.transaction_id
       );
 
-      if (insert.rowCount > 0) {
+      const entry = await createRevenueEntry(
+        {
+          revenueReference:
+            `RECOVERED-TRANSFER-${row.transaction_id}`,
+          serviceType: 'transfer',
+          sourceType: 'transfer',
+          sourceId: row.transaction_id,
+          sourceReference: reference,
+          customerUserId: row.customer_user_id,
+          currency,
+          grossFee: fee.toFixed(2),
+
+          // These costs are not verified yet.
+          // Keep them NULL; never assume they are zero.
+          providerCost: null,
+          partnerShare: null,
+          otherDirectCost: null,
+
+          transactionStatus: 'completed',
+          accountingStatus: 'incomplete',
+          recordedBy: req.userId,
+          description:
+            `Recovered historical transfer fee for ${reference}`,
+        },
+        { client }
+      );
+
+      if (entry) {
         created++;
-      } else {
-        alreadyRecorded++;
       }
     }
 
@@ -477,22 +476,29 @@ const reconcileHistoricalTransferRevenue = async (req, res) => {
         eligibleTransfers: result.rowCount,
         entriesCreated: created,
         alreadyRecorded,
-        skippedForReview: skipped,
+        skippedForReview,
         entriesRemainIncomplete: true,
+        revenueAutomaticallyPosted: false,
       },
     });
   } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Historical transfer reconciliation failed:', error);
+    await client.query('ROLLBACK').catch(() => {});
+
+    console.error(
+      'Historical transfer reconciliation failed:',
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: 'Reconciliation failed. No recovery was committed.',
+      message:
+        'Reconciliation failed. The recovery transaction was rolled back.',
     });
   } finally {
     client.release();
   }
 };
+
 // ============================================================
 // EXPORTS
 // ============================================================
