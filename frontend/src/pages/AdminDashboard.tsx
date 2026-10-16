@@ -1851,9 +1851,9 @@ const revenueChartData: Array<{
                     fontWeight: 700,
                     color: BRAND.green,
                     backgroundColor:
-                      revenuePeriod === period
-                        ? BRAND.greenLight
-                        : 'transparent',
+                    revenuePeriod === period.value
+                    ? BRAND.greenLight
+                     : 'transparent',
                     borderColor: BRAND.green,
                     cursor: 'pointer',
                   }}
@@ -9433,14 +9433,7 @@ const renderRevenueLedger = () => (
                 Review revenue entries awaiting an approval decision.
               </Typography>
             </Box>
-            <Button
-              size="small"
-              onClick={() => void loadRevenueApprovals()}
-              disabled={revenueApprovalsLoading}
-              sx={{ textTransform: 'none' }}
-            >
-              Refresh
-            </Button>
+          
           </Stack>
           {revenueApprovalError && (
             <Alert severity="error">
