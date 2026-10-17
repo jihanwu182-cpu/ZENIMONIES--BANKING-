@@ -1,22 +1,21 @@
+
 const crypto = require('crypto');
+const pool = require('../config/database');
 
 // ============================================================
 // ZENIMONIES BANKING — SECURE DOJAH WEBHOOK RECEIVER
 // ============================================================
-// - Verifies the webhook signature against the exact raw body.
-// - Uses DOJAH_WEBHOOK_SECRET, NOT DOJAH_SECRET_KEY.
-// - Does not log customer information or KYC payloads.
-// - Does not approve or reject customer KYC automatically.
+// Verifies the exact raw request body.
+// Correlates events using the saved Dojah reference.
+// Never logs customer identity data or the webhook payload.
+// Does not automatically approve or reject KYC.
 // ============================================================
 
 const getWebhookSecret = () => {
   const secret = process.env.DOJAH_WEBHOOK_SECRET;
-
-  if (!secret || !secret.trim()) {
-    return null;
-  }
-
-  return secret;
+  return typeof secret === 'string' && secret.trim()
+    ? secret
+    : null;
 };
 
 const safeEqualHex = (receivedSignature, expectedSignature) => {
@@ -27,12 +26,10 @@ const safeEqualHex = (receivedSignature, expectedSignature) => {
     return false;
   }
 
-  // Support a possible "sha256=" prefix.
   const received = receivedSignature
     .trim()
     .replace(/^sha256=/i, '');
 
-  // SHA-256 HMAC hex signatures contain exactly 64 hex characters.
   if (!/^[a-f0-9]{64}$/i.test(received)) {
     return false;
   }
@@ -40,21 +37,44 @@ const safeEqualHex = (receivedSignature, expectedSignature) => {
   const receivedBuffer = Buffer.from(received, 'hex');
   const expectedBuffer = Buffer.from(expectedSignature, 'hex');
 
-  if (receivedBuffer.length !== expectedBuffer.length) {
-    return false;
+  return (
+    receivedBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(receivedBuffer, expectedBuffer)
+  );
+};
+
+const getReferenceId = (body) => {
+  if (!body || typeof body !== 'object') {
+    return null;
   }
 
-  return crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
+  const candidates = [
+    body.reference_id,
+    body.data?.reference_id,
+    body.metadata?.reference_id,
+    body.data?.metadata?.reference_id,
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      typeof candidate === 'string' &&
+      candidate.trim() &&
+      candidate.trim().length <= 150
+    ) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
 };
 
 const handleDojahWebhook = async (req, res) => {
   try {
     const secret = getWebhookSecret();
 
-    // Fail closed if the webhook secret is missing.
     if (!secret) {
       console.error(
-        'Dojah webhook rejected: webhook secret is not configured.'
+        'KYC webhook unavailable: signing secret is not configured.'
       );
 
       return res.status(503).json({
@@ -63,13 +83,7 @@ const handleDojahWebhook = async (req, res) => {
       });
     }
 
-    // server.js must preserve the exact incoming request bytes
-    // in req.rawBody before express.json() parses the JSON.
     if (!Buffer.isBuffer(req.rawBody)) {
-      console.error(
-        'Dojah webhook rejected: original request body is unavailable.'
-      );
-
       return res.status(400).json({
         success: false,
         message: 'Unable to verify webhook request.',
@@ -85,14 +99,13 @@ const handleDojahWebhook = async (req, res) => {
       });
     }
 
-    // Dojah webhook signature: HMAC-SHA256 of the exact raw body.
     const expectedSignature = crypto
       .createHmac('sha256', secret)
       .update(req.rawBody)
       .digest('hex');
 
     if (!safeEqualHex(signature, expectedSignature)) {
-      console.warn('Dojah webhook rejected: signature verification failed.');
+      console.warn('KYC webhook rejected: signature verification failed.');
 
       return res.status(401).json({
         success: false,
@@ -100,22 +113,49 @@ const handleDojahWebhook = async (req, res) => {
       });
     }
 
-    // Signature verified. Do not log the body, identity data,
-    // BVN, selfie data, or other sensitive customer information.
-    console.info('Dojah webhook signature verified.');
+    // The signature is valid. Only use the reference for correlation.
+    const referenceId = getReferenceId(req.body);
 
-    // IMPORTANT:
-    // A valid signature proves the request's authenticity,
-    // not that the customer's identity checks passed.
-    // Keep this receiver non-mutating until the exact final
-    // Dojah event schema and reference correlation are confirmed.
+    if (!referenceId) {
+      console.warn(
+        'KYC webhook accepted but no supported reference was found.'
+      );
+
+      // Acknowledge the authenticated delivery without changing KYC.
+      return res.status(200).json({
+        success: true,
+        received: true,
+      });
+    }
+
+    // Only touch the KYC record associated with this exact reference.
+    // Do not change verification status based on an unvalidated event.
+    const result = await pool.query(
+      `UPDATE kyc_records
+       SET dojah_checked_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE dojah_reference = $1
+         AND dojah_verification_type = 'identity'
+       RETURNING id`,
+      [referenceId]
+    );
+
+    if (result.rowCount === 0) {
+      // Do not disclose whether a reference belongs to a customer.
+      console.warn(
+        'KYC webhook received with no matching active identity reference.'
+      );
+    } else {
+      console.info('KYC webhook correlated with an identity record.');
+    }
+
     return res.status(200).json({
       success: true,
       received: true,
-      message: 'Webhook signature verified.',
     });
   } catch (error) {
-    console.error('Dojah webhook processing failed.');
+    // Do not log request bodies, SQL parameters, or identity information.
+    console.error('KYC webhook processing failed.');
 
     return res.status(500).json({
       success: false,
