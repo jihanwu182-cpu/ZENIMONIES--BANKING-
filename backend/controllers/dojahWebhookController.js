@@ -157,6 +157,7 @@ const handleDojahWebhook = async (req, res) => {
     ).toLowerCase();
 
     const sessionCompleted = sessionStatus === 'completed';
+const sessionFailed = ['failed', 'abandoned'].includes(sessionStatus);
 
     const nextId =
       sessionCompleted && idStatus !== 'pending'
