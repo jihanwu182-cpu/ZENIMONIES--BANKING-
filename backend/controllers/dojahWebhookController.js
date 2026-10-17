@@ -1,181 +1,127 @@
 const crypto = require('crypto');
 
 // ============================================================
-// DOJAH WEBHOOK RECEIVER
+// ZENIMONIES BANKING — SECURE DOJAH WEBHOOK RECEIVER
 // ============================================================
-//
-// This first receiver is intentionally non-mutating.
-//
-// We do NOT mark a customer as verified from an unknown payload
-// shape. The exact Dojah KYC Widget webhook payload must first be
-// observed from the Sandbox subscription.
-//
-// Once the real payload is confirmed, this handler will be
-// extended to update the correct KYC record and user status.
+// - Verifies the webhook signature against the exact raw body.
+// - Uses DOJAH_WEBHOOK_SECRET, NOT DOJAH_SECRET_KEY.
+// - Does not log customer information or KYC payloads.
+// - Does not approve or reject customer KYC automatically.
 // ============================================================
 
-const getPayloadKeys = (value, prefix = '') => {
-  if (!value || typeof value !== 'object') {
-    return [];
-  }
+const getWebhookSecret = () => {
+  const secret = process.env.DOJAH_WEBHOOK_SECRET;
 
-  const keys = [];
-
-  for (const key of Object.keys(value)) {
-    const path = prefix
-      ? `${prefix}.${key}`
-      : key;
-
-    keys.push(path);
-
-    if (
-      value[key] &&
-      typeof value[key] === 'object' &&
-      !Array.isArray(value[key])
-    ) {
-      keys.push(
-        ...getPayloadKeys(
-          value[key],
-          path
-        )
-      );
-    }
-  }
-
-  return keys;
-};
-
-const getRequestFingerprint = (req) => {
-  try {
-    const body = JSON.stringify(
-      req.body || {}
-    );
-
-    return crypto
-      .createHash('sha256')
-      .update(body)
-      .digest('hex');
-  } catch {
+  if (!secret || !secret.trim()) {
     return null;
   }
+
+  return secret;
 };
 
-const handleDojahWebhook = async (
-  req,
-  res
-) => {
+const safeEqualHex = (receivedSignature, expectedSignature) => {
+  if (
+    typeof receivedSignature !== 'string' ||
+    typeof expectedSignature !== 'string'
+  ) {
+    return false;
+  }
+
+  // Support a possible "sha256=" prefix.
+  const received = receivedSignature
+    .trim()
+    .replace(/^sha256=/i, '');
+
+  // SHA-256 HMAC hex signatures contain exactly 64 hex characters.
+  if (!/^[a-f0-9]{64}$/i.test(received)) {
+    return false;
+  }
+
+  const receivedBuffer = Buffer.from(received, 'hex');
+  const expectedBuffer = Buffer.from(expectedSignature, 'hex');
+
+  if (receivedBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
+};
+
+const handleDojahWebhook = async (req, res) => {
   try {
-    const payload =
-      req.body || {};
+    const secret = getWebhookSecret();
 
-    const fingerprint =
-      getRequestFingerprint(req);
+    // Fail closed if the webhook secret is missing.
+    if (!secret) {
+      console.error(
+        'Dojah webhook rejected: webhook secret is not configured.'
+      );
 
-    const payloadKeys =
-      getPayloadKeys(payload);
+      return res.status(503).json({
+        success: false,
+        message: 'Webhook verification is temporarily unavailable.',
+      });
+    }
 
-    // ----------------------------------------------------------
-    // SECURITY
-    // ----------------------------------------------------------
-    //
-    // NEVER log the complete Dojah payload.
-    //
-    // KYC payloads can contain sensitive information such as:
-    //
-    // - BVN
-    // - NIN
-    // - phone number
-    // - date of birth
-    // - identity information
-    // - document information
-    // - biometric information
-    //
-    // ----------------------------------------------------------
+    // server.js must preserve the exact incoming request bytes
+    // in req.rawBody before express.json() parses the JSON.
+    if (!Buffer.isBuffer(req.rawBody)) {
+      console.error(
+        'Dojah webhook rejected: original request body is unavailable.'
+      );
 
-    console.log(
-      '============================================'
-    );
+      return res.status(400).json({
+        success: false,
+        message: 'Unable to verify webhook request.',
+      });
+    }
 
-    console.log(
-      'DOJAH WEBHOOK RECEIVED'
-    );
+    const signature = req.headers['x-dojah-signature'];
 
-    console.log(
-      '============================================'
-    );
+    if (typeof signature !== 'string' || !signature.trim()) {
+      return res.status(401).json({
+        success: false,
+        message: 'Webhook signature is missing or invalid.',
+      });
+    }
 
-    console.log(
-      'Content-Type:',
-      req.headers[
-        'content-type'
-      ] || null
-    );
+    // Dojah webhook signature: HMAC-SHA256 of the exact raw body.
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(req.rawBody)
+      .digest('hex');
 
-    console.log(
-      'Event header:',
-      req.headers[
-        'x-dojah-event'
-      ] || null
-    );
+    if (!safeEqualHex(signature, expectedSignature)) {
+      console.warn('Dojah webhook rejected: signature verification failed.');
 
-    console.log(
-      'Webhook signature header present:',
-      Boolean(
-        req.headers[
-          'x-dojah-signature'
-        ]
-      )
-    );
+      return res.status(401).json({
+        success: false,
+        message: 'Webhook signature is missing or invalid.',
+      });
+    }
 
-    console.log(
-      'Payload fingerprint:',
-      fingerprint
-    );
+    // Signature verified. Do not log the body, identity data,
+    // BVN, selfie data, or other sensitive customer information.
+    console.info('Dojah webhook signature verified.');
 
-    console.log(
-      'Payload key paths:',
-      payloadKeys
-    );
-
-    console.log(
-      '============================================'
-    );
-
-    // ----------------------------------------------------------
-    // IMPORTANT
-    // ----------------------------------------------------------
-    //
-    // We intentionally acknowledge the webhook without changing
-    // any customer record.
-    //
-    // We first need the real Dojah Sandbox payload so we can map
-    // the actual provider result correctly.
-    //
-    // ----------------------------------------------------------
-
+    // IMPORTANT:
+    // A valid signature proves the request's authenticity,
+    // not that the customer's identity checks passed.
+    // Keep this receiver non-mutating until the exact final
+    // Dojah event schema and reference correlation are confirmed.
     return res.status(200).json({
       success: true,
-
       received: true,
-
-      message:
-        'Dojah webhook received successfully.',
+      message: 'Webhook signature verified.',
     });
   } catch (error) {
-    console.error(
-      'Dojah webhook receiver error:',
-      error
-    );
+    console.error('Dojah webhook processing failed.');
 
     return res.status(500).json({
       success: false,
-
-      message:
-        'Unable to process Dojah webhook.',
+      message: 'Unable to process webhook.',
     });
   }
 };
 
-module.exports = {
-  handleDojahWebhook,
-};
+module.exports = { handleDojahWebhook };
