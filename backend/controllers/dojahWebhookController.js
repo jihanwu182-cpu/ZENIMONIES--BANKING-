@@ -111,14 +111,23 @@ const handleDojahWebhook = async (req, res) => {
 
   const data = body?.data || {};
 
-  // Recognize only explicit step statuses.
-  const idStatus = getStepStatus(
-    data.id || data.id_data
+
+  // Match the actual EasyOnboard webhook payload.
+  const governmentData = data.government_data || {};
+  const selfieData = data.selfie || {};
+
+  const idStatus = getStepStatus(governmentData);
+  const livenessStatus = getStepStatus(selfieData);
+
+  // Scores are inside selfie.data in the provider payload.
+  const livenessScore = getScore(
+    selfieData.data?.liveness_score
   );
 
-  const livenessStatus = getStepStatus(
-    data.selfie || data.liveness
+  const selfieMatchScore = getScore(
+    selfieData.data?.match_score
   );
+
 
   const client = await pool.connect();
 
