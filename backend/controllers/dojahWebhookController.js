@@ -2,165 +2,249 @@
 const crypto = require('crypto');
 const pool = require('../config/database');
 
-// ============================================================
-// ZENIMONIES BANKING — SECURE DOJAH WEBHOOK RECEIVER
-// ============================================================
-// Verifies the exact raw request body.
-// Correlates events using the saved Dojah reference.
-// Never logs customer identity data or the webhook payload.
-// Does not automatically approve or reject KYC.
-// ============================================================
-
 const getWebhookSecret = () => {
-  const secret = process.env.DOJAH_WEBHOOK_SECRET;
-  return typeof secret === 'string' && secret.trim()
-    ? secret
+  const value = process.env.DOJAH_WEBHOOK_SECRET;
+  return typeof value === 'string' && value.trim()
+    ? value
     : null;
 };
 
-const safeEqualHex = (receivedSignature, expectedSignature) => {
-  if (
-    typeof receivedSignature !== 'string' ||
-    typeof expectedSignature !== 'string'
-  ) {
-    return false;
-  }
+const verifySignature = (signature, rawBody, secret) => {
+  if (typeof signature !== 'string') return false;
 
-  const received = receivedSignature
-    .trim()
-    .replace(/^sha256=/i, '');
+  const received = signature.trim().replace(/^sha256=/i, '');
 
-  if (!/^[a-f0-9]{64}$/i.test(received)) {
-    return false;
-  }
+  if (!/^[a-f0-9]{64}$/i.test(received)) return false;
 
-  const receivedBuffer = Buffer.from(received, 'hex');
-  const expectedBuffer = Buffer.from(expectedSignature, 'hex');
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(rawBody)
+    .digest();
 
-  return (
-    receivedBuffer.length === expectedBuffer.length &&
-    crypto.timingSafeEqual(receivedBuffer, expectedBuffer)
-  );
+  const actual = Buffer.from(received, 'hex');
+
+  return actual.length === expected.length &&
+    crypto.timingSafeEqual(actual, expected);
 };
 
-const getReferenceId = (body) => {
-  if (!body || typeof body !== 'object') {
-    return null;
-  }
-
-  const candidates = [
-    body.reference_id,
-    body.data?.reference_id,
-    body.metadata?.reference_id,
-    body.data?.metadata?.reference_id,
+const getReference = (body) => {
+  const values = [
+    body?.reference_id,
+    body?.data?.reference_id,
+    body?.metadata?.reference_id,
   ];
 
-  for (const candidate of candidates) {
-    if (
-      typeof candidate === 'string' &&
-      candidate.trim() &&
-      candidate.trim().length <= 150
-    ) {
-      return candidate.trim();
-    }
+  return values.find(
+    value =>
+      typeof value === 'string' &&
+      value.trim().length > 0 &&
+      value.trim().length <= 150
+  )?.trim() || null;
+};
+
+// Only accept explicit, recognized outcomes.
+const checkOutcome = (value) => {
+  if (value === true) return 'verified';
+  if (value === false) return 'rejected';
+
+  if (typeof value !== 'string') return 'pending';
+
+  const normalized = value.trim().toLowerCase();
+
+  if (['success', 'successful', 'verified', 'passed', 'pass'].includes(normalized)) {
+    return 'verified';
   }
 
-  return null;
+  if (['failed', 'failure', 'rejected', 'declined', 'fail'].includes(normalized)) {
+    return 'rejected';
+  }
+
+  return 'pending';
+};
+
+const getStepStatus = (step) => {
+  if (!step || typeof step !== 'object') return 'pending';
+
+  // Do not treat a generic message or score as a pass.
+  return checkOutcome(step.status);
 };
 
 const handleDojahWebhook = async (req, res) => {
+  const secret = getWebhookSecret();
+
+  if (!secret) {
+    return res.status(503).json({
+      success: false,
+      message: 'Webhook verification is temporarily unavailable.',
+    });
+  }
+
+  if (!Buffer.isBuffer(req.rawBody)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Unable to verify webhook request.',
+    });
+  }
+
+  if (!verifySignature(
+    req.headers['x-dojah-signature'],
+    req.rawBody,
+    secret
+  )) {
+    return res.status(401).json({
+      success: false,
+      message: 'Webhook signature is missing or invalid.',
+    });
+  }
+
+  const body = req.body;
+  const reference = getReference(body);
+
+  if (!reference) {
+    // Authenticated delivery, but no safe correlation is possible.
+    return res.status(200).json({ success: true, received: true });
+  }
+
+  const sessionStatus = String(
+    body?.verification_status || ''
+  ).trim().toLowerCase();
+
+  const data = body?.data || {};
+
+  // Recognize only explicit step statuses.
+  const idStatus = getStepStatus(
+    data.id || data.id_data
+  );
+
+  const livenessStatus = getStepStatus(
+    data.selfie || data.liveness
+  );
+
+  const client = await pool.connect();
+
   try {
-    const secret = getWebhookSecret();
+    await client.query('BEGIN');
 
-    if (!secret) {
-      console.error(
-        'KYC webhook unavailable: signing secret is not configured.'
-      );
+    const found = await client.query(
+      `SELECT id, user_id, id_verification_status, liveness_status
+       FROM kyc_records
+       WHERE dojah_reference = $1
+         AND dojah_verification_type = 'identity'
+       FOR UPDATE`,
+      [reference]
+    );
 
-      return res.status(503).json({
-        success: false,
-        message: 'Webhook verification is temporarily unavailable.',
-      });
-    }
+    if (!found.rows.length) {
+      await client.query('ROLLBACK');
 
-    if (!Buffer.isBuffer(req.rawBody)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Unable to verify webhook request.',
-      });
-    }
-
-    const signature = req.headers['x-dojah-signature'];
-
-    if (typeof signature !== 'string' || !signature.trim()) {
-      return res.status(401).json({
-        success: false,
-        message: 'Webhook signature is missing or invalid.',
-      });
-    }
-
-    const expectedSignature = crypto
-      .createHmac('sha256', secret)
-      .update(req.rawBody)
-      .digest('hex');
-
-    if (!safeEqualHex(signature, expectedSignature)) {
-      console.warn('KYC webhook rejected: signature verification failed.');
-
-      return res.status(401).json({
-        success: false,
-        message: 'Webhook signature is missing or invalid.',
-      });
-    }
-
-    // The signature is valid. Only use the reference for correlation.
-    const referenceId = getReferenceId(req.body);
-
-    if (!referenceId) {
-      console.warn(
-        'KYC webhook accepted but no supported reference was found.'
-      );
-
-      // Acknowledge the authenticated delivery without changing KYC.
+      // Do not reveal whether a customer/reference exists.
       return res.status(200).json({
         success: true,
         received: true,
       });
     }
 
-    // Only touch the KYC record associated with this exact reference.
-    // Do not change verification status based on an unvalidated event.
-    const result = await pool.query(
+    const record = found.rows[0];
+
+    // A final, already verified check must not be downgraded by
+    // a later or duplicate event.
+    const currentId = String(
+      record.id_verification_status || ''
+    ).toLowerCase();
+
+    const currentLiveness = String(
+      record.liveness_status || ''
+    ).toLowerCase();
+
+    const sessionCompleted = sessionStatus === 'completed';
+
+    const nextId =
+      sessionCompleted && idStatus !== 'pending'
+        ? idStatus
+        : 'pending';
+
+    const nextLiveness =
+      sessionCompleted && livenessStatus !== 'pending'
+        ? livenessStatus
+        : 'pending';
+
+    const preserveId = ['verified', 'approved'].includes(currentId);
+    const preserveLiveness = ['verified', 'approved'].includes(currentLiveness);
+
+    await client.query(
       `UPDATE kyc_records
-       SET dojah_checked_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE dojah_reference = $1
-         AND dojah_verification_type = 'identity'
-       RETURNING id`,
-      [referenceId]
+       SET
+         id_verification_status = CASE
+           WHEN $2 = TRUE THEN id_verification_status
+           WHEN $3 <> 'pending' THEN $3
+           ELSE id_verification_status
+         END,
+         id_verified_at = CASE
+           WHEN $2 = TRUE THEN id_verified_at
+           WHEN $3 = 'verified' THEN COALESCE(id_verified_at, CURRENT_TIMESTAMP)
+           ELSE id_verified_at
+         END,
+         id_rejection_reason = CASE
+           WHEN $2 = TRUE THEN id_rejection_reason
+           WHEN $3 = 'rejected' THEN 'Identity check did not pass provider verification.'
+           ELSE id_rejection_reason
+         END,
+         liveness_status = CASE
+           WHEN $4 = TRUE THEN liveness_status
+           WHEN $5 <> 'pending' THEN $5
+           ELSE liveness_status
+         END,
+         dojah_checked_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [
+        record.id,
+        preserveId,
+        nextId,
+        preserveLiveness,
+        nextLiveness,
+      ]
     );
 
-    if (result.rowCount === 0) {
-      // Do not disclose whether a reference belongs to a customer.
-      console.warn(
-        'KYC webhook received with no matching active identity reference.'
+    // Update only the individual ID flag.
+    // Do not approve the whole account or change its tier/limits.
+    if (!preserveId && nextId === 'verified') {
+      await client.query(
+        `UPDATE users
+         SET id_verified = TRUE,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [record.user_id]
       );
-    } else {
-      console.info('KYC webhook correlated with an identity record.');
+    } else if (!preserveId && nextId === 'rejected') {
+      await client.query(
+        `UPDATE users
+         SET id_verified = FALSE,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [record.user_id]
+      );
     }
+
+    await client.query('COMMIT');
 
     return res.status(200).json({
       success: true,
       received: true,
     });
   } catch (error) {
-    // Do not log request bodies, SQL parameters, or identity information.
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+
     console.error('KYC webhook processing failed.');
 
     return res.status(500).json({
       success: false,
       message: 'Unable to process webhook.',
     });
+  } finally {
+    client.release();
   }
 };
 
