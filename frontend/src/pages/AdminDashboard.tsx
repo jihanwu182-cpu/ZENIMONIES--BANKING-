@@ -986,6 +986,112 @@ const loadKyc = useCallback(async () => {
 }, []);
 
   
+const handleKycDecision = async (
+  record: KycRecord,
+  stage: 'bvn' | 'tier2' | 'tier3',
+  decision: 'verify' | 'reject'
+) => {
+  const stageStatus = {
+    bvn: record.bvn_verification_status,
+    tier2: record.id_verification_status,
+    tier3: record.tier_3_verification_status,
+  }[stage];
+
+  if (stageStatus?.toLowerCase() !== 'pending') {
+    setError(
+      'Only pending verification stages can be approved or rejected.'
+    );
+    return;
+  }
+
+  let reason = '';
+
+  if (decision === 'reject') {
+    reason = kycRejectionReason.trim();
+
+    if (!reason) {
+      setError('Please enter a rejection reason before rejecting.');
+      return;
+    }
+  }
+
+  const confirmed = window.confirm(
+    decision === 'verify'
+      ? `Approve ${stage.toUpperCase()} verification for ${
+          record.full_name || record.email || 'this customer'
+        }?`
+      : `Reject ${stage.toUpperCase()} verification for ${
+          record.full_name || record.email || 'this customer'
+        }?`
+  );
+
+  if (!confirmed) return;
+
+  setKycActionLoading(true);
+
+  try {
+    const endpoint =
+      stage === 'bvn'
+        ? `/admin/kyc/${record.id}/bvn/${decision}`
+        : stage === 'tier2'
+        ? `/admin/kyc/${record.id}/tier2/${decision}`
+        : `/admin/kyc/${record.id}/tier3/${decision}`;
+
+    await api.post(
+      endpoint,
+      decision === 'reject' ? { reason } : {}
+    );
+
+    setSuccess(
+      `${stage.toUpperCase()} verification ${
+        decision === 'verify' ? 'approved' : 'rejected'
+      } successfully.`
+    );
+
+    setKycRejectionReason('');
+
+    await loadKyc();
+
+    setSelectedKyc((current) =>
+      current?.id === record.id
+        ? {
+            ...current,
+            ...(stage === 'bvn'
+              ? {
+                  bvn_verification_status:
+                    decision === 'verify' ? 'verified' : 'rejected',
+                  bvn_rejection_reason:
+                    decision === 'reject' ? reason : undefined,
+                }
+              : stage === 'tier2'
+              ? {
+                  id_verification_status:
+                    decision === 'verify' ? 'verified' : 'rejected',
+                  id_rejection_reason:
+                    decision === 'reject' ? reason : undefined,
+                }
+              : {
+                  tier_3_verification_status:
+                    decision === 'verify' ? 'verified' : 'rejected',
+                  tier_3_rejection_reason:
+                    decision === 'reject' ? reason : undefined,
+                }),
+          }
+        : current
+    );
+  } catch (error) {
+    console.error('KYC decision failed:', error);
+
+    setError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to process the KYC decision.'
+    );
+  } finally {
+    setKycActionLoading(false);
+  }
+};
+
   /* ==========================================================
      LOAD TRANSACTIONS
      ========================================================== */
