@@ -848,6 +848,14 @@ const [revenueApiSummary, setRevenueApiSummary] =
 
   const [kycFilter, setKycFilter] =
     useState('ALL');
+ const [selectedKyc, setSelectedKyc] =
+  useState<KycRecord | null>(null);
+
+const [kycRejectionReason, setKycRejectionReason] =
+  useState('');
+
+const [kycActionLoading, setKycActionLoading] =
+  useState(false);
 
   const [customerMenuAnchor, setCustomerMenuAnchor] =
     useState<null | HTMLElement>(null);
