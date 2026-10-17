@@ -3387,7 +3387,7 @@ const renderKyc = () => {
             </Typography>
 
             <Typography variant="body2">
-              BVN: {maskValue(selectedKyc.bvn)}
+              BVN: {selectedKyc.bvn || 'Not provided'}
             </Typography>
 
             <Typography variant="body2">
@@ -3395,7 +3395,7 @@ const renderKyc = () => {
             </Typography>
 
             <Typography variant="body2">
-              Identification number: {maskValue(selectedKyc.document_number)}
+              Identification number: {selectedKyc.document_number || 'Not provided'}
             </Typography>
 
             <Divider />
