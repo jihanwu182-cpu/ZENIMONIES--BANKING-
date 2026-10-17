@@ -3072,11 +3072,7 @@ const revenueChartData: Array<{
      KYC
      ============================================================ */
 
-  
 const renderKyc = () => {
-  const selectedStatus = (value?: string) =>
-    String(value || 'pending').toLowerCase();
-
   const maskValue = (value?: string) => {
     if (!value) return 'Not provided';
     if (value.length <= 4) return '••••';
@@ -3091,7 +3087,12 @@ const renderKyc = () => {
         description="Review customer verification records and KYC status."
       />
 
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+      <Stack
+        direction="row"
+        spacing={1}
+        flexWrap="wrap"
+        useFlexGap
+      >
         {[
           ['ALL', 'All'],
           ['PENDING', 'Pending'],
@@ -3110,7 +3111,10 @@ const renderKyc = () => {
               ...(kycFilter === value
                 ? {
                     backgroundColor: BRAND.dark,
-                    '&:hover': { backgroundColor: BRAND.green },
+                    color: BRAND.white,
+                    '&:hover': {
+                      backgroundColor: BRAND.green,
+                    },
                   }
                 : {
                     borderColor: BRAND.border,
@@ -3123,56 +3127,114 @@ const renderKyc = () => {
         ))}
       </Stack>
 
-      <Card sx={pageCardSx}>
-        <TableContainer>
-          <Table size="small" sx={{ minWidth: 850 }}>
+      <Card sx={{ ...pageCardSx, overflow: 'hidden' }}>
+        <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+          <Table
+            size="small"
+            sx={{
+              minWidth: 760,
+              '& th, & td': {
+                px: 1.25,
+                py: 1.5,
+                whiteSpace: 'nowrap',
+              },
+            }}
+          >
             <TableHead>
               <TableRow>
-                {['Customer', 'Verification', 'Tier', 'Status', 'Submitted', 'Action'].map(
-                  (heading) => (
-                    <TableCell
-                      key={heading}
-                      sx={{
-                        fontSize: 10,
-                        fontWeight: 800,
-                        color: BRAND.muted,
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.5,
-                      }}
-                    >
-                      {heading}
-                    </TableCell>
-                  )
-                )}
+                {[
+                  'Customer',
+                  'Verification',
+                  'Tier',
+                  'Status',
+                  'Submitted',
+                  'Action',
+                ].map((heading) => (
+                  <TableCell
+                    key={heading}
+                    sx={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color: BRAND.muted,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    {heading}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableHead>
 
             <TableBody>
               {filteredKyc.map((record) => {
+                const row = record as KycRecord & {
+                  name?: string;
+                  user_email?: string;
+                  verification_stage?: string;
+                };
+
                 const overallStatus =
-                  record.verification_status ||
-                  record.status ||
-                  record.kyc_status ||
-                  record.kycStatus ||
+                  row.verification_status ||
+                  row.status ||
+                  row.kyc_status ||
+                  row.kycStatus ||
                   'pending';
 
+                const customerName =
+                  row.full_name ||
+                  row.fullName ||
+                  row.name ||
+                  'Unknown customer';
+
+                const customerEmail =
+                  row.email ||
+                  row.user_email ||
+                  '—';
+
+                const verificationStage =
+                  row.verification_type ||
+                  row.verificationType ||
+                  row.verification_stage ||
+                  (row.bvn_verification_status === 'pending'
+                    ? 'BVN verification'
+                    : row.id_verification_status === 'pending'
+                    ? 'Identity verification'
+                    : row.tier_3_verification_status === 'pending'
+                    ? 'Tier 3 verification'
+                    : 'KYC review');
+
                 return (
-                  <TableRow hover key={record.id}>
+                  <TableRow hover key={row.id}>
                     <TableCell>
-                      <Typography sx={{ fontSize: 12, fontWeight: 700 }}>
-                        {record.full_name || record.fullName || 'Unknown customer'}
+                      <Typography
+                        sx={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: BRAND.text,
+                        }}
+                      >
+                        {customerName}
                       </Typography>
-                      <Typography sx={{ fontSize: 10, color: BRAND.muted }}>
-                        {record.email || '—'}
+
+                      <Typography
+                        sx={{
+                          fontSize: 10,
+                          color: BRAND.muted,
+                        }}
+                      >
+                        {customerEmail}
                       </Typography>
                     </TableCell>
 
                     <TableCell>
-                      {record.verification_type || record.verificationType || 'KYC'}
+                      <Typography sx={{ fontSize: 12 }}>
+                        {verificationStage}
+                      </Typography>
                     </TableCell>
 
                     <TableCell>
-                      {record.kyc_tier || record.tier || '—'}
+                      {row.kyc_tier || row.tier || '—'}
                     </TableCell>
 
                     <TableCell>
@@ -3180,19 +3242,24 @@ const renderKyc = () => {
                         size="small"
                         label={statusLabel(overallStatus)}
                         color={statusColor(overallStatus)}
-                        sx={{ fontSize: 10, fontWeight: 800 }}
+                        sx={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                        }}
                       />
                     </TableCell>
 
                     <TableCell>
-                      {formatDate(record.created_at || record.createdAt)}
+                      <Typography sx={{ fontSize: 11 }}>
+                        {formatDate(row.created_at || row.createdAt)}
+                      </Typography>
                     </TableCell>
 
                     <TableCell>
                       <Button
                         size="small"
                         onClick={() => {
-                          setSelectedKyc(record);
+                          setSelectedKyc(row);
                           setKycRejectionReason('');
                         }}
                         sx={{
@@ -3210,8 +3277,16 @@ const renderKyc = () => {
 
               {filteredKyc.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 5, color: BRAND.muted }}>
-                    No KYC records found.
+                  <TableCell
+                    colSpan={6}
+                    align="center"
+                    sx={{
+                      py: 5,
+                      color: BRAND.muted,
+                      whiteSpace: 'normal',
+                    }}
+                  >
+                    No KYC records found for this filter.
                   </TableCell>
                 </TableRow>
               )}
@@ -3221,22 +3296,49 @@ const renderKyc = () => {
       </Card>
 
       {selectedKyc && (
-        <Card sx={{ ...pageCardSx, p: 2 }}>
+        <Card sx={{ ...pageCardSx, p: 2, overflow: 'hidden' }}>
           <Stack spacing={2}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Box>
-                <Typography sx={{ fontSize: 16, fontWeight: 800, color: BRAND.dark }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              spacing={1}
+            >
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  sx={{
+                    fontSize: 16,
+                    fontWeight: 800,
+                    color: BRAND.dark,
+                  }}
+                >
                   Customer KYC Review
                 </Typography>
-                <Typography sx={{ fontSize: 12, color: BRAND.muted }}>
-                  {selectedKyc.full_name || selectedKyc.fullName || 'Unknown customer'}
+
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    color: BRAND.muted,
+                    overflowWrap: 'anywhere',
+                  }}
+                >
+                  {selectedKyc.full_name ||
+                    selectedKyc.fullName ||
+                    (selectedKyc as KycRecord & { name?: string }).name ||
+                    'Unknown customer'}
                 </Typography>
               </Box>
 
               <Button
                 size="small"
-                onClick={() => setSelectedKyc(null)}
-                sx={{ textTransform: 'none', color: BRAND.green }}
+                onClick={() => {
+                  setSelectedKyc(null);
+                  setKycRejectionReason('');
+                }}
+                sx={{
+                  textTransform: 'none',
+                  color: BRAND.green,
+                }}
               >
                 Close
               </Button>
@@ -3248,21 +3350,26 @@ const renderKyc = () => {
               Customer information
             </Typography>
 
-            <Typography variant="body2">
+            <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
               Email: {selectedKyc.email || 'Not provided'}
             </Typography>
+
             <Typography variant="body2">
               Phone: {selectedKyc.phone || 'Not provided'}
             </Typography>
+
             <Typography variant="body2">
               KYC tier: {selectedKyc.kyc_tier || selectedKyc.tier || 'Not specified'}
             </Typography>
+
             <Typography variant="body2">
               BVN: {maskValue(selectedKyc.bvn)}
             </Typography>
+
             <Typography variant="body2">
               Identification type: {selectedKyc.document_type || 'Not provided'}
             </Typography>
+
             <Typography variant="body2">
               Identification number: {maskValue(selectedKyc.document_number)}
             </Typography>
@@ -3274,37 +3381,64 @@ const renderKyc = () => {
             </Typography>
 
             {[
-              ['BVN verification', selectedKyc.bvn_verification_status, selectedKyc.bvn_rejection_reason],
-              ['Identity verification', selectedKyc.id_verification_status, selectedKyc.id_rejection_reason],
-              ['Tier 3 verification', selectedKyc.tier_3_verification_status, selectedKyc.tier_3_rejection_reason],
-              ['Liveness check', selectedKyc.liveness_status, undefined],
-            ].map(([label, status, reason]) => (
+              {
+                label: 'BVN verification',
+                status: selectedKyc.bvn_verification_status,
+                reason: selectedKyc.bvn_rejection_reason,
+              },
+              {
+                label: 'Identity verification',
+                status: selectedKyc.id_verification_status,
+                reason: selectedKyc.id_rejection_reason,
+              },
+              {
+                label: 'Tier 3 verification',
+                status: selectedKyc.tier_3_verification_status,
+                reason: selectedKyc.tier_3_rejection_reason,
+              },
+              {
+                label: 'Liveness check',
+                status: selectedKyc.liveness_status,
+                reason: undefined,
+              },
+            ].map((stage) => (
               <Box
-                key={label}
+                key={stage.label}
                 sx={{
                   p: 1.5,
                   border: `1px solid ${BRAND.border}`,
                   borderRadius: 2,
+                  minWidth: 0,
                 }}
               >
                 <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-                  {label}
+                  {stage.label}
                 </Typography>
+
                 <Chip
                   size="small"
-                  label={statusLabel(status)}
+                  label={statusLabel(stage.status)}
                   sx={{ mt: 0.75, fontSize: 10 }}
                 />
-                {reason && (
-                  <Typography sx={{ mt: 0.75, fontSize: 12, color: BRAND.muted }}>
-                    Rejection reason: {reason}
+
+                {stage.reason && (
+                  <Typography
+                    sx={{
+                      mt: 0.75,
+                      fontSize: 12,
+                      color: BRAND.muted,
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    Rejection reason: {stage.reason}
                   </Typography>
                 )}
               </Box>
             ))}
 
             <Typography sx={{ fontSize: 11, color: BRAND.muted }}>
-              Verification statuses shown above are taken from the backend. No verification result is assumed.
+              Verification statuses shown here come from the backend.
+              No verification result is assumed.
             </Typography>
           </Stack>
         </Card>
