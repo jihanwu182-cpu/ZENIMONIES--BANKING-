@@ -961,19 +961,29 @@ const [kycActionLoading, setKycActionLoading] =
      LOAD KYC
      ========================================================== */
 
-  const loadKyc = useCallback(async () => {
+const loadKyc = useCallback(async () => {
+  try {
     const response = await api.get('/admin/kyc');
 
+    console.log('ZENIMONIES KYC API response:', response.data);
+
     const records =
-      response.data?.kyc_records ||
-      response.data?.requests ||
-      response.data?.records ||
+      response.data?.kyc_records ??
+      response.data?.requests ??
+      response.data?.records ??
       [];
 
-    setKycRecords(
-      Array.isArray(records) ? records : []
-    );
-  }, []);
+    if (!Array.isArray(records)) {
+      throw new Error('The KYC API did not return a records array.');
+    }
+
+    setKycRecords(records);
+  } catch (error) {
+    console.error('Failed to load KYC records:', error);
+    setKycRecords([]);
+    throw error;
+  }
+}, []);
 
   
   /* ==========================================================
