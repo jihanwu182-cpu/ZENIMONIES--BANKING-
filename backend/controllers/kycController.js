@@ -2059,6 +2059,7 @@ const startDojahVerification = async (req, res) => {
 // It does not trust a reference supplied by the browser.
 // ============================================================
 
+
 const confirmDojahVerification = async (req, res) => {
   const userId =
     req.user?.id ||
@@ -2080,9 +2081,13 @@ const confirmDojahVerification = async (req, res) => {
         dojah_reference,
         dojah_verification_type,
         id_verification_status,
-        liveness_status
+        liveness_status,
+        liveness_score,
+        selfie_match_score,
+        dojah_checked_at
       FROM kyc_records
       WHERE user_id = $1
+        AND dojah_verification_type = 'identity'
       ORDER BY created_at DESC
       LIMIT 1
       `,
@@ -2091,71 +2096,85 @@ const confirmDojahVerification = async (req, res) => {
 
     const record = result.rows[0];
 
-    if (
-      !record ||
-      !record.dojah_reference ||
-      record.dojah_verification_type !== 'identity'
-    ) {
+    if (!record || !record.dojah_reference) {
       return res.status(404).json({
         success: false,
-        message:
-          'No active Dojah verification session was found.',
+        message: 'No identity verification session was found.',
       });
     }
 
-    const dojahResult =
-      await getDojahVerification(
-        record.dojah_reference
-      );
+    const normalize = (value) => {
+      const status = String(value || '').trim().toLowerCase();
 
-    if (!dojahResult.success) {
-      return res.status(502).json({
-        success: false,
-        status: 'pending',
-        message:
-          'We could not retrieve the verification result from Dojah. Please try again.',
-      });
-    }
-    // Record that a server-side provider check was made.
-    await pool.query(
-      `
-      UPDATE kyc_records
-      SET dojah_checked_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1 AND user_id = $2
-      `,
-      [record.id, userId]
+      if (['verified', 'approved'].includes(status)) {
+        return 'verified';
+      }
+
+      if (['rejected', 'failed', 'declined'].includes(status)) {
+        return 'rejected';
+      }
+
+      return 'pending';
+    };
+
+    const idStatus = normalize(
+      record.id_verification_status
     );
 
-    // Do not expose the full Dojah response because it may
-    // contain identity information or other sensitive data.
-    //
-    // Do not mark the customer verified from the widget
-    // callback or an unvalidated provider response.
-    //
-    // The exact approved response fields must be mapped
-    // before we update verified flags or account limits.
+    const livenessStatus = normalize(
+      record.liveness_status
+    );
+
+    // Identity verification is complete only when both checks
+    // have an approved result.
+    const verified =
+      idStatus === 'verified' &&
+      livenessStatus === 'verified';
+
+    const rejected =
+      idStatus === 'rejected' ||
+      livenessStatus === 'rejected';
+
+    const status = verified
+      ? 'verified'
+      : rejected
+      ? 'rejected'
+      : 'pending';
 
     return res.status(200).json({
       success: true,
-      status: 'pending',
-      verified: false,
-      message:
-        'Dojah verification result retrieved. Verification remains pending until the provider result is validated.',
+      status,
+      verified,
+      id_verification_status: idStatus,
+      liveness_status: livenessStatus,
+      liveness_score:
+        record.liveness_score == null
+          ? null
+          : Number(record.liveness_score),
+      selfie_match_score:
+        record.selfie_match_score == null
+          ? null
+          : Number(record.selfie_match_score),
+      checked_at: record.dojah_checked_at,
+      message: verified
+        ? 'Identity verification has been approved.'
+        : rejected
+        ? 'Identity verification requires attention.'
+        : 'Identity verification is still pending review.',
     });
   } catch (error) {
     console.error(
-      'Confirm Dojah verification failed:',
+      'Confirm identity verification failed:',
       error.message
     );
 
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to confirm Dojah verification.',
+      message: 'Unable to retrieve verification status.',
     });
   }
 };
+
 // ============================================================
 // EXPORTS
 // ============================================================
