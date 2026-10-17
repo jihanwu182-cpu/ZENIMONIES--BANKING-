@@ -69,6 +69,19 @@ const getStepStatus = (step) => {
   return checkOutcome(step.status);
 };
 
+const getScore = (value) => {
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    value > 100
+  ) {
+    return null;
+  }
+
+  return value;
+};
+
 const handleDojahWebhook = async (req, res) => {
   const secret = getWebhookSecret();
 
