@@ -634,7 +634,13 @@ CREATE TABLE IF NOT EXISTS kyc_records (
     selfie_url TEXT,
 
     liveness_status VARCHAR(30)
-        NOT NULL DEFAULT 'pending',
+    NOT NULL DEFAULT 'pending',
+
+liveness_score NUMERIC(5,2),
+
+selfie_match_score NUMERIC(5,2),
+
+liveness_provider_reference VARCHAR(150),
 
     liveness_provider_reference VARCHAR(150),
 
