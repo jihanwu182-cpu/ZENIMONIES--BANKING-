@@ -1098,27 +1098,51 @@ const loadKyc = useCallback(async () => {
      FILTERED KYC
      ========================================================== */
 
-  const filteredKyc =
-    useMemo(() => {
-      if (kycFilter === 'ALL') {
-        return kycRecords;
-      }
+  const filteredKyc = useMemo(() => {
+  if (kycFilter === 'ALL') {
+    return kycRecords;
+  }
 
-      return kycRecords.filter(
-        (record) =>
-          String(
-            record.status ||
-              record.kyc_status ||
-              record.kycStatus ||
-              ''
-          ).toUpperCase() ===
-          kycFilter
+  return kycRecords.filter((record) => {
+    const overallStatus = String(
+      record.verification_status ||
+        record.status ||
+        record.kyc_status ||
+        record.kycStatus ||
+        ''
+    ).toLowerCase();
+
+    const stageStatuses = [
+      record.bvn_verification_status,
+      record.id_verification_status,
+      record.tier_3_verification_status,
+    ].map((status) => String(status || '').toLowerCase());
+
+    if (kycFilter === 'PENDING') {
+      return (
+        overallStatus === 'pending' ||
+        overallStatus === 'under_review' ||
+        stageStatuses.includes('pending')
       );
-    }, [
-      kycRecords,
-      kycFilter,
-    ]);
+    }
 
+    if (kycFilter === 'APPROVED') {
+      return (
+        overallStatus === 'approved' ||
+        overallStatus === 'verified'
+      );
+    }
+
+    if (kycFilter === 'REJECTED') {
+      return (
+        overallStatus === 'rejected' ||
+        stageStatuses.includes('rejected')
+      );
+    }
+
+    return true;
+  });
+}, [kycRecords, kycFilter]);
   /* ==========================================================
      RECENT TRANSACTIONS
      ========================================================== */
