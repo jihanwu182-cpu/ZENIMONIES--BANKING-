@@ -3202,375 +3202,663 @@ const revenueChartData: Array<{
      KYC
      ============================================================ */
 
+
 const renderKyc = () => {
-  const maskValue = (value?: string) => {
-    if (!value) return 'Not provided';
-    if (value.length <= 4) return '••••';
-    return `${'•'.repeat(Math.min(value.length - 4, 8))}${value.slice(-4)}`;
+  const filteredKycRecords = kycRecords.filter((record) => {
+    const filter = String(kycFilter || 'all').toLowerCase();
+
+    if (filter === 'all') return true;
+
+    const overallStatus = String(
+      record.verification_status || record.status || ''
+    ).toLowerCase();
+
+    if (filter === 'pending') {
+      return (
+        overallStatus === 'pending' ||
+        [
+          record.bvn_verification_status,
+          record.id_verification_status,
+          record.tier_3_verification_status,
+        ].some((status) => String(status || '').toLowerCase() === 'pending')
+      );
+    }
+
+    if (filter === 'approved') {
+      return overallStatus === 'verified' || overallStatus === 'approved';
+    }
+
+    if (filter === 'rejected') {
+      return overallStatus === 'rejected';
+    }
+
+    return true;
+  });
+
+  const displayDate = (value?: string) => {
+    if (!value) return '—';
+
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime())
+      ? '—'
+      : date.toLocaleString();
+  };
+
+  const displayStatus = (value?: string) => {
+    if (!value) return 'Not submitted';
+
+    return value
+      .replace(/[_-]/g, ' ')
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  };
+
+  const statusColorForKyc = (
+    value?: string
+  ): 'success' | 'error' | 'warning' | 'default' => {
+    const status = String(value || '').toLowerCase();
+
+    if (status === 'verified' || status === 'approved') {
+      return 'success';
+    }
+
+    if (status === 'rejected' || status === 'failed') {
+      return 'error';
+    }
+
+    if (status === 'pending' || status === 'processing') {
+      return 'warning';
+    }
+
+    return 'default';
+  };
+
+  const openDocument = (url?: string) => {
+    if (!url) return;
+
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
     <Stack spacing={2.5}>
-      <SectionHeader
-        eyebrow="Risk & Verification"
-        title="KYC & Verification"
-        description="Review customer verification records and KYC status."
-      />
+      {/* KYC heading */}
+      <Box>
+        <Typography
+          variant="h4"
+          sx={{ fontWeight: 800, color: BRAND.dark }}
+        >
+          KYC & Verification
+        </Typography>
 
+        <Typography sx={{ mt: 0.5, color: BRAND.muted }}>
+          Review customer identity submissions and make verification
+          decisions based on the available evidence.
+        </Typography>
+      </Box>
+
+      {/* Filter tabs */}
       <Stack
         direction="row"
         spacing={1}
-        flexWrap="wrap"
         useFlexGap
+        flexWrap="wrap"
       >
         {[
-          ['ALL', 'All'],
-          ['PENDING', 'Pending'],
-          ['APPROVED', 'Approved'],
-          ['REJECTED', 'Rejected'],
-        ].map(([value, label]) => (
+          { value: 'all', label: 'All submissions' },
+          { value: 'pending', label: 'Pending' },
+          { value: 'approved', label: 'Approved' },
+          { value: 'rejected', label: 'Rejected' },
+        ].map((item) => (
           <Button
-            key={value}
+            key={item.value}
             size="small"
-            variant={kycFilter === value ? 'contained' : 'outlined'}
-            onClick={() => setKycFilter(value)}
+            variant={kycFilter === item.value ? 'contained' : 'outlined'}
+            onClick={() => setKycFilter(item.value)}
             sx={{
               borderRadius: 2,
               textTransform: 'none',
               fontWeight: 700,
-              ...(kycFilter === value
+              ...(kycFilter === item.value
                 ? {
-                    backgroundColor: BRAND.dark,
-                    color: BRAND.white,
+                    backgroundColor: BRAND.green,
+                    color: '#fff',
                     '&:hover': {
-                      backgroundColor: BRAND.green,
+                      backgroundColor: BRAND.dark,
                     },
                   }
                 : {
+                    color: BRAND.dark,
                     borderColor: BRAND.border,
-                    color: BRAND.text,
                   }),
             }}
           >
-            {label}
+            {item.label}
           </Button>
         ))}
+
+        <Box sx={{ flexGrow: 1 }} />
+
+        <Button
+          variant="outlined"
+          onClick={() => {
+            void loadKyc().catch((error) => {
+              setError(
+                error instanceof Error
+                  ? error.message
+                  : 'Unable to refresh KYC records.'
+              );
+            });
+          }}
+          sx={{
+            borderColor: BRAND.green,
+            color: BRAND.green,
+            textTransform: 'none',
+            fontWeight: 700,
+          }}
+        >
+          Refresh
+        </Button>
       </Stack>
 
-      <Card sx={{ ...pageCardSx, overflow: 'hidden' }}>
-        <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
-          <Table
-            size="small"
-            sx={{
-              minWidth: 760,
-              '& th, & td': {
-                px: 1.25,
-                py: 1.5,
-                whiteSpace: 'nowrap',
-              },
-            }}
+      {/* KYC queue */}
+      <Card
+        variant="outlined"
+        sx={{ borderColor: BRAND.border, borderRadius: 3 }}
+      >
+        <CardContent>
+          <Typography
+            sx={{ mb: 2, fontWeight: 800, color: BRAND.dark }}
           >
-            <TableHead>
-              <TableRow>
-                {[
-                  'Customer',
-                  'Verification',
-                  'Tier',
-                  'Status',
-                  'Submitted',
-                  'Action',
-                ].map((heading) => (
-                  <TableCell
-                    key={heading}
-                    sx={{
-                      fontSize: 10,
-                      fontWeight: 800,
-                      color: BRAND.muted,
-                      textTransform: 'uppercase',
-                      letterSpacing: 0.5,
-                    }}
-                  >
-                    {heading}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
+            Verification queue
+          </Typography>
 
-            <TableBody>
-              {filteredKyc.map((record) => {
-                const row = record as KycRecord & {
-                  name?: string;
-                  user_email?: string;
-                  verification_stage?: string;
-                };
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table sx={{ minWidth: 850 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Customer</TableCell>
+                  <TableCell>BVN</TableCell>
+                  <TableCell>Tier 2</TableCell>
+                  <TableCell>Tier 3</TableCell>
+                  <TableCell>Overall status</TableCell>
+                  <TableCell>Submitted</TableCell>
+                  <TableCell align="right">Action</TableCell>
+                </TableRow>
+              </TableHead>
 
-                const overallStatus =
-                  row.verification_status ||
-                  row.status ||
-                  row.kyc_status ||
-                  row.kycStatus ||
-                  'pending';
-
-                const customerName =
-                  row.full_name ||
-                  row.fullName ||
-                  row.name ||
-                  'Unknown customer';
-
-                const customerEmail =
-                  row.email ||
-                  row.user_email ||
-                  '—';
-
-                const verificationStage =
-                  row.verification_type ||
-                  row.verificationType ||
-                  row.verification_stage ||
-                  (row.bvn_verification_status === 'pending'
-                    ? 'BVN verification'
-                    : row.id_verification_status === 'pending'
-                    ? 'Identity verification'
-                    : row.tier_3_verification_status === 'pending'
-                    ? 'Tier 3 verification'
-                    : 'KYC review');
-
-                return (
-                  <TableRow hover key={row.id}>
+              <TableBody>
+                {filteredKycRecords.map((record) => (
+                  <TableRow key={record.id} hover>
                     <TableCell>
-                      <Typography
-                        sx={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: BRAND.text,
-                        }}
-                      >
-                        {customerName}
+                      <Typography sx={{ fontWeight: 700 }}>
+                        {record.full_name || 'Unnamed customer'}
                       </Typography>
 
                       <Typography
-                        sx={{
-                          fontSize: 10,
-                          color: BRAND.muted,
-                        }}
+                        variant="body2"
+                        sx={{ color: BRAND.muted }}
                       >
-                        {customerEmail}
+                        {record.email || 'No email'}
                       </Typography>
-                    </TableCell>
 
-                    <TableCell>
-                      <Typography sx={{ fontSize: 12 }}>
-                        {verificationStage}
+                      <Typography
+                        variant="caption"
+                        sx={{ color: BRAND.muted }}
+                      >
+                        {record.phone || 'No phone'}
                       </Typography>
-                    </TableCell>
-
-                    <TableCell>
-                      {row.kyc_tier || row.tier || '—'}
                     </TableCell>
 
                     <TableCell>
                       <Chip
                         size="small"
-                        label={statusLabel(overallStatus)}
-                        color={statusColor(overallStatus)}
-                        sx={{
-                          fontSize: 10,
-                          fontWeight: 800,
-                        }}
+                        label={displayStatus(
+                          record.bvn_verification_status
+                        )}
+                        color={statusColorForKyc(
+                          record.bvn_verification_status
+                        )}
                       />
                     </TableCell>
 
                     <TableCell>
-                      <Typography sx={{ fontSize: 11 }}>
-                        {formatDate(row.created_at || row.createdAt)}
-                      </Typography>
+                      <Chip
+                        size="small"
+                        label={displayStatus(
+                          record.id_verification_status
+                        )}
+                        color={statusColorForKyc(
+                          record.id_verification_status
+                        )}
+                      />
                     </TableCell>
 
                     <TableCell>
+                      <Chip
+                        size="small"
+                        label={displayStatus(
+                          record.tier_3_verification_status
+                        )}
+                        color={statusColorForKyc(
+                          record.tier_3_verification_status
+                        )}
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={displayStatus(
+                          record.verification_status
+                        )}
+                        color={statusColorForKyc(
+                          record.verification_status
+                        )}
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      {displayDate(record.created_at)}
+                    </TableCell>
+
+                    <TableCell align="right">
                       <Button
                         size="small"
+                        variant="outlined"
                         onClick={() => {
-                          setSelectedKyc(row);
+                          setSelectedKyc(record);
                           setKycRejectionReason('');
+                          setError('');
                         }}
                         sx={{
+                          borderColor: BRAND.green,
                           color: BRAND.green,
-                          fontWeight: 800,
                           textTransform: 'none',
+                          fontWeight: 700,
                         }}
                       >
                         Review
                       </Button>
                     </TableCell>
                   </TableRow>
+                ))}
+
+                {filteredKycRecords.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">
+                      No KYC records found for this filter.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
+      {/* Customer review panel */}
+      {selectedKyc && (
+        <Card
+          variant="outlined"
+          sx={{ borderColor: BRAND.border, borderRadius: 3 }}
+        >
+          <CardContent>
+            <Stack spacing={2.5}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                justifyContent="space-between"
+                alignItems={{ xs: 'flex-start', sm: 'center' }}
+                spacing={1}
+              >
+                <Box>
+                  <Typography
+                    variant="h6"
+                    sx={{ fontWeight: 800, color: BRAND.dark }}
+                  >
+                    Customer review
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    sx={{ color: BRAND.muted }}
+                  >
+                    Review the submitted details and each verification
+                    stage separately.
+                  </Typography>
+                </Box>
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    setSelectedKyc(null);
+                    setKycRejectionReason('');
+                  }}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Close review
+                </Button>
+              </Stack>
+
+              <Divider />
+
+              {/* Customer details */}
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: 'repeat(2, minmax(0, 1fr))',
+                  },
+                  gap: 2,
+                }}
+              >
+                {[
+                  {
+                    label: 'Full name',
+                    value: selectedKyc.full_name,
+                  },
+                  {
+                    label: 'Email',
+                    value: selectedKyc.email,
+                  },
+                  {
+                    label: 'Phone',
+                    value: selectedKyc.phone,
+                  },
+                  {
+                    label: 'KYC tier',
+                    value: selectedKyc.kyc_tier,
+                  },
+                  {
+                    label: 'BVN',
+                    value: selectedKyc.bvn,
+                  },
+                  {
+                    label: 'Identity document type',
+                    value: selectedKyc.document_type,
+                  },
+                  {
+                    label: 'Identity document number',
+                    value: selectedKyc.document_number,
+                  },
+                  {
+                    label: 'Submitted',
+                    value: displayDate(selectedKyc.created_at),
+                  },
+                ].map((detail) => (
+                  <Box
+                    key={detail.label}
+                    sx={{
+                      p: 1.5,
+                      border: `1px solid ${BRAND.border}`,
+                      borderRadius: 2,
+                      minWidth: 0,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{ color: BRAND.muted }}
+                    >
+                      {detail.label}
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        mt: 0.5,
+                        fontWeight: 700,
+                        overflowWrap: 'anywhere',
+                      }}
+                    >
+                      {detail.value === undefined ||
+                      detail.value === null ||
+                      detail.value === ''
+                        ? 'Not provided'
+                        : String(detail.value)}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+
+              {/* Submitted evidence */}
+              <Box>
+                <Typography
+                  sx={{ mb: 1.5, fontWeight: 800, color: BRAND.dark }}
+                >
+                  Submitted documents
+                </Typography>
+
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  useFlexGap
+                  flexWrap="wrap"
+                >
+                  {[
+                    {
+                      label: 'Open ID front',
+                      url: selectedKyc.document_front_url,
+                    },
+                    {
+                      label: 'Open ID back',
+                      url: selectedKyc.document_back_url,
+                    },
+                    {
+                      label: 'Open selfie',
+                      url: selectedKyc.selfie_url,
+                    },
+                    {
+                      label: 'Open Tier 3 document',
+                      url: selectedKyc.tier_3_document_url,
+                    },
+                  ].map((document) => (
+                    <Button
+                      key={document.label}
+                      size="small"
+                      variant="outlined"
+                      disabled={!document.url}
+                      onClick={() => openDocument(document.url)}
+                      sx={{
+                        textTransform: 'none',
+                        borderColor: BRAND.green,
+                        color: BRAND.green,
+                      }}
+                    >
+                      {document.label}
+                    </Button>
+                  ))}
+                </Stack>
+
+                {!selectedKyc.document_front_url &&
+                  !selectedKyc.document_back_url &&
+                  !selectedKyc.selfie_url &&
+                  !selectedKyc.tier_3_document_url && (
+                    <Typography
+                      variant="body2"
+                      sx={{ mt: 1, color: BRAND.muted }}
+                    >
+                      No document links are available for this record.
+                    </Typography>
+                  )}
+              </Box>
+
+              <Divider />
+
+              {/* Verification stages */}
+              <Typography
+                sx={{ fontWeight: 800, color: BRAND.dark }}
+              >
+                Verification stages
+              </Typography>
+
+              {[
+                {
+                  key: 'bvn' as const,
+                  label: 'BVN verification',
+                  status: selectedKyc.bvn_verification_status,
+                  reason: selectedKyc.bvn_rejection_reason,
+                },
+                {
+                  key: 'tier2' as const,
+                  label: 'Identity verification (Tier 2)',
+                  status: selectedKyc.id_verification_status,
+                  reason: selectedKyc.id_rejection_reason,
+                },
+                {
+                  key: 'tier3' as const,
+                  label: 'Tier 3 verification',
+                  status: selectedKyc.tier_3_verification_status,
+                  reason: selectedKyc.tier_3_rejection_reason,
+                },
+              ].map((stage) => {
+                const stageStatus = String(
+                  stage.status || ''
+                ).toLowerCase();
+
+                const pending = stageStatus === 'pending';
+                const verified = stageStatus === 'verified';
+
+                return (
+                  <Box
+                    key={stage.key}
+                    sx={{
+                      p: 1.5,
+                      border: `1px solid ${BRAND.border}`,
+                      borderRadius: 2,
+                      minWidth: 0,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+                      {stage.label}
+                    </Typography>
+
+                    <Chip
+                      size="small"
+                      label={displayStatus(stage.status)}
+                      color={statusColorForKyc(stage.status)}
+                      sx={{ mt: 0.75 }}
+                    />
+
+                    {stage.reason && (
+                      <Typography
+                        sx={{
+                          mt: 0.75,
+                          fontSize: 12,
+                          color: BRAND.muted,
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        Rejection reason: {stage.reason}
+                      </Typography>
+                    )}
+
+                    {pending && (
+                      <Stack spacing={1} sx={{ mt: 1.5 }}>
+                        <Button
+                          fullWidth
+                          size="small"
+                          variant="contained"
+                          disabled={kycActionLoading}
+                          onClick={() =>
+                            handleKycDecision(
+                              selectedKyc,
+                              stage.key,
+                              'verify'
+                            )
+                          }
+                          sx={{
+                            backgroundColor: BRAND.green,
+                            textTransform: 'none',
+                            fontWeight: 700,
+                            '&:hover': {
+                              backgroundColor: BRAND.dark,
+                            },
+                          }}
+                        >
+                          Approve
+                        </Button>
+
+                        <TextField
+                          size="small"
+                          fullWidth
+                          label="Reason for rejection"
+                          value={kycRejectionReason}
+                          onChange={(event) =>
+                            setKycRejectionReason(event.target.value)
+                          }
+                          inputProps={{ maxLength: 500 }}
+                        />
+
+                        <Button
+                          fullWidth
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          disabled={
+                            kycActionLoading ||
+                            !kycRejectionReason.trim()
+                          }
+                          onClick={() =>
+                            handleKycDecision(
+                              selectedKyc,
+                              stage.key,
+                              'reject'
+                            )
+                          }
+                          sx={{
+                            textTransform: 'none',
+                            fontWeight: 700,
+                          }}
+                        >
+                          Reject
+                        </Button>
+                      </Stack>
+                    )}
+
+                    {verified && (
+                      <Typography
+                        sx={{
+                          mt: 1,
+                          fontSize: 12,
+                          color: BRAND.green,
+                        }}
+                      >
+                        Verified — further decisions are locked.
+                      </Typography>
+                    )}
+                  </Box>
                 );
               })}
 
-              {filteredKyc.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    align="center"
-                    sx={{
-                      py: 5,
-                      color: BRAND.muted,
-                      whiteSpace: 'normal',
-                    }}
-                  >
-                    No KYC records found for this filter.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Card>
-
-      {selectedKyc && (
-        <Card sx={{ ...pageCardSx, p: 2, overflow: 'hidden' }}>
-          <Stack spacing={2}>
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-              spacing={1}
-            >
-              <Box sx={{ minWidth: 0 }}>
-                <Typography
-                  sx={{
-                    fontSize: 16,
-                    fontWeight: 800,
-                    color: BRAND.dark,
-                  }}
-                >
-                  Customer KYC Review
-                </Typography>
-
-                <Typography
-                  sx={{
-                    fontSize: 12,
-                    color: BRAND.muted,
-                    overflowWrap: 'anywhere',
-                  }}
-                >
-                  {selectedKyc.full_name ||
-                    selectedKyc.fullName ||
-                    (selectedKyc as KycRecord & { name?: string }).name ||
-                    'Unknown customer'}
-                </Typography>
-              </Box>
-
-              <Button
-                size="small"
-                onClick={() => {
-                  setSelectedKyc(null);
-                  setKycRejectionReason('');
-                }}
-                sx={{
-                  textTransform: 'none',
-                  color: BRAND.green,
-                }}
-              >
-                Close
-              </Button>
-            </Stack>
-
-            <Divider />
-
-            <Typography sx={{ fontWeight: 800, color: BRAND.dark }}>
-              Customer information
-            </Typography>
-
-            <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-              Email: {selectedKyc.email || 'Not provided'}
-            </Typography>
-
-            <Typography variant="body2">
-              Phone: {selectedKyc.phone || 'Not provided'}
-            </Typography>
-
-            <Typography variant="body2">
-              KYC tier: {selectedKyc.kyc_tier || selectedKyc.tier || 'Not specified'}
-            </Typography>
-
-            <Typography variant="body2">
-              BVN: {selectedKyc.bvn || 'Not provided'}
-            </Typography>
-
-            <Typography variant="body2">
-              Identification type: {selectedKyc.document_type || 'Not provided'}
-            </Typography>
-
-            <Typography variant="body2">
-              Identification number: {selectedKyc.document_number || 'Not provided'}
-            </Typography>
-
-            <Divider />
-
-            <Typography sx={{ fontWeight: 800, color: BRAND.dark }}>
-              Verification stages
-            </Typography>
-
-            {[
-              {
-                label: 'BVN verification',
-                status: selectedKyc.bvn_verification_status,
-                reason: selectedKyc.bvn_rejection_reason,
-              },
-              {
-                label: 'Identity verification',
-                status: selectedKyc.id_verification_status,
-                reason: selectedKyc.id_rejection_reason,
-              },
-              {
-                label: 'Tier 3 verification',
-                status: selectedKyc.tier_3_verification_status,
-                reason: selectedKyc.tier_3_rejection_reason,
-              },
-              {
-                label: 'Liveness check',
-                status: selectedKyc.liveness_status,
-                reason: undefined,
-              },
-            ].map((stage) => (
+              {/* Liveness is status-only */}
               <Box
-                key={stage.label}
                 sx={{
                   p: 1.5,
                   border: `1px solid ${BRAND.border}`,
                   borderRadius: 2,
-                  minWidth: 0,
                 }}
               >
                 <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-                  {stage.label}
+                  Liveness check
                 </Typography>
 
                 <Chip
                   size="small"
-                  label={statusLabel(stage.status)}
-                  sx={{ mt: 0.75, fontSize: 10 }}
+                  label={displayStatus(selectedKyc.liveness_status)}
+                  color={statusColorForKyc(selectedKyc.liveness_status)}
+                  sx={{ mt: 0.75 }}
                 />
-
-                {stage.reason && (
-                  <Typography
-                    sx={{
-                      mt: 0.75,
-                      fontSize: 12,
-                      color: BRAND.muted,
-                      overflowWrap: 'anywhere',
-                    }}
-                  >
-                    Rejection reason: {stage.reason}
-                  </Typography>
-                )}
               </Box>
-            ))}
 
-            <Typography sx={{ fontSize: 11, color: BRAND.muted }}>
-              Verification statuses shown here come from the backend.
-              No verification result is assumed.
-            </Typography>
-          </Stack>
+              <Typography
+                sx={{ fontSize: 11, color: BRAND.muted }}
+              >
+                Verification statuses come from the backend. Only pending
+                BVN, Tier 2, and Tier 3 stages can receive a manual decision.
+                Liveness is displayed as reported; no result is assumed.
+              </Typography>
+            </Stack>
+          </CardContent>
         </Card>
       )}
     </Stack>
