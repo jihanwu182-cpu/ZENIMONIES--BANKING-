@@ -2118,53 +2118,6 @@ const confirmDojahVerification = async (req, res) => {
           'We could not retrieve the verification result from Dojah. Please try again.',
       });
     }
-    // TEMPORARY DIAGNOSTIC: inspect score and status fields only.
-    const inspectProviderResponse = (value, path = '') => {
-      if (!value || typeof value !== 'object') {
-        return [];
-      }
-
-      const findings = [];
-
-      for (const [key, item] of Object.entries(value)) {
-        const currentPath = path
-          ? `${path}.${key}`
-          : key;
-
-        if (
-          /score|liveness|selfie|image.?match|face.?match|status|result/i.test(key)
-        ) {
-          if (
-            item === null ||
-            ['string', 'number', 'boolean'].includes(typeof item)
-          ) {
-            findings.push({
-              field: currentPath,
-              value: item,
-            });
-          }
-        }
-
-        if (
-          item &&
-          typeof item === 'object' &&
-          !Array.isArray(item)
-        ) {
-          findings.push(
-            ...inspectProviderResponse(item, currentPath)
-          );
-        }
-      }
-
-      return findings;
-    };
-
-    console.log(
-      'KYC provider score/status field inspection:',
-      JSON.stringify(
-        inspectProviderResponse(dojahResult.data)
-      )
-    );
     // Record that a server-side provider check was made.
     await pool.query(
       `
