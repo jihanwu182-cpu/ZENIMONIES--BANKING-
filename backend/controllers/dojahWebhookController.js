@@ -124,6 +124,22 @@ const handleDojahWebhook = async (req, res) => {
 
   const data = body?.data || {};
 
+  
+const governmentData = data.government_data || {};
+const selfieData = data.selfie || {};
+
+const idStatus = getStepStatus(governmentData);
+const livenessStatus = getStepStatus(selfieData);
+
+const livenessScore = getScore(
+  selfieData.data?.liveness_score
+);
+
+const selfieMatchScore = getScore(
+  selfieData.data?.match_score
+);
+
+
 
   // Match the actual EasyOnboard webhook payload.
   const governmentData = data.government_data || {};
