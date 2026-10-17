@@ -324,14 +324,12 @@ const getKycStatus = async (req, res) => {
         bvn_rejection_reason,
 
         document_type,
-        document_number,
 
         id_verification_status,
         id_verified_at,
         id_rejection_reason,
 
         liveness_status,
-        liveness_provider_reference,
 
         tier_3_method,
         tier_3_verification_status,
