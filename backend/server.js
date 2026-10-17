@@ -637,6 +637,24 @@ const startServer = async () => {
       'Database initialization completed.'
     );
 
+    // ========================================================
+    // KYC BIOMETRIC SCORES MIGRATION
+    // ========================================================
+
+    await pool.query(`
+      ALTER TABLE kyc_records
+      ADD COLUMN IF NOT EXISTS
+      liveness_score NUMERIC(5,2);
+
+      ALTER TABLE kyc_records
+      ADD COLUMN IF NOT EXISTS
+      selfie_match_score NUMERIC(5,2);
+    `);
+
+    console.log(
+      'Database migration completed: KYC biometric score columns are available.'
+    );
+
 // ========================================================
 // ACCOUNTS: ALLOW PROVIDER ACCOUNT NUMBER PROVISIONING
 // ========================================================
