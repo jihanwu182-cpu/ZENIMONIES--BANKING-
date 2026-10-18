@@ -1702,8 +1702,7 @@ const KYC: React.FC = () => {
                 'zenimonies_tier_2',
             },
 
-            onSuccess:
-              async () => {
+            onSuccess: async (widgetResult) => {
                 try {
                   const confirmResponse =
                     await fetch(
