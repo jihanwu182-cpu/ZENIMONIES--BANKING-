@@ -1703,7 +1703,13 @@ const KYC: React.FC = () => {
             },
 
             onSuccess: async (widgetResult) => {
-                try {
+                console.info(
+             'Dojah callback fields:',
+            widgetResult && typeof widgetResult === 'object'
+            ? Object.keys(widgetResult)
+              : typeof widgetResult
+            );
+              try {
                   const confirmResponse =
                     await fetch(
                       `${API_BASE}/kyc/dojah/confirm`,
