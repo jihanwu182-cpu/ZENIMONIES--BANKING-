@@ -1698,9 +1698,9 @@ const KYC: React.FC = () => {
               referenceId,
 
             metadata: {
-              service:
-                'zenimonies_tier_2',
-            },
+            service: 'zenimonies_tier_2',
+            reference_id: referenceId,
+},
 
             onSuccess: async (widgetResult) => {
                 console.info(
