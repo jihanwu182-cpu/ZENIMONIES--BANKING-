@@ -1714,6 +1714,27 @@ console.log(
     `);
 
     // --------------------------------------------------------
+    // Link notifications to their transaction receipts
+    // --------------------------------------------------------
+
+    await pool.query(`
+      ALTER TABLE notifications
+      ADD COLUMN IF NOT EXISTS transaction_id UUID
+      REFERENCES transactions(id)
+      ON DELETE SET NULL;
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS
+      idx_notifications_transaction_id
+      ON notifications(transaction_id);
+    `);
+
+    console.log(
+      'Database migration completed: notification transaction links are available'
+    );
+
+    // --------------------------------------------------------
     // Notification indexes
     // --------------------------------------------------------
 
