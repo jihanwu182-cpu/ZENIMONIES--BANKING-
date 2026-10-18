@@ -1863,18 +1863,17 @@ const startDojahVerification = async (req, res) => {
     });
   }
 
-  const client = await pool.connect();
+  let client;
 
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     const userResult = await client.query(
-      `
-      SELECT id, id_verified
-      FROM users
-      WHERE id = $1
-      FOR UPDATE
-      `,
+      `SELECT id, id_verified
+       FROM users
+       WHERE id = $1
+       FOR UPDATE`,
       [userId]
     );
 
@@ -1897,14 +1896,13 @@ const startDojahVerification = async (req, res) => {
     }
 
     const existing = await client.query(
-      `
-      SELECT id, id_verification_status
-      FROM kyc_records
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT 1
-      FOR UPDATE
-      `,
+      `SELECT id, id_verification_status
+       FROM kyc_records
+       WHERE user_id = $1
+         AND dojah_verification_type = 'identity'
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE`,
       [userId]
     );
 
@@ -1912,9 +1910,8 @@ const startDojahVerification = async (req, res) => {
 
     if (
       record &&
-      normalizeKycStatus(
-        record.id_verification_status
-      ) === 'verified'
+      normalizeKycStatus(record.id_verification_status) ===
+        'verified'
     ) {
       await client.query('ROLLBACK');
 
@@ -1926,9 +1923,8 @@ const startDojahVerification = async (req, res) => {
 
     if (
       record &&
-      normalizeKycStatus(
-        record.id_verification_status
-      ) === 'pending'
+      normalizeKycStatus(record.id_verification_status) ===
+        'pending'
     ) {
       await client.query('ROLLBACK');
 
@@ -1939,53 +1935,50 @@ const startDojahVerification = async (req, res) => {
       });
     }
 
-    const referenceId =
-      `zen_${crypto.randomUUID()}`;
-
+    const referenceId = `zen_${crypto.randomUUID()}`;
     let kycRecordId;
 
     if (record) {
       kycRecordId = record.id;
 
       await client.query(
-        `
-        UPDATE kyc_records
-        SET
-          dojah_reference = $1,
-          dojah_verification_type = 'identity',
-          dojah_started_at = CURRENT_TIMESTAMP,
-          dojah_checked_at = NULL,
-          id_verification_status = 'pending',
-          liveness_status = 'pending',
-          id_rejection_reason = NULL,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-        `,
+        `UPDATE kyc_records
+         SET
+           dojah_reference = $1,
+           dojah_verification_type = 'identity',
+           dojah_started_at = CURRENT_TIMESTAMP,
+           dojah_checked_at = NULL,
+           id_verification_status = 'pending',
+           liveness_status = 'pending',
+           liveness_score = NULL,
+           selfie_match_score = NULL,
+           id_verified_at = NULL,
+           id_rejection_reason = NULL,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
         [referenceId, kycRecordId]
       );
     } else {
       const inserted = await client.query(
-        `
-        INSERT INTO kyc_records (
-          user_id,
-          dojah_reference,
-          dojah_verification_type,
-          dojah_started_at,
-          id_verification_status,
-          liveness_status,
-          bvn_verification_status,
-          tier_3_verification_status,
-          verification_status
-        )
-        VALUES (
-          $1, $2, 'identity',
-          CURRENT_TIMESTAMP,
-          'pending', 'pending',
-          'not_verified', 'not_verified',
-          'pending'
-        )
-        RETURNING id
-        `,
+        `INSERT INTO kyc_records (
+           user_id,
+           dojah_reference,
+           dojah_verification_type,
+           dojah_started_at,
+           id_verification_status,
+           liveness_status,
+           bvn_verification_status,
+           tier_3_verification_status,
+           verification_status
+         )
+         VALUES (
+           $1, $2, 'identity',
+           CURRENT_TIMESTAMP,
+           'pending', 'pending',
+           'not_verified', 'not_verified',
+           'pending'
+         )
+         RETURNING id`,
         [userId, referenceId]
       );
 
@@ -1993,29 +1986,25 @@ const startDojahVerification = async (req, res) => {
     }
 
     await client.query(
-      `
-      UPDATE users
-      SET
-        kyc_status = 'pending',
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-      `,
+      `UPDATE users
+       SET
+         kyc_status = 'pending',
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
       [userId]
     );
 
     await client.query(
-      `
-      INSERT INTO audit_logs (
-        user_id,
-        action,
-        description
-      )
-      VALUES ($1, $2, $3)
-      `,
+      `INSERT INTO audit_logs (
+         user_id,
+         action,
+         description
+       )
+       VALUES ($1, $2, $3)`,
       [
         userId,
         'dojah_verification_started',
-        'A Dojah identity verification session was initiated.',
+        'An identity verification session was initiated.',
       ]
     );
 
@@ -2027,27 +2016,29 @@ const startDojahVerification = async (req, res) => {
       kyc_record_id: kycRecordId,
       status: 'pending',
       message:
-        'Verification session created. Continue with the Dojah widget.',
+        'Verification session created. Continue with the verification widget.',
     });
   } catch (error) {
-    try {
-      await client.query('ROLLBACK');
-    } catch {}
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {}
+    }
 
-    console.error(
-      'Start Dojah verification failed:',
-      error.message
-    );
+    console.error('Start identity verification failed.');
 
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to start identity verification.',
+      message: 'Unable to start identity verification.',
     });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
+
+
 
 // ============================================================
 // DOJAH WIDGET VERIFICATION
