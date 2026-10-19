@@ -2094,14 +2094,22 @@ const confirmDojahVerification = async (req, res) => {
       });
     }
 
+    // Do not assume the Zenimonies reference is the same
+    // as the reference returned by Dojah.
     const normalize = (value) => {
-      const status = String(value || '').trim().toLowerCase();
+      const status = String(value || '')
+        .trim()
+        .toLowerCase();
 
-      if (['verified', 'approved'].includes(status)) {
+      if (
+        ['verified', 'approved', 'success'].includes(status)
+      ) {
         return 'verified';
       }
 
-      if (['rejected', 'failed', 'declined'].includes(status)) {
+      if (
+        ['rejected', 'failed', 'declined'].includes(status)
+      ) {
         return 'rejected';
       }
 
@@ -2116,8 +2124,6 @@ const confirmDojahVerification = async (req, res) => {
       record.liveness_status
     );
 
-    // Identity verification is complete only when both checks
-    // have an approved result.
     const verified =
       idStatus === 'verified' &&
       livenessStatus === 'verified';
@@ -2129,8 +2135,8 @@ const confirmDojahVerification = async (req, res) => {
     const status = verified
       ? 'verified'
       : rejected
-      ? 'rejected'
-      : 'pending';
+        ? 'rejected'
+        : 'pending';
 
     return res.status(200).json({
       success: true,
@@ -2150,8 +2156,8 @@ const confirmDojahVerification = async (req, res) => {
       message: verified
         ? 'Identity verification has been approved.'
         : rejected
-        ? 'Identity verification requires attention.'
-        : 'Identity verification is still pending review.',
+          ? 'Identity verification requires attention.'
+          : 'Identity verification is still pending review.',
     });
   } catch (error) {
     console.error(
@@ -2165,6 +2171,7 @@ const confirmDojahVerification = async (req, res) => {
     });
   }
 };
+
 
 // ============================================================
 // EXPORTS
