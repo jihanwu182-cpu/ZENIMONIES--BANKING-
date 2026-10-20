@@ -1725,9 +1725,12 @@ const KYC: React.FC = () => {
                         },
 
                         body: JSON.stringify({
-                          reference_id:
-                            referenceId,
-                        }),
+                      reference_id: referenceId,
+                        provider_reference_id:
+                       typeof widgetResult?.reference_id === 'string'
+                      ? widgetResult.reference_id
+                       : null,
+                      }),
                       }
                     );
 
