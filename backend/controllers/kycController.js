@@ -260,6 +260,7 @@ const validateProofOfAddressFile = (file) => {
 // GET CURRENT KYC STATUS
 // ============================================================
 
+
 const getKycStatus = async (req, res) => {
   try {
     const userId =
@@ -312,36 +313,29 @@ const getKycStatus = async (req, res) => {
 
     // ========================================================
     // GET LATEST KYC RECORD
+    // Used for BVN, Tier 3 and general record information.
     // ========================================================
 
     const kycResult = await pool.query(
       `
       SELECT
         id,
-
         bvn_verification_status,
         bvn_verified_at,
         bvn_rejection_reason,
-
         document_type,
-
         id_verification_status,
         id_verified_at,
         id_rejection_reason,
-
         liveness_status,
-
         tier_3_method,
         tier_3_verification_status,
         tier_3_verified_at,
         tier_3_rejection_reason,
-
         verification_status,
         rejection_reason,
-
         created_at,
         updated_at
-
       FROM kyc_records
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -353,6 +347,36 @@ const getKycStatus = async (req, res) => {
     const record =
       kycResult.rows.length > 0
         ? kycResult.rows[0]
+        : null;
+
+    // ========================================================
+    // GET LATEST IDENTITY VERIFICATION RECORD
+    // Specifically matches the record updated by Dojah.
+    // ========================================================
+
+    const identityResult = await pool.query(
+      `
+      SELECT
+        id,
+        id_verification_status,
+        id_verified_at,
+        id_rejection_reason,
+        liveness_status,
+        dojah_checked_at,
+        created_at,
+        updated_at
+      FROM kyc_records
+      WHERE user_id = $1
+        AND dojah_verification_type = 'identity'
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    const identityRecord =
+      identityResult.rows.length > 0
+        ? identityResult.rows[0]
         : null;
 
     // ========================================================
@@ -370,7 +394,7 @@ const getKycStatus = async (req, res) => {
       user.id_verified === true
         ? 'verified'
         : normalizeKycStatus(
-            record?.id_verification_status
+            identityRecord?.id_verification_status
           );
 
     const tier3Status =
@@ -398,19 +422,16 @@ const getKycStatus = async (req, res) => {
 
     // ========================================================
     // OVERALL KYC STATUS
+    // Do not approve the entire account from identity alone.
     // ========================================================
 
     const kycStatus =
-      normalizeKycStatus(
-        user.kyc_status
-      );
+      normalizeKycStatus(user.kyc_status);
 
     const verified =
       kycStatus === 'verified';
 
-    const tier = Number(
-      user.kyc_tier || 0
-    );
+    const tier = Number(user.kyc_tier || 0);
 
     const limits = getTierLimits(
       verified ? tier : 0
@@ -433,9 +454,7 @@ const getKycStatus = async (req, res) => {
       kyc: {
         status: kycStatus,
 
-        tier: verified
-          ? tier
-          : 0,
+        tier: verified ? tier : 0,
 
         submitted_tier: tier,
 
@@ -453,11 +472,10 @@ const getKycStatus = async (req, res) => {
           bvnLocked,
 
         bvn_rejection_reason:
-          record?.bvn_rejection_reason ||
-          null,
+          record?.bvn_rejection_reason || null,
 
         // ----------------------------------------------------
-        // ID
+        // IDENTITY
         // ----------------------------------------------------
 
         id_verified:
@@ -470,7 +488,7 @@ const getKycStatus = async (req, res) => {
           idLocked,
 
         id_rejection_reason:
-          record?.id_rejection_reason ||
+          identityRecord?.id_rejection_reason ||
           null,
 
         // ----------------------------------------------------
@@ -504,18 +522,14 @@ const getKycStatus = async (req, res) => {
           limits.dailyTransferLimit,
 
         daily_transfer_used:
-          Number(
-            user.daily_transfer_used || 0
-          ),
+          Number(user.daily_transfer_used || 0),
 
         daily_transfer_remaining:
           limits.dailyTransferLimit === null
             ? null
             : Math.max(
                 limits.dailyTransferLimit -
-                  Number(
-                    user.daily_transfer_used || 0
-                  ),
+                  Number(user.daily_transfer_used || 0),
                 0
               ),
       },
@@ -530,8 +544,7 @@ const getKycStatus = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to get KYC status',
+      message: 'Unable to get KYC status',
     });
   }
 };
