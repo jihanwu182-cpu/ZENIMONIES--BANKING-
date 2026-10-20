@@ -2146,38 +2146,11 @@ const confirmDojahVerification = async (req, res) => {
       });
     }
 
-    // Save the provider reference against this user's
-    // locked KYC record. The reference is not trusted on
-    // its own; the provider result must still be checked.
-    if (
-      providerReference &&
-      providerReference !== record.dojah_reference
-    ) {
-      await client.query(
-        `
-        UPDATE kyc_records
-        SET
-          liveness_provider_reference = $1,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-          AND user_id = $3
-        `,
-        [
-          providerReference,
-          record.id,
-          userId,
-        ]
-      );
-    }
-
     await client.query('COMMIT');
 
     // Query the provider reference when available;
     // otherwise use the internal reference.
-    const lookupReference =
-      providerReference ||
-      record.liveness_provider_reference ||
-      record.dojah_reference;
+    const lookupReference = record.dojah_reference;
 
     const providerResult =
       await getDojahVerification(lookupReference);
