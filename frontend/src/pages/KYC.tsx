@@ -1746,12 +1746,28 @@ const KYC: React.FC = () => {
                     );
                   }
 
-                  showAlert(
-                    'Your Tier 2 identity verification has been submitted successfully.',
-                    'success'
-                  );
+                 const verificationStatus = String(
+  confirmResult.status || 'pending'
+).trim().toLowerCase();
 
-                  await fetchStatus();
+if (verificationStatus === 'verified') {
+  showAlert(
+    'Your identity verification is complete.',
+    'success'
+  );
+} else if (verificationStatus === 'rejected') {
+  showAlert(
+    'Your identity verification could not be approved. Please follow the instructions shown on your verification page.',
+    'error'
+  );
+} else {
+  showAlert(
+    'Your verification was received and is still being processed. Please check again later.',
+    'warning'
+  );
+}
+
+await fetchStatus();
                 } catch (error) {
                   showAlert(
                     error instanceof
