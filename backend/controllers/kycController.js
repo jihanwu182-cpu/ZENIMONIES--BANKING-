@@ -2064,8 +2064,41 @@ const confirmDojahVerification = async (req, res) => {
     });
   }
 
+  const clientReference = String(
+    req.body?.reference_id || ''
+  ).trim();
+
+  const providerReference = String(
+    req.body?.provider_reference_id || ''
+  ).trim();
+
+  if (
+    clientReference &&
+    clientReference.length > 150
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid verification reference.',
+    });
+  }
+
+  if (
+    providerReference &&
+    providerReference.length > 150
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid provider reference.',
+    });
+  }
+
+  let client;
+
   try {
-    const result = await pool.query(
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const result = await client.query(
       `
       SELECT
         id,
@@ -2073,14 +2106,15 @@ const confirmDojahVerification = async (req, res) => {
         dojah_verification_type,
         id_verification_status,
         liveness_status,
+        liveness_provider_reference,
         liveness_score,
-        selfie_match_score,
-        dojah_checked_at
+        selfie_match_score
       FROM kyc_records
       WHERE user_id = $1
         AND dojah_verification_type = 'identity'
       ORDER BY created_at DESC
       LIMIT 1
+      FOR UPDATE
       `,
       [userId]
     );
@@ -2088,69 +2122,165 @@ const confirmDojahVerification = async (req, res) => {
     const record = result.rows[0];
 
     if (!record || !record.dojah_reference) {
+      await client.query('ROLLBACK');
+
       return res.status(404).json({
         success: false,
-        message: 'No identity verification session was found.',
+        message:
+          'No identity verification session was found.',
       });
     }
 
-    // Retrieve the result using the reference stored by Zenimonies.
-    const providerResult = await getDojahVerification(
-      record.dojah_reference
-    );
+    // If the frontend supplied an internal reference,
+    // it must match the authenticated user's active session.
+    if (
+      clientReference &&
+      clientReference !== record.dojah_reference
+    ) {
+      await client.query('ROLLBACK');
 
-    if (!providerResult?.success || !providerResult.data) {
+      return res.status(409).json({
+        success: false,
+        message:
+          'The verification session does not match your active session.',
+      });
+    }
+
+    // Save the provider reference against this user's
+    // locked KYC record. The reference is not trusted on
+    // its own; the provider result must still be checked.
+    if (
+      providerReference &&
+      providerReference !== record.dojah_reference
+    ) {
+      await client.query(
+        `
+        UPDATE kyc_records
+        SET
+          liveness_provider_reference = $1,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+          AND user_id = $3
+        `,
+        [
+          providerReference,
+          record.id,
+          userId,
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    // Query the provider reference when available;
+    // otherwise use the internal reference.
+    const lookupReference =
+      providerReference ||
+      record.liveness_provider_reference ||
+      record.dojah_reference;
+
+    const providerResult =
+      await getDojahVerification(lookupReference);
+
+    if (
+      !providerResult?.success ||
+      !providerResult.data
+    ) {
       return res.status(502).json({
         success: false,
         status: 'pending',
         message:
-          'Unable to retrieve the verification result. Please try again.',
+          'We could not retrieve the verification result. Please try again.',
       });
     }
 
-    const verification = providerResult.data;
+    // Some APIs wrap the actual result inside `data`.
+    let verification = providerResult.data;
+
+    for (let i = 0; i < 3; i += 1) {
+      if (
+        verification &&
+        (
+          verification.verification_status ||
+          verification.status === 'Completed' ||
+          verification.data?.government_data ||
+          verification.data?.selfie
+        )
+      ) {
+        break;
+      }
+
+      if (
+        verification?.data &&
+        typeof verification.data === 'object'
+      ) {
+        verification = verification.data;
+      } else {
+        break;
+      }
+    }
+
+    // Never accept a result that does not identify the
+    // same provider reference we queried, when returned.
+    const returnedReference = String(
+      verification?.reference_id ||
+      verification?.data?.reference_id ||
+      ''
+    ).trim();
+
+    if (
+      returnedReference &&
+      returnedReference !== lookupReference
+    ) {
+      return res.status(502).json({
+        success: false,
+        status: 'pending',
+        message:
+          'The provider result did not match the requested verification reference.',
+      });
+    }
 
     const sessionStatus = String(
-      verification.verification_status || ''
+      verification?.verification_status ||
+      verification?.status ||
+      ''
     ).trim().toLowerCase();
 
     const governmentData =
-      verification.data?.government_data;
+      verification?.data?.government_data;
 
-    const selfieData = verification.data?.selfie;
+    const selfieData =
+      verification?.data?.selfie;
 
     const outcome = (step) => {
-      if (step?.status === true) return 'verified';
-      if (step?.status === false) return 'rejected';
+      if (step?.status === true) {
+        return 'verified';
+      }
+
+      if (step?.status === false) {
+        return 'rejected';
+      }
+
       return 'pending';
     };
 
     let idStatus = 'pending';
     let livenessStatus = 'pending';
 
-    if (sessionStatus === 'completed') {
+    if (
+      sessionStatus === 'completed' ||
+      sessionStatus === 'complete'
+    ) {
       idStatus = outcome(governmentData);
       livenessStatus = outcome(selfieData);
     } else if (
-      ['failed', 'abandoned'].includes(sessionStatus)
+      ['failed', 'abandoned', 'rejected'].includes(
+        sessionStatus
+      )
     ) {
       idStatus = 'rejected';
       livenessStatus = 'rejected';
     }
-
-    const verified =
-      idStatus === 'verified' &&
-      livenessStatus === 'verified';
-
-    const rejected =
-      idStatus === 'rejected' ||
-      livenessStatus === 'rejected';
-
-    const status = verified
-      ? 'verified'
-      : rejected
-        ? 'rejected'
-        : 'pending';
 
     const score = (value) => {
       const number = Number(value);
@@ -2173,153 +2303,176 @@ const confirmDojahVerification = async (req, res) => {
       selfieData?.data?.match_score
     );
 
-    const client = await pool.connect();
+    await client.query('BEGIN');
 
-    try {
-      await client.query('BEGIN');
+    const locked = await client.query(
+      `
+      SELECT
+        id_verification_status,
+        liveness_status,
+        liveness_provider_reference
+      FROM kyc_records
+      WHERE id = $1
+        AND user_id = $2
+        AND dojah_reference = $3
+        AND dojah_verification_type = 'identity'
+      FOR UPDATE
+      `,
+      [
+        record.id,
+        userId,
+        record.dojah_reference,
+      ]
+    );
 
-      // Lock and verify ownership of the exact record.
-      const locked = await client.query(
-        `
-        SELECT id, id_verification_status, liveness_status
-        FROM kyc_records
-        WHERE id = $1
-          AND user_id = $2
-          AND dojah_reference = $3
-          AND dojah_verification_type = 'identity'
-        FOR UPDATE
-        `,
-        [record.id, userId, record.dojah_reference]
-      );
+    if (!locked.rows.length) {
+      await client.query('ROLLBACK');
 
-      if (!locked.rows.length) {
-        await client.query('ROLLBACK');
+      return res.status(409).json({
+        success: false,
+        message:
+          'The verification record changed. Please refresh and try again.',
+      });
+    }
 
-        return res.status(409).json({
-          success: false,
-          message:
-            'The verification record changed. Please refresh and try again.',
-        });
-      }
+    const current = locked.rows[0];
 
-      const current = locked.rows[0];
+    // Do not allow a browser-supplied provider reference
+    // to switch an already-associated session to another ID.
+    if (
+      providerReference &&
+      current.liveness_provider_reference &&
+      current.liveness_provider_reference !== providerReference
+    ) {
+      await client.query('ROLLBACK');
 
-      const finalId =
-        ['verified', 'approved'].includes(
-          String(current.id_verification_status || '').toLowerCase()
-        )
-          ? 'verified'
-          : idStatus;
+      return res.status(409).json({
+        success: false,
+        message:
+          'A different provider reference is already associated with this verification session.',
+      });
+    }
 
-      const finalLiveness =
-        ['verified', 'approved'].includes(
-          String(current.liveness_status || '').toLowerCase()
-        )
-          ? 'verified'
-          : livenessStatus;
+    const finalId =
+      ['verified', 'approved'].includes(
+        String(
+          current.id_verification_status || ''
+        ).toLowerCase()
+      )
+        ? 'verified'
+        : idStatus;
 
+    const finalLiveness =
+      ['verified', 'approved'].includes(
+        String(current.liveness_status || '').toLowerCase()
+      )
+        ? 'verified'
+        : livenessStatus;
+
+    await client.query(
+      `
+      UPDATE kyc_records
+      SET
+        id_verification_status = CASE
+          WHEN id_verification_status IN ('verified', 'approved')
+            THEN id_verification_status
+          WHEN $2 <> 'pending' THEN $2
+          ELSE id_verification_status
+        END,
+
+        id_verified_at = CASE
+          WHEN $2 = 'verified'
+            THEN COALESCE(id_verified_at, CURRENT_TIMESTAMP)
+          ELSE id_verified_at
+        END,
+
+        id_rejection_reason = CASE
+          WHEN $2 = 'rejected'
+            THEN 'Identity check did not pass provider verification.'
+          WHEN $2 = 'verified' THEN NULL
+          ELSE id_rejection_reason
+        END,
+
+        liveness_status = CASE
+          WHEN liveness_status IN ('verified', 'approved')
+            THEN liveness_status
+          WHEN $3 <> 'pending' THEN $3
+          ELSE liveness_status
+        END,
+
+        liveness_score = COALESCE($4, liveness_score),
+        selfie_match_score = COALESCE($5, selfie_match_score),
+        dojah_checked_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      `,
+      [
+        record.id,
+        idStatus,
+        livenessStatus,
+        livenessScore,
+        selfieMatchScore,
+      ]
+    );
+
+    if (
+      finalId === 'verified' &&
+      finalLiveness === 'verified'
+    ) {
       await client.query(
         `
-        UPDATE kyc_records
+        UPDATE users
         SET
-          id_verification_status = CASE
-            WHEN id_verification_status IN ('verified', 'approved')
-              THEN id_verification_status
-            WHEN $2 <> 'pending' THEN $2
-            ELSE id_verification_status
-          END,
-          id_verified_at = CASE
-            WHEN $2 = 'verified'
-              THEN COALESCE(id_verified_at, CURRENT_TIMESTAMP)
-            ELSE id_verified_at
-          END,
-          id_rejection_reason = CASE
-            WHEN $2 = 'rejected'
-              THEN 'Identity check did not pass provider verification.'
-            WHEN $2 = 'verified' THEN NULL
-            ELSE id_rejection_reason
-          END,
-          liveness_status = CASE
-            WHEN liveness_status IN ('verified', 'approved')
-              THEN liveness_status
-            WHEN $3 <> 'pending' THEN $3
-            ELSE liveness_status
-          END,
-          liveness_score = COALESCE($4, liveness_score),
-          selfie_match_score = COALESCE($5, selfie_match_score),
-          dojah_checked_at = CURRENT_TIMESTAMP,
+          id_verified = TRUE,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
         `,
-        [
-          record.id,
-          idStatus,
-          livenessStatus,
-          livenessScore,
-          selfieMatchScore,
-        ]
+        [userId]
       );
+    } else if (
+      finalId === 'rejected' ||
+      finalLiveness === 'rejected'
+    ) {
+      await client.query(
+        `
+        UPDATE users
+        SET
+          id_verified = FALSE,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        `,
+        [userId]
+      );
+    }
 
-      // Update the individual identity flag only.
-      if (
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      success: true,
+      status:
         finalId === 'verified' &&
         finalLiveness === 'verified'
-      ) {
-        await client.query(
-          `
-          UPDATE users
-          SET id_verified = TRUE,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = $1
-          `,
-          [userId]
-        );
-      } else if (
-        finalId === 'rejected' ||
-        finalLiveness === 'rejected'
-      ) {
-        await client.query(
-          `
-          UPDATE users
-          SET id_verified = FALSE,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = $1
-          `,
-          [userId]
-        );
-      }
-
-      await client.query('COMMIT');
-
-      return res.status(200).json({
-        success: true,
-        status:
-          finalId === 'verified' &&
-          finalLiveness === 'verified'
-            ? 'verified'
-            : finalId === 'rejected' ||
-                finalLiveness === 'rejected'
-              ? 'rejected'
-              : 'pending',
-        verified:
-          finalId === 'verified' &&
-          finalLiveness === 'verified',
-        id_verification_status: finalId,
-        liveness_status: finalLiveness,
-        liveness_score: livenessScore,
-        selfie_match_score: selfieMatchScore,
-        checked_at: new Date().toISOString(),
-      });
-    } catch (error) {
+          ? 'verified'
+          : finalId === 'rejected' ||
+              finalLiveness === 'rejected'
+            ? 'rejected'
+            : 'pending',
+      verified:
+        finalId === 'verified' &&
+        finalLiveness === 'verified',
+      id_verification_status: finalId,
+      liveness_status: finalLiveness,
+      liveness_score: livenessScore,
+      selfie_match_score: selfieMatchScore,
+      checked_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (client) {
       try {
         await client.query('ROLLBACK');
       } catch {}
-
-      throw error;
-    } finally {
-      client.release();
     }
-  } catch (error) {
+
     console.error(
       'Confirm identity verification failed:',
       error.message
@@ -2327,10 +2480,17 @@ const confirmDojahVerification = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: 'Unable to retrieve verification status.',
+      message:
+        'Unable to retrieve verification status.',
     });
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 };
+
+
 
 // ============================================================
 // EXPORTS
