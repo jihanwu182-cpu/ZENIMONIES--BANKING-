@@ -2180,34 +2180,43 @@ const confirmDojahVerification = async (req, res) => {
       });
     }
 
-    // Some APIs wrap the actual result inside `data`.
-    let verification = providerResult.data;
+   
+    // Safely locate the actual verification result,
+    // even when the API wraps it inside nested data objects.
+    const candidates = [];
+    const queue = [providerResult.data];
+    const visited = new Set();
 
-    for (let i = 0; i < 3; i += 1) {
-      if (
-        verification &&
-        (
-          verification.verification_status ||
-          verification.status === 'Completed' ||
-          verification.data?.government_data ||
-          verification.data?.selfie
-        )
-      ) {
-        break;
+    while (queue.length > 0 && visited.size < 30) {
+      const item = queue.shift();
+
+      if (!item || typeof item !== 'object' || visited.has(item)) {
+        continue;
       }
 
-      if (
-        verification?.data &&
-        typeof verification.data === 'object'
-      ) {
-        verification = verification.data;
-      } else {
-        break;
+      visited.add(item);
+      candidates.push(item);
+
+      if (item.data && typeof item.data === 'object') {
+        queue.push(item.data);
+      }
+
+      if (item.result && typeof item.result === 'object') {
+        queue.push(item.result);
+      }
+
+      if (item.response && typeof item.response === 'object') {
+        queue.push(item.response);
       }
     }
 
-    // Never accept a result that does not identify the
-    // same provider reference we queried, when returned.
+    const verification =
+      candidates.find((item) =>
+        item.government_data ||
+        item.selfie ||
+        item.verification_status
+      ) || providerResult.data;
+
     const returnedReference = String(
       verification?.reference_id ||
       verification?.data?.reference_id ||
@@ -2222,20 +2231,25 @@ const confirmDojahVerification = async (req, res) => {
         success: false,
         status: 'pending',
         message:
-          'The provider result did not match the requested verification reference.',
+          'The verification result could not be matched to this session.',
       });
     }
 
+    // A provider-level boolean `status: true` means
+    // the API request succeeded; it does not mean the
+    // customer's identity verification is complete.
     const sessionStatus = String(
       verification?.verification_status ||
-      verification?.status ||
+      verification?.data?.verification_status ||
       ''
     ).trim().toLowerCase();
 
     const governmentData =
+      verification?.government_data ||
       verification?.data?.government_data;
 
     const selfieData =
+      verification?.selfie ||
       verification?.data?.selfie;
 
     const outcome = (step) => {
