@@ -512,58 +512,34 @@ app.get(
 // It does NOT change any KYC status.
 // ============================================================
 
-app.get(
-  '/api/health/dojah',
-  async (req, res) => {
-    try {
-      const appId =
-        process.env.DOJAH_APP_ID;
+/*
+ * Private verification-provider health check.
+ * Public response intentionally reveals no provider details.
+ */
+app.get('/api/health/verification', (req, res) => {
+  const configured = Boolean(
+    process.env.DOJAH_APP_ID &&
+    process.env.DOJAH_SECRET_KEY &&
+    process.env.DOJAH_WEBHOOK_SECRET
+  );
 
-      const secretKey =
-        process.env.DOJAH_SECRET_KEY;
-
-      const baseUrl =
-        process.env.DOJAH_BASE_URL ||
-        'https://sandbox.dojah.io';
-
-      if (!appId || !secretKey) {
-        return res.status(500).json({
-          success: false,
-          status: 'unhealthy',
-          message:
-            'Dojah configuration is incomplete.',
-          dojah: {
-            configured: false,
-            baseUrl,
-          },
-        });
-      }
-
-      return res.status(200).json({
-        success: true,
-        status: 'healthy',
-        message:
-          'Dojah configuration is available.',
-        dojah: {
-          configured: true,
-          baseUrl,
-        },
-      });
-    } catch (error) {
-      console.error(
-        'Dojah health check failed:',
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        status: 'unhealthy',
-        message:
-          'Unable to check Dojah configuration.',
-      });
-    }
+  if (!configured) {
+    return res.status(503).json({
+      success: false,
+      status: 'unhealthy',
+      message: 'Verification service is temporarily unavailable.',
+    });
   }
-);
+
+  return res.status(200).json({
+    success: true,
+    status: 'healthy',
+    message: 'Verification service is available.',
+  });
+});
+
+
+
 
 // ============================================================
 // DOJAH WEBHOOK
