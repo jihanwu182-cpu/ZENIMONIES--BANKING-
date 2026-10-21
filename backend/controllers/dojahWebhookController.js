@@ -282,25 +282,41 @@ const handleDojahWebhook = async (req, res) => {
       ]
     );
 
-    // Update only the user's individual identity-verification flag.
-    // Do not approve the entire account or change its tier or limits.
-    if (!preserveId && finalId === 'verified') {
-      await client.query(
-        `UPDATE users
-         SET id_verified = TRUE,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1`,
-        [record.user_id]
-      );
-    } else if (!preserveId && finalId === 'rejected') {
-      await client.query(
-        `UPDATE users
-         SET id_verified = FALSE,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1`,
-        [record.user_id]
-      );
-    }
+  // Update the user's identity flag only when BOTH checks pass.
+// Completing a verification session does not automatically mean
+// the customer has passed identity and liveness verification.
+
+const identityPassed =
+  ['verified', 'approved'].includes(
+    String(
+      preserveId ? currentId : nextId
+    ).toLowerCase()
+  );
+
+const livenessPassed =
+  ['verified', 'approved'].includes(
+    String(
+      preserveLiveness ? currentLiveness : nextLiveness
+    ).toLowerCase()
+  );
+
+if (identityPassed && livenessPassed) {
+  await client.query(
+    `UPDATE users
+     SET id_verified = TRUE,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1`,
+    [record.user_id]
+  );
+} else {
+  await client.query(
+    `UPDATE users
+     SET id_verified = FALSE,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1`,
+    [record.user_id]
+  );
+}
 
     await client.query('COMMIT');
 
