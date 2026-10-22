@@ -58,6 +58,7 @@ const getReference = (body) => {
   );
 };
 
+
 const checkOutcome = (value) => {
   if (value === true) return 'verified';
   if (value === false) return 'rejected';
@@ -67,17 +68,26 @@ const checkOutcome = (value) => {
   const normalized = value.trim().toLowerCase();
 
   if (
-    ['success', 'successful', 'verified', 'passed', 'pass'].includes(
-      normalized
-    )
+    [
+      'success',
+      'successful',
+      'verified',
+      'passed',
+      'pass',
+      'approved',
+    ].includes(normalized)
   ) {
     return 'verified';
   }
 
   if (
-    ['failed', 'failure', 'rejected', 'declined', 'fail'].includes(
-      normalized
-    )
+    [
+      'failed',
+      'failure',
+      'rejected',
+      'declined',
+      'fail',
+    ].includes(normalized)
   ) {
     return 'rejected';
   }
