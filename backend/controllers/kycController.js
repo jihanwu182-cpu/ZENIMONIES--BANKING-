@@ -133,52 +133,59 @@ const getMissingProfileFields = (user) => {
     .map(({ label }) => label);
 };
 
-const interpretBvnLookup = (result, user) => {
+
+const interpretBvnLookup = (result, user, submittedBvn) => {
+  // A failed request or missing response is never an approval.
   if (result?.success !== true) {
-    return { status: 'pending' };
+    return { status: 'pending', reason: 'lookup_unavailable' };
   }
 
   const entity = result.data?.entity;
 
   if (!entity || typeof entity !== 'object') {
-    return { status: 'pending' };
+    return { status: 'pending', reason: 'missing_identity_data' };
   }
 
-  const normalize = value =>
-    String(value || '')
+  const normalize = (value) =>
+    String(value ?? '')
       .trim()
       .toLowerCase()
       .replace(/\s+/g, ' ');
 
-  const returnedFirstName = normalize(entity.first_name);
-  const returnedLastName = normalize(entity.last_name);
-  const registeredName = normalize(user.full_name);
+  const firstName = normalize(entity.first_name);
+  const lastName = normalize(entity.last_name);
+  const dateOfBirth = normalize(
+    entity.dob ?? entity.date_of_birth ?? entity.dateOfBirth
+  );
 
-  // Do not approve when the provider has not returned
-  // the minimum identity information needed for a comparison.
-  if (
-    !returnedFirstName ||
-    !returnedLastName ||
-    !registeredName
-  ) {
-    return { status: 'pending' };
+  const registeredName = normalize(user?.full_name);
+  const submittedDateOfBirth = normalize(user?.date_of_birth);
+
+  // Do not approve when required identity details are unavailable.
+  if (!firstName || !lastName || !registeredName) {
+    return { status: 'pending', reason: 'incomplete_identity_data' };
   }
 
-  const registeredParts = registeredName.split(' ');
-  const firstNameMatches =
-    registeredParts.includes(returnedFirstName);
-  const lastNameMatches =
-    registeredParts.includes(returnedLastName);
+  const nameParts = registeredName.split(' ');
+  const nameMatches =
+    nameParts.includes(firstName) &&
+    nameParts.includes(lastName);
 
-  if (!firstNameMatches || !lastNameMatches) {
-    return { status: 'pending' };
+  if (!nameMatches) {
+    return { status: 'pending', reason: 'name_mismatch' };
   }
 
-  // A basic BVN lookup supplies details, but does not
-  // itself prove a successful name-validation result.
-  // Keep the record pending until authoritative matching
-  // is confirmed by the appropriate validation endpoint.
-  return { status: 'pending' };
+  // A DOB comparison is only possible when both values are available.
+  // Keep the record pending until the authoritative verification rules
+  // and the date formats have been confirmed.
+  if (!dateOfBirth || !submittedDateOfBirth) {
+    return { status: 'pending', reason: 'date_of_birth_not_confirmed' };
+  }
+
+  // This is intentionally not an approval decision.
+  // A successful lookup and partial name match alone do not prove
+  // that the submitted BVN belongs to this customer.
+  return { status: 'pending', reason: 'awaiting_verification_rules' };
 };
 
 // ============================================================
