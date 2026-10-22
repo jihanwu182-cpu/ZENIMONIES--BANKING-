@@ -2064,6 +2064,8 @@ const startDojahVerification = async (req, res) => {
 
 
 const confirmDojahVerification = async (req, res) => {
+    console.log('[KYC DEBUG] Identity confirmation endpoint reached.');
+  console.log('[KYC DEBUG] Request method:', req.method);
   const userId =
     req.user?.id ||
     req.userId ||
