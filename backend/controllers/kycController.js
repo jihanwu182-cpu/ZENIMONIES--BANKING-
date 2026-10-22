@@ -958,8 +958,7 @@ const submitBvn = async (req, res) => {
       verified: false,
 
       locked: true,
-
-      provider: 'dojah',
+   
     });
   } catch (error) {
     try {
