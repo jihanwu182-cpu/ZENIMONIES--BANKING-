@@ -308,14 +308,6 @@ if (identityPassed && livenessPassed) {
      WHERE id = $1`,
     [record.user_id]
   );
-} else {
-  await client.query(
-    `UPDATE users
-     SET id_verified = FALSE,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = $1`,
-    [record.user_id]
-  );
 }
 
     await client.query('COMMIT');
