@@ -168,7 +168,10 @@ const handleDojahWebhook = async (req, res) => {
     body.verification_status || ''
   ).trim().toLowerCase();
 
-  const sessionCompleted = sessionStatus === 'completed';
+  const sessionCompleted = [
+  'completed',
+  'complete',
+].includes(sessionStatus);
 
   const data = body.data || {};
 
