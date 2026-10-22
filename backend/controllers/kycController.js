@@ -2450,23 +2450,59 @@ const confirmDojahVerification = async (req, res) => {
         `,
         [userId]
       );
-if (
-  finalId === 'verified' &&
-  finalLiveness === 'verified'
-) {
-  await client.query(
-    `
-    UPDATE users
-    SET
-      id_verified = TRUE,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = $1
-    `,
-    [userId]
-  );
-}
 
-await client.query('COMMIT');
+    const savedStatuses = await client.query(
+      `
+      SELECT
+        id_verification_status,
+        liveness_status
+      FROM kyc_records
+      WHERE id = $1
+        AND user_id = $2
+      `,
+      [record.id, userId]
+    );
+
+    if (!savedStatuses.rows.length) {
+      throw new Error(
+        'Verification record could not be confirmed.'
+      );
+    }
+
+    const savedIdStatus = String(
+      savedStatuses.rows[0].id_verification_status || ''
+    ).toLowerCase();
+
+    const savedLivenessStatus = String(
+      savedStatuses.rows[0].liveness_status || ''
+    ).toLowerCase();
+
+    const finalId = ['verified', 'approved'].includes(
+      savedIdStatus
+    ) ? 'verified' : savedIdStatus;
+
+    const finalLiveness = ['verified', 'approved'].includes(
+      savedLivenessStatus
+    ) ? 'verified' : savedLivenessStatus;
+
+    if (
+      finalId === 'verified' &&
+      finalLiveness === 'verified'
+    ) {
+      await client.query(
+        `
+        UPDATE users
+        SET
+          id_verified = TRUE,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        `,
+        [userId]
+      );
+    }
+
+    await client.query('COMMIT');
+
     return res.status(200).json({
       success: true,
       status:
@@ -2486,6 +2522,7 @@ await client.query('COMMIT');
       selfie_match_score: selfieMatchScore,
       checked_at: new Date().toISOString(),
     });
+
   } catch (error) {
     if (client) {
       try {
