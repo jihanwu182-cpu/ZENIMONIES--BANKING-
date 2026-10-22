@@ -2252,16 +2252,38 @@ const confirmDojahVerification = async (req, res) => {
       verification?.data?.selfie;
 
     const outcome = (step) => {
-      if (step?.status === true) {
-        return 'verified';
-      }
+  const value = step?.status;
 
-      if (step?.status === false) {
-        return 'rejected';
-      }
+  if (value === true) {
+    return 'verified';
+  }
 
-      return 'pending';
-    };
+  if (value === false) {
+    return 'rejected';
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+
+    if (
+      ['success', 'successful', 'verified', 'passed', 'pass', 'approved'].includes(
+        normalized
+      )
+    ) {
+      return 'verified';
+    }
+
+    if (
+      ['failed', 'failure', 'rejected', 'declined', 'fail'].includes(
+        normalized
+      )
+    ) {
+      return 'rejected';
+    }
+  }
+
+  return 'pending';
+};
 
     let idStatus = 'pending';
     let livenessStatus = 'pending';
