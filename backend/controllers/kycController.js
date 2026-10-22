@@ -2450,24 +2450,23 @@ const confirmDojahVerification = async (req, res) => {
         `,
         [userId]
       );
-    } else if (
-      finalId === 'rejected' ||
-      finalLiveness === 'rejected'
-    ) {
-      await client.query(
-        `
-        UPDATE users
-        SET
-          id_verified = FALSE,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-        `,
-        [userId]
-      );
-    }
+if (
+  finalId === 'verified' &&
+  finalLiveness === 'verified'
+) {
+  await client.query(
+    `
+    UPDATE users
+    SET
+      id_verified = TRUE,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = $1
+    `,
+    [userId]
+  );
+}
 
-    await client.query('COMMIT');
-
+await client.query('COMMIT');
     return res.status(200).json({
       success: true,
       status:
