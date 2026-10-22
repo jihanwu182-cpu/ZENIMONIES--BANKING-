@@ -2130,21 +2130,23 @@ const confirmDojahVerification = async (req, res) => {
     }
 
     const lookupReference = record.dojah_reference;
+     
 const providerResult =
-await getDojahVerification(lookupReference);
+  await getDojahVerification(lookupReference);
 
 console.log(
-‘Dojah identity result lookup:’,
-{
-success: providerResult?.success === true,
-hasData: Boolean(providerResult?.data),
-referencePresent: Boolean(lookupReference),
-providerStatus:
-providerResult?.status || null,
-errorCode:
-providerResult?.code || null,
-}
+  'Dojah identity result lookup:',
+  {
+    success: providerResult?.success === true,
+    hasData: Boolean(providerResult?.data),
+    referencePresent: Boolean(lookupReference),
+    providerStatus:
+      providerResult?.status || null,
+    errorCode:
+      providerResult?.code || null,
+  }
 );
+
    
     // Find a verification payload inside common response wrappers.
     const candidates = [];
