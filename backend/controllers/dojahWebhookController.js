@@ -286,19 +286,35 @@ const handleDojahWebhook = async (req, res) => {
 // Completing a verification session does not automatically mean
 // the customer has passed identity and liveness verification.
 
-const identityPassed =
-  ['verified', 'approved'].includes(
-    String(
-      preserveId ? currentId : nextId
-    ).toLowerCase()
-  );
+const savedStatuses = await client.query(
+  `SELECT
+     id_verification_status,
+     liveness_status
+   FROM kyc_records
+   WHERE id = $1
+     AND user_id = $2`,
+  [record.id, record.user_id]
+);
 
-const livenessPassed =
-  ['verified', 'approved'].includes(
-    String(
-      preserveLiveness ? currentLiveness : nextLiveness
-    ).toLowerCase()
-  );
+if (!savedStatuses.rows.length) {
+  throw new Error('Verification record could not be confirmed.');
+}
+
+const savedIdStatus = String(
+  savedStatuses.rows[0].id_verification_status || ''
+).toLowerCase();
+
+const savedLivenessStatus = String(
+  savedStatuses.rows[0].liveness_status || ''
+).toLowerCase();
+
+const identityPassed = ['verified', 'approved'].includes(
+  savedIdStatus
+);
+
+const livenessPassed = ['verified', 'approved'].includes(
+  savedLivenessStatus
+);
 
 if (identityPassed && livenessPassed) {
   await client.query(
