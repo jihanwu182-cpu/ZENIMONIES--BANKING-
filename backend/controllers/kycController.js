@@ -133,6 +133,54 @@ const getMissingProfileFields = (user) => {
     .map(({ label }) => label);
 };
 
+const interpretBvnLookup = (result, user) => {
+  if (result?.success !== true) {
+    return { status: 'pending' };
+  }
+
+  const entity = result.data?.entity;
+
+  if (!entity || typeof entity !== 'object') {
+    return { status: 'pending' };
+  }
+
+  const normalize = value =>
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+
+  const returnedFirstName = normalize(entity.first_name);
+  const returnedLastName = normalize(entity.last_name);
+  const registeredName = normalize(user.full_name);
+
+  // Do not approve when the provider has not returned
+  // the minimum identity information needed for a comparison.
+  if (
+    !returnedFirstName ||
+    !returnedLastName ||
+    !registeredName
+  ) {
+    return { status: 'pending' };
+  }
+
+  const registeredParts = registeredName.split(' ');
+  const firstNameMatches =
+    registeredParts.includes(returnedFirstName);
+  const lastNameMatches =
+    registeredParts.includes(returnedLastName);
+
+  if (!firstNameMatches || !lastNameMatches) {
+    return { status: 'pending' };
+  }
+
+  // A basic BVN lookup supplies details, but does not
+  // itself prove a successful name-validation result.
+  // Keep the record pending until authoritative matching
+  // is confirmed by the appropriate validation endpoint.
+  return { status: 'pending' };
+};
+
 // ============================================================
 // FILE TYPES
 // ============================================================
