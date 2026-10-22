@@ -2080,27 +2080,10 @@ const confirmDojahVerification = async (req, res) => {
     req.body?.reference_id || ''
   ).trim();
 
-  const providerReference = String(
-    req.body?.provider_reference_id || ''
-  ).trim();
-
-  if (
-    clientReference &&
-    clientReference.length > 150
-  ) {
+  if (clientReference.length > 150) {
     return res.status(400).json({
       success: false,
       message: 'Invalid verification reference.',
-    });
-  }
-
-  if (
-    providerReference &&
-    providerReference.length > 150
-  ) {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid provider reference.',
     });
   }
 
@@ -2108,25 +2091,20 @@ const confirmDojahVerification = async (req, res) => {
 
   try {
     client = await pool.connect();
-    await client.query('BEGIN');
 
+    // Read the authenticated user's current session.
     const result = await client.query(
       `
       SELECT
         id,
         dojah_reference,
-        dojah_verification_type,
         id_verification_status,
-        liveness_status,
-        liveness_provider_reference,
-        liveness_score,
-        selfie_match_score
+        liveness_status
       FROM kyc_records
       WHERE user_id = $1
         AND dojah_verification_type = 'identity'
       ORDER BY created_at DESC
       LIMIT 1
-      FOR UPDATE
       `,
       [userId]
     );
@@ -2134,23 +2112,16 @@ const confirmDojahVerification = async (req, res) => {
     const record = result.rows[0];
 
     if (!record || !record.dojah_reference) {
-      await client.query('ROLLBACK');
-
       return res.status(404).json({
         success: false,
-        message:
-          'No identity verification session was found.',
+        message: 'No identity verification session was found.',
       });
     }
 
-    // If the frontend supplied an internal reference,
-    // it must match the authenticated user's active session.
     if (
       clientReference &&
       clientReference !== record.dojah_reference
     ) {
-      await client.query('ROLLBACK');
-
       return res.status(409).json({
         success: false,
         message:
@@ -2158,10 +2129,6 @@ const confirmDojahVerification = async (req, res) => {
       });
     }
 
-    await client.query('COMMIT');
-
-    // Query the provider reference when available;
-    // otherwise use the internal reference.
     const lookupReference = record.dojah_reference;
 
     const providerResult =
@@ -2179,9 +2146,7 @@ const confirmDojahVerification = async (req, res) => {
       });
     }
 
-   
-    // Safely locate the actual verification result,
-    // even when the API wraps it inside nested data objects.
+    // Find a verification payload inside common response wrappers.
     const candidates = [];
     const queue = [providerResult.data];
     const visited = new Set();
@@ -2189,32 +2154,33 @@ const confirmDojahVerification = async (req, res) => {
     while (queue.length > 0 && visited.size < 30) {
       const item = queue.shift();
 
-      if (!item || typeof item !== 'object' || visited.has(item)) {
+      if (
+        !item ||
+        typeof item !== 'object' ||
+        visited.has(item)
+      ) {
         continue;
       }
 
       visited.add(item);
       candidates.push(item);
 
-      if (item.data && typeof item.data === 'object') {
-        queue.push(item.data);
-      }
-
-      if (item.result && typeof item.result === 'object') {
-        queue.push(item.result);
-      }
-
-      if (item.response && typeof item.response === 'object') {
-        queue.push(item.response);
+      for (const key of ['data', 'result', 'response']) {
+        if (
+          item[key] &&
+          typeof item[key] === 'object'
+        ) {
+          queue.push(item[key]);
+        }
       }
     }
 
-    const verification =
-      candidates.find((item) =>
+    const verification = candidates.find(
+      item =>
         item.government_data ||
         item.selfie ||
         item.verification_status
-      ) || providerResult.data;
+    ) || providerResult.data;
 
     const returnedReference = String(
       verification?.reference_id ||
@@ -2234,9 +2200,6 @@ const confirmDojahVerification = async (req, res) => {
       });
     }
 
-    // A provider-level boolean `status: true` means
-    // the API request succeeded; it does not mean the
-    // customer's identity verification is complete.
     const sessionStatus = String(
       verification?.verification_status ||
       verification?.data?.verification_status ||
@@ -2251,46 +2214,49 @@ const confirmDojahVerification = async (req, res) => {
       verification?.selfie ||
       verification?.data?.selfie;
 
-    const outcome = (step) => {
-  const value = step?.status;
+    const outcome = step => {
+      const value = step?.status;
 
-  if (value === true) {
-    return 'verified';
-  }
+      if (value === true) return 'verified';
+      if (value === false) return 'rejected';
 
-  if (value === false) {
-    return 'rejected';
-  }
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
 
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
+        if (
+          [
+            'success',
+            'successful',
+            'verified',
+            'passed',
+            'pass',
+            'approved',
+          ].includes(normalized)
+        ) {
+          return 'verified';
+        }
 
-    if (
-      ['success', 'successful', 'verified', 'passed', 'pass', 'approved'].includes(
-        normalized
-      )
-    ) {
-      return 'verified';
-    }
+        if (
+          [
+            'failed',
+            'failure',
+            'rejected',
+            'declined',
+            'fail',
+          ].includes(normalized)
+        ) {
+          return 'rejected';
+        }
+      }
 
-    if (
-      ['failed', 'failure', 'rejected', 'declined', 'fail'].includes(
-        normalized
-      )
-    ) {
-      return 'rejected';
-    }
-  }
-
-  return 'pending';
-};
+      return 'pending';
+    };
 
     let idStatus = 'pending';
     let livenessStatus = 'pending';
 
     if (
-      sessionStatus === 'completed' ||
-      sessionStatus === 'complete'
+      ['completed', 'complete'].includes(sessionStatus)
     ) {
       idStatus = outcome(governmentData);
       livenessStatus = outcome(selfieData);
@@ -2303,7 +2269,7 @@ const confirmDojahVerification = async (req, res) => {
       livenessStatus = 'rejected';
     }
 
-    const score = (value) => {
+    const score = value => {
       const number = Number(value);
 
       return value !== null &&
@@ -2324,14 +2290,15 @@ const confirmDojahVerification = async (req, res) => {
       selfieData?.data?.match_score
     );
 
+    // Re-lock the exact session. A newer session must not be
+    // overwritten by a delayed result from an older session.
     await client.query('BEGIN');
 
     const locked = await client.query(
       `
       SELECT
         id_verification_status,
-        liveness_status,
-        liveness_provider_reference
+        liveness_status
       FROM kyc_records
       WHERE id = $1
         AND user_id = $2
@@ -2339,11 +2306,7 @@ const confirmDojahVerification = async (req, res) => {
         AND dojah_verification_type = 'identity'
       FOR UPDATE
       `,
-      [
-        record.id,
-        userId,
-        record.dojah_reference,
-      ]
+      [record.id, userId, lookupReference]
     );
 
     if (!locked.rows.length) {
@@ -2352,43 +2315,9 @@ const confirmDojahVerification = async (req, res) => {
       return res.status(409).json({
         success: false,
         message:
-          'The verification record changed. Please refresh and try again.',
+          'The verification session changed. Please try again.',
       });
     }
-
-    const current = locked.rows[0];
-
-    // Do not allow a browser-supplied provider reference
-    // to switch an already-associated session to another ID.
-    if (
-      providerReference &&
-      current.liveness_provider_reference &&
-      current.liveness_provider_reference !== providerReference
-    ) {
-      await client.query('ROLLBACK');
-
-      return res.status(409).json({
-        success: false,
-        message:
-          'A different provider reference is already associated with this verification session.',
-      });
-    }
-
-    const finalId =
-      ['verified', 'approved'].includes(
-        String(
-          current.id_verification_status || ''
-        ).toLowerCase()
-      )
-        ? 'verified'
-        : idStatus;
-
-    const finalLiveness =
-      ['verified', 'approved'].includes(
-        String(current.liveness_status || '').toLowerCase()
-      )
-        ? 'verified'
-        : livenessStatus;
 
     await client.query(
       `
@@ -2402,12 +2331,16 @@ const confirmDojahVerification = async (req, res) => {
         END,
 
         id_verified_at = CASE
+          WHEN id_verification_status IN ('verified', 'approved')
+            THEN id_verified_at
           WHEN $2 = 'verified'
             THEN COALESCE(id_verified_at, CURRENT_TIMESTAMP)
           ELSE id_verified_at
         END,
 
         id_rejection_reason = CASE
+          WHEN id_verification_status IN ('verified', 'approved')
+            THEN id_rejection_reason
           WHEN $2 = 'rejected'
             THEN 'Identity check did not pass provider verification.'
           WHEN $2 = 'verified' THEN NULL
@@ -2435,21 +2368,6 @@ const confirmDojahVerification = async (req, res) => {
         selfieMatchScore,
       ]
     );
-
-    if (
-      finalId === 'verified' &&
-      finalLiveness === 'verified'
-    ) {
-      await client.query(
-        `
-        UPDATE users
-        SET
-          id_verified = TRUE,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-        `,
-        [userId]
-      );
 
     const savedStatuses = await client.query(
       `
@@ -2522,7 +2440,6 @@ const confirmDojahVerification = async (req, res) => {
       selfie_match_score: selfieMatchScore,
       checked_at: new Date().toISOString(),
     });
-
   } catch (error) {
     if (client) {
       try {
@@ -2537,8 +2454,7 @@ const confirmDojahVerification = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to retrieve verification status.',
+      message: 'Unable to retrieve verification status.',
     });
   } finally {
     if (client) {
@@ -2546,8 +2462,6 @@ const confirmDojahVerification = async (req, res) => {
     }
   }
 };
-
-
 
 // ============================================================
 // EXPORTS
