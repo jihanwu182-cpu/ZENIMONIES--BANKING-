@@ -946,6 +946,9 @@ ADD COLUMN IF NOT EXISTS dojah_started_at TIMESTAMP;
 ALTER TABLE kyc_records
 ADD COLUMN IF NOT EXISTS dojah_checked_at TIMESTAMP;
 
+ALTER TABLE kyc_records
+ADD COLUMN IF NOT EXISTS bvn_provider_validation_result VARCHAR(30);
+
 CREATE UNIQUE INDEX IF NOT EXISTS
 idx_kyc_dojah_reference_unique
 ON kyc_records (dojah_reference)
