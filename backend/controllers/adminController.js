@@ -547,6 +547,7 @@ const KYC_TYPES = {
 // UPDATE OVERALL KYC STATE
 // ============================================================
 
+
 const refreshOverallKycState = async (
   client,
   userId
@@ -579,30 +580,19 @@ const refreshOverallKycState = async (
   const tier3Verified =
     user.tier_3_verified === true;
 
+  // Highest individual verification tier completed.
+  let highestVerifiedTier = 0;
+
+  if (bvnVerified) highestVerifiedTier = 1;
+  if (idVerified) highestVerifiedTier = 2;
+  if (tier3Verified) highestVerifiedTier = 3;
+
+  // A completed Tier 1 verification must not require
+  // Tier 2 and Tier 3 to be completed as well.
   const allVerified =
     bvnVerified &&
     idVerified &&
     tier3Verified;
-
-  let highestVerifiedTier = 0;
-
-  if (bvnVerified) {
-    highestVerifiedTier = 1;
-  }
-
-  if (idVerified) {
-    highestVerifiedTier = 2;
-  }
-
-  if (tier3Verified) {
-    highestVerifiedTier = 3;
-  }
-
-  let overallStatus = 'pending';
-
-  if (allVerified) {
-    overallStatus = 'approved';
-  }
 
   const rejectedResult = await client.query(
     `
@@ -618,17 +608,21 @@ const refreshOverallKycState = async (
     [userId]
   );
 
-  if (rejectedResult.rows.length > 0) {
-    const record = rejectedResult.rows[0];
+  const record = rejectedResult.rows[0] || {};
 
-    const hasRejected =
-      record.bvn_verification_status === 'rejected' ||
-      record.id_verification_status === 'rejected' ||
-      record.tier_3_verification_status === 'rejected';
+  const hasRejected =
+    record.bvn_verification_status === 'rejected' ||
+    record.id_verification_status === 'rejected' ||
+    record.tier_3_verification_status === 'rejected';
 
-    if (hasRejected && !allVerified) {
-      overallStatus = 'rejected';
-    }
+  // Overall status describes the current KYC journey.
+  // It does not mean every tier must be completed.
+  let overallStatus = 'pending';
+
+  if (hasRejected && !allVerified) {
+    overallStatus = 'rejected';
+  } else if (bvnVerified) {
+    overallStatus = 'verified';
   }
 
   await client.query(
@@ -644,7 +638,7 @@ const refreshOverallKycState = async (
     [
       overallStatus,
       highestVerifiedTier,
-      allVerified,
+      bvnVerified,
       userId,
     ]
   );
@@ -655,14 +649,13 @@ const refreshOverallKycState = async (
     SET
       verification_status = $1,
       updated_at = CURRENT_TIMESTAMP
-    WHERE user_id = $2
-      AND id = (
-        SELECT id
-        FROM kyc_records
-        WHERE user_id = $2
-        ORDER BY updated_at DESC
-        LIMIT 1
-      )
+    WHERE id = (
+      SELECT id
+      FROM kyc_records
+      WHERE user_id = $2
+      ORDER BY updated_at DESC
+      LIMIT 1
+    )
     `,
     [
       overallStatus,
@@ -676,7 +669,6 @@ const refreshOverallKycState = async (
     allVerified,
   };
 };
-
 
 // ============================================================
 // ADMIN KYC DECISION
