@@ -256,29 +256,30 @@ const validateBvn = async ({
     };
   }
 
-  const params = {
-    bvn: normalizedBvn,
-  };
-
-  if (String(firstName || '').trim()) {
-    params.first_name = String(firstName).trim();
-  }
-
-  if (String(lastName || '').trim()) {
-    params.last_name = String(lastName).trim();
-  }
-
-  if (String(dateOfBirth || '').trim()) {
-    params.dob = String(dateOfBirth).trim();
+  if (
+    !String(firstName || '').trim() ||
+    !String(lastName || '').trim() ||
+    !String(dateOfBirth || '').trim()
+  ) {
+    return {
+      success: false,
+      status: 400,
+      data: null,
+      message: 'Required identity details are missing.',
+    };
   }
 
   return dojahRequest({
     method: 'GET',
     url: '/v1/kyc/bvn',
-    params,
+    params: {
+      bvn: normalizedBvn,
+      first_name: String(firstName).trim(),
+      last_name: String(lastName).trim(),
+      dob: String(dateOfBirth).trim(),
+    },
   });
 };
-
 
 // ============================================================
 // EXPORTS
