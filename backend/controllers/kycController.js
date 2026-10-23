@@ -843,43 +843,39 @@ const submitBvn = async (req, res) => {
       });
     }
 
-       // SAFE DIAGNOSTIC: log field names and types only.
-    // Never log BVN, names, date of birth, or identity data.
-    const validationData = dojahResult.data;
-    const validationEntity =
-      validationData &&
-      typeof validationData === 'object'
-        ? validationData.entity
-        : null;
+    // SAFE DIAGNOSTIC: field names and types only.
+// Never log BVN, names, DOB, or identity data.
+const validationData = dojahResult.data;
 
-    console.info('Tier 1 BVN result structure:', {
-      success: dojahResult.success === true,
-      status: dojahResult.status ?? null,
-      dataKeys:
-        validationData &&
-        typeof validationData === 'object'
-          ? Object.keys(validationData).slice(0, 30)
-          : [],
-      entityKeys:
-        validationEntity &&
-        typeof validationEntity === 'object'
-          ? Object.keys(validationEntity).slice(0, 30)
-          : [],
-      matchFieldTypes:
-        validationEntity &&
-        typeof validationEntity === 'object'
-          ? Object.fromEntries(
-              Object.entries(validationEntity)
-                .filter(([key]) =>
-                  /match|valid|verified|status|success/i.test(key)
-                )
-                .map(([key, value]) => [
-                  key,
-                  typeof value,
-                ])
-            )
-          : {},
-    });
+const validationEntity =
+  validationData &&
+  typeof validationData === 'object'
+    ? validationData.entity
+    : null;
+
+console.info('Tier 1 BVN result structure:', {
+  success: dojahResult.success === true,
+  status: dojahResult.status ?? null,
+  topLevelKeys:
+    validationData && typeof validationData === 'object'
+      ? Object.keys(validationData).slice(0, 30)
+      : [],
+  entityFields:
+    validationEntity && typeof validationEntity === 'object'
+      ? Object.fromEntries(
+          Object.entries(validationEntity).map(
+            ([key, value]) => [
+              key,
+              value === null
+                ? 'null'
+                : Array.isArray(value)
+                  ? 'array'
+                  : typeof value,
+            ]
+          )
+        )
+      : {},
+});
     // ========================================================
     // DOJAH RESPONDED SUCCESSFULLY
     //
