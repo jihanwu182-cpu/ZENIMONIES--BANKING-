@@ -133,6 +133,7 @@ const getMissingProfileFields = (user) => {
     .map(({ label }) => label);
 };
 
+
 const interpretBvnLookup = (result) => {
   if (
     result?.success !== true ||
@@ -145,51 +146,16 @@ const interpretBvnLookup = (result) => {
     };
   }
 
-  const entity = result.data.entity;
-
-  if (!entity || typeof entity !== 'object') {
-    return {
-      status: 'pending',
-      reason: 'missing_validation_result',
-    };
-  }
-
-  // Only accept explicit boolean results from the provider.
-  const bvnResult = entity.bvn;
-  const firstNameResult = entity.first_name;
-  const lastNameResult = entity.last_name;
-  const dobResult =
-    entity.date_of_birth || entity.dob;
-
-  const results = [
-    bvnResult?.status,
-    firstNameResult?.status,
-    lastNameResult?.status,
-    dobResult?.status,
-  ];
-
-  if (results.some(value => value === false)) {
-    return {
-      status: 'rejected',
-      reason: 'provider_match_failed',
-    };
-  }
-
-  if (
-    results.length === 4 &&
-    results.every(value => value === true)
-  ) {
-    return {
-      status: 'verified',
-      reason: 'provider_confirmed_all_fields',
-    };
-  }
-
+  // Do not infer verification from HTTP success,
+  // identity data being present, or undocumented fields.
+  // Until the provider's documented validation flags
+  // are confirmed, require manual verification review.
   return {
     status: 'pending',
-    reason: 'provider_result_incomplete',
+    reason: 'provider_result_requires_review',
   };
 };
+
 // ============================================================
 // FILE TYPES
 // ============================================================
