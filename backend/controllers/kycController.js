@@ -877,25 +877,12 @@ console.info('Tier 1 BVN result structure:', {
         )
       : {},
 });
-    // ========================================================
-    // DOJAH RESPONDED SUCCESSFULLY
-    //
-    // Save the Zenimonies verification as PENDING.
-    //
-    // We deliberately do NOT set bvn_verified = true here.
-    // ========================================================
+   
+    // Interpret the explicit validation flags returned by Dojah.
+    const bvnDecision = interpretBvnLookup(dojahResult);
+    const finalBvnStatus = bvnDecision.status;
 
     let kycId;
-
-    // ========================================================
-    // UPDATE EXISTING RECORD
-    //
-    // ONLY BVN fields are changed.
-    //
-    // Tier 2 and Tier 3 remain untouched.
-    // ========================================================
-
-    
 
     if (existingRecord) {
       kycId = existingRecord.id;
@@ -908,95 +895,96 @@ console.info('Tier 1 BVN result structure:', {
           bvn_provider_reference = NULL,
           bvn_verified_name = NULL,
           bvn_verified_date_of_birth = NULL,
-          bvn_verification_status = 'pending',
-          bvn_verified_at = NULL,
-          bvn_rejection_reason = NULL,
-          verification_status = 'pending',
-          rejection_reason = NULL,
+          bvn_verification_status = $2,
+          bvn_verified_at = CASE
+            WHEN $2 = 'verified' THEN CURRENT_TIMESTAMP
+            ELSE NULL
+          END,
+          bvn_rejection_reason = CASE
+            WHEN $2 = 'rejected' THEN $3
+            ELSE NULL
+          END,
+          verification_status = CASE
+            WHEN $2 = 'rejected' THEN 'rejected'
+            ELSE 'pending'
+          END,
+          rejection_reason = CASE
+            WHEN $2 = 'rejected' THEN $3
+            ELSE NULL
+          END,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
+        WHERE id = $4
         `,
-        [bvn, kycId]
+        [
+          bvn,
+          finalBvnStatus,
+          finalBvnStatus === 'rejected'
+            ? bvnDecision.reason
+            : null,
+          kycId,
+        ]
       );
+    } else {
+      const insertResult = await client.query(
+        `
+        INSERT INTO kyc_records (
+          user_id,
+          bvn,
+          bvn_verification_status,
+          bvn_verified_at,
+          bvn_rejection_reason,
+          id_verification_status,
+          liveness_status,
+          tier_3_verification_status,
+          verification_status,
+          rejection_reason
+        )
+        VALUES (
+          $1, $2, $3,
+          CASE WHEN $3 = 'verified'
+            THEN CURRENT_TIMESTAMP ELSE NULL END,
+          $4,
+          'not_verified',
+          'not_verified',
+          'not_verified',
+          CASE WHEN $3 = 'rejected'
+            THEN 'rejected' ELSE 'pending' END,
+          $4
+        )
+        RETURNING id
+        `,
+        [
+          userId,
+          bvn,
+          finalBvnStatus,
+          finalBvnStatus === 'rejected'
+            ? bvnDecision.reason
+            : null,
+        ]
+      );
+
+      kycId = insertResult.rows[0].id;
     }
 
-    // ========================================================
-    // CREATE NEW KYC RECORD
-    // ========================================================
-
-    else {
-      const insertResult =
-        await client.query(
-          `
-          INSERT INTO kyc_records (
-            user_id,
-            bvn,
-
-            bvn_verification_status,
-
-            id_verification_status,
-
-            liveness_status,
-
-            tier_3_verification_status,
-
-            verification_status
-          )
-          VALUES (
-            $1,
-            $2,
-
-            'pending',
-
-            'not_verified',
-
-            'not_verified',
-
-            'not_verified',
-
-            'pending'
-          )
-          RETURNING id
-          `,
-          [
-            userId,
-            bvn,
-          ]
-        );
-
-      kycId =
-        insertResult.rows[0].id;
-    }
-
-    // ========================================================
-    // UPDATE USER
-    //
-    // BVN submission = PENDING.
-    //
-    // DO NOT CHANGE:
-    //
-    // id_verified
-    // tier_3_verified
-    // ========================================================
-
+    // Update Tier 1 only. Do not modify Tier 2 or Tier 3 flags.
     await client.query(
       `
       UPDATE users
       SET
         bvn = $1,
-
-        bvn_verified = false,
-
-        kyc_status = 'pending',
-
+        bvn_verified = $2,
+        kyc_status = CASE
+          WHEN $3 = 'rejected' THEN 'rejected'
+          ELSE 'pending'
+        END,
         kyc_tier = 1,
-
         updated_at = CURRENT_TIMESTAMP
-
-      WHERE id = $2
+      WHERE id = $4
       `,
       [
         bvn,
+        finalBvnStatus === 'verified',
+        finalBvnStatus,
         userId,
       ]
     );
@@ -1030,24 +1018,22 @@ console.info('Tier 1 BVN result structure:', {
     // RESPONSE
     // ========================================================
 
-    return res.status(200).json({
-      success: true,
+    
+return res.status(200).json({
+  success: true,
+  message:
+    finalBvnStatus === 'verified'
+      ? 'Your BVN has been verified successfully.'
+      : finalBvnStatus === 'rejected'
+        ? 'Your BVN could not be verified. Please check your details or contact support.'
+        : 'Your BVN submission is awaiting verification review.',
+  kyc_record_id: kycId,
+  tier: 1,
+  status: finalBvnStatus,
+  verified: finalBvnStatus === 'verified',
+  locked: finalBvnStatus === 'verified',
+});
 
-      message:
-        'BVN submitted successfully. Your BVN verification is now pending.',
-
-      kyc_record_id:
-        kycId,
-
-      tier: 1,
-
-      status: 'pending',
-
-      verified: false,
-
-      locked: true,
-   
-    });
   } catch (error) {
     try {
       await client.query('ROLLBACK');
