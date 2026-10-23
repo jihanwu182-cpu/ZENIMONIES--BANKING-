@@ -795,7 +795,31 @@ const processKycDecision = async (
     // VERIFY
     // ----------------------------------------------------------
 
+    
     if (decision === 'verify') {
+      // Tier 1 must not be manually approved when the
+      // provider result is missing or unconfirmed.
+      if (type === 'BVN') {
+        const providerResult =
+          interpretBvnLookup({
+            success: true,
+            data: {
+              entity: null,
+            },
+          });
+
+        if (providerResult.status !== 'verified') {
+          await client.query('ROLLBACK');
+
+          return res.status(409).json({
+            success: false,
+            code: 'BVN_PROVIDER_VERIFICATION_REQUIRED',
+            message:
+              'This BVN cannot be approved until authoritative provider verification evidence is available.',
+          });
+        }
+      }
+
       await client.query(
         `
         UPDATE kyc_records
@@ -820,6 +844,7 @@ const processKycDecision = async (
         [record.user_id]
       );
     }
+
 
     // ----------------------------------------------------------
     // REJECT
