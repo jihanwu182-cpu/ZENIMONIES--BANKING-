@@ -256,23 +256,29 @@ const validateBvn = async ({
     };
   }
 
-  if (
-    !String(firstName || '').trim() ||
-    !String(lastName || '').trim() ||
-    !String(dateOfBirth || '').trim()
-  ) {
-    return {
-      success: false,
-      status: 400,
-      data: null,
-      message: 'Required identity details are missing.',
-    };
+  const params = {
+    bvn: normalizedBvn,
+  };
+
+  if (String(firstName || '').trim()) {
+    params.first_name = String(firstName).trim();
   }
 
-  // Use the existing BVN lookup endpoint.
-  // A successful lookup is NOT automatic approval.
-  return verifyBvn(normalizedBvn);
+  if (String(lastName || '').trim()) {
+    params.last_name = String(lastName).trim();
+  }
+
+  if (String(dateOfBirth || '').trim()) {
+    params.dob = String(dateOfBirth).trim();
+  }
+
+  return dojahRequest({
+    method: 'GET',
+    url: '/v1/kyc/bvn',
+    params,
+  });
 };
+
 
 // ============================================================
 // EXPORTS
