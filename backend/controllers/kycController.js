@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+ const pool = require('../config/database');
 const crypto = require('crypto');
 
 const {
@@ -134,58 +134,39 @@ const getMissingProfileFields = (user) => {
 };
 
 
-const interpretBvnLookup = (result, user, submittedBvn) => {
-  // A failed request or missing response is never an approval.
+const interpretBvnLookup = (result) => {
   if (result?.success !== true) {
-    return { status: 'pending', reason: 'lookup_unavailable' };
+    return {
+      status: 'pending',
+      reason: 'lookup_unavailable',
+    };
   }
 
-  const entity = result.data?.entity;
+  const data = result.data;
+
+  if (!data || typeof data !== 'object') {
+    return {
+      status: 'pending',
+      reason: 'missing_validation_result',
+    };
+  }
+
+  // Do not assume a response is a match merely because
+  // the HTTP request succeeded. The exact provider fields
+  // must be confirmed from a real sandbox response.
+  const entity = data.entity;
 
   if (!entity || typeof entity !== 'object') {
-    return { status: 'pending', reason: 'missing_identity_data' };
+    return {
+      status: 'pending',
+      reason: 'missing_validation_result',
+    };
   }
 
-  const normalize = (value) =>
-    String(value ?? '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, ' ');
-
-  const firstName = normalize(entity.first_name);
-  const lastName = normalize(entity.last_name);
-  const dateOfBirth = normalize(
-    entity.dob ?? entity.date_of_birth ?? entity.dateOfBirth
-  );
-
-  const registeredName = normalize(user?.full_name);
-  const submittedDateOfBirth = normalize(user?.date_of_birth);
-
-  // Do not approve when required identity details are unavailable.
-  if (!firstName || !lastName || !registeredName) {
-    return { status: 'pending', reason: 'incomplete_identity_data' };
-  }
-
-  const nameParts = registeredName.split(' ');
-  const nameMatches =
-    nameParts.includes(firstName) &&
-    nameParts.includes(lastName);
-
-  if (!nameMatches) {
-    return { status: 'pending', reason: 'name_mismatch' };
-  }
-
-  // A DOB comparison is only possible when both values are available.
-  // Keep the record pending until the authoritative verification rules
-  // and the date formats have been confirmed.
-  if (!dateOfBirth || !submittedDateOfBirth) {
-    return { status: 'pending', reason: 'date_of_birth_not_confirmed' };
-  }
-
-  // This is intentionally not an approval decision.
-  // A successful lookup and partial name match alone do not prove
-  // that the submitted BVN belongs to this customer.
-  return { status: 'pending', reason: 'awaiting_verification_rules' };
+  return {
+    status: 'pending',
+    reason: 'validation_result_requires_confirmation',
+  };
 };
 
 // ============================================================
@@ -810,33 +791,42 @@ const submitBvn = async (req, res) => {
     // authoritative Dojah result is processed.
     // ========================================================
 
-    const dojahResult =
-      await verifyBvn(bvn);
+    
+    const dojahResult = await validateBvn({
+      bvn,
+      firstName: String(user.full_name || '')
+        .trim()
+        .split(/\s+/)[0],
+      lastName: String(user.full_name || '')
+        .trim()
+        .split(/\s+/)
+        .slice(1)
+        .join(' '),
+      dateOfBirth: user.date_of_birth
+        ? new Date(user.date_of_birth)
+            .toISOString()
+            .slice(0, 10)
+        : '',
+    });
 
     if (!dojahResult?.success) {
       await client.query('ROLLBACK');
 
-      console.error(
-        'Dojah BVN submission failed:',
-        {
-          status:
-            dojahResult?.status ||
-            null,
-
-          message:
-            dojahResult?.message ||
-            null,
-        }
-      );
+      console.error('Dojah BVN validation failed:', {
+        status: dojahResult?.status || null,
+        message: dojahResult?.message || null,
+      });
 
       return res.status(502).json({
         success: false,
-        code:
-          'DOJAH_BVN_SUBMISSION_FAILED',
+        code: 'DOJAH_BVN_VALIDATION_FAILED',
         message:
-          'We could not submit your BVN for verification at this time. Please try again later.',
+          'We could not validate your BVN at this time. Please try again later.',
       });
     }
+
+    // Keep the result pending until the provider's exact
+    // validation-match fields have been confirmed.
 
     // ========================================================
     // DOJAH RESPONDED SUCCESSFULLY
