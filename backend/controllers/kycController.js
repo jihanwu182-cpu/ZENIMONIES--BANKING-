@@ -151,9 +151,6 @@ const interpretBvnLookup = (result) => {
     };
   }
 
-  // Do not assume a response is a match merely because
-  // the HTTP request succeeded. The exact provider fields
-  // must be confirmed from a real sandbox response.
   const entity = data.entity;
 
   if (!entity || typeof entity !== 'object') {
@@ -163,12 +160,33 @@ const interpretBvnLookup = (result) => {
     };
   }
 
+  // Only accept explicit boolean match flags.
+  // Do not approve based on HTTP success alone.
+  const matchFlags = [
+    entity.is_bvn_match,
+    entity.is_bvn_valid,
+    entity.is_match,
+  ];
+
+  if (matchFlags.includes(false)) {
+    return {
+      status: 'rejected',
+      reason: 'provider_match_failed',
+    };
+  }
+
+  if (matchFlags.includes(true)) {
+    return {
+      status: 'verified',
+      reason: 'provider_explicit_match',
+    };
+  }
+
   return {
     status: 'pending',
-    reason: 'validation_result_requires_confirmation',
+    reason: 'provider_match_fields_unconfirmed',
   };
 };
-
 // ============================================================
 // FILE TYPES
 // ============================================================
