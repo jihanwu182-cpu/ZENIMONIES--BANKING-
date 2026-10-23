@@ -762,20 +762,18 @@ const submitBvn = async (req, res) => {
     // ========================================================
 
     if (
-      currentBvnStatus === 'pending'
-    ) {
-      await client.query('ROLLBACK');
+  currentBvnStatus === 'pending' &&
+  existingRecord?.bvn_provider_reference
+) {
+  await client.query('ROLLBACK');
 
-      return res.status(409).json({
-        success: false,
-        code: 'BVN_VERIFICATION_PENDING',
-        message:
-          'Your BVN verification is currently pending. You cannot submit another BVN while verification is in progress.',
-        status: 'pending',
-        verified: false,
-        locked: true,
-      });
-    }
+  return res.status(409).json({
+    success: false,
+    code: 'BVN_VERIFICATION_PENDING',
+    message:
+      'Your BVN verification is still being processed.',
+  });
+}
 
     // ========================================================
     // PROFILE COMPLETENESS CHECK
