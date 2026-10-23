@@ -238,7 +238,6 @@ const testDojahConnection = () => {
  * It does not change any customer's KYC status.
  */
 
-
 const validateBvn = async ({
   bvn,
   firstName,
@@ -246,6 +245,9 @@ const validateBvn = async ({
   dateOfBirth,
 }) => {
   const normalizedBvn = String(bvn || '').trim();
+  const first = String(firstName || '').trim();
+  const last = String(lastName || '').trim();
+  const dob = String(dateOfBirth || '').trim();
 
   if (!/^\d{11}$/.test(normalizedBvn)) {
     return {
@@ -256,11 +258,7 @@ const validateBvn = async ({
     };
   }
 
-  if (
-    !String(firstName || '').trim() ||
-    !String(lastName || '').trim() ||
-    !String(dateOfBirth || '').trim()
-  ) {
+  if (!first || !last || !dob) {
     return {
       success: false,
       status: 400,
@@ -274,6 +272,9 @@ const validateBvn = async ({
     url: '/api/v1/kyc/bvn',
     params: {
       bvn: normalizedBvn,
+      first_name: first,
+      last_name: last,
+      dob,
     },
   });
 };
