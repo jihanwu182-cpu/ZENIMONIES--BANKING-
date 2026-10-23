@@ -1,7 +1,20 @@
 
-
 const crypto = require('crypto');
 const pool = require('../config/database');
+
+// ============================================================
+// ZENIMONIES BANKING
+// Signed verification webhook
+//
+// Supports:
+//   Tier 1: BVN verification
+//   Tier 2: Identity and liveness verification
+//
+// Security:
+//   - Verifies HMAC SHA-256 against the raw request body.
+//   - Matches the backend-created reference to a saved KYC record.
+//   - Never approves a verification from session completion alone.
+// ============================================================
 
 const getWebhookSecret = () => {
   const value = process.env.DOJAH_WEBHOOK_SECRET;
@@ -20,11 +33,13 @@ const verifySignature = (signature, rawBody, secret) => {
     return false;
   }
 
-  const received = signature
-    .trim()
-    .replace(/^sha256=/i, '');
+  let received = signature.trim();
 
-  if (!/^[a-f0-9]{64}$/i.test(received)) {
+  if (received.startsWith('sha256=')) {
+    received = received.slice('sha256='.length);
+  }
+
+  if (!/^[a-fA-F0-9]{64}$/.test(received)) {
     return false;
   }
 
@@ -41,58 +56,49 @@ const verifySignature = (signature, rawBody, secret) => {
   );
 };
 
+// Prefer the backend-created reference supplied in metadata.
+// A provider-generated reference must not be assumed to be
+// the same as the reference stored by Zenimonies.
 const getReference = (body) => {
-  const values = [
-    body?.reference_id,
-    body?.data?.reference_id,
+  const candidates = [
     body?.metadata?.reference_id,
+    body?.data?.metadata?.reference_id,
   ];
 
-  return (
-    values.find(
-      value =>
-        typeof value === 'string' &&
-        value.trim().length > 0 &&
-        value.trim().length <= 150
-    )?.trim() || null
-  );
+  for (const candidate of candidates) {
+    if (
+      typeof candidate === 'string' &&
+      candidate.trim()
+    ) {
+      return candidate.trim();
+    }
+  }
+
+  // These fallback fields are accepted only if they actually
+  // match a saved backend reference in the database below.
+  const fallbackCandidates = [
+    body?.reference_id,
+    body?.data?.reference_id,
+  ];
+
+  for (const candidate of fallbackCandidates) {
+    if (
+      typeof candidate === 'string' &&
+      candidate.trim()
+    ) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
 };
 
+const isCompleted = (body) => {
+  const status = String(
+    body?.verification_status || ''
+  ).toLowerCase();
 
-const checkOutcome = (value) => {
-  if (value === true) return 'verified';
-  if (value === false) return 'rejected';
-
-  if (typeof value !== 'string') return 'pending';
-
-  const normalized = value.trim().toLowerCase();
-
-  if (
-    [
-      'success',
-      'successful',
-      'verified',
-      'passed',
-      'pass',
-      'approved',
-    ].includes(normalized)
-  ) {
-    return 'verified';
-  }
-
-  if (
-    [
-      'failed',
-      'failure',
-      'rejected',
-      'declined',
-      'fail',
-    ].includes(normalized)
-  ) {
-    return 'rejected';
-  }
-
-  return 'pending';
+  return ['completed', 'complete'].includes(status);
 };
 
 const getStepStatus = (step) => {
@@ -100,57 +106,91 @@ const getStepStatus = (step) => {
     return 'pending';
   }
 
-  return checkOutcome(step.status);
+  if (step.status === true) {
+    return 'verified';
+  }
+
+  if (step.status === false) {
+    return 'rejected';
+  }
+
+  const status = String(
+    step.status || step.verification_status || ''
+  ).toLowerCase();
+
+  if (
+    ['verified', 'success', 'successful', 'approved', 'passed'].includes(status)
+  ) {
+    return 'verified';
+  }
+
+  if (
+    ['rejected', 'failed', 'failure', 'declined'].includes(status)
+  ) {
+    return 'rejected';
+  }
+
+  return 'pending';
 };
 
 const getScore = (value) => {
-  if (
-    typeof value !== 'number' ||
-    !Number.isFinite(value) ||
-    value < 0 ||
-    value > 100
-  ) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
     return null;
   }
 
-  return value;
+  if (number < 0 || number > 100) {
+    return null;
+  }
+
+  return number;
 };
 
 const handleDojahWebhook = async (req, res) => {
   const secret = getWebhookSecret();
+  const rawBody = req.rawBody;
+  const signature =
+    req.headers['x-dojah-signature'];
 
   if (!secret) {
-    return res.status(503).json({
-      success: false,
-      message: 'Webhook verification is temporarily unavailable.',
+    console.error(
+      '[KYC webhook] Webhook secret is not configured.'
+    );
+
+    return res.status(500).json({
+      received: false,
+      message: 'Webhook configuration error.',
     });
   }
 
-  if (!Buffer.isBuffer(req.rawBody)) {
+  if (!Buffer.isBuffer(rawBody)) {
+    console.error(
+      '[KYC webhook] Raw request body is unavailable.'
+    );
+
     return res.status(400).json({
-      success: false,
-      message: 'Unable to verify webhook request.',
+      received: false,
+      message: 'Invalid webhook request.',
     });
   }
 
-  if (
-    !verifySignature(
-      req.headers['x-dojah-signature'],
-      req.rawBody,
-      secret
-    )
-  ) {
+  if (!verifySignature(signature, rawBody, secret)) {
+    console.warn(
+      '[KYC webhook] Invalid webhook signature.'
+    );
+
     return res.status(401).json({
-      success: false,
-      message: 'Webhook signature is missing or invalid.',
+      received: false,
+      message: 'Invalid signature.',
     });
   }
 
   const body = req.body;
 
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+  if (!body || typeof body !== 'object') {
     return res.status(400).json({
-      success: false,
+      received: false,
       message: 'Invalid webhook payload.',
     });
   }
@@ -158,211 +198,270 @@ const handleDojahWebhook = async (req, res) => {
   const reference = getReference(body);
 
   if (!reference) {
-    return res.status(200).json({
-      success: true,
-      received: true,
+    console.warn(
+      '[KYC webhook] No usable verification reference.'
+    );
+
+    return res.status(400).json({
+      received: false,
+      message: 'Verification reference is missing.',
     });
   }
 
-  const sessionStatus = String(
-    body.verification_status || ''
-  ).trim().toLowerCase();
-
-  const sessionCompleted = [
-  'completed',
-  'complete',
-].includes(sessionStatus);
-
   const data = body.data || {};
+  const completed = isCompleted(body);
 
-  // Match the actual EasyOnboard payload structure.
-  const governmentData = data.government_data || {};
-  const selfieData = data.selfie || {};
-  const selfieResult = selfieData.data || {};
-
-  const idStatus = getStepStatus(governmentData);
-  const livenessStatus = getStepStatus(selfieData);
-
-  const nextId = sessionCompleted ? idStatus : 'pending';
-  const nextLiveness = sessionCompleted
-    ? livenessStatus
-    : 'pending';
-
-  const livenessScore = getScore(
-    selfieResult.liveness_score
-  );
-
-  const selfieMatchScore = getScore(
-    selfieResult.match_score
-  );
-
-  let client;
+  const client = await pool.connect();
 
   try {
-    client = await pool.connect();
-
     await client.query('BEGIN');
 
-    const found = await client.query(
-      `SELECT
-         id,
-         user_id,
-         id_verification_status,
-         liveness_status
+    const lookup = await client.query(
+      `SELECT *
        FROM kyc_records
        WHERE dojah_reference = $1
-         AND dojah_verification_type = 'identity'
+         AND dojah_verification_type IN ('bvn', 'identity')
        FOR UPDATE`,
       [reference]
     );
 
-    if (!found.rows.length) {
+    const record = lookup.rows[0];
+
+    if (!record) {
       await client.query('ROLLBACK');
 
-      // Do not guess which customer owns an unmatched reference.
+      // Do not attach an unknown provider reference to a user.
+      // A valid signature does not establish which user owns it.
+      console.warn(
+        '[KYC webhook] No KYC record matched the supplied reference.'
+      );
+
+      return res.status(409).json({
+        received: false,
+        message: 'Verification reference not matched.',
+      });
+    }
+
+    // ========================================================
+    // TIER 1 — BVN
+    // ========================================================
+    if (record.dojah_verification_type === 'bvn') {
+      const governmentData =
+        data.government_data || {};
+
+      const bvnEntity =
+        governmentData?.data?.bvn?.entity || {};
+
+      const storedBvn =
+        typeof record.bvn === 'string'
+          ? record.bvn.trim()
+          : '';
+
+      const returnedBvn =
+        typeof bvnEntity.bvn === 'string'
+          ? bvnEntity.bvn.trim()
+          : '';
+
+      const providerStatus =
+        getStepStatus(governmentData);
+
+      const exactBvnMatch =
+        /^\d{11}$/.test(storedBvn) &&
+        /^\d{11}$/.test(returnedBvn) &&
+        storedBvn === returnedBvn;
+
+      // Approve only when:
+      // 1. The session is complete.
+      // 2. The provider's government-data check passed.
+      // 3. The returned BVN exactly matches the saved BVN.
+      const approved =
+        completed &&
+        providerStatus === 'verified' &&
+        exactBvnMatch;
+
+      const explicitlyRejected =
+        completed &&
+        providerStatus === 'rejected';
+
+      const nextStatus = approved
+        ? 'verified'
+        : explicitlyRejected
+          ? 'rejected'
+          : 'pending';
+
+      await client.query(
+        `UPDATE kyc_records
+         SET bvn_verification_status = $1,
+             bvn_verified_at = CASE
+               WHEN $1 = 'verified'
+                 THEN COALESCE(bvn_verified_at, NOW())
+               ELSE bvn_verified_at
+             END,
+             bvn_rejection_reason = CASE
+               WHEN $1 = 'rejected'
+                 THEN 'provider_bvn_check_failed'
+               ELSE NULL
+             END,
+             dojah_checked_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $2`,
+        [nextStatus, record.id]
+      );
+
+      if (approved) {
+        await client.query(
+          `UPDATE users
+           SET bvn_verified = TRUE,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [record.user_id]
+        );
+      }
+
+      if (explicitlyRejected) {
+        await client.query(
+          `UPDATE users
+           SET bvn_verified = FALSE,
+               kyc_status = 'rejected',
+               updated_at = NOW()
+           WHERE id = $1`,
+          [record.user_id]
+        );
+      }
+
+      await client.query('COMMIT');
+
       return res.status(200).json({
-        success: true,
         received: true,
       });
     }
 
-    const record = found.rows[0];
+    // ========================================================
+    // TIER 2 — IDENTITY AND LIVENESS
+    // Preserve the existing Tier 2 workflow.
+    // ========================================================
+    const governmentData =
+      data.government_data || {};
 
-    const currentId = String(
-      record.id_verification_status || ''
-    ).toLowerCase();
+    const selfieData =
+      data.selfie || {};
 
-    const currentLiveness = String(
-      record.liveness_status || ''
-    ).toLowerCase();
+    const selfieResult =
+      selfieData.data || {};
 
-    // Preserve already-approved individual checks.
-    const preserveId = ['verified', 'approved'].includes(
-      currentId
+    const identityStatus = completed
+      ? getStepStatus(governmentData)
+      : 'pending';
+
+    const livenessStatus = completed
+      ? getStepStatus(selfieData)
+      : 'pending';
+
+    const identityScore = getScore(
+      governmentData.match_score ??
+      governmentData.data?.match_score
     );
 
-    const preserveLiveness = ['verified', 'approved'].includes(
-      currentLiveness
+    const livenessScore = getScore(
+      selfieResult.liveness_score
     );
 
-    const finalId = preserveId ? currentId : nextId;
+    const savedIdentityStatus =
+      record.id_verification_status === 'verified'
+        ? 'verified'
+        : identityStatus;
+
+    const savedLivenessStatus =
+      record.liveness_status === 'verified'
+        ? 'verified'
+        : livenessStatus;
+
+    const identityRejected =
+      savedIdentityStatus === 'rejected';
+
+    const livenessRejected =
+      savedLivenessStatus === 'rejected';
 
     await client.query(
       `UPDATE kyc_records
-       SET
-         id_verification_status = CASE
-           WHEN $2 = TRUE THEN id_verification_status
-           WHEN $3 <> 'pending' THEN $3
-           ELSE id_verification_status
-         END,
-
-         id_verified_at = CASE
-           WHEN $2 = TRUE THEN id_verified_at
-           WHEN $3 = 'verified'
-             THEN COALESCE(id_verified_at, CURRENT_TIMESTAMP)
-           ELSE id_verified_at
-         END,
-
-         id_rejection_reason = CASE
-           WHEN $2 = TRUE THEN id_rejection_reason
-           WHEN $3 = 'rejected'
-             THEN 'Identity check did not pass provider verification.'
-           WHEN $3 = 'verified' THEN NULL
-           ELSE id_rejection_reason
-         END,
-
-         liveness_status = CASE
-           WHEN $4 = TRUE THEN liveness_status
-           WHEN $5 <> 'pending' THEN $5
-           ELSE liveness_status
-         END,
-
-         liveness_score = COALESCE($6, liveness_score),
-         selfie_match_score = COALESCE($7, selfie_match_score),
-
-         dojah_checked_at = CURRENT_TIMESTAMP,
-         updated_at = CURRENT_TIMESTAMP
-
-       WHERE id = $1`,
+       SET id_verification_status = $1,
+           id_verified_at = CASE
+             WHEN $1 = 'verified'
+               THEN COALESCE(id_verified_at, NOW())
+             ELSE id_verified_at
+           END,
+           id_rejection_reason = CASE
+             WHEN $1 = 'rejected'
+               THEN 'provider_identity_check_failed'
+             ELSE NULL
+           END,
+           liveness_status = $2,
+           identity_match_score = COALESCE($3, identity_match_score),
+           liveness_score = COALESCE($4, liveness_score),
+           dojah_checked_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $5`,
       [
-        record.id,
-        preserveId,
-        nextId,
-        preserveLiveness,
-        nextLiveness,
+        savedIdentityStatus,
+        savedLivenessStatus,
+        identityScore,
         livenessScore,
-        selfieMatchScore,
+        record.id,
       ]
     );
 
-  // Update the user's identity flag only when BOTH checks pass.
-// Completing a verification session does not automatically mean
-// the customer has passed identity and liveness verification.
+    if (
+      savedIdentityStatus === 'verified' &&
+      savedLivenessStatus === 'verified'
+    ) {
+      await client.query(
+        `UPDATE users
+         SET id_verified = TRUE,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [record.user_id]
+      );
+    }
 
-const savedStatuses = await client.query(
-  `SELECT
-     id_verification_status,
-     liveness_status
-   FROM kyc_records
-   WHERE id = $1
-     AND user_id = $2`,
-  [record.id, record.user_id]
-);
-
-if (!savedStatuses.rows.length) {
-  throw new Error('Verification record could not be confirmed.');
-}
-
-const savedIdStatus = String(
-  savedStatuses.rows[0].id_verification_status || ''
-).toLowerCase();
-
-const savedLivenessStatus = String(
-  savedStatuses.rows[0].liveness_status || ''
-).toLowerCase();
-
-const identityPassed = ['verified', 'approved'].includes(
-  savedIdStatus
-);
-
-const livenessPassed = ['verified', 'approved'].includes(
-  savedLivenessStatus
-);
-
-if (identityPassed && livenessPassed) {
-  await client.query(
-    `UPDATE users
-     SET id_verified = TRUE,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = $1`,
-    [record.user_id]
-  );
-}
+    if (identityRejected || livenessRejected) {
+      await client.query(
+        `UPDATE users
+         SET id_verified = FALSE,
+             kyc_status = 'rejected',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [record.user_id]
+      );
+    }
 
     await client.query('COMMIT');
 
     return res.status(200).json({
-      success: true,
       received: true,
     });
   } catch (error) {
-    if (client) {
-      try {
-        await client.query('ROLLBACK');
-      } catch {}
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error(
+        '[KYC webhook] Transaction rollback failed.'
+      );
     }
 
-    console.error('KYC webhook processing failed.');
+    console.error(
+      '[KYC webhook] Processing failed:',
+      error.message
+    );
 
     return res.status(500).json({
-      success: false,
-      message: 'Unable to process webhook.',
+      received: false,
+      message: 'Webhook processing failed.',
     });
   } finally {
-    if (client) {
-      client.release();
-    }
+    client.release();
   }
 };
 
-module.exports = { handleDojahWebhook };
+module.exports = {
+  handleDojahWebhook,
+};
