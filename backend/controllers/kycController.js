@@ -1,4 +1,4 @@
- const pool = require('../config/database');
+const pool = require('../config/database');
 const crypto = require('crypto');
 
 const {
@@ -133,25 +133,19 @@ const getMissingProfileFields = (user) => {
     .map(({ label }) => label);
 };
 
-
 const interpretBvnLookup = (result) => {
-  if (result?.success !== true) {
+  if (
+    result?.success !== true ||
+    !result.data ||
+    typeof result.data !== 'object'
+  ) {
     return {
       status: 'pending',
       reason: 'lookup_unavailable',
     };
   }
 
-  const data = result.data;
-
-  if (!data || typeof data !== 'object') {
-    return {
-      status: 'pending',
-      reason: 'missing_validation_result',
-    };
-  }
-
-  const entity = data.entity;
+  const entity = result.data.entity;
 
   if (!entity || typeof entity !== 'object') {
     return {
@@ -160,31 +154,40 @@ const interpretBvnLookup = (result) => {
     };
   }
 
-  // Only accept explicit boolean match flags.
-  // Do not approve based on HTTP success alone.
-  const matchFlags = [
-    entity.is_bvn_match,
-    entity.is_bvn_valid,
-    entity.is_match,
+  // Only accept explicit boolean results from the provider.
+  const bvnResult = entity.bvn;
+  const firstNameResult = entity.first_name;
+  const lastNameResult = entity.last_name;
+  const dobResult =
+    entity.date_of_birth || entity.dob;
+
+  const results = [
+    bvnResult?.status,
+    firstNameResult?.status,
+    lastNameResult?.status,
+    dobResult?.status,
   ];
 
-  if (matchFlags.includes(false)) {
+  if (results.some(value => value === false)) {
     return {
       status: 'rejected',
       reason: 'provider_match_failed',
     };
   }
 
-  if (matchFlags.includes(true)) {
+  if (
+    results.length === 4 &&
+    results.every(value => value === true)
+  ) {
     return {
       status: 'verified',
-      reason: 'provider_explicit_match',
+      reason: 'provider_confirmed_all_fields',
     };
   }
 
   return {
     status: 'pending',
-    reason: 'provider_match_fields_unconfirmed',
+    reason: 'provider_result_incomplete',
   };
 };
 // ============================================================
