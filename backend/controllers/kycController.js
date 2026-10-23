@@ -894,6 +894,7 @@ console.info('Tier 1 BVN result structure:', {
 
     let kycId;
 
+   
     if (existingRecord) {
       kycId = existingRecord.id;
 
@@ -905,28 +906,30 @@ console.info('Tier 1 BVN result structure:', {
           bvn_provider_reference = NULL,
           bvn_verified_name = NULL,
           bvn_verified_date_of_birth = NULL,
-          bvn_verification_status = $2,
+          bvn_provider_validation_result = $2,
+          bvn_verification_status = $3,
           bvn_verified_at = CASE
-            WHEN $2 = 'verified' THEN CURRENT_TIMESTAMP
+            WHEN $3 = 'verified' THEN CURRENT_TIMESTAMP
             ELSE NULL
           END,
           bvn_rejection_reason = CASE
-            WHEN $2 = 'rejected' THEN $3
+            WHEN $3 = 'rejected' THEN $4
             ELSE NULL
           END,
           verification_status = CASE
-            WHEN $2 = 'rejected' THEN 'rejected'
+            WHEN $3 = 'rejected' THEN 'rejected'
             ELSE 'pending'
           END,
           rejection_reason = CASE
-            WHEN $2 = 'rejected' THEN $3
+            WHEN $3 = 'rejected' THEN $4
             ELSE NULL
           END,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = $4
+        WHERE id = $5
         `,
         [
           bvn,
+          finalBvnStatus,
           finalBvnStatus,
           finalBvnStatus === 'rejected'
             ? bvnDecision.reason
@@ -940,6 +943,7 @@ console.info('Tier 1 BVN result structure:', {
         INSERT INTO kyc_records (
           user_id,
           bvn,
+          bvn_provider_validation_result,
           bvn_verification_status,
           bvn_verified_at,
           bvn_rejection_reason,
@@ -950,22 +954,23 @@ console.info('Tier 1 BVN result structure:', {
           rejection_reason
         )
         VALUES (
-          $1, $2, $3,
-          CASE WHEN $3 = 'verified'
+          $1, $2, $3, $4,
+          CASE WHEN $4 = 'verified'
             THEN CURRENT_TIMESTAMP ELSE NULL END,
-          $4,
+          $5,
           'not_verified',
           'not_verified',
           'not_verified',
-          CASE WHEN $3 = 'rejected'
+          CASE WHEN $4 = 'rejected'
             THEN 'rejected' ELSE 'pending' END,
-          $4
+          $5
         )
         RETURNING id
         `,
         [
           userId,
           bvn,
+          finalBvnStatus,
           finalBvnStatus,
           finalBvnStatus === 'rejected'
             ? bvnDecision.reason
@@ -976,7 +981,6 @@ console.info('Tier 1 BVN result structure:', {
       kycId = insertResult.rows[0].id;
     }
 
-    // Update Tier 1 only. Do not modify Tier 2 or Tier 3 flags.
     await client.query(
       `
       UPDATE users
