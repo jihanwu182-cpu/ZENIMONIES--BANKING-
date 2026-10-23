@@ -238,6 +238,7 @@ const testDojahConnection = () => {
  * It does not change any customer's KYC status.
  */
 
+
 const validateBvn = async ({
   bvn,
   firstName,
@@ -268,16 +269,9 @@ const validateBvn = async ({
     };
   }
 
-  return dojahRequest({
-    method: 'GET',
-    url: '/api/v1/kyc/bvn',
-    params: {
-      bvn: normalizedBvn,
-      first_name: String(firstName).trim(),
-      last_name: String(lastName).trim(),
-      dob: String(dateOfBirth).trim(),
-    },
-  });
+  // Use the existing BVN lookup endpoint.
+  // A successful lookup is NOT automatic approval.
+  return verifyBvn(normalizedBvn);
 };
 
 // ============================================================
