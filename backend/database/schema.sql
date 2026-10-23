@@ -642,8 +642,6 @@ selfie_match_score NUMERIC(5,2),
 
 liveness_provider_reference VARCHAR(150),
 
-    liveness_provider_reference VARCHAR(150),
-
     id_verification_status VARCHAR(30)
         NOT NULL DEFAULT 'pending',
 
