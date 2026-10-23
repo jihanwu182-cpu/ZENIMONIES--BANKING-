@@ -146,16 +146,60 @@ const interpretBvnLookup = (result) => {
     };
   }
 
-  // Do not infer verification from HTTP success,
-  // identity data being present, or undocumented fields.
-  // Until the provider's documented validation flags
-  // are confirmed, require manual verification review.
+  const entity = result.data.entity;
+
+  if (!entity || typeof entity !== 'object') {
+    return {
+      status: 'pending',
+      reason: 'missing_validation_result',
+    };
+  }
+
+  const bvnStatus = entity.bvn?.status;
+  const firstNameStatus = entity.first_name?.status;
+  const lastNameStatus = entity.last_name?.status;
+
+  // Reject only when the provider explicitly reports a mismatch.
+  if (
+    bvnStatus === false ||
+    firstNameStatus === false ||
+    lastNameStatus === false ||
+    entity.dob?.status === false
+  ) {
+    return {
+      status: 'rejected',
+      reason: 'provider_match_failed',
+    };
+  }
+
+  // Require explicit positive evidence for the BVN and names.
+  if (
+    bvnStatus !== true ||
+    firstNameStatus !== true ||
+    lastNameStatus !== true
+  ) {
+    return {
+      status: 'pending',
+      reason: 'provider_result_incomplete',
+    };
+  }
+
+  // If the provider returns a DOB match flag, it must be true.
+  if (
+    entity.dob &&
+    entity.dob.status !== true
+  ) {
+    return {
+      status: 'pending',
+      reason: 'dob_match_unconfirmed',
+    };
+  }
+
   return {
-    status: 'pending',
-    reason: 'provider_result_requires_review',
+    status: 'verified',
+    reason: 'provider_confirmed_bvn_and_names',
   };
 };
-
 // ============================================================
 // FILE TYPES
 // ============================================================
