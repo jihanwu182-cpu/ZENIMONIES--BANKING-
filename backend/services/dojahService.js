@@ -229,6 +229,56 @@ const testDojahConnection = () => {
   }
 };
 
+/**
+ * BVN VALIDATION
+ *
+ * GET /v1/kyc/bvn
+ *
+ * This is separate from the BVN lookup endpoint.
+ * It does not change any customer's KYC status.
+ */
+const validateBvn = async ({
+  bvn,
+  firstName,
+  lastName,
+  dateOfBirth,
+}) => {
+  const normalizedBvn = String(bvn || '').trim();
+
+  if (!/^\d{11}$/.test(normalizedBvn)) {
+    return {
+      success: false,
+      status: 400,
+      data: null,
+      message: 'BVN must contain exactly 11 digits.',
+    };
+  }
+
+  if (
+    !String(firstName || '').trim() ||
+    !String(lastName || '').trim() ||
+    !String(dateOfBirth || '').trim()
+  ) {
+    return {
+      success: false,
+      status: 400,
+      data: null,
+      message: 'First name, last name, and date of birth are required.',
+    };
+  }
+
+  return dojahRequest({
+    method: 'GET',
+    url: '/v1/kyc/bvn',
+    params: {
+      bvn: normalizedBvn,
+      first_name: String(firstName).trim(),
+      last_name: String(lastName).trim(),
+      dob: String(dateOfBirth).trim(),
+    },
+  });
+};
+
 // ============================================================
 // EXPORTS
 // ============================================================
@@ -236,6 +286,7 @@ const testDojahConnection = () => {
 module.exports = {
   dojahRequest,
   verifyBvn,
+  validateBvn,
   getDojahVerification,
   testDojahConnection,
 };
