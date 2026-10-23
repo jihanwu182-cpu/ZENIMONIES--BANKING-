@@ -1827,100 +1827,168 @@ await fetchStatus();
   // SUBMIT BVN
   // ==========================================================
 
-  const submitBvn =
-    async (
-      event: React.FormEvent
-    ) => {
-      event.preventDefault();
+const startTier1BvnVerification = async () => {
+  const token = localStorage.getItem('zenimonies_token');
 
-      const cleanBvn =
-        bvn.replace(
-          /\D/g,
-          ''
-        );
+  if (!token) {
+    setAlert({
+      type: 'error',
+      message: 'Please log in again to continue verification.',
+    });
+    return;
+  }
 
-      if (
-        cleanBvn.length !==
-        11
-      ) {
-        showAlert(
-          'Please enter a valid 11-digit BVN.',
-          'error'
-        );
+  if (!window.Connect || !DOJAH_APP_ID || !DOJAH_PUBLIC_KEY || !DOJAH_WIDGET_ID) {
+    setAlert({
+      type: 'error',
+      message: 'Verification is temporarily unavailable. Please try again later.',
+    });
+    return;
+  }
 
-        return;
-      }
+  setDojahLoading(true);
 
-      if (
-        missingFields.length >
-        0
-      ) {
-        showAlert(
-          'Please complete the required profile information before submitting your BVN.',
-          'warning'
-        );
+  try {
+    const response = await fetch(`${API_BASE}/kyc/dojah/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        verification_type: 'tier_1',
+      }),
+    });
 
-        return;
-      }
+    const result = await response.json();
 
-      try {
-        setSubmitting(
-          true
-        );
+    if (!response.ok || !result.reference_id) {
+      throw new Error(
+        result.message || 'Unable to start verification. Please try again.'
+      );
+    }
 
-        const response =
-          await fetch(
-            `${API_BASE}/kyc/bvn`,
-            {
-              method: 'POST',
+    const referenceId = result.reference_id;
 
-              headers: {
-                ...requestHeaders(),
+    const widget = new window.Connect({
+      app_id: DOJAH_APP_ID,
+      p_key: DOJAH_PUBLIC_KEY,
+      type: 'custom',
+      config: {
+        widget_id: DOJAH_WIDGET_ID,
+      },
+      reference_id: referenceId,
+      metadata: {
+        service: 'zenimonies_tier_1_bvn',
+        reference_id: referenceId,
+      },
 
-                'Content-Type':
-                  'application/json',
-              },
+      onSuccess: async () => {
+        setAlert({
+          type: 'success',
+          message:
+            'Your verification has been submitted. Your status will update after the checks are completed.',
+        });
 
-              body: JSON.stringify({
-                bvn: cleanBvn,
-              }),
-            }
-          );
-
-        const result =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            result.message ||
-              'BVN verification failed.'
-          );
-        }
-
-        showAlert(
-          result.message ||
-            'BVN submitted successfully.',
-          'success'
-        );
-
-        setBvn('');
-
+        setDojahLoading(false);
         await fetchStatus();
-      } catch (error) {
-        showAlert(
-          error instanceof
-            Error
-            ? error.message
-            : 'BVN verification failed.',
-          'error'
-        );
-      } finally {
-        setSubmitting(
-          false
-        );
-      }
-    };
+      },
 
+      onError: () => {
+        setAlert({
+          type: 'error',
+          message: 'Verification could not be completed. Please try again.',
+        });
+        setDojahLoading(false);
+      },
+
+      onClose: () => {
+        setDojahLoading(false);
+      },
+    });
+
+    widget.open();
+  } catch (error) {
+    setAlert({
+      type: 'error',
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Unable to start verification. Please try again.',
+    });
+    setDojahLoading(false);
+  }
+};
+
+const submitBvn = async (event?: React.FormEvent) => {
+  event?.preventDefault();
+
+  const token = localStorage.getItem('zenimonies_token');
+
+  if (!token) {
+    setAlert({
+      type: 'error',
+      message: 'Please log in again to continue.',
+    });
+    return;
+  }
+
+  if (!/^\d{11}$/.test(bvn.trim())) {
+    setAlert({
+      type: 'error',
+      message: 'Enter a valid 11-digit BVN.',
+    });
+    return;
+  }
+
+  setSubmitting(true);
+
+  try {
+    const response = await fetch(`${API_BASE}/kyc/bvn`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        bvn: bvn.trim(),
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Unable to submit BVN.');
+    }
+
+    setBvn('');
+    await fetchStatus();
+
+    // Do not start another session if this BVN is already verified.
+    if (String(result.status || '').toLowerCase() === 'verified') {
+      setAlert({
+        type: 'success',
+        message: 'Your BVN is already verified.',
+      });
+      return;
+    }
+
+    // Save the BVN first, then launch the Tier 1 verification session.
+    await startTier1BvnVerification();
+  } catch (error) {
+    setAlert({
+      type: 'error',
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Unable to submit your BVN. Please try again.',
+    });
+  } finally {
+    setSubmitting(false);
+  }
+};
+
+  
   // ==========================================================
   // SUBMIT TIER 2
   // ==========================================================
