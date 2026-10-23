@@ -237,6 +237,7 @@ const testDojahConnection = () => {
  * This is separate from the BVN lookup endpoint.
  * It does not change any customer's KYC status.
  */
+
 const validateBvn = async ({
   bvn,
   firstName,
@@ -250,7 +251,7 @@ const validateBvn = async ({
       success: false,
       status: 400,
       data: null,
-      message: 'BVN must contain exactly 11 digits.',
+      message: 'Invalid BVN format.',
     };
   }
 
@@ -263,13 +264,13 @@ const validateBvn = async ({
       success: false,
       status: 400,
       data: null,
-      message: 'First name, last name, and date of birth are required.',
+      message: 'Required identity details are missing.',
     };
   }
 
   return dojahRequest({
     method: 'GET',
-    url: '/v1/kyc/bvn',
+    url: '/api/v1/kyc/bvn',
     params: {
       bvn: normalizedBvn,
       first_name: String(firstName).trim(),
