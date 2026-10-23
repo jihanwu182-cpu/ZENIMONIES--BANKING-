@@ -894,34 +894,28 @@ console.info('Tier 1 BVN result structure:', {
     // Tier 2 and Tier 3 remain untouched.
     // ========================================================
 
+    
+
     if (existingRecord) {
-      kycId =
-        existingRecord.id;
+      kycId = existingRecord.id;
 
       await client.query(
         `
         UPDATE kyc_records
         SET
           bvn = $1,
-
+          bvn_provider_reference = NULL,
+          bvn_verified_name = NULL,
+          bvn_verified_date_of_birth = NULL,
           bvn_verification_status = 'pending',
-
           bvn_verified_at = NULL,
-
           bvn_rejection_reason = NULL,
-
           verification_status = 'pending',
-
           rejection_reason = NULL,
-
           updated_at = CURRENT_TIMESTAMP
-
         WHERE id = $2
         `,
-        [
-          bvn,
-          kycId,
-        ]
+        [bvn, kycId]
       );
     }
 
