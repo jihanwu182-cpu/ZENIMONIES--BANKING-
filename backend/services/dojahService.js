@@ -271,12 +271,9 @@ const validateBvn = async ({
 
   return dojahRequest({
     method: 'GET',
-    url: '/v1/kyc/bvn',
+    url: '/api/v1/kyc/bvn',
     params: {
       bvn: normalizedBvn,
-      first_name: String(firstName).trim(),
-      last_name: String(lastName).trim(),
-      dob: String(dateOfBirth).trim(),
     },
   });
 };
