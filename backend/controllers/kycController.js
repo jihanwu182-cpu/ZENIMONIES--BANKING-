@@ -1950,6 +1950,7 @@ const submitTier3 = async (req, res) => {
 // The frontend must never choose another user's reference.
 // ============================================================
 
+
 const startDojahVerification = async (req, res) => {
   const userId =
     req.user?.id ||
@@ -1963,6 +1964,17 @@ const startDojahVerification = async (req, res) => {
     });
   }
 
+  const verificationType = String(
+    req.body?.verification_type || 'tier_2'
+  ).trim().toLowerCase();
+
+  if (!['tier_1', 'tier_2'].includes(verificationType)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid verification type.',
+    });
+  }
+
   let client;
 
   try {
@@ -1970,7 +1982,7 @@ const startDojahVerification = async (req, res) => {
     await client.query('BEGIN');
 
     const userResult = await client.query(
-      `SELECT id, id_verified
+      `SELECT id, id_verified, bvn_verified
        FROM users
        WHERE id = $1
        FOR UPDATE`,
@@ -1986,32 +1998,11 @@ const startDojahVerification = async (req, res) => {
       });
     }
 
-    if (userResult.rows[0].id_verified === true) {
-      await client.query('ROLLBACK');
-
-      return res.status(409).json({
-        success: false,
-        message: 'Your identity is already verified.',
-      });
-    }
-
-    const existing = await client.query(
-      `SELECT id, id_verification_status
-       FROM kyc_records
-       WHERE user_id = $1
-         AND dojah_verification_type = 'identity'
-       ORDER BY created_at DESC
-       LIMIT 1
-       FOR UPDATE`,
-      [userId]
-    );
-
-    const record = existing.rows[0];
+    const user = userResult.rows[0];
 
     if (
-      record &&
-      normalizeKycStatus(record.id_verification_status) ===
-        'verified'
+      verificationType === 'tier_2' &&
+      user.id_verified === true
     ) {
       await client.query('ROLLBACK');
 
@@ -2022,25 +2013,121 @@ const startDojahVerification = async (req, res) => {
     }
 
     if (
-      record &&
-      normalizeKycStatus(record.id_verification_status) ===
-        'pending'
+      verificationType === 'tier_1' &&
+      user.bvn_verified === true
     ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        message: 'Your BVN is already verified.',
+      });
+    }
+
+    const recordResult =
+      verificationType === 'tier_1'
+        ? await client.query(
+            `SELECT
+               id,
+               bvn,
+               bvn_verification_status,
+               bvn_provider_reference,
+               dojah_reference,
+               dojah_verification_type
+             FROM kyc_records
+             WHERE user_id = $1
+               AND bvn IS NOT NULL
+               AND bvn <> ''
+             ORDER BY created_at DESC
+             LIMIT 1
+             FOR UPDATE`,
+            [userId]
+          )
+        : await client.query(
+            `SELECT
+               id,
+               id_verification_status,
+               dojah_reference,
+               dojah_verification_type
+             FROM kyc_records
+             WHERE user_id = $1
+               AND dojah_verification_type = 'identity'
+             ORDER BY created_at DESC
+             LIMIT 1
+             FOR UPDATE`,
+            [userId]
+          );
+
+    const record = recordResult.rows[0];
+
+    if (!record) {
       await client.query('ROLLBACK');
 
       return res.status(409).json({
         success: false,
         message:
-          'An identity verification is already pending.',
+          verificationType === 'tier_1'
+            ? 'Submit your BVN before starting verification.'
+            : 'No identity verification record was found.',
+      });
+    }
+
+    const currentStatus = String(
+      verificationType === 'tier_1'
+        ? record.bvn_verification_status || ''
+        : record.id_verification_status || ''
+    ).trim().toLowerCase();
+
+    if (['verified', 'approved'].includes(currentStatus)) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        message: 'This verification is already approved.',
+      });
+    }
+
+    const existingReference = String(
+      verificationType === 'tier_1'
+        ? record.bvn_provider_reference || ''
+        : record.dojah_reference || ''
+    ).trim();
+
+    if (
+      currentStatus === 'pending' &&
+      existingReference &&
+      record.dojah_verification_type ===
+        (verificationType === 'tier_1' ? 'bvn' : 'identity')
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        code: 'VERIFICATION_ALREADY_PENDING',
+        message:
+          'A verification session is already pending. Please wait for its result.',
       });
     }
 
     const referenceId = `zen_${crypto.randomUUID()}`;
-    let kycRecordId;
 
-    if (record) {
-      kycRecordId = record.id;
-
+    if (verificationType === 'tier_1') {
+      await client.query(
+        `UPDATE kyc_records
+         SET
+           dojah_reference = $1,
+           dojah_verification_type = 'bvn',
+           bvn_provider_reference = $1,
+           dojah_started_at = CURRENT_TIMESTAMP,
+           dojah_checked_at = NULL,
+           bvn_verification_status = 'pending',
+           bvn_rejection_reason = NULL,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2
+           AND user_id = $3`,
+        [referenceId, record.id, userId]
+      );
+    } else {
       await client.query(
         `UPDATE kyc_records
          SET
@@ -2055,34 +2142,10 @@ const startDojahVerification = async (req, res) => {
            id_verified_at = NULL,
            id_rejection_reason = NULL,
            updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2`,
-        [referenceId, kycRecordId]
+         WHERE id = $2
+           AND user_id = $3`,
+        [referenceId, record.id, userId]
       );
-    } else {
-      const inserted = await client.query(
-        `INSERT INTO kyc_records (
-           user_id,
-           dojah_reference,
-           dojah_verification_type,
-           dojah_started_at,
-           id_verification_status,
-           liveness_status,
-           bvn_verification_status,
-           tier_3_verification_status,
-           verification_status
-         )
-         VALUES (
-           $1, $2, 'identity',
-           CURRENT_TIMESTAMP,
-           'pending', 'pending',
-           'not_verified', 'not_verified',
-           'pending'
-         )
-         RETURNING id`,
-        [userId, referenceId]
-      );
-
-      kycRecordId = inserted.rows[0].id;
     }
 
     await client.query(
@@ -2104,7 +2167,9 @@ const startDojahVerification = async (req, res) => {
       [
         userId,
         'dojah_verification_started',
-        'An identity verification session was initiated.',
+        verificationType === 'tier_1'
+          ? 'A Tier 1 BVN verification session was initiated.'
+          : 'An identity verification session was initiated.',
       ]
     );
 
@@ -2113,7 +2178,8 @@ const startDojahVerification = async (req, res) => {
     return res.status(200).json({
       success: true,
       reference_id: referenceId,
-      kyc_record_id: kycRecordId,
+      kyc_record_id: record.id,
+      verification_type: verificationType,
       status: 'pending',
       message:
         'Verification session created. Continue with the verification widget.',
@@ -2125,11 +2191,11 @@ const startDojahVerification = async (req, res) => {
       } catch {}
     }
 
-    console.error('Start identity verification failed.');
+    console.error('Start verification session failed.');
 
     return res.status(500).json({
       success: false,
-      message: 'Unable to start identity verification.',
+      message: 'Unable to start verification.',
     });
   } finally {
     if (client) {
@@ -2137,7 +2203,6 @@ const startDojahVerification = async (req, res) => {
     }
   }
 };
-
 
 
 // ============================================================
