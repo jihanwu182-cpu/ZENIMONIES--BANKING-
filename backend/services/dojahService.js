@@ -115,6 +115,7 @@ const dojahRequest = async ({
 // A successful API response alone does not approve a customer.
 // ============================================================
 
+
 const verifyBvn = async (bvn) => {
   const normalizedBvn =
     String(bvn || '').trim();
@@ -123,20 +124,48 @@ const verifyBvn = async (bvn) => {
     return {
       success: false,
       status: 400,
-      message:
-        'BVN must contain exactly 11 digits.',
+      message: 'BVN must contain exactly 11 digits.',
       data: null,
     };
   }
 
-  return dojahRequest({
+  const result = await dojahRequest({
     method: 'GET',
     url: '/api/v1/kyc/bvn',
     params: {
       bvn: normalizedBvn,
     },
   });
+
+  // Safe diagnostics only: never log the BVN or response values.
+  const responseData = result?.data;
+  const entity = responseData?.entity;
+
+  console.info('Dojah BVN lookup diagnostic:', {
+    success: result?.success === true,
+    httpStatus: result?.status ?? null,
+    responseType:
+      responseData === null
+        ? 'null'
+        : Array.isArray(responseData)
+          ? 'array'
+          : typeof responseData,
+    topLevelKeys:
+      responseData &&
+      typeof responseData === 'object'
+        ? Object.keys(responseData).slice(0, 20)
+        : [],
+    entityPresent:
+      Boolean(entity && typeof entity === 'object'),
+    entityKeys:
+      entity && typeof entity === 'object'
+        ? Object.keys(entity).slice(0, 20)
+        : [],
+  });
+
+  return result;
 };
+
 
 // ============================================================
 // DOJAH VERIFICATION LOOKUP
