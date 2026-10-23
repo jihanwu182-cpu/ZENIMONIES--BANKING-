@@ -3,9 +3,9 @@ const crypto = require('crypto');
 
 const {
   verifyBvn,
+  validateBvn,
   getDojahVerification,
 } = require('../services/dojahService');
-
 // ============================================================
 // KYC / ACCOUNT LIMITS
 // ============================================================
