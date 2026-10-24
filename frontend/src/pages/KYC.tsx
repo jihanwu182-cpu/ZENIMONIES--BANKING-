@@ -60,6 +60,7 @@ interface DojahWidgetOptions {
 }
 
 interface DojahConnectInstance {
+  setup?: () => void;
   open?: () => void;
   close?: () => void;
 }
@@ -1813,21 +1814,23 @@ await fetchStatus();
           );
         }
    
-} catch (error) {
-  console.error(
-    '[KYC] Tier 1 verification launch failed:',
-    error
-  );
+      } catch (error) {
+        console.error(
+          '[KYC] Tier 2 verification launch failed:',
+          error
+        );
 
-  setDojahLoading(false);
+        setDojahLoading(false);
 
-  showAlert(
-    error instanceof Error
-      ? error.message
-      : 'Unable to open verification. Please try again.',
-    'error'
-  );
-}
+        showAlert(
+          error instanceof Error
+            ? error.message
+            : 'Unable to open identity verification. Please try again.',
+          'error'
+        );
+      }
+    };
+  
   // ==========================================================
   // SUBMIT BVN
   // ==========================================================
@@ -1950,6 +1953,23 @@ if (typeof connect.setup !== 'function') {
 
 connect.setup();
 connect.open();
+
+    } catch (error) {
+      console.error(
+        '[KYC] Tier 1 verification launch failed:',
+        error
+      );
+
+      setDojahLoading(false);
+
+      showAlert(
+        error instanceof Error
+          ? error.message
+          : 'Unable to open verification. Please try again.',
+        'error'
+      );
+    }
+  }; 
 
   // ==========================================================
   // SUBMIT TIER 2
