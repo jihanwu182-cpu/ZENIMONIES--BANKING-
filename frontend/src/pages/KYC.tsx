@@ -1842,10 +1842,26 @@ const startTier1BvnVerification = async () => {
     return;
   }
 
-  if (!window.Connect || !DOJAH_APP_ID || !DOJAH_PUBLIC_KEY || !DOJAH_WIDGET_ID) {
+  if (dojahLoading) {
+    return;
+  }
+
+  if (
+    !DOJAH_APP_ID ||
+    !DOJAH_PUBLIC_KEY ||
+    !DOJAH_WIDGET_ID
+  ) {
     setAlert({
       type: 'error',
       message: 'Verification is temporarily unavailable. Please try again later.',
+    });
+    return;
+  }
+
+  if (typeof window.Connect !== 'function') {
+    setAlert({
+      type: 'error',
+      message: 'The verification service did not load. Please refresh the page and try again.',
     });
     return;
   }
@@ -1864,11 +1880,12 @@ const startTier1BvnVerification = async () => {
       }),
     });
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
 
     if (!response.ok || !result.reference_id) {
       throw new Error(
-        result.message || 'Unable to start verification. Please try again.'
+        result.message ||
+          'Unable to start verification. Please try again.'
       );
     }
 
@@ -1886,113 +1903,60 @@ const startTier1BvnVerification = async () => {
         service: 'zenimonies_tier_1_bvn',
         reference_id: referenceId,
       },
-
       onSuccess: async () => {
+        setDojahLoading(false);
+
         setAlert({
           type: 'success',
           message:
-            'Your verification has been submitted. Your status will update after the checks are completed.',
+            'Your verification was submitted. Your status will update after the checks are completed.',
         });
 
-        setDojahLoading(false);
-        await fetchStatus();
+        try {
+          await fetchStatus();
+        } catch {
+          // Keep the KYC page usable if refreshing status fails.
+        }
       },
-
       onError: () => {
+        setDojahLoading(false);
         setAlert({
           type: 'error',
-          message: 'Verification could not be completed. Please try again.',
+          message:
+            'Verification could not be opened or completed. Please refresh the page and try again.',
         });
-        setDojahLoading(false);
       },
-
       onClose: () => {
         setDojahLoading(false);
       },
     });
 
+    if (!widget || typeof widget.open !== 'function') {
+      throw new Error(
+        'The verification window could not be opened. Please refresh and try again.'
+      );
+    }
+
     widget.open();
   } catch (error) {
-    setAlert({
-      type: 'error',
-      message:
-        error instanceof Error
-          ? error.message
-          : 'Unable to start verification. Please try again.',
-    });
+    console.error(
+      '[KYC] Tier 1 verification launch failed:',
+      error
+    );
+
     setDojahLoading(false);
-  }
-};
 
-const submitBvn = async (event?: React.FormEvent) => {
-  event?.preventDefault();
-
-  const token = localStorage.getItem('zenimonies_token');
-
-  if (!token) {
-    setAlert({
-      type: 'error',
-      message: 'Please log in again to continue.',
-    });
-    return;
-  }
-
-  if (!/^\d{11}$/.test(bvn.trim())) {
-    setAlert({
-      type: 'error',
-      message: 'Enter a valid 11-digit BVN.',
-    });
-    return;
-  }
-
-  setSubmitting(true);
-
-  try {
-    const response = await fetch(`${API_BASE}/kyc/bvn`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        bvn: bvn.trim(),
-      }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.message || 'Unable to submit BVN.');
-    }
-
-    setBvn('');
-    await fetchStatus();
-
-    // Do not start another session if this BVN is already verified.
-    if (String(result.status || '').toLowerCase() === 'verified') {
-      setAlert({
-        type: 'success',
-        message: 'Your BVN is already verified.',
-      });
-      return;
-    }
-
-    // Save the BVN first, then launch the Tier 1 verification session.
-    await startTier1BvnVerification();
-  } catch (error) {
     setAlert({
       type: 'error',
       message:
         error instanceof Error
           ? error.message
-          : 'Unable to submit your BVN. Please try again.',
+          : 'Unable to open verification. Please try again.',
     });
-  } finally {
-    setSubmitting(false);
   }
 };
 
-  
+
   // ==========================================================
   // SUBMIT TIER 2
   // ==========================================================
