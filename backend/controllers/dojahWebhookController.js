@@ -208,49 +208,59 @@ const handleDojahWebhook = async (req, res) => {
     });
   }
 
-  const data = body.data || {};
-  const completed = isCompleted(body);
+  
+const data =
+  body.data && typeof body.data === 'object'
+    ? body.data
+    : {};
 
-  const client = await pool.connect();
+const completed = isCompleted(body);
 
-  try {
-    await client.query('BEGIN');
+// Diagnostic information only.
+// Never log the BVN, identity documents, full payload,
+// webhook signature, or secrets.
+console.info('[KYC webhook] Received verification event:', {
+  topLevelKeys: Object.keys(body),
+  dataKeys: Object.keys(data),
+  verificationStatus:
+    typeof body.verification_status === 'string'
+      ? body.verification_status
+      : null,
+  dataVerificationStatus:
+    typeof data.verification_status === 'string'
+      ? data.verification_status
+      : null,
+  completed,
+  hasMetadataReference:
+    typeof body?.metadata?.reference_id === 'string' ||
+    typeof data?.metadata?.reference_id === 'string',
+});
 
-    const lookup = await client.query(
-      `SELECT *
-       FROM kyc_records
-       WHERE dojah_reference = $1
-         AND dojah_verification_type IN ('bvn', 'identity')
-       FOR UPDATE`,
-      [reference]
-    );
-
-    const record = lookup.rows[0];
-
-    if (!record) {
-      await client.query('ROLLBACK');
-
-      // Do not attach an unknown provider reference to a user.
-      // A valid signature does not establish which user owns it.
-      console.warn(
-        '[KYC webhook] No KYC record matched the supplied reference.'
-      );
-
-      return res.status(409).json({
-        received: false,
-        message: 'Verification reference not matched.',
-      });
-    }
 
     // ========================================================
     // TIER 1 — BVN
     // ========================================================
     if (record.dojah_verification_type === 'bvn') {
+      
       const governmentData =
-        data.government_data || {};
+        data.government_data &&
+        typeof data.government_data === 'object'
+          ? data.government_data
+          : {};
+
+      const bvnEntityCandidates = [
+        governmentData?.data?.bvn?.entity,
+        governmentData?.bvn?.entity,
+        data?.bvn?.entity,
+      ];
 
       const bvnEntity =
-        governmentData?.data?.bvn?.entity || {};
+        bvnEntityCandidates.find(
+          (candidate) =>
+            candidate &&
+            typeof candidate === 'object' &&
+            typeof candidate.bvn === 'string'
+        ) || {};
 
       const storedBvn =
         typeof record.bvn === 'string'
@@ -270,10 +280,9 @@ const handleDojahWebhook = async (req, res) => {
         /^\d{11}$/.test(returnedBvn) &&
         storedBvn === returnedBvn;
 
-      // Approve only when:
-      // 1. The session is complete.
-      // 2. The provider's government-data check passed.
-      // 3. The returned BVN exactly matches the saved BVN.
+      // Approve only when the provider confirms completion,
+      // its government-data check passes, and the returned
+      // BVN exactly matches the saved BVN.
       const approved =
         completed &&
         providerStatus === 'verified' &&
@@ -288,6 +297,16 @@ const handleDojahWebhook = async (req, res) => {
         : explicitlyRejected
           ? 'rejected'
           : 'pending';
+
+      console.info('[KYC webhook] BVN decision:', {
+        completed,
+        providerStatus,
+        returnedBvnPresent: Boolean(returnedBvn),
+        storedBvnValid: /^\d{11}$/.test(storedBvn),
+        returnedBvnValid: /^\d{11}$/.test(returnedBvn),
+        exactBvnMatch,
+        nextStatus,
+      });
 
       await client.query(
         `UPDATE kyc_records
