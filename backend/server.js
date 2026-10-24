@@ -165,7 +165,27 @@ app.use(
   })
 );
 
+// ============================================================
+// DOJAH WEBHOOK
+// ============================================================
+app.post(
+  '/api/webhooks/dojah',
+  express.raw({ type: 'application/json' }),
+  (req, res, next) => {
+    // Keep the original raw body for signature verification
+    req.rawBody = req.body;
 
+    // Parse the JSON so the controller can use req.body
+    try {
+      req.body = JSON.parse(req.body.toString('utf8'));
+    } catch (err) {
+      req.body = {};
+    }
+
+    next();
+  },
+  handleDojahWebhook
+);
 // ============================================================
 // API ROUTES
 // ============================================================
@@ -537,24 +557,6 @@ app.get('/api/health/verification', (req, res) => {
     message: 'Verification service is available.',
   });
 });
-
-
-
-
-// ============================================================
-// DOJAH WEBHOOK
-// ============================================================
-//
-// Dojah sends verification results to this endpoint.
-//
-// The webhook controller is responsible for processing
-// the provider result.
-// ============================================================
-
-app.post(
-  '/api/webhooks/dojah',
-  handleDojahWebhook
-);
 
 // ============================================================
 // 404 HANDLER
