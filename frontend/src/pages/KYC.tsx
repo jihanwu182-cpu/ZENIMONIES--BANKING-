@@ -1812,21 +1812,22 @@ await fetchStatus();
             'Unable to open the secure verification window.'
           );
         }
-      } catch (error) {
-        setDojahLoading(
-          false
-        );
+   
+} catch (error) {
+  console.error(
+    '[KYC] Tier 1 verification launch failed:',
+    error
+  );
 
-        showAlert(
-          error instanceof
-            Error
-            ? error.message
-            : 'Unable to start secure verification.',
-          'error'
-        );
-      }
-    };
+  setDojahLoading(false);
 
+  showAlert(
+    error instanceof Error
+      ? error.message
+      : 'Unable to open verification. Please try again.',
+    'error'
+  );
+}
   // ==========================================================
   // SUBMIT BVN
   // ==========================================================
@@ -1893,71 +1894,62 @@ setDojahLoading(true);
 
     const referenceId = result.reference_id;
 
-    const widget = new window.Connect({
-      app_id: DOJAH_APP_ID,
-      p_key: DOJAH_PUBLIC_KEY,
-      type: 'custom',
-      config: {
-        widget_id: DOJAH_WIDGET_ID,
-      },
-      reference_id: referenceId,
-      metadata: {
-        service: 'zenimonies_tier_1_bvn',
-        reference_id: referenceId,
-      },
-      onSuccess: async () => {
-        setDojahLoading(false);
+    
+const Connect = window.Connect;
 
-        setAlert({
-          type: 'success',
-          message:
-            'Your verification was submitted. Your status will update after the checks are completed.',
-        });
+if (typeof Connect !== 'function') {
+  throw new Error(
+    'The verification SDK did not load. Please refresh and try again.'
+  );
+}
 
-        try {
-          await fetchStatus();
-        } catch {
-          // Keep the KYC page usable if refreshing status fails.
-        }
-      },
-      onError: () => {
-        setDojahLoading(false);
-        setAlert({
-          type: 'error',
-          message:
-            'Verification could not be opened or completed. Please refresh the page and try again.',
-        });
-      },
-      onClose: () => {
-        setDojahLoading(false);
-      },
-    });
-
-    if (!widget || typeof widget.open !== 'function') {
-      throw new Error(
-        'The verification window could not be opened. Please refresh and try again.'
-      );
-    }
-
-    widget.open();
-  } catch (error) {
-    console.error(
-      '[KYC] Tier 1 verification launch failed:',
-      error
-    );
-
+const connect = new Connect({
+  app_id: DOJAH_APP_ID,
+  p_key: DOJAH_PUBLIC_KEY,
+  type: 'custom',
+  config: {
+    widget_id: DOJAH_WIDGET_ID,
+  },
+  reference_id: referenceId,
+  metadata: {
+    service: 'zenimonies_tier_1_bvn',
+    reference_id: referenceId,
+  },
+  onSuccess: async () => {
     setDojahLoading(false);
 
-    setAlert({
-      type: 'error',
-      message:
-        error instanceof Error
-          ? error.message
-          : 'Unable to open verification. Please try again.',
-    });
-  }
-};
+    showAlert(
+      'Your verification was submitted. Your status will update after the checks are completed.',
+      'success'
+    );
 
+    try {
+      await fetchStatus();
+    } catch {
+      // Keep the KYC page usable if refreshing status fails.
+    }
+  },
+  onError: () => {
+    setDojahLoading(false);
+
+    showAlert(
+      'Verification could not be opened or completed. Please refresh the page and try again.',
+      'error'
+    );
+  },
+  onClose: () => {
+    setDojahLoading(false);
+  },
+});
+
+if (typeof connect.setup !== 'function') {
+  throw new Error(
+    'The verification SDK does not provide setup(). Please check the loaded SDK.'
+  );
+}
+
+connect.setup();
+connect.open();
 
   // ==========================================================
   // SUBMIT TIER 2
