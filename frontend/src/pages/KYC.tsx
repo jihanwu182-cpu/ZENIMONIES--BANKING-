@@ -2487,75 +2487,64 @@ const submitBvn = async (event?: React.FormEvent) => {
                 </div>
               )}
 
-              {canSubmitBvn && (
-                <form
-                  onSubmit={
-                    submitBvn
-                  }
-                >
+            
+{canSubmitBvn && (
+  <form onSubmit={submitBvn}>
+    <div className="zk-field">
+      <label className="zk-field-label">
+        Bank Verification Number
+      </label>
 
-                  <div className="zk-field">
+      <input
+        className="zk-input"
+        type="text"
+        inputMode="numeric"
+        maxLength={11}
+        value={bvn}
+        onChange={(event) =>
+          setBvn(
+            event.target.value
+              .replace(/\D/g, '')
+              .slice(0, 11)
+          )
+        }
+        placeholder="Enter your 11-digit BVN"
+        disabled={submitting}
+      />
 
-                    <label className="zk-field-label">
-                      Bank Verification
-                      Number
-                    </label>
+      <div className="zk-help">
+        Your BVN is used only for identity verification.
+      </div>
+    </div>
 
-                    <input
-                      className="zk-input"
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={11}
-                      value={bvn}
-                      onChange={(
-                        event
-                      ) =>
-                        setBvn(
-                          event.target.value
-                            .replace(
-                              /\D/g,
-                              ''
-                            )
-                            .slice(
-                              0,
-                              11
-                            )
-                        )
-                      }
-                      placeholder="Enter your 11-digit BVN"
-                      disabled={
-                        submitting
-                      }
-                    />
+    <button
+      type="submit"
+      className="zk-button"
+      disabled={
+        submitting ||
+        bvn.length !== 11 ||
+        missingFields.length > 0
+      }
+    >
+      {submitting ? 'Submitting...' : 'Verify BVN'}
+    </button>
+  </form>
+)}
 
-                    <div className="zk-help">
-                      Your BVN is used
-                      only for identity
-                      verification.
-                    </div>
+{canContinueBvnVerification && (
+  <button
+    type="button"
+    className="zk-button"
+    onClick={startTier1BvnVerification}
+    disabled={dojahLoading}
+  >
+    {dojahLoading
+      ? 'Opening verification...'
+      : 'Continue BVN Verification'}
+  </button>
+)}
+</section>
 
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="zk-button"
-                    disabled={
-                      submitting ||
-                      bvn.length !==
-                        11 ||
-                      missingFields.length >
-                        0
-                    }
-                  >
-                    {submitting
-                      ? 'Submitting...'
-                      : 'Verify BVN'}
-                  </button>
-
-                </form>
-              )}
-
-            </section>
 
             {/* ==================================================
                 TIER 2
