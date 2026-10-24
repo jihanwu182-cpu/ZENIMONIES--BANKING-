@@ -657,16 +657,13 @@ const submitBvn = async (req, res) => {
     });
   }
 
-  const bvn = String(
-    req.body?.bvn || ''
-  ).trim();
+  const bvn = String(req.body?.bvn || '').trim();
 
   if (!/^\d{11}$/.test(bvn)) {
     return res.status(400).json({
       success: false,
       code: 'INVALID_BVN',
-      message:
-        'BVN must contain exactly 11 digits',
+      message: 'BVN must contain exactly 11 digits',
     });
   }
 
@@ -678,89 +675,75 @@ const submitBvn = async (req, res) => {
     // ========================================================
     // LOCK USER
     // ========================================================
-
-    const userResult =
-      await client.query(
-        `
-        SELECT
-          id,
-          full_name,
-          email,
-          phone,
-          date_of_birth,
-          address,
-          city,
-          state,
-          lga,
-          country,
-          kyc_status,
-          kyc_tier,
-          bvn_verified
-        FROM users
-        WHERE id = $1
-        FOR UPDATE
-        `,
-        [userId]
-      );
+    const userResult = await client.query(
+      `
+      SELECT
+        id,
+        full_name,
+        email,
+        phone,
+        date_of_birth,
+        address,
+        city,
+        state,
+        lga,
+        country,
+        kyc_status,
+        kyc_tier,
+        bvn_verified
+      FROM users
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [userId]
+    );
 
     if (userResult.rows.length === 0) {
       await client.query('ROLLBACK');
-
       return res.status(404).json({
         success: false,
         message: 'User not found',
       });
     }
 
-    const user =
-      userResult.rows[0];
+    const user = userResult.rows[0];
 
     // ========================================================
-    // GET CURRENT BVN VERIFICATION RECORD
+    // GET CURRENT BVN RECORD
     // ========================================================
-
-    const existingKyc =
-      await client.query(
-        `
-        SELECT
-          id,
-          bvn_verification_status,
-          bvn_verified_at,
-          bvn_rejection_reason
-        FROM kyc_records
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-        LIMIT 1
-        FOR UPDATE
-        `,
-        [userId]
-      );
+    const existingKyc = await client.query(
+      `
+      SELECT
+        id,
+        bvn_verification_status,
+        bvn_verified_at,
+        bvn_rejection_reason,
+        bvn_provider_reference
+      FROM kyc_records
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [userId]
+    );
 
     const existingRecord =
-      existingKyc.rows.length > 0
-        ? existingKyc.rows[0]
-        : null;
+      existingKyc.rows.length > 0 ? existingKyc.rows[0] : null;
 
-    const currentBvnStatus =
-      normalizeKycStatus(
-        existingRecord?.bvn_verification_status
-      );
+    const currentBvnStatus = normalizeKycStatus(
+      existingRecord?.bvn_verification_status
+    );
 
     // ========================================================
-    // VERIFIED = PERMANENT LOCK
+    // ALREADY VERIFIED → LOCK
     // ========================================================
-
-    if (
-      user.bvn_verified === true ||
-      currentBvnStatus === 'verified'
-    ) {
+    if (user.bvn_verified === true || currentBvnStatus === 'verified') {
       await client.query('ROLLBACK');
-
       return res.status(400).json({
         success: false,
         code: 'BVN_ALREADY_VERIFIED',
-        message:
-          'Your BVN has already been verified and cannot be changed.',
+        message: 'Your BVN has already been verified and cannot be changed.',
         status: 'verified',
         verified: true,
         locked: true,
@@ -768,74 +751,70 @@ const submitBvn = async (req, res) => {
     }
 
     // ========================================================
-    // PENDING = LOCK
+    // ALREADY PENDING → LOCK
     // ========================================================
-
-    if (
-  currentBvnStatus === 'pending' &&
-  existingRecord?.bvn_provider_reference
-) {
-  await client.query('ROLLBACK');
-
-  return res.status(409).json({
-    success: false,
-    code: 'BVN_VERIFICATION_PENDING',
-    message:
-      'Your BVN verification is still being processed.',
-  });
-}
-
-    // ========================================================
-    // PROFILE COMPLETENESS CHECK
-    // ========================================================
-
-    const missingProfileFields =
-      getMissingProfileFields(user);
-
-    if (
-      missingProfileFields.length > 0
-    ) {
+    if (currentBvnStatus === 'pending') {
       await client.query('ROLLBACK');
-
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
-        code: 'PROFILE_INCOMPLETE',
-        message:
-          'Please complete your personal profile before submitting your BVN.',
-        missing_fields:
-          missingProfileFields,
+        code: 'BVN_VERIFICATION_PENDING',
+        message: 'Your BVN verification is still being processed.',
+        status: 'pending',
+        verified: false,
+        locked: true,
       });
     }
 
     // ========================================================
-    // DOJAH BVN LOOKUP
-    //
-    // Dojah is contacted before the submission is committed.
-    //
-    // IMPORTANT:
-    // A successful API response does NOT automatically mean
-    // the customer is verified.
-    //
-    // The Zenimonies BVN state remains PENDING until the
-    // authoritative Dojah result is processed.
+    // PROFILE COMPLETENESS
     // ========================================================
+    const missingProfileFields = getMissingProfileFields(user);
 
-    
+    if (missingProfileFields.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        code: 'PROFILE_INCOMPLETE',
+        message: 'Please complete your personal profile before submitting your BVN.',
+        missing_fields: missingProfileFields,
+      });
+    }
+
+    // ========================================================
+    // PREPARE NAME + DOB FOR DOJAH
+    // ========================================================
+    const nameParts = String(user.full_name || '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    const firstName = nameParts[0] || '';
+    const lastName =
+      nameParts.length > 1
+        ? nameParts.slice(1).join(' ')
+        : nameParts[0] || '';
+
+    const dateOfBirth = user.date_of_birth
+      ? new Date(user.date_of_birth).toISOString().slice(0, 10)
+      : '';
+
+    if (!firstName || !lastName || !dateOfBirth) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        code: 'PROFILE_INCOMPLETE',
+        message: 'Full name and date of birth are required for BVN verification.',
+      });
+    }
+
+    // ========================================================
+    // CALL DOJAH
+    // ========================================================
     const dojahResult = await validateBvn({
       bvn,
-      firstName: String(user.full_name || '')
-        .trim()
-        .split(/\s+/)[0],
-      lastName: String(user.full_name || '')
-        .trim()
-        .split(/\s+/)
-        .slice(1)
-        .join(' '),
-      dateOfBirth: user.date_of_birth
-        ? new Date(user.date_of_birth)
-            .toISOString()
-            .slice(0, 10)
-        : '',
+      firstName,
+      lastName,
+      dateOfBirth,
     });
 
     if (!dojahResult?.success) {
@@ -849,52 +828,21 @@ const submitBvn = async (req, res) => {
       return res.status(502).json({
         success: false,
         code: 'DOJAH_BVN_VALIDATION_FAILED',
-        message:
-          'We could not validate your BVN at this time. Please try again later.',
+        message: 'We could not validate your BVN at this time. Please try again later.',
       });
     }
 
-    // SAFE DIAGNOSTIC: field names and types only.
-// Never log BVN, names, DOB, or identity data.
-const validationData = dojahResult.data;
-
-const validationEntity =
-  validationData &&
-  typeof validationData === 'object'
-    ? validationData.entity
-    : null;
-
-console.info('Tier 1 BVN result structure:', {
-  success: dojahResult.success === true,
-  status: dojahResult.status ?? null,
-  topLevelKeys:
-    validationData && typeof validationData === 'object'
-      ? Object.keys(validationData).slice(0, 30)
-      : [],
-  entityFields:
-    validationEntity && typeof validationEntity === 'object'
-      ? Object.fromEntries(
-          Object.entries(validationEntity).map(
-            ([key, value]) => [
-              key,
-              value === null
-                ? 'null'
-                : Array.isArray(value)
-                  ? 'array'
-                  : typeof value,
-            ]
-          )
-        )
-      : {},
-});
-   
-    // Interpret the explicit validation flags returned by Dojah.
+    // ========================================================
+    // INTERPRET RESULT
+    // ========================================================
     const bvnDecision = interpretBvnLookup(dojahResult);
-    const finalBvnStatus = bvnDecision.status;
+    const finalBvnStatus = bvnDecision.status; // 'verified' | 'rejected' | 'pending'
 
     let kycId;
 
-   
+    // ========================================================
+    // UPDATE OR CREATE KYC RECORD
+    // ========================================================
     if (existingRecord) {
       kycId = existingRecord.id;
 
@@ -931,9 +879,7 @@ console.info('Tier 1 BVN result structure:', {
           bvn,
           finalBvnStatus,
           finalBvnStatus,
-          finalBvnStatus === 'rejected'
-            ? bvnDecision.reason
-            : null,
+          finalBvnStatus === 'rejected' ? bvnDecision.reason : null,
           kycId,
         ]
       );
@@ -955,14 +901,12 @@ console.info('Tier 1 BVN result structure:', {
         )
         VALUES (
           $1, $2, $3, $4,
-          CASE WHEN $4 = 'verified'
-            THEN CURRENT_TIMESTAMP ELSE NULL END,
+          CASE WHEN $4 = 'verified' THEN CURRENT_TIMESTAMP ELSE NULL END,
           $5,
           'not_verified',
           'not_verified',
           'not_verified',
-          CASE WHEN $4 = 'rejected'
-            THEN 'rejected' ELSE 'pending' END,
+          CASE WHEN $4 = 'rejected' THEN 'rejected' ELSE 'pending' END,
           $5
         )
         RETURNING id
@@ -972,15 +916,16 @@ console.info('Tier 1 BVN result structure:', {
           bvn,
           finalBvnStatus,
           finalBvnStatus,
-          finalBvnStatus === 'rejected'
-            ? bvnDecision.reason
-            : null,
+          finalBvnStatus === 'rejected' ? bvnDecision.reason : null,
         ]
       );
 
       kycId = insertResult.rows[0].id;
     }
 
+    // ========================================================
+    // UPDATE USER
+    // ========================================================
     await client.query(
       `
       UPDATE users
@@ -991,7 +936,10 @@ console.info('Tier 1 BVN result structure:', {
           WHEN $3 = 'rejected' THEN 'rejected'
           ELSE 'pending'
         END,
-        kyc_tier = 1,
+        kyc_tier = CASE
+          WHEN $2 = true THEN GREATEST(kyc_tier, 1)
+          ELSE 1
+        END,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $4
       `,
@@ -1006,23 +954,14 @@ console.info('Tier 1 BVN result structure:', {
     // ========================================================
     // AUDIT LOG
     // ========================================================
-
     await client.query(
       `
-      INSERT INTO audit_logs (
-        user_id,
-        action,
-        description
-      )
-      VALUES (
-        $1,
-        'kyc_bvn_submitted',
-        $2
-      )
+      INSERT INTO audit_logs (user_id, action, description)
+      VALUES ($1, 'kyc_bvn_submitted', $2)
       `,
       [
         userId,
-        'BVN submitted to Dojah for Tier 1 verification. Awaiting Dojah verification result.',
+        `BVN submitted. Status: ${finalBvnStatus}. Reason: ${bvnDecision.reason || 'n/a'}`,
       ]
     );
 
@@ -1031,43 +970,35 @@ console.info('Tier 1 BVN result structure:', {
     // ========================================================
     // RESPONSE
     // ========================================================
-
-    
-return res.status(200).json({
-  success: true,
-  message:
-    finalBvnStatus === 'verified'
-      ? 'Your BVN has been verified successfully.'
-      : finalBvnStatus === 'rejected'
-        ? 'Your BVN could not be verified. Please check your details or contact support.'
-        : 'Your BVN submission is awaiting verification review.',
-  kyc_record_id: kycId,
-  tier: 1,
-  status: finalBvnStatus,
-  verified: finalBvnStatus === 'verified',
-  locked: finalBvnStatus === 'verified',
-});
-
+    return res.status(200).json({
+      success: true,
+      message:
+        finalBvnStatus === 'verified'
+          ? 'Your BVN has been verified successfully.'
+          : finalBvnStatus === 'rejected'
+          ? 'Your BVN could not be verified. Please check your details or contact support.'
+          : 'Your BVN submission is awaiting verification review.',
+      kyc_record_id: kycId,
+      tier: 1,
+      status: finalBvnStatus,
+      verified: finalBvnStatus === 'verified',
+      locked: finalBvnStatus === 'verified' || finalBvnStatus === 'pending',
+    });
   } catch (error) {
     try {
       await client.query('ROLLBACK');
     } catch {}
 
-    console.error(
-      'Submit BVN error:',
-      error
-    );
+    console.error('Submit BVN error:', error);
 
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to submit BVN',
+      message: 'Unable to submit BVN',
     });
   } finally {
     client.release();
   }
 };
-
 // ============================================================
 // SUBMIT TIER 2
 //
