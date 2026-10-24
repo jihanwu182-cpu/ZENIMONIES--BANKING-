@@ -2002,12 +2002,13 @@ const startDojahVerification = async (req, res) => {
             : 'No identity verification record was found.',
       });
     }
-  
-    const currentStatus = String(
+      const currentStatus = String(
       verificationType === 'tier_1'
         ? record.bvn_verification_status || ''
         : record.id_verification_status || ''
-    ).trim().toLowerCase();
+    )
+      .trim()
+      .toLowerCase();
 
     if (['verified', 'approved'].includes(currentStatus)) {
       await client.query('ROLLBACK');
@@ -2020,7 +2021,7 @@ const startDojahVerification = async (req, res) => {
 
     const existingReference = String(
       verificationType === 'tier_1'
-        ? record.bvn_provider_reference || ''
+        ? record.bvn_provider_reference || record.dojah_reference || ''
         : record.dojah_reference || ''
     ).trim();
 
@@ -2030,21 +2031,31 @@ const startDojahVerification = async (req, res) => {
     const hasMatchingPendingSession =
       currentStatus === 'pending' &&
       Boolean(existingReference) &&
-      record.dojah_verification_type ===
-        expectedVerificationType;
+      record.dojah_verification_type === expectedVerificationType;
 
+    // ========================================================
+    // IF ALREADY PENDING → RETURN THE EXISTING REFERENCE
+    // (so the frontend can continue the same session)
+    // ========================================================
     if (hasMatchingPendingSession) {
       await client.query('ROLLBACK');
 
-      return res.status(409).json({
-        success: false,
-        code: 'VERIFICATION_ALREADY_PENDING',
-        message:
-          'Your verification is still being processed. Please try again after the current verification has been resolved.',
+      return res.status(200).json({
+        success: true,
+        reference_id: existingReference,
+        kyc_record_id: record.id,
+        verification_type: verificationType,
+        status: 'pending',
+        message: 'Continuing existing verification session.',
+        already_pending: true,
       });
     }
-    const referenceId = `zen_${crypto.randomUUID()}`;
 
+    // ========================================================
+    // CREATE A NEW REFERENCE
+    // ========================================================
+    const referenceId = `zen_${crypto.randomUUID()}`;
+    
     if (verificationType === 'tier_1') {
       await client.query(
         `UPDATE kyc_records
