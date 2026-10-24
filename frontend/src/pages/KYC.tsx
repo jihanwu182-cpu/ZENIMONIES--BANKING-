@@ -1554,6 +1554,10 @@ const KYC: React.FC = () => {
     bvnStatus !==
       'verified';
 
+const canContinueBvnVerification =
+  bvnStatus === 'pending' &&
+  bvnStatus !== 'verified';
+
   const canSubmitTier2 =
     bvnStatus ===
       'verified' &&
