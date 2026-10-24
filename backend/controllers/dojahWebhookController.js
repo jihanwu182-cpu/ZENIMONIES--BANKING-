@@ -64,12 +64,24 @@ const isCompleted = (body) => {
   ];
 
   return candidates.some((value) =>
-    ['completed', 'complete'].includes(
+    ['completed', 'complete', 'failed', 'abandoned', 'rejected'].includes(
       String(value || '').trim().toLowerCase()
     )
   );
 };
 
+const isFailed = (body) => {
+  const candidates = [
+    body?.verification_status,
+    body?.data?.verification_status,
+  ];
+
+  return candidates.some((value) =>
+    ['failed', 'abandoned', 'rejected'].includes(
+      String(value || '').trim().toLowerCase()
+    )
+  );
+};
 const getStepStatus = (step) => {
   if (!step || typeof step !== 'object') return 'pending';
 
@@ -182,76 +194,78 @@ const handleDojahWebhook = async (req, res) => {
 
     const record = recordResult.rows[0];
 
-    // ========================================================
-    // TIER 1 — BVN
-    // ========================================================
-    if (record.dojah_verification_type === 'bvn') {
-      const governmentData =
-        data.government_data && typeof data.government_data === 'object'
-          ? data.government_data
-          : {};
+  // ========================================================
+// TIER 1 — BVN
+// ========================================================
+if (record.dojah_verification_type === 'bvn') {
+  const governmentData =
+    data.government_data && typeof data.government_data === 'object'
+      ? data.government_data
+      : {};
 
-      const providerStatus = getStepStatus(governmentData);
+  const providerStatus = getStepStatus(governmentData);
+  const failed = isFailed(body);
 
-      // We only approve if the session is completed AND the provider says verified
-      const approved = completed && providerStatus === 'verified';
-      const explicitlyRejected = completed && providerStatus === 'rejected';
+  const approved = isCompleted(body) && !failed && providerStatus === 'verified';
+  const explicitlyRejected =
+    failed || (isCompleted(body) && providerStatus === 'rejected');
 
-      const nextStatus = approved
-        ? 'verified'
-        : explicitlyRejected
-        ? 'rejected'
-        : 'pending';
+  const nextStatus = approved
+    ? 'verified'
+    : explicitlyRejected
+    ? 'rejected'
+    : 'pending';
 
-      console.info('[KYC webhook] BVN decision:', {
-        completed,
-        providerStatus,
-        nextStatus,
-      });
+  console.info('[KYC webhook] BVN decision:', {
+    completed: isCompleted(body),
+    failed,
+    providerStatus,
+    nextStatus,
+  });
 
-      await client.query(
-        `UPDATE kyc_records
-         SET bvn_verification_status = $1,
-             bvn_verified_at = CASE
-               WHEN $1 = 'verified' THEN COALESCE(bvn_verified_at, NOW())
-               ELSE NULL
-             END,
-             bvn_provider_validation_result = $2,
-             bvn_rejection_reason = CASE
-               WHEN $1 = 'rejected' THEN 'provider_bvn_check_failed'
-               ELSE NULL
-             END,
-             dojah_checked_at = NOW(),
-             updated_at = NOW()
-         WHERE id = $3`,
-        [nextStatus, nextStatus, record.id]
-      );
+  await client.query(
+    `UPDATE kyc_records
+     SET bvn_verification_status = $1,
+         bvn_verified_at = CASE
+           WHEN $1 = 'verified' THEN COALESCE(bvn_verified_at, NOW())
+           ELSE NULL
+         END,
+         bvn_provider_validation_result = $2,
+         bvn_rejection_reason = CASE
+           WHEN $1 = 'rejected' THEN 'provider_bvn_check_failed'
+           ELSE NULL
+         END,
+         dojah_checked_at = NOW(),
+         updated_at = NOW()
+     WHERE id = $3`,
+    [nextStatus, nextStatus, record.id]
+  );
 
-      if (approved) {
-        await client.query(
-          `UPDATE users
-           SET bvn_verified = TRUE,
-               kyc_tier = GREATEST(kyc_tier, 1),
-               updated_at = NOW()
-           WHERE id = $1`,
-          [record.user_id]
-        );
-      } else if (explicitlyRejected) {
-        await client.query(
-          `UPDATE users
-           SET bvn_verified = FALSE,
-               kyc_status = 'rejected',
-               updated_at = NOW()
-           WHERE id = $1`,
-          [record.user_id]
-        );
-      }
+  if (approved) {
+    await client.query(
+      `UPDATE users
+       SET bvn_verified = TRUE,
+           kyc_tier = GREATEST(kyc_tier, 1),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [record.user_id]
+    );
+  } else if (explicitlyRejected) {
+    await client.query(
+      `UPDATE users
+       SET bvn_verified = FALSE,
+           kyc_status = 'rejected',
+           updated_at = NOW()
+       WHERE id = $1`,
+      [record.user_id]
+    );
+  }
 
-      await client.query('COMMIT');
-      transactionStarted = false;
+  await client.query('COMMIT');
+  transactionStarted = false;
 
-      return res.status(200).json({ received: true });
-    }
+  return res.status(200).json({ received: true });
+}
 
     // ========================================================
     // TIER 2 — IDENTITY + LIVENESS
