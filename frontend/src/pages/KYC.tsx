@@ -1834,39 +1834,41 @@ await fetchStatus();
 const startTier1BvnVerification = async () => {
   const token = localStorage.getItem('zenimonies_token');
 
-  if (!token) {
-    setAlert({
-      type: 'error',
-      message: 'Please log in again to continue verification.',
-    });
-    return;
-  }
+  
+if (!token) {
+  showAlert(
+    'Please log in again to continue verification.',
+    'error'
+  );
+  return;
+}
 
-  if (dojahLoading) {
-    return;
-  }
+if (dojahLoading) {
+  return;
+}
 
-  if (
-    !DOJAH_APP_ID ||
-    !DOJAH_PUBLIC_KEY ||
-    !DOJAH_WIDGET_ID
-  ) {
-    setAlert({
-      type: 'error',
-      message: 'Verification is temporarily unavailable. Please try again later.',
-    });
-    return;
-  }
+if (
+  !DOJAH_APP_ID ||
+  !DOJAH_PUBLIC_KEY ||
+  !DOJAH_WIDGET_ID
+) {
+  showAlert(
+    'Verification is temporarily unavailable. Please try again later.',
+    'error'
+  );
+  return;
+}
 
-  if (typeof window.Connect !== 'function') {
-    setAlert({
-      type: 'error',
-      message: 'The verification service did not load. Please refresh the page and try again.',
-    });
-    return;
-  }
+if (typeof window.Connect !== 'function') {
+  showAlert(
+    'The verification service did not load. Please refresh the page and try again.',
+    'error'
+  );
+  return;
+}
 
-  setDojahLoading(true);
+setDojahLoading(true);
+
 
   try {
     const response = await fetch(`${API_BASE}/kyc/dojah/start`, {
