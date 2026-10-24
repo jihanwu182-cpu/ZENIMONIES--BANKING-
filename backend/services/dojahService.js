@@ -1,41 +1,30 @@
-
 const axios = require('axios');
 
 // ============================================================
-// ZENIMONIES BANKING
-// DOJAH SERVICE
+// ZENIMONIES BANKING — DOJAH SERVICE
 // ============================================================
 
 const DOJAH_BASE_URL =
-  process.env.DOJAH_BASE_URL ||
-  'https://sandbox.dojah.io';
+  process.env.DOJAH_BASE_URL || 'https://sandbox.dojah.io';
 
-const DOJAH_APP_ID =
-  process.env.DOJAH_APP_ID;
-
-const DOJAH_SECRET_KEY =
-  process.env.DOJAH_SECRET_KEY;
+const DOJAH_APP_ID = process.env.DOJAH_APP_ID;
+const DOJAH_SECRET_KEY = process.env.DOJAH_SECRET_KEY;
 
 // ============================================================
-// CONFIGURATION VALIDATION
+// CONFIG VALIDATION
 // ============================================================
 
 const validateDojahConfig = () => {
   if (!DOJAH_APP_ID) {
-    throw new Error(
-      'DOJAH_APP_ID is not configured'
-    );
+    throw new Error('DOJAH_APP_ID is not configured');
   }
-
   if (!DOJAH_SECRET_KEY) {
-    throw new Error(
-      'DOJAH_SECRET_KEY is not configured'
-    );
+    throw new Error('DOJAH_SECRET_KEY is not configured');
   }
 };
 
 // ============================================================
-// DOJAH HEADERS
+// HEADERS
 // ============================================================
 
 const getDojahHeaders = () => {
@@ -43,26 +32,17 @@ const getDojahHeaders = () => {
 
   return {
     Accept: 'application/json',
+    'Content-Type': 'application/json',
     AppId: DOJAH_APP_ID,
-    Authorization: DOJAH_SECRET_KEY,
+    Authorization: DOJAH_SECRET_KEY, // raw key — NO "Bearer"
   };
 };
 
 // ============================================================
-// SAFE DOJAH API REQUEST
-//
-// IMPORTANT:
-// Never log BVNs, identity data, selfies, API credentials,
-// provider response bodies, or response headers.
+// SAFE REQUEST HELPER
 // ============================================================
 
-const dojahRequest = async ({
-  method,
-  url,
-  data,
-  params,
-  headers = {},
-}) => {
+const dojahRequest = async ({ method, url, data, params }) => {
   try {
     const response = await axios({
       method,
@@ -70,10 +50,7 @@ const dojahRequest = async ({
       url,
       data,
       params,
-      headers: {
-        ...getDojahHeaders(),
-        ...headers,
-      },
+      headers: getDojahHeaders(),
       timeout: 30000,
     });
 
@@ -83,10 +60,9 @@ const dojahRequest = async ({
       data: response.data,
     };
   } catch (error) {
-    const status =
-      error.response?.status || 500;
+    const status = error.response?.status || 500;
 
-    // Log only non-sensitive diagnostics.
+    // Never log sensitive data
     console.error('Dojah API request failed:', {
       endpoint: url,
       method,
@@ -97,7 +73,7 @@ const dojahRequest = async ({
     return {
       success: false,
       status,
-      data: null,
+      data: error.response?.data || null,
       message:
         status >= 500
           ? 'Dojah service is temporarily unavailable.'
@@ -107,143 +83,11 @@ const dojahRequest = async ({
 };
 
 // ============================================================
-// BVN LOOKUP
-//
+// VALIDATE BVN (used by Tier 1)
 // GET /api/v1/kyc/bvn
-//
-// This submits a BVN for lookup.
-// A successful API response alone does not approve a customer.
 // ============================================================
 
-
-const verifyBvn = async (bvn) => {
-  const normalizedBvn =
-    String(bvn || '').trim();
-
-  if (!/^\d{11}$/.test(normalizedBvn)) {
-    return {
-      success: false,
-      status: 400,
-      message: 'BVN must contain exactly 11 digits.',
-      data: null,
-    };
-  }
-
-  const result = await dojahRequest({
-    method: 'GET',
-    url: '/api/v1/kyc/bvn',
-    params: {
-      bvn: normalizedBvn,
-    },
-  });
-
-  // Safe diagnostics only: never log the BVN or response values.
-  const responseData = result?.data;
-  const entity = responseData?.entity;
-
-  console.info('Dojah BVN lookup diagnostic:', {
-    success: result?.success === true,
-    httpStatus: result?.status ?? null,
-    responseType:
-      responseData === null
-        ? 'null'
-        : Array.isArray(responseData)
-          ? 'array'
-          : typeof responseData,
-    topLevelKeys:
-      responseData &&
-      typeof responseData === 'object'
-        ? Object.keys(responseData).slice(0, 20)
-        : [],
-    entityPresent:
-      Boolean(entity && typeof entity === 'object'),
-    entityKeys:
-      entity && typeof entity === 'object'
-        ? Object.keys(entity).slice(0, 20)
-        : [],
-  });
-
-  return result;
-};
-
-
-// ============================================================
-// DOJAH VERIFICATION LOOKUP
-//
-// GET /api/v1/kyc/verification
-//
-// The reference must be generated and associated with the
-// authenticated customer by the Zenimonies backend.
-//
-// Never accept an arbitrary customer ID from the browser
-// to decide whose verification record should be updated.
-// ============================================================
-
-const getDojahVerification = async (
-  referenceId
-) => {
-  const reference =
-    String(referenceId || '').trim();
-
-  if (
-    !reference ||
-    reference.length > 150
-  ) {
-    return {
-      success: false,
-      status: 400,
-      message:
-        'A valid verification reference is required.',
-      data: null,
-    };
-  }
-
-  return dojahRequest({
-    method: 'GET',
-    url: '/api/v1/kyc/verification',
-    params: {
-      reference_id: reference,
-    },
-  });
-};
-
-// ============================================================
-// TEST DOJAH CONNECTION
-// ============================================================
-
-const testDojahConnection = () => {
-  try {
-    validateDojahConfig();
-
-    return {
-      success: true,
-      configured: true,
-      baseUrl: DOJAH_BASE_URL,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      configured: false,
-      message: error.message,
-    };
-  }
-};
-
-/**
- * BVN VALIDATION
- *
- * GET /v1/kyc/bvn
- *
- * This is separate from the BVN lookup endpoint.
- * It does not change any customer's KYC status.
- */
-
-const validateBvn = async ({
-  bvn,
-  firstName,
-  lastName,
-  dateOfBirth,
-}) => {
+const validateBvn = async ({ bvn, firstName, lastName, dateOfBirth }) => {
   const normalizedBvn = String(bvn || '').trim();
   const first = String(firstName || '').trim();
   const last = String(lastName || '').trim();
@@ -280,13 +124,83 @@ const validateBvn = async ({
 };
 
 // ============================================================
+// SIMPLE BVN LOOKUP (optional)
+// ============================================================
+
+const verifyBvn = async (bvn) => {
+  const normalizedBvn = String(bvn || '').trim();
+
+  if (!/^\d{11}$/.test(normalizedBvn)) {
+    return {
+      success: false,
+      status: 400,
+      message: 'BVN must contain exactly 11 digits.',
+      data: null,
+    };
+  }
+
+  return dojahRequest({
+    method: 'GET',
+    url: '/api/v1/kyc/bvn',
+    params: { bvn: normalizedBvn },
+  });
+};
+
+// ============================================================
+// GET VERIFICATION RESULT (for widget / confirm)
+// GET /api/v1/kyc/verification
+// ============================================================
+
+const getDojahVerification = async (referenceId) => {
+  const reference = String(referenceId || '').trim();
+
+  if (!reference || reference.length > 150) {
+    return {
+      success: false,
+      status: 400,
+      message: 'A valid verification reference is required.',
+      data: null,
+    };
+  }
+
+  return dojahRequest({
+    method: 'GET',
+    url: '/api/v1/kyc/verification',
+    params: {
+      reference_id: reference,
+    },
+  });
+};
+
+// ============================================================
+// TEST CONNECTION
+// ============================================================
+
+const testDojahConnection = () => {
+  try {
+    validateDojahConfig();
+    return {
+      success: true,
+      configured: true,
+      baseUrl: DOJAH_BASE_URL,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      configured: false,
+      message: error.message,
+    };
+  }
+};
+
+// ============================================================
 // EXPORTS
 // ============================================================
 
 module.exports = {
   dojahRequest,
-  verifyBvn,
   validateBvn,
+  verifyBvn,
   getDojahVerification,
   testDojahConnection,
 };
