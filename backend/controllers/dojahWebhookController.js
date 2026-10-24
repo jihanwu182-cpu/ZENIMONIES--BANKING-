@@ -4,16 +4,16 @@ const pool = require('../config/database');
 
 // ============================================================
 // ZENIMONIES BANKING
-// Signed verification webhook
+// Signed KYC webhook
 //
-// Supports:
-//   Tier 1: BVN verification
-//   Tier 2: Identity and liveness verification
+// Tier 1: BVN
+// Tier 2: Identity and liveness
 //
 // Security:
-//   - Verifies HMAC SHA-256 against the raw request body.
-//   - Matches the backend-created reference to a saved KYC record.
-//   - Never approves a verification from session completion alone.
+// - Verify the signature against the original request body.
+// - Match the backend-created reference to a saved KYC record.
+// - Never approve BVN from session completion alone.
+// - Never log BVNs, identity documents, signatures or secrets.
 // ============================================================
 
 const getWebhookSecret = () => {
@@ -36,7 +36,7 @@ const verifySignature = (signature, rawBody, secret) => {
   let received = signature.trim();
 
   if (received.startsWith('sha256=')) {
-    received = received.slice('sha256='.length);
+    received = received.slice(7);
   }
 
   if (!/^[a-fA-F0-9]{64}$/.test(received)) {
@@ -56,37 +56,17 @@ const verifySignature = (signature, rawBody, secret) => {
   );
 };
 
-// Prefer the backend-created reference supplied in metadata.
-// A provider-generated reference must not be assumed to be
-// the same as the reference stored by Zenimonies.
 const getReference = (body) => {
   const candidates = [
     body?.metadata?.reference_id,
     body?.data?.metadata?.reference_id,
-  ];
-
-  for (const candidate of candidates) {
-    if (
-      typeof candidate === 'string' &&
-      candidate.trim()
-    ) {
-      return candidate.trim();
-    }
-  }
-
-  // These fallback fields are accepted only if they actually
-  // match a saved backend reference in the database below.
-  const fallbackCandidates = [
     body?.reference_id,
     body?.data?.reference_id,
   ];
 
-  for (const candidate of fallbackCandidates) {
-    if (
-      typeof candidate === 'string' &&
-      candidate.trim()
-    ) {
-      return candidate.trim();
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
     }
   }
 
@@ -94,11 +74,16 @@ const getReference = (body) => {
 };
 
 const isCompleted = (body) => {
-  const status = String(
-    body?.verification_status || ''
-  ).toLowerCase();
+  const candidates = [
+    body?.verification_status,
+    body?.data?.verification_status,
+  ];
 
-  return ['completed', 'complete'].includes(status);
+  return candidates.some((value) =>
+    ['completed', 'complete'].includes(
+      String(value || '').trim().toLowerCase()
+    )
+  );
 };
 
 const getStepStatus = (step) => {
@@ -114,18 +99,20 @@ const getStepStatus = (step) => {
     return 'rejected';
   }
 
-  const status = String(
+  const value = String(
     step.status || step.verification_status || ''
-  ).toLowerCase();
+  ).trim().toLowerCase();
 
   if (
-    ['verified', 'success', 'successful', 'approved', 'passed'].includes(status)
+    ['verified', 'success', 'successful', 'approved', 'passed']
+      .includes(value)
   ) {
     return 'verified';
   }
 
   if (
-    ['rejected', 'failed', 'failure', 'declined'].includes(status)
+    ['rejected', 'failed', 'failure', 'declined']
+      .includes(value)
   ) {
     return 'rejected';
   }
@@ -134,24 +121,23 @@ const getStepStatus = (step) => {
 };
 
 const getScore = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
   const number = Number(value);
 
-  if (!Number.isFinite(number)) {
-    return null;
-  }
-
-  if (number < 0 || number > 100) {
-    return null;
-  }
-
-  return number;
+  return Number.isFinite(number) &&
+    number >= 0 &&
+    number <= 100
+    ? number
+    : null;
 };
 
 const handleDojahWebhook = async (req, res) => {
   const secret = getWebhookSecret();
   const rawBody = req.rawBody;
-  const signature =
-    req.headers['x-dojah-signature'];
+  const signature = req.headers['x-dojah-signature'];
 
   if (!secret) {
     console.error(
@@ -188,7 +174,7 @@ const handleDojahWebhook = async (req, res) => {
 
   const body = req.body;
 
-  if (!body || typeof body !== 'object') {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return res.status(400).json({
       received: false,
       message: 'Invalid webhook payload.',
@@ -199,7 +185,7 @@ const handleDojahWebhook = async (req, res) => {
 
   if (!reference) {
     console.warn(
-      '[KYC webhook] No usable verification reference.'
+      '[KYC webhook] Verification reference is missing.'
     );
 
     return res.status(400).json({
@@ -208,40 +194,81 @@ const handleDojahWebhook = async (req, res) => {
     });
   }
 
-  
-const data =
-  body.data && typeof body.data === 'object'
-    ? body.data
-    : {};
+  const data =
+    body.data && typeof body.data === 'object'
+      ? body.data
+      : {};
 
-const completed = isCompleted(body);
+  const completed = isCompleted(body);
 
-// Diagnostic information only.
-// Never log the BVN, identity documents, full payload,
-// webhook signature, or secrets.
-console.info('[KYC webhook] Received verification event:', {
-  topLevelKeys: Object.keys(body),
-  dataKeys: Object.keys(data),
-  verificationStatus:
-    typeof body.verification_status === 'string'
-      ? body.verification_status
-      : null,
-  dataVerificationStatus:
-    typeof data.verification_status === 'string'
-      ? data.verification_status
-      : null,
-  completed,
-  hasMetadataReference:
-    typeof body?.metadata?.reference_id === 'string' ||
-    typeof data?.metadata?.reference_id === 'string',
-});
+  console.info('[KYC webhook] Received verification event:', {
+    topLevelKeys: Object.keys(body),
+    dataKeys: Object.keys(data),
+    verificationStatus:
+      typeof body.verification_status === 'string'
+        ? body.verification_status
+        : null,
+    dataVerificationStatus:
+      typeof data.verification_status === 'string'
+        ? data.verification_status
+        : null,
+    completed,
+    hasMetadataReference: Boolean(
+      body?.metadata?.reference_id ||
+      data?.metadata?.reference_id
+    ),
+  });
 
+  let client;
+  let transactionStarted = false;
+
+  try {
+    client = await pool.connect();
+
+    await client.query('BEGIN');
+    transactionStarted = true;
+
+    // Match only the exact reference created by our backend.
+    const recordResult = await client.query(
+      `SELECT
+         id,
+         user_id,
+         bvn,
+         bvn_verification_status,
+         bvn_provider_reference,
+         id_verification_status,
+         liveness_status,
+         dojah_reference,
+         dojah_verification_type
+       FROM kyc_records
+       WHERE dojah_reference = $1
+         AND dojah_verification_type IN ('bvn', 'identity')
+       FOR UPDATE`,
+      [reference]
+    );
+
+    if (recordResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+
+      console.warn(
+        '[KYC webhook] No matching KYC record found.'
+      );
+
+      // Acknowledge an authenticated event that does not match
+      // a record, so it cannot update another customer's KYC.
+      return res.status(200).json({
+        received: true,
+        matched: false,
+      });
+    }
+
+    const record = recordResult.rows[0];
 
     // ========================================================
     // TIER 1 — BVN
     // ========================================================
     if (record.dojah_verification_type === 'bvn') {
-      
       const governmentData =
         data.government_data &&
         typeof data.government_data === 'object'
@@ -254,13 +281,12 @@ console.info('[KYC webhook] Received verification event:', {
         data?.bvn?.entity,
       ];
 
-      const bvnEntity =
-        bvnEntityCandidates.find(
-          (candidate) =>
-            candidate &&
-            typeof candidate === 'object' &&
-            typeof candidate.bvn === 'string'
-        ) || {};
+      const bvnEntity = bvnEntityCandidates.find(
+        (candidate) =>
+          candidate &&
+          typeof candidate === 'object' &&
+          typeof candidate.bvn === 'string'
+      ) || {};
 
       const storedBvn =
         typeof record.bvn === 'string'
@@ -272,17 +298,13 @@ console.info('[KYC webhook] Received verification event:', {
           ? bvnEntity.bvn.trim()
           : '';
 
-      const providerStatus =
-        getStepStatus(governmentData);
+      const providerStatus = getStepStatus(governmentData);
 
       const exactBvnMatch =
         /^\d{11}$/.test(storedBvn) &&
         /^\d{11}$/.test(returnedBvn) &&
         storedBvn === returnedBvn;
 
-      // Approve only when the provider confirms completion,
-      // its government-data check passes, and the returned
-      // BVN exactly matches the saved BVN.
       const approved =
         completed &&
         providerStatus === 'verified' &&
@@ -314,8 +336,9 @@ console.info('[KYC webhook] Received verification event:', {
              bvn_verified_at = CASE
                WHEN $1 = 'verified'
                  THEN COALESCE(bvn_verified_at, NOW())
-               ELSE bvn_verified_at
+               ELSE NULL
              END,
+             bvn_provider_validation_result = $2,
              bvn_rejection_reason = CASE
                WHEN $1 = 'rejected'
                  THEN 'provider_bvn_check_failed'
@@ -323,8 +346,12 @@ console.info('[KYC webhook] Received verification event:', {
              END,
              dojah_checked_at = NOW(),
              updated_at = NOW()
-         WHERE id = $2`,
-        [nextStatus, record.id]
+         WHERE id = $3`,
+        [
+          nextStatus,
+          nextStatus,
+          record.id,
+        ]
       );
 
       if (approved) {
@@ -335,9 +362,7 @@ console.info('[KYC webhook] Received verification event:', {
            WHERE id = $1`,
           [record.user_id]
         );
-      }
-
-      if (explicitlyRejected) {
+      } else if (explicitlyRejected) {
         await client.query(
           `UPDATE users
            SET bvn_verified = FALSE,
@@ -349,6 +374,7 @@ console.info('[KYC webhook] Received verification event:', {
       }
 
       await client.query('COMMIT');
+      transactionStarted = false;
 
       return res.status(200).json({
         received: true,
@@ -357,16 +383,23 @@ console.info('[KYC webhook] Received verification event:', {
 
     // ========================================================
     // TIER 2 — IDENTITY AND LIVENESS
-    // Preserve the existing Tier 2 workflow.
     // ========================================================
     const governmentData =
-      data.government_data || {};
+      data.government_data &&
+      typeof data.government_data === 'object'
+        ? data.government_data
+        : {};
 
     const selfieData =
-      data.selfie || {};
+      data.selfie && typeof data.selfie === 'object'
+        ? data.selfie
+        : {};
 
     const selfieResult =
-      selfieData.data || {};
+      selfieData.data &&
+      typeof selfieData.data === 'object'
+        ? selfieData.data
+        : {};
 
     const identityStatus = completed
       ? getStepStatus(governmentData)
@@ -376,15 +409,18 @@ console.info('[KYC webhook] Received verification event:', {
       ? getStepStatus(selfieData)
       : 'pending';
 
-    const identityScore = getScore(
-      governmentData.match_score ??
-      governmentData.data?.match_score
+    const selfieMatchScore = getScore(
+      selfieResult.match_score ??
+      selfieData.match_score
     );
 
     const livenessScore = getScore(
-      selfieResult.liveness_score
+      selfieResult.liveness_score ??
+      selfieData.liveness_score
     );
 
+    // Do not downgrade a previously verified step on a later
+    // incomplete or unrecognized webhook event.
     const savedIdentityStatus =
       record.id_verification_status === 'verified'
         ? 'verified'
@@ -415,15 +451,17 @@ console.info('[KYC webhook] Received verification event:', {
              ELSE NULL
            END,
            liveness_status = $2,
-           selfie_match_score = COALESCE($3, selfie_match_score),
-           liveness_score = COALESCE($4, liveness_score),
+           selfie_match_score =
+             COALESCE($3, selfie_match_score),
+           liveness_score =
+             COALESCE($4, liveness_score),
            dojah_checked_at = NOW(),
            updated_at = NOW()
        WHERE id = $5`,
       [
         savedIdentityStatus,
         savedLivenessStatus,
-        identityScore,
+        selfieMatchScore,
         livenessScore,
         record.id,
       ]
@@ -440,9 +478,7 @@ console.info('[KYC webhook] Received verification event:', {
          WHERE id = $1`,
         [record.user_id]
       );
-    }
-
-    if (identityRejected || livenessRejected) {
+    } else if (identityRejected || livenessRejected) {
       await client.query(
         `UPDATE users
          SET id_verified = FALSE,
@@ -454,19 +490,23 @@ console.info('[KYC webhook] Received verification event:', {
     }
 
     await client.query('COMMIT');
+    transactionStarted = false;
 
     return res.status(200).json({
       received: true,
     });
   } catch (error) {
-    try {
-      await client.query('ROLLBACK');
-    } catch (rollbackError) {
-      console.error(
-        '[KYC webhook] Transaction rollback failed.'
-      );
+    if (client && transactionStarted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        console.error(
+          '[KYC webhook] Transaction rollback failed.'
+        );
+      }
     }
 
+    // Do not log payloads, BVNs, signatures, or secrets.
     console.error(
       '[KYC webhook] Processing failed:',
       error.message
@@ -477,7 +517,9 @@ console.info('[KYC webhook] Received verification event:', {
       message: 'Webhook processing failed.',
     });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
 
