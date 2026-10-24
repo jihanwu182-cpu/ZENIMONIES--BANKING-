@@ -1834,8 +1834,63 @@ await fetchStatus();
   // ==========================================================
   // SUBMIT BVN
   // ==========================================================
+const submitBvn = async (event: React.FormEvent) => {
+  event.preventDefault();
 
-const startTier1BvnVerification = async () => {
+  if (!token) {
+    showAlert('Please log in to continue.', 'error');
+    return;
+  }
+
+  if (bvn.length !== 11) {
+    showAlert('BVN must be exactly 11 digits.', 'error');
+    return;
+  }
+
+  if (missingFields.length > 0) {
+    showAlert(
+      'Please complete your profile information before submitting your BVN.',
+      'error'
+    );
+    return;
+  }
+
+  try {
+    setSubmitting(true);
+
+    const response = await fetch(`${API_BASE}/kyc/bvn`, {
+      method: 'POST',
+      headers: {
+        ...requestHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ bvn }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'BVN verification failed.');
+    }
+
+    showAlert(
+      result.message || 'BVN submitted successfully. Verification is pending.',
+      result.status === 'verified' ? 'success' : 'warning'
+    );
+
+    setBvn('');
+    await fetchStatus();
+  } catch (error) {
+    showAlert(
+      error instanceof Error ? error.message : 'Unable to submit BVN.',
+      'error'
+    );
+  } finally {
+    setSubmitting(false);
+  }
+};
+
+  const startTier1BvnVerification = async () => {
   const token = localStorage.getItem('zenimonies_token');
 
   
