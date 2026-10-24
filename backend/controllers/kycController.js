@@ -2071,7 +2071,7 @@ const startDojahVerification = async (req, res) => {
             : 'No identity verification record was found.',
       });
     }
-
+  
     const currentStatus = String(
       verificationType === 'tier_1'
         ? record.bvn_verification_status || ''
@@ -2093,22 +2093,25 @@ const startDojahVerification = async (req, res) => {
         : record.dojah_reference || ''
     ).trim();
 
-    if (
+    const expectedVerificationType =
+      verificationType === 'tier_1' ? 'bvn' : 'identity';
+
+    const hasMatchingPendingSession =
       currentStatus === 'pending' &&
-      existingReference &&
+      Boolean(existingReference) &&
       record.dojah_verification_type ===
-        (verificationType === 'tier_1' ? 'bvn' : 'identity')
-    ) {
+        expectedVerificationType;
+
+    if (hasMatchingPendingSession) {
       await client.query('ROLLBACK');
 
       return res.status(409).json({
         success: false,
         code: 'VERIFICATION_ALREADY_PENDING',
         message:
-          'A verification session is already pending. Please wait for its result.',
+          'Your verification is still being processed. Please try again after the current verification has been resolved.',
       });
     }
-
     const referenceId = `zen_${crypto.randomUUID()}`;
 
     if (verificationType === 'tier_1') {
