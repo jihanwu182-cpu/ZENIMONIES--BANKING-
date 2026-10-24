@@ -415,7 +415,7 @@ console.info('[KYC webhook] Received verification event:', {
              ELSE NULL
            END,
            liveness_status = $2,
-           identity_match_score = COALESCE($3, identity_match_score),
+           selfie_match_score = COALESCE($3, selfie_match_score),
            liveness_score = COALESCE($4, liveness_score),
            dojah_checked_at = NOW(),
            updated_at = NOW()
