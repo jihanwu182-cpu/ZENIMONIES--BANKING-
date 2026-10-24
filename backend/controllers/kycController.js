@@ -2130,8 +2130,9 @@ const startDojahVerification = async (req, res) => {
            AND user_id = $3`,
         [referenceId, record.id, userId]
       );
+  
     } else {
-      await client.query(
+      const updateResult = await client.query(
         `UPDATE kyc_records
          SET
            dojah_reference = $1,
@@ -2149,7 +2150,12 @@ const startDojahVerification = async (req, res) => {
            AND user_id = $3`,
         [referenceId, record.id, userId]
       );
+
+      if (updateResult.rowCount !== 1) {
+        throw new Error('KYC record update failed');
+      }
     }
+
 
     await client.query(
       `UPDATE users
