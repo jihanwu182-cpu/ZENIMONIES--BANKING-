@@ -1756,7 +1756,8 @@ const lgaOptions =
               }}
             >
               {accountVerified
-                {verificationLabel}
+               ? 'Verified'
+               : verificationLabel}
             </span>
 
           </div>
