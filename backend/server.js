@@ -165,27 +165,44 @@ app.use(
   })
 );
 
-// ============================================================
-// DOJAH WEBHOOK
-// ============================================================
+
+/* ============================================================
+   DOJAH WEBHOOK — PRESERVE RAW BODY FOR SIGNATURE VERIFICATION
+   ============================================================ */
+
 app.post(
   '/api/webhooks/dojah',
-  express.raw({ type: 'application/json' }),
   (req, res, next) => {
-    // Keep the original raw body for signature verification
-    req.rawBody = req.body;
+    // The earlier express.json() middleware saves the original
+    // request bytes in req.rawBody through its verify callback.
+    if (!Buffer.isBuffer(req.rawBody)) {
+      console.error(
+        '[KYC webhook] Raw request body unavailable after JSON parsing.'
+      );
 
-    // Parse the JSON so the controller can use req.body
-    try {
-      req.body = JSON.parse(req.body.toString('utf8'));
-    } catch (err) {
-      req.body = {};
+      return res.status(400).json({
+        received: false,
+        message: 'Invalid webhook request.',
+      });
+    }
+
+    // express.json() has already parsed valid JSON in req.body.
+    if (
+      !req.body ||
+      typeof req.body !== 'object' ||
+      Array.isArray(req.body)
+    ) {
+      return res.status(400).json({
+        received: false,
+        message: 'Invalid webhook payload.',
+      });
     }
 
     next();
   },
   handleDojahWebhook
 );
+
 // ============================================================
 // API ROUTES
 // ============================================================
