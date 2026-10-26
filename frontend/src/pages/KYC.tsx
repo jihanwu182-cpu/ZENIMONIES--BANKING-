@@ -1250,6 +1250,20 @@ const KYC: React.FC = () => {
   ] = useState<File | null>(
     null
   );
+  const [
+  employmentStatus,
+  setEmploymentStatus,
+] = useState('');
+
+const [
+  occupation,
+  setOccupation,
+] = useState('');
+
+const [
+  annualIncomeRange,
+  setAnnualIncomeRange,
+] = useState('');
 
   // ==========================================================
   // FILE REFS
@@ -2171,6 +2185,18 @@ connect.open();
     ) => {
       event.preventDefault();
 
+ if (
+  !employmentStatus ||
+  !occupation.trim() ||
+  !annualIncomeRange
+) {
+  showAlert(
+    'Please complete your employment and annual income information.',
+    'error'
+  );
+  return;
+}
+
       if (
         !addressDocumentType
       ) {
@@ -2239,6 +2265,9 @@ connect.open();
           'tier_3_selfie',
           tier3Selfie
         );
+        formData.append('employment_status', employmentStatus);
+        formData.append('occupation', occupation.trim());
+        formData.append('annual_income_range', annualIncomeRange);
 
         const response =
           await fetch(
@@ -2945,6 +2974,75 @@ connect.open();
                     submitTier3
                   }
                 >
+                  
+{/* EMPLOYMENT AND INCOME INFORMATION */}
+
+<div className="zk-small-title">
+  Employment and Income Information
+</div>
+
+<div className="zk-field">
+  <label className="zk-field-label">
+    Employment status
+  </label>
+  <select
+    className="zk-select"
+    value={employmentStatus}
+    onChange={(event) => setEmploymentStatus(event.target.value)}
+    disabled={submitting}
+    required
+  >
+    <option value="">Select employment status</option>
+    <option value="employed">Employed</option>
+    <option value="self_employed">Self-employed</option>
+    <option value="business_owner">Business owner</option>
+    <option value="student">Student</option>
+    <option value="unemployed">Unemployed</option>
+    <option value="retired">Retired</option>
+    <option value="other">Other</option>
+  </select>
+</div>
+
+<div className="zk-field">
+  <label className="zk-field-label">
+    Occupation
+  </label>
+  <input
+    className="zk-input"
+    type="text"
+    value={occupation}
+    onChange={(event) => setOccupation(event.target.value)}
+    placeholder="Enter your occupation"
+    maxLength={120}
+    disabled={submitting}
+    required
+  />
+</div>
+
+<div className="zk-field">
+  <label className="zk-field-label">
+    Annual income range
+  </label>
+  <select
+    className="zk-select"
+    value={annualIncomeRange}
+    onChange={(event) => setAnnualIncomeRange(event.target.value)}
+    disabled={submitting}
+    required
+  >
+    <option value="">Select annual income range</option>
+    <option value="below_500000">Below ₦500,000</option>
+    <option value="500000_999999">₦500,000 – ₦999,999</option>
+    <option value="1000000_2999999">₦1,000,000 – ₦2,999,999</option>
+    <option value="3000000_4999999">₦3,000,000 – ₦4,999,999</option>
+    <option value="5000000_9999999">₦5,000,000 – ₦9,999,999</option>
+    <option value="10000000_plus">₦10,000,000 and above</option>
+    <option value="prefer_not_to_say">Prefer not to say</option>
+  </select>
+</div>
+
+<div className="zk-divider" />
+
 
                   {/* VERIFICATION METHOD */}
 
