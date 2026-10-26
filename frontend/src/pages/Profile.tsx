@@ -1746,54 +1746,50 @@ const lgaOptions =
                 'Email not available'}
             </p>
 
-            
+    
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px', marginTop: '12px' }}>
+  <span
+    style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '6px 10px',
+      borderRadius: '20px',
+      backgroundColor: '#E8F5E9',
+      color: '#237A45',
+      fontSize: '13px',
+      fontWeight: 600,
+      whiteSpace: 'nowrap',
+    }}
+  >
+    <span aria-hidden="true">✓</span>
+    Tier 1 Verified
+  </span>
 
-<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '12px', marginTop: '12px' }}>
-  {accountVerified && (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        padding: '6px 10px',
-        borderRadius: '20px',
-        backgroundColor: '#E8F5E9',
-        color: '#237A45',
-        fontSize: '13px',
-        fontWeight: 600,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <span aria-hidden="true">✓</span>
-      Tier 1 Verified
-    </span>
-  )}
-
-  {accountVerified && (
-    <button
-      type="button"
-      onClick={() => {
-        window.location.href = '/kyc?level=2';
-      }}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px',
-        padding: '10px 14px',
-        border: 'none',
-        borderRadius: '8px',
-        backgroundColor: '#287A4B',
-        color: '#FFFFFF',
-        fontSize: '14px',
-        fontWeight: 600,
-        cursor: 'pointer',
-      }}
-    >
-      Upgrade to Tier 2 <span aria-hidden="true">→</span>
-    </button>
-  )}
+  <button
+    type="button"
+    onClick={() => {
+      window.location.href = '/kyc?level=2';
+    }}
+    style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '8px',
+      padding: '10px 14px',
+      border: 'none',
+      borderRadius: '8px',
+      backgroundColor: '#287A4B',
+      color: '#FFFFFF',
+      fontSize: '14px',
+      fontWeight: 600,
+      cursor: 'pointer',
+    }}
+  >
+    Upgrade to Tier 2 <span aria-hidden="true">→</span>
+  </button>
 </div>
+        
 
 
           </div>
