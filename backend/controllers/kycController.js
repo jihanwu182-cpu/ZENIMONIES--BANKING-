@@ -1280,11 +1280,16 @@ const submitTier2 = async (req, res) => {
 
       await client.query(
         `
-        UPDATE kyc_records
-        SET
-          document_type = $1,
-          document_number = $2,
-          id_verification_status = 'pending',
+        
+UPDATE kyc_records
+SET
+  document_type = $1,
+  document_number = $2,
+  dojah_reference = NULL,
+  dojah_verification_type = NULL,
+  dojah_started_at = NULL,
+  dojah_checked_at = NULL,
+  id_verification_status = 'pending',
           id_verified_at = NULL,
           id_rejection_reason = NULL,
           liveness_status = 'pending',
