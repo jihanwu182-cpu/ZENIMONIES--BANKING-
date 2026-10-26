@@ -1163,28 +1163,6 @@ const submitTier2 = async (req, res) => {
       });
     }
   }
-
-  // A selfie is required for every Tier 2 submission.
-  if (!selfieFile) {
-    return res.status(400).json({
-      success: false,
-      code: 'SELFIE_REQUIRED',
-      message:
-        'A selfie is required to continue identity verification.',
-    });
-  }
-
-  const selfieValidation =
-    validateSelfieFile(selfieFile);
-
-  if (!selfieValidation.valid) {
-    return res.status(400).json({
-      success: false,
-      code: 'INVALID_SELFIE',
-      message: selfieValidation.message,
-    });
-  }
-
   // NIN and international passport do not require a back image.
   const documentsWithoutBack = [
     'nin',
