@@ -2246,50 +2246,32 @@ console.log(
 );
 
    
-    // Find a verification payload inside common response wrappers.
-    const candidates = [];
-    const queue = [providerResult.data];
-    const visited = new Set();
-
-    while (queue.length > 0 && visited.size < 30) {
-      const item = queue.shift();
-
-      if (
-        !item ||
-        typeof item !== 'object' ||
-        visited.has(item)
-      ) {
-        continue;
-      }
-
-      visited.add(item);
-      candidates.push(item);
-
-      for (const key of ['data', 'result', 'response']) {
-        if (
-          item[key] &&
-          typeof item[key] === 'object'
-        ) {
-          queue.push(item[key]);
-        }
-      }
+    
+    // Parse the provider response using the verified response structure.
+    // An unknown or unsuccessful response must never approve KYC.
+    if (
+      providerResult?.success !== true ||
+      !providerResult.data ||
+      typeof providerResult.data !== 'object' ||
+      Array.isArray(providerResult.data)
+    ) {
+      return res.status(502).json({
+        success: false,
+        status: 'pending',
+        message: 'The verification result is not available yet.',
+      });
     }
 
-    const verification = candidates.find(
-      item =>
-        item.government_data ||
-        item.selfie ||
-        item.verification_status
-    ) || providerResult.data;
+    const verification = providerResult.data;
+    const resultData = verification.data;
 
+    // The returned reference must match this user's active Tier 2 session.
     const returnedReference = String(
-      verification?.reference_id ||
-      verification?.data?.reference_id ||
-      ''
+      verification.reference_id || ''
     ).trim();
 
     if (
-      returnedReference &&
+      !returnedReference ||
       returnedReference !== lookupReference
     ) {
       return res.status(502).json({
@@ -2301,18 +2283,11 @@ console.log(
     }
 
     const sessionStatus = String(
-      verification?.verification_status ||
-      verification?.data?.verification_status ||
-      ''
+      verification.verification_status || ''
     ).trim().toLowerCase();
 
-    const governmentData =
-      verification?.government_data ||
-      verification?.data?.government_data;
-
-    const selfieData =
-      verification?.selfie ||
-      verification?.data?.selfie;
+    const governmentData = resultData?.government_data;
+    const selfieData = resultData?.selfie;
 
     const outcome = step => {
       const value = step?.status;
@@ -2355,18 +2330,11 @@ console.log(
     let idStatus = 'pending';
     let livenessStatus = 'pending';
 
-    if (
-      ['completed', 'complete'].includes(sessionStatus)
-    ) {
+    if (['completed', 'complete'].includes(sessionStatus)) {
       idStatus = outcome(governmentData);
-// Do not treat a selfie result as proof of liveness.
-// Liveness remains pending until its actual provider result
-// has been identified and verified server-side.
-livenessStatus = 'pending';
+      livenessStatus = outcome(selfieData);
     } else if (
-      ['failed', 'abandoned', 'rejected'].includes(
-        sessionStatus
-      )
+      ['failed', 'abandoned', 'rejected'].includes(sessionStatus)
     ) {
       idStatus = 'rejected';
       livenessStatus = 'rejected';
@@ -2392,6 +2360,7 @@ livenessStatus = 'pending';
     const selfieMatchScore = score(
       selfieData?.data?.match_score
     );
+
 
     // Re-lock the exact session. A newer session must not be
     // overwritten by a delayed result from an older session.
