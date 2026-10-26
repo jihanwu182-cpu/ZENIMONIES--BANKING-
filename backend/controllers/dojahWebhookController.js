@@ -378,25 +378,27 @@ const handleDojahWebhook = async (req, res) => {
         nextStatus,
       });
 
-      await client.query(
-        `UPDATE kyc_records
-         SET bvn_verification_status = $1,
-             bvn_verified_at = CASE
-               WHEN $1 = 'verified'
-                 THEN COALESCE(bvn_verified_at, NOW())
-               ELSE NULL
-             END,
-             bvn_provider_validation_result = $2,
-             bvn_rejection_reason = CASE
-               WHEN $1 = 'rejected'
-                 THEN 'provider_bvn_check_failed'
-               ELSE NULL
-             END,
-             dojah_checked_at = NOW(),
-             updated_at = NOW()
-         WHERE id = $3`,
-        [nextStatus, nextStatus, record.id]
-      );
+      
+await client.query(
+  `UPDATE kyc_records
+   SET bvn_verification_status = $1,
+       bvn_verified_at = CASE
+         WHEN $1::text = 'verified'
+           THEN COALESCE(bvn_verified_at, NOW())
+         ELSE NULL
+       END,
+       bvn_provider_validation_result = $2,
+       bvn_rejection_reason = CASE
+         WHEN $1::text = 'rejected'
+           THEN 'provider_bvn_check_failed'
+         ELSE NULL
+       END,
+       dojah_checked_at = NOW(),
+       updated_at = NOW()
+   WHERE id = $3`,
+  [nextStatus, nextStatus, record.id]
+);
+
 
       if (approved) {
         
