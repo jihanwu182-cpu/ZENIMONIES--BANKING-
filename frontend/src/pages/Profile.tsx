@@ -1747,23 +1747,27 @@ const lgaOptions =
             </p>
 
             
-<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px', marginTop: '12px' }}>
-  <span
-    style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '7px',
-      padding: '7px 12px',
-      borderRadius: '8px',
-      background: accountVerified ? '#E8F5E9' : '#F3F4F6',
-      color: accountVerified ? '#237A45' : '#59636E',
-      fontSize: '14px',
-      fontWeight: 600,
-      border: `1px solid ${accountVerified ? '#C8E6C9' : '#E5E7EB'}`,
-    }}
-  >
-    {accountVerified ? '✓ Tier 1 Verified' : verificationLabel}
-  </span>
+
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '12px', marginTop: '12px' }}>
+  {accountVerified && (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '6px 10px',
+        borderRadius: '20px',
+        backgroundColor: '#E8F5E9',
+        color: '#237A45',
+        fontSize: '13px',
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span aria-hidden="true">✓</span>
+      Tier 1 Verified
+    </span>
+  )}
 
   {accountVerified && (
     <button
@@ -1776,17 +1780,17 @@ const lgaOptions =
         alignItems: 'center',
         justifyContent: 'center',
         gap: '8px',
-        padding: '10px 16px',
+        padding: '10px 14px',
+        border: 'none',
         borderRadius: '8px',
-        border: '1px solid #287A4B',
-        background: '#287A4B',
+        backgroundColor: '#287A4B',
         color: '#FFFFFF',
         fontSize: '14px',
         fontWeight: 600,
         cursor: 'pointer',
       }}
     >
-      Upgrade to Tier 2 →
+      Upgrade to Tier 2 <span aria-hidden="true">→</span>
     </button>
   )}
 </div>
