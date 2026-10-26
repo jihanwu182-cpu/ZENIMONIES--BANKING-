@@ -383,6 +383,7 @@ const getKycStatus = async (req, res) => {
     // Used for BVN, Tier 3 and general record information.
     // ========================================================
 
+    
     const kycResult = await pool.query(
       `
       SELECT
@@ -405,7 +406,13 @@ const getKycStatus = async (req, res) => {
         updated_at
       FROM kyc_records
       WHERE user_id = $1
-      ORDER BY created_at DESC
+      ORDER BY
+        CASE
+          WHEN bvn_verification_status IN ('verified', 'approved')
+            THEN 0
+          ELSE 1
+        END,
+        created_at DESC
       LIMIT 1
       `,
       [userId]
