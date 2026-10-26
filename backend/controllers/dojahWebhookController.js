@@ -223,42 +223,54 @@ const handleDojahWebhook = async (req, res) => {
     });
   }
 
+  
+  // Extract the verification reference.
   const reference = getReference(body);
 
-  
-if (!reference) {
-  const safeKeys = (value) =>
-    value &&
-    typeof value === 'object' &&
-    !Array.isArray(value)
-      ? Object.keys(value).slice(0, 40)
-      : [];
+  // Dojah test/diagnostic events may contain only event and source.
+  // Acknowledge them without modifying any customer's KYC status.
+  if (!reference) {
+    const eventName =
+      typeof body.event === 'string'
+        ? body.event.trim().toLowerCase()
+        : '';
 
-  console.warn('[KYC webhook] Verification reference is missing.', {
-    bodyType: Array.isArray(req.body)
-      ? 'array'
-      : typeof req.body,
-    topLevelKeys: safeKeys(body),
-    metadataKeys: safeKeys(body.metadata),
-    dataKeys: safeKeys(body.data),
-    dataMetadataKeys: safeKeys(body.data?.metadata),
-    referenceFieldsPresent: {
-      metadataReference: Boolean(body.metadata?.reference_id),
-      dataMetadataReference: Boolean(
-        body.data?.metadata?.reference_id
-      ),
-      topLevelReference: Boolean(body.reference_id),
-      dataReference: Boolean(body.data?.reference_id),
-    },
-  });
+    const source =
+      typeof body.source === 'string'
+        ? body.source.trim().toLowerCase()
+        : '';
 
-  return res.status(400).json({
-    received: false,
-    message: 'Verification reference is missing.',
-  });
-}
+    const isTestEvent =
+      eventName.includes('test') ||
+      eventName.includes('ping') ||
+      source.includes('test');
 
+    if (isTestEvent) {
+      console.info('[KYC webhook] Test event acknowledged.', {
+        eventName: eventName || null,
+        source: source || null,
+      });
 
+      return res.status(200).json({
+        received: true,
+        test: true,
+      });
+    }
+
+    console.warn(
+      '[KYC webhook] Verification reference is missing.',
+      {
+        topLevelKeys: Object.keys(body).slice(0, 40),
+        eventName: eventName || null,
+        source: source || null,
+      }
+    );
+
+    return res.status(400).json({
+      received: false,
+      message: 'Verification reference is missing.',
+    });
+  }
   const data =
     body.data && typeof body.data === 'object'
       ? body.data
