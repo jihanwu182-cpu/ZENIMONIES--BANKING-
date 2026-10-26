@@ -663,6 +663,7 @@ tier_3_rejection_reason:
 
       record,
     });
+  }catch (error) {
   console.error('Get KYC status error:', {
   message: error.message,
   code: error.code,
