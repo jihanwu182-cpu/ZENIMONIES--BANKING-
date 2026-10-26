@@ -1746,19 +1746,51 @@ const lgaOptions =
                 'Email not available'}
             </p>
 
-            <span
-              style={{
-                ...styles.statusBadge,
+            
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px', marginTop: '12px' }}>
+  <span
+    style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '7px',
+      padding: '7px 12px',
+      borderRadius: '8px',
+      background: accountVerified ? '#E8F5E9' : '#F3F4F6',
+      color: accountVerified ? '#237A45' : '#59636E',
+      fontSize: '14px',
+      fontWeight: 600,
+      border: `1px solid ${accountVerified ? '#C8E6C9' : '#E5E7EB'}`,
+    }}
+  >
+    {accountVerified ? '✓ Tier 1 Verified' : verificationLabel}
+  </span>
 
-                ...(accountVerified
-                  ? styles.verifiedBadge
-                  : styles.notVerifiedBadge),
-              }}
-            >
-              {accountVerified
-               ? 'Verified'
-               : verificationLabel}
-            </span>
+  {accountVerified && (
+    <button
+      type="button"
+      onClick={() => {
+        window.location.href = '/kyc?level=2';
+      }}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        padding: '10px 16px',
+        borderRadius: '8px',
+        border: '1px solid #287A4B',
+        background: '#287A4B',
+        color: '#FFFFFF',
+        fontSize: '14px',
+        fontWeight: 600,
+        cursor: 'pointer',
+      }}
+    >
+      Upgrade to Tier 2 →
+    </button>
+  )}
+</div>
+
 
           </div>
 
