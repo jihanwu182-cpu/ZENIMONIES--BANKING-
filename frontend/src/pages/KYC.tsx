@@ -2030,6 +2030,7 @@ connect.open();
   // A selfie upload does NOT satisfy liveness verification.
   // ==========================================================
 
+  
   const submitTier2 = async (
     event: React.FormEvent
   ) => {
@@ -2060,8 +2061,6 @@ connect.open();
       return;
     }
 
-    // NIN submission does not require ID images.
-    // Other supported document types retain their image rules.
     if (!isNin && !frontFile) {
       showAlert(
         'Please provide the front image of your identity document.',
@@ -2082,14 +2081,84 @@ connect.open();
       return;
     }
 
-    // A static selfie is not a liveness check.
-    // Require the live verification flow instead.
-    showAlert(
-      'Please complete live identity and liveness verification using Secure Verification. A selfie upload alone cannot complete Tier 2 verification.',
-      'warning'
+    const token = localStorage.getItem(
+      'zenimonies_token'
     );
 
-    return;
+    if (!token) {
+      showAlert(
+        'Please log in again to continue verification.',
+        'error'
+      );
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+
+      formData.append(
+        'document_type',
+        documentType
+      );
+
+      formData.append(
+        'document_number',
+        cleanNumber
+      );
+
+      if (frontFile) {
+        formData.append(
+          'document_front',
+          frontFile
+        );
+      }
+
+      if (backFile) {
+        formData.append(
+          'document_back',
+          backFile
+        );
+      }
+
+      const response = await fetch(
+        `${API_BASE}/kyc/tier-2`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || result.success !== true) {
+        showAlert(
+          result.message ||
+            'Unable to save your identity details.',
+          'error'
+        );
+        return;
+      }
+
+      showAlert(
+        'Your identity details have been saved. Continue with live verification.',
+        'success'
+      );
+
+      // Open the existing live verification flow.
+      await startDojahVerification();
+    } catch (error) {
+      console.error(
+        'Tier 2 submission failed.'
+      );
+
+      showAlert(
+        'Unable to submit your identity details. Please try again.',
+        'error'
+      );
+    }
   };
 
   // ==========================================================
