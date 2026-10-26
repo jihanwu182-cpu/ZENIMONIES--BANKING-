@@ -1079,6 +1079,7 @@ const submitBvn = async (req, res) => {
 //
 // ============================================================
 
+
 const submitTier2 = async (req, res) => {
   const userId =
     req.user?.id ||
@@ -1094,7 +1095,7 @@ const submitTier2 = async (req, res) => {
 
   const documentType = String(
     req.body?.document_type || ''
-  ).trim();
+  ).trim().toLowerCase();
 
   const documentNumber = String(
     req.body?.document_number || ''
@@ -1108,16 +1109,27 @@ const submitTier2 = async (req, res) => {
     'voters_card',
   ];
 
-  if (
-    !allowedDocumentTypes.includes(
-      documentType
-    )
-  ) {
+  if (!allowedDocumentTypes.includes(documentType)) {
     return res.status(400).json({
       success: false,
       code: 'INVALID_DOCUMENT_TYPE',
-      message:
-        'Please select a valid government-issued ID',
+      message: 'Please select a valid government-issued ID.',
+    });
+  }
+
+  const isNin =
+    documentType === 'nin' ||
+    documentType === 'national_id';
+
+  // NIN must contain exactly 11 digits.
+  if (
+    isNin &&
+    !/^\d{11}$/.test(documentNumber)
+  ) {
+    return res.status(400).json({
+      success: false,
+      code: 'INVALID_NIN',
+      message: 'NIN must contain exactly 11 digits.',
     });
   }
 
@@ -1125,42 +1137,42 @@ const submitTier2 = async (req, res) => {
     return res.status(400).json({
       success: false,
       code: 'DOCUMENT_NUMBER_REQUIRED',
-      message:
-        'Document number is required',
+      message: 'Document number is required.',
     });
   }
 
   const idFrontFile =
-    req.files?.document_front?.[0] ||
-    null;
+    req.files?.document_front?.[0] || null;
 
   const idBackFile =
-    req.files?.document_back?.[0] ||
-    null;
+    req.files?.document_back?.[0] || null;
 
   const selfieFile =
-    req.files?.selfie?.[0] ||
-    null;
+    req.files?.selfie?.[0] || null;
 
-  // ==========================================================
-  // FRONT
-  // ==========================================================
+  // NIN does not require ID images.
+  if (!isNin) {
+    const frontValidation =
+      validateIdFile(idFrontFile);
 
-  const frontValidation =
-    validateIdFile(idFrontFile);
-
-  if (!frontValidation.valid) {
-    return res.status(400).json({
-      success: false,
-      code: 'INVALID_ID_FRONT',
-      message:
-        frontValidation.message,
-    });
+    if (!frontValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_ID_FRONT',
+        message: frontValidation.message,
+      });
+    }
   }
 
-  // ==========================================================
-  // SELFIE
-  // ==========================================================
+  // A selfie is required for every Tier 2 submission.
+  if (!selfieFile) {
+    return res.status(400).json({
+      success: false,
+      code: 'SELFIE_REQUIRED',
+      message:
+        'A selfie is required to continue identity verification.',
+    });
+  }
 
   const selfieValidation =
     validateSelfieFile(selfieFile);
@@ -1169,35 +1181,26 @@ const submitTier2 = async (req, res) => {
     return res.status(400).json({
       success: false,
       code: 'INVALID_SELFIE',
-      message:
-        selfieValidation.message,
+      message: selfieValidation.message,
     });
   }
 
-  // ==========================================================
-  // BACK
-  // ==========================================================
-
+  // NIN and international passport do not require a back image.
   const documentsWithoutBack = [
+    'nin',
+    'national_id',
     'international_passport',
   ];
 
-  if (
-    !documentsWithoutBack.includes(
-      documentType
-    )
-  ) {
+  if (!documentsWithoutBack.includes(documentType)) {
     if (!idBackFile) {
       return res.status(400).json({
         success: false,
         code: 'ID_BACK_REQUIRED',
-        message:
-          'Back of ID document is required for this document type.',
+        message: 'The back of your ID document is required.',
       });
     }
-  }
 
-  if (idBackFile) {
     const backValidation =
       validateIdFile(idBackFile);
 
@@ -1205,8 +1208,7 @@ const submitTier2 = async (req, res) => {
       return res.status(400).json({
         success: false,
         code: 'INVALID_ID_BACK',
-        message:
-          backValidation.message,
+        message: backValidation.message,
       });
     }
   }
@@ -1216,232 +1218,160 @@ const submitTier2 = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // ========================================================
-    // LOCK USER
-    // ========================================================
-
-    const userResult =
-      await client.query(
-        `
-        SELECT
-          id,
-          full_name,
-          date_of_birth,
-          kyc_status,
-          kyc_tier,
-          id_verified
-        FROM users
-        WHERE id = $1
-        FOR UPDATE
-        `,
-        [userId]
-      );
+    const userResult = await client.query(
+      `
+      SELECT
+        id,
+        full_name,
+        kyc_tier,
+        id_verified
+      FROM users
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [userId]
+    );
 
     if (userResult.rows.length === 0) {
       await client.query('ROLLBACK');
 
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: 'User not found.',
       });
     }
 
-    const user =
-      userResult.rows[0];
+    const user = userResult.rows[0];
 
-    // ========================================================
-    // GET CURRENT ID STATUS
-    // ========================================================
-
-    const existingKyc =
-      await client.query(
-        `
-        SELECT
-          id,
-          id_verification_status,
-          id_verified_at,
-          id_rejection_reason
-        FROM kyc_records
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-        LIMIT 1
-        FOR UPDATE
-        `,
-        [userId]
-      );
+    const existingKyc = await client.query(
+      `
+      SELECT
+        id,
+        id_verification_status
+      FROM kyc_records
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [userId]
+    );
 
     const existingRecord =
-      existingKyc.rows.length > 0
-        ? existingKyc.rows[0]
-        : null;
+      existingKyc.rows[0] || null;
 
     const currentIdStatus =
       normalizeKycStatus(
         existingRecord?.id_verification_status
       );
 
-    // ========================================================
-    // VERIFIED = PERMANENT LOCK
-    // ========================================================
-
     if (
       user.id_verified === true ||
-      currentIdStatus === 'verified'
+      currentIdStatus === 'verified' ||
+      currentIdStatus === 'approved'
     ) {
       await client.query('ROLLBACK');
 
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
         code: 'ID_ALREADY_VERIFIED',
         message:
-          'Your identity verification has already been completed and cannot be changed.',
+          'Your identity verification has already been completed.',
         status: 'verified',
-        verified: true,
         locked: true,
       });
     }
 
-    // ========================================================
-    // PENDING = LOCK
-    // ========================================================
-
-    if (
-      currentIdStatus === 'pending'
-    ) {
+    if (currentIdStatus === 'pending') {
       await client.query('ROLLBACK');
 
       return res.status(409).json({
         success: false,
         code: 'ID_VERIFICATION_PENDING',
         message:
-          'Your identity verification is currently pending. You cannot submit another identity verification while verification is in progress.',
+          'Your identity verification is already being processed.',
         status: 'pending',
-        verified: false,
         locked: true,
       });
     }
 
-    // ========================================================
-    // UPDATE EXISTING RECORD
-    // ========================================================
-
     let kycId;
 
     if (existingRecord) {
-      kycId =
-        existingRecord.id;
+      kycId = existingRecord.id;
 
       await client.query(
         `
         UPDATE kyc_records
         SET
           document_type = $1,
-
           document_number = $2,
-
           id_verification_status = 'pending',
-
           id_verified_at = NULL,
-
           id_rejection_reason = NULL,
-
           liveness_status = 'pending',
-
           liveness_provider_reference = NULL,
-
           verification_status = 'pending',
-
           rejection_reason = NULL,
-
           updated_at = CURRENT_TIMESTAMP
-
         WHERE id = $3
+          AND user_id = $4
         `,
         [
           documentType,
           documentNumber,
           kycId,
+          userId,
         ]
       );
+    } else {
+      const insertResult = await client.query(
+        `
+        INSERT INTO kyc_records (
+          user_id,
+          document_type,
+          document_number,
+          bvn_verification_status,
+          id_verification_status,
+          liveness_status,
+          tier_3_verification_status,
+          verification_status
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          'not_verified',
+          'pending',
+          'pending',
+          'not_verified',
+          'pending'
+        )
+        RETURNING id
+        `,
+        [
+          userId,
+          documentType,
+          documentNumber,
+        ]
+      );
+
+      kycId = insertResult.rows[0].id;
     }
 
-    // ========================================================
-    // CREATE NEW RECORD
-    // ========================================================
-
-    else {
-      const insertResult =
-        await client.query(
-          `
-          INSERT INTO kyc_records (
-            user_id,
-
-            document_type,
-            document_number,
-
-            bvn_verification_status,
-
-            id_verification_status,
-
-            liveness_status,
-
-            tier_3_verification_status,
-
-            verification_status
-          )
-          VALUES (
-            $1,
-
-            $2,
-            $3,
-
-            'not_verified',
-
-            'pending',
-
-            'pending',
-
-            'not_verified',
-
-            'pending'
-          )
-          RETURNING id
-          `,
-          [
-            userId,
-            documentType,
-            documentNumber,
-          ]
-        );
-
-      kycId =
-        insertResult.rows[0].id;
-    }
-
-    // ========================================================
-    // SUBMISSION = PENDING
-    // ========================================================
-
+    // Do not elevate the customer's verified tier here.
+    // Tier 2 must be approved by the trusted verification process.
     await client.query(
       `
       UPDATE users
       SET
         id_verified = false,
-
         kyc_status = 'pending',
-
-        kyc_tier = 2,
-
         updated_at = CURRENT_TIMESTAMP
-
       WHERE id = $1
       `,
       [userId]
     );
-
-    // ========================================================
-    // AUDIT LOG
-    // ========================================================
 
     await client.query(
       `
@@ -1450,15 +1380,12 @@ const submitTier2 = async (req, res) => {
         action,
         description
       )
-      VALUES (
-        $1,
-        'kyc_tier2_submitted',
-        $2
-      )
+      VALUES ($1, $2, $3)
       `,
       [
         userId,
-        `Tier 2 government ID and selfie received using ${documentType}. Awaiting identity and liveness verification.`,
+        'kyc_tier2_submitted',
+        `Tier 2 ${isNin ? 'NIN' : 'government ID'} submission received. Identity and liveness checks are pending.`,
       ]
     );
 
@@ -1466,41 +1393,34 @@ const submitTier2 = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-
       message:
-        'Your ID documents and selfie have been received. Identity and liveness verification are pending.',
-
-      kyc_record_id:
-        kycId,
-
+        'Your details and selfie have been received. Identity and liveness verification must be completed before approval.',
+      kyc_record_id: kycId,
       tier: 2,
-
       status: 'pending',
-
       verified: false,
-
       locked: true,
-
-      liveness_status:
-        'pending',
-
-      id_verification_status:
-        'pending',
+      id_verification_status: 'pending',
+      liveness_status: 'pending',
     });
   } catch (error) {
     try {
       await client.query('ROLLBACK');
-    } catch {}
+    } catch (rollbackError) {
+      console.error(
+        'Tier 2 rollback failed:',
+        rollbackError.message
+      );
+    }
 
-    console.error(
-      'Submit Tier 2 error:',
-      error
-    );
+    console.error('Submit Tier 2 error:', {
+      message: error.message,
+      code: error.code,
+    });
 
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to submit Tier 2 verification',
+      message: 'Unable to submit Tier 2 verification.',
     });
   } finally {
     client.release();
