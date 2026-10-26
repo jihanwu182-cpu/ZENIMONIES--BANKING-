@@ -101,6 +101,7 @@ router.post(
 // document_back is optional for passports.
 // ============================================================
 
+
 router.post(
   '/tier-2',
   authMiddleware,
@@ -111,10 +112,6 @@ router.post(
     },
     {
       name: 'document_back',
-      maxCount: 1,
-    },
-    {
-      name: 'selfie',
       maxCount: 1,
     },
   ]),
