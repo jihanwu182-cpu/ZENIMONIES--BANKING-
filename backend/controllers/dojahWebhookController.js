@@ -225,16 +225,39 @@ const handleDojahWebhook = async (req, res) => {
 
   const reference = getReference(body);
 
-  if (!reference) {
-    console.warn(
-      '[KYC webhook] Verification reference is missing.'
-    );
+  
+if (!reference) {
+  const safeKeys = (value) =>
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value)
+      ? Object.keys(value).slice(0, 40)
+      : [];
 
-    return res.status(400).json({
-      received: false,
-      message: 'Verification reference is missing.',
-    });
-  }
+  console.warn('[KYC webhook] Verification reference is missing.', {
+    bodyType: Array.isArray(req.body)
+      ? 'array'
+      : typeof req.body,
+    topLevelKeys: safeKeys(body),
+    metadataKeys: safeKeys(body.metadata),
+    dataKeys: safeKeys(body.data),
+    dataMetadataKeys: safeKeys(body.data?.metadata),
+    referenceFieldsPresent: {
+      metadataReference: Boolean(body.metadata?.reference_id),
+      dataMetadataReference: Boolean(
+        body.data?.metadata?.reference_id
+      ),
+      topLevelReference: Boolean(body.reference_id),
+      dataReference: Boolean(body.data?.reference_id),
+    },
+  });
+
+  return res.status(400).json({
+    received: false,
+    message: 'Verification reference is missing.',
+  });
+}
+
 
   const data =
     body.data && typeof body.data === 'object'
