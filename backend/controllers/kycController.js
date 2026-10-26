@@ -2208,6 +2208,24 @@ const confirmDojahVerification = async (req, res) => {
      
 const providerResult =
   await getDojahVerification(lookupReference);
+    
+
+const safeKeys = value =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.keys(value).filter(key =>
+        /^(data|result|response|government_data|selfie|liveness|liveness_status|liveness_score|match_score|verification_status|status|reference_id|success|score|passed|verified)$/i.test(key)
+      )
+    : [];
+
+console.log(
+  '[KYC DEBUG] Provider response field names:',
+  {
+    topLevel: safeKeys(providerResult?.data),
+    data: safeKeys(providerResult?.data?.data),
+    result: safeKeys(providerResult?.data?.result),
+    response: safeKeys(providerResult?.data?.response),
+  }
+);
 
 console.log(
   'Dojah identity result lookup:',
