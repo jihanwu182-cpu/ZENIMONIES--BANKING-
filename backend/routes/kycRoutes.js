@@ -81,26 +81,28 @@ router.post(
   submitBvn
 );
 
-// ============================================================
-// TIER 2 — GOVERNMENT ID + SELFIE/LIVENESS
-// ============================================================
-//
-// POST /api/kyc/tier-2
-//
-// Expected fields:
-//
-// document_type
-// document_number
-//
-// Files:
-//
-// document_front
-// document_back
-// selfie
-//
-// document_back is optional for passports.
-// ============================================================
 
+ // ============================================================
+ // TIER 2 — GOVERNMENT ID + LIVE VERIFICATION
+ // ============================================================
+ //
+ // POST /api/kyc/tier-2
+ //
+ // Required fields:
+ // document_type
+ // document_number
+ //
+ // Files:
+ // document_front — required for non-NIN document types
+ // document_back  — required for document types that need it
+ //
+ // NIN submissions do not require ID images.
+ // The verification widget performs the live selfie check.
+ // No static selfie upload is required for Tier 2.
+ //
+ // Uploaded documents do not automatically approve KYC.
+ // The backend must confirm identity and liveness.
+ // ============================================================
 
 router.post(
   '/tier-2',
