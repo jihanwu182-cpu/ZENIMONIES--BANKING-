@@ -2025,167 +2025,72 @@ connect.open();
       );
     }
   }; 
-
   // ==========================================================
-  // SUBMIT TIER 2
+  // SUBMIT TIER 2 — MANUAL DOCUMENT INTAKE
+  // A selfie upload does NOT satisfy liveness verification.
   // ==========================================================
 
-  const submitTier2 =
-    async (
-      event: React.FormEvent
-    ) => {
-      event.preventDefault();
+  const submitTier2 = async (
+    event: React.FormEvent
+  ) => {
+    event.preventDefault();
 
-      if (
-        !documentNumber.trim()
-      ) {
-        showAlert(
-          'Please enter your document number.',
-          'error'
-        );
+    const isNin =
+      documentType === 'nin' ||
+      documentType === 'national_id';
 
-        return;
-      }
+    const cleanNumber = documentNumber.trim();
 
-      if (!frontFile) {
-        showAlert(
-          'Please upload the front of your identity document.',
-          'error'
-        );
+    if (!cleanNumber) {
+      showAlert(
+        'Please enter your document number.',
+        'error'
+      );
+      return;
+    }
 
-        return;
-      }
+    if (
+      isNin &&
+      !/^\d{11}$/.test(cleanNumber)
+    ) {
+      showAlert(
+        'NIN must contain exactly 11 digits.',
+        'error'
+      );
+      return;
+    }
 
-      if (
-        documentType !==
-          'international_passport' &&
-        !backFile
-      ) {
-        showAlert(
-          'Please upload the back of your identity document.',
-          'error'
-        );
+    // NIN submission does not require ID images.
+    // Other supported document types retain their image rules.
+    if (!isNin && !frontFile) {
+      showAlert(
+        'Please provide the front image of your identity document.',
+        'error'
+      );
+      return;
+    }
 
-        return;
-      }
+    if (
+      !isNin &&
+      documentType !== 'international_passport' &&
+      !backFile
+    ) {
+      showAlert(
+        'Please provide the back image of your identity document.',
+        'error'
+      );
+      return;
+    }
 
-      if (!tier2Selfie) {
-        showAlert(
-          'Please upload a selfie.',
-          'error'
-        );
+    // A static selfie is not a liveness check.
+    // Require the live verification flow instead.
+    showAlert(
+      'Please complete live identity and liveness verification using Secure Verification. A selfie upload alone cannot complete Tier 2 verification.',
+      'warning'
+    );
 
-        return;
-      }
-
-      try {
-        setSubmitting(
-          true
-        );
-
-        const formData =
-          new FormData();
-
-        formData.append(
-          'document_type',
-          documentType
-        );
-
-        formData.append(
-          'document_number',
-          documentNumber.trim()
-        );
-
-        formData.append(
-          'document_front',
-          frontFile
-        );
-
-        if (backFile) {
-          formData.append(
-            'document_back',
-            backFile
-          );
-        }
-
-        formData.append(
-          'selfie',
-          tier2Selfie
-        );
-
-        const response =
-          await fetch(
-            `${API_BASE}/kyc/tier-2`,
-            {
-              method: 'POST',
-
-              headers:
-                requestHeaders(),
-
-              body: formData,
-            }
-          );
-
-        const result =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            result.message ||
-              'Tier 2 verification failed.'
-          );
-        }
-
-        showAlert(
-          result.message ||
-            'Tier 2 verification submitted successfully.',
-          'success'
-        );
-
-        setDocumentNumber('');
-
-        setFrontFile(null);
-
-        setBackFile(null);
-
-        setTier2Selfie(null);
-
-        if (
-          frontFileRef.current
-        ) {
-          frontFileRef.current.value =
-            '';
-        }
-
-        if (
-          backFileRef.current
-        ) {
-          backFileRef.current.value =
-            '';
-        }
-
-        if (
-          tier2SelfieRef.current
-        ) {
-          tier2SelfieRef.current.value =
-            '';
-        }
-
-        await fetchStatus();
-      } catch (error) {
-        showAlert(
-          error instanceof
-            Error
-            ? error.message
-            : 'Tier 2 verification failed.',
-          'error'
-        );
-      } finally {
-        setSubmitting(
-          false
-        );
-      }
-    };
+    return;
+  };
 
   // ==========================================================
   // SUBMIT TIER 3
