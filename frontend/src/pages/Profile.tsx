@@ -38,13 +38,15 @@ interface User {
   role?: string;
   status?: string;
 
-  kyc_status?: string;
-  kyc_tier?: number;
-  tier?: number;
+kyc_status?: string;
+kyc_tier?: number;
+tier?: number;
 
-  bvn_verified?: boolean;
-  id_verified?: boolean;
-  tier_3_verified?: boolean;
+bvn_verified?: boolean;
+id_verified?: boolean;
+tier_3_verified?: boolean;
+
+phone_verified?: boolean;
 
   is_verified?: boolean;
   legal_name_locked?: boolean;
@@ -1230,20 +1232,33 @@ const Profile: React.FC = () => {
       .slice(0, 2)
       .join('')
       .toUpperCase();
+// ==========================================================
+// VERIFICATION STATUS
+// ==========================================================
 
-  // ==========================================================
-  // VERIFICATION STATUS
-  // ==========================================================
+// Tier 1 is complete only when BVN verification is confirmed.
+const tier1Verified =
+  user?.bvn_verified === true;
 
-  const accountVerified =
-    user?.is_verified === true;
+// Tier 2 requires both identity verification and liveness.
+const tier2Verified =
+  user?.id_verified === true;
 
-  const legalNameLocked =
-    user?.legal_name_locked === true;
+// Keep the existing account-level flag for profile locking.
+const accountVerified =
+  user?.is_verified === true;
 
-  const profileLocked =
-    accountVerified;
+const legalNameLocked =
+  user?.legal_name_locked === true;
 
+const profileLocked =
+  accountVerified;
+
+const verificationLabel = tier2Verified
+  ? '✓ Tier 2 Verified'
+  : tier1Verified
+    ? '✓ Tier 1 Verified · Upgrade to Tier 2'
+    : 'Complete Tier 1 Verification';
   // ==========================================================
   // LOCATION OPTIONS
   // ==========================================================
@@ -1741,8 +1756,7 @@ const lgaOptions =
               }}
             >
               {accountVerified
-                ? '✓ KYC Verified'
-                : 'KYC Not Verified'}
+                {verificationLabel}
             </span>
 
           </div>
