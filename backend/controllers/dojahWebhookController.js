@@ -379,15 +379,16 @@ const handleDojahWebhook = async (req, res) => {
       });
 
       
+
 await client.query(
   `UPDATE kyc_records
-   SET bvn_verification_status = $1,
+   SET bvn_verification_status = $1::text,
        bvn_verified_at = CASE
          WHEN $1::text = 'verified'
            THEN COALESCE(bvn_verified_at, NOW())
          ELSE NULL
        END,
-       bvn_provider_validation_result = $2,
+       bvn_provider_validation_result = $2::text,
        bvn_rejection_reason = CASE
          WHEN $1::text = 'rejected'
            THEN 'provider_bvn_check_failed'
@@ -398,6 +399,7 @@ await client.query(
    WHERE id = $3`,
   [nextStatus, nextStatus, record.id]
 );
+
 
 
       if (approved) {
