@@ -885,6 +885,30 @@ const submitBvn = async (req, res) => {
       lastName,
       dateOfBirth,
     });
+console.log('[KYC BVN DEBUG]', {
+  success: dojahResult?.success === true,
+  httpStatus: dojahResult?.status ?? null,
+  topLevelKeys:
+    dojahResult?.data &&
+    typeof dojahResult.data === 'object'
+      ? Object.keys(dojahResult.data)
+      : [],
+  entityKeys:
+    dojahResult?.data?.entity &&
+    typeof dojahResult.data.entity === 'object'
+      ? Object.keys(dojahResult.data.entity)
+      : [],
+  bvnStatusType:
+    typeof dojahResult?.data?.entity?.bvn?.status,
+  firstNameStatusType:
+    typeof dojahResult?.data?.entity?.first_name?.status,
+  lastNameStatusType:
+    typeof dojahResult?.data?.entity?.last_name?.status,
+  dobStatusType:
+    typeof dojahResult?.data?.entity?.dob?.status,
+});
+
+
 
     if (!dojahResult?.success) {
       await client.query('ROLLBACK');
