@@ -384,6 +384,8 @@ const getKycStatus = async (req, res) => {
     // ========================================================
 
     
+    
+    // General KYC record: newest record for the user's overall KYC details.
     const kycResult = await pool.query(
       `
       SELECT
@@ -406,13 +408,7 @@ const getKycStatus = async (req, res) => {
         updated_at
       FROM kyc_records
       WHERE user_id = $1
-      ORDER BY
-        CASE
-          WHEN bvn_verification_status IN ('verified', 'approved')
-            THEN 0
-          ELSE 1
-        END,
-        created_at DESC
+      ORDER BY created_at DESC
       LIMIT 1
       `,
       [userId]
@@ -422,6 +418,61 @@ const getKycStatus = async (req, res) => {
       kycResult.rows.length > 0
         ? kycResult.rows[0]
         : null;
+
+    // Dedicated BVN record: prefer the record with a completed BVN result.
+    const bvnResult = await pool.query(
+      `
+      SELECT
+        id,
+        bvn_verification_status,
+        bvn_verified_at,
+        bvn_rejection_reason
+      FROM kyc_records
+      WHERE user_id = $1
+        AND bvn IS NOT NULL
+        AND bvn <> ''
+      ORDER BY
+        CASE
+          WHEN bvn_verification_status IN ('verified', 'approved')
+            THEN 0
+          WHEN bvn_verification_status = 'pending'
+            THEN 1
+          ELSE 2
+        END,
+        created_at DESC
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    const bvnRecord =
+      bvnResult.rows.length > 0
+        ? bvnResult.rows[0]
+        : null;
+
+    // Dedicated Tier 3 record.
+    const tier3Result = await pool.query(
+      `
+      SELECT
+        id,
+        tier_3_method,
+        tier_3_verification_status,
+        tier_3_verified_at,
+        tier_3_rejection_reason
+      FROM kyc_records
+      WHERE user_id = $1
+        AND tier_3_method IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    const tier3Record =
+      tier3Result.rows.length > 0
+        ? tier3Result.rows[0]
+        : null;
+
 
     // ========================================================
     // GET LATEST IDENTITY VERIFICATION RECORD
@@ -458,25 +509,18 @@ const getKycStatus = async (req, res) => {
     // ========================================================
 
     const bvnStatus =
-      user.bvn_verified === true
-        ? 'verified'
-        : normalizeKycStatus(
-            record?.bvn_verification_status
-          );
+  user.bvn_verified === true
+    ? 'verified'
+    : normalizeKycStatus(
+        bvnRecord?.bvn_verification_status
+      );
 
-    const idStatus =
-      user.id_verified === true
-        ? 'verified'
-        : normalizeKycStatus(
-            identityRecord?.id_verification_status
-          );
-
-    const tier3Status =
-      user.tier_3_verified === true
-        ? 'verified'
-        : normalizeKycStatus(
-            record?.tier_3_verification_status
-          );
+const tier3Status =
+  user.tier_3_verified === true
+    ? 'verified'
+    : normalizeKycStatus(
+        tier3Record?.tier_3_verification_status
+      );
 
     // ========================================================
     // INDIVIDUAL LOCK RULES
@@ -508,16 +552,14 @@ const storedTier = Math.max(
 
 // A verified BVN establishes Tier 1 verification only.
 // Higher tiers still require their own verification.
-const verifiedTier = Math.min(
-  storedTier,
+const verifiedTier =
   tier3Status === 'verified'
     ? 3
     : idStatus === 'verified'
       ? 2
       : bvnStatus === 'verified'
         ? 1
-        : 0
-);
+        : 0;
 
 const tier = verifiedTier;
 
@@ -537,9 +579,8 @@ const limits = getTierLimits(tier);
         email: user.email,
         phone: user.phone,
       },
-
-      kyc: {
-         status: tier >= 1 ? 'verified' : kycStatus,
+        kyc: {
+          status: kycStatus,
 
           tier,
 
@@ -558,7 +599,7 @@ const limits = getTierLimits(tier);
           bvnLocked,
 
         bvn_rejection_reason:
-          record?.bvn_rejection_reason || null,
+  bvnRecord?.bvn_rejection_reason || null,
 
         // ----------------------------------------------------
         // IDENTITY
@@ -591,13 +632,13 @@ const limits = getTierLimits(tier);
           tier3Locked,
 
         tier_3_method:
-          user.tier_3_method ||
-          record?.tier_3_method ||
-          null,
+  user.tier_3_method ||
+  tier3Record?.tier_3_method ||
+  null,
 
-        tier_3_rejection_reason:
-          record?.tier_3_rejection_reason ||
-          null,
+tier_3_rejection_reason:
+  tier3Record?.tier_3_rejection_reason ||
+  null,
       },
 
       limits: {
