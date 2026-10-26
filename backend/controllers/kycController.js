@@ -2336,7 +2336,10 @@ console.log(
       ['completed', 'complete'].includes(sessionStatus)
     ) {
       idStatus = outcome(governmentData);
-      livenessStatus = outcome(selfieData);
+// Do not treat a selfie result as proof of liveness.
+// Liveness remains pending until its actual provider result
+// has been identified and verified server-side.
+livenessStatus = 'pending';
     } else if (
       ['failed', 'abandoned', 'rejected'].includes(
         sessionStatus
