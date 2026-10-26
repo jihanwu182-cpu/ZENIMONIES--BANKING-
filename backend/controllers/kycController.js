@@ -1963,20 +1963,22 @@ const startDojahVerification = async (req, res) => {
              FOR UPDATE`,
             [userId]
           )
-        : await client.query(
-            `SELECT
-               id,
-               id_verification_status,
-               dojah_reference,
-               dojah_verification_type
-             FROM kyc_records
-             WHERE user_id = $1
-               AND dojah_verification_type = 'identity'
-             ORDER BY created_at DESC
-             LIMIT 1
-             FOR UPDATE`,
-            [userId]
-          );
+       : await client.query(
+    `SELECT
+       id,
+       id_verification_status,
+       dojah_reference,
+       dojah_verification_type
+     FROM kyc_records
+     WHERE user_id = $1
+       AND document_type IS NOT NULL
+       AND document_number IS NOT NULL
+       AND document_number <> ''
+     ORDER BY created_at DESC
+     LIMIT 1
+     FOR UPDATE`,
+    [userId]
+  );
 
     const record = recordResult.rows[0];
 
