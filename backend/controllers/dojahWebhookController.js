@@ -399,14 +399,16 @@ const handleDojahWebhook = async (req, res) => {
       );
 
       if (approved) {
-        await client.query(
-          `UPDATE users
-           SET bvn_verified = TRUE,
-               kyc_tier = GREATEST(kyc_tier, 1),
-               updated_at = NOW()
-           WHERE id = $1`,
-          [record.user_id]
-        );
+        
+await client.query(
+  `UPDATE users
+   SET bvn_verified = TRUE,
+       kyc_tier = GREATEST(kyc_tier, 1),
+       updated_at = NOW()
+   WHERE id = $1::uuid`,
+  [record.user_id]
+);
+
       } else if (explicitlyRejected) {
         await client.query(
           `UPDATE users
