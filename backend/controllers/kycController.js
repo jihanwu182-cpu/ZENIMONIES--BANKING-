@@ -2391,7 +2391,8 @@ console.log(
       });
     }
 
-    await client.query(
+    
+    const updateResult = await client.query(
       `
       UPDATE kyc_records
       SET
@@ -2431,6 +2432,9 @@ console.log(
         dojah_checked_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
+        AND user_id = $6
+        AND dojah_reference = $7
+        AND dojah_verification_type = 'identity'
       `,
       [
         record.id,
@@ -2438,9 +2442,16 @@ console.log(
         livenessStatus,
         livenessScore,
         selfieMatchScore,
+        userId,
+        lookupReference,
       ]
     );
 
+if (updateResult.rowCount !== 1) {
+  throw new Error(
+    'The active identity verification session changed.'
+  );
+}
     const savedStatuses = await client.query(
       `
       SELECT
