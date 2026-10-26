@@ -491,18 +491,31 @@ const getKycStatus = async (req, res) => {
     // OVERALL KYC STATUS
     // Do not approve the entire account from identity alone.
     // ========================================================
-
     const kycStatus =
-      normalizeKycStatus(user.kyc_status);
+  normalizeKycStatus(user.kyc_status);
 
-    const verified =
-      kycStatus === 'verified';
+const storedTier = Math.max(
+  0,
+  Number(user.kyc_tier || 0)
+);
 
-    const tier = Number(user.kyc_tier || 0);
+// A verified BVN establishes Tier 1 verification only.
+// Higher tiers still require their own verification.
+const verifiedTier = Math.min(
+  storedTier,
+  tier3Status === 'verified'
+    ? 3
+    : idStatus === 'verified'
+      ? 2
+      : bvnStatus === 'verified'
+        ? 1
+        : 0
+);
 
-    const limits = getTierLimits(
-      verified ? tier : 0
-    );
+const tier = verifiedTier;
+
+const limits = getTierLimits(tier);
+    
 
     // ========================================================
     // RESPONSE
@@ -519,12 +532,11 @@ const getKycStatus = async (req, res) => {
       },
 
       kyc: {
-        status: kycStatus,
+         status: tier >= 1 ? 'verified' : kycStatus,
 
-        tier: verified ? tier : 0,
+          tier,
 
-        submitted_tier: tier,
-
+          submitted_tier: storedTier,
         // ----------------------------------------------------
         // BVN
         // ----------------------------------------------------
