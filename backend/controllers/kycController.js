@@ -515,6 +515,13 @@ const getKycStatus = async (req, res) => {
         bvnRecord?.bvn_verification_status
       );
 
+const idStatus =
+  user.id_verified === true
+    ? 'verified'
+    : normalizeKycStatus(
+        identityRecord?.id_verification_status
+      );
+
 const tier3Status =
   user.tier_3_verified === true
     ? 'verified'
