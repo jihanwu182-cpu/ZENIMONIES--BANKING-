@@ -1,15 +1,24 @@
+
 const crypto = require('crypto');
 const pool = require('../config/database');
 
 // ============================================================
-// ZENIMONIES — DOJAH WEBHOOK
+// ZENIMONIES BANKING — DOJAH WEBHOOK CONTROLLER
+// Handles Tier 1 BVN and Tier 2 identity/liveness callbacks.
+// Signature verification remains mandatory.
 // ============================================================
 
 const getWebhookSecret = () => {
   const value = process.env.DOJAH_WEBHOOK_SECRET;
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
+  return typeof value === 'string' && value.trim()
+    ? value.trim()
+    : null;
 };
 
+// ------------------------------------------------------------
+// Verify the signature against the original request bytes.
+// Never disable this check to make a webhook succeed.
+// ------------------------------------------------------------
 const verifySignature = (signature, rawBody, secret) => {
   if (
     typeof signature !== 'string' ||
@@ -20,6 +29,7 @@ const verifySignature = (signature, rawBody, secret) => {
   }
 
   let received = signature.trim();
+
   if (received.startsWith('sha256=')) {
     received = received.slice(7);
   }
@@ -41,6 +51,9 @@ const verifySignature = (signature, rawBody, secret) => {
   );
 };
 
+// ------------------------------------------------------------
+// Extract the verification reference from supported locations.
+// ------------------------------------------------------------
 const getReference = (body) => {
   const candidates = [
     body?.metadata?.reference_id,
@@ -54,109 +67,189 @@ const getReference = (body) => {
       return value.trim();
     }
   }
+
   return null;
 };
 
-const isCompleted = (body) => {
-  const candidates = [
-    body?.verification_status,
-    body?.data?.verification_status,
-  ];
+const getVerificationStatus = (body) =>
+  String(
+    body?.verification_status ??
+    body?.data?.verification_status ??
+    ''
+  ).trim().toLowerCase();
 
-  return candidates.some((value) =>
-    ['completed', 'complete', 'failed', 'abandoned', 'rejected'].includes(
-      String(value || '').trim().toLowerCase()
-    )
+const isCompleted = (body) =>
+  [
+    'completed',
+    'complete',
+    'failed',
+    'abandoned',
+    'rejected',
+  ].includes(getVerificationStatus(body));
+
+const isFailed = (body) =>
+  ['failed', 'abandoned', 'rejected'].includes(
+    getVerificationStatus(body)
   );
-};
 
-const isFailed = (body) => {
-  const candidates = [
-    body?.verification_status,
-    body?.data?.verification_status,
-  ];
-
-  return candidates.some((value) =>
-    ['failed', 'abandoned', 'rejected'].includes(
-      String(value || '').trim().toLowerCase()
-    )
-  );
-};
+// ------------------------------------------------------------
+// Read step statuses, including Dojah's nested data structure.
+//
+// Example:
+// data.government_data.status === true
+// data.selfie.status === true
+//
+// A completed flow alone is NOT proof of successful verification.
+// ------------------------------------------------------------
 const getStepStatus = (step) => {
-  if (!step || typeof step !== 'object') return 'pending';
-
-  if (step.status === true) return 'verified';
-  if (step.status === false) return 'rejected';
-
-  const value = String(
-    step.status || step.verification_status || ''
-  )
-    .trim()
-    .toLowerCase();
-
-  if (
-    ['verified', 'success', 'successful', 'approved', 'passed'].includes(value)
-  ) {
-    return 'verified';
+  if (!step || typeof step !== 'object') {
+    return 'pending';
   }
 
-  if (
-    ['rejected', 'failed', 'failure', 'declined'].includes(value)
-  ) {
-    return 'rejected';
+  const candidates = [
+    step.status,
+    step.verification_status,
+    step.data?.status,
+    step.data?.verification_status,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate === true) return 'verified';
+    if (candidate === false) return 'rejected';
+
+    const value = String(candidate ?? '')
+      .trim()
+      .toLowerCase();
+
+    if (
+      [
+        'verified',
+        'success',
+        'successful',
+        'approved',
+        'passed',
+      ].includes(value)
+    ) {
+      return 'verified';
+    }
+
+    if (
+      [
+        'rejected',
+        'failed',
+        'failure',
+        'declined',
+      ].includes(value)
+    ) {
+      return 'rejected';
+    }
   }
 
   return 'pending';
 };
 
 const getScore = (value) => {
-  if (value === null || value === undefined || value === '') return null;
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
   const number = Number(value);
+
   return Number.isFinite(number) && number >= 0 && number <= 100
     ? number
     : null;
 };
 
+// ============================================================
+// WEBHOOK HANDLER
+// ============================================================
 const handleDojahWebhook = async (req, res) => {
   const secret = getWebhookSecret();
   const rawBody = req.rawBody;
-  const signature = req.headers['x-dojah-signature'];
+  const signature =
+    req.headers['x-dojah-signature'];
 
+  // 1. Check server configuration.
   if (!secret) {
-    console.error('[KYC webhook] Webhook secret is not configured.');
-    return res.status(500).json({ received: false, message: 'Webhook configuration error.' });
+    console.error(
+      '[KYC webhook] DOJAH_WEBHOOK_SECRET is not configured.'
+    );
+
+    return res.status(500).json({
+      received: false,
+      message: 'Webhook configuration error.',
+    });
   }
 
+  // 2. Require the original request body.
   if (!Buffer.isBuffer(rawBody)) {
-    console.error('[KYC webhook] Raw request body is unavailable.');
-    return res.status(400).json({ received: false, message: 'Invalid webhook request.' });
+    console.error(
+      '[KYC webhook] Original request body is unavailable.'
+    );
+
+    return res.status(400).json({
+      received: false,
+      message: 'Invalid webhook request.',
+    });
   }
 
+  // 3. Verify authenticity before processing any payload.
   if (!verifySignature(signature, rawBody, secret)) {
-    console.warn('[KYC webhook] Invalid webhook signature.');
-    return res.status(401).json({ received: false, message: 'Invalid signature.' });
+    console.warn('[KYC webhook] Signature validation failed.', {
+      signatureHeaderPresent: typeof signature === 'string',
+      rawBodyIsBuffer: Buffer.isBuffer(rawBody),
+      rawBodyLength: rawBody.length,
+    });
+
+    return res.status(401).json({
+      received: false,
+      message: 'Invalid signature.',
+    });
   }
 
+  // 4. Validate the parsed payload.
   const body = req.body;
 
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return res.status(400).json({ received: false, message: 'Invalid webhook payload.' });
+  if (
+    !body ||
+    typeof body !== 'object' ||
+    Array.isArray(body)
+  ) {
+    console.warn('[KYC webhook] Invalid JSON payload.');
+
+    return res.status(400).json({
+      received: false,
+      message: 'Invalid webhook payload.',
+    });
   }
 
   const reference = getReference(body);
 
   if (!reference) {
-    console.warn('[KYC webhook] Verification reference is missing.');
-    return res.status(400).json({ received: false, message: 'Verification reference is missing.' });
+    console.warn(
+      '[KYC webhook] Verification reference is missing.'
+    );
+
+    return res.status(400).json({
+      received: false,
+      message: 'Verification reference is missing.',
+    });
   }
 
-  const data = body.data && typeof body.data === 'object' ? body.data : {};
-  const completed = isCompleted(body);
+  const data =
+    body.data && typeof body.data === 'object'
+      ? body.data
+      : {};
 
-  console.info('[KYC webhook] Event received:', {
+  const verificationStatus = getVerificationStatus(body);
+  const completed = isCompleted(body);
+  const failed = isFailed(body);
+
+  console.info('[KYC webhook] Verified event received.', {
     reference,
+    verificationStatus: verificationStatus || null,
     completed,
-    verification_status: body.verification_status || data.verification_status || null,
+    failed,
   });
 
   let client;
@@ -164,9 +257,11 @@ const handleDojahWebhook = async (req, res) => {
 
   try {
     client = await pool.connect();
+
     await client.query('BEGIN');
     transactionStarted = true;
 
+    // 5. Match the provider reference to an existing KYC record.
     const recordResult = await client.query(
       `SELECT
          id,
@@ -188,119 +283,171 @@ const handleDojahWebhook = async (req, res) => {
       await client.query('ROLLBACK');
       transactionStarted = false;
 
-      console.warn('[KYC webhook] No matching KYC record found for reference.');
-      return res.status(200).json({ received: true, matched: false });
+      console.warn(
+        '[KYC webhook] No matching KYC record found.',
+        { reference }
+      );
+
+      // A validly signed event can be acknowledged without
+      // changing any user or KYC record.
+      return res.status(200).json({
+        received: true,
+        matched: false,
+      });
     }
 
     const record = recordResult.rows[0];
 
-  // ========================================================
-// TIER 1 — BVN
-// ========================================================
-if (record.dojah_verification_type === 'bvn') {
-  const governmentData =
-    data.government_data && typeof data.government_data === 'object'
-      ? data.government_data
-      : {};
+    // Do not update KYC based on a nonterminal event.
+    if (!completed) {
+      await client.query('COMMIT');
+      transactionStarted = false;
 
-  const providerStatus = getStepStatus(governmentData);
-  const failed = isFailed(body);
+      return res.status(200).json({
+        received: true,
+        matched: true,
+        updated: false,
+      });
+    }
 
-  const approved = isCompleted(body) && !failed && providerStatus === 'verified';
-  const explicitlyRejected =
-    failed || (isCompleted(body) && providerStatus === 'rejected');
+    // ========================================================
+    // TIER 1 — BVN
+    // ========================================================
+    if (record.dojah_verification_type === 'bvn') {
+      const governmentData =
+        data.government_data &&
+        typeof data.government_data === 'object'
+          ? data.government_data
+          : {};
 
-  const nextStatus = approved
-    ? 'verified'
-    : explicitlyRejected
-    ? 'rejected'
-    : 'pending';
+      const providerStatus = getStepStatus(governmentData);
 
-  console.info('[KYC webhook] BVN decision:', {
-    completed: isCompleted(body),
-    failed,
-    providerStatus,
-    nextStatus,
-  });
+      // Approval requires both a completed, nonfailed event
+      // and an explicitly successful government-data step.
+      const approved =
+        !failed && providerStatus === 'verified';
 
-  await client.query(
-    `UPDATE kyc_records
-     SET bvn_verification_status = $1,
-         bvn_verified_at = CASE
-           WHEN $1 = 'verified' THEN COALESCE(bvn_verified_at, NOW())
-           ELSE NULL
-         END,
-         bvn_provider_validation_result = $2,
-         bvn_rejection_reason = CASE
-           WHEN $1 = 'rejected' THEN 'provider_bvn_check_failed'
-           ELSE NULL
-         END,
-         dojah_checked_at = NOW(),
-         updated_at = NOW()
-     WHERE id = $3`,
-    [nextStatus, nextStatus, record.id]
-  );
+      const explicitlyRejected =
+        failed || providerStatus === 'rejected';
 
-  if (approved) {
-    await client.query(
-      `UPDATE users
-       SET bvn_verified = TRUE,
-           kyc_tier = GREATEST(kyc_tier, 1),
-           updated_at = NOW()
-       WHERE id = $1`,
-      [record.user_id]
-    );
-  } else if (explicitlyRejected) {
-    await client.query(
-      `UPDATE users
-       SET bvn_verified = FALSE,
-           kyc_status = 'rejected',
-           updated_at = NOW()
-       WHERE id = $1`,
-      [record.user_id]
-    );
-  }
+      // Unknown/incomplete results remain pending.
+      const nextStatus = approved
+        ? 'verified'
+        : explicitlyRejected
+          ? 'rejected'
+          : 'pending';
 
-  await client.query('COMMIT');
-  transactionStarted = false;
+      console.info('[KYC webhook] BVN decision.', {
+        reference,
+        providerStatus,
+        nextStatus,
+      });
 
-  return res.status(200).json({ received: true });
-}
+      await client.query(
+        `UPDATE kyc_records
+         SET bvn_verification_status = $1,
+             bvn_verified_at = CASE
+               WHEN $1 = 'verified'
+                 THEN COALESCE(bvn_verified_at, NOW())
+               ELSE NULL
+             END,
+             bvn_provider_validation_result = $2,
+             bvn_rejection_reason = CASE
+               WHEN $1 = 'rejected'
+                 THEN 'provider_bvn_check_failed'
+               ELSE NULL
+             END,
+             dojah_checked_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $3`,
+        [nextStatus, nextStatus, record.id]
+      );
+
+      if (approved) {
+        await client.query(
+          `UPDATE users
+           SET bvn_verified = TRUE,
+               kyc_tier = GREATEST(kyc_tier, 1),
+               updated_at = NOW()
+           WHERE id = $1`,
+          [record.user_id]
+        );
+      } else if (explicitlyRejected) {
+        await client.query(
+          `UPDATE users
+           SET bvn_verified = FALSE,
+               kyc_status = 'rejected',
+               updated_at = NOW()
+           WHERE id = $1`,
+          [record.user_id]
+        );
+      }
+
+      await client.query('COMMIT');
+      transactionStarted = false;
+
+      return res.status(200).json({
+        received: true,
+        matched: true,
+        verificationType: 'bvn',
+        status: nextStatus,
+      });
+    }
 
     // ========================================================
     // TIER 2 — IDENTITY + LIVENESS
     // ========================================================
     const governmentData =
-      data.government_data && typeof data.government_data === 'object'
+      data.government_data &&
+      typeof data.government_data === 'object'
         ? data.government_data
         : {};
 
     const selfieData =
-      data.selfie && typeof data.selfie === 'object' ? data.selfie : {};
+      data.selfie && typeof data.selfie === 'object'
+        ? data.selfie
+        : {};
 
     const selfieResult =
-      selfieData.data && typeof selfieData.data === 'object'
+      selfieData.data &&
+      typeof selfieData.data === 'object'
         ? selfieData.data
         : {};
 
-    const identityStatus = completed ? getStepStatus(governmentData) : 'pending';
-    const livenessStatus = completed ? getStepStatus(selfieData) : 'pending';
+    const identityProviderStatus =
+      getStepStatus(governmentData);
+
+    const livenessProviderStatus =
+      getStepStatus(selfieData);
+
+    const identityStatus = failed
+      ? 'rejected'
+      : identityProviderStatus;
+
+    const livenessStatus = failed
+      ? 'rejected'
+      : livenessProviderStatus;
 
     const selfieMatchScore = getScore(
       selfieResult.match_score ?? selfieData.match_score
     );
+
     const livenessScore = getScore(
       selfieResult.liveness_score ?? selfieData.liveness_score
     );
 
-    // Do not downgrade an already verified step
-    const savedIdentityStatus =
-      record.id_verification_status === 'verified'
+    // Preserve an already verified step unless there is an
+    // explicit failed event. Never promote pending to verified
+    // without a successful provider step status.
+    const savedIdentityStatus = failed
+      ? 'rejected'
+      : record.id_verification_status === 'verified'
         ? 'verified'
         : identityStatus;
 
-    const savedLivenessStatus =
-      record.liveness_status === 'verified'
+    const savedLivenessStatus = failed
+      ? 'rejected'
+      : record.liveness_status === 'verified'
         ? 'verified'
         : livenessStatus;
 
@@ -308,11 +455,13 @@ if (record.dojah_verification_type === 'bvn') {
       `UPDATE kyc_records
        SET id_verification_status = $1,
            id_verified_at = CASE
-             WHEN $1 = 'verified' THEN COALESCE(id_verified_at, NOW())
+             WHEN $1 = 'verified'
+               THEN COALESCE(id_verified_at, NOW())
              ELSE id_verified_at
            END,
            id_rejection_reason = CASE
-             WHEN $1 = 'rejected' THEN 'provider_identity_check_failed'
+             WHEN $1 = 'rejected'
+               THEN 'provider_identity_check_failed'
              ELSE NULL
            END,
            liveness_status = $2,
@@ -359,24 +508,43 @@ if (record.dojah_verification_type === 'bvn') {
     await client.query('COMMIT');
     transactionStarted = false;
 
-    return res.status(200).json({ received: true });
+    return res.status(200).json({
+      received: true,
+      matched: true,
+      verificationType: 'identity',
+      identityStatus: savedIdentityStatus,
+      livenessStatus: savedLivenessStatus,
+    });
   } catch (error) {
     if (client && transactionStarted) {
       try {
         await client.query('ROLLBACK');
-      } catch {
-        console.error('[KYC webhook] Transaction rollback failed.');
+      } catch (rollbackError) {
+        console.error(
+          '[KYC webhook] Database rollback failed.',
+          {
+            code: rollbackError.code || null,
+          }
+        );
       }
     }
 
-    console.error('[KYC webhook] Processing failed:', error.message);
+    // Log diagnostic details without logging the incoming
+    // payload, signature, BVN, selfie, or webhook secret.
+    console.error('[KYC webhook] Processing failed.', {
+      name: error.name,
+      code: error.code || null,
+      message: error.message,
+    });
 
     return res.status(500).json({
       received: false,
       message: 'Webhook processing failed.',
     });
   } finally {
-    if (client) client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
 
