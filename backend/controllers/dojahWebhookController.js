@@ -555,11 +555,11 @@ if (!reference) {
     // Log diagnostic details without logging the incoming
     // payload, signature, BVN, selfie, or webhook secret.
     console.error('[KYC webhook] Processing failed.', {
-      name: error.name,
-      code: error.code || null,
-      message: error.message,
-    });
-
+  name: error?.name || 'UnknownError',
+  code: error?.code || null,
+  message: String(error?.message || 'Unknown processing error'),
+  stack: error?.stack || null,
+});
     return res.status(500).json({
       received: false,
       message: 'Webhook processing failed.',
