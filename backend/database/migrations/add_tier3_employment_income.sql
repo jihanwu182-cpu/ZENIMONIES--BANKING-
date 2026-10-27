@@ -1,0 +1,4 @@
+ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS employment_status VARCHAR(40),
+  ADD COLUMN IF NOT EXISTS occupation VARCHAR(120),
+  ADD COLUMN IF NOT EXISTS annual_income_range VARCHAR(40);
