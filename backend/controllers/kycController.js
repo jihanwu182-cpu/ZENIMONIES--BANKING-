@@ -6,6 +6,10 @@ const {
   validateBvn,
   getDojahVerification,
 } = require('../services/dojahService');
+const {
+  uploadKycFile,
+  deleteKycFile,
+} = require('../services/cloudinaryStorageService');
 // ============================================================
 // KYC / ACCOUNT LIMITS
 // ============================================================
@@ -1451,40 +1455,41 @@ SET
 // tier_3_selfie
 //
 // ============================================================
-
 const submitTier3 = async (req, res) => {
   const userId =
     req.user?.id ||
     req.userId ||
     req.user?.userId;
+
   if (!userId) {
     return res.status(401).json({
       success: false,
       message: 'Authentication required.',
     });
   }
-  // ==========================================================
-  // METHOD AND DOCUMENT TYPE
-  // ==========================================================
+
   const method = String(
     req.body?.tier_3_method || ''
   ).trim();
+
   const documentType = String(
     req.body?.tier_3_document_type || ''
   ).trim();
-  // Accept existing frontend method values.
+
   const allowedMethods = [
     'bank_statement',
     'utility_bill',
     'proof_of_address',
     'address_document',
   ];
+
   const allowedDocumentTypes = [
     'bank_statement',
     'utility_bill',
     'tax_proof',
     'rent_receipt_or_agreement',
   ];
+
   if (!allowedMethods.includes(method)) {
     return res.status(400).json({
       success: false,
@@ -1492,6 +1497,7 @@ const submitTier3 = async (req, res) => {
       message: 'Please select a valid Tier 3 verification method.',
     });
   }
+
   if (!allowedDocumentTypes.includes(documentType)) {
     return res.status(400).json({
       success: false,
@@ -1499,18 +1505,19 @@ const submitTier3 = async (req, res) => {
       message: 'Please select a valid proof of address document.',
     });
   }
-  // ==========================================================
-  // EMPLOYMENT AND INCOME
-  // ==========================================================
+
   const employmentStatus = String(
     req.body?.employment_status || ''
   ).trim();
+
   const occupation = String(
     req.body?.occupation || ''
   ).trim();
+
   const annualIncomeRange = String(
     req.body?.annual_income_range || ''
   ).trim();
+
   const allowedEmploymentStatuses = [
     'employed',
     'self_employed',
@@ -1520,6 +1527,7 @@ const submitTier3 = async (req, res) => {
     'retired',
     'other',
   ];
+
   const allowedIncomeRanges = [
     'below_500000',
     '500000_999999',
@@ -1529,6 +1537,7 @@ const submitTier3 = async (req, res) => {
     '10000000_plus',
     'prefer_not_to_say',
   ];
+
   if (
     !allowedEmploymentStatuses.includes(employmentStatus) ||
     !occupation ||
@@ -1542,15 +1551,16 @@ const submitTier3 = async (req, res) => {
         'Please provide a valid employment status, occupation, and annual income range.',
     });
   }
-  // ==========================================================
-  // REQUIRED FILES
-  // ==========================================================
+
   const tier3Document =
     req.files?.tier_3_document?.[0] || null;
+
   const tier3Selfie =
     req.files?.tier_3_selfie?.[0] || null;
+
   const documentValidation =
     validateProofOfAddressFile(tier3Document);
+
   if (!documentValidation.valid) {
     return res.status(400).json({
       success: false,
@@ -1558,8 +1568,10 @@ const submitTier3 = async (req, res) => {
       message: documentValidation.message,
     });
   }
+
   const selfieValidation =
     validateSelfieFile(tier3Selfie);
+
   if (!selfieValidation.valid) {
     return res.status(400).json({
       success: false,
@@ -1567,7 +1579,8 @@ const submitTier3 = async (req, res) => {
       message: selfieValidation.message,
     });
   }
-  // Requirements correspond to the actual selected document.
+
+  // Keep the selected document requirements visible to the user.
   const tier3Requirements = {
     bank_statement: {
       accepted:
@@ -1594,35 +1607,63 @@ const submitTier3 = async (req, res) => {
         'Invalid documents or documents that do not establish the applicant’s address.',
     },
   };
+
   let client;
+  let transactionStarted = false;
+  let transactionCommitted = false;
+  let uploadedDocument = null;
+  let uploadedSelfie = null;
+
+  const cleanupUploadedFiles = async () => {
+    const files = [
+      uploadedSelfie,
+      uploadedDocument,
+    ].filter(Boolean);
+
+    for (const file of files) {
+      try {
+        await deleteKycFile({
+          publicId: file.publicId,
+          resourceType: file.resourceType,
+        });
+      } catch (cleanupError) {
+        // Do not log file contents, credentials, or customer documents.
+        console.error(
+          'KYC storage cleanup failed. Manual storage review may be required.'
+        );
+      }
+    }
+  };
+
   try {
     client = await pool.connect();
+
     await client.query('BEGIN');
-    // ========================================================
-    // LOCK USER
-    // ========================================================
+    transactionStarted = true;
+
+    // Lock the user to prevent concurrent Tier 3 submissions.
     const userResult = await client.query(
       `
-      SELECT
-        id,
-        tier_3_verified
+      SELECT id, tier_3_verified
       FROM users
       WHERE id = $1
       FOR UPDATE
       `,
       [userId]
     );
+
     if (userResult.rows.length === 0) {
       await client.query('ROLLBACK');
+      transactionStarted = false;
+
       return res.status(404).json({
         success: false,
         message: 'User not found.',
       });
     }
+
     const user = userResult.rows[0];
-    // ========================================================
-    // FIND THE LATEST TIER 3 RECORD ONLY
-    // ========================================================
+
     const existingKyc = await client.query(
       `
       SELECT
@@ -1637,18 +1678,22 @@ const submitTier3 = async (req, res) => {
       `,
       [userId]
     );
+
     const existingRecord =
       existingKyc.rows[0] || null;
+
     const currentTier3Status =
       normalizeKycStatus(
         existingRecord?.tier_3_verification_status
       );
-    // A verified Tier 3 account cannot be resubmitted.
+
     if (
       user.tier_3_verified === true ||
       currentTier3Status === 'verified'
     ) {
       await client.query('ROLLBACK');
+      transactionStarted = false;
+
       return res.status(400).json({
         success: false,
         code: 'TIER_3_ALREADY_VERIFIED',
@@ -1659,9 +1704,11 @@ const submitTier3 = async (req, res) => {
         locked: true,
       });
     }
-    // Do not accept duplicate submissions while review is pending.
+
     if (currentTier3Status === 'pending') {
       await client.query('ROLLBACK');
+      transactionStarted = false;
+
       return res.status(409).json({
         success: false,
         code: 'TIER_3_VERIFICATION_PENDING',
@@ -1672,12 +1719,26 @@ const submitTier3 = async (req, res) => {
         locked: true,
       });
     }
-    // ========================================================
-    // UPDATE OR INSERT TIER 3 RECORD
-    // ========================================================
+
+    // Upload both files as authenticated Cloudinary assets.
+    // Do not save or return public delivery URLs.
+    uploadedDocument = await uploadKycFile({
+      file: tier3Document,
+      userId,
+      documentKind: 'proof_of_address',
+    });
+
+    uploadedSelfie = await uploadKycFile({
+      file: tier3Selfie,
+      userId,
+      documentKind: 'selfie',
+    });
+
     let kycId;
+
     if (existingRecord) {
       kycId = existingRecord.id;
+
       await client.query(
         `
         UPDATE kyc_records
@@ -1687,16 +1748,27 @@ const submitTier3 = async (req, res) => {
           employment_status = $3,
           occupation = $4,
           annual_income_range = $5,
+
+          tier_3_document_asset_id = $6,
+          tier_3_document_public_id = $7,
+          tier_3_document_resource_type = $8,
+
+          tier_3_selfie_asset_id = $9,
+          tier_3_selfie_public_id = $10,
+          tier_3_selfie_resource_type = $11,
+
+          tier_3_document_url = NULL,
           tier_3_verification_status = 'pending',
           tier_3_verified_at = NULL,
           tier_3_rejection_reason = NULL,
+
           liveness_status = 'pending',
           liveness_provider_reference = NULL,
           verification_status = 'pending',
           rejection_reason = NULL,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = $6
-          AND user_id = $7
+        WHERE id = $12
+          AND user_id = $13
         `,
         [
           method,
@@ -1704,6 +1776,12 @@ const submitTier3 = async (req, res) => {
           employmentStatus,
           occupation,
           annualIncomeRange,
+          uploadedDocument.assetId,
+          uploadedDocument.publicId,
+          uploadedDocument.resourceType,
+          uploadedSelfie.assetId,
+          uploadedSelfie.publicId,
+          uploadedSelfie.resourceType,
           kycId,
           userId,
         ]
@@ -1718,6 +1796,15 @@ const submitTier3 = async (req, res) => {
           employment_status,
           occupation,
           annual_income_range,
+
+          tier_3_document_asset_id,
+          tier_3_document_public_id,
+          tier_3_document_resource_type,
+
+          tier_3_selfie_asset_id,
+          tier_3_selfie_public_id,
+          tier_3_selfie_resource_type,
+
           bvn_verification_status,
           id_verification_status,
           liveness_status,
@@ -1725,12 +1812,9 @@ const submitTier3 = async (req, res) => {
           verification_status
         )
         VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6,
+          $1, $2, $3, $4, $5, $6,
+          $7, $8, $9,
+          $10, $11, $12,
           'not_verified',
           'not_verified',
           'pending',
@@ -1746,11 +1830,18 @@ const submitTier3 = async (req, res) => {
           employmentStatus,
           occupation,
           annualIncomeRange,
+          uploadedDocument.assetId,
+          uploadedDocument.publicId,
+          uploadedDocument.resourceType,
+          uploadedSelfie.assetId,
+          uploadedSelfie.publicId,
+          uploadedSelfie.resourceType,
         ]
       );
+
       kycId = insertResult.rows[0].id;
     }
-    // Keep the approved tier unchanged until verification succeeds.
+
     await client.query(
       `
       UPDATE users
@@ -1762,9 +1853,7 @@ const submitTier3 = async (req, res) => {
       `,
       [method, userId]
     );
-    // ========================================================
-    // AUDIT LOG
-    // ========================================================
+
     await client.query(
       `
       INSERT INTO audit_logs (
@@ -1772,18 +1861,18 @@ const submitTier3 = async (req, res) => {
         action,
         description
       )
-      VALUES (
-        $1,
-        'kyc_tier3_submitted',
-        $2
-      )
+      VALUES ($1, 'kyc_tier3_submitted', $2)
       `,
       [
         userId,
-        `Tier 3 ${method} submission received. Document type: ${documentType}. Employment and income information received. Document and selfie verification are pending.`,
+        `Tier 3 ${method} submission received. Document type: ${documentType}. Employment and income information received. Private document and selfie uploads completed; verification remains pending.`,
       ]
     );
+
     await client.query('COMMIT');
+    transactionStarted = false;
+    transactionCommitted = true;
+
     return res.status(200).json({
       success: true,
       message:
@@ -1800,15 +1889,28 @@ const submitTier3 = async (req, res) => {
       requirements: tier3Requirements[documentType],
     });
   } catch (error) {
-    if (client) {
+    if (transactionStarted && client) {
       try {
         await client.query('ROLLBACK');
       } catch (_) {}
+      transactionStarted = false;
     }
-    console.error('Submit Tier 3 error:', error);
+
+    // If the database operation failed before commit, remove new assets.
+    if (!transactionCommitted) {
+      await cleanupUploadedFiles();
+    }
+
+    // Never return internal storage details or credentials to the client.
+    console.error(
+      'Submit Tier 3 failed:',
+      error?.message || 'Unknown error'
+    );
+
     return res.status(500).json({
       success: false,
-      message: 'Unable to submit Tier 3 verification.',
+      message:
+        'Unable to submit Tier 3 verification. Please try again later.',
     });
   } finally {
     if (client) {
