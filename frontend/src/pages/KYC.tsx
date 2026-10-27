@@ -1904,11 +1904,8 @@ connect.open();
         return;
       }
 
-      // Save the submitted identity details without launching a
-      // separate hosted verification page. Saving details is NOT
-      // identity approval; the backend must verify them separately.
       showAlert(
-        'Your identity details have been saved. Verification is pending until the secure checks are completed.',
+        'Your identity details were submitted successfully.',
         'success'
       );
 
@@ -2398,8 +2395,6 @@ connect.open();
               ) : canSubmitTier2 ? (
                 <>
 
-                  {/* IN-PAGE VERIFICATION STATUS */}
-
                   <div className="zk-small-title">
                     Identity verification
                   </div>
@@ -2407,10 +2402,7 @@ connect.open();
                   <div className="zk-note">
                     <span className="zk-note-icon">🔒</span>
                     <span>
-                      Submit your details below without leaving this page.
-                      Your status will remain pending until the backend
-                      confirms the required identity and liveness checks.
-                      Do not submit the same details repeatedly.
+                      Verify your identity using your details below. We will show your verification status here.
                     </span>
                   </div>
 
@@ -2429,7 +2421,7 @@ connect.open();
                     </span>
 
                     <span>
-                      Choose your document type from the dropdown. NIN requires the 11-digit number only; all other supported IDs require front and back images. Your submission remains pending until the backend completes the required checks.
+                      Choose your identity document. For NIN, enter your 11-digit number. For other supported IDs, provide clear images of the front and back of the document.
                     </span>
 
                   </div>
