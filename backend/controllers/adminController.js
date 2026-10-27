@@ -1681,6 +1681,7 @@ module.exports = {
   getUser,
   updateUserStatus,
   getKycRecords,
+  getPrivateTier3Document,
 
   // KYC decisions
   verifyBvn,
