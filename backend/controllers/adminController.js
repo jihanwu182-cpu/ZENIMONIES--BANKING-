@@ -459,9 +459,6 @@ const getKycRecords = async (req, res) => {
 
         k.document_type,
         k.document_number,
-        k.document_front_url,
-        k.document_back_url,
-        k.selfie_url,
         k.id_verification_status,
         k.id_verified_at,
         k.id_rejection_reason,
