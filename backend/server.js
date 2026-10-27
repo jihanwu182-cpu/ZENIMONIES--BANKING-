@@ -631,6 +631,28 @@ const startServer = async () => {
     console.log(
       'Database initialization completed.'
     );
+    
+    // ========================================================
+    // TIER 3 EMPLOYMENT AND INCOME MIGRATION
+    // ========================================================
+
+    await pool.query(`
+      ALTER TABLE kyc_records
+      ADD COLUMN IF NOT EXISTS
+      employment_status VARCHAR(40);
+
+      ALTER TABLE kyc_records
+      ADD COLUMN IF NOT EXISTS
+      occupation VARCHAR(120);
+
+      ALTER TABLE kyc_records
+      ADD COLUMN IF NOT EXISTS
+      annual_income_range VARCHAR(40);
+    `);
+
+    console.log(
+      'Database migration completed: Tier 3 employment and income fields are available.'
+    );
 
     // ========================================================
     // KYC BIOMETRIC SCORES MIGRATION
