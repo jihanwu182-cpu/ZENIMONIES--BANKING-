@@ -98,6 +98,10 @@ router.patch('/users/:id/status', updateUserStatus);
 
 router.get('/kyc', getKycRecords);
 
+router.get(
+  '/kyc/:id/private-document/:document',
+  getPrivateTier3Document
+);
 // BVN
 router.post('/kyc/:id/bvn/verify', verifyBvn);
 router.post('/kyc/:id/bvn/reject', rejectBvn);
