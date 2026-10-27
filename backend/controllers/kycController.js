@@ -1457,47 +1457,60 @@ const submitTier3 = async (req, res) => {
     req.user?.id ||
     req.userId ||
     req.user?.userId;
-
   if (!userId) {
     return res.status(401).json({
       success: false,
       message: 'Authentication required.',
     });
   }
-
+  // ==========================================================
+  // METHOD AND DOCUMENT TYPE
+  // ==========================================================
   const method = String(
     req.body?.tier_3_method || ''
   ).trim();
-
-const allowedMethods = [
-‘bank_statement’,
-‘utility_bill’,
-‘proof_of_address’,
-‘address_document’,
-];
-
+  const documentType = String(
+    req.body?.tier_3_document_type || ''
+  ).trim();
+  // Accept existing frontend method values.
+  const allowedMethods = [
+    'bank_statement',
+    'utility_bill',
+    'proof_of_address',
+    'address_document',
+  ];
+  const allowedDocumentTypes = [
+    'bank_statement',
+    'utility_bill',
+    'tax_proof',
+    'rent_receipt_or_agreement',
+  ];
   if (!allowedMethods.includes(method)) {
     return res.status(400).json({
       success: false,
       code: 'INVALID_TIER_3_METHOD',
-      message:
-        'Choose bank statement, utility bill, or proof of address.',
+      message: 'Please select a valid Tier 3 verification method.',
     });
   }
-
-  // Employment and income information
+  if (!allowedDocumentTypes.includes(documentType)) {
+    return res.status(400).json({
+      success: false,
+      code: 'INVALID_TIER_3_DOCUMENT_TYPE',
+      message: 'Please select a valid proof of address document.',
+    });
+  }
+  // ==========================================================
+  // EMPLOYMENT AND INCOME
+  // ==========================================================
   const employmentStatus = String(
     req.body?.employment_status || ''
   ).trim();
-
   const occupation = String(
     req.body?.occupation || ''
   ).trim();
-
   const annualIncomeRange = String(
     req.body?.annual_income_range || ''
   ).trim();
-
   const allowedEmploymentStatuses = [
     'employed',
     'self_employed',
@@ -1507,7 +1520,6 @@ const allowedMethods = [
     'retired',
     'other',
   ];
-
   const allowedIncomeRanges = [
     'below_500000',
     '500000_999999',
@@ -1517,16 +1529,11 @@ const allowedMethods = [
     '10000000_plus',
     'prefer_not_to_say',
   ];
-
   if (
-    !allowedEmploymentStatuses.includes(
-      employmentStatus
-    ) ||
+    !allowedEmploymentStatuses.includes(employmentStatus) ||
     !occupation ||
     occupation.length > 120 ||
-    !allowedIncomeRanges.includes(
-      annualIncomeRange
-    )
+    !allowedIncomeRanges.includes(annualIncomeRange)
   ) {
     return res.status(400).json({
       success: false,
@@ -1535,18 +1542,15 @@ const allowedMethods = [
         'Please provide a valid employment status, occupation, and annual income range.',
     });
   }
-
-  // Files
+  // ==========================================================
+  // REQUIRED FILES
+  // ==========================================================
   const tier3Document =
     req.files?.tier_3_document?.[0] || null;
-
   const tier3Selfie =
     req.files?.tier_3_selfie?.[0] || null;
-
-  // Preserve existing document validation
   const documentValidation =
     validateProofOfAddressFile(tier3Document);
-
   if (!documentValidation.valid) {
     return res.status(400).json({
       success: false,
@@ -1554,11 +1558,8 @@ const allowedMethods = [
       message: documentValidation.message,
     });
   }
-
-  // Preserve existing selfie validation
   const selfieValidation =
     validateSelfieFile(tier3Selfie);
-
   if (!selfieValidation.valid) {
     return res.status(400).json({
       success: false,
@@ -1566,44 +1567,40 @@ const allowedMethods = [
       message: selfieValidation.message,
     });
   }
-
+  // Requirements correspond to the actual selected document.
   const tier3Requirements = {
-bank_statement: {
-accepted:
-‘Stamped PDF from bank app, dated within 90 days.’,
-rejected:
-‘Screenshots or statements older than 90 days.’,
-},
-
-utility_bill: {
-accepted:
-‘Electricity, water, or waste bill issued by the relevant service provider and dated within the last 90 days.’,
-rejected:
-‘Bills older than 90 days or bills that do not meet the proof-of-address requirements.’,
-},
-
-proof_of_address: {
-accepted:
-‘Stamped tenancy agreement or government letter.’,
-rejected:
-‘Letters from friends or documents without an address.’,
-},
-
-address_document: {
-accepted:
-‘A valid tax document, rent receipt, tenancy agreement, or other accepted proof of address.’,
-rejected:
-‘Documents that are invalid, outdated, or do not establish the applicant’s address.’,
-},
-};
-
+    bank_statement: {
+      accepted:
+        'Bank statement dated within the last 90 days.',
+      rejected:
+        'Screenshots or statements older than 90 days.',
+    },
+    utility_bill: {
+      accepted:
+        'Electricity, water, or waste bill issued by the relevant service provider and dated within the last 90 days.',
+      rejected:
+        'Bills older than 90 days or bills that do not meet proof-of-address requirements.',
+    },
+    tax_proof: {
+      accepted:
+        'Valid tax document that meets proof-of-address review requirements.',
+      rejected:
+        'Invalid, outdated, or insufficient documents.',
+    },
+    rent_receipt_or_agreement: {
+      accepted:
+        'Valid rent receipt or tenancy agreement showing the address.',
+      rejected:
+        'Invalid documents or documents that do not establish the applicant’s address.',
+    },
+  };
   let client;
-
   try {
     client = await pool.connect();
     await client.query('BEGIN');
-
-    // Lock the user to prevent concurrent submissions.
+    // ========================================================
+    // LOCK USER
+    // ========================================================
     const userResult = await client.query(
       `
       SELECT
@@ -1615,26 +1612,22 @@ rejected:
       `,
       [userId]
     );
-
     if (userResult.rows.length === 0) {
       await client.query('ROLLBACK');
-
       return res.status(404).json({
         success: false,
         message: 'User not found.',
       });
     }
-
     const user = userResult.rows[0];
-
-    // Find only a Tier 3 record, not a Tier 1 or Tier 2 record.
+    // ========================================================
+    // FIND THE LATEST TIER 3 RECORD ONLY
+    // ========================================================
     const existingKyc = await client.query(
       `
       SELECT
         id,
-        tier_3_verification_status,
-        tier_3_verified_at,
-        tier_3_rejection_reason
+        tier_3_verification_status
       FROM kyc_records
       WHERE user_id = $1
         AND tier_3_method IS NOT NULL
@@ -1644,22 +1637,18 @@ rejected:
       `,
       [userId]
     );
-
     const existingRecord =
       existingKyc.rows[0] || null;
-
     const currentTier3Status =
       normalizeKycStatus(
         existingRecord?.tier_3_verification_status
       );
-
-    // Verified Tier 3 cannot be resubmitted.
+    // A verified Tier 3 account cannot be resubmitted.
     if (
       user.tier_3_verified === true ||
       currentTier3Status === 'verified'
     ) {
       await client.query('ROLLBACK');
-
       return res.status(400).json({
         success: false,
         code: 'TIER_3_ALREADY_VERIFIED',
@@ -1670,11 +1659,9 @@ rejected:
         locked: true,
       });
     }
-
-    // Pending Tier 3 cannot be submitted again.
+    // Do not accept duplicate submissions while review is pending.
     if (currentTier3Status === 'pending') {
       await client.query('ROLLBACK');
-
       return res.status(409).json({
         success: false,
         code: 'TIER_3_VERIFICATION_PENDING',
@@ -1685,20 +1672,21 @@ rejected:
         locked: true,
       });
     }
-
+    // ========================================================
+    // UPDATE OR INSERT TIER 3 RECORD
+    // ========================================================
     let kycId;
-
     if (existingRecord) {
       kycId = existingRecord.id;
-
       await client.query(
         `
         UPDATE kyc_records
         SET
           tier_3_method = $1,
-          employment_status = $2,
-          occupation = $3,
-          annual_income_range = $4,
+          tier_3_document_type = $2,
+          employment_status = $3,
+          occupation = $4,
+          annual_income_range = $5,
           tier_3_verification_status = 'pending',
           tier_3_verified_at = NULL,
           tier_3_rejection_reason = NULL,
@@ -1707,11 +1695,12 @@ rejected:
           verification_status = 'pending',
           rejection_reason = NULL,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = $5
-          AND user_id = $6
+        WHERE id = $6
+          AND user_id = $7
         `,
         [
           method,
+          documentType,
           employmentStatus,
           occupation,
           annualIncomeRange,
@@ -1725,6 +1714,7 @@ rejected:
         INSERT INTO kyc_records (
           user_id,
           tier_3_method,
+          tier_3_document_type,
           employment_status,
           occupation,
           annual_income_range,
@@ -1740,6 +1730,7 @@ rejected:
           $3,
           $4,
           $5,
+          $6,
           'not_verified',
           'not_verified',
           'pending',
@@ -1751,16 +1742,15 @@ rejected:
         [
           userId,
           method,
+          documentType,
           employmentStatus,
           occupation,
           annualIncomeRange,
         ]
       );
-
       kycId = insertResult.rows[0].id;
     }
-
-    // Do not mark Tier 3 as verified or promote the approved tier here.
+    // Keep the approved tier unchanged until verification succeeds.
     await client.query(
       `
       UPDATE users
@@ -1772,7 +1762,9 @@ rejected:
       `,
       [method, userId]
     );
-
+    // ========================================================
+    // AUDIT LOG
+    // ========================================================
     await client.query(
       `
       INSERT INTO audit_logs (
@@ -1788,12 +1780,10 @@ rejected:
       `,
       [
         userId,
-        `Tier 3 ${method} document, selfie, employment status, occupation, and annual income range were received. Verification is pending.`,
+        `Tier 3 ${method} submission received. Document type: ${documentType}. Employment and income information received. Document and selfie verification are pending.`,
       ]
     );
-
     await client.query('COMMIT');
-
     return res.status(200).json({
       success: true,
       message:
@@ -1804,9 +1794,10 @@ rejected:
       verified: false,
       locked: true,
       method,
+      document_type: documentType,
       tier_3_verification_status: 'pending',
       liveness_status: 'pending',
-      requirements: tier3Requirements[method],
+      requirements: tier3Requirements[documentType],
     });
   } catch (error) {
     if (client) {
@@ -1814,13 +1805,10 @@ rejected:
         await client.query('ROLLBACK');
       } catch (_) {}
     }
-
     console.error('Submit Tier 3 error:', error);
-
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to submit Tier 3 verification.',
+      message: 'Unable to submit Tier 3 verification.',
     });
   } finally {
     if (client) {
