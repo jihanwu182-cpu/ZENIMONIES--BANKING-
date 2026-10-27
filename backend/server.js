@@ -632,27 +632,27 @@ const startServer = async () => {
       'Database initialization completed.'
     );
     
- // ========================================================
-// TIER 3 EMPLOYMENT AND INCOME MIGRATION
+    // ========================================================
+// TIER 3 EMPLOYMENT, INCOME AND DOCUMENT TYPE MIGRATION
 // ========================================================
-
 await pool.query(`
   ALTER TABLE kyc_records
   ADD COLUMN IF NOT EXISTS employment_status VARCHAR(40)
 `);
-
 await pool.query(`
   ALTER TABLE kyc_records
   ADD COLUMN IF NOT EXISTS occupation VARCHAR(120)
 `);
-
 await pool.query(`
   ALTER TABLE kyc_records
   ADD COLUMN IF NOT EXISTS annual_income_range VARCHAR(40)
 `);
-
+await pool.query(`
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS tier_3_document_type VARCHAR(50)
+`);
 console.log(
-  'Database migration completed: Tier 3 employment and income fields are available.'
+  'Database migration completed: Tier 3 employment, income, and document type fields are available.'
 );
 
     // ========================================================
