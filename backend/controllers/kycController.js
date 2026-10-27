@@ -1736,111 +1736,126 @@ const submitTier3 = async (req, res) => {
 
     let kycId;
 
-    if (existingRecord) {
-      kycId = existingRecord.id;
+    
+if (existingRecord) {
+  kycId = existingRecord.id;
 
-      await client.query(
-        `
-        UPDATE kyc_records
-        SET
-          tier_3_method = $1,
-          tier_3_document_type = $2,
-          employment_status = $3,
-          occupation = $4,
-          annual_income_range = $5,
+  await client.query(
+    `
+    UPDATE kyc_records
+    SET
+      tier_3_method = $1,
+      tier_3_document_type = $2,
+      employment_status = $3,
+      occupation = $4,
+      annual_income_range = $5,
 
-          tier_3_document_asset_id = $6,
-          tier_3_document_public_id = $7,
-          tier_3_document_resource_type = $8,
+      tier_3_document_asset_id = $6,
+      tier_3_document_public_id = $7,
+      tier_3_document_resource_type = $8,
+      tier_3_document_format = $9,
 
-          tier_3_selfie_asset_id = $9,
-          tier_3_selfie_public_id = $10,
-          tier_3_selfie_resource_type = $11,
+      tier_3_selfie_asset_id = $10,
+      tier_3_selfie_public_id = $11,
+      tier_3_selfie_resource_type = $12,
+      tier_3_selfie_format = $13,
 
-          tier_3_document_url = NULL,
-          tier_3_verification_status = 'pending',
-          tier_3_verified_at = NULL,
-          tier_3_rejection_reason = NULL,
+      tier_3_document_url = NULL,
+      tier_3_verification_status = 'pending',
+      tier_3_verified_at = NULL,
+      tier_3_rejection_reason = NULL,
 
-          liveness_status = 'pending',
-          liveness_provider_reference = NULL,
-          verification_status = 'pending',
-          rejection_reason = NULL,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $12
-          AND user_id = $13
-        `,
-        [
-          method,
-          documentType,
-          employmentStatus,
-          occupation,
-          annualIncomeRange,
-          uploadedDocument.assetId,
-          uploadedDocument.publicId,
-          uploadedDocument.resourceType,
-          uploadedSelfie.assetId,
-          uploadedSelfie.publicId,
-          uploadedSelfie.resourceType,
-          kycId,
-          userId,
-        ]
-      );
-    } else {
-      const insertResult = await client.query(
-        `
-        INSERT INTO kyc_records (
-          user_id,
-          tier_3_method,
-          tier_3_document_type,
-          employment_status,
-          occupation,
-          annual_income_range,
+      liveness_status = 'pending',
+      liveness_provider_reference = NULL,
+      verification_status = 'pending',
+      rejection_reason = NULL,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = $14
+      AND user_id = $15
+    `,
+    [
+      method,
+      documentType,
+      employmentStatus,
+      occupation,
+      annualIncomeRange,
 
-          tier_3_document_asset_id,
-          tier_3_document_public_id,
-          tier_3_document_resource_type,
+      uploadedDocument.assetId,
+      uploadedDocument.publicId,
+      uploadedDocument.resourceType,
+      uploadedDocument.format,
 
-          tier_3_selfie_asset_id,
-          tier_3_selfie_public_id,
-          tier_3_selfie_resource_type,
+      uploadedSelfie.assetId,
+      uploadedSelfie.publicId,
+      uploadedSelfie.resourceType,
+      uploadedSelfie.format,
 
-          bvn_verification_status,
-          id_verification_status,
-          liveness_status,
-          tier_3_verification_status,
-          verification_status
-        )
-        VALUES (
-          $1, $2, $3, $4, $5, $6,
-          $7, $8, $9,
-          $10, $11, $12,
-          'not_verified',
-          'not_verified',
-          'pending',
-          'pending',
-          'pending'
-        )
-        RETURNING id
-        `,
-        [
-          userId,
-          method,
-          documentType,
-          employmentStatus,
-          occupation,
-          annualIncomeRange,
-          uploadedDocument.assetId,
-          uploadedDocument.publicId,
-          uploadedDocument.resourceType,
-          uploadedSelfie.assetId,
-          uploadedSelfie.publicId,
-          uploadedSelfie.resourceType,
-        ]
-      );
+      kycId,
+      userId,
+    ]
+  );
+} else {
+  const insertResult = await client.query(
+    `
+    INSERT INTO kyc_records (
+      user_id,
+      tier_3_method,
+      tier_3_document_type,
+      employment_status,
+      occupation,
+      annual_income_range,
 
-      kycId = insertResult.rows[0].id;
-    }
+      tier_3_document_asset_id,
+      tier_3_document_public_id,
+      tier_3_document_resource_type,
+      tier_3_document_format,
+
+      tier_3_selfie_asset_id,
+      tier_3_selfie_public_id,
+      tier_3_selfie_resource_type,
+      tier_3_selfie_format,
+
+      bvn_verification_status,
+      id_verification_status,
+      liveness_status,
+      tier_3_verification_status,
+      verification_status
+    )
+    VALUES (
+      $1, $2, $3, $4, $5, $6,
+      $7, $8, $9, $10,
+      $11, $12, $13, $14,
+      'not_verified',
+      'not_verified',
+      'pending',
+      'pending',
+      'pending'
+    )
+    RETURNING id
+    `,
+    [
+      userId,
+      method,
+      documentType,
+      employmentStatus,
+      occupation,
+      annualIncomeRange,
+
+      uploadedDocument.assetId,
+      uploadedDocument.publicId,
+      uploadedDocument.resourceType,
+      uploadedDocument.format,
+
+      uploadedSelfie.assetId,
+      uploadedSelfie.publicId,
+      uploadedSelfie.resourceType,
+      uploadedSelfie.format,
+    ]
+  );
+
+  kycId = insertResult.rows[0].id;
+}
+
 
     await client.query(
       `
