@@ -179,24 +179,24 @@ const TIER_LIMITS: Record<
 
 const ADDRESS_DOCUMENT_OPTIONS = [
 {
-value: ‘bank_statement’,
-label: ‘Bank Statement’,
-description: ‘Valid within the last 3 months’,
+value: 'bank_statement',
+label: 'Bank Statement',
+description: 'Valid within the last 3 months',
 },
 {
-value: ‘utility_bill’,
-label: ‘Electricity, waste or water bill’,
-description: ‘Valid within the last 3 months’,
+value: 'utility_bill',
+label: 'Electricity, waste or water bill',
+description: 'Valid within the last 3 months',
 },
 {
-value: ‘tax_proof’,
-label: ‘Proof of tax’,
-description: ‘Valid within the last 3 months’,
+value: 'tax_proof',
+label: 'Proof of tax',
+description: 'Valid within the last 3 months',
 },
 {
-value: ‘rent_receipt_or_agreement’,
-label: ‘Rent receipt or Agreement’,
-description: ‘Valid within the last 3 months’,
+value: 'rent_receipt_or_agreement',
+label: 'Rent receipt or Agreement',
+description: 'Valid within the last 3 months',
 },
 ];
 
@@ -1189,6 +1189,11 @@ const KYC: React.FC = () => {
   ] = useState('');
 
   const [
+    tier2Bvn,
+    setTier2Bvn,
+  ] = useState('');
+
+  const [
     frontFile,
     setFrontFile,
   ] = useState<File | null>(
@@ -2045,6 +2050,15 @@ connect.open();
       documentType === 'national_id';
 
     const cleanNumber = documentNumber.trim();
+    const cleanTier2Bvn = tier2Bvn.replace(/\D/g, '');
+
+    if (!/^\d{11}$/.test(cleanTier2Bvn)) {
+      showAlert(
+        'Please enter your 11-digit BVN for Tier 2 verification.',
+        'error'
+      );
+      return;
+    }
 
     if (!cleanNumber) {
       showAlert(
@@ -2073,11 +2087,7 @@ connect.open();
       return;
     }
 
-    if (
-      !isNin &&
-      documentType !== 'international_passport' &&
-      !backFile
-    ) {
+    if (!isNin && !backFile) {
       showAlert(
         'Please provide the back image of your identity document.',
         'error'
@@ -2099,6 +2109,8 @@ connect.open();
 
     try {
       const formData = new FormData();
+
+      formData.append('bvn', cleanTier2Bvn);
 
       formData.append(
         'document_type',
@@ -2693,11 +2705,7 @@ connect.open();
                     </span>
 
                     <span>
-                      If you cannot use the
-                      secure verification
-                      option, you can submit
-                      your identity document
-                      and selfie manually.
+                      Submit your identity details and required document images here. Liveness verification must still be completed through the secure verification step.
                     </span>
 
                   </div>
@@ -2707,6 +2715,31 @@ connect.open();
                       submitTier2
                     }
                   >
+
+                    <div className="zk-field">
+                      <label className="zk-field-label">
+                        Bank Verification Number (BVN)
+                      </label>
+                      <input
+                        className="zk-input"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        maxLength={11}
+                        value={tier2Bvn}
+                        onChange={(event) =>
+                          setTier2Bvn(
+                            event.target.value.replace(/\D/g, '').slice(0, 11)
+                          )
+                        }
+                        placeholder="Enter your 11-digit BVN"
+                        disabled={submitting}
+                        required
+                      />
+                      <div className="zk-help">
+                        Enter the BVN already associated with your verified Tier 1 account.
+                      </div>
+                    </div>
 
                     <div className="zk-field">
 
@@ -2732,8 +2765,8 @@ connect.open();
                         }
                       >
 
-                        <option value="national_id">
-                          National ID
+                        <option value="nin">
+                          National Identification Number (NIN)
                         </option>
 
                         <option value="drivers_license">
@@ -2792,7 +2825,7 @@ connect.open();
                         }
                         className="zk-input"
                         type="file"
-                        accept="image/*,.pdf"
+                        accept="image/jpeg,image/png,image/webp"
                         onChange={(
                           event
                         ) =>
@@ -2809,8 +2842,7 @@ connect.open();
 
                     </div>
 
-                    {documentType !==
-                      'international_passport' && (
+                    {documentType !== 'nin' && (
                       <div className="zk-field">
 
                         <label className="zk-field-label">
@@ -2823,7 +2855,7 @@ connect.open();
                           }
                           className="zk-input"
                           type="file"
-                          accept="image/*,.pdf"
+                          accept="image/jpeg,image/png,image/webp"
                           onChange={(
                             event
                           ) =>
@@ -2880,7 +2912,10 @@ connect.open();
                       type="submit"
                       className="zk-button"
                       disabled={
-                        submitting
+                        submitting ||
+                        tier2Bvn.replace(/\D/g, '').length !== 11 ||
+                        !documentNumber.trim() ||
+                        (documentType !== 'nin' && (!frontFile || !backFile))
                       }
                     >
                       {submitting
