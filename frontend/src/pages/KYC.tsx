@@ -1798,6 +1798,10 @@ connect.open();
     const cleanNumber = documentNumber.trim();
     const cleanTier2Bvn = tier2Bvn.replace(/\D/g, '');
 
+    if (dojahLoading) {
+      return;
+    }
+
     if (!/^\d{11}$/.test(cleanTier2Bvn)) {
       showAlert(
         'Please enter your 11-digit BVN for Tier 2 verification.',
@@ -1814,10 +1818,7 @@ connect.open();
       return;
     }
 
-    if (
-      isNin &&
-      !/^\d{11}$/.test(cleanNumber)
-    ) {
+    if (isNin && !/^\d{11}$/.test(cleanNumber)) {
       showAlert(
         'NIN must contain exactly 11 digits.',
         'error'
@@ -1841,9 +1842,7 @@ connect.open();
       return;
     }
 
-    const token = localStorage.getItem(
-      'zenimonies_token'
-    );
+    const token = localStorage.getItem('zenimonies_token');
 
     if (!token) {
       showAlert(
@@ -1853,36 +1852,38 @@ connect.open();
       return;
     }
 
+    if (
+      !DOJAH_APP_ID ||
+      !DOJAH_PUBLIC_KEY ||
+      !DOJAH_WIDGET_ID ||
+      typeof window.Connect !== 'function'
+    ) {
+      showAlert(
+        'Verification is temporarily unavailable. Please try again later.',
+        'error'
+      );
+      return;
+    }
+
+    setDojahLoading(true);
+
     try {
+      // 1. Submit the customer's Tier 2 details.
       const formData = new FormData();
 
       formData.append('bvn', cleanTier2Bvn);
-
-      formData.append(
-        'document_type',
-        documentType
-      );
-
-      formData.append(
-        'document_number',
-        cleanNumber
-      );
+      formData.append('document_type', documentType);
+      formData.append('document_number', cleanNumber);
 
       if (frontFile) {
-        formData.append(
-          'document_front',
-          frontFile
-        );
+        formData.append('document_front', frontFile);
       }
 
       if (backFile) {
-        formData.append(
-          'document_back',
-          backFile
-        );
+        formData.append('document_back', backFile);
       }
 
-      const response = await fetch(
+      const submitResponse = await fetch(
         `${API_BASE}/kyc/tier-2`,
         {
           method: 'POST',
@@ -1893,34 +1894,182 @@ connect.open();
         }
       );
 
-      const result = await response.json();
+      const submitResult = await submitResponse
+        .json()
+        .catch(() => ({}));
 
-      if (!response.ok || result.success !== true) {
-        showAlert(
-          result.message ||
-            'Unable to save your identity details.',
-          'error'
+      if (
+        !submitResponse.ok ||
+        submitResult.success !== true
+      ) {
+        throw new Error(
+          submitResult.message ||
+            'Unable to save your identity details.'
         );
-        return;
       }
 
-      showAlert(
-        'Your identity details were submitted successfully.',
-        'success'
+      // 2. Ask the authenticated backend for the
+      // verification reference. Never create it in the browser.
+      const startResponse = await fetch(
+        `${API_BASE}/kyc/dojah/start`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            verification_type: 'tier_2',
+          }),
+        }
       );
 
-      await fetchStatus();
+      const startResult = await startResponse
+        .json()
+        .catch(() => ({}));
+
+      if (
+        !startResponse.ok ||
+        startResult.success !== true ||
+        typeof startResult.reference_id !== 'string' ||
+        !startResult.reference_id
+      ) {
+        throw new Error(
+          startResult.message ||
+            'Unable to start identity verification.'
+        );
+      }
+
+      const referenceId = startResult.reference_id;
+      const Connect = window.Connect;
+
+      if (typeof Connect !== 'function') {
+        throw new Error(
+          'The verification widget did not load. Please refresh and try again.'
+        );
+      }
+
+      // 3. Open the configured verification workflow.
+      // The workflow must be configured to collect the
+      // required government ID and live liveness evidence.
+      const connect = new Connect({
+        app_id: DOJAH_APP_ID,
+        p_key: DOJAH_PUBLIC_KEY,
+        type: 'custom',
+        config: {
+          widget_id: DOJAH_WIDGET_ID,
+        },
+        reference_id: referenceId,
+        metadata: {
+          service: 'zenimonies_tier_2_identity',
+          reference_id: referenceId,
+        },
+
+        // A widget callback is NOT proof of approval.
+        // Always ask our authenticated backend to verify.
+        onSuccess: async () => {
+          try {
+            const confirmResponse = await fetch(
+              `${API_BASE}/kyc/dojah/confirm`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  reference_id: referenceId,
+                }),
+              }
+            );
+
+            const confirmResult = await confirmResponse
+              .json()
+              .catch(() => ({}));
+
+            if (
+              !confirmResponse.ok ||
+              confirmResult.success !== true
+            ) {
+              showAlert(
+                'Your verification was submitted. The result is still being checked.',
+                'warning'
+              );
+            } else if (
+              confirmResult.verified === true &&
+              confirmResult.status === 'verified'
+            ) {
+              showAlert(
+                'Your identity verification has been confirmed.',
+                'success'
+              );
+            } else if (
+              confirmResult.status === 'rejected'
+            ) {
+              showAlert(
+                'Your verification could not be approved. Please review your details or contact support.',
+                'error'
+              );
+            } else {
+              showAlert(
+                'Your verification is being reviewed. Your status will update when the checks are complete.',
+                'warning'
+              );
+            }
+          } catch {
+            showAlert(
+              'Your verification was submitted, but its result is not available yet.',
+              'warning'
+            );
+          } finally {
+            setDojahLoading(false);
+
+            try {
+              await fetchStatus();
+            } catch {
+              // Keep the page usable if status refresh fails.
+            }
+          }
+        },
+
+        onError: () => {
+          setDojahLoading(false);
+
+          showAlert(
+            'Verification could not be completed. Please try again.',
+            'error'
+          );
+        },
+
+        onClose: () => {
+          setDojahLoading(false);
+        },
+      });
+
+      if (
+        typeof connect.setup !== 'function' ||
+        typeof connect.open !== 'function'
+      ) {
+        throw new Error(
+          'The verification widget could not be initialized.'
+        );
+      }
+
+      connect.setup();
+      connect.open();
     } catch (error) {
-      console.error(
-        'Tier 2 submission failed.'
-      );
+      setDojahLoading(false);
 
       showAlert(
-        'Unable to submit your identity details. Please try again.',
+        error instanceof Error
+          ? error.message
+          : 'Unable to start identity verification. Please try again.',
         'error'
       );
     }
   };
+
+  
 
   // ==========================================================
   // SUBMIT TIER 3
