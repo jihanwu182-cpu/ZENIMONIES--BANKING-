@@ -1,5 +1,8 @@
 const pool = require('../config/database');
-
+const {
+  cloudinary,
+  configureCloudinary,
+} = require('../config/cloudinary');
 // ============================================================
 // ADMIN DASHBOARD
 // GET /api/admin/dashboard
@@ -1550,7 +1553,124 @@ const getAuditLogs = async (req, res) => {
   }
 };
 
+const getPrivateTier3Document = async (req, res) => {
+  try {
+    const { id, document } = req.params;
 
+    const allowedDocuments = {
+      proof_of_address: {
+        publicIdColumn: 'tier_3_document_public_id',
+        resourceTypeColumn: 'tier_3_document_resource_type',
+      },
+      selfie: {
+        publicIdColumn: 'tier_3_selfie_public_id',
+        resourceTypeColumn: 'tier_3_selfie_resource_type',
+      },
+    };
+
+    if (!/^[0-9a-f-]{36}$/i.test(id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid KYC record ID.',
+      });
+    }
+
+    const selected = allowedDocuments[document];
+
+    if (!selected) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid document type.',
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        user_id,
+        ${selected.publicIdColumn} AS public_id,
+        ${selected.resourceTypeColumn} AS resource_type
+      FROM kyc_records
+      WHERE id = $1
+        AND tier_3_method IS NOT NULL
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    if (!result.rows.length || !result.rows[0].public_id) {
+      return res.status(404).json({
+        success: false,
+        message: 'Private KYC document not found.',
+      });
+    }
+
+    const record = result.rows[0];
+
+    if (!['image', 'raw'].includes(record.resource_type)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Private KYC document is unavailable.',
+      });
+    }
+
+    configureCloudinary();
+
+    const format = record.resource_type === 'raw'
+      ? 'pdf'
+      : undefined;
+
+    const expiresAt = Math.floor(Date.now() / 1000) + 300;
+
+    const downloadUrl = cloudinary.utils.private_download_url(
+      record.public_id,
+      format,
+      {
+        resource_type: record.resource_type,
+        type: 'authenticated',
+        expires_at: expiresAt,
+      }
+    );
+
+    await pool.query(
+      `
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description,
+        ip_address,
+        user_agent
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      `,
+      [
+        req.userId,
+        'admin_private_tier3_document_access',
+        `Administrator accessed Tier 3 ${document} for KYC record ${record.id}.`,
+        req.ip || null,
+        req.get('user-agent') || null,
+      ]
+    );
+
+    return res.status(200).json({
+      success: true,
+      document,
+      expires_at: expiresAt,
+      url: downloadUrl,
+    });
+  } catch (error) {
+    console.error(
+      'Private Tier 3 document access failed:',
+      error?.message || 'Unknown error'
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to access the private KYC document.',
+    });
+  }
+};
 // ============================================================
 // EXPORTS
 // ============================================================
