@@ -1,4 +1,4 @@
-require('dotenv').config();
+rrequire('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
@@ -683,6 +683,21 @@ await pool.query(`
 console.log(
   'Database migration completed: Tier 3 private storage reference fields are available.'
 );
+    
+await pool.query(`
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS tier_3_document_format VARCHAR(20)
+`);
+
+await pool.query(`
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS tier_3_selfie_format VARCHAR(20)
+`);
+
+console.log(
+  'Database migration completed: Tier 3 private file format fields are available.'
+);
+
     // ========================================================
     // KYC BIOMETRIC SCORES MIGRATION
     // ========================================================
