@@ -73,8 +73,13 @@ const uploadKycFile = async ({
     throw new Error('Invalid KYC user identifier.');
   }
 
-  const publicId =
-    `zenimonies-kyc/${safeUserId}/${documentKind}-${require('crypto').randomUUID()}`;
+  const crypto = require('crypto');
+
+const fileExtension =
+  resourceType === 'raw' ? '.pdf' : '';
+
+const publicId =
+  `zenimonies-kyc/${safeUserId}/${documentKind}-${crypto.randomUUID()}${fileExtension}`;
 
   const result = await uploadBuffer(file.buffer, {
     public_id: publicId,
