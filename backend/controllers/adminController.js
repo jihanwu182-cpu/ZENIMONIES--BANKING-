@@ -1561,10 +1561,12 @@ const getPrivateTier3Document = async (req, res) => {
       proof_of_address: {
         publicIdColumn: 'tier_3_document_public_id',
         resourceTypeColumn: 'tier_3_document_resource_type',
+        formatColumn: 'tier_3_document_format',
       },
       selfie: {
         publicIdColumn: 'tier_3_selfie_public_id',
         resourceTypeColumn: 'tier_3_selfie_resource_type',
+        formatColumn: 'tier_3_selfie_format',
       },
     };
 
@@ -1590,7 +1592,8 @@ const getPrivateTier3Document = async (req, res) => {
         id,
         user_id,
         ${selected.publicIdColumn} AS public_id,
-        ${selected.resourceTypeColumn} AS resource_type
+        ${selected.resourceTypeColumn} AS resource_type,
+        ${selected.formatColumn} AS format
       FROM kyc_records
       WHERE id = $1
         AND tier_3_method IS NOT NULL
@@ -1615,11 +1618,36 @@ const getPrivateTier3Document = async (req, res) => {
       });
     }
 
-    configureCloudinary();
+    const allowedFormats = new Set([
+      'pdf',
+      'jpg',
+      'jpeg',
+      'png',
+      'webp',
+    ]);
 
-    const format = record.resource_type === 'raw'
-      ? 'pdf'
-      : undefined;
+    const format = String(record.format || '')
+      .trim()
+      .toLowerCase();
+
+    if (!allowedFormats.has(format)) {
+      return res.status(409).json({
+        success: false,
+        message: 'The stored document format is missing or unsupported.',
+      });
+    }
+
+    if (
+      (record.resource_type === 'raw' && format !== 'pdf') ||
+      (record.resource_type === 'image' && format === 'pdf')
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: 'The stored document format does not match its file type.',
+      });
+    }
+
+    configureCloudinary();
 
     const expiresAt = Math.floor(Date.now() / 1000) + 300;
 
@@ -1630,6 +1658,7 @@ const getPrivateTier3Document = async (req, res) => {
         resource_type: record.resource_type,
         type: 'authenticated',
         expires_at: expiresAt,
+        attachment: true,
       }
     );
 
@@ -1671,6 +1700,7 @@ const getPrivateTier3Document = async (req, res) => {
     });
   }
 };
+
 // ============================================================
 // EXPORTS
 // ============================================================
