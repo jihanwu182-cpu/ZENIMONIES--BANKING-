@@ -1469,10 +1469,6 @@ const submitTier3 = async (req, res) => {
     req.body?.tier_3_method || ''
   ).trim();
 
-  // ==========================================================
-  // ALLOWED TIER 3 METHODS
-  // ==========================================================
-
   const allowedMethods = [
     'bank_statement',
     'utility_bill',
@@ -1488,57 +1484,87 @@ const submitTier3 = async (req, res) => {
     });
   }
 
-  // ==========================================================
-  // FILES
-  // ==========================================================
+  // Employment and income information
+  const employmentStatus = String(
+    req.body?.employment_status || ''
+  ).trim();
 
+  const occupation = String(
+    req.body?.occupation || ''
+  ).trim();
+
+  const annualIncomeRange = String(
+    req.body?.annual_income_range || ''
+  ).trim();
+
+  const allowedEmploymentStatuses = [
+    'employed',
+    'self_employed',
+    'business_owner',
+    'student',
+    'unemployed',
+    'retired',
+    'other',
+  ];
+
+  const allowedIncomeRanges = [
+    'below_500000',
+    '500000_999999',
+    '1000000_2999999',
+    '3000000_4999999',
+    '5000000_9999999',
+    '10000000_plus',
+    'prefer_not_to_say',
+  ];
+
+  if (
+    !allowedEmploymentStatuses.includes(
+      employmentStatus
+    ) ||
+    !occupation ||
+    occupation.length > 120 ||
+    !allowedIncomeRanges.includes(
+      annualIncomeRange
+    )
+  ) {
+    return res.status(400).json({
+      success: false,
+      code: 'INVALID_EMPLOYMENT_INCOME',
+      message:
+        'Please provide a valid employment status, occupation, and annual income range.',
+    });
+  }
+
+  // Files
   const tier3Document =
-    req.files?.tier_3_document?.[0] ||
-    null;
+    req.files?.tier_3_document?.[0] || null;
 
   const tier3Selfie =
-    req.files?.tier_3_selfie?.[0] ||
-    null;
+    req.files?.tier_3_selfie?.[0] || null;
 
-  // ==========================================================
-  // DOCUMENT VALIDATION
-  // ==========================================================
-
+  // Preserve existing document validation
   const documentValidation =
-    validateProofOfAddressFile(
-      tier3Document
-    );
+    validateProofOfAddressFile(tier3Document);
 
   if (!documentValidation.valid) {
     return res.status(400).json({
       success: false,
       code: 'INVALID_TIER_3_DOCUMENT',
-      message:
-        documentValidation.message,
+      message: documentValidation.message,
     });
   }
 
-  // ==========================================================
-  // LIVENESS / SELFIE VALIDATION
-  // ==========================================================
-
+  // Preserve existing selfie validation
   const selfieValidation =
-    validateSelfieFile(
-      tier3Selfie
-    );
+    validateSelfieFile(tier3Selfie);
 
   if (!selfieValidation.valid) {
     return res.status(400).json({
       success: false,
       code: 'INVALID_TIER_3_SELFIE',
-      message:
-        selfieValidation.message,
+      message: selfieValidation.message,
     });
   }
-
-  // ==========================================================
-  // TIER 3 REQUIREMENTS
-  // ==========================================================
 
   const tier3Requirements = {
     bank_statement: {
@@ -1547,14 +1573,12 @@ const submitTier3 = async (req, res) => {
       rejected:
         'Screenshots or statements older than 90 days.',
     },
-
     utility_bill: {
       accepted:
         'Provider-issued PHED, water, DSTV, or gas bill.',
       rejected:
         'Old bills or bills not in the user’s name.',
     },
-
     proof_of_address: {
       accepted:
         'Stamped tenancy agreement or government letter.',
@@ -1563,84 +1587,63 @@ const submitTier3 = async (req, res) => {
     },
   };
 
-  // ==========================================================
-  // DATABASE
-  // ==========================================================
-
-  const client = await pool.connect();
+  let client;
 
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
-    // ========================================================
-    // LOCK USER
-    // ========================================================
-
-    const userResult =
-      await client.query(
-        `
-        SELECT
-          id,
-          full_name,
-          date_of_birth,
-          kyc_status,
-          kyc_tier,
-          tier_3_verified
-        FROM users
-        WHERE id = $1
-        FOR UPDATE
-        `,
-        [userId]
-      );
+    // Lock the user to prevent concurrent submissions.
+    const userResult = await client.query(
+      `
+      SELECT
+        id,
+        tier_3_verified
+      FROM users
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [userId]
+    );
 
     if (userResult.rows.length === 0) {
       await client.query('ROLLBACK');
 
       return res.status(404).json({
         success: false,
-        message:
-          'User not found.',
+        message: 'User not found.',
       });
     }
 
-    const user =
-      userResult.rows[0];
+    const user = userResult.rows[0];
 
-    // ========================================================
-    // GET CURRENT TIER 3 STATUS
-    // ========================================================
-
-    const existingKyc =
-      await client.query(
-        `
-        SELECT
-          id,
-          tier_3_verification_status,
-          tier_3_verified_at,
-          tier_3_rejection_reason
-        FROM kyc_records
-        WHERE user_id = $1
-        ORDER BY created_at DESC
-        LIMIT 1
-        FOR UPDATE
-        `,
-        [userId]
-      );
+    // Find only a Tier 3 record, not a Tier 1 or Tier 2 record.
+    const existingKyc = await client.query(
+      `
+      SELECT
+        id,
+        tier_3_verification_status,
+        tier_3_verified_at,
+        tier_3_rejection_reason
+      FROM kyc_records
+      WHERE user_id = $1
+        AND tier_3_method IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [userId]
+    );
 
     const existingRecord =
-      existingKyc.rows.length > 0
-        ? existingKyc.rows[0]
-        : null;
+      existingKyc.rows[0] || null;
 
     const currentTier3Status =
       normalizeKycStatus(
         existingRecord?.tier_3_verification_status
       );
 
-    // ========================================================
-    // VERIFIED = PERMANENT LOCK
-    // ========================================================
-
+    // Verified Tier 3 cannot be resubmitted.
     if (
       user.tier_3_verified === true ||
       currentTier3Status === 'verified'
@@ -1658,142 +1661,107 @@ const submitTier3 = async (req, res) => {
       });
     }
 
-    // ========================================================
-    // PENDING = LOCK
-    // ========================================================
-
-    if (
-      currentTier3Status === 'pending'
-    ) {
+    // Pending Tier 3 cannot be submitted again.
+    if (currentTier3Status === 'pending') {
       await client.query('ROLLBACK');
 
       return res.status(409).json({
         success: false,
         code: 'TIER_3_VERIFICATION_PENDING',
         message:
-          'Your Tier 3 verification is currently pending. You cannot submit another Tier 3 verification while verification is in progress.',
+          'Your Tier 3 verification is pending. Please wait for the review to finish.',
         status: 'pending',
         verified: false,
         locked: true,
       });
     }
 
-    // ========================================================
-    // CREATE OR UPDATE RECORD
-    // ========================================================
-
     let kycId;
 
     if (existingRecord) {
-      kycId =
-        existingRecord.id;
+      kycId = existingRecord.id;
 
       await client.query(
         `
         UPDATE kyc_records
         SET
           tier_3_method = $1,
-
+          employment_status = $2,
+          occupation = $3,
+          annual_income_range = $4,
           tier_3_verification_status = 'pending',
-
           tier_3_verified_at = NULL,
-
           tier_3_rejection_reason = NULL,
-
           liveness_status = 'pending',
-
           liveness_provider_reference = NULL,
-
           verification_status = 'pending',
-
           rejection_reason = NULL,
-
           updated_at = CURRENT_TIMESTAMP
-
-        WHERE id = $2
+        WHERE id = $5
+          AND user_id = $6
         `,
         [
           method,
+          employmentStatus,
+          occupation,
+          annualIncomeRange,
           kycId,
+          userId,
         ]
       );
     } else {
-      const insertResult =
-        await client.query(
-          `
-          INSERT INTO kyc_records (
-            user_id,
+      const insertResult = await client.query(
+        `
+        INSERT INTO kyc_records (
+          user_id,
+          tier_3_method,
+          employment_status,
+          occupation,
+          annual_income_range,
+          bvn_verification_status,
+          id_verification_status,
+          liveness_status,
+          tier_3_verification_status,
+          verification_status
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          'not_verified',
+          'not_verified',
+          'pending',
+          'pending',
+          'pending'
+        )
+        RETURNING id
+        `,
+        [
+          userId,
+          method,
+          employmentStatus,
+          occupation,
+          annualIncomeRange,
+        ]
+      );
 
-            tier_3_method,
-
-            bvn_verification_status,
-
-            id_verification_status,
-
-            liveness_status,
-
-            tier_3_verification_status,
-
-            verification_status
-          )
-          VALUES (
-            $1,
-
-            $2,
-
-            'not_verified',
-
-            'not_verified',
-
-            'pending',
-
-            'pending',
-
-            'pending'
-          )
-          RETURNING id
-          `,
-          [
-            userId,
-            method,
-          ]
-        );
-
-      kycId =
-        insertResult.rows[0].id;
+      kycId = insertResult.rows[0].id;
     }
 
-    // ========================================================
-    // UPDATE USER
-    //
-    // Do not change BVN or Tier 2 verification flags.
-    // ========================================================
-
+    // Do not mark Tier 3 as verified or promote the approved tier here.
     await client.query(
       `
       UPDATE users
       SET
-        tier_3_verified = false,
-
         tier_3_method = $1,
-
         kyc_status = 'pending',
-
-        kyc_tier = 3,
-
         updated_at = CURRENT_TIMESTAMP
-
       WHERE id = $2
       `,
-      [
-        method,
-        userId,
-      ]
+      [method, userId]
     );
-
-    // ========================================================
-    // AUDIT LOG
-    // ========================================================
 
     await client.query(
       `
@@ -1810,53 +1778,34 @@ const submitTier3 = async (req, res) => {
       `,
       [
         userId,
-        `Tier 3 ${method} document and liveness selfie were received. Document review and liveness verification are pending.`,
+        `Tier 3 ${method} document, selfie, employment status, occupation, and annual income range were received. Verification is pending.`,
       ]
     );
 
     await client.query('COMMIT');
 
-    // ========================================================
-    // RESPONSE
-    // ========================================================
-
     return res.status(200).json({
       success: true,
-
       message:
-        'Your Tier 3 document and liveness submission have been received. Verification is pending.',
-
-      kyc_record_id:
-        kycId,
-
+        'Your Tier 3 information has been received. Verification is pending.',
+      kyc_record_id: kycId,
       tier: 3,
-
       status: 'pending',
-
       verified: false,
-
       locked: true,
-
       method,
-
-      tier_3_verification_status:
-        'pending',
-
-      liveness_status:
-        'pending',
-
-      requirements:
-        tier3Requirements[method],
+      tier_3_verification_status: 'pending',
+      liveness_status: 'pending',
+      requirements: tier3Requirements[method],
     });
   } catch (error) {
-    try {
-      await client.query('ROLLBACK');
-    } catch {}
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+    }
 
-    console.error(
-      'Submit Tier 3 error:',
-      error
-    );
+    console.error('Submit Tier 3 error:', error);
 
     return res.status(500).json({
       success: false,
@@ -1864,7 +1813,9 @@ const submitTier3 = async (req, res) => {
         'Unable to submit Tier 3 verification.',
     });
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
 // ============================================================
