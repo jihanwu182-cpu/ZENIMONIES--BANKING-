@@ -467,7 +467,6 @@ const getKycRecords = async (req, res) => {
         k.id_rejection_reason,
 
         k.tier_3_method,
-        k.tier_3_document_url,
         k.tier_3_verification_status,
         k.tier_3_verified_at,
         k.tier_3_rejection_reason,
