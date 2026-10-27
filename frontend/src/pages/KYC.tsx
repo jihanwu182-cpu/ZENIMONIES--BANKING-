@@ -178,36 +178,26 @@ const TIER_LIMITS: Record<
 // ============================================================
 
 const ADDRESS_DOCUMENT_OPTIONS = [
-  {
-    value: 'bank_statement',
-    label: 'Bank Statement',
-    description:
-      'Valid within the last 3 months',
-  },
-
-  {
-    value: 'utility_bill',
-    label:
-      'Electricity, waste or water bill',
-    description:
-      'Valid within the last 3 months',
-  },
-
-  {
-    value: 'tax_proof',
-    label: 'Proof of tax',
-    description:
-      'Valid within the last 3 months',
-  },
-
-  {
-    value:
-      'rent_receipt_or_agreement',
-    label:
-      'Rent receipt or Agreement',
-    description:
-      'Valid within the last 3 months',
-  },
+{
+value: ‘bank_statement’,
+label: ‘Bank Statement’,
+description: ‘Valid within the last 3 months’,
+},
+{
+value: ‘utility_bill’,
+label: ‘Electricity, waste or water bill’,
+description: ‘Valid within the last 3 months’,
+},
+{
+value: ‘tax_proof’,
+label: ‘Proof of tax’,
+description: ‘Valid within the last 3 months’,
+},
+{
+value: ‘rent_receipt_or_agreement’,
+label: ‘Rent receipt or Agreement’,
+description: ‘Valid within the last 3 months’,
+},
 ];
 
 // ============================================================
