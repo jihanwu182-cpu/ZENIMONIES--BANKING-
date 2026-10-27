@@ -631,8 +631,7 @@ const startServer = async () => {
     console.log(
       'Database initialization completed.'
     );
-    
-    // ========================================================
+  // ========================================================
 // TIER 3 EMPLOYMENT, INCOME AND DOCUMENT TYPE MIGRATION
 // ========================================================
 await pool.query(`
@@ -654,7 +653,36 @@ await pool.query(`
 console.log(
   'Database migration completed: Tier 3 employment, income, and document type fields are available.'
 );
-
+// ========================================================
+// TIER 3 PRIVATE CLOUDINARY STORAGE REFERENCES
+// ========================================================
+await pool.query(`
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS tier_3_document_asset_id VARCHAR(255)
+`);
+await pool.query(`
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS tier_3_document_public_id VARCHAR(500)
+`);
+await pool.query(`
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS tier_3_document_resource_type VARCHAR(20)
+`);
+await pool.query(`
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS tier_3_selfie_asset_id VARCHAR(255)
+`);
+await pool.query(`
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS tier_3_selfie_public_id VARCHAR(500)
+`);
+await pool.query(`
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS tier_3_selfie_resource_type VARCHAR(20)
+`);
+console.log(
+  'Database migration completed: Tier 3 private storage reference fields are available.'
+);
     // ========================================================
     // KYC BIOMETRIC SCORES MIGRATION
     // ========================================================
