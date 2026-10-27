@@ -1,15 +1,13 @@
-// ============================================================
-// ZENIMONIES BANKING
-// SECURE CLOUDINARY KYC STORAGE SERVICE
-// ============================================================
 
+const crypto = require('crypto');
 const { Readable } = require('stream');
+
 const {
   cloudinary,
   configureCloudinary,
 } = require('../config/cloudinary');
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
@@ -19,15 +17,29 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/webp',
 ]);
 
+const MIME_TO_FORMAT = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
 const uploadBuffer = (buffer, options) =>
   new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       options,
       (error, result) => {
-        if (error) return reject(error);
-        if (!result) {
-          return reject(new Error('Cloudinary returned no upload result.'));
+        if (error) {
+          return reject(error);
         }
+
+        if (!result) {
+          return reject(
+            new Error('Cloudinary returned no upload result.')
+          );
+        }
+
         resolve(result);
       }
     );
@@ -52,34 +64,39 @@ const uploadKycFile = async ({
     throw new Error('Unsupported KYC document category.');
   }
 
-  if (file.size > MAX_FILE_SIZE) {
-    throw new Error('KYC files must not exceed 10 MB.');
+  if (
+    !Number.isSafeInteger(file.size) ||
+    file.size <= 0 ||
+    file.size > MAX_FILE_SIZE ||
+    file.buffer.length !== file.size
+  ) {
+    throw new Error(
+      'KYC files must be non-empty and must not exceed 10 MB.'
+    );
   }
 
   if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
     throw new Error('Unsupported KYC file format.');
   }
 
-  // PDF documents use Cloudinary's raw resource type.
-  // Image documents and selfies use the image resource type.
+  const format = MIME_TO_FORMAT[file.mimetype];
   const resourceType =
     file.mimetype === 'application/pdf' ? 'raw' : 'image';
 
   configureCloudinary();
 
-  const safeUserId = String(userId).replace(/[^a-zA-Z0-9_-]/g, '');
+  const safeUserId = String(userId).replace(
+    /[^a-zA-Z0-9_-]/g,
+    ''
+  );
 
   if (!safeUserId) {
     throw new Error('Invalid KYC user identifier.');
   }
 
-  const crypto = require('crypto');
-
-const fileExtension =
-  resourceType === 'raw' ? '.pdf' : '';
-
-const publicId =
-  `zenimonies-kyc/${safeUserId}/${documentKind}-${crypto.randomUUID()}${fileExtension}`;
+  const publicId =
+    `zenimonies-kyc/${safeUserId}/${documentKind}-${crypto.randomUUID()}` +
+    (resourceType === 'raw' ? '.pdf' : '');
 
   const result = await uploadBuffer(file.buffer, {
     public_id: publicId,
@@ -92,12 +109,52 @@ const publicId =
     tags: ['zenimonies-kyc'],
   });
 
-  // Save references, not public delivery URLs.
+  // Verify the upload result before storing its reference.
+  if (
+    !result.asset_id ||
+    !result.public_id ||
+    result.resource_type !== resourceType
+  ) {
+    throw new Error(
+      'Cloudinary returned incomplete KYC storage metadata.'
+    );
+  }
+
+  const actualFormat = String(result.format || '')
+    .trim()
+    .toLowerCase();
+
+  const normalizedActualFormat =
+    actualFormat === 'jpeg' ? 'jpg' : actualFormat;
+
+  if (
+    normalizedActualFormat !== format ||
+    (resourceType === 'raw' && normalizedActualFormat !== 'pdf')
+  ) {
+    // Remove an unexpected upload result rather than saving
+    // metadata that could generate an incorrect download URL.
+    try {
+      await cloudinary.uploader.destroy(result.public_id, {
+        resource_type: resourceType,
+        type: 'authenticated',
+        invalidate: true,
+      });
+    } catch {
+      console.error(
+        'Cloudinary cleanup after format validation failed.'
+      );
+    }
+
+    throw new Error(
+      'Cloudinary upload format did not match the validated file type.'
+    );
+  }
+
   return {
     assetId: result.asset_id,
     publicId: result.public_id,
-    resourceType: result.resource_type,
-    format: result.format || null,
+    resourceType,
+    format: normalizedActualFormat,
     bytes: result.bytes,
     storageProvider: 'cloudinary',
   };
