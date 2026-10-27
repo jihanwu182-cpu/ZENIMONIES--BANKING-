@@ -1180,7 +1180,7 @@ const KYC: React.FC = () => {
     documentType,
     setDocumentType,
   ] = useState(
-    'national_id'
+    'nin'
   );
 
   const [
@@ -2705,7 +2705,7 @@ connect.open();
                     </span>
 
                     <span>
-                      Submit your identity details and required document images here. Liveness verification must still be completed through the secure verification step.
+                      Choose your document type from the dropdown. NIN requires the number only; other supported IDs require front and back images. Liveness verification must still be completed through the secure verification step.
                     </span>
 
                   </div>
@@ -2752,14 +2752,25 @@ connect.open();
                         value={
                           documentType
                         }
-                        onChange={(
-                          event
-                        ) =>
-                          setDocumentType(
-                            event.target
-                              .value
-                          )
-                        }
+                        onChange={(event) => {
+                          const nextType = event.target.value;
+                          setDocumentType(nextType);
+
+                          // NIN requires the number only. Clear any ID
+                          // images previously selected for another ID type.
+                          if (nextType === 'nin' || nextType === 'national_id') {
+                            setFrontFile(null);
+                            setBackFile(null);
+
+                            if (frontFileRef.current) {
+                              frontFileRef.current.value = '';
+                            }
+
+                            if (backFileRef.current) {
+                              backFileRef.current.value = '';
+                            }
+                          }
+                        }}
                         disabled={
                           submitting
                         }
@@ -2813,64 +2824,50 @@ connect.open();
 
                     </div>
 
-                    <div className="zk-field">
+                    {documentType !== 'nin' && documentType !== 'national_id' && (
+                      <>
+                        <div className="zk-field">
+                          <label className="zk-field-label">
+                            Document front
+                          </label>
 
-                      <label className="zk-field-label">
-                        Document front
-                      </label>
+                          <input
+                            ref={frontFileRef}
+                            className="zk-input"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            onChange={(event) =>
+                              setFrontFile(event.target.files?.[0] || null)
+                            }
+                            disabled={submitting}
+                            required
+                          />
+                          <div className="zk-help">
+                            Upload a clear image of the front of your ID.
+                          </div>
+                        </div>
 
-                      <input
-                        ref={
-                          frontFileRef
-                        }
-                        className="zk-input"
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={(
-                          event
-                        ) =>
-                          setFrontFile(
-                            event.target
-                              .files?.[0] ||
-                              null
-                          )
-                        }
-                        disabled={
-                          submitting
-                        }
-                      />
+                        <div className="zk-field">
+                          <label className="zk-field-label">
+                            Document back
+                          </label>
 
-                    </div>
-
-                    {documentType !== 'nin' && (
-                      <div className="zk-field">
-
-                        <label className="zk-field-label">
-                          Document back
-                        </label>
-
-                        <input
-                          ref={
-                            backFileRef
-                          }
-                          className="zk-input"
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          onChange={(
-                            event
-                          ) =>
-                            setBackFile(
-                              event.target
-                                .files?.[0] ||
-                                null
-                            )
-                          }
-                          disabled={
-                            submitting
-                          }
-                        />
-
-                      </div>
+                          <input
+                            ref={backFileRef}
+                            className="zk-input"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            onChange={(event) =>
+                              setBackFile(event.target.files?.[0] || null)
+                            }
+                            disabled={submitting}
+                            required
+                          />
+                          <div className="zk-help">
+                            Upload a clear image of the back of your ID.
+                          </div>
+                        </div>
+                      </>
                     )}
 
                     <div className="zk-field">
@@ -2915,7 +2912,7 @@ connect.open();
                         submitting ||
                         tier2Bvn.replace(/\D/g, '').length !== 11 ||
                         !documentNumber.trim() ||
-                        (documentType !== 'nin' && (!frontFile || !backFile))
+                        (documentType !== 'nin' && documentType !== 'national_id' && (!frontFile || !backFile))
                       }
                     >
                       {submitting
