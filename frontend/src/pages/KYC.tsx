@@ -1207,13 +1207,6 @@ const KYC: React.FC = () => {
     null
   );
 
-  const [
-    tier2Selfie,
-    setTier2Selfie,
-  ] = useState<File | null>(
-    null
-  );
-
   // ==========================================================
   // TIER 3
   // ==========================================================
@@ -1270,11 +1263,6 @@ const [
     );
 
   const backFileRef =
-    useRef<HTMLInputElement | null>(
-      null
-    );
-
-  const tier2SelfieRef =
     useRef<HTMLInputElement | null>(
       null
     );
@@ -1599,248 +1587,6 @@ const canContinueBvnVerification =
       : `Your approved ZENIMONIES verification level`;
 
   // ==========================================================
-  // SECURE TIER 2 VERIFICATION
-  // ==========================================================
-
-  const startDojahVerification =
-    async () => {
-      if (!token) {
-        showAlert(
-          'Please log in before starting verification.',
-          'error'
-        );
-
-        return;
-      }
-
-      if (
-        !DOJAH_APP_ID ||
-        !DOJAH_PUBLIC_KEY ||
-        !DOJAH_WIDGET_ID
-      ) {
-        showAlert(
-          'Secure verification is not currently available. Please use the manual Tier 2 verification option.',
-          'warning'
-        );
-
-        return;
-      }
-
-      if (!window.Connect) {
-        showAlert(
-          'Secure verification is still loading. Please try again in a moment.',
-          'warning'
-        );
-
-        return;
-      }
-
-      try {
-        setDojahLoading(
-          true
-        );
-
-        const response =
-          await fetch(
-            `${API_BASE}/kyc/dojah/start`,
-            {
-              method: 'POST',
-
-              headers: {
-                ...requestHeaders(),
-
-                'Content-Type':
-                  'application/json',
-              },
-
-              body: JSON.stringify({
-                verification_type:
-                  'tier_2',
-              }),
-            }
-          );
-
-        const result =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            result.message ||
-              'Unable to start secure verification.'
-          );
-        }
-
-        const referenceId =
-          result.reference_id ||
-          result.referenceId ||
-          result.data
-            ?.reference_id ||
-          result.data
-            ?.referenceId;
-
-        if (!referenceId) {
-          throw new Error(
-            'No verification reference was returned.'
-          );
-        }
-
-        const Connect =
-          window.Connect;
-
-        if (!Connect) {
-          throw new Error(
-            'Secure verification is unavailable.'
-          );
-        }
-
-        const instance =
-          new Connect({
-            app_id:
-              DOJAH_APP_ID,
-
-            p_key:
-              DOJAH_PUBLIC_KEY,
-
-            type: 'custom',
-
-            config: {
-              widget_id:
-                DOJAH_WIDGET_ID,
-            },
-
-            reference_id:
-              referenceId,
-
-            metadata: {
-            service: 'zenimonies_tier_2',
-            reference_id: referenceId,
-},
-
-            onSuccess: async (widgetResult) => {
-                console.info(
-             'Dojah callback fields:',
-            widgetResult && typeof widgetResult === 'object'
-            ? Object.keys(widgetResult)
-              : typeof widgetResult
-            );
-              try {
-                  const confirmResponse =
-                    await fetch(
-                      `${API_BASE}/kyc/dojah/confirm`,
-                      {
-                        method:
-                          'POST',
-
-                        headers: {
-                          ...requestHeaders(),
-
-                          'Content-Type':
-                            'application/json',
-                        },
-
-                        body: JSON.stringify({
-                      reference_id: referenceId,
-                        provider_reference_id:
-                       typeof widgetResult?.reference_id === 'string'
-                      ? widgetResult.reference_id
-                       : null,
-                      }),
-                      }
-                    );
-
-                  const confirmResult =
-                    await confirmResponse.json();
-
-                  if (
-                    !confirmResponse.ok
-                  ) {
-                    throw new Error(
-                      confirmResult.message ||
-                        'Unable to confirm secure verification.'
-                    );
-                  }
-
-                 const verificationStatus = String(
-  confirmResult.status || 'pending'
-).trim().toLowerCase();
-
-if (verificationStatus === 'verified') {
-  showAlert(
-    'Your identity verification is complete.',
-    'success'
-  );
-} else if (verificationStatus === 'rejected') {
-  showAlert(
-    'Your identity verification could not be approved. Please follow the instructions shown on your verification page.',
-    'error'
-  );
-} else {
-  showAlert(
-    'Your verification was received and is still being processed. Please check again later.',
-    'warning'
-  );
-}
-
-await fetchStatus();
-                } catch (error) {
-                  showAlert(
-                    error instanceof
-                      Error
-                      ? error.message
-                      : 'Unable to confirm verification.',
-                    'error'
-                  );
-                } finally {
-                  setDojahLoading(
-                    false
-                  );
-                }
-              },
-
-            onError: () => {
-              setDojahLoading(
-                false
-              );
-
-              showAlert(
-                'Secure verification was not completed. You can try again or use manual verification.',
-                'error'
-              );
-            },
-
-            onClose: () => {
-              setDojahLoading(
-                false
-              );
-            },
-          });
-
-        if (instance.open) {
-          instance.open();
-        } else {
-          throw new Error(
-            'Unable to open the secure verification window.'
-          );
-        }
-   
-      } catch (error) {
-        console.error(
-          '[KYC] Tier 2 verification launch failed:',
-          error
-        );
-
-        setDojahLoading(false);
-
-        showAlert(
-          error instanceof Error
-            ? error.message
-            : 'Unable to open identity verification. Please try again.',
-          'error'
-        );
-      }
-    };
-  
-  // ==========================================================
   // SUBMIT BVN
   // ==========================================================
 const submitBvn = async (event: React.FormEvent) => {
@@ -2158,13 +1904,15 @@ connect.open();
         return;
       }
 
+      // Save the submitted identity details without launching a
+      // separate hosted verification page. Saving details is NOT
+      // identity approval; the backend must verify them separately.
       showAlert(
-        'Your identity details have been saved. Continue with live verification.',
+        'Your identity details have been saved. Verification is pending until the secure checks are completed.',
         'success'
       );
 
-      // Open the existing live verification flow.
-      await startDojahVerification();
+      await fetchStatus();
     } catch (error) {
       console.error(
         'Tier 2 submission failed.'
@@ -2650,52 +2398,28 @@ connect.open();
               ) : canSubmitTier2 ? (
                 <>
 
-                  {/* SECURE VERIFICATION */}
+                  {/* IN-PAGE VERIFICATION STATUS */}
 
                   <div className="zk-small-title">
-                    Secure verification
+                    Identity verification
                   </div>
 
                   <div className="zk-note">
-
-                    <span className="zk-note-icon">
-                      🔒
-                    </span>
-
+                    <span className="zk-note-icon">🔒</span>
                     <span>
-                      Complete your identity
-                      verification securely
-                      using ZENIMONIES'
-                      approved verification
-                      process.
+                      Submit your details below without leaving this page.
+                      Your status will remain pending until the backend
+                      confirms the required identity and liveness checks.
+                      Do not submit the same details repeatedly.
                     </span>
-
                   </div>
-
-                  <button
-                    type="button"
-                    className="zk-button zk-dojah-button"
-                    onClick={
-                      startDojahVerification
-                    }
-                    disabled={
-                      dojahLoading ||
-                      !dojahScriptReady
-                    }
-                  >
-                    {dojahLoading
-                      ? 'Opening secure verification...'
-                      : !dojahScriptReady
-                      ? 'Preparing secure verification...'
-                      : 'Start secure verification'}
-                  </button>
 
                   <div className="zk-divider" />
 
-                  {/* MANUAL VERIFICATION */}
+                  {/* ID DETAILS */}
 
                   <div className="zk-small-title">
-                    Manual verification
+                    Identity document details
                   </div>
 
                   <div className="zk-note">
@@ -2705,7 +2429,7 @@ connect.open();
                     </span>
 
                     <span>
-                      Choose your document type from the dropdown. NIN requires the number only; other supported IDs require front and back images. Liveness verification must still be completed through the secure verification step.
+                      Choose your document type from the dropdown. NIN requires the 11-digit number only; all other supported IDs require front and back images. Your submission remains pending until the backend completes the required checks.
                     </span>
 
                   </div>
@@ -2869,41 +2593,6 @@ connect.open();
                         </div>
                       </>
                     )}
-
-                    <div className="zk-field">
-
-                      <label className="zk-field-label">
-                        Selfie
-                      </label>
-
-                      <input
-                        ref={
-                          tier2SelfieRef
-                        }
-                        className="zk-input"
-                        type="file"
-                        accept="image/*"
-                        capture="user"
-                        onChange={(
-                          event
-                        ) =>
-                          setTier2Selfie(
-                            event.target
-                              .files?.[0] ||
-                              null
-                          )
-                        }
-                        disabled={
-                          submitting
-                        }
-                      />
-
-                      <div className="zk-help">
-                        Upload a clear,
-                        recent selfie.
-                      </div>
-
-                    </div>
 
                     <button
                       type="submit"
