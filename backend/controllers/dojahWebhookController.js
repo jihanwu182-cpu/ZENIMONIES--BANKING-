@@ -164,6 +164,15 @@ const getScore = (value) => {
 // WEBHOOK HANDLER
 // ============================================================
 const handleDojahWebhook = async (req, res) => {
+    // Safe temporary diagnostics: never log secret values or payloads.
+  console.info('[KYC webhook] Handler entered.', {
+    legacySignaturePresent:
+      typeof req.headers['x-dojah-signature'] === 'string',
+    v2SignaturePresent:
+      typeof req.headers['x-dojah-signature-v2'] === 'string',
+    rawBodyAvailable: Buffer.isBuffer(req.rawBody),
+    webhookSecretConfigured: Boolean(getWebhookSecret()),
+  });
   const secret = getWebhookSecret();
   const rawBody = req.rawBody;
   const signature =
