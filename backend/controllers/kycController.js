@@ -1204,12 +1204,12 @@ const submitTier2 = async (req, res) => {
       });
     }
   }
-  // NIN and international passport do not require a back image.
-  const documentsWithoutBack = [
-    'nin',
-    'national_id',
-    'international_passport',
-  ];
+ // Only NIN is number-only.
+// All other supported IDs require front and back images.
+const documentsWithoutBack = [
+  'nin',
+  'national_id',
+];
 
   if (!documentsWithoutBack.includes(documentType)) {
     if (!idBackFile) {
