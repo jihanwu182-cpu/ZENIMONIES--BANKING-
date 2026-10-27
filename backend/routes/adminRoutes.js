@@ -19,6 +19,7 @@ const {
 
   // KYC
   getKycRecords,
+  getPrivateTier3Document,
   verifyBvn,
   rejectBvn,
   verifyTier2,
