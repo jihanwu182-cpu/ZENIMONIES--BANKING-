@@ -1469,11 +1469,12 @@ const submitTier3 = async (req, res) => {
     req.body?.tier_3_method || ''
   ).trim();
 
-  const allowedMethods = [
-    'bank_statement',
-    'utility_bill',
-    'proof_of_address',
-  ];
+const allowedMethods = [
+‘bank_statement’,
+‘utility_bill’,
+‘proof_of_address’,
+‘address_document’,
+];
 
   if (!allowedMethods.includes(method)) {
     return res.status(400).json({
@@ -1567,25 +1568,34 @@ const submitTier3 = async (req, res) => {
   }
 
   const tier3Requirements = {
-    bank_statement: {
-      accepted:
-        'Stamped PDF from bank app, dated within 90 days.',
-      rejected:
-        'Screenshots or statements older than 90 days.',
-    },
-    utility_bill: {
-      accepted:
-        'Provider-issued PHED, water, DSTV, or gas bill.',
-      rejected:
-        'Old bills or bills not in the user’s name.',
-    },
-    proof_of_address: {
-      accepted:
-        'Stamped tenancy agreement or government letter.',
-      rejected:
-        'Letters from friends or documents without an address.',
-    },
-  };
+bank_statement: {
+accepted:
+‘Stamped PDF from bank app, dated within 90 days.’,
+rejected:
+‘Screenshots or statements older than 90 days.’,
+},
+
+utility_bill: {
+accepted:
+‘Electricity, water, or waste bill issued by the relevant service provider and dated within the last 90 days.’,
+rejected:
+‘Bills older than 90 days or bills that do not meet the proof-of-address requirements.’,
+},
+
+proof_of_address: {
+accepted:
+‘Stamped tenancy agreement or government letter.’,
+rejected:
+‘Letters from friends or documents without an address.’,
+},
+
+address_document: {
+accepted:
+‘A valid tax document, rent receipt, tenancy agreement, or other accepted proof of address.’,
+rejected:
+‘Documents that are invalid, outdated, or do not establish the applicant’s address.’,
+},
+};
 
   let client;
 
