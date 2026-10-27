@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+ const pool = require('../config/database');
 const crypto = require('crypto');
 
 const {
@@ -484,29 +484,42 @@ const getKycStatus = async (req, res) => {
     // ========================================================
 
     const identityResult = await pool.query(
-      `
-      SELECT
-        id,
-        id_verification_status,
-        id_verified_at,
-        id_rejection_reason,
-        liveness_status,
-        dojah_checked_at,
-        created_at,
-        updated_at
-      FROM kyc_records
-      WHERE user_id = $1
-        AND dojah_verification_type = 'identity'
-      ORDER BY created_at DESC
-      LIMIT 1
-      `,
-      [userId]
-    );
+  `
+  SELECT
+    id,
+    id_verification_status,
+    id_verified_at,
+    id_rejection_reason,
+    liveness_status,
+    dojah_checked_at,
+    created_at,
+    updated_at
+  FROM kyc_records
+  WHERE user_id = $1
+    AND document_type IS NOT NULL
+    AND document_number IS NOT NULL
+    AND document_number <> ''
+  ORDER BY
+    CASE
+      WHEN id_verification_status IN (
+        'pending',
+        'verified',
+        'approved',
+        'rejected'
+      ) THEN 0
+      ELSE 1
+    END,
+    updated_at DESC,
+    created_at DESC
+  LIMIT 1
+  `,
+  [userId]
+);
 
-    const identityRecord =
-      identityResult.rows.length > 0
-        ? identityResult.rows[0]
-        : null;
+const identityRecord =
+  identityResult.rows.length > 0
+    ? identityResult.rows[0]
+    : null;
 
     // ========================================================
     // INDIVIDUAL VERIFICATION STATES
