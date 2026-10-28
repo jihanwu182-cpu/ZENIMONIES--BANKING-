@@ -3456,7 +3456,10 @@ connect.open();
 </form>
 ) : (
   
-{kyc?.liveness_status === 'rejected' &&
+
+</form>
+) : (
+  kyc?.liveness_status === 'rejected' &&
   kyc?.tier_3_status !== 'verified' &&
   kyc?.tier_3_status !== 'approved' && (
     <div className="zk-card">
@@ -3476,7 +3479,9 @@ connect.open();
           : 'Retry Liveness Verification'}
       </button>
     </div>
-  )}
+  )
+)}
+
 
         {/* ==================================================
             FOOTER
