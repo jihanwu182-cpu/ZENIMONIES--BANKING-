@@ -30,6 +30,7 @@ interface User {
   id_verified?: boolean;
   tier_3_verified?: boolean;
   phone_verified?: boolean;
+  phone_change_used?: boolean;
   is_verified?: boolean;
   legal_name_locked?: boolean;
   profile_photo?: string;
@@ -113,6 +114,14 @@ const Profile: React.FC = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [approvedKycTier, setApprovedKycTier] = useState(0);
+  const [contactChoice, setContactChoice] = useState<'email' | 'phone' | null>(null);
+  const [contactFlow, setContactFlow] = useState<'email' | 'phone' | null>(null);
+  const [newEmail, setNewEmail] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [contactOtp, setContactOtp] = useState('');
+  const [contactBusy, setContactBusy] = useState(false);
+  const [contactMessage, setContactMessage] = useState('');
+  const [contactError, setContactError] = useState('');
 
   const loadProfile = useCallback(async () => {
     try {
@@ -243,6 +252,64 @@ const Profile: React.FC = () => {
     setForm((previous) => ({ ...previous, [field]: value }));
   };
 
+  const startContactChange = async (kind: 'email' | 'phone') => {
+    const value = kind === 'email' ? newEmail.trim() : newPhone.trim();
+    if (kind === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      setContactError('Enter a valid email address.');
+      setContactMessage('');
+      return;
+    }
+    if (kind === 'phone' && value.replace(/[\s()-]/g, '').length < 7) {
+      setContactError('Enter a valid phone number. Include the country code if needed.');
+      setContactMessage('');
+      return;
+    }
+    if (kind === 'phone' && user?.phone_change_used) {
+      setContactError('Your one-time phone number change has already been used. Please contact support for help.');
+      setContactMessage('');
+      return;
+    }
+    if (kind === 'phone' && !window.confirm('Phone number changes are allowed only once. Continue?')) return;
+    const token = getToken();
+    if (!token) { navigate('/login'); return; }
+    setContactBusy(true); setContactError(''); setContactMessage('');
+    try {
+      const response = await axios.post(`${API_URL}/api/profile/contact/${kind}/start`,
+        kind === 'email' ? { email: value } : { phone: value },
+        { timeout: 60000, headers: { Authorization: `Bearer ${token}` } });
+      if (!response.data?.success) throw new Error(response.data?.message || 'Could not send your verification code.');
+      setContactFlow(kind); setContactOtp('');
+      setContactMessage(response.data?.message || `A verification code has been sent to your ${kind === 'email' ? 'new email address' : 'new phone number'}.`);
+    } catch (err: unknown) {
+      setContactError(getErrorMessage(err, 'Could not send your verification code.'));
+    } finally { setContactBusy(false); }
+  };
+
+  const verifyContactChange = async () => {
+    if (!contactFlow) return;
+    if (!/^\d{6}$/.test(contactOtp.trim())) {
+      setContactError('Enter the six-digit verification code.'); setContactMessage(''); return;
+    }
+    const token = getToken();
+    if (!token) { navigate('/login'); return; }
+    setContactBusy(true); setContactError(''); setContactMessage('');
+    try {
+      const response = await axios.post(`${API_URL}/api/profile/contact/${contactFlow}/verify`,
+        { otp: contactOtp.trim() },
+        { timeout: 60000, headers: { Authorization: `Bearer ${token}` } });
+      if (!response.data?.success) throw new Error(response.data?.message || 'Verification failed.');
+      setContactMessage(response.data?.message || `${contactFlow === 'email' ? 'Email address' : 'Phone number'} updated successfully.`);
+      setContactFlow(null); setContactOtp(''); setNewEmail(''); setNewPhone('');
+      await loadProfile();
+    } catch (err: unknown) {
+      setContactError(getErrorMessage(err, 'Verification failed. Please check the code and try again.'));
+    } finally { setContactBusy(false); }
+  };
+
+  const cancelContactChange = () => {
+    setContactFlow(null); setContactChoice(null); setContactOtp(''); setNewEmail(''); setNewPhone(''); setContactMessage(''); setContactError('');
+  };
+
   const handleSave = async () => {
     if (profileLocked) {
       setError('Your verified account details are protected and can no longer be edited here.');
@@ -264,8 +331,6 @@ const Profile: React.FC = () => {
         `${API_URL}/api/profile`,
         {
           full_name: form.fullName.trim(),
-          email: form.email.trim(),
-          phone: form.phone.trim(),
           date_of_birth: form.dateOfBirth || null,
           gender: form.gender || null,
           address: form.address.trim(),
@@ -648,35 +713,76 @@ const Profile: React.FC = () => {
 
             <div style={styles.field}>
               <label htmlFor="profile-email" style={styles.label}>Email address</label>
-              <input
+              <button
                 id="profile-email"
-                type="email"
-                autoComplete="email"
-                value={form.email}
-                onChange={(event) => updateField('email', event.target.value)}
-                disabled={!editing}
-                style={{ ...styles.input, ...(editing ? styles.inputEditable : styles.inputDisabled) }}
-              />
-              <small style={styles.helper}>Changing your email may require a separate verification process.</small>
+                type="button"
+                onClick={() => { setContactChoice('email'); setContactFlow(null); setContactMessage(''); setContactError(''); }}
+                style={{ ...styles.input, ...styles.contactPicker, ...(contactChoice === 'email' ? styles.contactPickerActive : {}) }}
+                aria-label="Tap to change email address"
+              >
+                <span>{form.email || 'Email not available'}</span><span style={styles.contactPickerAction}>Change email →</span>
+              </button>
+              <small style={styles.helper}>Tap this field to change your email address securely.</small>
             </div>
 
             <div style={styles.field}>
               <label htmlFor="profile-phone" style={styles.label}>Phone number</label>
-              <input
+              <button
                 id="profile-phone"
-                type="tel"
-                autoComplete="tel"
-                value={form.phone}
-                onChange={(event) => updateField('phone', event.target.value)}
-                disabled={!editing}
-                style={{ ...styles.input, ...(editing ? styles.inputEditable : styles.inputDisabled) }}
-              />
+                type="button"
+                onClick={() => { setContactChoice('phone'); setContactFlow(null); setContactMessage(''); setContactError(''); }}
+                style={{ ...styles.input, ...styles.contactPicker, ...(contactChoice === 'phone' ? styles.contactPickerActive : {}) }}
+                aria-label="Tap to change phone number"
+              >
+                <span>{form.phone || 'Phone number not available'}</span><span style={styles.contactPickerAction}>Change phone →</span>
+              </button>
               <small style={styles.helper}>
                 {user?.phone_verified ? '✓ Phone number verified' : 'Phone number not verified'}
+                {user?.phone_change_used ? ' · One-time phone change already used' : ' · Tap to change your number (one-time only)'}
               </small>
             </div>
           </div>
         </section>
+
+        {contactChoice && (
+        <section style={styles.card}>
+          <div style={styles.sectionHeadingBlock}>
+            <div style={styles.eyebrow}>CONTACT SECURITY</div>
+            <h2 style={styles.sectionTitle}>{contactChoice === 'email' ? 'Change email address' : 'Change phone number'}</h2>
+            <p style={styles.sectionDescription}>Your current {contactChoice === 'email' ? 'email address' : 'phone number'} remains active until the new contact detail is verified.</p>
+          </div>
+          <div style={styles.formGrid}>
+            {contactChoice === 'email' ? (
+            <div style={styles.field}>
+              <label htmlFor="new-contact-email" style={styles.label}>New email address</label>
+              <input id="new-contact-email" type="email" autoComplete="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} disabled={contactBusy || contactFlow !== null} placeholder="Enter new email address" style={{ ...styles.input, ...(contactBusy || contactFlow !== null ? styles.inputDisabled : styles.inputEditable) }} />
+              <button type="button" onClick={() => void startContactChange('email')} disabled={contactBusy || contactFlow !== null} style={{ ...styles.primaryButton, ...(contactBusy || contactFlow !== null ? styles.buttonDisabled : {}) }}>{contactBusy ? 'Please wait…' : 'Send email verification code'}</button>
+            </div>
+            ) : (
+            <div style={styles.field}>
+              <label htmlFor="new-contact-phone" style={styles.label}>New phone number</label>
+              <input id="new-contact-phone" type="tel" autoComplete="tel" value={newPhone} onChange={(event) => setNewPhone(event.target.value)} disabled={contactBusy || contactFlow !== null || user?.phone_change_used === true} placeholder="e.g. +2348012345678" style={{ ...styles.input, ...(contactBusy || contactFlow !== null || user?.phone_change_used ? styles.inputDisabled : styles.inputEditable) }} />
+              <small style={styles.helper}>Phone number changes can be completed only once. Your current number stays active until verification succeeds.</small>
+              <button type="button" onClick={() => void startContactChange('phone')} disabled={contactBusy || contactFlow !== null || user?.phone_change_used === true} style={{ ...styles.primaryButton, ...(contactBusy || contactFlow !== null || user?.phone_change_used ? styles.buttonDisabled : {}) }}>{user?.phone_change_used ? 'Phone change already used' : contactBusy ? 'Please wait…' : 'Send phone verification code'}</button>
+            </div>
+            )}
+          </div>
+          {contactFlow && (
+            <div style={{ ...styles.field, marginTop: 20, maxWidth: 420 }}>
+              <label htmlFor="contact-otp" style={styles.label}>Six-digit verification code</label>
+              <input id="contact-otp" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={contactOtp} onChange={(event) => setContactOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} disabled={contactBusy} placeholder="Enter 6-digit code" style={{ ...styles.input, ...styles.inputEditable }} />
+              <small style={styles.helper}>Check the {contactFlow === 'email' ? 'new email inbox' : 'new phone'} for your code. It expires after 10 minutes.</small>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => void verifyContactChange()} disabled={contactBusy || contactOtp.length !== 6} style={{ ...styles.primaryButton, ...(contactBusy || contactOtp.length !== 6 ? styles.buttonDisabled : {}) }}>{contactBusy ? 'Verifying…' : 'Verify and update'}</button>
+                <button type="button" onClick={cancelContactChange} disabled={contactBusy} style={styles.cancelButton}>Cancel verification</button>
+              </div>
+            </div>
+          )}
+          {contactMessage && <div role="status" style={{ ...styles.successMessage, marginTop: 16, marginBottom: 0 }}>{contactMessage}</div>}
+          {contactError && <div role="alert" style={{ ...styles.errorMessage, marginTop: 16, marginBottom: 0 }}>{contactError}</div>}
+          <button type="button" onClick={cancelContactChange} disabled={contactBusy} style={{ ...styles.cancelButton, marginTop: 16 }}>Close</button>
+        </section>
+        )}
 
         <section style={styles.card}>
           <div style={styles.sectionHeadingBlock}>
@@ -919,6 +1025,9 @@ const styles: Record<string, React.CSSProperties> = {
   input: { width: '100%', boxSizing: 'border-box', minHeight: 43, border: '1px solid #dce5df', borderRadius: 9, padding: '11px 12px', color: '#24362b', background: '#fff', fontSize: 13, outline: 'none' },
   inputEditable: { borderColor: '#72b895', boxShadow: '0 0 0 2px rgba(8,118,75,.045)' },
   inputDisabled: { background: '#f4f6f4', color: '#6c7b71', cursor: 'not-allowed' },
+  contactPicker: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, textAlign: 'left', cursor: 'pointer', background: '#fff', color: '#24362b', minHeight: 46 },
+  contactPickerActive: { borderColor: '#08764b', boxShadow: '0 0 0 2px rgba(8,118,75,.10)' },
+  contactPickerAction: { color: '#08764b', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' },
   textarea: { resize: 'vertical', minHeight: 90, fontFamily: 'inherit', lineHeight: 1.5 },
   helper: { color: '#839087', fontSize: 10, lineHeight: 1.5 },
   accountGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 },
