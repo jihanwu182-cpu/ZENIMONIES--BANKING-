@@ -13,6 +13,10 @@ const {
   sendPhoneChangeOtp,
   verifyPhoneChangeOtp,
 } = require('../controllers/contactChangeController');
+const {
+  sendEmailChangeOtp,
+  verifyEmailChangeOtp,
+} = require('../controllers/contactEmailChangeController');
 
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -62,5 +66,16 @@ router.post(
   '/contact/phone/verify',
   authMiddleware,
   verifyPhoneChangeOtp
+);
+router.post(
+  '/contact/email/start',
+  authMiddleware,
+  sendEmailChangeOtp
+);
+
+router.post(
+  '/contact/email/verify',
+  authMiddleware,
+  verifyEmailChangeOtp
 );
 module.exports = router;
