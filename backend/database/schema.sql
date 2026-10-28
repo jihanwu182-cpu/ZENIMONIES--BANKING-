@@ -3107,6 +3107,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_pending_phone_unique
 ON users (pending_phone)
 WHERE pending_phone IS NOT NULL;
 
+ALTER TABLE security_tokens
+ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
 -- ============================================================
 -- END OF ZENIMONIES DATABASE SCHEMA
 -- ============================================================
