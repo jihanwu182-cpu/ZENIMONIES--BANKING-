@@ -9,6 +9,10 @@ const {
   uploadProfilePhoto,
   handlePhotoUpload,
 } = require('../controllers/profilePhotoController');
+const {
+  sendPhoneChangeOtp,
+  verifyPhoneChangeOtp,
+} = require('../controllers/contactChangeController');
 
 const authMiddleware = require('../middleware/authMiddleware');
 
@@ -48,4 +52,15 @@ router.post(
   uploadProfilePhoto
 );
 
+router.post(
+  '/contact/phone/start',
+  authMiddleware,
+  sendPhoneChangeOtp
+);
+
+router.post(
+  '/contact/phone/verify',
+  authMiddleware,
+  verifyPhoneChangeOtp
+);
 module.exports = router;
