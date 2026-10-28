@@ -2367,6 +2367,199 @@ connect.open();
       }
     }
   };
+  
+  const retryTier3Liveness = async () => {
+    if (dojahLoading || submitting) return;
+
+    const activeToken =
+      localStorage.getItem('zenimonies_token') ||
+      localStorage.getItem('access_token') ||
+      localStorage.getItem('token') ||
+      '';
+
+    if (!activeToken) {
+      showAlert(
+        'Please log in again to continue verification.',
+        'error'
+      );
+      return;
+    }
+
+    if (
+      !DOJAH_APP_ID ||
+      !DOJAH_PUBLIC_KEY ||
+      !DOJAH_WIDGET_ID ||
+      typeof window.Connect !== 'function'
+    ) {
+      showAlert(
+        'Secure verification is temporarily unavailable. Please refresh and try again.',
+        'error'
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    setDojahLoading(true);
+
+    try {
+      // Start a new session using the existing Tier 3 documents.
+      const startResponse = await fetch(
+        `${API_BASE}/kyc/dojah/start`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${activeToken}`,
+          },
+          body: JSON.stringify({
+            verification_type: 'tier_3',
+          }),
+        }
+      );
+
+      const startResult = await startResponse
+        .json()
+        .catch(() => ({}));
+
+      if (
+        !startResponse.ok ||
+        startResult.success !== true ||
+        typeof startResult.reference_id !== 'string' ||
+        !startResult.reference_id
+      ) {
+        throw new Error(
+          startResult.message ||
+            'Unable to restart liveness verification. Please try again later.'
+        );
+      }
+
+      const referenceId = startResult.reference_id;
+      const Connect = window.Connect;
+
+      const connect = new Connect({
+        app_id: DOJAH_APP_ID,
+        p_key: DOJAH_PUBLIC_KEY,
+        type: 'custom',
+        config: {
+          widget_id: DOJAH_WIDGET_ID,
+        },
+        reference_id: referenceId,
+        metadata: {
+          service: 'zenimonies_tier_3_liveness',
+          reference_id: referenceId,
+        },
+
+        onSuccess: async () => {
+          try {
+            const confirmResponse = await fetch(
+              `${API_BASE}/kyc/dojah/confirm`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${activeToken}`,
+                },
+                body: JSON.stringify({
+                  verification_type: 'tier_3',
+                  reference_id: referenceId,
+                }),
+              }
+            );
+
+            const confirmResult = await confirmResponse
+              .json()
+              .catch(() => ({}));
+
+            if (
+              !confirmResponse.ok ||
+              confirmResult.success !== true
+            ) {
+              showAlert(
+                'Your liveness result is not available yet. Tier 3 has not been approved.',
+                'warning'
+              );
+            } else if (
+              confirmResult.liveness_status === 'rejected'
+            ) {
+              showAlert(
+                'The liveness check did not pass. You can try again when the retry option becomes available.',
+                'error'
+              );
+            } else if (
+              confirmResult.liveness_status === 'verified'
+            ) {
+              showAlert(
+                'Your liveness check is complete. Your proof of address still requires review before Tier 3 can be approved.',
+                'success'
+              );
+            } else {
+              showAlert(
+                'Your liveness result is still pending. Tier 3 has not been approved.',
+                'warning'
+              );
+            }
+          } catch {
+            showAlert(
+              'We could not retrieve your liveness result. Tier 3 has not been approved.',
+              'warning'
+            );
+          } finally {
+            setDojahLoading(false);
+            setSubmitting(false);
+            await fetchStatus();
+          }
+        },
+
+        onError: () => {
+          setDojahLoading(false);
+          setSubmitting(false);
+          showAlert(
+            'Liveness verification could not be completed. Please try again.',
+            'error'
+          );
+          void fetchStatus();
+        },
+
+        onClose: () => {
+          setDojahLoading(false);
+          setSubmitting(false);
+          showAlert(
+            'The verification window was closed. Tier 3 has not been approved.',
+            'warning'
+          );
+          void fetchStatus();
+        },
+      });
+
+      if (
+        typeof connect.setup !== 'function' ||
+        typeof connect.open !== 'function'
+      ) {
+        throw new Error(
+          'The verification window could not be opened.'
+        );
+      }
+
+      connect.setup();
+      connect.open();
+
+      showAlert(
+        'Continue the secure liveness check to retry verification.',
+        'success'
+      );
+    } catch (error) {
+      setDojahLoading(false);
+      setSubmitting(false);
+
+      showAlert(
+        error instanceof Error
+          ? error.message
+          : 'Unable to restart liveness verification.',
+        'error'
+      );
+    }
+  };
+
   // ==========================================================
   // RENDER
   // ==========================================================
