@@ -1978,8 +1978,9 @@ connect.open();
                   Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
+                 verification_type: 'tier_2',
                   reference_id: referenceId,
-                }),
+               }),
               }
             );
 
@@ -2075,159 +2076,297 @@ connect.open();
   // SUBMIT TIER 3
   // ==========================================================
 
-  const submitTier3 =
-    async (
-      event: React.FormEvent
-    ) => {
-      event.preventDefault();
+  const submitTier3 = async (
+    event: React.FormEvent
+  ) => {
+    event.preventDefault();
 
- if (
-  !employmentStatus ||
-  !occupation.trim() ||
-  !annualIncomeRange
-) {
-  showAlert(
-    'Please complete your employment and annual income information.',
-    'error'
-  );
-  return;
-}
+    if (dojahLoading || submitting) return;
+
+    if (
+      !employmentStatus ||
+      !occupation.trim() ||
+      !annualIncomeRange
+    ) {
+      showAlert(
+        'Please complete your employment and annual income information.',
+        'error'
+      );
+      return;
+    }
+
+    if (!addressDocumentType || !addressFile) {
+      showAlert(
+        'Please select and upload your proof of address.',
+        'error'
+      );
+      return;
+    }
+
+    if (addressFile.type !== 'application/pdf') {
+      showAlert(
+        'Your proof of address must be uploaded as a PDF.',
+        'error'
+      );
+      return;
+    }
+
+    if (!tier3Selfie) {
+      showAlert(
+        'Please select a selfie photo.',
+        'error'
+      );
+      return;
+    }
+
+    const activeToken =
+      localStorage.getItem('zenimonies_token') ||
+      localStorage.getItem('access_token') ||
+      localStorage.getItem('token') ||
+      '';
+
+    if (!activeToken) {
+      showAlert(
+        'Please log in again to continue verification.',
+        'error'
+      );
+      return;
+    }
+
+    if (
+      !DOJAH_APP_ID ||
+      !DOJAH_PUBLIC_KEY ||
+      !DOJAH_WIDGET_ID ||
+      typeof window.Connect !== 'function'
+    ) {
+      showAlert(
+        'Secure verification is temporarily unavailable. Please refresh and try again.',
+        'error'
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    setDojahLoading(true);
+
+    let documentsSubmitted = false;
+
+    try {
+      // 1. Submit Tier 3 evidence to the authenticated backend.
+      const formData = new FormData();
+
+      formData.append('tier_3_method', tier3Method);
+      formData.append(
+        'tier_3_document_type',
+        addressDocumentType
+      );
+      formData.append('tier_3_document', addressFile);
+      formData.append('tier_3_selfie', tier3Selfie);
+      formData.append('employment_status', employmentStatus);
+      formData.append('occupation', occupation.trim());
+      formData.append('annual_income_range', annualIncomeRange);
+
+      const submitResponse = await fetch(
+        `${API_BASE}/kyc/tier-3`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+          },
+          body: formData,
+        }
+      );
+
+      const submitResult = await submitResponse
+        .json()
+        .catch(() => ({}));
 
       if (
-        !addressDocumentType
+        !submitResponse.ok ||
+        submitResult.success !== true
       ) {
-        showAlert(
-          'Please select a proof of address document.',
-          'error'
+        throw new Error(
+          submitResult.message ||
+            'Unable to submit Tier 3 documents.'
         );
-
-        return;
       }
 
-      if (!addressFile) {
-        showAlert(
-          'Please upload your proof of address document.',
-          'error'
-        );
+      documentsSubmitted = true;
 
-        return;
-      }
+      // 2. Request a separate Tier 3 session from the backend.
+      const startResponse = await fetch(
+        `${API_BASE}/kyc/dojah/start`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${activeToken}`,
+          },
+          body: JSON.stringify({
+            verification_type: 'tier_3',
+          }),
+        }
+      );
 
-      if (!tier3Selfie) {
-        showAlert(
-          'Please upload a selfie for Tier 3 verification.',
-          'error'
-        );
-
-        return;
-      }
+      const startResult = await startResponse
+        .json()
+        .catch(() => ({}));
 
       if (
-        addressFile.type !==
-        'application/pdf'
+        !startResponse.ok ||
+        startResult.success !== true ||
+        typeof startResult.reference_id !== 'string' ||
+        !startResult.reference_id
       ) {
-        showAlert(
-          'Your proof of address must be uploaded as a PDF.',
-          'error'
+        throw new Error(
+          startResult.message ||
+            'Your documents were received, but the liveness session could not be started. Please contact support before submitting again.'
         );
-
-        return;
       }
 
-      try {
-        setSubmitting(
-          true
+      const referenceId = startResult.reference_id;
+      const Connect = window.Connect;
+
+      if (typeof Connect !== 'function') {
+        throw new Error(
+          'Your documents were received, but the verification widget could not be opened. Please contact support before submitting again.'
         );
+      }
 
-        const formData =
-          new FormData();
+      // 3. Open the configured verification widget.
+      const connect = new Connect({
+        app_id: DOJAH_APP_ID,
+        p_key: DOJAH_PUBLIC_KEY,
+        type: 'custom',
+        config: {
+          widget_id: DOJAH_WIDGET_ID,
+        },
+        reference_id: referenceId,
+        metadata: {
+          service: 'zenimonies_tier_3_liveness',
+          reference_id: referenceId,
+        },
 
-        formData.append(
-          'tier_3_method',
-          tier3Method
-        );
+        // The widget callback is not itself approval.
+        // The backend must retrieve the authoritative result.
+        onSuccess: async () => {
+          try {
+            const confirmResponse = await fetch(
+              `${API_BASE}/kyc/dojah/confirm`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${activeToken}`,
+                },
+                body: JSON.stringify({
+                  verification_type: 'tier_3',
+                  reference_id: referenceId,
+                }),
+              }
+            );
 
-        formData.append(
-          'tier_3_document_type',
-          addressDocumentType
-        );
+            const confirmResult = await confirmResponse
+              .json()
+              .catch(() => ({}));
 
-        formData.append(
-          'tier_3_document',
-          addressFile
-        );
-
-        formData.append(
-          'tier_3_selfie',
-          tier3Selfie
-        );
-        formData.append('employment_status', employmentStatus);
-        formData.append('occupation', occupation.trim());
-        formData.append('annual_income_range', annualIncomeRange);
-
-        const response =
-          await fetch(
-            `${API_BASE}/kyc/tier-3`,
-            {
-              method: 'POST',
-
-              headers:
-                requestHeaders(),
-
-              body: formData,
+            if (
+              !confirmResponse.ok ||
+              confirmResult.success !== true
+            ) {
+              showAlert(
+                'Your verification was submitted, but the result is not available yet. Your Tier 3 application has not been approved.',
+                'warning'
+              );
+            } else if (
+              confirmResult.liveness_status === 'rejected'
+            ) {
+              showAlert(
+                'The liveness check could not be completed successfully. Please contact support for assistance.',
+                'error'
+              );
+            } else if (
+              confirmResult.liveness_status === 'verified'
+            ) {
+              showAlert(
+                'Your liveness check is complete. Your proof of address still requires review before Tier 3 can be approved.',
+                'success'
+              );
+            } else {
+              showAlert(
+                'Your liveness result is still pending. Tier 3 has not been approved.',
+                'warning'
+              );
             }
+          } catch {
+            showAlert(
+              'Your verification was submitted, but its result could not be retrieved. Tier 3 has not been approved.',
+              'warning'
+            );
+          } finally {
+            setDojahLoading(false);
+            setSubmitting(false);
+            await fetchStatus();
+          }
+        },
+
+        onError: () => {
+          setDojahLoading(false);
+          setSubmitting(false);
+
+          showAlert(
+            documentsSubmitted
+              ? 'Your documents were received, but verification could not be completed. Please contact support before submitting again.'
+              : 'Verification could not be completed. Please try again.',
+            'error'
+          );
+        },
+
+        onClose: () => {
+          setDojahLoading(false);
+          setSubmitting(false);
+
+          showAlert(
+            'The verification window was closed. Your Tier 3 application has not been approved.',
+            'warning'
           );
 
-        const result =
-          await response.json();
+          fetchStatus();
+        },
+      });
 
-        if (!response.ok) {
-          throw new Error(
-            result.message ||
-              'Tier 3 verification failed.'
-          );
-        }
-
-        showAlert(
-          result.message ||
-            'Tier 3 verification submitted successfully.',
-          'success'
-        );
-
-        setAddressFile(null);
-
-        setTier3Selfie(null);
-
-        if (
-          addressFileRef.current
-        ) {
-          addressFileRef.current.value =
-            '';
-        }
-
-        if (
-          tier3SelfieRef.current
-        ) {
-          tier3SelfieRef.current.value =
-            '';
-        }
-
-        await fetchStatus();
-      } catch (error) {
-        showAlert(
-          error instanceof
-            Error
-            ? error.message
-            : 'Tier 3 verification failed.',
-          'error'
-        );
-      } finally {
-        setSubmitting(
-          false
+      if (
+        typeof connect.setup !== 'function' ||
+        typeof connect.open !== 'function'
+      ) {
+        throw new Error(
+          'The verification widget could not be initialized.'
         );
       }
-    };
 
+      connect.setup();
+      connect.open();
+
+      showAlert(
+        'Your documents were received. Complete the secure liveness check to continue.',
+        'success'
+      );
+    } catch (error) {
+      setDojahLoading(false);
+      setSubmitting(false);
+
+      showAlert(
+        error instanceof Error
+          ? error.message
+          : 'Unable to start Tier 3 verification.',
+        'error'
+      );
+
+      if (documentsSubmitted) {
+        await fetchStatus();
+      }
+    }
+  };
   // ==========================================================
   // RENDER
   // ==========================================================
