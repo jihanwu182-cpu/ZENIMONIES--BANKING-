@@ -96,10 +96,12 @@ interface KycData {
 
   id_rejection_reason?: string;
 
-  tier_3_status?:
+    tier_3_status?:
     | string
     | boolean;
-liveness_status?: string;
+
+  liveness_status?: string;
+
   tier_3_verified?: boolean;
 
   tier_3_method?: string;
