@@ -3455,32 +3455,30 @@ connect.open();
 
 
 </form>
-) : (
-  kyc?.liveness_status === 'rejected' &&
-  kyc?.tier_3_status !== 'verified' &&
-  kyc?.tier_3_status !== 'approved' && (
-    <div className="zk-card">
-      <p>
-        Your previous liveness check was unsuccessful.
-        You can retry without uploading your documents again.
-      </p>
-
-      <button
-        type="button"
-        className="zk-button"
-        disabled={submitting || dojahLoading}
-        onClick={retryTier3Liveness}
-      >
-        {dojahLoading
-          ? 'Starting verification...'
-          : 'Retry Liveness Verification'}
-      </button>
-    </div>
-  )
-)}
-
-
-
+              ) : (
+                kyc?.liveness_status === 'rejected' &&
+                kyc?.tier_3_status !== 'verified' &&
+                kyc?.tier_3_status !== 'approved' && (
+                  <div className="zk-note">
+                    <span className="zk-note-icon">!</span>
+                    <span>
+                      Your previous liveness check was unsuccessful.
+                      You can retry without uploading your documents again.
+                    </span>
+                    <button
+                      type="button"
+                      className="zk-button"
+                      disabled={submitting || dojahLoading}
+                      onClick={retryTier3Liveness}
+                    >
+                      {dojahLoading
+                        ? 'Starting verification...'
+                        : 'Retry Liveness Verification'}
+                    </button>
+                  </div>
+                )
+              )}
+          </section>
         {/* ==================================================
             FOOTER
         ================================================== */}
