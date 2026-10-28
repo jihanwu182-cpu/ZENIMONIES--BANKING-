@@ -1,19 +1,8 @@
-import React, {
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
-
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-
 import { useNavigate } from 'react-router-dom';
 
-const API_URL =
-  'https://zenimonies-banking.onrender.com';
-
-// ============================================================
-// TYPES
-// ============================================================
+const API_URL = 'https://zenimonies-banking.onrender.com';
 
 interface User {
   id?: string | number;
@@ -25,35 +14,26 @@ interface User {
   phone?: string;
   date_of_birth?: string;
   dob?: string;
-
   gender?: string;
-
   address?: string;
   residential_address?: string;
   city?: string;
   state?: string;
   lga?: string;
   country?: string;
-
   role?: string;
   status?: string;
-
-kyc_status?: string;
-kyc_tier?: number;
-tier?: number;
-
-bvn_verified?: boolean;
-id_verified?: boolean;
-tier_3_verified?: boolean;
-
-phone_verified?: boolean;
-
+  kyc_status?: string;
+  kyc_tier?: number;
+  tier?: number;
+  bvn_verified?: boolean;
+  id_verified?: boolean;
+  tier_3_verified?: boolean;
+  phone_verified?: boolean;
   is_verified?: boolean;
   legal_name_locked?: boolean;
-
   profile_photo?: string;
   avatar?: string;
-
   created_at?: string;
   updated_at?: string;
 }
@@ -68,1268 +48,210 @@ interface Account {
   status?: string;
 }
 
-// ============================================================
-// NIGERIA
-// 36 STATES + FCT
-// ============================================================
-
-const NIGERIAN_STATES = [
-  'Abia',
-  'Adamawa',
-  'Akwa Ibom',
-  'Anambra',
-  'Bauchi',
-  'Bayelsa',
-  'Benue',
-  'Borno',
-  'Cross River',
-  'Delta',
-  'Ebonyi',
-  'Edo',
-  'Ekiti',
-  'Enugu',
-  'Gombe',
-  'Imo',
-  'Jigawa',
-  'Kaduna',
-  'Kano',
-  'Katsina',
-  'Kebbi',
-  'Kogi',
-  'Kwara',
-  'Lagos',
-  'Nasarawa',
-  'Niger',
-  'Ogun',
-  'Ondo',
-  'Osun',
-  'Oyo',
-  'Plateau',
-  'Rivers',
-  'Sokoto',
-  'Taraba',
-  'Yobe',
-  'Zamfara',
-  'Federal Capital Territory',
-];
-
-// ============================================================
-// NIGERIAN LGAs
-// ============================================================
-
-const NIGERIAN_LGAS: Record<string, string[]> = {
-  Abia: [
-    'Aba North',
-    'Aba South',
-    'Arochukwu',
-    'Bende',
-    'Ikwuano',
-    'Isiala Ngwa North',
-    'Isiala Ngwa South',
-    'Isuikwuato',
-    'Obi Ngwa',
-    'Ohafia',
-    'Osisioma Ngwa',
-    'Ugwunagbo',
-    'Ukwa East',
-    'Ukwa West',
-    'Umuahia North',
-    'Umuahia South',
-    'Umunneochi',
-  ],
-
-  Adamawa: [
-    'Demsa',
-    'Fufore',
-    'Ganye',
-    'Girei',
-    'Gombi',
-    'Guyuk',
-    'Hong',
-    'Jada',
-    'Lamurde',
-    'Madagali',
-    'Maiha',
-    'Mayo Belwa',
-    'Michika',
-    'Mubi North',
-    'Mubi South',
-    'Numan',
-    'Shelleng',
-    'Song',
-    'Toungo',
-    'Yola North',
-    'Yola South',
-  ],
-
-  'Akwa Ibom': [
-    'Abak',
-    'Eastern Obolo',
-    'Eket',
-    'Esit Eket',
-    'Essien Udim',
-    'Etim Ekpo',
-    'Etinan',
-    'Ibeno',
-    'Ibesikpo Asutan',
-    'Ibiono-Ibom',
-    'Ika',
-    'Ikono',
-    'Ikot Abasi',
-    'Ikot Ekpene',
-    'Ini',
-    'Itu',
-    'Mbo',
-    'Mkpat-Enin',
-    'Nsit-Atai',
-    'Nsit-Ibom',
-    'Nsit-Ubium',
-    'Obot Akara',
-    'Okobo',
-    'Onna',
-    'Oron',
-    'Oruk Anam',
-    'Udung-Uko',
-    'Ukanafun',
-    'Uruan',
-    'Urue-Offong/Oruko',
-    'Uyo',
-  ],
-
-  Anambra: [
-    'Aguata',
-    'Anambra East',
-    'Anambra West',
-    'Anaocha',
-    'Awka North',
-    'Awka South',
-    'Ayamelum',
-    'Dunukofia',
-    'Ekwusigo',
-    'Idemili North',
-    'Idemili South',
-    'Ihiala',
-    'Njikoka',
-    'Nnewi North',
-    'Nnewi South',
-    'Ogbaru',
-    'Onitsha North',
-    'Onitsha South',
-    'Orumba North',
-    'Orumba South',
-    'Oyi',
-  ],
-
-  Bauchi: [
-    'Bauchi',
-    'Bogoro',
-    'Damban',
-    'Darazo',
-    'Dass',
-    'Gamawa',
-    'Ganjuwa',
-    'Giade',
-    'Itas/Gadau',
-    'Jama’are',
-    'Katagum',
-    'Kirfi',
-    'Misau',
-    'Ningi',
-    'Shira',
-    'Tafawa Balewa',
-    'Toro',
-    'Warji',
-    'Zaki',
-  ],
-
-  Bayelsa: [
-    'Brass',
-    'Ekeremor',
-    'Kolokuma/Opokuma',
-    'Nembe',
-    'Ogbia',
-    'Sagbama',
-    'Southern Ijaw',
-    'Yenagoa',
-  ],
-
-  Benue: [
-    'Ado',
-    'Agatu',
-    'Apa',
-    'Buruku',
-    'Gboko',
-    'Guma',
-    'Gwer East',
-    'Gwer West',
-    'Katsina-Ala',
-    'Konshisha',
-    'Kwande',
-    'Logo',
-    'Makurdi',
-    'Obi',
-    'Ogbadibo',
-    'Ohimini',
-    'Oju',
-    'Okpokwu',
-    'Oturkpo',
-    'Tarka',
-    'Ukum',
-    'Ushongo',
-    'Vandeikya',
-  ],
-
-  Borno: [
-    'Abadam',
-    'Askira/Uba',
-    'Bama',
-    'Bayo',
-    'Biu',
-    'Chibok',
-    'Damboa',
-    'Dikwa',
-    'Gubio',
-    'Guzamala',
-    'Gwoza',
-    'Hawul',
-    'Jere',
-    'Kaga',
-    'Kala/Balge',
-    'Konduga',
-    'Kukawa',
-    'Kwaya Kusar',
-    'Mafa',
-    'Magumeri',
-    'Maiduguri',
-    'Marte',
-    'Mobbar',
-    'Monguno',
-    'Ngala',
-    'Nganzai',
-    'Shani',
-  ],
-
-  'Cross River': [
-    'Abi',
-    'Akamkpa',
-    'Akpabuyo',
-    'Bakassi',
-    'Bekwarra',
-    'Biase',
-    'Boki',
-    'Calabar Municipal',
-    'Calabar South',
-    'Etung',
-    'Ikom',
-    'Obanliku',
-    'Obubra',
-    'Obudu',
-    'Odukpani',
-    'Ogoja',
-    'Yakurr',
-    'Yala',
-  ],
-
-  Delta: [
-    'Aniocha North',
-    'Aniocha South',
-    'Bomadi',
-    'Burutu',
-    'Ethiope East',
-    'Ethiope West',
-    'Ika North East',
-    'Ika South',
-    'Isoko North',
-    'Isoko South',
-    'Ndokwa East',
-    'Ndokwa West',
-    'Okpe',
-    'Oshimili North',
-    'Oshimili South',
-    'Patani',
-    'Sapele',
-    'Udu',
-    'Ughelli North',
-    'Ughelli South',
-    'Ukwuani',
-    'Uvwie',
-    'Warri North',
-    'Warri South',
-    'Warri South West',
-  ],
-
-  Ebonyi: [
-    'Abakaliki',
-    'Afikpo North',
-    'Afikpo South',
-    'Ebonyi',
-    'Ezza North',
-    'Ezza South',
-    'Ikwo',
-    'Ishielu',
-    'Ivo',
-    'Izzi',
-    'Ohaukwu',
-    'Onicha',
-  ],
-
-  Edo: [
-    'Akoko-Edo',
-    'Egor',
-    'Esan Central',
-    'Esan North-East',
-    'Esan South-East',
-    'Esan West',
-    'Etsako Central',
-    'Etsako East',
-    'Etsako West',
-    'Igueben',
-    'Ikpoba-Okha',
-    'Oredo',
-    'Orhionmwon',
-    'Ovia North-East',
-    'Ovia South-West',
-    'Owan East',
-    'Owan West',
-    'Uhunmwonde',
-  ],
-
-  Ekiti: [
-    'Ado Ekiti',
-    'Efon',
-    'Ekiti East',
-    'Ekiti South-West',
-    'Ekiti West',
-    'Emure',
-    'Gbonyin',
-    'Ido Osi',
-    'Ijero',
-    'Ikere',
-    'Ikole',
-    'Ilejemeje',
-    'Irepodun/Ifelodun',
-    'Ise/Orun',
-    'Moba',
-    'Oye',
-  ],
-
-  Enugu: [
-    'Aninri',
-    'Awgu',
-    'Enugu East',
-    'Enugu North',
-    'Enugu South',
-    'Ezeagu',
-    'Igbo Etiti',
-    'Igbo Eze North',
-    'Igbo Eze South',
-    'Isi Uzo',
-    'Nkanu East',
-    'Nkanu West',
-    'Nsukka',
-    'Oji River',
-    'Udenu',
-    'Udi',
-    'Uzo-Uwani',
-  ],
-
-  Gombe: [
-    'Akko',
-    'Balanga',
-    'Billiri',
-    'Dukku',
-    'Funakaye',
-    'Gombe',
-    'Kaltungo',
-    'Kwami',
-    'Nafada',
-    'Shongom',
-    'Yamaltu/Deba',
-  ],
-
-  Imo: [
-    'Aboh Mbaise',
-    'Ahiazu Mbaise',
-    'Ehime Mbano',
-    'Ezinihitte',
-    'Ideato North',
-    'Ideato South',
-    'Ihitte/Uboma',
-    'Ikeduru',
-    'Isiala Mbano',
-    'Isu',
-    'Mbaitoli',
-    'Ngor Okpala',
-    'Njaba',
-    'Nkwerre',
-    'Nwangele',
-    'Obowo',
-    'Oguta',
-    'Ohaji/Egbema',
-    'Okigwe',
-    'Orlu',
-    'Orsu',
-    'Oru East',
-    'Oru West',
-    'Owerri Municipal',
-    'Owerri North',
-    'Owerri West',
-  ],
-
-  Jigawa: [
-    'Auyo',
-    'Babura',
-    'Biriniwa',
-    'Birnin Kudu',
-    'Buji',
-    'Dutse',
-    'Gagarawa',
-    'Garki',
-    'Gumel',
-    'Guri',
-    'Gwaram',
-    'Gwiwa',
-    'Hadejia',
-    'Jahun',
-    'Kafin Hausa',
-    'Kaugama',
-    'Kazaure',
-    'Kiri Kasama',
-    'Kiyawa',
-    'Maigatari',
-    'Malam Madori',
-    'Miga',
-    'Ringim',
-    'Roni',
-    'Sule Tankarkar',
-    'Taura',
-    'Yankwashi',
-  ],
-
-  Kaduna: [
-    'Birnin Gwari',
-    'Chikun',
-    'Giwa',
-    'Igabi',
-    'Ikara',
-    'Jaba',
-    'Jema’a',
-    'Kachia',
-    'Kaduna North',
-    'Kaduna South',
-    'Kagarko',
-    'Kajuru',
-    'Kaura',
-    'Kauru',
-    'Kubau',
-    'Kudan',
-    'Lere',
-    'Makarfi',
-    'Sabon Gari',
-    'Sanga',
-    'Soba',
-    'Zangon Kataf',
-    'Zaria',
-  ],
-
-  Kano: [
-    'Ajingi',
-    'Albasu',
-    'Bagwai',
-    'Bebeji',
-    'Bichi',
-    'Bunkure',
-    'Dala',
-    'Dambatta',
-    'Dawakin Kudu',
-    'Dawakin Tofa',
-    'Doguwa',
-    'Fagge',
-    'Gabasawa',
-    'Garko',
-    'Garun Mallam',
-    'Gaya',
-    'Gezawa',
-    'Gwale',
-    'Gwarzo',
-    'Kabo',
-    'Kano Municipal',
-    'Karaye',
-    'Kibiya',
-    'Kiru',
-    'Kumbotso',
-    'Kunchi',
-    'Kura',
-    'Madobi',
-    'Makoda',
-    'Minjibir',
-    'Nasarawa',
-    'Rano',
-    'Rimin Gado',
-    'Rogo',
-    'Shanono',
-    'Sumaila',
-    'Takai',
-    'Tarauni',
-    'Tofa',
-    'Tsanyawa',
-    'Tudun Wada',
-    'Ungogo',
-    'Warawa',
-    'Wudil',
-  ],
-
-  Katsina: [
-    'Bakori',
-    'Batagarawa',
-    'Batsari',
-    'Baure',
-    'Bindawa',
-    'Charanchi',
-    'Dan Musa',
-    'Dandume',
-    'Danja',
-    'Daura',
-    'Dutsi',
-    'Dutsin-Ma',
-    'Faskari',
-    'Funtua',
-    'Ingawa',
-    'Jibia',
-    'Kafur',
-    'Kaita',
-    'Kankara',
-    'Kankia',
-    'Katsina',
-    'Kurfi',
-    'Kusada',
-    'Mai’Adua',
-    'Malumfashi',
-    'Mani',
-    'Mashi',
-    'Matazu',
-    'Musawa',
-    'Rimi',
-    'Sabuwa',
-    'Safana',
-    'Sandamu',
-    'Zango',
-  ],
-
-  Kebbi: [
-    'Aleiro',
-    'Arewa Dandi',
-    'Argungu',
-    'Augie',
-    'Bagudo',
-    'Birnin Kebbi',
-    'Bunza',
-    'Dandi',
-    'Fakai',
-    'Gwandu',
-    'Jega',
-    'Kalgo',
-    'Koko/Besse',
-    'Maiyama',
-    'Ngaski',
-    'Sakaba',
-    'Shanga',
-    'Suru',
-    'Wasagu/Danko',
-    'Yauri',
-    'Zuru',
-  ],
-
-  Kogi: [
-    'Adavi',
-    'Ajaokuta',
-    'Ankpa',
-    'Bassa',
-    'Dekina',
-    'Ibaji',
-    'Idah',
-    'Igalamela Odolu',
-    'Ijumu',
-    'Kabba/Bunu',
-    'Kogi',
-    'Lokoja',
-    'Mopa-Muro',
-    'Ofu',
-    'Ogori/Magongo',
-    'Okehi',
-    'Okene',
-    'Olamaboro',
-    'Omala',
-    'Yagba East',
-    'Yagba West',
-  ],
-
-  Kwara: [
-    'Asa',
-    'Baruten',
-    'Edu',
-    'Ekiti',
-    'Ifelodun',
-    'Ilorin East',
-    'Ilorin South',
-    'Ilorin West',
-    'Irepodun',
-    'Isin',
-    'Kaiama',
-    'Moro',
-    'Offa',
-    'Oke Ero',
-    'Oyun',
-    'Pategi',
-  ],
-
-  Lagos: [
-    'Agege',
-    'Ajeromi-Ifelodun',
-    'Alimosho',
-    'Amuwo-Odofin',
-    'Apapa',
-    'Badagry',
-    'Epe',
-    'Eti-Osa',
-    'Ibeju-Lekki',
-    'Ifako-Ijaiye',
-    'Ikeja',
-    'Ikorodu',
-    'Kosofe',
-    'Lagos Island',
-    'Lagos Mainland',
-    'Mushin',
-    'Ojo',
-    'Oshodi-Isolo',
-    'Shomolu',
-    'Surulere',
-  ],
-
-  Nasarawa: [
-    'Akwanga',
-    'Awe',
-    'Doma',
-    'Karu',
-    'Keana',
-    'Keffi',
-    'Kokona',
-    'Lafia',
-    'Nasarawa',
-    'Nasarawa Eggon',
-    'Obi',
-    'Toto',
-    'Wamba',
-  ],
-
-  Niger: [
-    'Agaie',
-    'Agwara',
-    'Bida',
-    'Borgu',
-    'Bosso',
-    'Chanchaga',
-    'Edati',
-    'Gbako',
-    'Gurara',
-    'Katcha',
-    'Kontagora',
-    'Lapai',
-    'Lavun',
-    'Magama',
-    'Mariga',
-    'Mashegu',
-    'Mokwa',
-    'Munya',
-    'Paikoro',
-    'Rafi',
-    'Rijau',
-    'Shiroro',
-    'Suleja',
-    'Tafa',
-    'Wushishi',
-  ],
-
-  Ogun: [
-    'Abeokuta North',
-    'Abeokuta South',
-    'Ado-Odo/Ota',
-    'Ewekoro',
-    'Ifo',
-    'Ijebu East',
-    'Ijebu North',
-    'Ijebu North East',
-    'Ijebu Ode',
-    'Ikenne',
-    'Imeko Afon',
-    'Ipokia',
-    'Obafemi Owode',
-    'Odeda',
-    'Odogbolu',
-    'Ogun Waterside',
-    'Remo North',
-    'Sagamu',
-    'Yewa North',
-    'Yewa South',
-  ],
-
-  Ondo: [
-    'Akoko North-East',
-    'Akoko North-West',
-    'Akoko South-East',
-    'Akoko South-West',
-    'Akure North',
-    'Akure South',
-    'Ese Odo',
-    'Idanre',
-    'Ifedore',
-    'Ilaje',
-    'Ile Oluji/Okeigbo',
-    'Irele',
-    'Odigbo',
-    'Okitipupa',
-    'Ondo East',
-    'Ondo West',
-    'Ose',
-    'Owo',
-  ],
-
-  Osun: [
-    'Atakunmosa East',
-    'Atakunmosa West',
-    'Ayedaade',
-    'Ayedire',
-    'Boluwaduro',
-    'Boripe',
-    'Ede North',
-    'Ede South',
-    'Egbedore',
-    'Ejigbo',
-    'Ife Central',
-    'Ife East',
-    'Ife North',
-    'Ife South',
-    'Ifedayo',
-    'Ila',
-    'Ilesa East',
-    'Ilesa West',
-    'Irepodun',
-    'Irewole',
-    'Isokan',
-    'Iwo',
-    'Obokun',
-    'Odo Otin',
-    'Ola Oluwa',
-    'Olorunda',
-    'Oriade',
-    'Orolu',
-    'Osogbo',
-  ],
-
-  Oyo: [
-    'Afijio',
-    'Akinyele',
-    'Atiba',
-    'Atisbo',
-    'Egbeda',
-    'Ibadan North',
-    'Ibadan North-East',
-    'Ibadan North-West',
-    'Ibadan South-East',
-    'Ibadan South-West',
-    'Ibarapa Central',
-    'Ibarapa East',
-    'Ibarapa North',
-    'Ido',
-    'Irepo',
-    'Iseyin',
-    'Itesiwaju',
-    'Iwajowa',
-    'Kajola',
-    'Lagelu',
-    'Ogbomoso North',
-    'Ogbomoso South',
-    'Ogo Oluwa',
-    'Olorunsogo',
-    'Oluyole',
-    'Ona Ara',
-    'Orelope',
-    'Ori Ire',
-    'Oyo East',
-    'Oyo West',
-    'Saki East',
-    'Saki West',
-    'Surulere',
-  ],
-
-  Plateau: [
-    'Barkin Ladi',
-    'Bassa',
-    'Bokkos',
-    'Jos East',
-    'Jos North',
-    'Jos South',
-    'Kanam',
-    'Kanke',
-    'Langtang North',
-    'Langtang South',
-    'Mangu',
-    'Mikang',
-    'Pankshin',
-    'Qua’an Pan',
-    'Riyom',
-    'Shendam',
-    'Wase',
-  ],
-
-  Rivers: [
-    'Abua/Odual',
-    'Ahoada East',
-    'Ahoada West',
-    'Akuku-Toru',
-    'Andoni',
-    'Asari-Toru',
-    'Bonny',
-    'Degema',
-    'Eleme',
-    'Emohua',
-    'Etche',
-    'Gokana',
-    'Ikwerre',
-    'Khana',
-    'Obio/Akpor',
-    'Ogba/Egbema/Ndoni',
-    'Ogu/Bolo',
-    'Okrika',
-    'Omuma',
-    'Opobo/Nkoro',
-    'Oyigbo',
-    'Port Harcourt',
-    'Tai',
-  ],
-
-  Sokoto: [
-    'Binji',
-    'Bodinga',
-    'Dange Shuni',
-    'Gada',
-    'Goronyo',
-    'Gudu',
-    'Gwadabawa',
-    'Illela',
-    'Isa',
-    'Kebbe',
-    'Kware',
-    'Rabah',
-    'Sabon Birni',
-    'Shagari',
-    'Silame',
-    'Sokoto North',
-    'Sokoto South',
-    'Tambuwal',
-    'Tangaza',
-    'Tureta',
-    'Wamako',
-    'Wurno',
-    'Yabo',
-  ],
-
-  Taraba: [
-    'Ardo Kola',
-    'Bali',
-    'Donga',
-    'Gashaka',
-    'Gassol',
-    'Ibi',
-    'Jalingo',
-    'Karim Lamido',
-    'Kumi',
-    'Lau',
-    'Sardauna',
-    'Takum',
-    'Ussa',
-    'Wukari',
-    'Yorro',
-    'Zing',
-  ],
-
-  Yobe: [
-    'Bade',
-    'Bursari',
-    'Damaturu',
-    'Fika',
-    'Fune',
-    'Geidam',
-    'Gujba',
-    'Gulani',
-    'Jakusko',
-    'Karasuwa',
-    'Machina',
-    'Nangere',
-    'Nguru',
-    'Potiskum',
-    'Tarmuwa',
-    'Yunusari',
-    'Yusufari',
-  ],
-
-  Zamfara: [
-    'Anka',
-    'Bakura',
-    'Birnin Magaji/Kiyaw',
-    'Bukkuyum',
-    'Bungudu',
-    'Gummi',
-    'Gusau',
-    'Isa',
-    'Kaura Namoda',
-    'Maradun',
-    'Maru',
-    'Shinkafi',
-    'Talata Mafara',
-    'Tsafe',
-    'Zurmi',
-  ],
-
-  'Federal Capital Territory': [
-    'Abaji',
-    'Bwari',
-    'Gwagwalada',
-    'Kuje',
-    'Kwali',
-    'Municipal Area Council',
-  ],
+type ProfileForm = {
+  fullName: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  gender: string;
+  address: string;
+  city: string;
+  state: string;
+  lga: string;
+  country: string;
 };
 
-// ============================================================
-// GENDER OPTIONS
-// ============================================================
-
-const GENDER_OPTIONS = [
-  'Male',
-  'Female',
-  'Other',
-  'Prefer not to say',
+const NIGERIAN_STATES = [
+  'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa',
+  'Benue', 'Borno', 'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti',
+  'Enugu', 'Gombe', 'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina',
+  'Kebbi', 'Kogi', 'Kwara', 'Lagos', 'Nasarawa', 'Niger', 'Ogun',
+  'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto', 'Taraba',
+  'Yobe', 'Zamfara', 'Federal Capital Territory',
 ];
 
-// ============================================================
-// PROFILE
-// ============================================================
+const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
+
+const emptyForm: ProfileForm = {
+  fullName: '',
+  email: '',
+  phone: '',
+  dateOfBirth: '',
+  gender: '',
+  address: '',
+  city: '',
+  state: '',
+  lga: '',
+  country: 'Nigeria',
+};
+
+const getToken = () =>
+  localStorage.getItem('zenimonies_token') ||
+  localStorage.getItem('token');
+
+const formatDateInput = (value?: string) =>
+  value ? String(value).slice(0, 10) : '';
+
+const getErrorMessage = (err: unknown, fallback: string) => {
+  if (axios.isAxiosError(err)) {
+    return err.response?.data?.message || fallback;
+  }
+  return err instanceof Error ? err.message : fallback;
+};
 
 const Profile: React.FC = () => {
   const navigate = useNavigate();
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [user, setUser] =
-    useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [account, setAccount] = useState<Account | null>(null);
+  const [form, setForm] = useState<ProfileForm>(emptyForm);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [approvedKycTier, setApprovedKycTier] = useState(0);
 
-  const [account, setAccount] =
-    useState<Account | null>(null);
-
-  const [editing, setEditing] =
-    useState(false);
-
-  const [saving, setSaving] =
-    useState(false);
-
-  const [photoUploading, setPhotoUploading] =
-    useState(false);
-
-  const [message, setMessage] =
-    useState('');
-
-  const [error, setError] =
-    useState('');
-
-  const photoInputRef =
-    useRef<HTMLInputElement | null>(null);
-
-  const [form, setForm] = useState({
-    fullName: '',
-    email: '',
-    phone: '',
-    dateOfBirth: '',
-    gender: '',
-    address: '',
-    city: '',
-    state: '',
-    lga: '',
-    country: 'Nigeria',
-  });
-
-  // ==========================================================
-  // LOAD PROFILE
-  // ==========================================================
-
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     try {
       setError('');
-
-      const token =
-        localStorage.getItem(
-          'zenimonies_token'
-        ) ||
-        localStorage.getItem('token');
-
+      const token = getToken();
       if (!token) {
         navigate('/login');
         return;
       }
 
-      const response =
-        await axios.get(
-          `${API_URL}/api/profile`,
-          {
-            timeout: 60000,
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
-
-      const data =
-        response.data;
-
-      if (
-        !data?.success ||
-        !data?.user
-      ) {
-        throw new Error(
-          data?.message ||
-            'Unable to load your profile.'
-        );
-      }
-
-      const serverUser =
-        data.user;
-
-      setUser(serverUser);
-
-      setForm({
-        fullName:
-          serverUser.full_name || '',
-
-        email:
-          serverUser.email || '',
-
-        phone:
-          serverUser.phone || '',
-
-        dateOfBirth:
-          serverUser.date_of_birth
-            ? String(
-                serverUser.date_of_birth
-              ).slice(0, 10)
-            : '',
-
-        gender:
-          serverUser.gender || '',
-
-        address:
-          serverUser.address ||
-          serverUser.residential_address ||
-          '',
-
-        city:
-          serverUser.city || '',
-
-        state:
-          serverUser.state || '',
-
-        lga:
-          serverUser.lga || '',
-
-        country:
-          serverUser.country ||
-          'Nigeria',
+      const response = await axios.get(`${API_URL}/api/profile`, {
+        timeout: 60000,
+        headers: { Authorization: `Bearer ${token}` },
       });
+      const data = response.data;
 
+      if (!data?.success || !data?.user) {
+        throw new Error(data?.message || 'Unable to load your profile.');
+      }
+
+      const serverUser: User = data.user;
+      setUser(serverUser);
+      setForm({
+        fullName: serverUser.full_name || '',
+        email: serverUser.email || '',
+        phone: serverUser.phone || '',
+        dateOfBirth: formatDateInput(serverUser.date_of_birth || serverUser.dob),
+        gender: serverUser.gender || '',
+        address: serverUser.address || serverUser.residential_address || '',
+        city: serverUser.city || '',
+        state: serverUser.state || '',
+        lga: serverUser.lga || '',
+        country: serverUser.country || 'Nigeria',
+      });
+      setAccount(data.account || null);
+
+      localStorage.setItem('zenimonies_user', JSON.stringify(serverUser));
       if (data.account) {
-        setAccount(
-          data.account
-        );
+        localStorage.setItem('zenimonies_accounts', JSON.stringify([data.account]));
       } else {
-        setAccount(null);
+        localStorage.removeItem('zenimonies_accounts');
       }
 
-      localStorage.setItem(
-        'zenimonies_user',
-        JSON.stringify(
-          serverUser
-        )
-      );
-
-      if (data.account) {
-        localStorage.setItem(
-          'zenimonies_accounts',
-          JSON.stringify([
-            data.account,
-          ])
+      // The KYC endpoint is supplementary. Profile loading should still work
+      // if this endpoint is temporarily unavailable.
+      try {
+        const kycResponse = await axios.get(`${API_URL}/api/kyc/status`, {
+          timeout: 30000,
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const kyc = kycResponse.data?.kyc || kycResponse.data;
+        const rawTier = Number(
+          kyc?.approved_tier ??
+          kyc?.verified_tier ??
+          kyc?.tier ??
+          serverUser.kyc_tier ??
+          serverUser.tier ??
+          0
+        );
+        setApprovedKycTier(
+          Number.isFinite(rawTier) ? Math.max(0, Math.min(3, rawTier)) : 0
+        );
+      } catch (kycError) {
+        console.warn('Could not load KYC status; using profile flags.', kycError);
+        const fallbackTier = Number(serverUser.kyc_tier ?? serverUser.tier ?? 0);
+        setApprovedKycTier(
+          Number.isFinite(fallbackTier) ? Math.max(0, Math.min(3, fallbackTier)) : 0
         );
       }
-
     } catch (err: unknown) {
-      console.error(
-        'Profile loading error:',
-        err
-      );
-
-      if (
-        axios.isAxiosError(err) &&
-        err.response?.status === 401
-      ) {
-        localStorage.removeItem(
-          'zenimonies_token'
-        );
-
-        localStorage.removeItem(
-          'token'
-        );
-
+      console.error('Profile loading error:', err);
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+        localStorage.removeItem('zenimonies_token');
+        localStorage.removeItem('token');
         navigate('/login');
         return;
       }
-
-      setError(
-        axios.isAxiosError(err)
-          ? err.response?.data?.message ||
-              'Unable to load your profile.'
-          : err instanceof Error
-            ? err.message
-            : 'Unable to load your profile.'
-      );
+      setError(getErrorMessage(err, 'Unable to load your profile.'));
+    } finally {
+      setLoading(false);
     }
+  }, [navigate]);
+
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
+
+  const displayName = useMemo(
+    () =>
+      user?.full_name ||
+      user?.name ||
+      `${user?.first_name || ''} ${user?.last_name || ''}`.trim() ||
+      'ZENIMONIES Customer',
+    [user]
+  );
+
+  const initials = useMemo(
+    () =>
+      displayName
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0))
+        .slice(0, 2)
+        .join('')
+        .toUpperCase() || 'Z',
+    [displayName]
+  );
+
+  const tier1Verified = approvedKycTier >= 1 || user?.bvn_verified === true;
+  const tier2Verified = approvedKycTier >= 2 || user?.id_verified === true;
+  const tier3Verified = approvedKycTier >= 3 || user?.tier_3_verified === true;
+
+  // Keep the identity lock consistent with the deployed backend's approved-KYC
+  // policy. The server remains the authority and enforces this rule on writes.
+  const accountVerified =
+    approvedKycTier >= 1 ||
+    user?.is_verified === true ||
+    user?.bvn_verified === true ||
+    user?.id_verified === true ||
+    user?.tier_3_verified === true;
+
+  const legalNameLocked = user?.legal_name_locked === true || accountVerified;
+  const profileLocked = accountVerified;
+  const highestTier = tier3Verified ? 3 : tier2Verified ? 2 : tier1Verified ? 1 : 0;
+  const nextTier = highestTier === 0 ? 1 : highestTier === 1 ? 2 : 3;
+
+  const updateField = (field: keyof ProfileForm, value: string) => {
+    setForm((previous) => ({ ...previous, [field]: value }));
   };
-
-  // ==========================================================
-  // DISPLAY NAME
-  // ==========================================================
-
-  const displayName =
-    user?.full_name ||
-    user?.name ||
-    `${user?.first_name || ''} ${
-      user?.last_name || ''
-    }`.trim() ||
-    'Zenimonies User';
-
-  // ==========================================================
-  // INITIALS
-  // ==========================================================
-
-  const initials =
-    displayName
-      .split(' ')
-      .filter(Boolean)
-      .map(
-        (part) =>
-          part.charAt(0)
-      )
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
-// ==========================================================
-// VERIFICATION STATUS
-// ==========================================================
-
-// Tier 1 is complete only when BVN verification is confirmed.
-const tier1Verified =
-  user?.bvn_verified === true;
-
-// Tier 2 requires both identity verification and liveness.
-const tier2Verified =
-  user?.id_verified === true;
-
-// Keep the existing account-level flag for profile locking.
-const accountVerified =
-  user?.is_verified === true;
-
-const legalNameLocked =
-  user?.legal_name_locked === true;
-
-const profileLocked =
-  accountVerified;
-
-const verificationLabel = tier2Verified
-  ? '✓ Tier 2 Verified'
-  : tier1Verified
-    ? '✓ Tier 1 Verified · Upgrade to Tier 2'
-    : 'Complete Tier 1 Verification';
-  // ==========================================================
-  // LOCATION OPTIONS
-  // ==========================================================
-
-  const stateOptions = NIGERIAN_STATES;
-
-const lgaOptions =
-  form.state
-    ? NIGERIAN_LGAS[
-  form.state
-  ] || []
-    : [];
-
-  // ==========================================================
-  // UPDATE FIELD
-  // ==========================================================
-
-  const updateField = (
-    field: keyof typeof form,
-    value: string
-  ) => {
-    setForm(
-      (previous) => ({
-        ...previous,
-        [field]: value,
-      })
-    );
-  };
-
-  // ==========================================================
-  // COUNTRY
-  // ==========================================================
-
-  const handleCountryChange = (
-    value: string
-  ) => {
-    setForm(
-      (previous) => ({
-        ...previous,
-        country: value,
-        state: '',
-        lga: '',
-      })
-    );
-  };
-
-  // ==========================================================
-  // STATE
-  // ==========================================================
-
-  const handleStateChange = (
-    value: string
-  ) => {
-    setForm(
-      (previous) => ({
-        ...previous,
-        state: value,
-        lga: '',
-      })
-    );
-  };
-
-  // ==========================================================
-  // SAVE PROFILE
-  // ==========================================================
 
   const handleSave = async () => {
     if (profileLocked) {
-      setError(
-        'Your account is verified. Protected profile information can no longer be changed.'
-      );
+      setError('Your verified account details are protected and can no longer be edited here.');
+      return;
+    }
+
+    const token = getToken();
+    if (!token) {
+      navigate('/login');
       return;
     }
 
@@ -1338,163 +260,76 @@ const lgaOptions =
     setError('');
 
     try {
-      const token =
-        localStorage.getItem(
-          'zenimonies_token'
-        ) ||
-        localStorage.getItem('token');
-
-      if (!token) {
-        navigate('/login');
-        return;
-      }
-
-      const response =
-        await axios.put(
-          `${API_URL}/api/profile`,
-          {
-            full_name:
-              form.fullName.trim(),
-
-            email:
-              form.email.trim(),
-
-            phone:
-              form.phone.trim(),
-
-            date_of_birth:
-              form.dateOfBirth ||
-              null,
-
-            gender:
-              form.gender ||
-              null,
-
-            address:
-              form.address.trim(),
-
-            city:
-              form.city.trim(),
-
-            state:
-              form.state,
-
-            lga:
-              form.lga,
-
-            country:
-              form.country,
+      const response = await axios.put(
+        `${API_URL}/api/profile`,
+        {
+          full_name: form.fullName.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          date_of_birth: form.dateOfBirth || null,
+          gender: form.gender || null,
+          address: form.address.trim(),
+          city: form.city.trim(),
+          state: form.state,
+          lga: form.lga.trim(),
+          country: form.country,
+        },
+        {
+          timeout: 60000,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
-          {
-            timeout: 60000,
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
+        }
+      );
 
-              'Content-Type':
-                'application/json',
-            },
-          }
-        );
-
-      if (
-        !response.data?.success
-      ) {
-        throw new Error(
-          response.data?.message ||
-            'Unable to save your profile.'
-        );
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Unable to save your profile.');
       }
 
       await loadProfile();
-
       setEditing(false);
-
-      setMessage(
-        'Profile updated successfully.'
-      );
-
+      setMessage('Your profile has been updated successfully.');
     } catch (err: unknown) {
-      console.error(
-        'Profile save error:',
-        err
-      );
-
+      console.error('Profile save error:', err);
       if (
         axios.isAxiosError(err) &&
         err.response?.status === 403 &&
-        (
-          err.response?.data?.code ===
-            'PROFILE_LOCKED' ||
-          err.response?.data?.code ===
-            'LEGAL_NAME_LOCKED'
-        )
+        ['PROFILE_LOCKED', 'LEGAL_NAME_LOCKED'].includes(err.response?.data?.code)
       ) {
         setEditing(false);
-
         setError(
           err.response?.data?.message ||
-            'Your verified profile information can no longer be changed.'
+          'Your verified profile information can no longer be changed.'
         );
-
         await loadProfile();
-
       } else {
-        setError(
-          axios.isAxiosError(err)
-            ? err.response?.data?.message ||
-                'Unable to save your profile.'
-            : err instanceof Error
-              ? err.message
-              : 'Unable to save your profile.'
-        );
+        setError(getErrorMessage(err, 'Unable to save your profile.'));
       }
-
     } finally {
       setSaving(false);
     }
   };
 
-  // ==========================================================
-  // CHANGE PROFILE PHOTO
-  // ==========================================================
-
   const handlePhotoChange = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const file =
-      event.target.files?.[0];
-
+    const file = event.target.files?.[0];
     event.target.value = '';
+    if (!file) return;
 
-    if (!file) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('Choose a JPG, PNG, or WEBP image.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Your profile photo must be 2 MB or smaller.');
       return;
     }
 
-    const allowedTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-    ];
-
-    if (
-      !allowedTypes.includes(
-        file.type
-      )
-    ) {
-      setError(
-        'Please select a JPG, PNG, or WEBP image.'
-      );
-      return;
-    }
-
-    if (
-      file.size >
-      2 * 1024 * 1024
-    ) {
-      setError(
-        'Profile photo must not exceed 2 MB.'
-      );
+    const token = getToken();
+    if (!token) {
+      navigate('/login');
       return;
     }
 
@@ -1503,1380 +338,602 @@ const lgaOptions =
     setError('');
 
     try {
-      const token =
-        localStorage.getItem(
-          'zenimonies_token'
-        ) ||
-        localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('profile_photo', file);
 
-      if (!token) {
-        navigate('/login');
-        return;
+      const response = await axios.post(`${API_URL}/api/profile/photo`, formData, {
+        timeout: 60000,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Unable to update your profile photo.');
       }
-
-      const formData =
-        new FormData();
-
-      formData.append(
-        'profile_photo',
-        file
-      );
-
-      const response =
-        await axios.post(
-          `${API_URL}/api/profile/photo`,
-          formData,
-          {
-            timeout: 60000,
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
-
-      if (
-        !response.data?.success
-      ) {
-        throw new Error(
-          response.data?.message ||
-            'Unable to update your profile photo.'
-        );
-      }
-
-      const updatedPhoto =
-        response.data
-          .profile_photo;
 
       const updatedUser: User = {
         ...(user || {}),
-        profile_photo:
-          updatedPhoto,
+        profile_photo: response.data.profile_photo,
       };
-
       setUser(updatedUser);
-
-      localStorage.setItem(
-        'zenimonies_user',
-        JSON.stringify(
-          updatedUser
-        )
-      );
-
-      setMessage(
-        'Profile photo updated successfully.'
-      );
-
+      localStorage.setItem('zenimonies_user', JSON.stringify(updatedUser));
+      setMessage('Profile photo updated successfully.');
     } catch (err: unknown) {
-      console.error(
-        'Profile photo upload error:',
-        err
-      );
-
-      setError(
-        axios.isAxiosError(err)
-          ? err.response?.data?.message ||
-              'Unable to update your profile photo.'
-          : err instanceof Error
-            ? err.message
-            : 'Unable to update your profile photo.'
-      );
-
+      console.error('Profile photo upload error:', err);
+      setError(getErrorMessage(err, 'Unable to update your profile photo.'));
     } finally {
       setPhotoUploading(false);
     }
   };
 
-  // ==========================================================
-  // CANCEL
-  // ==========================================================
-
   const handleCancel = async () => {
     setEditing(false);
     setMessage('');
     setError('');
-
     await loadProfile();
   };
 
-  // ==========================================================
-  // RENDER
-  // ==========================================================
+  const beginEdit = () => {
+    setMessage('');
+    setError('');
+    setEditing(true);
+  };
+
+  const startVerification = () => {
+    navigate(`/kyc${nextTier > 1 ? `?level=${nextTier}` : ''}`);
+  };
+
+  const tierRows = [
+    {
+      tier: 1,
+      title: 'Tier 1',
+      description: 'Basic identity verification',
+      completed: tier1Verified,
+    },
+    {
+      tier: 2,
+      title: 'Tier 2',
+      description: 'Identity document and liveness checks',
+      completed: tier2Verified,
+    },
+    {
+      tier: 3,
+      title: 'Tier 3',
+      description: 'Enhanced verification for higher account limits',
+      completed: tier3Verified,
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div style={styles.page}>
+        <header style={styles.header}>
+          <button type="button" onClick={() => navigate('/')} style={styles.headerBack} aria-label="Go back">←</button>
+          <div>
+            <div style={styles.headerEyebrow}>ZENIMONIES BANKING</div>
+            <div style={styles.headerTitle}>My Profile</div>
+          </div>
+        </header>
+        <main style={styles.main}>
+          <section style={styles.loadingCard}>
+            <div style={styles.spinner} />
+            <strong>Loading your profile</strong>
+            <span style={styles.mutedText}>Securely retrieving your account information…</span>
+          </section>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.page}>
-
-      {/* ======================================================
-          HEADER
-      ====================================================== */}
-
       <header style={styles.header}>
-
-        <button
-          type="button"
-          onClick={() =>
-            navigate('/')
-          }
-          style={styles.backButton}
-        >
-          ←
-        </button>
-
-        <div
-          style={
-            styles.headerTitle
-          }
-        >
-          My Profile
+        <button type="button" onClick={() => navigate('/')} style={styles.headerBack} aria-label="Go back">←</button>
+        <div style={styles.headerBrand}>
+          <div style={styles.headerEyebrow}>ZENIMONIES BANKING</div>
+          <div style={styles.headerTitle}>My Profile</div>
         </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            navigate('/')
-          }
-          style={styles.homeButton}
-        >
-          Home
-        </button>
-
+        <button type="button" onClick={() => navigate('/')} style={styles.headerHome}>Dashboard</button>
       </header>
 
       <main style={styles.main}>
-
-        {/* ====================================================
-            PROFILE SUMMARY
-        ==================================================== */}
-
-        <section
-          style={
-            styles.profileCard
-          }
-        >
-
-          <div
-            style={
-              styles.avatarWrapper
-            }
-          >
-
-            <div
-              style={styles.avatar}
-            >
-
-              {user?.profile_photo ||
-              user?.avatar ? (
-
-                <img
-                  src={
-                    user.profile_photo ||
-                    user.avatar
-                  }
-                  alt="Profile"
-                  style={
-                    styles.avatarImage
-                  }
-                />
-
-              ) : (
-
-                initials || 'Z'
-
-              )}
-
-            </div>
-
-            {/* HIDDEN FILE INPUT */}
-
-            <input
-              ref={
-                photoInputRef
-              }
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={
-                handlePhotoChange
-              }
-              style={{
-                display: 'none',
-              }}
-            />
-
-            {/* PHOTO BUTTON */}
-
-            <button
-              type="button"
-              onClick={() =>
-                photoInputRef.current?.click()
-              }
-              disabled={
-                photoUploading
-              }
-              style={
-                styles.photoButton
-              }
-            >
-              {photoUploading
-                ? 'Uploading...'
-                : 'Change Photo'}
-            </button>
-
+        <div style={styles.pageIntro}>
+          <div>
+            <div style={styles.eyebrow}>ACCOUNT SETTINGS</div>
+            <h1 style={styles.pageTitle}>Your profile</h1>
+            <p style={styles.pageSubtitle}>Manage your personal details, verification and account information.</p>
           </div>
-
-          <div
-            style={
-              styles.profileInfo
-            }
-          >
-
-            <h1
-              style={
-                styles.profileName
-              }
-            >
-              {displayName}
-            </h1>
-
-            <p
-              style={
-                styles.emailText
-              }
-            >
-              {user?.email ||
-                'Email not available'}
-            </p>
-
-    
-<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px', marginTop: '12px' }}>
-  <span
-    style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '6px',
-      padding: '6px 10px',
-      borderRadius: '20px',
-      backgroundColor: '#E8F5E9',
-      color: '#237A45',
-      fontSize: '13px',
-      fontWeight: 600,
-      whiteSpace: 'nowrap',
-    }}
-  >
-    <span aria-hidden="true">✓</span>
-    Tier 1 Verified
-  </span>
-
-  <button
-    type="button"
-    onClick={() => {
-      window.location.href = '/kyc?level=2';
-    }}
-    style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '8px',
-      padding: '10px 14px',
-      border: 'none',
-      borderRadius: '8px',
-      backgroundColor: '#287A4B',
-      color: '#FFFFFF',
-      fontSize: '14px',
-      fontWeight: 600,
-      cursor: 'pointer',
-    }}
-  >
-    Upgrade to Tier 2 <span aria-hidden="true">→</span>
-  </button>
-</div>
-        
-
-
-          </div>
-
-          {!editing &&
-            !profileLocked && (
-
-              <button
-                type="button"
-                onClick={() => {
-                  setEditing(true);
-                  setMessage('');
-                  setError('');
-                }}
-                style={
-                  styles.editButton
-                }
-              >
-                Edit Profile
-              </button>
-
-            )}
-
-          {profileLocked && (
-
-            <div
-              style={
-                styles.lockMessage
-              }
-            >
-              🔒 <strong>
-                Account Verified
-              </strong>
-
-              <br />
-
-              Your protected profile
-              information is locked.
-              Your profile photo can
-              still be changed.
-            </div>
-
-          )}
-
-        </section>
-
-        {/* ====================================================
-            MESSAGES
-        ==================================================== */}
+          <span style={styles.securePill}><span aria-hidden="true">●</span> Secure account</span>
+        </div>
 
         {message && (
-
-          <div
-            style={styles.success}
-          >
-            ✓ {message}
+          <div role="status" style={styles.successMessage}>
+            <span style={styles.messageIcon}>✓</span><span>{message}</span>
+            <button type="button" onClick={() => setMessage('')} style={styles.dismissButton} aria-label="Dismiss message">×</button>
           </div>
-
         )}
-
         {error && (
-
-          <div
-            style={styles.error}
-          >
-            {error}
+          <div role="alert" style={styles.errorMessage}>
+            <span style={styles.messageIcon}>!</span><span>{error}</span>
+            <button type="button" onClick={() => setError('')} style={styles.dismissButton} aria-label="Dismiss error">×</button>
           </div>
-
         )}
 
-        {/* ====================================================
-            PERSONAL INFORMATION
-        ==================================================== */}
+        <section style={styles.profileHero}>
+          <div style={styles.avatarColumn}>
+            <div style={styles.avatar}>
+              {user?.profile_photo || user?.avatar ? (
+                <img src={user.profile_photo || user.avatar} alt={`${displayName} profile`} style={styles.avatarImage} />
+              ) : initials}
+              <span style={styles.avatarCheck} aria-hidden="true">✓</span>
+            </div>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handlePhotoChange}
+              style={{ display: 'none' }}
+            />
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={photoUploading}
+              style={{ ...styles.secondaryButton, ...(photoUploading ? styles.buttonDisabled : {}) }}
+            >
+              {photoUploading ? 'Uploading…' : 'Change photo'}
+            </button>
+            <span style={styles.photoHint}>JPG, PNG or WEBP · Max 2 MB</span>
+          </div>
+
+          <div style={styles.heroDetails}>
+            <span style={styles.memberLabel}>ZENIMONIES CUSTOMER</span>
+            <h2 style={styles.profileName}>{displayName}</h2>
+            <p style={styles.profileEmail}>{user?.email || 'Email not available'}</p>
+            <div style={styles.heroBadges}>
+              <span style={{ ...styles.statusPill, ...(accountVerified ? styles.statusVerified : styles.statusPending) }}>
+                <span aria-hidden="true">{accountVerified ? '✓' : '○'}</span>
+                {accountVerified ? 'Identity verified' : 'Verification pending'}
+              </span>
+              <span style={styles.statusPillNeutral}>Tier {highestTier} of 3</span>
+              {user?.phone_verified && <span style={styles.statusPillNeutral}>Phone verified</span>}
+            </div>
+            {profileLocked && (
+              <div style={styles.lockNotice}>
+                <span aria-hidden="true">🔒</span>
+                <span><strong>Protected profile</strong><br />Your approved verification details are locked. You can still update your profile photo.</span>
+              </div>
+            )}
+          </div>
+
+          {!profileLocked && !editing && (
+            <button type="button" onClick={beginEdit} style={styles.primaryButton}>
+              <span aria-hidden="true">✎</span> Edit profile
+            </button>
+          )}
+        </section>
+
+        <section style={styles.verificationCard}>
+          <div style={styles.cardHeadingRow}>
+            <div>
+              <div style={styles.eyebrow}>IDENTITY & SECURITY</div>
+              <h2 style={styles.sectionTitle}>Verification status</h2>
+              <p style={styles.sectionDescription}>Track your verification progress and see the next available step.</p>
+            </div>
+            <span style={{ ...styles.statusPill, ...(accountVerified ? styles.statusVerified : styles.statusPending) }}>
+              {accountVerified ? '✓ Verified' : 'Action needed'}
+            </span>
+          </div>
+
+          <div style={styles.progressHeader}>
+            <span style={styles.progressLabel}>Verification progress</span>
+            <strong style={styles.progressCount}>{highestTier} <span>/ 3 tiers</span></strong>
+          </div>
+          <div
+            style={styles.progressTrack}
+            role="progressbar"
+            aria-label="Verification progress"
+            aria-valuemin={0}
+            aria-valuemax={3}
+            aria-valuenow={highestTier}
+          >
+            <div style={{ ...styles.progressFill, width: `${(highestTier / 3) * 100}%` }} />
+          </div>
+
+          <div style={styles.tierList}>
+            {tierRows.map((item) => {
+              const current = item.tier === nextTier && !item.completed;
+              return (
+                <div key={item.tier} style={{
+                  ...styles.tierRow,
+                  ...(current ? styles.tierRowCurrent : {}),
+                  ...(item.completed ? styles.tierRowComplete : {}),
+                }}>
+                  <div style={{
+                    ...styles.tierIcon,
+                    ...(item.completed ? styles.tierIconComplete : {}),
+                    ...(current ? styles.tierIconCurrent : {}),
+                  }}>
+                    {item.completed ? '✓' : item.tier}
+                  </div>
+                  <div style={styles.tierCopy}>
+                    <div style={styles.tierTitleLine}>
+                      <strong style={styles.tierName}>{item.title}</strong>
+                      {current && <span style={styles.currentTag}>NEXT STEP</span>}
+                    </div>
+                    <span style={styles.tierDescription}>{item.description}</span>
+                  </div>
+                  <span style={{ ...styles.tierStatus, ...(item.completed ? styles.tierStatusComplete : {}) }}>
+                    {item.completed ? 'Completed' : 'Pending'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {!tier3Verified ? (
+            <div style={styles.upgradeFooter}>
+              <div>
+                <strong style={styles.upgradeTitle}>
+                  {highestTier === 0 ? 'Start identity verification' : `Continue to Tier ${nextTier}`}
+                </strong>
+                <p style={styles.upgradeDescription}>
+                  {highestTier === 0
+                    ? 'Complete the first step to begin unlocking verified account features.'
+                    : 'Continue your verification journey to access the next available tier.'}
+                </p>
+              </div>
+              <button type="button" onClick={startVerification} style={styles.primaryButton}>
+                {highestTier === 0 ? 'Verify account' : `Upgrade to Tier ${nextTier}`} <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          ) : (
+            <div style={styles.completeBanner}>
+              <span style={styles.completeIcon}>✓</span>
+              <span><strong>Verification journey complete</strong><br />All three displayed verification tiers are marked complete.</span>
+            </div>
+          )}
+          <p style={styles.securityFootnote}>
+            Verification status is based on information returned by your account and KYC services. If a status looks incorrect, refresh your profile or contact support.
+          </p>
+        </section>
 
         <section style={styles.card}>
+          <div style={styles.sectionHeadingBlock}>
+            <div style={styles.eyebrow}>YOUR DETAILS</div>
+            <h2 style={styles.sectionTitle}>Personal information</h2>
+            <p style={styles.sectionDescription}>Keep your information accurate so your account records stay up to date.</p>
+          </div>
 
-          <h2
-            style={
-              styles.sectionTitle
-            }
-          >
-            Personal Information
-          </h2>
-
-          <p
-            style={
-              styles.description
-            }
-          >
-            Keep your personal
-            information up to date.
-          </p>
-
-          <div style={styles.grid}>
-
-            {/* FULL LEGAL NAME */}
-
-            <div
-              style={styles.field}
-            >
-
-              <label
-                style={styles.label}
-              >
-                Full Legal Name
-              </label>
-
+          <div style={styles.formGrid}>
+            <div style={styles.field}>
+              <label htmlFor="profile-full-name" style={styles.label}>Full legal name</label>
               <input
+                id="profile-full-name"
                 type="text"
+                autoComplete="name"
                 value={form.fullName}
-                onChange={(event) =>
-                  updateField(
-                    'fullName',
-                    event.target.value
-                  )
-                }
-                disabled={
-                  !editing ||
-                  legalNameLocked
-                }
-                style={{
-                  ...styles.input,
-
-                  ...(editing &&
-                  !legalNameLocked
-                    ? styles.editableInput
-                    : styles.disabledInput),
-                }}
+                onChange={(event) => updateField('fullName', event.target.value)}
+                disabled={!editing || legalNameLocked}
+                style={{ ...styles.input, ...(editing && !legalNameLocked ? styles.inputEditable : styles.inputDisabled) }}
               />
-
-              {legalNameLocked && (
-
-                <small
-                  style={
-                    styles.helper
-                  }
-                >
-                  🔒 Legal name is permanently
-                  locked because your account
-                  has been verified.
-                </small>
-
-              )}
-
+              {legalNameLocked && <small style={styles.helper}>🔒 Your verified legal name is protected.</small>}
             </div>
 
-            {/* DATE OF BIRTH */}
-
-            <div
-              style={styles.field}
-            >
-
-              <label
-                style={styles.label}
-              >
-                Date of Birth
-              </label>
-
+            <div style={styles.field}>
+              <label htmlFor="profile-dob" style={styles.label}>Date of birth</label>
               <input
+                id="profile-dob"
                 type="date"
-                value={
-                  form.dateOfBirth
-                }
-                disabled={
-                  !editing ||
-                  profileLocked
-                }
-                onChange={(
-                  event
-                ) =>
-                  updateField(
-                    'dateOfBirth',
-                    event.target.value
-                  )
-                }
-                style={{
-                  ...styles.input,
-
-                  ...(editing &&
-                  !profileLocked
-                    ? styles.editableInput
-                    : styles.disabledInput),
-                }}
+                autoComplete="bday"
+                value={form.dateOfBirth}
+                onChange={(event) => updateField('dateOfBirth', event.target.value)}
+                disabled={!editing || profileLocked}
+                style={{ ...styles.input, ...(editing && !profileLocked ? styles.inputEditable : styles.inputDisabled) }}
               />
-
-              {profileLocked && (
-
-                <small
-                  style={
-                    styles.helper
-                  }
-                >
-                  🔒 Your verified date
-                  of birth cannot be
-                  changed.
-                </small>
-
-              )}
-
+              {profileLocked && <small style={styles.helper}>🔒 Your verified date of birth is protected.</small>}
             </div>
 
-            {/* GENDER */}
-
-            <div
-              style={styles.field}
-            >
-
-              <label
-                style={styles.label}
-              >
-                Gender
-              </label>
-
+            <div style={styles.field}>
+              <label htmlFor="profile-gender" style={styles.label}>Gender</label>
               <select
-                value={
-                  form.gender
-                }
-                disabled={
-                  !editing ||
-                  profileLocked
-                }
-                onChange={(
-                  event
-                ) =>
-                  updateField(
-                    'gender',
-                    event.target.value
-                  )
-                }
-                style={{
-                  ...styles.input,
-
-                  ...(editing &&
-                  !profileLocked
-                    ? styles.editableInput
-                    : styles.disabledInput),
-                }}
+                id="profile-gender"
+                value={form.gender}
+                onChange={(event) => updateField('gender', event.target.value)}
+                disabled={!editing || profileLocked}
+                style={{ ...styles.input, ...(editing && !profileLocked ? styles.inputEditable : styles.inputDisabled) }}
               >
-
-                <option value="">
-                  Select Gender
-                </option>
-
-                {GENDER_OPTIONS.map(
-                  (gender) => (
-
-                    <option
-                      key={gender}
-                      value={gender}
-                    >
-                      {gender}
-                    </option>
-
-                  )
-                )}
-
+                <option value="">Select gender</option>
+                {GENDER_OPTIONS.map((gender) => <option key={gender} value={gender}>{gender}</option>)}
               </select>
-
-              {profileLocked && (
-
-                <small
-                  style={
-                    styles.helper
-                  }
-                >
-                  🔒 Your verified profile
-                  information cannot be
-                  changed.
-                </small>
-
-              )}
-
             </div>
 
-            
-            {/* EMAIL */}
-
             <div style={styles.field}>
-              <label style={styles.label}>
-                Email Address
-              </label>
-
+              <label htmlFor="profile-email" style={styles.label}>Email address</label>
               <input
+                id="profile-email"
                 type="email"
+                autoComplete="email"
                 value={form.email}
+                onChange={(event) => updateField('email', event.target.value)}
                 disabled={!editing}
-                onChange={(event) =>
-                  updateField(
-                    'email',
-                    event.target.value
-                  )
-                }
-                style={{
-                  ...styles.input,
-                  ...(editing
-                    ? styles.editableInput
-                    : styles.disabledInput),
-                }}
+                style={{ ...styles.input, ...(editing ? styles.inputEditable : styles.inputDisabled) }}
               />
+              <small style={styles.helper}>Changing your email may require a separate verification process.</small>
             </div>
 
-
-            {/* PHONE */}
-
             <div style={styles.field}>
-              <label style={styles.label}>
-                Phone Number
-              </label>
-
+              <label htmlFor="profile-phone" style={styles.label}>Phone number</label>
               <input
+                id="profile-phone"
                 type="tel"
+                autoComplete="tel"
                 value={form.phone}
+                onChange={(event) => updateField('phone', event.target.value)}
                 disabled={!editing}
-                onChange={(event) =>
-                  updateField(
-                    'phone',
-                    event.target.value
-                  )
-                }
-                style={{
-                  ...styles.input,
-                  ...(editing
-                    ? styles.editableInput
-                    : styles.disabledInput),
-                }}
+                style={{ ...styles.input, ...(editing ? styles.inputEditable : styles.inputDisabled) }}
               />
-
               <small style={styles.helper}>
-                {user?.phone_verified
-                  ? '✓ Phone number verified'
-                  : 'Phone number not verified'}
+                {user?.phone_verified ? '✓ Phone number verified' : 'Phone number not verified'}
               </small>
             </div>
-
           </div>
-
         </section>
 
-        {/* ====================================================
-            RESIDENTIAL ADDRESS
-        ==================================================== */}
-
         <section style={styles.card}>
+          <div style={styles.sectionHeadingBlock}>
+            <div style={styles.eyebrow}>LOCATION DETAILS</div>
+            <h2 style={styles.sectionTitle}>Residential address</h2>
+            <p style={styles.sectionDescription}>Your address information helps keep your account records accurate.</p>
+          </div>
 
-          <h2
-            style={
-              styles.sectionTitle
-            }
-          >
-            Residential Address
-          </h2>
-
-          <p
-            style={
-              styles.description
-            }
-          >
-            Select your country,
-            state and Local Government
-            Area.
-          </p>
-
-          <div style={styles.grid}>
-
-            {/* COUNTRY */}
-
-            <div
-              style={styles.field}
-            >
-
-              <label
-                style={styles.label}
-              >
-                Country
-              </label>
-
+          <div style={styles.formGrid}>
+            <div style={styles.field}>
+              <label htmlFor="profile-country" style={styles.label}>Country</label>
               <select
-                value={
-                  form.country
-                }
-                disabled={
-                  !editing ||
-                  profileLocked
-                }
-                onChange={(
-                  event
-                ) =>
-                  handleCountryChange(
-                    event.target.value
-                  )
-                }
-                style={{
-                  ...styles.input,
-
-                  ...(editing &&
-                  !profileLocked
-                    ? styles.editableInput
-                    : styles.disabledInput),
+                id="profile-country"
+                value={form.country}
+                disabled={!editing || profileLocked}
+                onChange={(event) => {
+                  setForm((previous) => ({
+                    ...previous,
+                    country: event.target.value,
+                    state: '',
+                    lga: '',
+                  }));
                 }}
+                style={{ ...styles.input, ...(editing && !profileLocked ? styles.inputEditable : styles.inputDisabled) }}
               >
-
-                <option value="Nigeria">
-                  Nigeria
-                </option>
-
+                <option value="Nigeria">Nigeria</option>
               </select>
-
             </div>
 
-            {/* STATE / PROVINCE */}
-
-            <div
-              style={styles.field}
-            >
-
-              <label
-                style={styles.label}
-              >
-                {form.country ===
-                'Nigeria'
-                  ? 'State'
-                  : 'Province'}
-              </label>
-
+            <div style={styles.field}>
+              <label htmlFor="profile-state" style={styles.label}>State / FCT</label>
               <select
-                value={
-                  form.state
-                }
-                disabled={
-                  !editing ||
-                  profileLocked
-                }
-                onChange={(
-                  event
-                ) =>
-                  handleStateChange(
-                    event.target.value
-                  )
-                }
-                style={{
-                  ...styles.input,
-
-                  ...(editing &&
-                  !profileLocked
-                    ? styles.editableInput
-                    : styles.disabledInput),
-                }}
+                id="profile-state"
+                value={form.state}
+                disabled={!editing || profileLocked}
+                onChange={(event) => setForm((previous) => ({ ...previous, state: event.target.value, lga: '' }))}
+                style={{ ...styles.input, ...(editing && !profileLocked ? styles.inputEditable : styles.inputDisabled) }}
               >
-
-                <option value="">
-                  Select{' '}
-                  {form.country ===
-                  'Nigeria'
-                    ? 'State'
-                    : 'Province'}
-                </option>
-
-                {stateOptions.map(
-                  (state) => (
-
-                    <option
-                      key={state}
-                      value={state}
-                    >
-                      {state}
-                    </option>
-
-                  )
-                )}
-
+                <option value="">Select state</option>
+                {NIGERIAN_STATES.map((state) => <option key={state} value={state}>{state}</option>)}
               </select>
-
             </div>
 
-            {/* LGA */}
-
-            {form.country ===
-              'Nigeria' && (
-
-              <div
-                style={
-                  styles.field
-                }
-              >
-
-                <label
-                  style={
-                    styles.label
-                  }
-                >
-                  Local Government Area
-                </label>
-
-                <select
-                  value={
-                    form.lga
-                  }
-                  disabled={
-                    !editing ||
-                    profileLocked ||
-                    !form.state
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    updateField(
-                      'lga',
-                      event.target.value
-                    )
-                  }
-                  style={{
-                    ...styles.input,
-
-                    ...(editing &&
-                    !profileLocked &&
-                    form.state
-                      ? styles.editableInput
-                      : styles.disabledInput),
-                  }}
-                >
-
-                  <option value="">
-                    {!form.state
-                      ? 'Select a State first'
-                      : 'Select LGA'}
-                  </option>
-
-                  {lgaOptions.map(
-                    (lga) => (
-
-                      <option
-                        key={lga}
-                        value={lga}
-                      >
-                        {lga}
-                      </option>
-
-                    )
-                  )}
-
-                </select>
-
-              </div>
-
-            )}
-
-            {/* CITY */}
-
-            <div
-              style={styles.field}
-            >
-
-              <label
-                style={styles.label}
-              >
-                City / Town
-              </label>
-
+            <div style={styles.field}>
+              <label htmlFor="profile-lga" style={styles.label}>Local Government Area</label>
               <input
+                id="profile-lga"
                 type="text"
+                value={form.lga}
+                onChange={(event) => updateField('lga', event.target.value)}
+                disabled={!editing || profileLocked}
+                placeholder="Enter your LGA"
+                style={{ ...styles.input, ...(editing && !profileLocked ? styles.inputEditable : styles.inputDisabled) }}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <label htmlFor="profile-city" style={styles.label}>City / town</label>
+              <input
+                id="profile-city"
+                type="text"
+                autoComplete="address-level2"
                 value={form.city}
-                disabled={
-                  !editing ||
-                  profileLocked
-                }
+                onChange={(event) => updateField('city', event.target.value)}
+                disabled={!editing || profileLocked}
                 placeholder="Enter your city or town"
-                onChange={(
-                  event
-                ) =>
-                  updateField(
-                    'city',
-                    event.target.value
-                  )
-                }
-                style={{
-                  ...styles.input,
-
-                  ...(editing &&
-                  !profileLocked
-                    ? styles.editableInput
-                    : styles.disabledInput),
-                }}
+                style={{ ...styles.input, ...(editing && !profileLocked ? styles.inputEditable : styles.inputDisabled) }}
               />
-
             </div>
 
-            {/* ADDRESS */}
-
-            <div
-              style={{
-                ...styles.field,
-                gridColumn:
-                  '1 / -1',
-              }}
-            >
-
-              <label
-                style={styles.label}
-              >
-                Residential Address
-              </label>
-
+            <div style={{ ...styles.field, gridColumn: '1 / -1' }}>
+              <label htmlFor="profile-address" style={styles.label}>Residential address</label>
               <textarea
-                value={
-                  form.address
-                }
-                disabled={
-                  !editing ||
-                  profileLocked
-                }
+                id="profile-address"
+                autoComplete="street-address"
+                value={form.address}
+                onChange={(event) => updateField('address', event.target.value)}
+                disabled={!editing || profileLocked}
+                rows={3}
                 placeholder="Enter your full residential address"
-                rows={4}
-                onChange={(
-                  event
-                ) =>
-                  updateField(
-                    'address',
-                    event.target.value
-                  )
-                }
-                style={{
-                  ...styles.input,
-                  ...styles.textarea,
-
-                  ...(editing &&
-                  !profileLocked
-                    ? styles.editableInput
-                    : styles.disabledInput),
-                }}
+                style={{ ...styles.input, ...styles.textarea, ...(editing && !profileLocked ? styles.inputEditable : styles.inputDisabled) }}
               />
-
             </div>
-
           </div>
-
         </section>
-
-        {/* ====================================================
-            ACCOUNT INFORMATION
-        ==================================================== */}
 
         <section style={styles.card}>
-
-          <h2
-            style={
-              styles.sectionTitle
-            }
-          >
-            Account Information
-          </h2>
-
-          <div
-            style={
-              styles.accountGrid
-            }
-          >
-
-            <div>
-
-              <span
-                style={
-                  styles.accountLabel
-                }
-              >
-                Account Type
-              </span>
-
-              <strong
-                style={
-                  styles.accountValue
-                }
-              >
-                {account?.account_type ||
-                  '—'}
-              </strong>
-
-            </div>
-
-            <div>
-
-              <span
-                style={
-                  styles.accountLabel
-                }
-              >
-                Currency
-              </span>
-
-              <strong
-                style={
-                  styles.accountValue
-                }
-              >
-                {account?.currency ||
-                  '—'}
-              </strong>
-
-            </div>
-
-            <div>
-
-              <span
-                style={
-                  styles.accountLabel
-                }
-              >
-                Status
-              </span>
-
-              <strong
-                style={
-                  styles.accountValue
-                }
-              >
-                {account?.status ||
-                  '—'}
-              </strong>
-
-            </div>
-
+          <div style={styles.sectionHeadingBlock}>
+            <div style={styles.eyebrow}>BANKING DETAILS</div>
+            <h2 style={styles.sectionTitle}>Account information</h2>
+            <p style={styles.sectionDescription}>A quick overview of the account linked to your profile.</p>
           </div>
-
+          <div style={styles.accountGrid}>
+            <div style={styles.accountTile}>
+              <span style={styles.accountLabel}>Account type</span>
+              <strong style={styles.accountValue}>{account?.account_type || 'Not available'}</strong>
+            </div>
+            <div style={styles.accountTile}>
+              <span style={styles.accountLabel}>Currency</span>
+              <strong style={styles.accountValue}>{account?.currency || 'NGN'}</strong>
+            </div>
+            <div style={styles.accountTile}>
+              <span style={styles.accountLabel}>Account status</span>
+              <strong style={styles.accountValue}>{account?.status || 'Not available'}</strong>
+            </div>
+          </div>
+          {account?.account_number && (
+            <div style={styles.accountNumberRow}>
+              <span style={styles.accountLabel}>Account number</span>
+              <strong style={styles.accountNumberValue}>
+                •••• •••• {String(account.account_number).slice(-4)}
+              </strong>
+              <span style={styles.accountNumberHint}>For your security, only the last four digits are shown here.</span>
+            </div>
+          )}
         </section>
 
-        {/* ====================================================
-            ACTION BUTTONS
-        ==================================================== */}
-
-        {editing &&
-          !profileLocked && (
-
-          <div
-            style={styles.actions}
-          >
-
-            <button
-              type="button"
-              onClick={
-                handleCancel
-              }
-              disabled={saving}
-              style={
-                styles.cancelButton
-              }
-            >
-              Cancel
+        {editing && !profileLocked && (
+          <div style={styles.formActions}>
+            <button type="button" onClick={handleCancel} disabled={saving} style={styles.cancelButton}>Cancel</button>
+            <button type="button" onClick={handleSave} disabled={saving} style={{ ...styles.primaryButton, ...(saving ? styles.buttonDisabled : {}) }}>
+              {saving ? 'Saving changes…' : 'Save changes'}
             </button>
-
-            <button
-              type="button"
-              onClick={
-                handleSave
-              }
-              disabled={saving}
-              style={
-                styles.saveButton
-              }
-            >
-              {saving
-                ? 'Saving...'
-                : 'Save Changes'}
-            </button>
-
           </div>
-
         )}
 
+        <footer style={styles.footer}>
+          <span>ZENIMONIES BANKING</span>
+          <span>Keep your sign-in details private and secure.</span>
+        </footer>
       </main>
-
     </div>
   );
 };
 
-// ============================================================
-// STYLES
-// ============================================================
-
-const styles: Record<
-  string,
-  React.CSSProperties
-> = {
-
+const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
-    backgroundColor: '#f5f7f6',
-    color: '#17211b',
-    fontFamily:
-      'Arial, Helvetica, sans-serif',
-    paddingBottom: '50px',
+    background: '#f4f7f5',
+    color: '#18251e',
+    fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+    paddingBottom: 42,
   },
-
   header: {
-    minHeight: '64px',
-    backgroundColor: '#087a4b',
-    color: '#ffffff',
+    minHeight: 74,
     display: 'flex',
     alignItems: 'center',
-    padding: '0 16px',
-    gap: '12px',
+    gap: 14,
+    padding: '12px max(18px, calc((100vw - 1080px) / 2))',
+    background: '#086b43',
+    color: '#fff',
     boxSizing: 'border-box',
+    boxShadow: '0 3px 14px rgba(16, 64, 42, 0.12)',
   },
-
-  backButton: {
-    border: 'none',
+  headerBack: {
+    width: 40,
+    height: 40,
+    border: '1px solid rgba(255,255,255,.28)',
+    borderRadius: 12,
+    color: '#fff',
+    background: 'rgba(255,255,255,.08)',
+    fontSize: 25,
+    cursor: 'pointer',
+  },
+  headerBrand: { flex: 1 },
+  headerEyebrow: { fontSize: 10, letterSpacing: 1.8, fontWeight: 800, opacity: 0.78 },
+  headerTitle: { marginTop: 3, fontSize: 19, fontWeight: 750, letterSpacing: -0.3 },
+  headerHome: {
+    border: '1px solid rgba(255,255,255,.38)',
+    borderRadius: 10,
+    padding: '9px 13px',
+    color: '#fff',
     background: 'transparent',
-    color: '#ffffff',
-    fontSize: '28px',
+    fontWeight: 700,
     cursor: 'pointer',
-    padding: '5px 8px',
   },
-
-  headerTitle: {
-    flex: 1,
-    fontSize: '20px',
-    fontWeight: 700,
-  },
-
-  homeButton: {
-    border:
-      '1px solid rgba(255,255,255,0.5)',
-    backgroundColor: 'transparent',
-    color: '#ffffff',
-    borderRadius: '8px',
-    padding: '8px 12px',
-    cursor: 'pointer',
-    fontWeight: 600,
-  },
-
-  main: {
-    width: '100%',
-    maxWidth: '900px',
-    margin: '0 auto',
-    padding: '22px 16px',
-    boxSizing: 'border-box',
-  },
-
-  profileCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: '18px',
-    padding: '20px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '16px',
-    boxShadow:
-      '0 4px 18px rgba(0,0,0,0.06)',
-    marginBottom: '18px',
-    flexWrap: 'wrap',
-  },
-
-  avatarWrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '8px',
-  },
-
-  avatar: {
-    width: '72px',
-    height: '72px',
-    minWidth: '72px',
-    borderRadius: '50%',
-    backgroundColor: '#087a4b',
-    color: '#ffffff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '24px',
-    fontWeight: 800,
-    overflow: 'hidden',
-  },
-
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-  },
-
-  photoButton: {
-    border:
-      '1px solid #087a4b',
-    backgroundColor: '#ffffff',
-    color: '#087a4b',
-    borderRadius: '8px',
-    padding: '7px 10px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: 700,
-  },
-
-  profileInfo: {
-    flex: 1,
-    minWidth: '180px',
-  },
-
-  profileName: {
-    margin: 0,
-    fontSize: '21px',
-    fontWeight: 800,
-  },
-
-  emailText: {
-    margin: '5px 0 9px',
-    color: '#69756e',
-    fontSize: '14px',
-  },
-
-  statusBadge: {
-    display: 'inline-block',
-    borderRadius: '20px',
-    padding: '6px 10px',
-    fontSize: '12px',
-    fontWeight: 700,
-  },
-
-  verifiedBadge: {
-    backgroundColor: '#e5f7ed',
-    color: '#087a4b',
-  },
-
-  notVerifiedBadge: {
-    backgroundColor: '#fff4df',
-    color: '#916100',
-  },
-
-  lockMessage: {
-    width: '100%',
-    marginTop: '4px',
-    padding: '10px 12px',
-    borderRadius: '9px',
-    backgroundColor: '#f1f5f3',
-    color: '#53605a',
-    fontSize: '12px',
-    lineHeight: 1.5,
-    boxSizing: 'border-box',
-  },
-
-  editButton: {
-    border: 'none',
-    backgroundColor: '#087a4b',
-    color: '#ffffff',
-    borderRadius: '9px',
-    padding: '11px 15px',
-    cursor: 'pointer',
-    fontWeight: 700,
-  },
-
-  success: {
-    backgroundColor: '#e7f7ee',
-    color: '#087a4b',
-    padding: '13px 15px',
-    borderRadius: '10px',
-    marginBottom: '15px',
-    fontWeight: 600,
-  },
-
-  error: {
-    backgroundColor: '#fdeaea',
-    color: '#b42318',
-    padding: '13px 15px',
-    borderRadius: '10px',
-    marginBottom: '15px',
-    fontWeight: 600,
-  },
-
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: '18px',
-    padding: '21px',
-    boxShadow:
-      '0 4px 18px rgba(0,0,0,0.06)',
-    marginBottom: '18px',
-  },
-
-  sectionTitle: {
-    margin: 0,
-    fontSize: '18px',
-    fontWeight: 800,
-  },
-
-  description: {
-    margin: '6px 0 20px',
-    color: '#69756e',
-    fontSize: '14px',
-  },
-
-  grid: {
-    display: 'grid',
-    gridTemplateColumns:
-      'repeat(auto-fit, minmax(250px, 1fr))',
-    gap: '17px',
-  },
-
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '7px',
-  },
-
-  label: {
-    fontSize: '13px',
-    fontWeight: 700,
-    color: '#344039',
-  },
-
-  input: {
-    width: '100%',
-    boxSizing: 'border-box',
-    border:
-      '1px solid #d6ddd8',
-    borderRadius: '9px',
-    padding: '12px',
-    fontSize: '15px',
-    color: '#17211b',
-    backgroundColor: '#ffffff',
-    outline: 'none',
-  },
-
-  editableInput: {
-    border:
-      '1px solid #087a4b',
-    backgroundColor: '#ffffff',
-  },
-
-  disabledInput: {
-    backgroundColor: '#f1f3f2',
-    color: '#68736d',
-    cursor: 'not-allowed',
-  },
-
-  textarea: {
-    resize: 'vertical',
-    minHeight: '100px',
-    fontFamily:
-      'Arial, Helvetica, sans-serif',
-  },
-
-  helper: {
-    color: '#69756e',
-    fontSize: '11px',
-  },
-
-  accountGrid: {
-    display: 'grid',
-    gridTemplateColumns:
-      'repeat(auto-fit, minmax(170px, 1fr))',
-    gap: '20px',
-  },
-
-  accountLabel: {
-    display: 'block',
-    color: '#69756e',
-    fontSize: '12px',
-    marginBottom: '5px',
-  },
-
-  accountValue: {
-    display: 'block',
-    fontSize: '15px',
-  },
-
-  actions: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: '10px',
-    marginTop: '5px',
-  },
-
-  cancelButton: {
-    border:
-      '1px solid #cbd3ce',
-    backgroundColor: '#ffffff',
-    color: '#344039',
-    borderRadius: '9px',
-    padding: '12px 18px',
-    cursor: 'pointer',
-    fontWeight: 700,
-  },
-
-  saveButton: {
-    border: 'none',
-    backgroundColor: '#087a4b',
-    color: '#ffffff',
-    borderRadius: '9px',
-    padding: '12px 20px',
-    cursor: 'pointer',
-    fontWeight: 700,
-  },
+  main: { width: '100%', maxWidth: 1080, padding: '28px 18px', margin: '0 auto', boxSizing: 'border-box' },
+  pageIntro: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 22 },
+  eyebrow: { color: '#08764b', fontSize: 10, fontWeight: 850, letterSpacing: 1.5 },
+  pageTitle: { margin: '6px 0 5px', fontSize: 29, letterSpacing: -0.8, fontWeight: 800 },
+  pageSubtitle: { margin: 0, color: '#69786f', fontSize: 13, lineHeight: 1.6 },
+  securePill: { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 11px', borderRadius: 99, background: '#e7f5ec', color: '#08764b', fontSize: 11, fontWeight: 750 },
+  successMessage: { display: 'flex', alignItems: 'center', gap: 10, padding: '13px 15px', borderRadius: 12, background: '#e7f7ed', color: '#14663f', border: '1px solid #c7ead4', fontSize: 13, marginBottom: 14 },
+  errorMessage: { display: 'flex', alignItems: 'center', gap: 10, padding: '13px 15px', borderRadius: 12, background: '#fff0ef', color: '#a52b25', border: '1px solid #f5d0cd', fontSize: 13, marginBottom: 14 },
+  messageIcon: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, minWidth: 22, borderRadius: '50%', background: 'rgba(0,0,0,.06)', fontWeight: 800 },
+  dismissButton: { marginLeft: 'auto', border: 0, background: 'transparent', color: 'inherit', fontSize: 22, cursor: 'pointer' },
+  profileHero: { display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap', padding: 24, background: '#fff', border: '1px solid #e6ede8', borderRadius: 18, boxShadow: '0 8px 26px rgba(22, 57, 38, .045)', marginBottom: 18 },
+  avatarColumn: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 },
+  avatar: { position: 'relative', width: 88, height: 88, minWidth: 88, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(145deg, #08764b, #0b9a63)', color: '#fff', fontSize: 27, fontWeight: 850, overflow: 'hidden', boxShadow: '0 5px 16px rgba(8,118,75,.2)' },
+  avatarImage: { width: '100%', height: '100%', objectFit: 'cover' },
+  avatarCheck: { position: 'absolute', right: 1, bottom: 1, width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', color: '#08764b', border: '2px solid #fff', fontSize: 12, fontWeight: 900, boxShadow: '0 0 0 1px #08764b' },
+  secondaryButton: { padding: '8px 12px', border: '1px solid #cbded2', borderRadius: 9, color: '#08764b', background: '#fff', fontSize: 11, fontWeight: 750, cursor: 'pointer' },
+  photoHint: { color: '#87948c', fontSize: 9, textAlign: 'center' },
+  heroDetails: { flex: 1, minWidth: 210 },
+  memberLabel: { color: '#87948c', fontSize: 9, fontWeight: 850, letterSpacing: 1.5 },
+  profileName: { margin: '6px 0 4px', fontSize: 23, fontWeight: 850, letterSpacing: -0.5, overflowWrap: 'anywhere' },
+  profileEmail: { margin: '0 0 12px', color: '#718077', fontSize: 13, overflowWrap: 'anywhere' },
+  heroBadges: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 7 },
+  statusPill: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 9px', borderRadius: 99, fontSize: 10, fontWeight: 800, whiteSpace: 'nowrap' },
+  statusVerified: { color: '#08764b', background: '#e5f6eb' },
+  statusPending: { color: '#8b620b', background: '#fff3d9' },
+  statusPillNeutral: { color: '#52645a', background: '#f0f4f1', padding: '6px 9px', borderRadius: 99, fontSize: 10, fontWeight: 750 },
+  lockNotice: { display: 'flex', gap: 9, marginTop: 13, padding: '10px 12px', borderRadius: 10, background: '#f3f7f4', color: '#56665c', fontSize: 11, lineHeight: 1.55, maxWidth: 470 },
+  primaryButton: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: '1px solid #08764b', borderRadius: 10, padding: '11px 15px', color: '#fff', background: '#08764b', fontSize: 12, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 3px 8px rgba(8,118,75,.12)' },
+  buttonDisabled: { opacity: 0.6, cursor: 'not-allowed' },
+  verificationCard: { padding: 24, background: '#fff', border: '1px solid #dcebe1', borderRadius: 18, boxShadow: '0 8px 26px rgba(22,57,38,.045)', marginBottom: 18 },
+  cardHeadingRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 15, flexWrap: 'wrap', marginBottom: 22 },
+  sectionHeadingBlock: { marginBottom: 22 },
+  sectionTitle: { margin: '6px 0 5px', color: '#1b2a21', fontSize: 18, fontWeight: 850, letterSpacing: -0.3 },
+  sectionDescription: { margin: 0, color: '#738077', fontSize: 12, lineHeight: 1.65 },
+  progressHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 },
+  progressLabel: { color: '#52645a', fontSize: 11, fontWeight: 750 },
+  progressCount: { color: '#08764b', fontSize: 13, fontWeight: 850 },
+  progressTrack: { width: '100%', height: 7, borderRadius: 99, overflow: 'hidden', background: '#eaf0ec', marginBottom: 18 },
+  progressFill: { height: '100%', borderRadius: 99, background: 'linear-gradient(90deg, #08764b, #21a56d)', transition: 'width .25s ease' },
+  tierList: { display: 'flex', flexDirection: 'column', gap: 9 },
+  tierRow: { display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px', border: '1px solid #e9efeb', borderRadius: 12, background: '#fbfcfb' },
+  tierRowCurrent: { borderColor: '#b8dec8', background: '#f3fbf6' },
+  tierRowComplete: { background: '#f8fcf9' },
+  tierIcon: { width: 35, height: 35, minWidth: 35, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 11, background: '#edf1ee', color: '#6d7a71', fontSize: 13, fontWeight: 850 },
+  tierIconComplete: { color: '#fff', background: '#08764b' },
+  tierIconCurrent: { color: '#08764b', background: '#dff3e7' },
+  tierCopy: { display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 },
+  tierTitleLine: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  tierName: { color: '#26362c', fontSize: 12 },
+  currentTag: { padding: '3px 6px', borderRadius: 5, color: '#08764b', background: '#dff3e7', fontSize: 8, fontWeight: 900, letterSpacing: .7 },
+  tierDescription: { color: '#78867d', fontSize: 10, lineHeight: 1.5 },
+  tierStatus: { color: '#7a877f', fontSize: 10, fontWeight: 750, whiteSpace: 'nowrap' },
+  tierStatusComplete: { color: '#08764b' },
+  upgradeFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 18, flexWrap: 'wrap', marginTop: 18, padding: 16, borderRadius: 12, background: '#f5faf6', border: '1px solid #e0eee5' },
+  upgradeTitle: { color: '#26372c', fontSize: 13 },
+  upgradeDescription: { margin: '5px 0 0', maxWidth: 450, color: '#718077', fontSize: 11, lineHeight: 1.55 },
+  completeBanner: { display: 'flex', alignItems: 'center', gap: 11, marginTop: 18, padding: 13, borderRadius: 11, background: '#e8f7ee', color: '#176b43', fontSize: 11, lineHeight: 1.6 },
+  completeIcon: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, minWidth: 28, borderRadius: '50%', background: '#08764b', color: '#fff', fontWeight: 900 },
+  securityFootnote: { margin: '15px 0 0', color: '#89958d', fontSize: 10, lineHeight: 1.6 },
+  card: { padding: 24, background: '#fff', border: '1px solid #e6ede8', borderRadius: 18, boxShadow: '0 8px 26px rgba(22,57,38,.035)', marginBottom: 18 },
+  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 245px), 1fr))', gap: 17 },
+  field: { display: 'flex', flexDirection: 'column', gap: 7, minWidth: 0 },
+  label: { color: '#34463a', fontSize: 11, fontWeight: 800 },
+  input: { width: '100%', boxSizing: 'border-box', minHeight: 43, border: '1px solid #dce5df', borderRadius: 9, padding: '11px 12px', color: '#24362b', background: '#fff', fontSize: 13, outline: 'none' },
+  inputEditable: { borderColor: '#72b895', boxShadow: '0 0 0 2px rgba(8,118,75,.045)' },
+  inputDisabled: { background: '#f4f6f4', color: '#6c7b71', cursor: 'not-allowed' },
+  textarea: { resize: 'vertical', minHeight: 90, fontFamily: 'inherit', lineHeight: 1.5 },
+  helper: { color: '#839087', fontSize: 10, lineHeight: 1.5 },
+  accountGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 },
+  accountTile: { display: 'flex', flexDirection: 'column', gap: 7, padding: 14, borderRadius: 11, border: '1px solid #e8efea', background: '#fafcfb' },
+  accountLabel: { color: '#7c8981', fontSize: 10, fontWeight: 700 },
+  accountValue: { color: '#27382d', fontSize: 13, fontWeight: 800, overflowWrap: 'anywhere' },
+  accountNumberRow: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 9, marginTop: 15, padding: '13px 14px', borderRadius: 10, background: '#f5f8f6' },
+  accountNumberValue: { color: '#27382d', fontSize: 13, letterSpacing: 1.3 },
+  accountNumberHint: { width: '100%', color: '#89958d', fontSize: 10 },
+  formActions: { display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10, margin: '4px 0 20px' },
+  cancelButton: { border: '1px solid #d4ded7', borderRadius: 10, padding: '11px 15px', color: '#45564b', background: '#fff', fontSize: 12, fontWeight: 750, cursor: 'pointer' },
+  footer: { display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 28, padding: '18px 3px', borderTop: '1px solid #e1e9e4', color: '#89958d', fontSize: 10 },
+  loadingCard: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '60px 20px', background: '#fff', border: '1px solid #e6ede8', borderRadius: 18, color: '#26372c' },
+  spinner: { width: 28, height: 28, border: '3px solid #dcebe2', borderTopColor: '#08764b', borderRadius: '50%' },
+  mutedText: { color: '#7b8980', fontSize: 12, textAlign: 'center' },
 };
 
 export default Profile;
