@@ -1788,6 +1788,14 @@ if (existingRecord) {
       tier_3_verification_status = 'pending',
       tier_3_verified_at = NULL,
       tier_3_rejection_reason = NULL,
+      
+      dojah_reference = NULL,
+      dojah_verification_type = NULL,
+      dojah_started_at = NULL,
+      dojah_checked_at = NULL,
+      liveness_score = NULL,
+      selfie_match_score = NULL,
+
 
       liveness_status = 'pending',
       liveness_provider_reference = NULL,
