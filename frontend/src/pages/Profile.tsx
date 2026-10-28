@@ -251,6 +251,131 @@ const [contactError, setContactError] = useState('');
   const updateField = (field: keyof ProfileForm, value: string) => {
     setForm((previous) => ({ ...previous, [field]: value }));
   };
+  
+
+const startContactChange = async (kind: 'email' | 'phone') => {
+  const value =
+    kind === 'email'
+      ? newEmail.trim().toLowerCase()
+      : newPhone.trim();
+
+  if (!value) {
+    setContactError(
+      kind === 'email'
+        ? 'Enter your new email address.'
+        : 'Enter your new phone number with country code.'
+    );
+    return;
+  }
+
+  if (kind === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    setContactError('Enter a valid email address.');
+    return;
+  }
+
+  if (kind === 'phone') {
+    if (user?.phone_change_used) {
+      setContactError(
+        'Your one-time phone change has already been used. Contact support if you need assistance.'
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Important: You can change your phone number only once through self-service. After verification, you cannot change it again here. Continue?'
+    );
+
+    if (!confirmed) return;
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    navigate('/login');
+    return;
+  }
+
+  setContactBusy(true);
+  setContactError('');
+  setContactMessage('');
+
+  try {
+    await axios.post(
+      `${API_URL}/api/profile/contact/${kind}/start`,
+      kind === 'email' ? { email: value } : { phone: value },
+      {
+        timeout: 60000,
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    setContactFlow(kind);
+    setContactOtp('');
+    setContactMessage(
+      `A verification code was sent to your new ${
+        kind === 'email' ? 'email address' : 'phone number'
+      }.`
+    );
+  } catch (err: unknown) {
+    setContactError(
+      getErrorMessage(err, 'Unable to send your verification code.')
+    );
+  } finally {
+    setContactBusy(false);
+  }
+};
+
+const verifyContactChange = async () => {
+  if (!contactFlow) return;
+
+  const otp = contactOtp.trim();
+
+  if (!/^\d{6}$/.test(otp)) {
+    setContactError('Enter the six-digit verification code.');
+    return;
+  }
+
+  const token = getToken();
+
+  if (!token) {
+    navigate('/login');
+    return;
+  }
+
+  setContactBusy(true);
+  setContactError('');
+  setContactMessage('');
+
+  try {
+    await axios.post(
+      `${API_URL}/api/profile/contact/${contactFlow}/verify`,
+      { otp },
+      {
+        timeout: 60000,
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    setContactMessage(
+      `Your ${
+        contactFlow === 'email' ? 'email address' : 'phone number'
+      } has been changed and verified.`
+    );
+
+    setContactFlow(null);
+    setContactOtp('');
+    setNewEmail('');
+    setNewPhone('');
+
+    await loadProfile();
+  } catch (err: unknown) {
+    setContactError(
+      getErrorMessage(err, 'Unable to verify your code.')
+    );
+  } finally {
+    setContactBusy(false);
+  }
+};
 
   const handleSave = async () => {
     if (profileLocked) {
