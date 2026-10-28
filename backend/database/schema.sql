@@ -3088,6 +3088,25 @@ AFTER INSERT OR UPDATE OR DELETE
 ON company_revenue_movements
 FOR EACH ROW
 EXECUTE FUNCTION record_revenue_audit_event();
+
+-- ============================================================
+-- ZENIMONIES CONTACT CHANGE SECURITY
+-- ============================================================
+
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS pending_email VARCHAR(255),
+ADD COLUMN IF NOT EXISTS pending_phone VARCHAR(30),
+ADD COLUMN IF NOT EXISTS phone_change_used BOOLEAN
+  NOT NULL DEFAULT FALSE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_pending_email_unique
+ON users (LOWER(pending_email))
+WHERE pending_email IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_pending_phone_unique
+ON users (pending_phone)
+WHERE pending_phone IS NOT NULL;
+
 -- ============================================================
 -- END OF ZENIMONIES DATABASE SCHEMA
 -- ============================================================
