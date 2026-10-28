@@ -99,7 +99,7 @@ interface KycData {
   tier_3_status?:
     | string
     | boolean;
-
+liveness_status?: string;
   tier_3_verified?: boolean;
 
   tier_3_method?: string;
