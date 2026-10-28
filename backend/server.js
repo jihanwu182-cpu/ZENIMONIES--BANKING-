@@ -173,6 +173,12 @@ app.use(
 app.post(
   '/api/webhooks/dojah',
   (req, res, next) => {
+   console.info('[KYC webhook] Route reached.', {
+  method: req.method,
+  path: req.path,
+  rawBodyAvailable: Buffer.isBuffer(req.rawBody),
+  contentType: req.headers['content-type'] || null,
+});
     // The earlier express.json() middleware saves the original
     // request bytes in req.rawBody through its verify callback.
     if (!Buffer.isBuffer(req.rawBody)) {
