@@ -1,5 +1,4 @@
-
-const crypto = require(‘crypto’);
+const crypto = require('crypto');
 const pool = require(’../config/database’);
 
 // ============================================================
