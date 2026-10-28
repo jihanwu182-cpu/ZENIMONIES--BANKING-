@@ -1956,7 +1956,6 @@ if (existingRecord) {
 // The frontend must never choose another user's reference.
 // ============================================================
 
-
 const startDojahVerification = async (req, res) => {
   const userId =
     req.user?.id ||
@@ -1974,7 +1973,13 @@ const startDojahVerification = async (req, res) => {
     req.body?.verification_type || 'tier_2'
   ).trim().toLowerCase();
 
-  if (!['tier_1', 'tier_2'].includes(verificationType)) {
+  const allowedTypes = [
+    'tier_1',
+    'tier_2',
+    'tier_3',
+  ];
+
+  if (!allowedTypes.includes(verificationType)) {
     return res.status(400).json({
       success: false,
       message: 'Invalid verification type.',
@@ -1988,7 +1993,7 @@ const startDojahVerification = async (req, res) => {
     await client.query('BEGIN');
 
     const userResult = await client.query(
-      `SELECT id, id_verified, bvn_verified
+      `SELECT id, id_verified, bvn_verified, tier_3_verified
        FROM users
        WHERE id = $1
        FOR UPDATE`,
@@ -2007,6 +2012,18 @@ const startDojahVerification = async (req, res) => {
     const user = userResult.rows[0];
 
     if (
+      verificationType === 'tier_1' &&
+      user.bvn_verified === true
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        message: 'Your BVN is already verified.',
+      });
+    }
+
+    if (
       verificationType === 'tier_2' &&
       user.id_verified === true
     ) {
@@ -2019,52 +2036,73 @@ const startDojahVerification = async (req, res) => {
     }
 
     if (
-      verificationType === 'tier_1' &&
-      user.bvn_verified === true
+      verificationType === 'tier_3' &&
+      user.tier_3_verified === true
     ) {
       await client.query('ROLLBACK');
 
       return res.status(409).json({
         success: false,
-        message: 'Your BVN is already verified.',
+        message: 'Your Tier 3 verification is already complete.',
       });
     }
 
-    const recordResult =
-      verificationType === 'tier_1'
-        ? await client.query(
-            `SELECT
-               id,
-               bvn,
-               bvn_verification_status,
-               bvn_provider_reference,
-               dojah_reference,
-               dojah_verification_type
-             FROM kyc_records
-             WHERE user_id = $1
-               AND bvn IS NOT NULL
-               AND bvn <> ''
-             ORDER BY created_at DESC
-             LIMIT 1
-             FOR UPDATE`,
-            [userId]
-          )
-       : await client.query(
-    `SELECT
-       id,
-       id_verification_status,
-       dojah_reference,
-       dojah_verification_type
-     FROM kyc_records
-     WHERE user_id = $1
-       AND document_type IS NOT NULL
-       AND document_number IS NOT NULL
-       AND document_number <> ''
-     ORDER BY created_at DESC
-     LIMIT 1
-     FOR UPDATE`,
-    [userId]
-  );
+    let recordResult;
+
+    if (verificationType === 'tier_1') {
+      recordResult = await client.query(
+        `SELECT
+           id,
+           bvn,
+           bvn_verification_status,
+           bvn_provider_reference,
+           dojah_reference,
+           dojah_verification_type
+         FROM kyc_records
+         WHERE user_id = $1
+           AND bvn IS NOT NULL
+           AND bvn <> ''
+         ORDER BY created_at DESC
+         LIMIT 1
+         FOR UPDATE`,
+        [userId]
+      );
+    } else if (verificationType === 'tier_2') {
+      recordResult = await client.query(
+        `SELECT
+           id,
+           id_verification_status,
+           dojah_reference,
+           dojah_verification_type
+         FROM kyc_records
+         WHERE user_id = $1
+           AND document_type IS NOT NULL
+           AND document_number IS NOT NULL
+           AND document_number <> ''
+         ORDER BY created_at DESC
+         LIMIT 1
+         FOR UPDATE`,
+        [userId]
+      );
+    } else {
+      recordResult = await client.query(
+        `SELECT
+           id,
+           tier_3_method,
+           tier_3_verification_status,
+           liveness_status,
+           dojah_reference,
+           dojah_verification_type
+         FROM kyc_records
+         WHERE user_id = $1
+           AND tier_3_method IS NOT NULL
+           AND tier_3_document_asset_id IS NOT NULL
+         ORDER BY created_at DESC
+         LIMIT 1
+         FOR UPDATE`,
+        [userId]
+      );
+    }
 
     const record = recordResult.rows[0];
 
@@ -2076,18 +2114,31 @@ const startDojahVerification = async (req, res) => {
         message:
           verificationType === 'tier_1'
             ? 'Submit your BVN before starting verification.'
-            : 'No identity verification record was found.',
+            : verificationType === 'tier_2'
+              ? 'Submit your identity details before starting verification.'
+              : 'Submit your Tier 3 documents before starting verification.',
       });
     }
-      const currentStatus = String(
+
+    const expectedType =
+      verificationType === 'tier_1'
+        ? 'bvn'
+        : verificationType === 'tier_2'
+          ? 'identity'
+          : 'tier_3_liveness';
+
+    const currentStatus = String(
       verificationType === 'tier_1'
         ? record.bvn_verification_status || ''
-        : record.id_verification_status || ''
-    )
-      .trim()
-      .toLowerCase();
+        : verificationType === 'tier_2'
+          ? record.id_verification_status || ''
+          : record.liveness_status || ''
+    ).trim().toLowerCase();
 
-    if (['verified', 'approved'].includes(currentStatus)) {
+    if (
+      verificationType !== 'tier_3' &&
+      ['verified', 'approved'].includes(currentStatus)
+    ) {
       await client.query('ROLLBACK');
 
       return res.status(409).json({
@@ -2096,26 +2147,28 @@ const startDojahVerification = async (req, res) => {
       });
     }
 
+    if (
+      verificationType === 'tier_3' &&
+      ['verified', 'approved'].includes(currentStatus)
+    ) {
+      await client.query('ROLLBACK');
+
+      return res.status(409).json({
+        success: false,
+        message: 'Tier 3 liveness has already been verified.',
+      });
+    }
+
     const existingReference = String(
-      verificationType === 'tier_1'
-        ? record.bvn_provider_reference || record.dojah_reference || ''
-        : record.dojah_reference || ''
+      record.dojah_reference || ''
     ).trim();
 
-    const expectedVerificationType =
-      verificationType === 'tier_1' ? 'bvn' : 'identity';
-
-    const hasMatchingPendingSession =
-      currentStatus === 'pending' &&
-      Boolean(existingReference) &&
-      record.dojah_verification_type === expectedVerificationType;
-
-    // ========================================================
-    // IF ALREADY PENDING → RETURN THE EXISTING REFERENCE
-    // (so the frontend can continue the same session)
-    // ========================================================
-    if (hasMatchingPendingSession) {
-      await client.query('ROLLBACK');
+    if (
+      existingReference &&
+      record.dojah_verification_type === expectedType &&
+      currentStatus === 'pending'
+    ) {
+      await client.query('COMMIT');
 
       return res.status(200).json({
         success: true,
@@ -2123,16 +2176,13 @@ const startDojahVerification = async (req, res) => {
         kyc_record_id: record.id,
         verification_type: verificationType,
         status: 'pending',
-        message: 'Continuing existing verification session.',
         already_pending: true,
+        message: 'Continuing the existing verification session.',
       });
     }
 
-    // ========================================================
-    // CREATE A NEW REFERENCE
-    // ========================================================
     const referenceId = `zen_${crypto.randomUUID()}`;
-    
+
     if (verificationType === 'tier_1') {
       await client.query(
         `UPDATE kyc_records
@@ -2149,9 +2199,8 @@ const startDojahVerification = async (req, res) => {
            AND user_id = $3`,
         [referenceId, record.id, userId]
       );
-  
-    } else {
-      const updateResult = await client.query(
+    } else if (verificationType === 'tier_2') {
+      await client.query(
         `UPDATE kyc_records
          SET
            dojah_reference = $1,
@@ -2169,12 +2218,23 @@ const startDojahVerification = async (req, res) => {
            AND user_id = $3`,
         [referenceId, record.id, userId]
       );
-
-      if (updateResult.rowCount !== 1) {
-        throw new Error('KYC record update failed');
-      }
+    } else {
+      await client.query(
+        `UPDATE kyc_records
+         SET
+           dojah_reference = $1,
+           dojah_verification_type = 'tier_3_liveness',
+           dojah_started_at = CURRENT_TIMESTAMP,
+           dojah_checked_at = NULL,
+           liveness_status = 'pending',
+           liveness_score = NULL,
+           selfie_match_score = NULL,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2
+           AND user_id = $3`,
+        [referenceId, record.id, userId]
+      );
     }
-
 
     await client.query(
       `UPDATE users
@@ -2196,8 +2256,10 @@ const startDojahVerification = async (req, res) => {
         userId,
         'dojah_verification_started',
         verificationType === 'tier_1'
-          ? 'A Tier 1 BVN verification session was initiated.'
-          : 'An identity verification session was initiated.',
+          ? 'Tier 1 BVN verification session initiated.'
+          : verificationType === 'tier_2'
+            ? 'Tier 2 identity verification session initiated.'
+            : 'Tier 3 liveness verification session initiated.',
       ]
     );
 
@@ -2209,29 +2271,28 @@ const startDojahVerification = async (req, res) => {
       kyc_record_id: record.id,
       verification_type: verificationType,
       status: 'pending',
-      message:
-        'Verification session created. Continue with the verification widget.',
+      message: 'Verification session created.',
     });
   } catch (error) {
     if (client) {
       try {
         await client.query('ROLLBACK');
-      } catch {}
+      } catch (_) {}
     }
 
-    console.error('Start verification session failed.');
+    console.error('Start verification session failed:', {
+      code: error?.code || null,
+      message: error?.message || 'Unknown error',
+    });
 
     return res.status(500).json({
       success: false,
       message: 'Unable to start verification.',
     });
   } finally {
-    if (client) {
-      client.release();
-    }
+    if (client) client.release();
   }
 };
-
 
 // ============================================================
 // DOJAH WIDGET VERIFICATION
@@ -2245,8 +2306,6 @@ const startDojahVerification = async (req, res) => {
 
 
 const confirmDojahVerification = async (req, res) => {
-    console.log('[KYC DEBUG] Identity confirmation endpoint reached.');
-  console.log('[KYC DEBUG] Request method:', req.method);
   const userId =
     req.user?.id ||
     req.userId ||
@@ -2263,33 +2322,45 @@ const confirmDojahVerification = async (req, res) => {
     req.body?.reference_id || ''
   ).trim();
 
-  if (clientReference.length > 150) {
+  const requestedType = String(
+    req.body?.verification_type || 'tier_2'
+  ).trim().toLowerCase();
+
+  if (
+    clientReference.length > 150 ||
+    !['tier_2', 'tier_3'].includes(requestedType)
+  ) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid verification reference.',
+      message: 'Invalid verification request.',
     });
   }
+
+  const sessionType =
+    requestedType === 'tier_3'
+      ? 'tier_3_liveness'
+      : 'identity';
 
   let client;
 
   try {
     client = await pool.connect();
 
-    // Read the authenticated user's current session.
     const result = await client.query(
-      `
-      SELECT
-        id,
-        dojah_reference,
-        id_verification_status,
-        liveness_status
-      FROM kyc_records
-      WHERE user_id = $1
-        AND dojah_verification_type = 'identity'
-      ORDER BY created_at DESC
-      LIMIT 1
-      `,
-      [userId]
+      `SELECT
+         id,
+         dojah_reference,
+         dojah_verification_type,
+         id_verification_status,
+         liveness_status,
+         tier_3_verification_status
+       FROM kyc_records
+       WHERE user_id = $1
+         AND dojah_verification_type = $2
+       ORDER BY dojah_started_at DESC NULLS LAST,
+                updated_at DESC
+       LIMIT 1`,
+      [userId, sessionType]
     );
 
     const record = result.rows[0];
@@ -2297,7 +2368,7 @@ const confirmDojahVerification = async (req, res) => {
     if (!record || !record.dojah_reference) {
       return res.status(404).json({
         success: false,
-        message: 'No identity verification session was found.',
+        message: 'No matching verification session was found.',
       });
     }
 
@@ -2307,51 +2378,14 @@ const confirmDojahVerification = async (req, res) => {
     ) {
       return res.status(409).json({
         success: false,
-        message:
-          'The verification session does not match your active session.',
+        message: 'The verification session does not match.',
       });
     }
 
     const lookupReference = record.dojah_reference;
-     
-const providerResult =
-  await getDojahVerification(lookupReference);
-    
+    const providerResult =
+      await getDojahVerification(lookupReference);
 
-const safeKeys = value =>
-  value && typeof value === 'object' && !Array.isArray(value)
-    ? Object.keys(value).filter(key =>
-        /^(data|result|response|government_data|selfie|liveness|liveness_status|liveness_score|match_score|verification_status|status|reference_id|success|score|passed|verified)$/i.test(key)
-      )
-    : [];
-
-console.log(
-  '[KYC DEBUG] Provider response field names:',
-  {
-    topLevel: safeKeys(providerResult?.data),
-    data: safeKeys(providerResult?.data?.data),
-    result: safeKeys(providerResult?.data?.result),
-    response: safeKeys(providerResult?.data?.response),
-  }
-);
-
-console.log(
-  'Dojah identity result lookup:',
-  {
-    success: providerResult?.success === true,
-    hasData: Boolean(providerResult?.data),
-    referencePresent: Boolean(lookupReference),
-    providerStatus:
-      providerResult?.status || null,
-    errorCode:
-      providerResult?.code || null,
-  }
-);
-
-   
-    
-    // Parse the provider response using the verified response structure.
-    // An unknown or unsuccessful response must never approve KYC.
     if (
       providerResult?.success !== true ||
       !providerResult.data ||
@@ -2366,9 +2400,7 @@ console.log(
     }
 
     const verification = providerResult.data;
-    const resultData = verification.data;
 
-    // The returned reference must match this user's active Tier 2 session.
     const returnedReference = String(
       verification.reference_id || ''
     ).trim();
@@ -2380,8 +2412,7 @@ console.log(
       return res.status(502).json({
         success: false,
         status: 'pending',
-        message:
-          'The verification result could not be matched to this session.',
+        message: 'The verification result could not be matched.',
       });
     }
 
@@ -2389,10 +2420,11 @@ console.log(
       verification.verification_status || ''
     ).trim().toLowerCase();
 
-    const governmentData = resultData?.government_data;
-    const selfieData = resultData?.selfie;
+    const resultData = verification.data || {};
+    const governmentData = resultData.government_data;
+    const selfieData = resultData.selfie;
 
-    const outcome = step => {
+    const outcome = (step) => {
       const value = step?.status;
 
       if (value === true) return 'verified';
@@ -2430,20 +2462,7 @@ console.log(
       return 'pending';
     };
 
-    let idStatus = 'pending';
-    let livenessStatus = 'pending';
-
-    if (['completed', 'complete'].includes(sessionStatus)) {
-      idStatus = outcome(governmentData);
-      livenessStatus = outcome(selfieData);
-    } else if (
-      ['failed', 'abandoned', 'rejected'].includes(sessionStatus)
-    ) {
-      idStatus = 'rejected';
-      livenessStatus = 'rejected';
-    }
-
-    const score = value => {
+    const score = (value) => {
       const number = Number(value);
 
       return value !== null &&
@@ -2464,24 +2483,61 @@ console.log(
       selfieData?.data?.match_score
     );
 
+    const sessionCompleted = [
+      'completed',
+      'complete',
+    ].includes(sessionStatus);
 
-    // Re-lock the exact session. A newer session must not be
-    // overwritten by a delayed result from an older session.
+    const sessionFailed = [
+      'failed',
+      'abandoned',
+      'rejected',
+    ].includes(sessionStatus);
+
+    let idStatus = 'pending';
+    let livenessStatus = 'pending';
+
+    if (sessionCompleted) {
+      livenessStatus = outcome(selfieData);
+
+      if (requestedType === 'tier_2') {
+        idStatus = outcome(governmentData);
+      }
+    } else if (sessionFailed) {
+      livenessStatus = 'rejected';
+
+      if (requestedType === 'tier_2') {
+        idStatus = 'rejected';
+      }
+    }
+
+    // A missing liveness result must never be treated as success.
+    if (!selfieData || typeof selfieData !== 'object') {
+      livenessStatus = 'pending';
+    }
+
     await client.query('BEGIN');
 
     const locked = await client.query(
-      `
-      SELECT
-        id_verification_status,
-        liveness_status
-      FROM kyc_records
-      WHERE id = $1
-        AND user_id = $2
-        AND dojah_reference = $3
-        AND dojah_verification_type = 'identity'
-      FOR UPDATE
-      `,
-      [record.id, userId, lookupReference]
+      `SELECT
+         id,
+         dojah_reference,
+         dojah_verification_type,
+         id_verification_status,
+         liveness_status,
+         tier_3_verification_status
+       FROM kyc_records
+       WHERE id = $1
+         AND user_id = $2
+         AND dojah_reference = $3
+         AND dojah_verification_type = $4
+       FOR UPDATE`,
+      [
+        record.id,
+        userId,
+        lookupReference,
+        sessionType,
+      ]
     );
 
     if (!locked.rows.length) {
@@ -2489,139 +2545,182 @@ console.log(
 
       return res.status(409).json({
         success: false,
-        message:
-          'The verification session changed. Please try again.',
+        message: 'The verification session changed. Please try again.',
       });
     }
 
-    
-    const updateResult = await client.query(
-      `
-      UPDATE kyc_records
-      SET
-        id_verification_status = CASE
-          WHEN id_verification_status IN ('verified', 'approved')
-            THEN id_verification_status
-          WHEN $2 <> 'pending' THEN $2
-          ELSE id_verification_status
-        END,
+    let savedIdStatus = 'not_verified';
+    let savedLivenessStatus = 'pending';
+    let savedTier3Status = null;
 
-        id_verified_at = CASE
-          WHEN id_verification_status IN ('verified', 'approved')
-            THEN id_verified_at
-          WHEN $2 = 'verified'
-            THEN COALESCE(id_verified_at, CURRENT_TIMESTAMP)
-          ELSE id_verified_at
-        END,
-
-        id_rejection_reason = CASE
-          WHEN id_verification_status IN ('verified', 'approved')
-            THEN id_rejection_reason
-          WHEN $2 = 'rejected'
-            THEN 'Identity check did not pass provider verification.'
-          WHEN $2 = 'verified' THEN NULL
-          ELSE id_rejection_reason
-        END,
-
-        liveness_status = CASE
-          WHEN liveness_status IN ('verified', 'approved')
-            THEN liveness_status
-          WHEN $3 <> 'pending' THEN $3
-          ELSE liveness_status
-        END,
-
-        liveness_score = COALESCE($4, liveness_score),
-        selfie_match_score = COALESCE($5, selfie_match_score),
-        dojah_checked_at = CURRENT_TIMESTAMP,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-        AND user_id = $6
-        AND dojah_reference = $7
-        AND dojah_verification_type = 'identity'
-      `,
-      [
-        record.id,
-        idStatus,
-        livenessStatus,
-        livenessScore,
-        selfieMatchScore,
-        userId,
-        lookupReference,
-      ]
-    );
-
-if (updateResult.rowCount !== 1) {
-  throw new Error(
-    'The active identity verification session changed.'
-  );
-}
-    const savedStatuses = await client.query(
-      `
-      SELECT
-        id_verification_status,
-        liveness_status
-      FROM kyc_records
-      WHERE id = $1
-        AND user_id = $2
-      `,
-      [record.id, userId]
-    );
-
-    if (!savedStatuses.rows.length) {
-      throw new Error(
-        'Verification record could not be confirmed.'
-      );
-    }
-
-    const savedIdStatus = String(
-      savedStatuses.rows[0].id_verification_status || ''
-    ).toLowerCase();
-
-    const savedLivenessStatus = String(
-      savedStatuses.rows[0].liveness_status || ''
-    ).toLowerCase();
-
-    const finalId = ['verified', 'approved'].includes(
-      savedIdStatus
-    ) ? 'verified' : savedIdStatus;
-
-    const finalLiveness = ['verified', 'approved'].includes(
-      savedLivenessStatus
-    ) ? 'verified' : savedLivenessStatus;
-
-    if (
-      finalId === 'verified' &&
-      finalLiveness === 'verified'
-    ) {
+    if (requestedType === 'tier_2') {
       await client.query(
-        `
-        UPDATE users
-        SET
-          id_verified = TRUE,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-        `,
-        [userId]
+        `UPDATE kyc_records
+         SET
+           id_verification_status = CASE
+             WHEN id_verification_status IN ('verified', 'approved')
+               THEN id_verification_status
+             WHEN $2 <> 'pending' THEN $2
+             ELSE id_verification_status
+           END,
+           id_verified_at = CASE
+             WHEN $2 = 'verified'
+               THEN COALESCE(id_verified_at, CURRENT_TIMESTAMP)
+             ELSE id_verified_at
+           END,
+           id_rejection_reason = CASE
+             WHEN $2 = 'rejected'
+               THEN 'Identity check did not pass verification.'
+             WHEN $2 = 'verified' THEN NULL
+             ELSE id_rejection_reason
+           END,
+           liveness_status = CASE
+             WHEN liveness_status IN ('verified', 'approved')
+               THEN liveness_status
+             WHEN $3 <> 'pending' THEN $3
+             ELSE liveness_status
+           END,
+           liveness_score = COALESCE($4, liveness_score),
+           selfie_match_score = COALESCE($5, selfie_match_score),
+           dojah_checked_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1
+           AND user_id = $6
+           AND dojah_reference = $7
+           AND dojah_verification_type = 'identity'`,
+        [
+          record.id,
+          idStatus,
+          livenessStatus,
+          livenessScore,
+          selfieMatchScore,
+          userId,
+          lookupReference,
+        ]
       );
+
+      const saved = await client.query(
+        `SELECT id_verification_status, liveness_status
+         FROM kyc_records
+         WHERE id = $1 AND user_id = $2`,
+        [record.id, userId]
+      );
+
+      savedIdStatus = String(
+        saved.rows[0]?.id_verification_status || ''
+      ).toLowerCase();
+
+      savedLivenessStatus = String(
+        saved.rows[0]?.liveness_status || ''
+      ).toLowerCase();
+
+      if (
+        ['verified', 'approved'].includes(savedIdStatus) &&
+        ['verified', 'approved'].includes(savedLivenessStatus)
+      ) {
+        await client.query(
+          `UPDATE users
+           SET id_verified = TRUE,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1`,
+          [userId]
+        );
+      }
+    } else {
+      // Tier 3 liveness only. Do not approve the address document here.
+      await client.query(
+        `UPDATE kyc_records
+         SET
+           liveness_status = CASE
+             WHEN liveness_status IN ('verified', 'approved')
+               THEN liveness_status
+             WHEN $2 <> 'pending' THEN $2
+             ELSE liveness_status
+           END,
+           liveness_score = COALESCE($3, liveness_score),
+           selfie_match_score = COALESCE($4, selfie_match_score),
+           tier_3_verification_status = CASE
+             WHEN tier_3_verification_status IN ('verified', 'approved')
+               THEN tier_3_verification_status
+             WHEN $2 = 'rejected' THEN 'rejected'
+             ELSE tier_3_verification_status
+           END,
+           tier_3_rejection_reason = CASE
+             WHEN $2 = 'rejected'
+               THEN 'Liveness verification did not pass.'
+             ELSE tier_3_rejection_reason
+           END,
+           dojah_checked_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1
+           AND user_id = $5
+           AND dojah_reference = $6
+           AND dojah_verification_type = 'tier_3_liveness'`,
+        [
+          record.id,
+          livenessStatus,
+          livenessScore,
+          selfieMatchScore,
+          userId,
+          lookupReference,
+        ]
+      );
+
+      const saved = await client.query(
+        `SELECT liveness_status, tier_3_verification_status
+         FROM kyc_records
+         WHERE id = $1 AND user_id = $2`,
+        [record.id, userId]
+      );
+
+      savedLivenessStatus = String(
+        saved.rows[0]?.liveness_status || 'pending'
+      ).toLowerCase();
+
+      savedTier3Status = String(
+        saved.rows[0]?.tier_3_verification_status || 'pending'
+      ).toLowerCase();
     }
 
     await client.query('COMMIT');
 
+    const livenessVerified = [
+      'verified',
+      'approved',
+    ].includes(savedLivenessStatus);
+
+    const identityVerified = [
+      'verified',
+      'approved',
+    ].includes(savedIdStatus);
+
     return res.status(200).json({
       success: true,
+      verification_type: requestedType,
       status:
-        finalId === 'verified' &&
-        finalLiveness === 'verified'
-          ? 'verified'
-          : finalId === 'rejected' ||
-              finalLiveness === 'rejected'
+        requestedType === 'tier_2'
+          ? identityVerified && livenessVerified
+            ? 'verified'
+            : savedIdStatus === 'rejected' ||
+                savedLivenessStatus === 'rejected'
+              ? 'rejected'
+              : 'pending'
+          : savedLivenessStatus === 'rejected'
             ? 'rejected'
             : 'pending',
       verified:
-        finalId === 'verified' &&
-        finalLiveness === 'verified',
-      id_verification_status: finalId,
-      liveness_status: finalLiveness,
+        requestedType === 'tier_2'
+          ? identityVerified && livenessVerified
+          : false,
+      id_verification_status:
+        requestedType === 'tier_2'
+          ? savedIdStatus
+          : undefined,
+      liveness_status: savedLivenessStatus,
+      tier_3_status:
+        requestedType === 'tier_3'
+          ? savedTier3Status
+          : undefined,
       liveness_score: livenessScore,
       selfie_match_score: selfieMatchScore,
       checked_at: new Date().toISOString(),
@@ -2630,22 +2729,20 @@ if (updateResult.rowCount !== 1) {
     if (client) {
       try {
         await client.query('ROLLBACK');
-      } catch {}
+      } catch (_) {}
     }
 
-    console.error(
-      'Confirm identity verification failed:',
-      error.message
-    );
+    console.error('Confirm verification failed:', {
+      code: error?.code || null,
+      message: error?.message || 'Unknown error',
+    });
 
     return res.status(500).json({
       success: false,
       message: 'Unable to retrieve verification status.',
     });
   } finally {
-    if (client) {
-      client.release();
-    }
+    if (client) client.release();
   }
 };
 
