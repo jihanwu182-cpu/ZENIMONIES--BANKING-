@@ -113,6 +113,15 @@ const Profile: React.FC = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [approvedKycTier, setApprovedKycTier] = useState(0);
+  
+const [contactFlow, setContactFlow] = useState<'email' | 'phone' | null>(null);
+const [newEmail, setNewEmail] = useState('');
+const [newPhone, setNewPhone] = useState('');
+const [contactOtp, setContactOtp] = useState('');
+const [contactBusy, setContactBusy] = useState(false);
+const [contactMessage, setContactMessage] = useState('');
+const [contactError, setContactError] = useState('');
+
 
   const loadProfile = useCallback(async () => {
     try {
