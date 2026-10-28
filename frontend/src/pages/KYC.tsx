@@ -3447,18 +3447,37 @@ connect.open();
                       !tier3Selfie
                     }
                   >
-                    {submitting
-                      ? 'Submitting Tier 3...'
-                      : 'Submit Tier 3 Verification'}
-                  </button>
+                  
+{submitting
+  ? 'Submitting Tier 3...'
+  : 'Submit Tier 3 Verification'}
+</button>
 
-                </form>
-              ) : null}
+</form>
+) : (
+  kyc?.liveness_status === 'rejected' &&
+  kyc?.tier_3_status !== 'verified' &&
+  kyc?.tier_3_status !== 'approved' && (
+    <div className="zk-card">
+      <p>
+        Your previous liveness check was unsuccessful.
+        You can retry without uploading your documents again.
+      </p>
 
-            </section>
+      <button
+        type="button"
+        className="zk-button"
+        disabled={submitting || dojahLoading}
+        onClick={retryTier3Liveness}
+      >
+        {dojahLoading
+          ? 'Starting verification...'
+          : 'Retry Liveness Verification'}
+      </button>
+    </div>
+  )
+)}
 
-          </>
-        )}
 
         {/* ==================================================
             FOOTER
