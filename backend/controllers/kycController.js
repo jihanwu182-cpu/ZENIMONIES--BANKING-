@@ -1,4 +1,4 @@
- const pool = require('../config/database');
+const pool = require('../config/database');
 const crypto = require('crypto');
 
 const {
@@ -455,28 +455,37 @@ const getKycStatus = async (req, res) => {
         : null;
 
     // Dedicated Tier 3 record.
-    const tier3Result = await pool.query(
-      `
-      SELECT
-        id,
-        tier_3_method,
-        tier_3_verification_status,
-        tier_3_verified_at,
-        tier_3_rejection_reason
-      FROM kyc_records
-      WHERE user_id = $1
-        AND tier_3_method IS NOT NULL
-      ORDER BY created_at DESC
-      LIMIT 1
-      `,
-      [userId]
-    );
+    
+const tier3Result = await pool.query(
+  `
+  SELECT
+    id,
+    tier_3_method,
+    tier_3_verification_status,
+    tier_3_verified_at,
+    tier_3_rejection_reason,
+    liveness_status,
+    liveness_score,
+    selfie_match_score,
+    dojah_reference,
+    dojah_verification_type,
+    dojah_started_at,
+    dojah_checked_at
+  FROM kyc_records
+  WHERE user_id = $1
+    AND tier_3_method IS NOT NULL
+  ORDER BY created_at DESC
+  LIMIT 1
+  `,
+  [userId]
+);
 
-    const tier3Record =
-      tier3Result.rows.length > 0
-        ? tier3Result.rows[0]
-        : null;
+const tier3Record =
+  tier3Result.rows.length > 0
+    ? tier3Result.rows[0]
+    : null;
 
+  
 
     // ========================================================
     // GET LATEST IDENTITY VERIFICATION RECORD
@@ -651,6 +660,8 @@ const limits = getTierLimits(tier);
 
         tier_3_status:
           tier3Status,
+         liveness_status:
+          tier3Record?.liveness_status || 'not_verified',
 
         tier_3_locked:
           tier3Locked,
