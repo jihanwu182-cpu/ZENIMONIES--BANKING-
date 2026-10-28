@@ -3453,9 +3453,6 @@ connect.open();
   : 'Submit Tier 3 Verification'}
 </button>
 
-</form>
-) : (
-  
 
 </form>
 ) : (
@@ -3481,6 +3478,7 @@ connect.open();
     </div>
   )
 )}
+
 
 
         {/* ==================================================
