@@ -2530,10 +2530,19 @@ const confirmDojahVerification = async (req, res) => {
       }
     }
 
-    // A missing liveness result must never be treated as success.
-    if (!selfieData || typeof selfieData !== 'object') {
-      livenessStatus = 'pending';
-    }
+   // ========================================================
+// TIER 3 LIVENESS RESULT PROTECTION
+// An explicit provider failure must remain REJECTED.
+// Missing selfie data must never overwrite a confirmed
+// failure with PENDING.
+// ========================================================
+
+if (
+  (!selfieData || typeof selfieData !== 'object') &&
+  !sessionFailed
+) {
+  livenessStatus = 'pending';
+}
 
     await client.query('BEGIN');
 
