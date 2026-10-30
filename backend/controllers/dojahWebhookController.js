@@ -298,7 +298,11 @@ const handleDojahWebhook = async (req, res) => {
          dojah_verification_type
        FROM kyc_records
        WHERE dojah_reference = $1
-         AND dojah_verification_type IN ('bvn', 'identity')
+         AND dojah_verification_type IN (
+          'bvn',
+          'identity',
+          'tier_3_liveness'
+       )
        FOR UPDATE`,
       [reference]
     );
@@ -412,7 +416,84 @@ const handleDojahWebhook = async (req, res) => {
         status: nextStatus,
       });
     }
+        // ========================================================
+    // TIER 3 — LIVENESS ONLY
+    // Address-document approval remains a separate admin action.
+    // ========================================================
+    if (
+      record.dojah_verification_type === 'tier_3_liveness'
+    ) {
+      const selfieData =
+        data.selfie &&
+        typeof data.selfie === 'object'
+          ? data.selfie
+          : {};
 
+      const providerLivenessStatus =
+        getStepStatus(selfieData);
+
+      // A failed/abandoned/rejected provider session is
+      // an explicit liveness rejection.
+      const nextLivenessStatus = failed
+        ? 'rejected'
+        : providerLivenessStatus;
+
+      // Never downgrade a previously verified liveness result
+      // because of a delayed or duplicate webhook.
+      const savedLivenessStatus =
+        record.liveness_status === 'verified'
+          ? 'verified'
+          : nextLivenessStatus;
+
+      await client.query(
+        `
+        UPDATE kyc_records
+        SET
+          liveness_status = $1::text,
+
+          tier_3_verification_status = CASE
+            WHEN $1::text = 'rejected'
+              THEN 'rejected'
+            ELSE tier_3_verification_status
+          END,
+
+          tier_3_rejection_reason = CASE
+            WHEN $1::text = 'rejected'
+              THEN 'provider_liveness_check_failed'
+            ELSE tier_3_rejection_reason
+          END,
+
+          dojah_checked_at = NOW(),
+          updated_at = NOW()
+
+        WHERE id = $2
+        `,
+        [
+          savedLivenessStatus,
+          record.id,
+        ]
+      );
+
+      console.info(
+        '[KYC webhook] Tier 3 liveness result saved.',
+        {
+          reference,
+          providerLivenessStatus,
+          savedLivenessStatus,
+        }
+      );
+
+      await client.query('COMMIT');
+      transactionStarted = false;
+
+      return res.status(200).json({
+        received: true,
+        matched: true,
+        verificationType: 'tier_3_liveness',
+        livenessStatus: savedLivenessStatus,
+        documentReviewRequired: true,
+      });
+    }
     // ========================================================
     // TIER 2 — IDENTITY + LIVENESS
     // ========================================================
