@@ -25,6 +25,11 @@ const MIME_TO_FORMAT = {
   'image/webp': 'webp',
 };
 
+const normalizeFormat = (value) => {
+  const format = String(value || '').trim().toLowerCase();
+  return format === 'jpeg' ? 'jpg' : format;
+};
+
 const uploadBuffer = (buffer, options) =>
   new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -44,7 +49,8 @@ const uploadBuffer = (buffer, options) =>
       }
     );
 
-    Readable.from(buffer).pipe(stream);
+    // Send the complete Buffer as one stream chunk.
+    Readable.from([buffer]).pipe(stream);
   });
 
 const uploadKycFile = async ({
@@ -79,7 +85,8 @@ const uploadKycFile = async ({
     throw new Error('Unsupported KYC file format.');
   }
 
-  const format = MIME_TO_FORMAT[file.mimetype];
+  const expectedFormat = MIME_TO_FORMAT[file.mimetype];
+
   const resourceType =
     file.mimetype === 'application/pdf' ? 'raw' : 'image';
 
@@ -109,7 +116,6 @@ const uploadKycFile = async ({
     tags: ['zenimonies-kyc'],
   });
 
-  // Verify the upload result before storing its reference.
   if (
     !result.asset_id ||
     !result.public_id ||
@@ -120,19 +126,17 @@ const uploadKycFile = async ({
     );
   }
 
-  const actualFormat = String(result.format || '')
-    .trim()
-    .toLowerCase();
+  const returnedFormat = normalizeFormat(result.format);
 
-  const normalizedActualFormat =
-    actualFormat === 'jpeg' ? 'jpg' : actualFormat;
+  // Cloudinary may not return a separate format value for
+  // authenticated raw PDF uploads. The PDF extension is already
+  // included in the generated raw public ID.
+  const actualFormat =
+    resourceType === 'raw' && !returnedFormat
+      ? 'pdf'
+      : returnedFormat;
 
-  if (
-    normalizedActualFormat !== format ||
-    (resourceType === 'raw' && normalizedActualFormat !== 'pdf')
-  ) {
-    // Remove an unexpected upload result rather than saving
-    // metadata that could generate an incorrect download URL.
+  if (actualFormat !== expectedFormat) {
     try {
       await cloudinary.uploader.destroy(result.public_id, {
         resource_type: resourceType,
@@ -154,7 +158,7 @@ const uploadKycFile = async ({
     assetId: result.asset_id,
     publicId: result.public_id,
     resourceType,
-    format: normalizedActualFormat,
+    format: actualFormat,
     bytes: result.bytes,
     storageProvider: 'cloudinary',
   };
