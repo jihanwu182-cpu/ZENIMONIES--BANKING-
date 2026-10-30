@@ -546,7 +546,6 @@ const KYC_TYPES = {
 // UPDATE OVERALL KYC STATE
 // ============================================================
 
-
 const refreshOverallKycState = async (
   client,
   userId
@@ -586,12 +585,9 @@ const refreshOverallKycState = async (
   if (idVerified) highestVerifiedTier = 2;
   if (tier3Verified) highestVerifiedTier = 3;
 
-  // A completed Tier 1 verification must not require
-  // Tier 2 and Tier 3 to be completed as well.
-  const allVerified =
-    bvnVerified &&
-    idVerified &&
-    tier3Verified;
+  // Tier 1 verification is sufficient for account verification.
+  // Customers do not need to complete all three tiers.
+  const accountVerified = bvnVerified;
 
   const rejectedResult = await client.query(
     `
@@ -609,19 +605,18 @@ const refreshOverallKycState = async (
 
   const record = rejectedResult.rows[0] || {};
 
-  const hasRejected =
-    record.bvn_verification_status === 'rejected' ||
-    record.id_verification_status === 'rejected' ||
-    record.tier_3_verification_status === 'rejected';
+  const bvnRejected =
+    record.bvn_verification_status === 'rejected';
 
-  // Overall status describes the current KYC journey.
-  // It does not mean every tier must be completed.
+  // Only a Tier 1 rejection affects the base account
+  // verification status. Higher-tier decisions remain
+  // independent of an already verified Tier 1 account.
   let overallStatus = 'pending';
 
-  if (hasRejected && !allVerified) {
-    overallStatus = 'rejected';
-  } else if (bvnVerified) {
+  if (bvnVerified) {
     overallStatus = 'verified';
+  } else if (bvnRejected) {
+    overallStatus = 'rejected';
   }
 
   await client.query(
@@ -637,7 +632,7 @@ const refreshOverallKycState = async (
     [
       overallStatus,
       highestVerifiedTier,
-      bvnVerified,
+      accountVerified,
       userId,
     ]
   );
@@ -665,7 +660,8 @@ const refreshOverallKycState = async (
   return {
     overallStatus,
     highestVerifiedTier,
-    allVerified,
+    allVerified: accountVerified,
+    accountVerified,
   };
 };
 
@@ -793,9 +789,26 @@ const processKycDecision = async (
     // ----------------------------------------------------------
     // VERIFY
     // ----------------------------------------------------------
-
-    
+ 
     if (decision === 'verify') {
+
+      // Tier 3 approval requires successful liveness verification.
+      if (
+        type === 'TIER3' &&
+        record.liveness_status !== 'verified'
+      ) {
+        await client.query('ROLLBACK');
+
+        return res.status(409).json({
+          success: false,
+          code: 'TIER3_LIVENESS_NOT_VERIFIED',
+          message:
+            'Tier 3 cannot be approved until liveness verification has been completed successfully.',
+          liveness_status:
+            record.liveness_status || 'pending',
+        });
+      }
+
       // Tier 1 must not be manually approved when the
       // provider result is missing or unconfirmed.
       if (type === 'BVN') {
@@ -818,7 +831,7 @@ const processKycDecision = async (
           });
         }
       }
-
+      
       await client.query(
         `
         UPDATE kyc_records
