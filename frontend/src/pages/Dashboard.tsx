@@ -1,4 +1,4 @@
- import React, {
+import React, {
   useEffect,
   useMemo,
   useState,
@@ -20,8 +20,13 @@ type KycData = {
   status?: string;
   tier?: number;
   bvn_verified?: boolean;
+  nin_verified?: boolean;
   id_verified?: boolean;
   tier_3_verified?: boolean;
+  bvn_status?: string | boolean;
+  nin_status?: string | boolean;
+  id_status?: string | boolean;
+  tier_3_status?: string | boolean;
 };
 
 type KycResponse = {
@@ -557,26 +562,38 @@ const Dashboard: React.FC = () => {
       }
 
       const status =
-        String(
-          kyc?.status || ''
-        ).toLowerCase();
+        String(kyc?.status || '').toLowerCase();
 
-      const tier =
-        Number(kyc?.tier || 0);
+      const isVerified = (value: unknown) =>
+        value === true ||
+        String(value || '').toLowerCase() === 'verified' ||
+        String(value || '').toLowerCase() === 'approved' ||
+        String(value || '').toLowerCase() === 'completed';
 
-      const verified =
-        status === 'verified' ||
-        status === 'approved' ||
-        status === 'completed';
+      const tier1Verified =
+        kyc?.bvn_verified === true ||
+        kyc?.nin_verified === true ||
+        isVerified(kyc?.bvn_status) ||
+        isVerified(kyc?.nin_status);
 
-      if (verified) {
+      const tier2Verified =
+        tier1Verified &&
+        (kyc?.id_verified === true || isVerified(kyc?.id_status));
+
+      const tier3Verified =
+        tier2Verified &&
+        (kyc?.tier_3_verified === true || isVerified(kyc?.tier_3_status));
+
+      const verifiedTier =
+        tier3Verified ? 3 : tier2Verified ? 2 : tier1Verified ? 1 : 0;
+
+      if (verifiedTier > 0) {
         return {
-          title:
-            tier > 0
-              ? `Tier ${tier} Verified`
-              : 'KYC Verified',
+          title: `Tier ${verifiedTier} Verified`,
           description:
-            'Your account verification is complete.',
+            verifiedTier === 3
+              ? 'Your Tier 3 verification is complete.'
+              : `Your Tier ${verifiedTier} verification is complete.`,
           type: 'verified',
         };
       }
