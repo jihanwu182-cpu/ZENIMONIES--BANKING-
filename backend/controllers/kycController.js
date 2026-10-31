@@ -435,7 +435,8 @@ const getKycStatus = async (req, res) => {
         id,
         bvn_verification_status,
         bvn_verified_at,
-        bvn_rejection_reason
+        bvn_rejection_reason,
+        created_at
       FROM kyc_records
       WHERE user_id = $1
         AND bvn IS NOT NULL
@@ -467,7 +468,8 @@ const getKycStatus = async (req, res) => {
         id,
         nin_verification_status,
         nin_verified_at,
-        nin_rejection_reason
+        nin_rejection_reason,
+        created_at
       FROM kyc_records
       WHERE user_id = $1
         AND nin IS NOT NULL
@@ -596,7 +598,26 @@ const tier3Status =
     : normalizeKycStatus(
         tier3Record?.tier_3_verification_status
       );
+      const bvnPendingAt = bvnRecord?.created_at
+  ? new Date(bvnRecord.created_at).getTime()
+  : 0;
 
+const ninPendingAt = ninRecord?.created_at
+  ? new Date(ninRecord.created_at).getTime()
+  : 0;
+
+const pendingTier1Method =
+  bvnStatus === 'pending' && ninStatus === 'pending'
+    ? (
+        bvnPendingAt >= ninPendingAt
+          ? 'bvn'
+          : 'nin'
+      )
+    : bvnStatus === 'pending'
+      ? 'bvn'
+      : ninStatus === 'pending'
+        ? 'nin'
+        : null;
     // ========================================================
     // INDIVIDUAL LOCK RULES
     // ========================================================
@@ -671,21 +692,24 @@ const limits = getTierLimits(tier);
         // ----------------------------------------------------
 
         bvn_verified:
-          user.bvn_verified === true,
+  user.bvn_verified === true,
 
-        bvn_status:
-          bvnStatus,
+bvn_status:
+  bvnStatus,
 
-        bvn_locked:
-          bvnLocked,
+pending_tier1_method:
+  pendingTier1Method,
 
-        bvn_rejection_reason:
+bvn_locked:
+  bvnLocked,
+
+bvn_rejection_reason:
   bvnRecord?.bvn_rejection_reason || null,
 
-        nin_verified: user.nin_verified === true,
-        nin_status: ninStatus,
-        nin_locked: ninStatus === 'pending' || ninStatus === 'verified',
-        nin_rejection_reason: ninRecord?.nin_rejection_reason || null,
+nin_verified: user.nin_verified === true,
+nin_status: ninStatus,
+nin_locked: ninStatus === 'pending' || ninStatus === 'verified',
+nin_rejection_reason: ninRecord?.nin_rejection_reason || null,
 
         // ----------------------------------------------------
         // IDENTITY
