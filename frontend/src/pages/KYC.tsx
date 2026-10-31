@@ -1,4 +1,4 @@
-import React, {
+ import React, {
   useEffect,
   useRef,
   useState,
@@ -1608,8 +1608,14 @@ const [
       'verified';
 
 const canContinueBvnVerification =
-  bvnStatus === 'pending' &&
-  bvnStatus !== 'verified';
+  (
+    tier1Method === 'bvn' &&
+    rawBvnStatus === 'pending'
+  ) ||
+  (
+    tier1Method === 'nin' &&
+    rawNinStatus === 'pending'
+  );
 
   const canSubmitTier2 =
     rawBvnStatus ===
