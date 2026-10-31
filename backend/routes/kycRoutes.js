@@ -4,6 +4,7 @@ const multer = require('multer');
 const {
   getKycStatus,
   submitBvn,
+  submitNin,
   submitTier2,
   submitTier3,
   startDojahVerification,
@@ -146,6 +147,22 @@ router.post(
   '/bvn',
   authMiddleware,
   submitBvn
+);
+
+// ============================================================
+// TIER 1 — NIN SUBMISSION
+// ============================================================
+//
+// POST /api/kyc/nin
+//
+// BVN and NIN are alternative Tier 1 verification methods.
+// A customer only needs one successfully verified method.
+// ============================================================
+
+router.post(
+  '/nin',
+  authMiddleware,
+  submitNin
 );
 
 // ============================================================
