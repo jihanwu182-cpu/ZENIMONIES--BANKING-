@@ -49,9 +49,8 @@ const getDashboard = async (req, res) => {
       pool.query(`
         SELECT COUNT(*)::int AS total
         FROM users
-        WHERE kyc_status = 'approved'
-      `),
-
+        WHERE kyc_status = 'verified'
+     `),
       pool.query(`
         SELECT COUNT(*)::int AS total
         FROM users
@@ -212,6 +211,7 @@ const getUsers = async (req, res) => {
         kyc_status,
         kyc_tier,
         bvn_verified,
+        nin_verified,
         id_verified,
         tier_3_verified,
         is_verified,
@@ -264,6 +264,7 @@ const getUser = async (req, res) => {
         kyc_status,
         kyc_tier,
         bvn_verified,
+        nin_verified,
         id_verified,
         tier_3_verified,
         tier_3_method,
