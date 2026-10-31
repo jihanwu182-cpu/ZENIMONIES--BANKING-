@@ -337,6 +337,68 @@ const handleDojahWebhook = async (req, res) => {
     }
 
     // ========================================================
+    // TIER 1 — NIN
+    // A completed widget flow is not approval. Require an
+    // explicit positive government_data status from Dojah.
+    // ========================================================
+    if (record.dojah_verification_type === 'nin') {
+      const governmentData =
+        data.government_data &&
+        typeof data.government_data === 'object'
+          ? data.government_data
+          : {};
+      const providerStatus = getStepStatus(governmentData);
+      const approved = !failed && providerStatus === 'verified';
+      const explicitlyRejected = failed || providerStatus === 'rejected';
+      const nextStatus = approved ? 'verified' : explicitlyRejected ? 'rejected' : 'pending';
+
+      await client.query(
+        `UPDATE kyc_records
+         SET nin_verification_status = $1::text,
+             nin_verified_at = CASE
+               WHEN $1::text = 'verified' THEN COALESCE(nin_verified_at, NOW())
+               ELSE NULL
+             END,
+             nin_rejection_reason = CASE
+               WHEN $1::text = 'rejected' THEN 'provider_nin_check_failed'
+               ELSE NULL
+             END,
+             dojah_checked_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $2`,
+        [nextStatus, record.id]
+      );
+
+      if (approved) {
+        await client.query(
+          `UPDATE users
+           SET nin_verified = TRUE,
+               kyc_tier = GREATEST(kyc_tier, 1),
+               updated_at = NOW()
+           WHERE id = $1::uuid`,
+          [record.user_id]
+        );
+      } else if (explicitlyRejected) {
+        await client.query(
+          `UPDATE users
+           SET nin_verified = FALSE,
+               updated_at = NOW()
+           WHERE id = $1::uuid`,
+          [record.user_id]
+        );
+      }
+
+      await client.query('COMMIT');
+      transactionStarted = false;
+      return res.status(200).json({
+        received: true,
+        matched: true,
+        verificationType: 'nin',
+        status: nextStatus,
+      });
+    }
+
+    // ========================================================
     // TIER 1 — BVN
     // ========================================================
     if (record.dojah_verification_type === 'bvn') {
@@ -399,7 +461,10 @@ const handleDojahWebhook = async (req, res) => {
         await client.query(
           `UPDATE users
            SET bvn_verified = FALSE,
-               kyc_status = 'rejected',
+               kyc_status = CASE
+                 WHEN nin_verified = TRUE THEN kyc_status
+                 ELSE 'rejected'
+               END,
                updated_at = NOW()
            WHERE id = $1`,
           [record.user_id]
