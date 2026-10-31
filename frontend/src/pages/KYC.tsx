@@ -260,55 +260,49 @@ const normalizeStatus = (
     return 'not submitted';
   }
 
-  const normalized =
-    String(value)
-      .trim()
-      .toLowerCase();
+  const normalized = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
 
+  // Explicitly prevent negative statuses from
+  // being mistaken for verified.
   if (
-    normalized.includes(
-      'verified'
-    ) ||
-    normalized.includes(
-      'approved'
-    ) ||
-    normalized === 'success' ||
-    normalized === 'completed'
+    normalized === 'not_verified' ||
+    normalized === 'unverified' ||
+    normalized === 'not_approved' ||
+    normalized === 'not_submitted'
+  ) {
+    return 'not submitted';
+  }
+
+  // Only explicit approval statuses count.
+  if (
+    normalized === 'verified' ||
+    normalized === 'approved'
   ) {
     return 'verified';
   }
 
   if (
-    normalized.includes(
-      'pending'
-    ) ||
-    normalized.includes(
-      'processing'
-    ) ||
-    normalized.includes(
-      'review'
-    )
+    normalized === 'pending' ||
+    normalized === 'processing' ||
+    normalized === 'under_review' ||
+    normalized === 'in_review'
   ) {
     return 'pending';
   }
 
   if (
-    normalized.includes(
-      'reject'
-    ) ||
-    normalized.includes(
-      'failed'
-    ) ||
-    normalized.includes(
-      'declined'
-    )
+    normalized === 'rejected' ||
+    normalized === 'failed' ||
+    normalized === 'declined'
   ) {
     return 'rejected';
   }
 
   return 'not submitted';
 };
-
 // ============================================================
 // CLAMP TIER
 // ============================================================
