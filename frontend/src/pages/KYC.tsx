@@ -84,6 +84,8 @@ interface KycData {
     | string
     | boolean;
 
+ pending_tier1_method?: 'bvn' | 'nin' | null;
+
   bvn_verified?: boolean;
 
   bvn_rejection_reason?: string;
@@ -1726,7 +1728,7 @@ const submitBvn = async (event: React.FormEvent) => {
       return;
     }
 
-    if (!/^\\d{11}$/.test(nin)) {
+    if (!/^\d{11}$/.test(nin)) {
       showAlert('NIN must contain exactly 11 digits.', 'error');
       return;
     }
