@@ -3,7 +3,7 @@ const pool = require('../config/database');
 
 // ============================================================
 // ZENIMONIES BANKING — DOJAH WEBHOOK CONTROLLER
-// Handles Tier 1 BVN and Tier 2 identity/liveness callbacks.
+// Handles Tier 1 BVN/NIN and Tier 2/Tier 3 verification callbacks.
 // ============================================================
 
 const getWebhookSecret = () => {
@@ -218,7 +218,7 @@ const handleDojahWebhook = async (req, res) => {
 
   // Acknowledge test events without modifying customer KYC.
   if (!reference) {
-    const eventName =
+        const eventName =
       typeof body.event === 'string'
         ? body.event.trim().toLowerCase()
         : '';
@@ -292,7 +292,11 @@ const handleDojahWebhook = async (req, res) => {
          user_id,
          bvn,
          bvn_verification_status,
+         bvn_provider_validation_result,
+         nin_verification_status,
+         nin_provider_validation_result,
          id_verification_status,
+         tier_3_verification_status,
          liveness_status,
          dojah_reference,
          dojah_verification_type
@@ -349,21 +353,38 @@ const handleDojahWebhook = async (req, res) => {
           ? data.government_data
           : {};
       const providerStatus = getStepStatus(governmentData);
-      const providerResult = !failed && providerStatus === 'verified'
-        ? 'verified'
-        : (failed || providerStatus === 'rejected')
-          ? 'rejected'
-          : 'pending';
+      const providerResult =
+        record.nin_verification_status === 'verified' ||
+        record.nin_provider_validation_result === 'verified'
+          ? 'verified'
+          : !failed && providerStatus === 'verified'
+            ? 'verified'
+            : (failed || providerStatus === 'rejected')
+              ? 'rejected'
+              : 'pending';
 
       // A positive Dojah result is evidence for the admin queue, not
       // final account approval. The admin action sets nin_verified.
-      const reviewStatus = providerResult === 'rejected' ? 'rejected' : 'pending';
+      const reviewStatus =
+        record.nin_verification_status === 'verified'
+          ? 'verified'
+          : providerResult === 'rejected'
+            ? 'rejected'
+            : 'pending';
 
       await client.query(
         `UPDATE kyc_records
-         SET nin_provider_validation_result = $1::text,
+         SET nin_provider_validation_result = CASE
+               WHEN $1::text = 'pending'
+                 THEN COALESCE(nin_provider_validation_result, 'pending')
+               ELSE $1::text
+             END,
              nin_verification_status = $2::text,
-             nin_verified_at = NULL,
+             nin_verified_at = CASE
+               WHEN $2::text = 'verified'
+                 THEN COALESCE(nin_verified_at, NOW())
+               ELSE NULL
+             END,
              nin_rejection_reason = CASE
                WHEN $1::text = 'rejected' THEN 'provider_nin_check_failed'
                ELSE NULL
@@ -374,15 +395,9 @@ const handleDojahWebhook = async (req, res) => {
         [providerResult, reviewStatus, record.id]
       );
 
-      if (providerResult === 'rejected') {
-        await client.query(
-          `UPDATE users
-           SET nin_verified = FALSE,
-               updated_at = NOW()
-           WHERE id = $1::uuid`,
-          [record.user_id]
-        );
-      }
+      // Provider callbacks are evidence only. They must never clear
+      // an existing customer approval or set the user-level flag.
+      // The administrator decision endpoint owns nin_verified.
 
       await client.query('COMMIT');
       transactionStarted = false;
@@ -413,11 +428,22 @@ const handleDojahWebhook = async (req, res) => {
       const explicitlyRejected =
         failed || providerStatus === 'rejected';
 
-      const nextStatus = approved
-        ? 'verified'
-        : explicitlyRejected
-          ? 'rejected'
-          : 'pending';
+      const nextStatus =
+        record.bvn_verification_status === 'verified'
+          ? 'verified'
+          : explicitlyRejected
+            ? 'rejected'
+            : 'pending';
+
+      const providerResult =
+        record.bvn_verification_status === 'verified' ||
+        record.bvn_provider_validation_result === 'verified'
+          ? 'verified'
+          : approved
+            ? 'verified'
+            : explicitlyRejected
+              ? 'rejected'
+              : 'pending';
 
       console.info('[KYC webhook] BVN decision.', {
         reference,
@@ -432,7 +458,7 @@ const handleDojahWebhook = async (req, res) => {
                WHEN $1::text = 'verified'
                  THEN COALESCE(bvn_verified_at, NOW())
                ELSE NULL
-             END,
+                            END,
              bvn_provider_validation_result = $2::text,
              bvn_rejection_reason = CASE
                WHEN $1::text = 'rejected'
@@ -442,31 +468,13 @@ const handleDojahWebhook = async (req, res) => {
              dojah_checked_at = NOW(),
              updated_at = NOW()
          WHERE id = $3`,
-        [nextStatus, nextStatus, record.id]
+        [nextStatus, providerResult, record.id]
       );
 
-      if (approved) {
-        await client.query(
-          `UPDATE users
-           SET bvn_verified = TRUE,
-               kyc_tier = GREATEST(kyc_tier, 1),
-               updated_at = NOW()
-           WHERE id = $1::uuid`,
-          [record.user_id]
-        );
-      } else if (explicitlyRejected) {
-        await client.query(
-          `UPDATE users
-           SET bvn_verified = FALSE,
-               kyc_status = CASE
-                 WHEN nin_verified = TRUE THEN kyc_status
-                 ELSE 'rejected'
-               END,
-               updated_at = NOW()
-           WHERE id = $1`,
-          [record.user_id]
-        );
-      }
+      // Do not set or clear users.bvn_verified here. A successful
+      // provider result remains pending for administrator approval.
+      // This avoids the admin endpoint's verified/permanently-locked
+      // conflict and prevents one method from undoing another.
 
       await client.query('COMMIT');
       transactionStarted = false;
@@ -478,7 +486,8 @@ const handleDojahWebhook = async (req, res) => {
         status: nextStatus,
       });
     }
-        // ========================================================
+
+    // ========================================================
     // TIER 3 — LIVENESS ONLY
     // Address-document approval remains a separate admin action.
     // ========================================================
@@ -512,19 +521,6 @@ const handleDojahWebhook = async (req, res) => {
         UPDATE kyc_records
         SET
           liveness_status = $1::text,
-
-          tier_3_verification_status = CASE
-            WHEN $1::text = 'rejected'
-              THEN 'rejected'
-            ELSE tier_3_verification_status
-          END,
-
-          tier_3_rejection_reason = CASE
-            WHEN $1::text = 'rejected'
-              THEN 'provider_liveness_check_failed'
-            ELSE tier_3_rejection_reason
-          END,
-
           dojah_checked_at = NOW(),
           updated_at = NOW()
 
@@ -556,6 +552,7 @@ const handleDojahWebhook = async (req, res) => {
         documentReviewRequired: true,
       });
     }
+
     // ========================================================
     // TIER 2 — IDENTITY + LIVENESS
     // ========================================================
@@ -599,19 +596,21 @@ const handleDojahWebhook = async (req, res) => {
     );
 
     // Preserve verified steps unless the event explicitly failed.
-    const savedIdentityStatus = failed
-      ? 'rejected'
-      : record.id_verification_status === 'verified'
+    const savedIdentityStatus =
+      record.id_verification_status === 'verified'
         ? 'verified'
-        : identityStatus;
+        : (failed || identityProviderStatus === 'rejected')
+          ? 'rejected'
+          : 'pending';
 
-    const savedLivenessStatus = failed
-      ? 'rejected'
-      : record.liveness_status === 'verified'
+    const savedLivenessStatus =
+      record.liveness_status === 'verified'
         ? 'verified'
-        : livenessStatus;
+        : failed
+          ? 'rejected'
+          : livenessStatus;
 
-    // FIX: Explicit casts prevent PostgreSQL error 42P08.
+    // Explicit casts prevent PostgreSQL error 42P08.
     await client.query(
       `UPDATE kyc_records
        SET id_verification_status = $1::text,
@@ -640,33 +639,10 @@ const handleDojahWebhook = async (req, res) => {
       ]
     );
 
-    if (
-      savedIdentityStatus === 'verified' &&
-      savedLivenessStatus === 'verified'
-    ) {
-      await client.query(
-        `UPDATE users
-         SET id_verified = TRUE,
-             kyc_tier = GREATEST(kyc_tier, 2),
-             updated_at = NOW()
-         WHERE id = $1`,
-        [record.user_id]
-      );
-    } else if (
-      savedIdentityStatus === 'rejected' ||
-      savedLivenessStatus === 'rejected'
-    ) {
-      await client.query(
-        `UPDATE users
-         SET id_verified = FALSE,
-             kyc_status = 'rejected',
-             updated_at = NOW()
-         WHERE id = $1`,
-        [record.user_id]
-      );
-    }
-
-    await client.query('COMMIT');
+    // Provider callbacks do not approve or revoke Tier 2 at the
+    // user level. The ID document remains pending for admin review;
+    // the administrator endpoint owns users.id_verified.
+      await client.query('COMMIT');
     transactionStarted = false;
 
     return res.status(200).json({
