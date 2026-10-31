@@ -1482,12 +1482,30 @@ const [
   // STATUS
   // ==========================================================
 
+  // Derive the displayed level from approved verification evidence.
+  // A submitted tier or stale backend tier value must never grant a level.
+  const tier1Verified =
+    kyc.bvn_verified === true ||
+    kyc.nin_verified === true ||
+    normalizeStatus(kyc.bvn_status) === 'verified' ||
+    normalizeStatus(kyc.nin_status) === 'verified';
+
+  const tier2Verified =
+    kyc.id_verified === true ||
+    normalizeStatus(kyc.id_status) === 'verified';
+
+  const tier3Verified =
+    kyc.tier_3_verified === true ||
+    normalizeStatus(kyc.tier_3_status) === 'verified';
+
   const approvedTier =
-    clampTier(
-      kyc.tier ??
-        kyc.submitted_tier ??
-        0
-    );
+    tier3Verified && tier2Verified && tier1Verified
+      ? 3
+      : tier2Verified && tier1Verified
+        ? 2
+        : tier1Verified
+          ? 1
+          : 0;
 
   // ==========================================================
   // TIER 1 / BVN
