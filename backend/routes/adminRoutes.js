@@ -1,5 +1,3 @@
-
-
 const express = require('express');
 
 const router = express.Router();
@@ -22,6 +20,8 @@ const {
   getPrivateTier3Document,
   verifyBvn,
   rejectBvn,
+  verifyNin,
+  rejectNin,
   verifyTier2,
   rejectTier2,
   verifyTier3,
@@ -106,6 +106,10 @@ router.get(
 // BVN
 router.post('/kyc/:id/bvn/verify', verifyBvn);
 router.post('/kyc/:id/bvn/reject', rejectBvn);
+
+// NIN
+router.post('/kyc/:id/nin/verify', verifyNin);
+router.post('/kyc/:id/nin/reject', rejectNin);
 
 // Tier 2
 router.post('/kyc/:id/tier2/verify', verifyTier2);
