@@ -300,6 +300,7 @@ const handleDojahWebhook = async (req, res) => {
        WHERE dojah_reference = $1
          AND dojah_verification_type IN (
           'bvn',
+          'nin',
           'identity',
           'tier_3_liveness'
        )
@@ -348,37 +349,32 @@ const handleDojahWebhook = async (req, res) => {
           ? data.government_data
           : {};
       const providerStatus = getStepStatus(governmentData);
-      const approved = !failed && providerStatus === 'verified';
-      const explicitlyRejected = failed || providerStatus === 'rejected';
-      const nextStatus = approved ? 'verified' : explicitlyRejected ? 'rejected' : 'pending';
+      const providerResult = !failed && providerStatus === 'verified'
+        ? 'verified'
+        : (failed || providerStatus === 'rejected')
+          ? 'rejected'
+          : 'pending';
+
+      // A positive Dojah result is evidence for the admin queue, not
+      // final account approval. The admin action sets nin_verified.
+      const reviewStatus = providerResult === 'rejected' ? 'rejected' : 'pending';
 
       await client.query(
         `UPDATE kyc_records
-         SET nin_verification_status = $1::text,
-             nin_verified_at = CASE
-               WHEN $1::text = 'verified' THEN COALESCE(nin_verified_at, NOW())
-               ELSE NULL
-             END,
+         SET nin_provider_validation_result = $1::text,
+             nin_verification_status = $2::text,
+             nin_verified_at = NULL,
              nin_rejection_reason = CASE
                WHEN $1::text = 'rejected' THEN 'provider_nin_check_failed'
                ELSE NULL
              END,
              dojah_checked_at = NOW(),
              updated_at = NOW()
-         WHERE id = $2`,
-        [nextStatus, record.id]
+         WHERE id = $3`,
+        [providerResult, reviewStatus, record.id]
       );
 
-      if (approved) {
-        await client.query(
-          `UPDATE users
-           SET nin_verified = TRUE,
-               kyc_tier = GREATEST(kyc_tier, 1),
-               updated_at = NOW()
-           WHERE id = $1::uuid`,
-          [record.user_id]
-        );
-      } else if (explicitlyRejected) {
+      if (providerResult === 'rejected') {
         await client.query(
           `UPDATE users
            SET nin_verified = FALSE,
@@ -394,7 +390,8 @@ const handleDojahWebhook = async (req, res) => {
         received: true,
         matched: true,
         verificationType: 'nin',
-        status: nextStatus,
+        providerResult,
+        status: reviewStatus,
       });
     }
 
