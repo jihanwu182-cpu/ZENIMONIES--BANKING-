@@ -1,3 +1,4 @@
+
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
@@ -70,6 +71,27 @@ const applyNinMigration = async (client) => {
       CREATE INDEX IF NOT EXISTS idx_kyc_records_dojah_reference
         ON kyc_records(dojah_reference)
         WHERE dojah_reference IS NOT NULL;
+    `);
+
+    // Tier 1 accepts either verified BVN or verified NIN.
+    // The schema runs before this migration, so NIN-aware
+    // normalization must happen here, after nin_verified exists.
+    //
+    // Only promote users with an already verified NIN.
+    // Do not downgrade or reset previously approved accounts.
+    await client.query(`
+      UPDATE users
+      SET
+        kyc_status = 'verified',
+        is_verified = TRUE
+      WHERE nin_verified = TRUE
+        AND kyc_status IN (
+          'pending',
+          'under_review',
+          'not_verified',
+          'rejected',
+          'approved'
+        );
     `);
 
     await client.query('COMMIT');
@@ -145,7 +167,7 @@ const initializeDatabase = async () => {
         BOOLEAN NOT NULL DEFAULT false;
       `);
 
-      // Apply the NIN migration automatically.
+      // Apply the NIN migration and Tier 1 normalization.
       await applyNinMigration(client);
 
       console.log(
