@@ -2917,7 +2917,7 @@ connect.open();
             autoComplete="off"
             maxLength={11}
             value={bvn}
-            onChange={(event) => setBvn(event.target.value.replace(/\\D/g, '').slice(0, 11))}
+            onChange={(event) => setBvn(event.target.value.replace(/\D/g, '').slice(0, 11))}
             placeholder="Enter your 11-digit BVN"
             disabled={submitting || dojahLoading}
           />
@@ -2943,7 +2943,7 @@ connect.open();
             autoComplete="off"
             maxLength={11}
             value={nin}
-            onChange={(event) => setNin(event.target.value.replace(/\\D/g, '').slice(0, 11))}
+            onChange={(event) => setNin(event.target.value.replace(/\D/g, '').slice(0, 11))}
             placeholder="Enter your 11-digit NIN"
             disabled={submitting || dojahLoading}
           />
@@ -3024,8 +3024,8 @@ connect.open();
                 </div>
               )}
 
-              {bvnStatus !==
-              'verified' ? (
+              {rawBvnStatus !==
+                'verified' ? (
                 <div className="zk-note">
 
                   <span className="zk-note-icon">
