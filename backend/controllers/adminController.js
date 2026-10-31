@@ -584,41 +584,37 @@ const refreshOverallKycState = async (
   }
 
   const user = result.rows[0];
-
-  const bvnVerified =
-    user.bvn_verified === true;
-
-  const ninVerified =
-    user.nin_verified === true;
-
+  const bvnVerified = user.bvn_verified === true;
+  const ninVerified = user.nin_verified === true;
   const tier1Verified = bvnVerified || ninVerified;
 
-  const idVerified =
-    user.id_verified === true;
+  // Tier 2 specifically requires BVN plus an approved identity document.
+  // NIN alone is sufficient for Tier 1, but never substitutes for BVN at Tier 2.
+  const tier2Verified =
+    bvnVerified && user.id_verified === true;
 
+  // Tier 3 cannot be counted unless Tier 2 has already been completed.
   const tier3Verified =
-    user.tier_3_verified === true;
+    tier2Verified && user.tier_3_verified === true;
 
-  // Highest individual verification tier completed.
-  let highestVerifiedTier = 0;
+  const highestVerifiedTier = tier3Verified
+    ? 3
+    : tier2Verified
+      ? 2
+      : tier1Verified
+        ? 1
+        : 0;
 
-  if (tier1Verified) highestVerifiedTier = 1;
-  if (idVerified) highestVerifiedTier = 2;
-  if (tier3Verified) highestVerifiedTier = 3;
-
-  // Tier 1 verification is sufficient for account verification.
-  // Customers do not need to complete all three tiers.
+  // Tier 1 is sufficient for basic account verification.
   const accountVerified = tier1Verified;
 
-  // BVN and NIN can be stored in different KYC rows. Aggregate all
-  // attempts so a newer row cannot hide an earlier verified method.
+  // A base account is rejected only when both available Tier 1 methods
+  // have been rejected and neither method has an approval.
   const rejectedResult = await client.query(
     `
     SELECT
       BOOL_OR(bvn_verification_status = 'rejected') AS bvn_rejected,
-      BOOL_OR(nin_verification_status = 'rejected') AS nin_rejected,
-      BOOL_OR(bvn_verification_status IN ('pending', 'verified')) AS bvn_attempted,
-      BOOL_OR(nin_verification_status IN ('pending', 'verified')) AS nin_attempted
+      BOOL_OR(nin_verification_status = 'rejected') AS nin_rejected
     FROM kyc_records
     WHERE user_id = $1
     `,
@@ -631,16 +627,11 @@ const refreshOverallKycState = async (
     attempts.bvn_rejected === true &&
     attempts.nin_rejected === true;
 
-  // Only a Tier 1 rejection affects the base account
-  // verification status. Higher-tier decisions remain
-  // independent of an already verified Tier 1 account.
-  let overallStatus = 'pending';
-
-  if (tier1Verified) {
-    overallStatus = 'verified';
-  } else if (tier1Rejected) {
-    overallStatus = 'rejected';
-  }
+  const overallStatus = tier1Verified
+    ? 'verified'
+    : tier1Rejected
+      ? 'rejected'
+      : 'pending';
 
   await client.query(
     `
@@ -652,39 +643,19 @@ const refreshOverallKycState = async (
       updated_at = CURRENT_TIMESTAMP
     WHERE id = $4
     `,
-    [
-      overallStatus,
-      highestVerifiedTier,
-      accountVerified,
-      userId,
-    ]
+    [overallStatus, highestVerifiedTier, accountVerified, userId]
   );
 
-  await client.query(
-    `
-    UPDATE kyc_records
-    SET
-      verification_status = $1,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = (
-      SELECT id
-      FROM kyc_records
-      WHERE user_id = $2
-      ORDER BY updated_at DESC
-      LIMIT 1
-    )
-    `,
-    [
-      overallStatus,
-      userId,
-    ]
-  );
-
+  // Do not overwrite a KYC submission's per-method verification_status
+  // with the user's overall account status. Those are separate concepts.
   return {
     overallStatus,
     highestVerifiedTier,
     allVerified: accountVerified,
     accountVerified,
+    tier1Verified,
+    tier2Verified,
+    tier3Verified,
   };
 };
 
@@ -740,7 +711,9 @@ const processKycDecision = async (
           k.*,
           u.full_name,
           u.email,
-          u.bvn_verified
+          u.bvn_verified,
+          u.nin_verified,
+          u.id_verified
         FROM kyc_records k
 
         INNER JOIN users u
@@ -816,7 +789,21 @@ const processKycDecision = async (
  
     if (decision === 'verify') {
 
+      // Tier 3 is only available after BVN + Tier 2 identity approval.
+      if (
+        type === 'TIER3' &&
+        (record.bvn_verified !== true || record.id_verified !== true)
+      ) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          code: 'TIER3_TIER2_REQUIRED',
+          message: 'Tier 3 approval requires a verified BVN and an approved Tier 2 identity document.',
+        });
+      }
+
       // Tier 3 approval requires successful liveness verification.
+      // Liveness is supporting evidence; it does not approve the address document by itself.
       if (
         type === 'TIER3' &&
         record.liveness_status !== 'verified'
@@ -910,17 +897,8 @@ const processKycDecision = async (
         ]
       );
 
-      await client.query(
-        `
-        UPDATE users
-        SET
-          ${config.verifiedColumn} = false,
-          kyc_status = 'rejected',
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-        `,
-        [record.user_id]
-      );
+      // Preserve any previously approved method. The overall state is
+      // recalculated from the user's approved flags immediately below.
     }
 
     const overall =
