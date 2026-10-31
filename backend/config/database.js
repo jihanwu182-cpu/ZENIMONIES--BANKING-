@@ -80,19 +80,30 @@ const applyNinMigration = async (client) => {
     // Only promote users with an already verified NIN.
     // Do not downgrade or reset previously approved accounts.
     await client.query(`
-      UPDATE users
-      SET
-        kyc_status = 'verified',
-        is_verified = TRUE
-      WHERE nin_verified = TRUE
-        AND kyc_status IN (
-          'pending',
-          'under_review',
-          'not_verified',
-          'rejected',
-          'approved'
-        );
-    `);
+  UPDATE users
+  SET
+    kyc_status = 'verified',
+    is_verified = TRUE,
+    kyc_tier = GREATEST(COALESCE(kyc_tier, 0), 1),
+    account_limit = CASE
+      WHEN COALESCE(kyc_tier, 0) < 1
+        THEN 300000.00
+      ELSE account_limit
+    END,
+    daily_transfer_limit = CASE
+      WHEN COALESCE(kyc_tier, 0) < 1
+        THEN 50000.00
+      ELSE daily_transfer_limit
+    END
+  WHERE nin_verified = TRUE
+    AND kyc_status IN (
+      'pending',
+      'under_review',
+      'not_verified',
+      'rejected',
+      'approved'
+    );
+`);
 
     await client.query('COMMIT');
 
