@@ -172,6 +172,32 @@ const getDojahVerification = async (referenceId) => {
   });
 };
 
+
+// ============================================================
+// VALIDATE NIN (Tier 1 alternative)
+// GET /api/v1/kyc/nin
+// The lookup response is identity data, not an approval flag.
+// Approval is completed only after the signed verification webhook.
+// ============================================================
+const validateNin = async (nin) => {
+  const normalizedNin = String(nin || '').trim();
+
+  if (!/^\d{11}$/.test(normalizedNin)) {
+    return {
+      success: false,
+      status: 400,
+      data: null,
+      message: 'NIN must contain exactly 11 digits.',
+    };
+  }
+
+  return dojahRequest({
+    method: 'GET',
+    url: '/api/v1/kyc/nin',
+    params: { nin: normalizedNin },
+  });
+};
+
 // ============================================================
 // TEST CONNECTION
 // ============================================================
@@ -200,6 +226,7 @@ const testDojahConnection = () => {
 module.exports = {
   dojahRequest,
   validateBvn,
+  validateNin,
   verifyBvn,
   getDojahVerification,
   testDojahConnection,
