@@ -1799,7 +1799,7 @@ if (typeof window.Connect !== 'function') {
 }
 
 setDojahLoading(true);
-
+setTier1Method(method);
 
   try {
     const response = await fetch(`${API_BASE}/kyc/dojah/start`, {
