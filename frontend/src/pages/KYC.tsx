@@ -1444,15 +1444,24 @@ const [
               'Unable to load KYC status.'
           );
         }
+     const payload =
+  result.data ||
+  result;
 
-        const payload =
-          result.data ||
-          result;
+const nextKyc =
+  payload.kyc || {};
 
-        setKyc(
-          payload.kyc ||
-            {}
-        );
+setKyc(nextKyc);
+
+if (
+  nextKyc.pending_tier1_method === 'bvn' ||
+  nextKyc.pending_tier1_method === 'nin'
+) {
+  setTier1Method(
+    nextKyc.pending_tier1_method
+  );
+}
+        
       } catch (error) {
         showAlert(
           error instanceof
