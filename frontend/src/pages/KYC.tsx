@@ -88,6 +88,12 @@ interface KycData {
 
   bvn_rejection_reason?: string;
 
+  nin_status?: string | boolean;
+
+  nin_verified?: boolean;
+
+  nin_rejection_reason?: string;
+
   id_status?:
     | string
     | boolean;
@@ -1174,6 +1180,12 @@ const KYC: React.FC = () => {
   const [bvn, setBvn] =
     useState('');
 
+  const [nin, setNin] =
+    useState('');
+
+  const [tier1Method, setTier1Method] =
+    useState<'bvn' | 'nin'>('bvn');
+
   // ==========================================================
   // TIER 2
   // ==========================================================
@@ -1488,13 +1500,29 @@ const [
         : kyc.bvn_status
     );
 
-  const bvnStatus =
+  const rawNinStatus =
+    normalizeStatus(
+      kyc.nin_verified === true
+        ? true
+        : kyc.nin_status
+    );
+
+  const ninStatus =
     approvedTier >= 1
-      ? rawBvnStatus
-      : rawBvnStatus ===
-        'pending'
-      ? 'pending'
-      : 'not submitted';
+      ? rawNinStatus
+      : rawNinStatus === 'pending'
+        ? 'pending'
+        : 'not submitted';
+
+  // Tier 1 is complete when either BVN or NIN is verified.
+  const bvnStatus =
+    rawBvnStatus === 'verified' || rawNinStatus === 'verified'
+      ? 'verified'
+      : rawBvnStatus === 'pending' || rawNinStatus === 'pending'
+        ? 'pending'
+        : rawBvnStatus === 'rejected' && rawNinStatus === 'rejected'
+          ? 'rejected'
+          : 'not submitted';
 
   // ==========================================================
   // TIER 2 / ID
@@ -1647,7 +1675,63 @@ const submitBvn = async (event: React.FormEvent) => {
   }
 };
 
-  const startTier1BvnVerification = async () => {
+  // ==========================================================
+  // SUBMIT NIN — TIER 1 ALTERNATIVE TO BVN
+  // ==========================================================
+  const submitNin = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!token) {
+      showAlert('Please log in to continue.', 'error');
+      return;
+    }
+
+    if (!/^\\d{11}$/.test(nin)) {
+      showAlert('NIN must contain exactly 11 digits.', 'error');
+      return;
+    }
+
+    if (missingFields.length > 0) {
+      showAlert('Please complete your profile information before submitting your NIN.', 'error');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      const response = await fetch(`${API_BASE}/kyc/nin`, {
+        method: 'POST',
+        headers: {
+          ...requestHeaders(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ nin }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.message || 'NIN verification could not be submitted.');
+      }
+
+      setNin('');
+      showAlert(
+        result.message || 'Your NIN details were received. Continue the secure verification to complete Tier 1.',
+        'success'
+      );
+      await fetchStatus();
+      await startTier1BvnVerification('nin');
+    } catch (error) {
+      showAlert(
+        error instanceof Error ? error.message : 'Unable to submit NIN.',
+        'error'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const startTier1BvnVerification = async (method: 'bvn' | 'nin' = 'bvn') => {
   const token = localStorage.getItem('zenimonies_token');
 
   
@@ -1695,6 +1779,7 @@ setDojahLoading(true);
       },
       body: JSON.stringify({
         verification_type: 'tier_1',
+        verification_method: method,
       }),
     });
 
@@ -1727,7 +1812,10 @@ const connect = new Connect({
   },
   reference_id: referenceId,
   metadata: {
-    service: 'zenimonies_tier_1_bvn',
+    service: method === 'nin'
+      ? 'zenimonies_tier_1_nin'
+      : 'zenimonies_tier_1_bvn',
+    verification_method: method,
     reference_id: referenceId,
   },
   onSuccess: async () => {
@@ -2722,15 +2810,11 @@ connect.open();
                   </div>
 
                   <h2>
-                    BVN Verification
+                    Identity Verification
                   </h2>
 
                   <p>
-                    Verify your Bank
-                    Verification Number
-                    to activate your
-                    first verification
-                    level.
+                    Complete Tier 1 using either your BVN or your NIN. You only need one successfully verified option.
                   </p>
 
                 </div>
@@ -2755,58 +2839,97 @@ connect.open();
 
             
 {canSubmitBvn && (
-  <form onSubmit={submitBvn}>
-    <div className="zk-field">
-      <label className="zk-field-label">
-        Bank Verification Number
-      </label>
+  <>
+    <div className="zk-small-title">Choose your Tier 1 verification method</div>
 
-      <input
-        className="zk-input"
-        type="text"
-        inputMode="numeric"
-        maxLength={11}
-        value={bvn}
-        onChange={(event) =>
-          setBvn(
-            event.target.value
-              .replace(/\D/g, '')
-              .slice(0, 11)
-          )
-        }
-        placeholder="Enter your 11-digit BVN"
-        disabled={submitting}
-      />
+    <div className="zk-methods">
+      <button
+        type="button"
+        className={`zk-method ${tier1Method === 'bvn' ? 'selected' : ''}`}
+        onClick={() => setTier1Method('bvn')}
+        disabled={submitting || dojahLoading}
+      >
+        <div className="zk-method-title">BVN</div>
+        <div className="zk-method-description">Use your 11-digit Bank Verification Number.</div>
+      </button>
 
-      <div className="zk-help">
-        Your BVN is used only for identity verification.
-      </div>
+      <button
+        type="button"
+        className={`zk-method ${tier1Method === 'nin' ? 'selected' : ''}`}
+        onClick={() => setTier1Method('nin')}
+        disabled={submitting || dojahLoading}
+      >
+        <div className="zk-method-title">NIN</div>
+        <div className="zk-method-description">Use your 11-digit National Identification Number.</div>
+      </button>
     </div>
 
-    <button
-      type="submit"
-      className="zk-button"
-      disabled={
-        submitting ||
-        bvn.length !== 11 ||
-        missingFields.length > 0
-      }
-    >
-      {submitting ? 'Submitting...' : 'Verify BVN'}
-    </button>
-  </form>
+    {tier1Method === 'bvn' ? (
+      <form onSubmit={submitBvn}>
+        <div className="zk-field">
+          <label className="zk-field-label">Bank Verification Number</label>
+          <input
+            className="zk-input"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={11}
+            value={bvn}
+            onChange={(event) => setBvn(event.target.value.replace(/\\D/g, '').slice(0, 11))}
+            placeholder="Enter your 11-digit BVN"
+            disabled={submitting || dojahLoading}
+          />
+          <div className="zk-help">Your BVN is used only for identity verification.</div>
+        </div>
+
+        <button
+          type="submit"
+          className="zk-button"
+          disabled={submitting || dojahLoading || bvn.length !== 11 || missingFields.length > 0}
+        >
+          {submitting ? 'Submitting...' : 'Submit BVN'}
+        </button>
+      </form>
+    ) : (
+      <form onSubmit={submitNin}>
+        <div className="zk-field">
+          <label className="zk-field-label">National Identification Number (NIN)</label>
+          <input
+            className="zk-input"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={11}
+            value={nin}
+            onChange={(event) => setNin(event.target.value.replace(/\\D/g, '').slice(0, 11))}
+            placeholder="Enter your 11-digit NIN"
+            disabled={submitting || dojahLoading}
+          />
+          <div className="zk-help">Enter your 11-digit NIN. You do not need to submit BVN as well.</div>
+        </div>
+
+        <button
+          type="submit"
+          className="zk-button"
+          disabled={submitting || dojahLoading || nin.length !== 11 || missingFields.length > 0}
+        >
+          {submitting ? 'Submitting...' : 'Submit NIN'}
+        </button>
+      </form>
+    )}
+  </>
 )}
 
 {canContinueBvnVerification && (
   <button
     type="button"
     className="zk-button"
-    onClick={startTier1BvnVerification}
+    onClick={() => startTier1BvnVerification(tier1Method)}
     disabled={dojahLoading}
   >
     {dojahLoading
       ? 'Opening verification...'
-      : 'Continue BVN Verification'}
+      : `Continue ${tier1Method.toUpperCase()} Verification`}
   </button>
 )}
 </section>
