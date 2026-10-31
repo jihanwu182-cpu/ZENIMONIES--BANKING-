@@ -1477,25 +1477,38 @@ const [
   // ==========================================================
 
   // Derive the displayed level from approved verification evidence.
-  // A submitted tier or stale backend tier value must never grant a level.
-  const tier1Verified =
+  // Tier 1 accepts BVN OR NIN.
+  // Tier 2 and Tier 3 require verified BVN.
+
+  const bvnVerified =
     kyc.bvn_verified === true ||
+    normalizeStatus(kyc.bvn_status) === 'verified';
+
+  const ninVerified =
     kyc.nin_verified === true ||
-    normalizeStatus(kyc.bvn_status) === 'verified' ||
     normalizeStatus(kyc.nin_status) === 'verified';
 
+  const tier1Verified =
+    bvnVerified || ninVerified;
+
   const tier2Verified =
-    kyc.id_verified === true ||
-    normalizeStatus(kyc.id_status) === 'verified';
+    bvnVerified &&
+    (
+      kyc.id_verified === true ||
+      normalizeStatus(kyc.id_status) === 'verified'
+    );
 
   const tier3Verified =
-    kyc.tier_3_verified === true ||
-    normalizeStatus(kyc.tier_3_status) === 'verified';
+    tier2Verified &&
+    (
+      kyc.tier_3_verified === true ||
+      normalizeStatus(kyc.tier_3_status) === 'verified'
+    );
 
   const approvedTier =
-    tier3Verified && tier2Verified && tier1Verified
+    tier3Verified
       ? 3
-      : tier2Verified && tier1Verified
+      : tier2Verified
         ? 2
         : tier1Verified
           ? 1
@@ -1599,7 +1612,7 @@ const canContinueBvnVerification =
   bvnStatus !== 'verified';
 
   const canSubmitTier2 =
-    bvnStatus ===
+    rawBvnStatus ===
       'verified' &&
     idStatus !==
       'pending' &&
