@@ -460,6 +460,13 @@ const getKycRecords = async (req, res) => {
         k.bvn_verified_at,
         k.bvn_rejection_reason,
 
+        k.nin,
+        k.nin_verification_status,
+        k.nin_verified_at,
+        k.nin_rejection_reason,
+        k.nin_provider_validation_result,
+        k.bvn_provider_validation_result,
+
         k.document_type,
         k.document_number,
         k.id_verification_status,
@@ -524,6 +531,14 @@ const KYC_TYPES = {
     userTier: 1,
   },
 
+  NIN: {
+    statusColumn: 'nin_verification_status',
+    verifiedColumn: 'nin_verified',
+    verifiedAtColumn: 'nin_verified_at',
+    rejectionColumn: 'nin_rejection_reason',
+    userTier: 1,
+  },
+
   TIER2: {
     statusColumn: 'id_verification_status',
     verifiedColumn: 'id_verified',
@@ -554,6 +569,7 @@ const refreshOverallKycState = async (
     `
     SELECT
       bvn_verified,
+      nin_verified,
       id_verified,
       tier_3_verified
     FROM users
@@ -572,6 +588,11 @@ const refreshOverallKycState = async (
   const bvnVerified =
     user.bvn_verified === true;
 
+  const ninVerified =
+    user.nin_verified === true;
+
+  const tier1Verified = bvnVerified || ninVerified;
+
   const idVerified =
     user.id_verified === true;
 
@@ -581,41 +602,43 @@ const refreshOverallKycState = async (
   // Highest individual verification tier completed.
   let highestVerifiedTier = 0;
 
-  if (bvnVerified) highestVerifiedTier = 1;
+  if (tier1Verified) highestVerifiedTier = 1;
   if (idVerified) highestVerifiedTier = 2;
   if (tier3Verified) highestVerifiedTier = 3;
 
   // Tier 1 verification is sufficient for account verification.
   // Customers do not need to complete all three tiers.
-  const accountVerified = bvnVerified;
+  const accountVerified = tier1Verified;
 
+  // BVN and NIN can be stored in different KYC rows. Aggregate all
+  // attempts so a newer row cannot hide an earlier verified method.
   const rejectedResult = await client.query(
     `
     SELECT
-      bvn_verification_status,
-      id_verification_status,
-      tier_3_verification_status
+      BOOL_OR(bvn_verification_status = 'rejected') AS bvn_rejected,
+      BOOL_OR(nin_verification_status = 'rejected') AS nin_rejected,
+      BOOL_OR(bvn_verification_status IN ('pending', 'verified')) AS bvn_attempted,
+      BOOL_OR(nin_verification_status IN ('pending', 'verified')) AS nin_attempted
     FROM kyc_records
     WHERE user_id = $1
-    ORDER BY updated_at DESC
-    LIMIT 1
     `,
     [userId]
   );
 
-  const record = rejectedResult.rows[0] || {};
-
-  const bvnRejected =
-    record.bvn_verification_status === 'rejected';
+  const attempts = rejectedResult.rows[0] || {};
+  const tier1Rejected =
+    !tier1Verified &&
+    attempts.bvn_rejected === true &&
+    attempts.nin_rejected === true;
 
   // Only a Tier 1 rejection affects the base account
   // verification status. Higher-tier decisions remain
   // independent of an already verified Tier 1 account.
   let overallStatus = 'pending';
 
-  if (bvnVerified) {
+  if (tier1Verified) {
     overallStatus = 'verified';
-  } else if (bvnRejected) {
+  } else if (tier1Rejected) {
     overallStatus = 'rejected';
   }
 
@@ -716,7 +739,8 @@ const processKycDecision = async (
         SELECT
           k.*,
           u.full_name,
-          u.email
+          u.email,
+          u.bvn_verified
         FROM kyc_records k
 
         INNER JOIN users u
@@ -811,25 +835,33 @@ const processKycDecision = async (
 
       // Tier 1 must not be manually approved when the
       // provider result is missing or unconfirmed.
-      if (type === 'BVN') {
-        const providerResult =
-          interpretBvnLookup({
-            success: true,
-            data: {
-              entity: null,
-            },
-          });
+      if (type === 'BVN' &&
+          record.bvn_provider_validation_result !== 'verified') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          code: 'BVN_PROVIDER_VERIFICATION_REQUIRED',
+          message: 'BVN approval requires a verified provider result recorded by the backend.',
+        });
+      }
 
-        if (providerResult.status !== 'verified') {
-          await client.query('ROLLBACK');
+      if (type === 'TIER2' && record.bvn_verified !== true) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          code: 'TIER2_BVN_REQUIRED',
+          message: 'Tier 2 approval requires a verified BVN and a verified identity document.',
+        });
+      }
 
-          return res.status(409).json({
-            success: false,
-            code: 'BVN_PROVIDER_VERIFICATION_REQUIRED',
-            message:
-              'This BVN cannot be approved until authoritative provider verification evidence is available.',
-          });
-        }
+      if (type === 'NIN' &&
+          record.nin_provider_validation_result !== 'verified') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          code: 'NIN_PROVIDER_VERIFICATION_REQUIRED',
+          message: 'NIN approval requires a verified provider result recorded by the backend.',
+        });
       }
       
       await client.query(
@@ -1032,6 +1064,25 @@ const rejectBvn = async (req, res) => {
     'BVN',
     'reject'
   );
+};
+
+
+// ============================================================
+// NIN VERIFICATION
+// POST /api/admin/kyc/:id/nin/verify
+// ============================================================
+
+const verifyNin = async (req, res) => {
+  return processKycDecision(req, res, 'NIN', 'verify');
+};
+
+// ============================================================
+// NIN REJECTION
+// POST /api/admin/kyc/:id/nin/reject
+// ============================================================
+
+const rejectNin = async (req, res) => {
+  return processKycDecision(req, res, 'NIN', 'reject');
 };
 
 
@@ -1729,6 +1780,8 @@ module.exports = {
   // KYC decisions
   verifyBvn,
   rejectBvn,
+  verifyNin,
+  rejectNin,
   verifyTier2,
   rejectTier2,
   verifyTier3,
