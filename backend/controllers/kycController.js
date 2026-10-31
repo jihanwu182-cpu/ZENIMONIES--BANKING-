@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const {
   verifyBvn,
   validateBvn,
+  validateNin,
   getDojahVerification,
 } = require('../services/dojahService');
 const {
@@ -360,6 +361,7 @@ const getKycStatus = async (req, res) => {
         kyc_status,
         kyc_tier,
         bvn_verified,
+        nin_verified,
         id_verified,
         tier_3_verified,
         tier_3_method,
@@ -395,6 +397,9 @@ const getKycStatus = async (req, res) => {
       SELECT
         id,
         bvn_verification_status,
+        nin_verification_status,
+        nin_verified_at,
+        nin_rejection_reason,
         bvn_verified_at,
         bvn_rejection_reason,
         document_type,
@@ -534,7 +539,12 @@ const identityRecord =
     // INDIVIDUAL VERIFICATION STATES
     // ========================================================
 
-    const bvnStatus =
+    const ninStatus =
+  user.nin_verified === true
+    ? 'verified'
+    : normalizeKycStatus(record?.nin_verification_status);
+
+const bvnStatus =
   user.bvn_verified === true
     ? 'verified'
     : normalizeKycStatus(
@@ -590,7 +600,7 @@ const verifiedTier =
     ? 3
     : idStatus === 'verified'
       ? 2
-      : bvnStatus === 'verified'
+      : (bvnStatus === 'verified' || ninStatus === 'verified')
         ? 1
         : 0;
 
@@ -633,6 +643,11 @@ const limits = getTierLimits(tier);
 
         bvn_rejection_reason:
   bvnRecord?.bvn_rejection_reason || null,
+
+        nin_verified: user.nin_verified === true,
+        nin_status: ninStatus,
+        nin_locked: ninStatus === 'pending' || ninStatus === 'verified',
+        nin_rejection_reason: record?.nin_rejection_reason || null,
 
         // ----------------------------------------------------
         // IDENTITY
@@ -1120,6 +1135,125 @@ console.log('[KYC BVN DEBUG]', {
     client.release();
   }
 };
+
+// ============================================================
+// SUBMIT NIN — TIER 1 ALTERNATIVE TO BVN
+// POST /api/kyc/nin
+// A lookup only confirms that the NIN record can be retrieved.
+// Final approval is performed by the signed Dojah webhook.
+// ============================================================
+const submitNin = async (req, res) => {
+  const userId = req.user?.id || req.userId || req.user?.userId;
+  if (!userId) {
+    return res.status(401).json({ success: false, message: 'Authentication required.' });
+  }
+
+  const nin = String(req.body?.nin || '').trim();
+  if (!/^\d{11}$/.test(nin)) {
+    return res.status(400).json({
+      success: false,
+      code: 'INVALID_NIN',
+      message: 'NIN must contain exactly 11 digits.',
+    });
+  }
+
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const userResult = await client.query(
+      `SELECT id, full_name, bvn_verified, nin_verified FROM users WHERE id = $1 FOR UPDATE`,
+      [userId]
+    );
+    if (!userResult.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    if (userResult.rows[0].nin_verified === true || userResult.rows[0].bvn_verified === true) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        success: false, code: 'NIN_ALREADY_VERIFIED',
+        message: 'Your NIN has already been verified.',
+        status: 'verified', locked: true,
+      });
+    }
+
+    const lookup = await validateNin(nin);
+    const entity = lookup?.data?.entity;
+    if (!lookup?.success || !entity || typeof entity !== 'object' || Array.isArray(entity)) {
+      await client.query('ROLLBACK');
+      return res.status(502).json({
+        success: false, code: 'NIN_LOOKUP_UNAVAILABLE',
+        message: 'We could not retrieve your NIN details. Please check the number and try again.',
+      });
+    }
+
+    // Do not mark verified from lookup alone. Dojah's verification
+    // widget and signed webhook remain the approval source.
+    const existing = await client.query(
+      `SELECT id, nin_verification_status
+       FROM kyc_records WHERE user_id = $1
+       ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+      [userId]
+    );
+    const row = existing.rows[0];
+    if (row && ['pending', 'verified', 'approved'].includes(String(row.nin_verification_status || '').toLowerCase())) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        success: false, code: 'NIN_VERIFICATION_PENDING',
+        message: 'Your NIN verification is already being processed.',
+        status: row.nin_verification_status, locked: true,
+      });
+    }
+
+    if (row) {
+      await client.query(
+        `UPDATE kyc_records
+         SET nin = $1, nin_verification_status = 'pending',
+             nin_verified_at = NULL, nin_rejection_reason = NULL,
+             dojah_reference = NULL, dojah_verification_type = NULL,
+             dojah_started_at = NULL, dojah_checked_at = NULL,
+             verification_status = 'pending', updated_at = NOW()
+         WHERE id = $2 AND user_id = $3`,
+        [nin, row.id, userId]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO kyc_records (user_id, nin, nin_verification_status, bvn_verification_status,
+          id_verification_status, liveness_status, tier_3_verification_status, verification_status)
+         VALUES ($1, $2, 'pending', 'not_verified', 'not_verified', 'not_verified', 'not_verified', 'pending')`,
+        [userId, nin]
+      );
+    }
+
+    await client.query(
+      `UPDATE users SET nin = $1, kyc_status = 'pending', updated_at = NOW() WHERE id = $2`,
+      [nin, userId]
+    );
+    await client.query(
+      `INSERT INTO audit_logs (user_id, action, description)
+       VALUES ($1, 'kyc_tier1_nin_submitted', 'Tier 1 NIN lookup received; final verification is pending.')`,
+      [userId]
+    );
+
+    await client.query('COMMIT');
+    return res.status(200).json({
+      success: true,
+      message: 'Your NIN details were received. Complete the verification step to finish Tier 1.',
+      tier: 1, verification_method: 'nin', status: 'pending', verified: false,
+    });
+  } catch (error) {
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+    }
+    console.error('Submit Tier 1 NIN error:', { code: error?.code || null, message: error?.message || 'Unknown error' });
+    return res.status(500).json({ success: false, message: 'Unable to submit NIN verification.' });
+  } finally {
+    if (client) client.release();
+  }
+};
+
 // ============================================================
 // SUBMIT TIER 2
 //
@@ -1272,6 +1406,21 @@ const documentsWithoutBack = [
     }
 
     const user = userResult.rows[0];
+
+    // Tier 2 requires a successfully verified BVN. NIN Tier 1
+    // does not replace this prerequisite.
+    const bvnPrerequisite = await client.query(
+      `SELECT bvn_verified FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (bvnPrerequisite.rows[0]?.bvn_verified !== true) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        success: false,
+        code: 'BVN_REQUIRED_FOR_TIER_2',
+        message: 'Please complete BVN verification before submitting Tier 2.',
+      });
+    }
 
     const existingKyc = await client.query(
       `
@@ -1991,6 +2140,9 @@ const startDojahVerification = async (req, res) => {
   const verificationType = String(
     req.body?.verification_type || 'tier_2'
   ).trim().toLowerCase();
+  const tier1Method = String(
+    req.body?.verification_method || 'bvn'
+  ).trim().toLowerCase();
 
   const allowedTypes = [
     'tier_1',
@@ -1998,7 +2150,8 @@ const startDojahVerification = async (req, res) => {
     'tier_3',
   ];
 
-  if (!allowedTypes.includes(verificationType)) {
+  if (!allowedTypes.includes(verificationType) ||
+      (verificationType === 'tier_1' && !['bvn', 'nin'].includes(tier1Method))) {
     return res.status(400).json({
       success: false,
       message: 'Invalid verification type.',
@@ -2012,7 +2165,7 @@ const startDojahVerification = async (req, res) => {
     await client.query('BEGIN');
 
     const userResult = await client.query(
-      `SELECT id, id_verified, bvn_verified, tier_3_verified
+      `SELECT id, id_verified, bvn_verified, nin_verified, tier_3_verified
        FROM users
        WHERE id = $1
        FOR UPDATE`,
@@ -2032,13 +2185,13 @@ const startDojahVerification = async (req, res) => {
 
     if (
       verificationType === 'tier_1' &&
-      user.bvn_verified === true
+      (user.bvn_verified === true || user.nin_verified === true)
     ) {
       await client.query('ROLLBACK');
 
       return res.status(409).json({
         success: false,
-        message: 'Your BVN is already verified.',
+        message: 'Your Tier 1 identity verification is already complete.',
       });
     }
 
@@ -2071,16 +2224,12 @@ const startDojahVerification = async (req, res) => {
     if (verificationType === 'tier_1') {
       recordResult = await client.query(
         `SELECT
-           id,
-           bvn,
-           bvn_verification_status,
-           bvn_provider_reference,
-           dojah_reference,
-           dojah_verification_type
+           id, bvn, nin, bvn_verification_status, nin_verification_status,
+           bvn_provider_reference, dojah_reference, dojah_verification_type
          FROM kyc_records
          WHERE user_id = $1
-           AND bvn IS NOT NULL
-           AND bvn <> ''
+           AND ${tier1Method} IS NOT NULL
+           AND ${tier1Method} <> ''
          ORDER BY created_at DESC
          LIMIT 1
          FOR UPDATE`,
@@ -2141,14 +2290,14 @@ const startDojahVerification = async (req, res) => {
 
     const expectedType =
       verificationType === 'tier_1'
-        ? 'bvn'
+        ? tier1Method
         : verificationType === 'tier_2'
           ? 'identity'
           : 'tier_3_liveness';
 
     const currentStatus = String(
       verificationType === 'tier_1'
-        ? record.bvn_verification_status || ''
+        ? (tier1Method === 'nin' ? record.nin_verification_status : record.bvn_verification_status) || ''
         : verificationType === 'tier_2'
           ? record.id_verification_status || ''
           : record.liveness_status || ''
@@ -2202,20 +2351,31 @@ const startDojahVerification = async (req, res) => {
 
     const referenceId = `zen_${crypto.randomUUID()}`;
 
-    if (verificationType === 'tier_1') {
+    if (verificationType === 'tier_1' && tier1Method === 'nin') {
       await client.query(
         `UPDATE kyc_records
-         SET
-           dojah_reference = $1,
-           dojah_verification_type = 'bvn',
-           bvn_provider_reference = $1,
-           dojah_started_at = CURRENT_TIMESTAMP,
-           dojah_checked_at = NULL,
-           bvn_verification_status = 'pending',
-           bvn_rejection_reason = NULL,
-           updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2
-           AND user_id = $3`,
+         SET dojah_reference = $1,
+             dojah_verification_type = 'nin',
+             dojah_started_at = CURRENT_TIMESTAMP,
+             dojah_checked_at = NULL,
+             nin_verification_status = 'pending',
+             nin_rejection_reason = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2 AND user_id = $3`,
+        [referenceId, record.id, userId]
+      );
+    } else if (verificationType === 'tier_1') {
+      await client.query(
+        `UPDATE kyc_records
+         SET dojah_reference = $1,
+             dojah_verification_type = 'bvn',
+             bvn_provider_reference = $1,
+             dojah_started_at = CURRENT_TIMESTAMP,
+             dojah_checked_at = NULL,
+             bvn_verification_status = 'pending',
+             bvn_rejection_reason = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2 AND user_id = $3`,
         [referenceId, record.id, userId]
       );
     } else if (verificationType === 'tier_2') {
@@ -2275,7 +2435,7 @@ const startDojahVerification = async (req, res) => {
         userId,
         'dojah_verification_started',
         verificationType === 'tier_1'
-          ? 'Tier 1 BVN verification session initiated.'
+          ? tier1Method === 'nin' ? 'Tier 1 NIN verification session initiated.' : 'Tier 1 BVN verification session initiated.'
           : verificationType === 'tier_2'
             ? 'Tier 2 identity verification session initiated.'
             : 'Tier 3 liveness verification session initiated.',
@@ -2781,6 +2941,7 @@ if (
 module.exports = {
   getKycStatus,
   submitBvn,
+  submitNin,
   submitTier2,
   submitTier3,
   getTierLimits,
