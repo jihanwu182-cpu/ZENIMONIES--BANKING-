@@ -459,6 +459,38 @@ const getKycStatus = async (req, res) => {
         ? bvnResult.rows[0]
         : null;
 
+    // Dedicated NIN record: never infer NIN status from an unrelated
+    // latest Tier 2/Tier 3 record.
+    const ninResult = await pool.query(
+      `
+      SELECT
+        id,
+        nin_verification_status,
+        nin_verified_at,
+        nin_rejection_reason
+      FROM kyc_records
+      WHERE user_id = $1
+        AND nin IS NOT NULL
+        AND nin <> ''
+      ORDER BY
+        CASE
+          WHEN nin_verification_status IN ('verified', 'approved')
+            THEN 0
+          WHEN nin_verification_status = 'pending'
+            THEN 1
+          ELSE 2
+        END,
+        created_at DESC
+      LIMIT 1
+      `,
+      [userId]
+    );
+
+    const ninRecord =
+      ninResult.rows.length > 0
+        ? ninResult.rows[0]
+        : null;
+
     // Dedicated Tier 3 record.
     
 const tier3Result = await pool.query(
@@ -542,7 +574,7 @@ const identityRecord =
     const ninStatus =
   user.nin_verified === true
     ? 'verified'
-    : normalizeKycStatus(record?.nin_verification_status);
+    : normalizeKycStatus(ninRecord?.nin_verification_status);
 
 const bvnStatus =
   user.bvn_verified === true
@@ -593,16 +625,22 @@ const storedTier = Math.max(
   Number(user.kyc_tier || 0)
 );
 
-// A verified BVN establishes Tier 1 verification only.
-// Higher tiers still require their own verification.
+// Tier 1 accepts either verified BVN or verified NIN.
+// Tier 2 specifically requires BVN plus approved identity verification.
+// Tier 3 requires the complete Tier 2 path plus Tier 3 approval.
+const tier1Verified =
+  bvnStatus === 'verified' || ninStatus === 'verified';
+
+const tier2Verified =
+  bvnStatus === 'verified' && idStatus === 'verified';
+
+const tier3Verified =
+  tier2Verified && tier3Status === 'verified';
+
 const verifiedTier =
-  tier3Status === 'verified'
-    ? 3
-    : idStatus === 'verified'
-      ? 2
-      : (bvnStatus === 'verified' || ninStatus === 'verified')
-        ? 1
-        : 0;
+  tier3Verified ? 3 :
+  tier2Verified ? 2 :
+  tier1Verified ? 1 : 0;
 
 const tier = verifiedTier;
 
@@ -647,7 +685,7 @@ const limits = getTierLimits(tier);
         nin_verified: user.nin_verified === true,
         nin_status: ninStatus,
         nin_locked: ninStatus === 'pending' || ninStatus === 'verified',
-        nin_rejection_reason: record?.nin_rejection_reason || null,
+        nin_rejection_reason: ninRecord?.nin_rejection_reason || null,
 
         // ----------------------------------------------------
         // IDENTITY
