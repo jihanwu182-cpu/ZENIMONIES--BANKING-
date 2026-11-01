@@ -427,22 +427,16 @@ const updateUserStatus = async (req, res) => {
 
 const getKycRecords = async (req, res) => {
   try {
-    const status =
-      String(
-        req.query.status ||
-        req.query.verification_status ||
-        ''
-      ).trim();
+    const status = String(
+      req.query.status || req.query.verification_status || ''
+    ).trim();
 
     const values = [];
     let whereClause = '';
 
     if (status) {
       values.push(status);
-
-      whereClause = `
-        WHERE k.verification_status = $1
-      `;
+      whereClause = `WHERE k.verification_status = $1`;
     }
 
     const result = await pool.query(
@@ -455,18 +449,37 @@ const getKycRecords = async (req, res) => {
         u.email,
         u.phone,
         u.kyc_tier,
+        u.bvn_verified,
+        u.nin_verified,
+        u.id_verified,
+        u.tier_3_verified,
+        u.is_verified,
 
         k.bvn,
         k.bvn_verification_status,
         k.bvn_verified_at,
         k.bvn_rejection_reason,
+        k.bvn_provider_validation_result,
 
         k.nin,
         k.nin_verification_status,
         k.nin_verified_at,
         k.nin_rejection_reason,
         k.nin_provider_validation_result,
-        k.bvn_provider_validation_result,
+
+        -- The method recorded for this KYC submission is authoritative.
+        -- Fall back only when exactly one identifier exists on the record.
+        CASE
+          WHEN LOWER(COALESCE(k.dojah_verification_type, '')) IN ('bvn', 'nin')
+            THEN LOWER(k.dojah_verification_type)
+          WHEN NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NOT NULL
+            AND NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NULL
+            THEN 'bvn'
+          WHEN NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NOT NULL
+            AND NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NULL
+            THEN 'nin'
+          ELSE NULL
+        END AS tier1_method,
 
         k.document_type,
         k.document_number,
@@ -474,28 +487,28 @@ const getKycRecords = async (req, res) => {
         k.id_verified_at,
         k.id_rejection_reason,
 
+        -- Presence flags only. Never send Cloudinary public IDs to the browser.
+        (k.tier_2_document_front_public_id IS NOT NULL) AS has_tier2_document_front,
+        (k.tier_2_document_back_public_id IS NOT NULL) AS has_tier2_document_back,
+        (k.tier_2_selfie_public_id IS NOT NULL) AS has_tier2_selfie,
+        (k.tier_3_document_public_id IS NOT NULL) AS has_tier3_document,
+        (k.tier_3_selfie_public_id IS NOT NULL) AS has_tier3_selfie,
+
         k.tier_3_method,
         k.tier_3_verification_status,
         k.tier_3_verified_at,
         k.tier_3_rejection_reason,
-
         k.liveness_status,
 
         k.verification_status,
         k.rejection_reason,
-
         k.created_at,
         k.updated_at
 
       FROM kyc_records k
-
-      INNER JOIN users u
-        ON u.id = k.user_id
-
+      INNER JOIN users u ON u.id = k.user_id
       ${whereClause}
-
       ORDER BY k.created_at DESC
-
       LIMIT 200
       `,
       values
@@ -506,18 +519,13 @@ const getKycRecords = async (req, res) => {
       kyc_records: result.rows,
     });
   } catch (error) {
-    console.error(
-      'Admin KYC records error:',
-      error
-    );
-
+    console.error('Admin KYC records error:', error?.message || 'Unknown error');
     return res.status(500).json({
       success: false,
       message: 'Unable to load KYC records',
     });
   }
 };
-
 
 // ============================================================
 // KYC DECISION HELPERS
@@ -1601,15 +1609,38 @@ const getPrivateTier3Document = async (req, res) => {
     const { id, document } = req.params;
 
     const allowedDocuments = {
+      // Tier 2 identity evidence
+      id_front: {
+        publicIdColumn: 'tier_2_document_front_public_id',
+        resourceTypeColumn: 'tier_2_document_front_resource_type',
+        formatColumn: 'tier_2_document_front_format',
+        label: 'Tier 2 identity front',
+      },
+      id_back: {
+        publicIdColumn: 'tier_2_document_back_public_id',
+        resourceTypeColumn: 'tier_2_document_back_resource_type',
+        formatColumn: 'tier_2_document_back_format',
+        label: 'Tier 2 identity back',
+      },
+      tier2_selfie: {
+        publicIdColumn: 'tier_2_selfie_public_id',
+        resourceTypeColumn: 'tier_2_selfie_resource_type',
+        formatColumn: 'tier_2_selfie_format',
+        label: 'Tier 2 selfie',
+      },
+
+      // Tier 3 evidence
       proof_of_address: {
         publicIdColumn: 'tier_3_document_public_id',
         resourceTypeColumn: 'tier_3_document_resource_type',
         formatColumn: 'tier_3_document_format',
+        label: 'Tier 3 proof of address',
       },
-      selfie: {
+      tier3_selfie: {
         publicIdColumn: 'tier_3_selfie_public_id',
         resourceTypeColumn: 'tier_3_selfie_resource_type',
         formatColumn: 'tier_3_selfie_format',
+        label: 'Tier 3 selfie',
       },
     };
 
@@ -1621,7 +1652,6 @@ const getPrivateTier3Document = async (req, res) => {
     }
 
     const selected = allowedDocuments[document];
-
     if (!selected) {
       return res.status(400).json({
         success: false,
@@ -1629,6 +1659,7 @@ const getPrivateTier3Document = async (req, res) => {
       });
     }
 
+    // Column names come only from the fixed allow-list above.
     const result = await pool.query(
       `
       SELECT
@@ -1639,7 +1670,6 @@ const getPrivateTier3Document = async (req, res) => {
         ${selected.formatColumn} AS format
       FROM kyc_records
       WHERE id = $1
-        AND tier_3_method IS NOT NULL
       LIMIT 1
       `,
       [id]
@@ -1653,7 +1683,6 @@ const getPrivateTier3Document = async (req, res) => {
     }
 
     const record = result.rows[0];
-
     if (!['image', 'raw'].includes(record.resource_type)) {
       return res.status(404).json({
         success: false,
@@ -1661,18 +1690,8 @@ const getPrivateTier3Document = async (req, res) => {
       });
     }
 
-    const allowedFormats = new Set([
-      'pdf',
-      'jpg',
-      'jpeg',
-      'png',
-      'webp',
-    ]);
-
-    const format = String(record.format || '')
-      .trim()
-      .toLowerCase();
-
+    const allowedFormats = new Set(['pdf', 'jpg', 'jpeg', 'png', 'webp']);
+    const format = String(record.format || '').trim().toLowerCase();
     if (!allowedFormats.has(format)) {
       return res.status(409).json({
         success: false,
@@ -1691,9 +1710,7 @@ const getPrivateTier3Document = async (req, res) => {
     }
 
     configureCloudinary();
-
     const expiresAt = Math.floor(Date.now() / 1000) + 300;
-
     const downloadUrl = cloudinary.utils.private_download_url(
       record.public_id,
       format,
@@ -1705,21 +1722,17 @@ const getPrivateTier3Document = async (req, res) => {
       }
     );
 
+    // Audit before returning the temporary private URL.
     await pool.query(
       `
       INSERT INTO audit_logs (
-        user_id,
-        action,
-        description,
-        ip_address,
-        user_agent
+        user_id, action, description, ip_address, user_agent
       )
-      VALUES ($1, $2, $3, $4, $5)
+      VALUES ($1, 'admin_private_kyc_document_access', $2, $3, $4)
       `,
       [
         req.userId,
-        'admin_private_tier3_document_access',
-        `Administrator accessed Tier 3 ${document} for KYC record ${record.id}.`,
+        `Administrator accessed ${selected.label} for KYC record ${record.id}.`,
         req.ip || null,
         req.get('user-agent') || null,
       ]
@@ -1733,10 +1746,9 @@ const getPrivateTier3Document = async (req, res) => {
     });
   } catch (error) {
     console.error(
-      'Private Tier 3 document access failed:',
+      'Private KYC document access failed:',
       error?.message || 'Unknown error'
     );
-
     return res.status(500).json({
       success: false,
       message: 'Unable to access the private KYC document.',
