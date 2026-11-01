@@ -3282,11 +3282,11 @@ const renderKyc = () => {
       : date.toLocaleString();
   };
 
-  const maskIdentifier = (value?: string) => {
-    const raw = String(value || '').replace(/\s+/g, '');
-    if (!raw) return 'Not provided';
-    if (raw.length <= 4) return '••••';
-    return `${'•'.repeat(Math.min(raw.length - 4, 12))}${raw.slice(-4)}`;
+  const displaySubmittedValue = (value?: string) => {
+    if (value === undefined || value === null || value === '') {
+      return 'Not provided';
+    }
+    return String(value);
   };
 
   const displayStatus = (value?: string) => {
@@ -3643,20 +3643,20 @@ const renderKyc = () => {
                     value: selectedKyc.kyc_tier ?? 'Not yet verified',
                   },
                   {
-                    label: 'BVN (masked)',
-                    value: maskIdentifier(selectedKyc.bvn),
+                    label: 'BVN',
+                    value: displaySubmittedValue(selectedKyc.bvn),
                   },
                   {
-                    label: 'NIN (masked)',
-                    value: maskIdentifier(selectedKyc.nin),
+                    label: 'NIN',
+                    value: displaySubmittedValue(selectedKyc.nin),
                   },
                   {
                     label: 'Identity document type',
                     value: selectedKyc.document_type,
                   },
                   {
-                    label: 'Identity document number (masked)',
-                    value: maskIdentifier(selectedKyc.document_number),
+                    label: 'Identity document number',
+                    value: displaySubmittedValue(selectedKyc.document_number),
                   },
                   {
                     label: 'Submitted',
