@@ -227,6 +227,11 @@ interface KycRecord {
   verification_status?: string;
   kyc_tier?: number | string;
   bvn?: string;
+  nin?: string;
+  nin_verification_status?: string;
+  nin_provider_validation_result?: string;
+  nin_verified_at?: string;
+  nin_rejection_reason?: string;
   bvn_verification_status?: string;
   bvn_provider_validation_result?: string;
   bvn_verified_at?: string;
@@ -989,11 +994,12 @@ const loadKyc = useCallback(async () => {
   
 const handleKycDecision = async (
   record: KycRecord,
-  stage: 'bvn' | 'tier2' | 'tier3',
+  stage: 'bvn' | 'nin' | 'tier2' | 'tier3',
   decision: 'verify' | 'reject'
 ) => {
   const stageStatus = {
     bvn: record.bvn_verification_status,
+    nin: record.nin_verification_status,
     tier2: record.id_verification_status,
     tier3: record.tier_3_verification_status,
   }[stage];
@@ -1008,13 +1014,19 @@ const handleKycDecision = async (
   // BVN provider validation is evidence, not final approval.
   // An administrator may approve BVN only after the backend has
   // recorded an explicit successful provider validation result.
+  const providerResult = stage === 'bvn'
+    ? record.bvn_provider_validation_result
+    : stage === 'nin'
+      ? record.nin_provider_validation_result
+      : undefined;
+
   if (
-    stage === 'bvn' &&
+    (stage === 'bvn' || stage === 'nin') &&
     decision === 'verify' &&
-    String(record.bvn_provider_validation_result || '').toLowerCase() !== 'verified'
+    String(providerResult || '').toLowerCase() !== 'verified'
   ) {
     setError(
-      'BVN cannot be approved yet. A successful provider validation result is required first.'
+      `${stage.toUpperCase()} cannot be approved until the backend records a successful provider validation result.`
     );
     return;
   }
@@ -1048,6 +1060,8 @@ const handleKycDecision = async (
     const endpoint =
       stage === 'bvn'
         ? `/admin/kyc/${record.id}/bvn/${decision}`
+        : stage === 'nin'
+        ? `/admin/kyc/${record.id}/nin/${decision}`
         : stage === 'tier2'
         ? `/admin/kyc/${record.id}/tier2/${decision}`
         : `/admin/kyc/${record.id}/tier3/${decision}`;
@@ -1076,6 +1090,13 @@ const handleKycDecision = async (
                   bvn_verification_status:
                     decision === 'verify' ? 'verified' : 'rejected',
                   bvn_rejection_reason:
+                    decision === 'reject' ? reason : undefined,
+                }
+              : stage === 'nin'
+              ? {
+                  nin_verification_status:
+                    decision === 'verify' ? 'verified' : 'rejected',
+                  nin_rejection_reason:
                     decision === 'reject' ? reason : undefined,
                 }
               : stage === 'tier2'
@@ -3233,6 +3254,7 @@ const renderKyc = () => {
         overallStatus === 'pending' ||
         [
           record.bvn_verification_status,
+          record.nin_verification_status,
           record.id_verification_status,
           record.tier_3_verification_status,
         ].some((status) => String(status || '').toLowerCase() === 'pending')
@@ -3316,6 +3338,12 @@ const renderKyc = () => {
           Review customer identity submissions and make verification
           decisions based on the available evidence.
         </Typography>
+        <Alert severity="info" sx={{ mt: 1.5 }}>
+          Tier 1 requires an administrator-approved BVN or NIN. Tier 2 requires
+          an approved BVN and identity document. Tier 3 requires Tier 2 approval
+          and successful liveness verification. The backend calculates the
+          customer’s verified tier after each decision.
+        </Alert>
       </Box>
 
       {/* Filter tabs */}
@@ -3395,11 +3423,13 @@ const renderKyc = () => {
           </Typography>
 
           <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table sx={{ minWidth: 850 }}>
+            <Table sx={{ minWidth: 1080 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Customer</TableCell>
+                  <TableCell>Current tier</TableCell>
                   <TableCell>BVN</TableCell>
+                  <TableCell>NIN</TableCell>
                   <TableCell>Tier 2</TableCell>
                   <TableCell>Tier 3</TableCell>
                   <TableCell>Overall status</TableCell>
@@ -3434,12 +3464,28 @@ const renderKyc = () => {
                     <TableCell>
                       <Chip
                         size="small"
+                        label={`Tier ${Number(record.kyc_tier || 0)}`}
+                        color={Number(record.kyc_tier || 0) > 0 ? 'success' : 'default'}
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Chip
+                        size="small"
                         label={displayStatus(
                           record.bvn_verification_status
                         )}
                         color={statusColorForKyc(
                           record.bvn_verification_status
                         )}
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={displayStatus(record.nin_verification_status)}
+                        color={statusColorForKyc(record.nin_verification_status)}
                       />
                     </TableCell>
 
@@ -3507,7 +3553,7 @@ const renderKyc = () => {
 
                 {filteredKycRecords.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={9} align="center">
                       No KYC records found for this filter.
                     </TableCell>
                   </TableRow>
@@ -3593,8 +3639,16 @@ const renderKyc = () => {
                     value: selectedKyc.kyc_tier,
                   },
                   {
+                    label: 'Current verified tier',
+                    value: selectedKyc.kyc_tier ?? 'Not yet verified',
+                  },
+                  {
                     label: 'BVN (masked)',
                     value: maskIdentifier(selectedKyc.bvn),
+                  },
+                  {
+                    label: 'NIN (masked)',
+                    value: maskIdentifier(selectedKyc.nin),
                   },
                   {
                     label: 'Identity document type',
@@ -3722,6 +3776,13 @@ const renderKyc = () => {
                   providerResult: selectedKyc.bvn_provider_validation_result,
                 },
                 {
+                  key: 'nin' as const,
+                  label: 'NIN verification (Tier 1 alternative)',
+                  status: selectedKyc.nin_verification_status,
+                  reason: selectedKyc.nin_rejection_reason,
+                  providerResult: selectedKyc.nin_provider_validation_result,
+                },
+                {
                   key: 'tier2' as const,
                   label: 'Identity verification (Tier 2)',
                   status: selectedKyc.id_verification_status,
@@ -3764,7 +3825,7 @@ const renderKyc = () => {
                       sx={{ mt: 0.75 }}
                     />
 
-                    {stage.key === 'bvn' && (
+                    {(stage.key === 'bvn' || stage.key === 'nin') && (
                       <Box sx={{ mt: 1 }}>
                         <Typography variant="caption" sx={{ color: BRAND.muted, display: 'block' }}>
                           Provider validation result
@@ -3775,7 +3836,7 @@ const renderKyc = () => {
                           color={statusColorForKyc(stage.providerResult)}
                         />
                         <Typography variant="caption" sx={{ color: BRAND.muted, display: 'block', mt: 0.75 }}>
-                          Provider validation is supporting evidence only. Final BVN approval is made here by an authorised administrator.
+                          Provider validation is supporting evidence only. Final {stage.key.toUpperCase()} approval is made here by an authorised administrator.
                         </Typography>
                       </Box>
                     )}
@@ -3801,7 +3862,7 @@ const renderKyc = () => {
                           variant="contained"
                           disabled={
                             kycActionLoading ||
-                            (stage.key === 'bvn' &&
+                            ((stage.key === 'bvn' || stage.key === 'nin') &&
                               String(stage.providerResult || '').toLowerCase() !== 'verified')
                           }
                           onClick={() =>
@@ -3823,10 +3884,10 @@ const renderKyc = () => {
                           Approve
                         </Button>
 
-                        {stage.key === 'bvn' &&
+                        {(stage.key === 'bvn' || stage.key === 'nin') &&
                           String(stage.providerResult || '').toLowerCase() !== 'verified' && (
                             <Alert severity="warning">
-                              Approval is locked until the backend records a successful BVN provider validation result.
+                              Approval is locked until the backend records a successful {stage.key.toUpperCase()} provider validation result.
                             </Alert>
                           )}
 
