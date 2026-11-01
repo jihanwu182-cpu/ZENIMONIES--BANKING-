@@ -1,4 +1,4 @@
- import React, {
+import React, {
   useCallback,
   useEffect,
   useMemo,
@@ -228,6 +228,7 @@ interface KycRecord {
   kyc_tier?: number | string;
   bvn?: string;
   bvn_verification_status?: string;
+  bvn_provider_validation_result?: string;
   bvn_verified_at?: string;
   bvn_rejection_reason?: string;
   document_type?: string;
@@ -965,7 +966,7 @@ const loadKyc = useCallback(async () => {
   try {
     const response = await api.get('/admin/kyc');
 
-    console.log('ZENIMONIES KYC API response:', response.data);
+    // Do not log KYC payloads: they may contain sensitive identity data.
 
     const records =
       response.data?.kyc_records ??
@@ -1000,6 +1001,20 @@ const handleKycDecision = async (
   if (stageStatus?.toLowerCase() !== 'pending') {
     setError(
       'Only pending verification stages can be approved or rejected.'
+    );
+    return;
+  }
+
+  // BVN provider validation is evidence, not final approval.
+  // An administrator may approve BVN only after the backend has
+  // recorded an explicit successful provider validation result.
+  if (
+    stage === 'bvn' &&
+    decision === 'verify' &&
+    String(record.bvn_provider_validation_result || '').toLowerCase() !== 'verified'
+  ) {
+    setError(
+      'BVN cannot be approved yet. A successful provider validation result is required first.'
     );
     return;
   }
@@ -3245,6 +3260,13 @@ const renderKyc = () => {
       : date.toLocaleString();
   };
 
+  const maskIdentifier = (value?: string) => {
+    const raw = String(value || '').replace(/\s+/g, '');
+    if (!raw) return 'Not provided';
+    if (raw.length <= 4) return '••••';
+    return `${'•'.repeat(Math.min(raw.length - 4, 12))}${raw.slice(-4)}`;
+  };
+
   const displayStatus = (value?: string) => {
     if (!value) return 'Not submitted';
 
@@ -3571,16 +3593,16 @@ const renderKyc = () => {
                     value: selectedKyc.kyc_tier,
                   },
                   {
-                    label: 'BVN',
-                    value: selectedKyc.bvn,
+                    label: 'BVN (masked)',
+                    value: maskIdentifier(selectedKyc.bvn),
                   },
                   {
                     label: 'Identity document type',
                     value: selectedKyc.document_type,
                   },
                   {
-                    label: 'Identity document number',
-                    value: selectedKyc.document_number,
+                    label: 'Identity document number (masked)',
+                    value: maskIdentifier(selectedKyc.document_number),
                   },
                   {
                     label: 'Submitted',
@@ -3697,18 +3719,21 @@ const renderKyc = () => {
                   label: 'BVN verification',
                   status: selectedKyc.bvn_verification_status,
                   reason: selectedKyc.bvn_rejection_reason,
+                  providerResult: selectedKyc.bvn_provider_validation_result,
                 },
                 {
                   key: 'tier2' as const,
                   label: 'Identity verification (Tier 2)',
                   status: selectedKyc.id_verification_status,
                   reason: selectedKyc.id_rejection_reason,
+                  providerResult: undefined,
                 },
                 {
                   key: 'tier3' as const,
                   label: 'Tier 3 verification',
                   status: selectedKyc.tier_3_verification_status,
                   reason: selectedKyc.tier_3_rejection_reason,
+                  providerResult: undefined,
                 },
               ].map((stage) => {
                 const stageStatus = String(
@@ -3739,6 +3764,22 @@ const renderKyc = () => {
                       sx={{ mt: 0.75 }}
                     />
 
+                    {stage.key === 'bvn' && (
+                      <Box sx={{ mt: 1 }}>
+                        <Typography variant="caption" sx={{ color: BRAND.muted, display: 'block' }}>
+                          Provider validation result
+                        </Typography>
+                        <Chip
+                          size="small"
+                          label={displayStatus(stage.providerResult)}
+                          color={statusColorForKyc(stage.providerResult)}
+                        />
+                        <Typography variant="caption" sx={{ color: BRAND.muted, display: 'block', mt: 0.75 }}>
+                          Provider validation is supporting evidence only. Final BVN approval is made here by an authorised administrator.
+                        </Typography>
+                      </Box>
+                    )}
+
                     {stage.reason && (
                       <Typography
                         sx={{
@@ -3758,7 +3799,11 @@ const renderKyc = () => {
                           fullWidth
                           size="small"
                           variant="contained"
-                          disabled={kycActionLoading}
+                          disabled={
+                            kycActionLoading ||
+                            (stage.key === 'bvn' &&
+                              String(stage.providerResult || '').toLowerCase() !== 'verified')
+                          }
                           onClick={() =>
                             handleKycDecision(
                               selectedKyc,
@@ -3777,6 +3822,13 @@ const renderKyc = () => {
                         >
                           Approve
                         </Button>
+
+                        {stage.key === 'bvn' &&
+                          String(stage.providerResult || '').toLowerCase() !== 'verified' && (
+                            <Alert severity="warning">
+                              Approval is locked until the backend records a successful BVN provider validation result.
+                            </Alert>
+                          )}
 
                         <TextField
                           size="small"
