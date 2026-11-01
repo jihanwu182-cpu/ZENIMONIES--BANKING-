@@ -3,6 +3,24 @@
 -- This migration does NOT change user verification flags or approval tiers.
 
 BEGIN;
+-- Permanently store the customer's selected Tier 1 method.
+ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS tier1_method VARCHAR(10);
+
+-- Backfill existing records where the selected method is identifiable.
+UPDATE kyc_records
+SET tier1_method = CASE
+  WHEN LOWER(COALESCE(dojah_verification_type, '')) IN ('bvn', 'nin')
+    THEN LOWER(dojah_verification_type)
+  WHEN NULLIF(BTRIM(COALESCE(bvn, '')), '') IS NOT NULL
+    AND NULLIF(BTRIM(COALESCE(nin, '')), '') IS NULL
+    THEN 'bvn'
+  WHEN NULLIF(BTRIM(COALESCE(nin, '')), '') IS NOT NULL
+    AND NULLIF(BTRIM(COALESCE(bvn, '')), '') IS NULL
+    THEN 'nin'
+  ELSE tier1_method
+END
+WHERE tier1_method IS NULL;
 
 -- Tier 2: authenticated Cloudinary metadata (never store delivery URLs here).
 ALTER TABLE kyc_records
