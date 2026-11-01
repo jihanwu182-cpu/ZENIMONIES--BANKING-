@@ -233,6 +233,11 @@ interface KycRecord {
   id_verified?: boolean;
   tier_3_verified?: boolean;
   tier1_method?: string;
+  has_tier2_document_front?: boolean;
+  has_tier2_document_back?: boolean;
+  has_tier2_selfie?: boolean;
+  has_tier3_document?: boolean;
+  has_tier3_selfie?: boolean;
   dojah_verification_type?: string;
   nin_verification_status?: string;
   nin_provider_validation_result?: string;
@@ -3304,20 +3309,36 @@ const renderKyc = () => {
   };
 
   // Tier 1 is one selected route: BVN OR NIN, never both as parallel stages.
+  // The persisted tier1_method is authoritative. For older records only, infer
+  // the route when exactly one identifier was submitted. Do not use the
+  // provider verification type because later tiers can overwrite that field.
   const getTier1Method = (record: KycRecord): 'bvn' | 'nin' | null => {
-    const explicit = String(
-      record.tier1_method || record.dojah_verification_type || ''
-    ).trim().toLowerCase();
+    const explicit = String(record.tier1_method || '').trim().toLowerCase();
     if (explicit === 'bvn' || explicit === 'nin') return explicit;
-    if (record.bvn_verified === true) return 'bvn';
-    if (record.nin_verified === true) return 'nin';
-    const bvnStatus = String(record.bvn_verification_status || '').toLowerCase();
-    const ninStatus = String(record.nin_verification_status || '').toLowerCase();
-    if (bvnStatus === 'pending' || bvnStatus === 'verified' || bvnStatus === 'approved') return 'bvn';
-    if (ninStatus === 'pending' || ninStatus === 'verified' || ninStatus === 'approved') return 'nin';
-    if (record.bvn) return 'bvn';
-    if (record.nin) return 'nin';
+    const hasBvn = Boolean(String(record.bvn || '').trim());
+    const hasNin = Boolean(String(record.nin || '').trim());
+    if (hasBvn && !hasNin) return 'bvn';
+    if (hasNin && !hasBvn) return 'nin';
     return null;
+  };
+
+  const openPrivateDocument = async (
+    record: KycRecord,
+    document: 'id_front' | 'id_back' | 'tier2_selfie' | 'proof_of_address' | 'tier3_selfie'
+  ) => {
+    try {
+      setError('');
+      const response = await api.get(
+        `/admin/kyc/${encodeURIComponent(record.id)}/private-document/${document}`
+      );
+      const url = response.data?.url || response.data?.data?.url;
+      if (typeof url !== 'string' || !/^https:\/\//i.test(url)) {
+        throw new Error('The secure document link was not returned by the server.');
+      }
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (documentError) {
+      setError(getErrorMessage(documentError));
+    }
   };
 
   const getVerifiedTier = (record: KycRecord): number => {
@@ -3458,8 +3479,7 @@ const renderKyc = () => {
                 <TableRow>
                   <TableCell>Customer</TableCell>
                   <TableCell>Current tier</TableCell>
-                  <TableCell>BVN</TableCell>
-                  <TableCell>NIN</TableCell>
+                  <TableCell>Tier 1 method</TableCell>
                   <TableCell>Tier 2</TableCell>
                   <TableCell>Tier 3</TableCell>
                   <TableCell>Overall status</TableCell>
@@ -3500,23 +3520,26 @@ const renderKyc = () => {
                     </TableCell>
 
                     <TableCell>
-                      <Chip
-                        size="small"
-                        label={displayStatus(
-                          record.bvn_verification_status
-                        )}
-                        color={statusColorForKyc(
-                          record.bvn_verification_status
-                        )}
-                      />
-                    </TableCell>
-
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={displayStatus(record.nin_verification_status)}
-                        color={statusColorForKyc(record.nin_verification_status)}
-                      />
+                      {(() => {
+                        const method = getTier1Method(record);
+                        const methodStatus = method === 'bvn'
+                          ? (record.bvn_verified === true ? 'verified' : record.bvn_verification_status)
+                          : method === 'nin'
+                            ? (record.nin_verified === true ? 'verified' : record.nin_verification_status)
+                            : '';
+                        return (
+                          <Stack spacing={0.5} alignItems="flex-start">
+                            <Typography sx={{ fontSize: 12, fontWeight: 700 }}>
+                              {method ? method.toUpperCase() : 'Not identified'}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              label={displayStatus(methodStatus)}
+                              color={statusColorForKyc(methodStatus)}
+                            />
+                          </Stack>
+                        );
+                      })()}
                     </TableCell>
 
                     <TableCell>
@@ -3583,7 +3606,7 @@ const renderKyc = () => {
 
                 {filteredKycRecords.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} align="center">
+                    <TableCell colSpan={8} align="center">
                       No KYC records found for this filter.
                     </TableCell>
                   </TableRow>
@@ -3728,17 +3751,51 @@ const renderKyc = () => {
                 ))}
               </Box>
 
-              {/* Submitted evidence: never expose private Cloudinary URLs in the browser. */}
+              {/* Private KYC evidence: links are short-lived and admin-authenticated. */}
               <Box>
                 <Typography
                   sx={{ mb: 1.5, fontWeight: 800, color: BRAND.dark }}
                 >
                   Submitted documents
                 </Typography>
-                <Alert severity="info">
-                  Customer documents are stored privately. They must be opened
-                  through the authenticated admin document-review endpoint;
-                  public document links are intentionally not used here.
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                  {selectedKyc.has_tier2_document_front && (
+                    <Button size="small" variant="outlined" onClick={() => openPrivateDocument(selectedKyc, 'id_front')}>
+                      View ID front
+                    </Button>
+                  )}
+                  {selectedKyc.has_tier2_document_back && (
+                    <Button size="small" variant="outlined" onClick={() => openPrivateDocument(selectedKyc, 'id_back')}>
+                      View ID back
+                    </Button>
+                  )}
+                  {selectedKyc.has_tier2_selfie && (
+                    <Button size="small" variant="outlined" onClick={() => openPrivateDocument(selectedKyc, 'tier2_selfie')}>
+                      View Tier 2 selfie
+                    </Button>
+                  )}
+                  {selectedKyc.has_tier3_document && (
+                    <Button size="small" variant="outlined" onClick={() => openPrivateDocument(selectedKyc, 'proof_of_address')}>
+                      View proof of address
+                    </Button>
+                  )}
+                  {selectedKyc.has_tier3_selfie && (
+                    <Button size="small" variant="outlined" onClick={() => openPrivateDocument(selectedKyc, 'tier3_selfie')}>
+                      View Tier 3 selfie
+                    </Button>
+                  )}
+                  {!selectedKyc.has_tier2_document_front &&
+                    !selectedKyc.has_tier2_document_back &&
+                    !selectedKyc.has_tier2_selfie &&
+                    !selectedKyc.has_tier3_document &&
+                    !selectedKyc.has_tier3_selfie && (
+                      <Typography variant="body2" sx={{ color: BRAND.muted }}>
+                        No submitted documents are available for this customer.
+                      </Typography>
+                    )}
+                </Stack>
+                <Alert severity="info" sx={{ mt: 1.5 }}>
+                  Documents open through a secure, audited admin-only link that expires automatically.
                 </Alert>
               </Box>
 
