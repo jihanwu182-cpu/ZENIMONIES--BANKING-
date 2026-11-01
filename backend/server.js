@@ -5,6 +5,10 @@ const cors = require('cors');
 
 const database = require('./config/database');
 
+const {
+  runKycMigration,
+} = require('./database/runKycMigration');
+
 const pool = database;
 const { initializeDatabase } = database;
 
@@ -637,6 +641,11 @@ const startServer = async () => {
     console.log(
       'Database initialization completed.'
     );
+    await runKycMigration(pool);
+
+console.log(
+  'ZENIMONIES KYC migration is ready.'
+);
   // ========================================================
 // TIER 3 EMPLOYMENT, INCOME AND DOCUMENT TYPE MIGRATION
 // ========================================================
