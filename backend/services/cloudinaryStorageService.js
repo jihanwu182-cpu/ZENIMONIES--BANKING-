@@ -25,6 +25,16 @@ const MIME_TO_FORMAT = {
   'image/webp': 'webp',
 };
 
+// Keep existing Tier 3 names for compatibility.
+// Tier 2 uses separate names to prevent document collisions.
+const ALLOWED_DOCUMENT_KINDS = new Set([
+  'tier_2_document_front',
+  'tier_2_document_back',
+  'tier_2_selfie',
+  'proof_of_address',
+  'selfie',
+]);
+
 const normalizeFormat = (value) => {
   const format = String(value || '').trim().toLowerCase();
   return format === 'jpeg' ? 'jpg' : format;
@@ -36,22 +46,45 @@ const uploadBuffer = (buffer, options) =>
       options,
       (error, result) => {
         if (error) {
-          return reject(error);
+          reject(error);
+          return;
         }
 
         if (!result) {
-          return reject(
+          reject(
             new Error('Cloudinary returned no upload result.')
           );
+          return;
         }
 
         resolve(result);
       }
     );
 
-    // Send the complete Buffer as one stream chunk.
     Readable.from([buffer]).pipe(stream);
   });
+
+const cleanupUploadedAsset = async ({
+  publicId,
+  resourceType,
+}) => {
+  if (!publicId || !['image', 'raw'].includes(resourceType)) {
+    return;
+  }
+
+  try {
+    configureCloudinary();
+
+    await cloudinary.uploader.destroy(publicId, {
+      resource_type: resourceType,
+      type: 'authenticated',
+      invalidate: true,
+    });
+  } catch {
+    // Do not log private Cloudinary identifiers.
+    console.error('KYC upload cleanup failed.');
+  }
+};
 
 const uploadKycFile = async ({
   file,
@@ -66,7 +99,7 @@ const uploadKycFile = async ({
     throw new Error('KYC user and document type are required.');
   }
 
-  if (!['proof_of_address', 'selfie'].includes(documentKind)) {
+  if (!ALLOWED_DOCUMENT_KINDS.has(documentKind)) {
     throw new Error('Unsupported KYC document category.');
   }
 
@@ -81,16 +114,18 @@ const uploadKycFile = async ({
     );
   }
 
-  if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+  const mimeType = String(file.mimetype || '')
+    .trim()
+    .toLowerCase();
+
+  if (!ALLOWED_MIME_TYPES.has(mimeType)) {
     throw new Error('Unsupported KYC file format.');
   }
 
-  const expectedFormat = MIME_TO_FORMAT[file.mimetype];
+  const expectedFormat = MIME_TO_FORMAT[mimeType];
 
   const resourceType =
-    file.mimetype === 'application/pdf' ? 'raw' : 'image';
-
-  configureCloudinary();
+    mimeType === 'application/pdf' ? 'raw' : 'image';
 
   const safeUserId = String(userId).replace(
     /[^a-zA-Z0-9_-]/g,
@@ -100,6 +135,8 @@ const uploadKycFile = async ({
   if (!safeUserId) {
     throw new Error('Invalid KYC user identifier.');
   }
+
+  configureCloudinary();
 
   const publicId =
     `zenimonies-kyc/${safeUserId}/${documentKind}-${crypto.randomUUID()}` +
@@ -116,11 +153,18 @@ const uploadKycFile = async ({
     tags: ['zenimonies-kyc'],
   });
 
+  // If Cloudinary returned an incomplete result, remove the
+  // uploaded asset where possible before reporting the error.
   if (
     !result.asset_id ||
     !result.public_id ||
     result.resource_type !== resourceType
   ) {
+    await cleanupUploadedAsset({
+      publicId: result.public_id,
+      resourceType,
+    });
+
     throw new Error(
       'Cloudinary returned incomplete KYC storage metadata.'
     );
@@ -128,26 +172,16 @@ const uploadKycFile = async ({
 
   const returnedFormat = normalizeFormat(result.format);
 
-  // Cloudinary may not return a separate format value for
-  // authenticated raw PDF uploads. The PDF extension is already
-  // included in the generated raw public ID.
   const actualFormat =
     resourceType === 'raw' && !returnedFormat
       ? 'pdf'
       : returnedFormat;
 
   if (actualFormat !== expectedFormat) {
-    try {
-      await cloudinary.uploader.destroy(result.public_id, {
-        resource_type: resourceType,
-        type: 'authenticated',
-        invalidate: true,
-      });
-    } catch {
-      console.error(
-        'Cloudinary cleanup after format validation failed.'
-      );
-    }
+    await cleanupUploadedAsset({
+      publicId: result.public_id,
+      resourceType,
+    });
 
     throw new Error(
       'Cloudinary upload format did not match the validated file type.'
@@ -168,7 +202,11 @@ const deleteKycFile = async ({
   publicId,
   resourceType,
 }) => {
-  if (!publicId || !['image', 'raw'].includes(resourceType)) {
+  if (
+    typeof publicId !== 'string' ||
+    !publicId.trim() ||
+    !['image', 'raw'].includes(resourceType)
+  ) {
     throw new Error('Valid KYC storage references are required.');
   }
 
