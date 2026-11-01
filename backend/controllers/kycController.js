@@ -2569,6 +2569,7 @@ const startDojahVerification = async (req, res) => {
         `UPDATE kyc_records
          SET dojah_reference = $1,
              dojah_verification_type = 'nin',
+                 tier1_method = 'nin',
              dojah_started_at = CURRENT_TIMESTAMP,
              dojah_checked_at = NULL,
              nin_verification_status = 'pending',
@@ -2582,6 +2583,7 @@ const startDojahVerification = async (req, res) => {
         `UPDATE kyc_records
          SET dojah_reference = $1,
              dojah_verification_type = 'bvn',
+                 tier1_method = 'bvn',
              bvn_provider_reference = $1,
              dojah_started_at = CURRENT_TIMESTAMP,
              dojah_checked_at = NULL,
