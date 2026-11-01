@@ -469,17 +469,18 @@ const getKycRecords = async (req, res) => {
 
         -- The method recorded for this KYC submission is authoritative.
         -- Fall back only when exactly one identifier exists on the record.
-        CASE
-          WHEN LOWER(COALESCE(k.dojah_verification_type, '')) IN ('bvn', 'nin')
-            THEN LOWER(k.dojah_verification_type)
-          WHEN NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NOT NULL
-            AND NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NULL
-            THEN 'bvn'
-          WHEN NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NOT NULL
-            AND NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NULL
-            THEN 'nin'
-          ELSE NULL
-        END AS tier1_method,
+        COALESCE(
+  NULLIF(LOWER(BTRIM(k.tier1_method)), ''),
+  CASE
+    WHEN NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NOT NULL
+      AND NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NULL
+      THEN 'bvn'
+    WHEN NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NOT NULL
+      AND NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NULL
+      THEN 'nin'
+    ELSE NULL
+  END
+) AS tier1_method,
 
         k.document_type,
         k.document_number,
