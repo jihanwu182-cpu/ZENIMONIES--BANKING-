@@ -9,6 +9,10 @@ const {
   runKycMigration,
 } = require('./database/runKycMigration');
 
+const {
+  runKycCompatibilityMigration,
+} = require('./database/migrations/runKycCompatibilityMigration');
+
 const pool = database;
 const { initializeDatabase } = database;
 
@@ -635,12 +639,22 @@ const startServer = async () => {
     // ========================================================
     // DATABASE
     // ========================================================
+   await initializeDatabase();
 
-    await initializeDatabase();
+console.log(
+  'Database initialization completed.'
+);
 
-    console.log(
-      'Database initialization completed.'
-    );
+// ========================================================
+// ZENIMONIES KYC SCHEMA COMPATIBILITY MIGRATION
+// ========================================================
+
+await runKycCompatibilityMigration(pool);
+
+console.log(
+  'ZENIMONIES KYC compatibility migration is ready.'
+);
+    
     await runKycMigration(pool);
 
 console.log(
