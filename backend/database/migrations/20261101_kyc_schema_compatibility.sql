@@ -1,12 +1,10 @@
-ZENIMONIES BANKING — KYC schema compatibility migration
+-- ZENIMONIES BANKING — KYC schema compatibility migration
 -- Additive only. Does not change customer verification decisions or KYC tiers.
 -- The runner executes this file once and records it in app_schema_migrations.
 
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS nin VARCHAR(11),
-  ADD COLUMN IF NOT EXISTS nin_verified BOOLEAN NOT NULL DEFAULT FALSE;
-
-ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS nin_verified BOOLEAN NOT NULL DEFAULT FALSE;ALTER TABLE kyc_records
   ADD COLUMN IF NOT EXISTS tier1_method VARCHAR(20),
   ADD COLUMN IF NOT EXISTS nin VARCHAR(11),
   ADD COLUMN IF NOT EXISTS nin_verification_status VARCHAR(30) NOT NULL DEFAULT 'not_verified',
