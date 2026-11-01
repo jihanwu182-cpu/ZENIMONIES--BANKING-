@@ -5,7 +5,6 @@ const {
   verifyBvn,
   validateBvn,
   validateNin,
-  getDojahVerification,
 } = require('../services/dojahService');
 const {
   uploadKycFile,
@@ -77,6 +76,54 @@ const normalizeKycStatus = (status) => {
 
   return 'not_verified';
 };
+
+// ============================================================
+// ARCHIVE ACTIVE PROVIDER ATTEMPT BEFORE REPLACING ITS REFERENCE
+// Requires ZENIMONIES_KYC_CONSOLIDATED_MIGRATION.sql to be run first.
+// ============================================================
+
+const archiveDojahAttempt = async (client, record, userId) => {
+  const reference = String(record?.dojah_reference || '').trim();
+
+  if (!reference) return;
+
+  await client.query(
+    `INSERT INTO kyc_verification_attempts (
+       user_id,
+       kyc_record_id,
+       verification_type,
+       reference,
+       document_type,
+       attempt_status,
+       identity_status,
+       liveness_status,
+       provider_validation_result,
+       rejection_reason,
+       started_at,
+       completed_at,
+       archived_at
+     )
+     SELECT
+       $1,
+       k.id,
+       COALESCE(NULLIF(k.dojah_verification_type, ''), 'unknown'),
+       $2,
+       k.document_type,
+       COALESCE(NULLIF(k.verification_status, ''), 'pending'),
+       k.id_verification_status,
+       k.liveness_status,
+       k.id_provider_validation_result,
+       COALESCE(k.id_rejection_reason, k.rejection_reason),
+       k.dojah_started_at,
+       k.dojah_checked_at,
+       CURRENT_TIMESTAMP
+     FROM kyc_records k
+     WHERE k.id = $3 AND k.user_id = $1
+     ON CONFLICT (reference) DO NOTHING`,
+    [userId, reference, record.id]
+  );
+};
+
 
 // ============================================================
 // PROFILE COMPLETENESS
@@ -990,38 +1037,10 @@ const submitBvn = async (req, res) => {
       lastName,
       dateOfBirth,
     });
-console.log('[KYC BVN DEBUG]', {
-  success: dojahResult?.success === true,
-  httpStatus: dojahResult?.status ?? null,
-  topLevelKeys:
-    dojahResult?.data &&
-    typeof dojahResult.data === 'object'
-      ? Object.keys(dojahResult.data)
-      : [],
-  entityKeys:
-    dojahResult?.data?.entity &&
-    typeof dojahResult.data.entity === 'object'
-      ? Object.keys(dojahResult.data.entity)
-      : [],
-  bvnStatusType:
-    typeof dojahResult?.data?.entity?.bvn?.status,
-  firstNameStatusType:
-    typeof dojahResult?.data?.entity?.first_name?.status,
-  lastNameStatusType:
-    typeof dojahResult?.data?.entity?.last_name?.status,
-  dobStatusType:
-    typeof dojahResult?.data?.entity?.dob?.status,
-});
-
-
-
     if (!dojahResult?.success) {
       await client.query('ROLLBACK');
 
-      console.error('Dojah BVN validation failed:', {
-        status: dojahResult?.status || null,
-        message: dojahResult?.message || null,
-      });
+      console.error('Dojah BVN validation failed.');
 
       return res.status(502).json({
         success: false,
@@ -1251,10 +1270,10 @@ const submitNin = async (req, res) => {
       });
     }
 
-    // Do not mark verified from lookup alone. Dojah's verification
-    // widget and signed webhook remain the approval source.
+    // Do not mark verified from lookup alone. The signed webhook records
+    // provider evidence; final approval remains administrator-controlled.
     const existing = await client.query(
-      `SELECT id, nin_verification_status
+      `SELECT id, nin_verification_status, dojah_reference, dojah_verification_type
        FROM kyc_records WHERE user_id = $1
        ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
       [userId]
@@ -1270,6 +1289,7 @@ const submitNin = async (req, res) => {
     }
 
     if (row) {
+      await archiveDojahAttempt(client, row, userId);
       await client.query(
         `UPDATE kyc_records
          SET nin = $1, nin_verification_status = 'pending',
@@ -1369,11 +1389,7 @@ const submitTier2 = async (req, res) => {
     documentType === 'nin' ||
     documentType === 'national_id';
 
-  // NIN must contain exactly 11 digits.
-  if (
-    isNin &&
-    !/^\d{11}$/.test(documentNumber)
-  ) {
+  if (isNin && !/^\d{11}$/.test(documentNumber)) {
     return res.status(400).json({
       success: false,
       code: 'INVALID_NIN',
@@ -1381,28 +1397,21 @@ const submitTier2 = async (req, res) => {
     });
   }
 
-  if (!documentNumber) {
+  if (!documentNumber || documentNumber.length > 100) {
     return res.status(400).json({
       success: false,
       code: 'DOCUMENT_NUMBER_REQUIRED',
-      message: 'Document number is required.',
+      message: 'Please enter a valid document number.',
     });
   }
 
-  const idFrontFile =
-    req.files?.document_front?.[0] || null;
+  const idFrontFile = req.files?.document_front?.[0] || null;
+  const idBackFile = req.files?.document_back?.[0] || null;
+  const selfieFile = req.files?.selfie?.[0] || null;
 
-  const idBackFile =
-    req.files?.document_back?.[0] || null;
-
-  const selfieFile =
-    req.files?.selfie?.[0] || null;
-
-  // NIN does not require ID images.
+  // NIN is number-only; other supported IDs require both sides.
   if (!isNin) {
-    const frontValidation =
-      validateIdFile(idFrontFile);
-
+    const frontValidation = validateIdFile(idFrontFile);
     if (!frontValidation.valid) {
       return res.status(400).json({
         success: false,
@@ -1410,26 +1419,8 @@ const submitTier2 = async (req, res) => {
         message: frontValidation.message,
       });
     }
-  }
- // Only NIN is number-only.
-// All other supported IDs require front and back images.
-const documentsWithoutBack = [
-  'nin',
-  'national_id',
-];
 
-  if (!documentsWithoutBack.includes(documentType)) {
-    if (!idBackFile) {
-      return res.status(400).json({
-        success: false,
-        code: 'ID_BACK_REQUIRED',
-        message: 'The back of your ID document is required.',
-      });
-    }
-
-    const backValidation =
-      validateIdFile(idBackFile);
-
+    const backValidation = validateIdFile(idBackFile);
     if (!backValidation.valid) {
       return res.status(400).json({
         success: false,
@@ -1439,18 +1430,49 @@ const documentsWithoutBack = [
     }
   }
 
-  const client = await pool.connect();
+  // The current frontend does not submit a Tier 2 selfie file.
+  // If one is supplied, validate and store it; provider liveness
+  // verification remains separate and cannot be replaced by an upload.
+  if (selfieFile) {
+    const selfieValidation = validateSelfieFile(selfieFile);
+    if (!selfieValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        code: 'INVALID_TIER_2_SELFIE',
+        message: selfieValidation.message,
+      });
+    }
+  }
+
+  let client;
+  let transactionStarted = false;
+  let transactionCommitted = false;
+  const newlyUploaded = [];
+  let previousFiles = [];
+
+  const cleanupFiles = async (files) => {
+    for (const file of files.filter(Boolean)) {
+      if (!file.publicId || !file.resourceType) continue;
+      try {
+        await deleteKycFile({
+          publicId: file.publicId,
+          resourceType: file.resourceType,
+        });
+      } catch (_) {
+        // Do not log private Cloudinary identifiers or customer data.
+        console.error('KYC storage cleanup failed. Manual review may be required.');
+      }
+    }
+  };
 
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
+    transactionStarted = true;
 
     const userResult = await client.query(
       `
-      SELECT
-        id,
-        full_name,
-        kyc_tier,
-        id_verified
+      SELECT id, full_name, kyc_tier, id_verified, bvn_verified
       FROM users
       WHERE id = $1
       FOR UPDATE
@@ -1460,7 +1482,7 @@ const documentsWithoutBack = [
 
     if (userResult.rows.length === 0) {
       await client.query('ROLLBACK');
-
+      transactionStarted = false;
       return res.status(404).json({
         success: false,
         message: 'User not found.',
@@ -1469,14 +1491,10 @@ const documentsWithoutBack = [
 
     const user = userResult.rows[0];
 
-    // Tier 2 requires a successfully verified BVN. NIN Tier 1
-    // does not replace this prerequisite.
-    const bvnPrerequisite = await client.query(
-      `SELECT bvn_verified FROM users WHERE id = $1`,
-      [userId]
-    );
-    if (bvnPrerequisite.rows[0]?.bvn_verified !== true) {
+    // Tier 2 requires verified BVN; NIN Tier 1 does not replace it.
+    if (user.bvn_verified !== true) {
       await client.query('ROLLBACK');
+      transactionStarted = false;
       return res.status(403).json({
         success: false,
         code: 'BVN_REQUIRED_FOR_TIER_2',
@@ -1488,7 +1506,15 @@ const documentsWithoutBack = [
       `
       SELECT
         id,
-        id_verification_status
+        id_verification_status,
+        dojah_reference,
+        dojah_verification_type,
+        tier_2_document_front_public_id,
+        tier_2_document_front_resource_type,
+        tier_2_document_back_public_id,
+        tier_2_document_back_resource_type,
+        tier_2_selfie_public_id,
+        tier_2_selfie_resource_type
       FROM kyc_records
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -1498,13 +1524,10 @@ const documentsWithoutBack = [
       [userId]
     );
 
-    const existingRecord =
-      existingKyc.rows[0] || null;
-
-    const currentIdStatus =
-      normalizeKycStatus(
-        existingRecord?.id_verification_status
-      );
+    const existingRecord = existingKyc.rows[0] || null;
+    const currentIdStatus = normalizeKycStatus(
+      existingRecord?.id_verification_status
+    );
 
     if (
       user.id_verified === true ||
@@ -1512,12 +1535,11 @@ const documentsWithoutBack = [
       currentIdStatus === 'approved'
     ) {
       await client.query('ROLLBACK');
-
+      transactionStarted = false;
       return res.status(409).json({
         success: false,
         code: 'ID_ALREADY_VERIFIED',
-        message:
-          'Your identity verification has already been completed.',
+        message: 'Your identity verification has already been completed.',
         status: 'verified',
         locked: true,
       });
@@ -1525,34 +1547,107 @@ const documentsWithoutBack = [
 
     if (currentIdStatus === 'pending') {
       await client.query('ROLLBACK');
-
+      transactionStarted = false;
       return res.status(409).json({
         success: false,
         code: 'ID_VERIFICATION_PENDING',
-        message:
-          'Your identity verification is already being processed.',
+        message: 'Your identity verification is already being processed.',
         status: 'pending',
         locked: true,
       });
     }
 
+    if (existingRecord) {
+      await archiveDojahAttempt(client, existingRecord, userId);
+      previousFiles = [
+        {
+          publicId: existingRecord.tier_2_document_front_public_id,
+          resourceType: existingRecord.tier_2_document_front_resource_type,
+        },
+        {
+          publicId: existingRecord.tier_2_document_back_public_id,
+          resourceType: existingRecord.tier_2_document_back_resource_type,
+        },
+        {
+          publicId: existingRecord.tier_2_selfie_public_id,
+          resourceType: existingRecord.tier_2_selfie_resource_type,
+        },
+      ];
+    }
+
+    let uploadedFront = null;
+    let uploadedBack = null;
+    let uploadedSelfie = null;
+
+    if (idFrontFile) {
+      uploadedFront = await uploadKycFile({
+        file: idFrontFile,
+        userId,
+        documentKind: 'tier_2_document_front',
+      });
+      newlyUploaded.push(uploadedFront);
+    }
+
+    if (idBackFile) {
+      uploadedBack = await uploadKycFile({
+        file: idBackFile,
+        userId,
+        documentKind: 'tier_2_document_back',
+      });
+      newlyUploaded.push(uploadedBack);
+    }
+
+    if (selfieFile) {
+      uploadedSelfie = await uploadKycFile({
+        file: selfieFile,
+        userId,
+        documentKind: 'tier_2_selfie',
+      });
+      newlyUploaded.push(uploadedSelfie);
+    }
+
     let kycId;
+
+    const storageValues = [
+      uploadedFront?.assetId || null,
+      uploadedFront?.publicId || null,
+      uploadedFront?.resourceType || null,
+      uploadedFront?.format || null,
+      uploadedBack?.assetId || null,
+      uploadedBack?.publicId || null,
+      uploadedBack?.resourceType || null,
+      uploadedBack?.format || null,
+      uploadedSelfie?.assetId || null,
+      uploadedSelfie?.publicId || null,
+      uploadedSelfie?.resourceType || null,
+      uploadedSelfie?.format || null,
+    ];
 
     if (existingRecord) {
       kycId = existingRecord.id;
-
       await client.query(
         `
-        
-UPDATE kyc_records
-SET
-  document_type = $1,
-  document_number = $2,
-  dojah_reference = NULL,
-  dojah_verification_type = NULL,
-  dojah_started_at = NULL,
-  dojah_checked_at = NULL,
-  id_verification_status = 'pending',
+        UPDATE kyc_records
+        SET
+          document_type = $1,
+          document_number = $2,
+          tier_2_document_front_asset_id = $3,
+          tier_2_document_front_public_id = $4,
+          tier_2_document_front_resource_type = $5,
+          tier_2_document_front_format = $6,
+          tier_2_document_back_asset_id = $7,
+          tier_2_document_back_public_id = $8,
+          tier_2_document_back_resource_type = $9,
+          tier_2_document_back_format = $10,
+          tier_2_selfie_asset_id = $11,
+          tier_2_selfie_public_id = $12,
+          tier_2_selfie_resource_type = $13,
+          tier_2_selfie_format = $14,
+          dojah_reference = NULL,
+          dojah_verification_type = NULL,
+          dojah_started_at = NULL,
+          dojah_checked_at = NULL,
+          id_verification_status = 'pending',
           id_verified_at = NULL,
           id_rejection_reason = NULL,
           liveness_status = 'pending',
@@ -1560,15 +1655,9 @@ SET
           verification_status = 'pending',
           rejection_reason = NULL,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = $3
-          AND user_id = $4
+        WHERE id = $15 AND user_id = $16
         `,
-        [
-          documentType,
-          documentNumber,
-          kycId,
-          userId,
-        ]
+        [documentType, documentNumber, ...storageValues, kycId, userId]
       );
     } else {
       const insertResult = await client.query(
@@ -1577,6 +1666,18 @@ SET
           user_id,
           document_type,
           document_number,
+          tier_2_document_front_asset_id,
+          tier_2_document_front_public_id,
+          tier_2_document_front_resource_type,
+          tier_2_document_front_format,
+          tier_2_document_back_asset_id,
+          tier_2_document_back_public_id,
+          tier_2_document_back_resource_type,
+          tier_2_document_back_format,
+          tier_2_selfie_asset_id,
+          tier_2_selfie_public_id,
+          tier_2_selfie_resource_type,
+          tier_2_selfie_format,
           bvn_verification_status,
           id_verification_status,
           liveness_status,
@@ -1584,36 +1685,27 @@ SET
           verification_status
         )
         VALUES (
-          $1,
-          $2,
-          $3,
-          'not_verified',
-          'pending',
-          'pending',
-          'not_verified',
-          'pending'
+          $1, $2, $3,
+          $4, $5, $6, $7,
+          $8, $9, $10, $11,
+          $12, $13, $14, $15,
+          'not_verified', 'pending', 'pending', 'not_verified', 'pending'
         )
         RETURNING id
         `,
-        [
-          userId,
-          documentType,
-          documentNumber,
-        ]
+        [userId, documentType, documentNumber, ...storageValues]
       );
-
       kycId = insertResult.rows[0].id;
     }
 
-    // Do not elevate the customer's verified tier here.
-    // Tier 2 must be approved by the trusted verification process.
+    // Provider results do not approve the account. Final Tier 2 approval
+    // remains an administrator-controlled action.
     await client.query(
       `
       UPDATE users
-      SET
-        id_verified = false,
-        kyc_status = 'pending',
-        updated_at = CURRENT_TIMESTAMP
+      SET id_verified = false,
+          kyc_status = 'pending',
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
       `,
       [userId]
@@ -1621,11 +1713,7 @@ SET
 
     await client.query(
       `
-      INSERT INTO audit_logs (
-        user_id,
-        action,
-        description
-      )
+      INSERT INTO audit_logs (user_id, action, description)
       VALUES ($1, $2, $3)
       `,
       [
@@ -1636,11 +1724,16 @@ SET
     );
 
     await client.query('COMMIT');
+    transactionStarted = false;
+    transactionCommitted = true;
+
+    // Delete replaced private assets only after the DB commit succeeds.
+    await cleanupFiles(previousFiles);
 
     return res.status(200).json({
       success: true,
       message:
-        'Your details and selfie have been received. Identity and liveness verification must be completed before approval.',
+        'Your details and required files have been received. Identity and liveness verification must be completed before approval.',
       kyc_record_id: kycId,
       tier: 2,
       status: 'pending',
@@ -1650,26 +1743,30 @@ SET
       liveness_status: 'pending',
     });
   } catch (error) {
-    try {
-      await client.query('ROLLBACK');
-    } catch (rollbackError) {
-      console.error(
-        'Tier 2 rollback failed:',
-        rollbackError.message
-      );
+    if (transactionStarted && client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {
+        console.error('Tier 2 database rollback failed.');
+      }
+      transactionStarted = false;
     }
 
-    console.error('Submit Tier 2 error:', {
-      message: error.message,
-      code: error.code,
+    if (!transactionCommitted) {
+      await cleanupFiles(newlyUploaded);
+    }
+
+    console.error('Submit Tier 2 failed:', {
+      code: error?.code || null,
+      message: error?.message || 'Unknown error',
     });
 
     return res.status(500).json({
       success: false,
-      message: 'Unable to submit Tier 2 verification.',
+      message: 'Unable to submit Tier 2 verification. Please try again later.',
     });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 };
 
@@ -2028,10 +2125,10 @@ if (existingRecord) {
       uploadedDocument.resourceType,
       uploadedDocument.format,
 
-      uploadedSelfie.assetId,
-      uploadedSelfie.publicId,
-      uploadedSelfie.resourceType,
-      uploadedSelfie.format,
+      uploadedSelfie?.assetId || null,
+      uploadedSelfie?.publicId || null,
+      uploadedSelfie?.resourceType || null,
+      uploadedSelfie?.format || null,
 
       kycId,
       userId,
@@ -2089,10 +2186,10 @@ if (existingRecord) {
       uploadedDocument.resourceType,
       uploadedDocument.format,
 
-      uploadedSelfie.assetId,
-      uploadedSelfie.publicId,
-      uploadedSelfie.resourceType,
-      uploadedSelfie.format,
+      uploadedSelfie?.assetId || null,
+      uploadedSelfie?.publicId || null,
+      uploadedSelfie?.resourceType || null,
+      uploadedSelfie?.format || null,
     ]
   );
 
@@ -2411,6 +2508,9 @@ const startDojahVerification = async (req, res) => {
       });
     }
 
+    // Preserve the prior provider attempt before assigning a new active reference.
+    await archiveDojahAttempt(client, record, userId);
+
     const referenceId = `zen_${crypto.randomUUID()}`;
 
     if (verificationType === 'tier_1' && tier1Method === 'nin') {
@@ -2559,440 +2659,91 @@ const confirmDojahVerification = async (req, res) => {
     });
   }
 
-  const clientReference = String(
-    req.body?.reference_id || ''
-  ).trim();
-
   const requestedType = String(
     req.body?.verification_type || 'tier_2'
   ).trim().toLowerCase();
 
-  if (
-    clientReference.length > 150 ||
-    !['tier_2', 'tier_3'].includes(requestedType)
-  ) {
+  if (!['tier_2', 'tier_3'].includes(requestedType)) {
     return res.status(400).json({
       success: false,
       message: 'Invalid verification request.',
     });
   }
 
-  const sessionType =
-    requestedType === 'tier_3'
-      ? 'tier_3_liveness'
-      : 'identity';
-
-  let client;
-
   try {
-    client = await pool.connect();
-
-    const result = await client.query(
+    // This endpoint is deliberately read-only. The signed webhook
+    // records provider evidence; final approval remains administrator-controlled.
+    const result = await pool.query(
       `SELECT
          id,
-         dojah_reference,
-         dojah_verification_type,
          id_verification_status,
          liveness_status,
-         tier_3_verification_status
+         tier_3_verification_status,
+         dojah_checked_at
        FROM kyc_records
        WHERE user_id = $1
-         AND dojah_verification_type = $2
-       ORDER BY dojah_started_at DESC NULLS LAST,
-                updated_at DESC
+         AND ($2 = 'tier_2' AND document_type IS NOT NULL
+              OR $2 = 'tier_3' AND tier_3_method IS NOT NULL)
+       ORDER BY updated_at DESC, created_at DESC
        LIMIT 1`,
-      [userId, sessionType]
+      [userId, requestedType]
     );
 
     const record = result.rows[0];
 
-    if (!record || !record.dojah_reference) {
+    if (!record) {
       return res.status(404).json({
         success: false,
-        message: 'No matching verification session was found.',
+        message: 'No matching verification record was found.',
       });
     }
 
-    if (
-      clientReference &&
-      clientReference !== record.dojah_reference
-    ) {
-      return res.status(409).json({
-        success: false,
-        message: 'The verification session does not match.',
-      });
-    }
-
-    const lookupReference = record.dojah_reference;
-    const providerResult =
-      await getDojahVerification(lookupReference);
-
-    if (
-      providerResult?.success !== true ||
-      !providerResult.data ||
-      typeof providerResult.data !== 'object' ||
-      Array.isArray(providerResult.data)
-    ) {
-      return res.status(502).json({
-        success: false,
-        status: 'pending',
-        message: 'The verification result is not available yet.',
-      });
-    }
-
-    const verification = providerResult.data;
-
-    const returnedReference = String(
-      verification.reference_id || ''
-    ).trim();
-
-    if (
-      !returnedReference ||
-      returnedReference !== lookupReference
-    ) {
-      return res.status(502).json({
-        success: false,
-        status: 'pending',
-        message: 'The verification result could not be matched.',
-      });
-    }
-
-    const sessionStatus = String(
-      verification.verification_status || ''
+    const idStatus = String(
+      record.id_verification_status || 'not_verified'
+    ).trim().toLowerCase();
+    const livenessStatus = String(
+      record.liveness_status || 'pending'
+    ).trim().toLowerCase();
+    const tier3Status = String(
+      record.tier_3_verification_status || 'pending'
     ).trim().toLowerCase();
 
-    const resultData = verification.data || {};
-    const governmentData = resultData.government_data;
-    const selfieData = resultData.selfie;
-
-    const outcome = (step) => {
-      const value = step?.status;
-
-      if (value === true) return 'verified';
-      if (value === false) return 'rejected';
-
-      if (typeof value === 'string') {
-        const normalized = value.trim().toLowerCase();
-
-        if (
-          [
-            'success',
-            'successful',
-            'verified',
-            'passed',
-            'pass',
-            'approved',
-          ].includes(normalized)
-        ) {
-          return 'verified';
-        }
-
-        if (
-          [
-            'failed',
-            'failure',
-            'rejected',
-            'declined',
-            'fail',
-          ].includes(normalized)
-        ) {
-          return 'rejected';
-        }
-      }
-
-      return 'pending';
-    };
-
-    const score = (value) => {
-      const number = Number(value);
-
-      return value !== null &&
-        value !== undefined &&
-        value !== '' &&
-        Number.isFinite(number) &&
-        number >= 0 &&
-        number <= 100
-        ? number
-        : null;
-    };
-
-    const livenessScore = score(
-      selfieData?.data?.liveness_score
-    );
-
-    const selfieMatchScore = score(
-      selfieData?.data?.match_score
-    );
-
-    const sessionCompleted = [
-      'completed',
-      'complete',
-    ].includes(sessionStatus);
-
-    const sessionFailed = [
-      'failed',
-      'abandoned',
-      'rejected',
-    ].includes(sessionStatus);
-
-    let idStatus = 'pending';
-    let livenessStatus = 'pending';
-
-    if (sessionCompleted) {
-      livenessStatus = outcome(selfieData);
-
-      if (requestedType === 'tier_2') {
-        idStatus = outcome(governmentData);
-      }
-    } else if (sessionFailed) {
-      livenessStatus = 'rejected';
-
-      if (requestedType === 'tier_2') {
-        idStatus = 'rejected';
-      }
-    }
-
-   // ========================================================
-// TIER 3 LIVENESS RESULT PROTECTION
-// An explicit provider failure must remain REJECTED.
-// Missing selfie data must never overwrite a confirmed
-// failure with PENDING.
-// ========================================================
-
-if (
-  (!selfieData || typeof selfieData !== 'object') &&
-  !sessionFailed
-) {
-  livenessStatus = 'pending';
-}
-
-    await client.query('BEGIN');
-
-    const locked = await client.query(
-      `SELECT
-         id,
-         dojah_reference,
-         dojah_verification_type,
-         id_verification_status,
-         liveness_status,
-         tier_3_verification_status
-       FROM kyc_records
-       WHERE id = $1
-         AND user_id = $2
-         AND dojah_reference = $3
-         AND dojah_verification_type = $4
-       FOR UPDATE`,
-      [
-        record.id,
-        userId,
-        lookupReference,
-        sessionType,
-      ]
-    );
-
-    if (!locked.rows.length) {
-      await client.query('ROLLBACK');
-
-      return res.status(409).json({
-        success: false,
-        message: 'The verification session changed. Please try again.',
-      });
-    }
-
-    let savedIdStatus = 'not_verified';
-    let savedLivenessStatus = 'pending';
-    let savedTier3Status = null;
-
-    if (requestedType === 'tier_2') {
-      await client.query(
-        `UPDATE kyc_records
-         SET
-           id_verification_status = CASE
-             WHEN id_verification_status IN ('verified', 'approved')
-               THEN id_verification_status
-             WHEN $2 <> 'pending' THEN $2
-             ELSE id_verification_status
-           END,
-           id_verified_at = CASE
-             WHEN $2 = 'verified'
-               THEN COALESCE(id_verified_at, CURRENT_TIMESTAMP)
-             ELSE id_verified_at
-           END,
-           id_rejection_reason = CASE
-             WHEN $2 = 'rejected'
-               THEN 'Identity check did not pass verification.'
-             WHEN $2 = 'verified' THEN NULL
-             ELSE id_rejection_reason
-           END,
-           liveness_status = CASE
-             WHEN liveness_status IN ('verified', 'approved')
-               THEN liveness_status
-             WHEN $3 <> 'pending' THEN $3
-             ELSE liveness_status
-           END,
-           liveness_score = COALESCE($4, liveness_score),
-           selfie_match_score = COALESCE($5, selfie_match_score),
-           dojah_checked_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1
-           AND user_id = $6
-           AND dojah_reference = $7
-           AND dojah_verification_type = 'identity'`,
-        [
-          record.id,
-          idStatus,
-          livenessStatus,
-          livenessScore,
-          selfieMatchScore,
-          userId,
-          lookupReference,
-        ]
-      );
-
-      const saved = await client.query(
-        `SELECT id_verification_status, liveness_status
-         FROM kyc_records
-         WHERE id = $1 AND user_id = $2`,
-        [record.id, userId]
-      );
-
-      savedIdStatus = String(
-        saved.rows[0]?.id_verification_status || ''
-      ).toLowerCase();
-
-      savedLivenessStatus = String(
-        saved.rows[0]?.liveness_status || ''
-      ).toLowerCase();
-
-      if (
-        ['verified', 'approved'].includes(savedIdStatus) &&
-        ['verified', 'approved'].includes(savedLivenessStatus)
-      ) {
-        await client.query(
-          `UPDATE users
-           SET id_verified = TRUE,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $1`,
-          [userId]
-        );
-      }
-    } else {
-      // Tier 3 liveness only. Do not approve the address document here.
-      await client.query(
-        `UPDATE kyc_records
-         SET
-           liveness_status = CASE
-             WHEN liveness_status IN ('verified', 'approved')
-               THEN liveness_status
-             WHEN $2 <> 'pending' THEN $2
-             ELSE liveness_status
-           END,
-           liveness_score = COALESCE($3, liveness_score),
-           selfie_match_score = COALESCE($4, selfie_match_score),
-           tier_3_verification_status = CASE
-             WHEN tier_3_verification_status IN ('verified', 'approved')
-               THEN tier_3_verification_status
-             WHEN $2 = 'rejected' THEN 'rejected'
-             ELSE tier_3_verification_status
-           END,
-           tier_3_rejection_reason = CASE
-             WHEN $2 = 'rejected'
-               THEN 'Liveness verification did not pass.'
-             ELSE tier_3_rejection_reason
-           END,
-           dojah_checked_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1
-           AND user_id = $5
-           AND dojah_reference = $6
-           AND dojah_verification_type = 'tier_3_liveness'`,
-        [
-          record.id,
-          livenessStatus,
-          livenessScore,
-          selfieMatchScore,
-          userId,
-          lookupReference,
-        ]
-      );
-
-      const saved = await client.query(
-        `SELECT liveness_status, tier_3_verification_status
-         FROM kyc_records
-         WHERE id = $1 AND user_id = $2`,
-        [record.id, userId]
-      );
-
-      savedLivenessStatus = String(
-        saved.rows[0]?.liveness_status || 'pending'
-      ).toLowerCase();
-
-      savedTier3Status = String(
-        saved.rows[0]?.tier_3_verification_status || 'pending'
-      ).toLowerCase();
-    }
-
-    await client.query('COMMIT');
-
-    const livenessVerified = [
-      'verified',
-      'approved',
-    ].includes(savedLivenessStatus);
-
-    const identityVerified = [
-      'verified',
-      'approved',
-    ].includes(savedIdStatus);
+    const identityVerified = ['verified', 'approved'].includes(idStatus);
+    const livenessVerified = ['verified', 'approved'].includes(livenessStatus);
 
     return res.status(200).json({
       success: true,
       verification_type: requestedType,
-      status:
-        requestedType === 'tier_2'
-          ? identityVerified && livenessVerified
-            ? 'verified'
-            : savedIdStatus === 'rejected' ||
-                savedLivenessStatus === 'rejected'
-              ? 'rejected'
-              : 'pending'
-          : savedLivenessStatus === 'rejected'
+      status: requestedType === 'tier_2'
+        ? identityVerified && livenessVerified
+          ? 'verified'
+          : idStatus === 'rejected' || livenessStatus === 'rejected'
             ? 'rejected'
-            : 'pending',
-      verified:
-        requestedType === 'tier_2'
-          ? identityVerified && livenessVerified
-          : false,
-      id_verification_status:
-        requestedType === 'tier_2'
-          ? savedIdStatus
-          : undefined,
-      liveness_status: savedLivenessStatus,
-      tier_3_status:
-        requestedType === 'tier_3'
-          ? savedTier3Status
-          : undefined,
-      liveness_score: livenessScore,
-      selfie_match_score: selfieMatchScore,
-      checked_at: new Date().toISOString(),
+            : 'pending'
+        : livenessStatus === 'rejected'
+          ? 'rejected'
+          : 'pending',
+      verified: requestedType === 'tier_2'
+        ? identityVerified && livenessVerified
+        : false,
+      id_verification_status: requestedType === 'tier_2'
+        ? idStatus
+        : undefined,
+      liveness_status: livenessStatus,
+      tier_3_status: requestedType === 'tier_3'
+        ? tier3Status
+        : undefined,
+      checked_at: record.dojah_checked_at || null,
     });
   } catch (error) {
-    if (client) {
-      try {
-        await client.query('ROLLBACK');
-      } catch (_) {}
-    }
-
-    console.error('Confirm verification failed:', {
+    console.error('Read verification status failed:', {
       code: error?.code || null,
-      message: error?.message || 'Unknown error',
     });
 
     return res.status(500).json({
       success: false,
       message: 'Unable to retrieve verification status.',
     });
-  } finally {
-    if (client) client.release();
   }
 };
 
