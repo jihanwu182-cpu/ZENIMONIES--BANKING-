@@ -865,6 +865,7 @@ tier_3_rejection_reason:
 // It does NOT automatically mark the BVN as VERIFIED.
 // ============================================================
 
+
 const submitBvn = async (req, res) => {
   const userId =
     req.user?.id ||
@@ -884,13 +885,14 @@ const submitBvn = async (req, res) => {
     return res.status(400).json({
       success: false,
       code: 'INVALID_BVN',
-      message: 'BVN must contain exactly 11 digits',
+      message: 'BVN must contain exactly 11 digits.',
     });
   }
 
-  const client = await pool.connect();
+  let client;
 
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     // ========================================================
@@ -921,9 +923,10 @@ const submitBvn = async (req, res) => {
 
     if (userResult.rows.length === 0) {
       await client.query('ROLLBACK');
+
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: 'User not found.',
       });
     }
 
@@ -950,18 +953,21 @@ const submitBvn = async (req, res) => {
     );
 
     const existingRecord =
-      existingKyc.rows.length > 0 ? existingKyc.rows[0] : null;
+      existingKyc.rows.length > 0
+        ? existingKyc.rows[0]
+        : null;
 
     const currentBvnStatus = normalizeKycStatus(
       existingRecord?.bvn_verification_status
     );
 
     // ========================================================
-    // ALREADY VERIFIED → LOCK
+    // FINAL ADMIN APPROVAL ALREADY EXISTS
     // ========================================================
-    if (user.bvn_verified === true || currentBvnStatus === 'verified') {
+    if (user.bvn_verified === true) {
       await client.query('ROLLBACK');
-      return res.status(400).json({
+
+      return res.status(409).json({
         success: false,
         code: 'BVN_ALREADY_VERIFIED',
         message: 'Your BVN has already been verified and cannot be changed.',
@@ -972,14 +978,20 @@ const submitBvn = async (req, res) => {
     }
 
     // ========================================================
-    // ALREADY PENDING → LOCK
+    // EXISTING VERIFICATION IS BEING PROCESSED
+    // A provider lookup alone is not final approval.
     // ========================================================
-    if (currentBvnStatus === 'pending') {
+    if (
+      currentBvnStatus === 'pending' ||
+      currentBvnStatus === 'verified' ||
+      currentBvnStatus === 'approved'
+    ) {
       await client.query('ROLLBACK');
+
       return res.status(409).json({
         success: false,
         code: 'BVN_VERIFICATION_PENDING',
-        message: 'Your BVN verification is still being processed.',
+        message: 'Your BVN verification is being processed and is awaiting review.',
         status: 'pending',
         verified: false,
         locked: true,
@@ -993,6 +1005,7 @@ const submitBvn = async (req, res) => {
 
     if (missingProfileFields.length > 0) {
       await client.query('ROLLBACK');
+
       return res.status(400).json({
         success: false,
         code: 'PROFILE_INCOMPLETE',
@@ -1002,7 +1015,7 @@ const submitBvn = async (req, res) => {
     }
 
     // ========================================================
-    // PREPARE NAME + DOB FOR DOJAH
+    // PREPARE NAME + DATE OF BIRTH
     // ========================================================
     const nameParts = String(user.full_name || '')
       .trim()
@@ -1010,17 +1023,25 @@ const submitBvn = async (req, res) => {
       .filter(Boolean);
 
     const firstName = nameParts[0] || '';
+
     const lastName =
       nameParts.length > 1
         ? nameParts.slice(1).join(' ')
-        : nameParts[0] || '';
+        : '';
 
-    const dateOfBirth = user.date_of_birth
-      ? new Date(user.date_of_birth).toISOString().slice(0, 10)
-      : '';
+    let dateOfBirth = '';
+
+    if (user.date_of_birth) {
+      const parsedDate = new Date(user.date_of_birth);
+
+      if (!Number.isNaN(parsedDate.getTime())) {
+        dateOfBirth = parsedDate.toISOString().slice(0, 10);
+      }
+    }
 
     if (!firstName || !lastName || !dateOfBirth) {
       await client.query('ROLLBACK');
+
       return res.status(400).json({
         success: false,
         code: 'PROFILE_INCOMPLETE',
@@ -1029,7 +1050,7 @@ const submitBvn = async (req, res) => {
     }
 
     // ========================================================
-    // CALL DOJAH
+    // PROVIDER LOOKUP
     // ========================================================
     const dojahResult = await validateBvn({
       bvn,
@@ -1037,28 +1058,53 @@ const submitBvn = async (req, res) => {
       lastName,
       dateOfBirth,
     });
+
     if (!dojahResult?.success) {
       await client.query('ROLLBACK');
 
-      console.error('Dojah BVN validation failed.');
+      console.error('BVN provider validation failed.');
 
       return res.status(502).json({
         success: false,
-        code: 'DOJAH_BVN_VALIDATION_FAILED',
+        code: 'BVN_VALIDATION_FAILED',
         message: 'We could not validate your BVN at this time. Please try again later.',
       });
     }
 
     // ========================================================
-    // INTERPRET RESULT
+    // INTERPRET PROVIDER RESULT
+    // This is provider evidence, NOT final approval.
     // ========================================================
     const bvnDecision = interpretBvnLookup(dojahResult);
-    const finalBvnStatus = bvnDecision.status; // 'verified' | 'rejected' | 'pending'
+
+    const allowedProviderStatuses = [
+      'verified',
+      'rejected',
+      'pending',
+    ];
+
+    const providerStatus = allowedProviderStatuses.includes(
+      bvnDecision?.status
+    )
+      ? bvnDecision.status
+      : 'pending';
+
+    // Only a negative provider result is rejected here.
+    // A positive provider result still requires admin approval.
+    const reviewStatus =
+      providerStatus === 'rejected'
+        ? 'rejected'
+        : 'pending';
+
+    const safeRejectionReason =
+      providerStatus === 'rejected'
+        ? 'provider_bvn_check_failed'
+        : null;
 
     let kycId;
 
     // ========================================================
-    // UPDATE OR CREATE KYC RECORD
+    // UPDATE EXISTING KYC RECORD
     // ========================================================
     if (existingRecord) {
       kycId = existingRecord.id;
@@ -1073,34 +1119,27 @@ const submitBvn = async (req, res) => {
           bvn_verified_date_of_birth = NULL,
           bvn_provider_validation_result = $2,
           bvn_verification_status = $3,
-          bvn_verified_at = CASE
-            WHEN $3 = 'verified' THEN CURRENT_TIMESTAMP
-            ELSE NULL
-          END,
-          bvn_rejection_reason = CASE
-            WHEN $3 = 'rejected' THEN $4
-            ELSE NULL
-          END,
-          verification_status = CASE
-            WHEN $3 = 'rejected' THEN 'rejected'
-            ELSE 'pending'
-          END,
-          rejection_reason = CASE
-            WHEN $3 = 'rejected' THEN $4
-            ELSE NULL
-          END,
+          bvn_verified_at = NULL,
+          bvn_rejection_reason = $4,
+          verification_status = $3,
+          rejection_reason = $4,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = $5
+          AND user_id = $6
         `,
         [
           bvn,
-          finalBvnStatus,
-          finalBvnStatus,
-          finalBvnStatus === 'rejected' ? bvnDecision.reason : null,
+          providerStatus,
+          reviewStatus,
+          safeRejectionReason,
           kycId,
+          userId,
         ]
       );
     } else {
+      // ======================================================
+      // CREATE KYC RECORD
+      // ======================================================
       const insertResult = await client.query(
         `
         INSERT INTO kyc_records (
@@ -1117,13 +1156,16 @@ const submitBvn = async (req, res) => {
           rejection_reason
         )
         VALUES (
-          $1, $2, $3, $4,
-          CASE WHEN $4 = 'verified' THEN CURRENT_TIMESTAMP ELSE NULL END,
+          $1,
+          $2,
+          $3,
+          $4,
+          NULL,
           $5,
           'not_verified',
           'not_verified',
           'not_verified',
-          CASE WHEN $4 = 'rejected' THEN 'rejected' ELSE 'pending' END,
+          $4,
           $5
         )
         RETURNING id
@@ -1131,9 +1173,9 @@ const submitBvn = async (req, res) => {
         [
           userId,
           bvn,
-          finalBvnStatus,
-          finalBvnStatus,
-          finalBvnStatus === 'rejected' ? bvnDecision.reason : null,
+          providerStatus,
+          reviewStatus,
+          safeRejectionReason,
         ]
       );
 
@@ -1142,43 +1184,44 @@ const submitBvn = async (req, res) => {
 
     // ========================================================
     // UPDATE USER
+    //
+    // IMPORTANT:
+    // Do not set bvn_verified here.
+    // Do not change kyc_tier here.
+    // Final approval belongs to the admin approval workflow.
     // ========================================================
     await client.query(
       `
       UPDATE users
       SET
         bvn = $1,
-        bvn_verified = $2,
-        kyc_status = CASE
-          WHEN $3 = 'rejected' THEN 'rejected'
-          ELSE 'pending'
-        END,
-        kyc_tier = CASE
-          WHEN $2 = true THEN GREATEST(kyc_tier, 1)
-          ELSE 1
-        END,
+        kyc_status = $2,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $4
+      WHERE id = $3
       `,
       [
         bvn,
-        finalBvnStatus === 'verified',
-        finalBvnStatus,
+        reviewStatus,
         userId,
       ]
     );
 
     // ========================================================
     // AUDIT LOG
+    // Do not include BVN or raw provider response/reason.
     // ========================================================
     await client.query(
       `
-      INSERT INTO audit_logs (user_id, action, description)
+      INSERT INTO audit_logs (
+        user_id,
+        action,
+        description
+      )
       VALUES ($1, 'kyc_bvn_submitted', $2)
       `,
       [
         userId,
-        `BVN submitted. Status: ${finalBvnStatus}. Reason: ${bvnDecision.reason || 'n/a'}`,
+        `BVN submitted. Provider result: ${providerStatus}. Review status: ${reviewStatus}.`,
       ]
     );
 
@@ -1190,30 +1233,38 @@ const submitBvn = async (req, res) => {
     return res.status(200).json({
       success: true,
       message:
-        finalBvnStatus === 'verified'
-          ? 'Your BVN has been verified successfully.'
-          : finalBvnStatus === 'rejected'
-          ? 'Your BVN could not be verified. Please check your details or contact support.'
+        reviewStatus === 'rejected'
+          ? 'Your BVN could not be validated. Please check your details or contact support.'
+          : providerStatus === 'verified'
+          ? 'Your BVN details passed the verification check and are awaiting ZENIMONIES review.'
           : 'Your BVN submission is awaiting verification review.',
       kyc_record_id: kycId,
       tier: 1,
-      status: finalBvnStatus,
-      verified: finalBvnStatus === 'verified',
-      locked: finalBvnStatus === 'verified' || finalBvnStatus === 'pending',
+      status: reviewStatus,
+      verified: false,
+      locked: reviewStatus === 'pending',
     });
-  } catch (error) {
-    try {
-      await client.query('ROLLBACK');
-    } catch {}
 
-    console.error('Submit BVN error:', error);
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+    }
+
+    console.error('Submit BVN error:', {
+      code: error?.code || null,
+    });
 
     return res.status(500).json({
       success: false,
-      message: 'Unable to submit BVN',
+      message: 'Unable to submit BVN.',
     });
+
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 };
 
