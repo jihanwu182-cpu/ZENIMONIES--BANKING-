@@ -1,4 +1,15 @@
 
+'use strict';
+
+// ============================================================
+// ZENIMONIES BANKING
+// CLOUDINARY KYC STORAGE SERVICE
+//
+// Private authenticated document storage.
+// Allowed: PDF, JPEG, PNG and WEBP.
+// Maximum file size: 10 MB.
+// ============================================================
+
 const crypto = require('crypto');
 const { Readable } = require('stream');
 
@@ -9,24 +20,15 @@ const {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
+const STORAGE_ROOT = 'zenimonies-kyc';
+
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
   'image/jpeg',
-  'image/jpg',
   'image/png',
   'image/webp',
 ]);
 
-const MIME_TO_FORMAT = {
-  'application/pdf': 'pdf',
-  'image/jpeg': 'jpg',
-  'image/jpg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-};
-
-// Keep existing Tier 3 names for compatibility.
-// Tier 2 uses separate names to prevent document collisions.
 const ALLOWED_DOCUMENT_KINDS = new Set([
   'tier_2_document_front',
   'tier_2_document_back',
@@ -35,56 +37,225 @@ const ALLOWED_DOCUMENT_KINDS = new Set([
   'selfie',
 ]);
 
-const normalizeFormat = (value) => {
-  const format = String(value || '').trim().toLowerCase();
-  return format === 'jpeg' ? 'jpg' : format;
+const MIME_FORMATS = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
 };
 
-const uploadBuffer = (buffer, options) =>
-  new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      options,
+// ------------------------------------------------------------
+// Validate actual file content, not just browser MIME type.
+// ------------------------------------------------------------
+
+const detectFileFormat = (buffer) => {
+  if (!Buffer.isBuffer(buffer)) {
+    return null;
+  }
+
+  // PDF
+  if (
+    buffer.length >= 5 &&
+    buffer.subarray(0, 5).toString('ascii') === '%PDF-'
+  ) {
+    return 'pdf';
+  }
+
+  // JPEG
+  if (
+    buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff
+  ) {
+    return 'jpg';
+  }
+
+  // PNG
+  const pngSignature = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47,
+    0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
+
+  if (
+    buffer.length >= 8 &&
+    buffer.subarray(0, 8).equals(pngSignature)
+  ) {
+    return 'png';
+  }
+
+  // WEBP
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return 'webp';
+  }
+
+  return null;
+};
+
+// ------------------------------------------------------------
+// Validate user ID used in the private storage path.
+// ------------------------------------------------------------
+
+const getSafeUserId = (userId) => {
+  if (
+    typeof userId !== 'string' &&
+    typeof userId !== 'number'
+  ) {
+    throw new Error('Invalid KYC storage user reference.');
+  }
+
+  const safeUserId = String(userId).trim();
+
+  if (
+    !safeUserId ||
+    safeUserId.length > 128 ||
+    !/^[a-zA-Z0-9_-]+$/.test(safeUserId)
+  ) {
+    throw new Error('Invalid KYC storage user reference.');
+  }
+
+  return safeUserId;
+};
+
+// ------------------------------------------------------------
+// Restrict document deletion to the ZENIMONIES KYC folder.
+// ------------------------------------------------------------
+
+const isAllowedKycPublicId = (publicId) => {
+  if (
+    typeof publicId !== 'string' ||
+    !publicId.trim() ||
+    publicId.length > 512
+  ) {
+    return false;
+  }
+
+  const value = publicId.trim();
+
+  if (
+    !value.startsWith(`${STORAGE_ROOT}/`) ||
+    value.includes('..') ||
+    value.includes('\\') ||
+    value.includes('?') ||
+    value.includes('#')
+  ) {
+    return false;
+  }
+
+  const parts = value.split('/');
+
+  return (
+    parts.length === 3 &&
+    parts[0] === STORAGE_ROOT &&
+    /^[a-zA-Z0-9_-]+$/.test(parts[1]) &&
+    /^[a-zA-Z0-9_-]+$/.test(parts[2])
+  );
+};
+
+// ------------------------------------------------------------
+// Upload buffer to Cloudinary as an authenticated asset.
+// ------------------------------------------------------------
+
+const uploadBuffer = ({
+  buffer,
+  publicId,
+  resourceType,
+}) => {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const finish = (error, result) => {
+      if (settled) return;
+
+      settled = true;
+
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(result);
+    };
+
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        public_id: publicId,
+        resource_type: resourceType,
+
+        // Private authenticated delivery.
+        type: 'authenticated',
+
+        overwrite: false,
+        unique_filename: false,
+        use_filename: false,
+
+        tags: [
+          'zenimonies',
+          'kyc',
+          'private',
+        ],
+      },
       (error, result) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-
-        if (!result) {
-          reject(
-            new Error('Cloudinary returned no upload result.')
-          );
-          return;
-        }
-
-        resolve(result);
+        finish(error, result);
       }
     );
 
-    Readable.from([buffer]).pipe(stream);
+    const source = Readable.from([buffer]);
+
+    source.on('error', (error) => {
+      finish(error);
+    });
+
+    uploadStream.on('error', (error) => {
+      finish(error);
+    });
+
+    source.pipe(uploadStream);
   });
+};
+
+// ------------------------------------------------------------
+// Clean up an incomplete or invalid upload.
+// Never log customer document information or identifiers.
+// ------------------------------------------------------------
 
 const cleanupUploadedAsset = async ({
   publicId,
   resourceType,
+  deliveryType = 'authenticated',
 }) => {
-  if (!publicId || !['image', 'raw'].includes(resourceType)) {
+  if (
+    !publicId ||
+    !isAllowedKycPublicId(publicId) ||
+    !['image', 'raw'].includes(resourceType) ||
+    !['authenticated', 'upload', 'private'].includes(deliveryType)
+  ) {
     return;
   }
 
   try {
-    configureCloudinary();
-
-    await cloudinary.uploader.destroy(publicId, {
-      resource_type: resourceType,
-      type: 'authenticated',
-      invalidate: true,
-    });
-  } catch {
-    // Do not log private Cloudinary identifiers.
-    console.error('KYC upload cleanup failed.');
+    await cloudinary.uploader.destroy(
+      publicId,
+      {
+        resource_type: resourceType,
+        type: deliveryType,
+        invalidate: false,
+      }
+    );
+  } catch (_) {
+    console.error(
+      'KYC storage cleanup failed. Manual review may be required.'
+    );
   }
 };
+
+// ------------------------------------------------------------
+// UPLOAD KYC FILE
+// ------------------------------------------------------------
 
 const uploadKycFile = async ({
   file,
@@ -92,131 +263,178 @@ const uploadKycFile = async ({
   documentKind,
 }) => {
   if (!file || !Buffer.isBuffer(file.buffer)) {
-    throw new Error('A valid KYC file is required.');
-  }
-
-  if (!userId || !documentKind) {
-    throw new Error('KYC user and document type are required.');
+    throw new Error('A valid KYC document is required.');
   }
 
   if (!ALLOWED_DOCUMENT_KINDS.has(documentKind)) {
-    throw new Error('Unsupported KYC document category.');
+    throw new Error('Invalid KYC document category.');
   }
 
-  if (
-    !Number.isSafeInteger(file.size) ||
-    file.size <= 0 ||
-    file.size > MAX_FILE_SIZE ||
-    file.buffer.length !== file.size
-  ) {
+  const safeUserId = getSafeUserId(userId);
+
+  const mimeType = String(file.mimetype || '')
+    .toLowerCase()
+    .trim();
+
+  if (!ALLOWED_MIME_TYPES.has(mimeType)) {
     throw new Error(
-      'KYC files must be non-empty and must not exceed 10 MB.'
+      'Unsupported document format. Upload PDF, JPEG, PNG or WEBP.'
     );
   }
 
-  const mimeType = String(file.mimetype || '')
-    .trim()
-    .toLowerCase();
+  const actualSize = file.buffer.length;
 
-  if (!ALLOWED_MIME_TYPES.has(mimeType)) {
-    throw new Error('Unsupported KYC file format.');
+  if (
+    actualSize <= 0 ||
+    actualSize > MAX_FILE_SIZE
+  ) {
+    throw new Error(
+      'KYC documents must not exceed 10 MB.'
+    );
   }
 
-  const expectedFormat = MIME_TO_FORMAT[mimeType];
+  const expectedFormat = MIME_FORMATS[mimeType];
+  const actualFormat = detectFileFormat(file.buffer);
 
-  const resourceType =
-    mimeType === 'application/pdf' ? 'raw' : 'image';
-
-  const safeUserId = String(userId).replace(
-    /[^a-zA-Z0-9_-]/g,
-    ''
-  );
-
-  if (!safeUserId) {
-    throw new Error('Invalid KYC user identifier.');
+  if (
+    !actualFormat ||
+    actualFormat !== expectedFormat
+  ) {
+    throw new Error(
+      'The uploaded document content does not match its file type.'
+    );
   }
 
   configureCloudinary();
 
+  const resourceType =
+    actualFormat === 'pdf' ? 'raw' : 'image';
+
   const publicId =
-    `zenimonies-kyc/${safeUserId}/${documentKind}-${crypto.randomUUID()}` +
-    (resourceType === 'raw' ? '.pdf' : '');
+    `${STORAGE_ROOT}/${safeUserId}/` +
+    `${documentKind}-${crypto.randomUUID()}`;
 
-  const result = await uploadBuffer(file.buffer, {
-    public_id: publicId,
-    resource_type: resourceType,
-    type: 'authenticated',
-    overwrite: false,
-    unique_filename: false,
-    discard_original_filename: true,
-    use_filename: false,
-    tags: ['zenimonies-kyc'],
-  });
+  let result = null;
 
-  // If Cloudinary returned an incomplete result, remove the
-  // uploaded asset where possible before reporting the error.
-  if (
-    !result.asset_id ||
-    !result.public_id ||
-    result.resource_type !== resourceType
-  ) {
-    await cleanupUploadedAsset({
-      publicId: result.public_id,
+  try {
+    result = await uploadBuffer({
+      buffer: file.buffer,
+      publicId,
       resourceType,
     });
 
-    throw new Error(
-      'Cloudinary returned incomplete KYC storage metadata.'
-    );
-  }
+    const returnedFormat = String(
+      result?.format || ''
+    ).toLowerCase();
 
-  const returnedFormat = normalizeFormat(result.format);
+    const normalizedReturnedFormat =
+      returnedFormat === 'jpeg'
+        ? 'jpg'
+        : returnedFormat;
 
-  const actualFormat =
-    resourceType === 'raw' && !returnedFormat
-      ? 'pdf'
-      : returnedFormat;
+    const validResult =
+      result &&
+      result.asset_id &&
+      result.public_id === publicId &&
+      result.resource_type === resourceType &&
+      result.type === 'authenticated' &&
+      normalizedReturnedFormat === expectedFormat;
 
-  if (actualFormat !== expectedFormat) {
-    await cleanupUploadedAsset({
+    if (!validResult) {
+      await cleanupUploadedAsset({
+        publicId: result?.public_id || publicId,
+        resourceType:
+          result?.resource_type || resourceType,
+        deliveryType:
+          result?.type || 'authenticated',
+      });
+
+      throw new Error(
+        'Cloudinary did not confirm a valid private KYC upload.'
+      );
+    }
+
+    return {
+      assetId: result.asset_id,
       publicId: result.public_id,
-      resourceType,
-    });
+      resourceType: result.resource_type,
+      format: normalizedReturnedFormat,
+      bytes: result.bytes,
+      storageProvider: 'cloudinary',
+    };
+  } catch (error) {
+    if (result?.public_id) {
+      await cleanupUploadedAsset({
+        publicId: result.public_id,
+        resourceType:
+          result.resource_type || resourceType,
+        deliveryType:
+          result.type || 'authenticated',
+      });
+    }
+
+    console.error(
+      'Private KYC document upload failed.'
+    );
 
     throw new Error(
-      'Cloudinary upload format did not match the validated file type.'
+      error?.message ===
+        'The uploaded document content does not match its file type.'
+        ? error.message
+        : 'KYC document upload failed. Please try again.'
     );
   }
-
-  return {
-    assetId: result.asset_id,
-    publicId: result.public_id,
-    resourceType,
-    format: actualFormat,
-    bytes: result.bytes,
-    storageProvider: 'cloudinary',
-  };
 };
+
+// ------------------------------------------------------------
+// DELETE KYC FILE
+//
+// Existing controller interface is preserved.
+// Deletion is restricted to the KYC storage folder.
+// ------------------------------------------------------------
 
 const deleteKycFile = async ({
   publicId,
   resourceType,
 }) => {
-  if (
-    typeof publicId !== 'string' ||
-    !publicId.trim() ||
-    !['image', 'raw'].includes(resourceType)
-  ) {
-    throw new Error('Valid KYC storage references are required.');
+  if (!isAllowedKycPublicId(publicId)) {
+    throw new Error(
+      'Invalid KYC storage reference.'
+    );
+  }
+
+  if (!['image', 'raw'].includes(resourceType)) {
+    throw new Error(
+      'Invalid KYC storage resource type.'
+    );
   }
 
   configureCloudinary();
 
-  return cloudinary.uploader.destroy(publicId, {
-    resource_type: resourceType,
-    type: 'authenticated',
-    invalidate: true,
-  });
+  try {
+    const result = await cloudinary.uploader.destroy(
+      publicId,
+      {
+        resource_type: resourceType,
+        type: 'authenticated',
+        invalidate: false,
+      }
+    );
+
+    return {
+      success:
+        result?.result === 'ok' ||
+        result?.result === 'not found',
+    };
+  } catch (_) {
+    console.error(
+      'Private KYC document deletion failed.'
+    );
+
+    throw new Error(
+      'KYC document deletion failed. Please try again.'
+    );
+  }
 };
 
 module.exports = {
