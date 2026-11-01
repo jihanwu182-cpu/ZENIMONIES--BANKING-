@@ -4,7 +4,7 @@
 
 BEGIN;
 
--- Tier 2: authenticated Cloudinary metadata.
+-- Tier 2: authenticated Cloudinary metadata (never store delivery URLs here).
 ALTER TABLE kyc_records
   ADD COLUMN IF NOT EXISTS tier_2_document_front_asset_id TEXT,
   ADD COLUMN IF NOT EXISTS tier_2_document_front_public_id VARCHAR(500),
@@ -19,7 +19,8 @@ ALTER TABLE kyc_records
   ADD COLUMN IF NOT EXISTS tier_2_selfie_resource_type VARCHAR(30),
   ADD COLUMN IF NOT EXISTS tier_2_selfie_format VARCHAR(30);
 
--- Tier 3: authenticated Cloudinary metadata.
+-- Tier 3: the existing migration/schema already has some of these fields;
+-- IF NOT EXISTS makes this safe when they are already present.
 ALTER TABLE kyc_records
   ADD COLUMN IF NOT EXISTS tier_3_document_asset_id TEXT,
   ADD COLUMN IF NOT EXISTS tier_3_document_public_id VARCHAR(500),
@@ -30,14 +31,15 @@ ALTER TABLE kyc_records
   ADD COLUMN IF NOT EXISTS tier_3_selfie_resource_type VARCHAR(30),
   ADD COLUMN IF NOT EXISTS tier_3_selfie_format VARCHAR(30);
 
--- Provider evidence.
+-- Separate provider evidence from the administrator's final Tier 2 decision.
 ALTER TABLE kyc_records
   ADD COLUMN IF NOT EXISTS id_provider_validation_result VARCHAR(30);
 
 CREATE INDEX IF NOT EXISTS idx_kyc_records_id_provider_validation_result
   ON kyc_records (id_provider_validation_result);
 
--- Preserve previous verification references.
+-- Preserve prior provider references for audit/history. Webhook processing
+-- must continue to query ONLY kyc_records.dojah_reference (active reference).
 CREATE TABLE IF NOT EXISTS kyc_verification_attempts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -58,11 +60,10 @@ CREATE TABLE IF NOT EXISTS kyc_verification_attempts (
 
 CREATE INDEX IF NOT EXISTS idx_kyc_attempts_user_created
   ON kyc_verification_attempts(user_id, created_at DESC);
-
 CREATE INDEX IF NOT EXISTS idx_kyc_attempts_record
   ON kyc_verification_attempts(kyc_record_id);
 
--- Backfill currently stored references without clearing active references.
+-- Backfill currently stored references once. This does not clear active refs.
 INSERT INTO kyc_verification_attempts (
   user_id,
   kyc_record_id,
