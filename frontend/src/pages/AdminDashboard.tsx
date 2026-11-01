@@ -228,6 +228,12 @@ interface KycRecord {
   kyc_tier?: number | string;
   bvn?: string;
   nin?: string;
+  bvn_verified?: boolean;
+  nin_verified?: boolean;
+  id_verified?: boolean;
+  tier_3_verified?: boolean;
+  tier1_method?: string;
+  dojah_verification_type?: string;
   nin_verification_status?: string;
   nin_provider_validation_result?: string;
   nin_verified_at?: string;
@@ -3297,6 +3303,30 @@ const renderKyc = () => {
       .replace(/\b\w/g, (letter) => letter.toUpperCase());
   };
 
+  // Tier 1 is one selected route: BVN OR NIN, never both as parallel stages.
+  const getTier1Method = (record: KycRecord): 'bvn' | 'nin' | null => {
+    const explicit = String(
+      record.tier1_method || record.dojah_verification_type || ''
+    ).trim().toLowerCase();
+    if (explicit === 'bvn' || explicit === 'nin') return explicit;
+    if (record.bvn_verified === true) return 'bvn';
+    if (record.nin_verified === true) return 'nin';
+    const bvnStatus = String(record.bvn_verification_status || '').toLowerCase();
+    const ninStatus = String(record.nin_verification_status || '').toLowerCase();
+    if (bvnStatus === 'pending' || bvnStatus === 'verified' || bvnStatus === 'approved') return 'bvn';
+    if (ninStatus === 'pending' || ninStatus === 'verified' || ninStatus === 'approved') return 'nin';
+    if (record.bvn) return 'bvn';
+    if (record.nin) return 'nin';
+    return null;
+  };
+
+  const getVerifiedTier = (record: KycRecord): number => {
+    if (record.tier_3_verified === true) return 3;
+    if (record.id_verified === true && record.bvn_verified === true) return 2;
+    if (record.bvn_verified === true || record.nin_verified === true) return 1;
+    return Number(record.kyc_tier || 0);
+  };
+
   const statusColorForKyc = (
     value?: string
   ): 'success' | 'error' | 'warning' | 'default' => {
@@ -3640,16 +3670,18 @@ const renderKyc = () => {
                   },
                   {
                     label: 'Current verified tier',
-                    value: selectedKyc.kyc_tier ?? 'Not yet verified',
+                    value: getVerifiedTier(selectedKyc) > 0
+                      ? `Tier ${getVerifiedTier(selectedKyc)} verified`
+                      : 'Not yet verified',
                   },
-                  {
+                  ...(getTier1Method(selectedKyc) === 'bvn' ? [{
                     label: 'BVN',
                     value: displaySubmittedValue(selectedKyc.bvn),
-                  },
-                  {
+                  }] : []),
+                  ...(getTier1Method(selectedKyc) === 'nin' ? [{
                     label: 'NIN',
                     value: displaySubmittedValue(selectedKyc.nin),
-                  },
+                  }] : []),
                   {
                     label: 'Identity document type',
                     value: selectedKyc.document_type,
@@ -3696,66 +3728,18 @@ const renderKyc = () => {
                 ))}
               </Box>
 
-              {/* Submitted evidence */}
+              {/* Submitted evidence: never expose private Cloudinary URLs in the browser. */}
               <Box>
                 <Typography
                   sx={{ mb: 1.5, fontWeight: 800, color: BRAND.dark }}
                 >
                   Submitted documents
                 </Typography>
-
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1}
-                  useFlexGap
-                  flexWrap="wrap"
-                >
-                  {[
-                    {
-                      label: 'Open ID front',
-                      url: selectedKyc.document_front_url,
-                    },
-                    {
-                      label: 'Open ID back',
-                      url: selectedKyc.document_back_url,
-                    },
-                    {
-                      label: 'Open selfie',
-                      url: selectedKyc.selfie_url,
-                    },
-                    {
-                      label: 'Open Tier 3 document',
-                      url: selectedKyc.tier_3_document_url,
-                    },
-                  ].map((document) => (
-                    <Button
-                      key={document.label}
-                      size="small"
-                      variant="outlined"
-                      disabled={!document.url}
-                      onClick={() => openDocument(document.url)}
-                      sx={{
-                        textTransform: 'none',
-                        borderColor: BRAND.green,
-                        color: BRAND.green,
-                      }}
-                    >
-                      {document.label}
-                    </Button>
-                  ))}
-                </Stack>
-
-                {!selectedKyc.document_front_url &&
-                  !selectedKyc.document_back_url &&
-                  !selectedKyc.selfie_url &&
-                  !selectedKyc.tier_3_document_url && (
-                    <Typography
-                      variant="body2"
-                      sx={{ mt: 1, color: BRAND.muted }}
-                    >
-                      No document links are available for this record.
-                    </Typography>
-                  )}
+                <Alert severity="info">
+                  Customer documents are stored privately. They must be opened
+                  through the authenticated admin document-review endpoint;
+                  public document links are intentionally not used here.
+                </Alert>
               </Box>
 
               <Divider />
@@ -3768,20 +3752,20 @@ const renderKyc = () => {
               </Typography>
 
               {[
-                {
+                ...(getTier1Method(selectedKyc) === 'bvn' ? [{
                   key: 'bvn' as const,
-                  label: 'BVN verification',
-                  status: selectedKyc.bvn_verification_status,
+                  label: 'BVN verification (Tier 1)',
+                  status: selectedKyc.bvn_verified === true ? 'verified' : selectedKyc.bvn_verification_status,
                   reason: selectedKyc.bvn_rejection_reason,
                   providerResult: selectedKyc.bvn_provider_validation_result,
-                },
-                {
+                }] : []),
+                ...(getTier1Method(selectedKyc) === 'nin' ? [{
                   key: 'nin' as const,
-                  label: 'NIN verification (Tier 1 alternative)',
-                  status: selectedKyc.nin_verification_status,
+                  label: 'NIN verification (Tier 1)',
+                  status: selectedKyc.nin_verified === true ? 'verified' : selectedKyc.nin_verification_status,
                   reason: selectedKyc.nin_rejection_reason,
                   providerResult: selectedKyc.nin_provider_validation_result,
-                },
+                }] : []),
                 {
                   key: 'tier2' as const,
                   label: 'Identity verification (Tier 2)',
