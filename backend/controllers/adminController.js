@@ -428,7 +428,9 @@ const updateUserStatus = async (req, res) => {
 const getKycRecords = async (req, res) => {
   try {
     const status = String(
-      req.query.status || req.query.verification_status || ''
+      req.query.status ||
+      req.query.verification_status ||
+      ''
     ).trim();
 
     const values = [];
@@ -436,7 +438,7 @@ const getKycRecords = async (req, res) => {
 
     if (status) {
       values.push(status);
-      whereClause = `WHERE k.verification_status = $1`;
+      whereClause = 'WHERE k.verification_status = $1';
     }
 
     const result = await pool.query(
@@ -445,71 +447,88 @@ const getKycRecords = async (req, res) => {
         k.id,
         k.user_id,
 
+        -- CUSTOMER PROFILE
         u.full_name,
         u.email,
         u.phone,
+        u.address,
+        u.city,
+        u.state,
+        u.lga,
+        u.country,
         u.kyc_tier,
-        u.bvn_verified,
-        u.nin_verified,
-        u.id_verified,
-        u.tier_3_verified,
         u.is_verified,
 
+        -- TIER 1: SELECTED BVN OR NIN
+        k.tier1_method,
         k.bvn,
         k.bvn_verification_status,
+        u.bvn_verified,
         k.bvn_verified_at,
         k.bvn_rejection_reason,
         k.bvn_provider_validation_result,
 
         k.nin,
         k.nin_verification_status,
+        u.nin_verified,
         k.nin_verified_at,
         k.nin_rejection_reason,
         k.nin_provider_validation_result,
 
-        -- The method recorded for this KYC submission is authoritative.
-        -- Fall back only when exactly one identifier exists on the record.
-        COALESCE(
-  NULLIF(LOWER(BTRIM(k.tier1_method)), ''),
-  CASE
-    WHEN NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NOT NULL
-      AND NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NULL
-      THEN 'bvn'
-    WHEN NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NOT NULL
-      AND NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NULL
-      THEN 'nin'
-    ELSE NULL
-  END
-) AS tier1_method,
-
+        -- TIER 2: IDENTITY DOCUMENT
         k.document_type,
         k.document_number,
         k.id_verification_status,
+        u.id_verified,
         k.id_verified_at,
         k.id_rejection_reason,
 
-        -- Presence flags only. Never send Cloudinary public IDs to the browser.
-        (k.tier_2_document_front_public_id IS NOT NULL) AS has_tier2_document_front,
-        (k.tier_2_document_back_public_id IS NOT NULL) AS has_tier2_document_back,
-        (k.tier_2_selfie_public_id IS NOT NULL) AS has_tier2_selfie,
-        (k.tier_3_document_public_id IS NOT NULL) AS has_tier3_document,
-        (k.tier_3_selfie_public_id IS NOT NULL) AS has_tier3_selfie,
+        (k.tier_2_document_front_public_id IS NOT NULL)
+          AS has_tier2_document_front,
 
+        (k.tier_2_document_back_public_id IS NOT NULL)
+          AS has_tier2_document_back,
+
+        (k.tier_2_selfie_public_id IS NOT NULL)
+          AS has_tier2_selfie,
+
+        -- TIER 3: PROOF OF ADDRESS
         k.tier_3_method,
+        k.tier_3_document_type,
+        k.employment_status,
+        k.occupation,
+        k.annual_income_range,
+
         k.tier_3_verification_status,
+        u.tier_3_verified,
         k.tier_3_verified_at,
         k.tier_3_rejection_reason,
+
+        (k.tier_3_document_public_id IS NOT NULL)
+          AS has_tier3_document,
+
+        (k.tier_3_selfie_public_id IS NOT NULL)
+          AS has_tier3_selfie,
+
+        -- LIVENESS
         k.liveness_status,
 
+        -- OVERALL STATUS
         k.verification_status,
         k.rejection_reason,
+
         k.created_at,
         k.updated_at
 
       FROM kyc_records k
-      INNER JOIN users u ON u.id = k.user_id
+
+      INNER JOIN users u
+        ON u.id = k.user_id
+
       ${whereClause}
+
       ORDER BY k.created_at DESC
+
       LIMIT 200
       `,
       values
@@ -519,14 +538,20 @@ const getKycRecords = async (req, res) => {
       success: true,
       kyc_records: result.rows,
     });
+
   } catch (error) {
-    console.error('Admin KYC records error:', error?.message || 'Unknown error');
+    console.error('Admin KYC records error:', {
+      message: error.message,
+      code: error.code,
+    });
+
     return res.status(500).json({
       success: false,
       message: 'Unable to load KYC records',
     });
   }
 };
+
 
 // ============================================================
 // KYC DECISION HELPERS
