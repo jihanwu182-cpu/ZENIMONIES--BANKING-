@@ -3298,35 +3298,53 @@ const revenueChartData: Array<{
      KYC
      ============================================================ */
 
-
 const renderKyc = () => {
   const filteredKycRecords = kycRecords.filter((record) => {
     const filter = String(kycFilter || 'all').toLowerCase();
-
-    if (filter === 'all') return true;
 
     const overallStatus = String(
       record.verification_status || record.status || ''
     ).toLowerCase();
 
+    const stageStatuses = [
+      record.bvn_verified === true
+        ? 'verified'
+        : record.bvn_verification_status,
+      record.nin_verified === true
+        ? 'verified'
+        : record.nin_verification_status,
+      record.id_verified === true
+        ? 'verified'
+        : record.id_verification_status,
+      record.tier_3_verified === true
+        ? 'verified'
+        : record.tier_3_verification_status,
+    ].map((status) => String(status || '').toLowerCase());
+
+    if (filter === 'all') return true;
+
     if (filter === 'pending') {
       return (
         overallStatus === 'pending' ||
-        [
-          record.bvn_verification_status,
-          record.nin_verification_status,
-          record.id_verification_status,
-          record.tier_3_verification_status,
-        ].some((status) => String(status || '').toLowerCase() === 'pending')
+        stageStatuses.some((status) =>
+          ['pending', 'processing'].includes(status)
+        )
       );
     }
 
     if (filter === 'approved') {
-      return overallStatus === 'verified' || overallStatus === 'approved';
+      return (
+        overallStatus === 'verified' ||
+        overallStatus === 'approved' ||
+        stageStatuses.some((status) => status === 'verified')
+      );
     }
 
     if (filter === 'rejected') {
-      return overallStatus === 'rejected';
+      return (
+        overallStatus === 'rejected' ||
+        stageStatuses.some((status) => status === 'rejected')
+      );
     }
 
     return true;
@@ -3346,34 +3364,51 @@ const renderKyc = () => {
     if (value === undefined || value === null || value === '') {
       return 'Not provided';
     }
+
     return String(value);
   };
 
   const displayStatus = (value?: string) => {
     if (!value) return 'Not submitted';
 
-    return value
+    return String(value)
       .replace(/[_-]/g, ' ')
       .replace(/\b\w/g, (letter) => letter.toUpperCase());
   };
 
-  // Tier 1 is one selected route: BVN OR NIN, never both as parallel stages.
-  // The persisted tier1_method is authoritative. For older records only, infer
-  // the route when exactly one identifier was submitted. Do not use the
-  // provider verification type because later tiers can overwrite that field.
-  const getTier1Method = (record: KycRecord): 'bvn' | 'nin' | null => {
-    const explicit = String(record.tier1_method || '').trim().toLowerCase();
-    if (explicit === 'bvn' || explicit === 'nin') return explicit;
+  // Tier 1 must use the customer's selected BVN OR NIN route.
+  // The explicit tier1_method takes priority.
+  const getTier1Method = (
+    record: KycRecord
+  ): 'bvn' | 'nin' | null => {
+    const explicit = String(
+      record.tier1_method || ''
+    ).trim().toLowerCase();
+
+    if (explicit === 'bvn' || explicit === 'nin') {
+      return explicit;
+    }
+
+    // Compatibility for older records without tier1_method.
     const hasBvn = Boolean(String(record.bvn || '').trim());
     const hasNin = Boolean(String(record.nin || '').trim());
+
     if (hasBvn && !hasNin) return 'bvn';
     if (hasNin && !hasBvn) return 'nin';
+
     return null;
   };
 
+  // Retrieve private documents through the authenticated admin endpoint.
+  // Do not expose Cloudinary public IDs or permanent document URLs.
   const openPrivateDocument = async (
     record: KycRecord,
-    document: 'id_front' | 'id_back' | 'tier2_selfie' | 'proof_of_address' | 'tier3_selfie'
+    document:
+      | 'id_front'
+      | 'id_back'
+      | 'tier2_selfie'
+      | 'proof_of_address'
+      | 'tier3_selfie'
   ) => {
     const titles: Record<string, string> = {
       id_front: 'Tier 2 identity document — front',
@@ -3382,19 +3417,33 @@ const renderKyc = () => {
       proof_of_address: 'Tier 3 proof of address',
       tier3_selfie: 'Tier 3 selfie',
     };
+
     try {
       setError('');
       setPrivateDocumentLoading(true);
       setPrivateDocumentUrl('');
-      setPrivateDocumentTitle(titles[document] || 'KYC document');
+      setPrivateDocumentTitle(
+        titles[document] || 'KYC document'
+      );
       setPrivateDocumentOpen(true);
+
       const response = await api.get(
         `/admin/kyc/${encodeURIComponent(record.id)}/private-document/${document}`
       );
-      const url = response.data?.url || response.data?.data?.url;
-      if (typeof url !== 'string' || !/^https:\/\//i.test(url)) {
-        throw new Error('The secure document link was not returned by the server.');
+
+      const url =
+        response.data?.url ||
+        response.data?.data?.url;
+
+      if (
+        typeof url !== 'string' ||
+        !/^https:\/\//i.test(url)
+      ) {
+        throw new Error(
+          'The secure document link was not returned by the server.'
+        );
       }
+
       setPrivateDocumentUrl(url);
     } catch (documentError) {
       setPrivateDocumentOpen(false);
@@ -3404,11 +3453,29 @@ const renderKyc = () => {
     }
   };
 
+  // Calculate the verified tier from verification flags.
+  // Do not treat a requested KYC tier as an approved tier.
   const getVerifiedTier = (record: KycRecord): number => {
-    if (record.tier_3_verified === true) return 3;
-    if (record.id_verified === true && record.bvn_verified === true) return 2;
-    if (record.bvn_verified === true || record.nin_verified === true) return 1;
-    return Number(record.kyc_tier || 0);
+    const tier1Verified =
+      record.bvn_verified === true ||
+      record.nin_verified === true;
+
+    if (record.tier_3_verified === true) {
+      return 3;
+    }
+
+    if (
+      record.id_verified === true &&
+      tier1Verified
+    ) {
+      return 2;
+    }
+
+    if (tier1Verified) {
+      return 1;
+    }
+
+    return 0;
   };
 
   const statusColorForKyc = (
@@ -3416,25 +3483,28 @@ const renderKyc = () => {
   ): 'success' | 'error' | 'warning' | 'default' => {
     const status = String(value || '').toLowerCase();
 
-    if (status === 'verified' || status === 'approved') {
+    if (
+      status === 'verified' ||
+      status === 'approved'
+    ) {
       return 'success';
     }
 
-    if (status === 'rejected' || status === 'failed') {
+    if (
+      status === 'rejected' ||
+      status === 'failed'
+    ) {
       return 'error';
     }
 
-    if (status === 'pending' || status === 'processing') {
+    if (
+      status === 'pending' ||
+      status === 'processing'
+    ) {
       return 'warning';
     }
 
     return 'default';
-  };
-
-  const openDocument = (url?: string) => {
-    if (!url) return;
-
-    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -3443,20 +3513,30 @@ const renderKyc = () => {
       <Box>
         <Typography
           variant="h4"
-          sx={{ fontWeight: 800, color: BRAND.dark }}
+          sx={{
+            fontWeight: 800,
+            color: BRAND.dark,
+          }}
         >
           KYC & Verification
         </Typography>
 
-        <Typography sx={{ mt: 0.5, color: BRAND.muted }}>
-          Review customer identity submissions and make verification
-          decisions based on the available evidence.
+        <Typography
+          sx={{
+            mt: 0.5,
+            color: BRAND.muted,
+          }}
+        >
+          Review customer identity submissions and make
+          verification decisions based on the available evidence.
         </Typography>
+
         <Alert severity="info" sx={{ mt: 1.5 }}>
-          Tier 1 requires an administrator-approved BVN or NIN. Tier 2 requires
-          an approved BVN and identity document. Tier 3 requires Tier 2 approval
-          and successful liveness verification. The backend calculates the
-          customer’s verified tier after each decision.
+          Tier 1 requires an administrator-approved BVN or NIN.
+          Tier 2 requires an approved BVN and identity document.
+          Tier 3 requires Tier 2 approval and successful liveness
+          verification. The backend calculates the customer's
+          verified tier after each decision.
         </Alert>
       </Box>
 
@@ -3476,7 +3556,11 @@ const renderKyc = () => {
           <Button
             key={item.value}
             size="small"
-            variant={kycFilter === item.value ? 'contained' : 'outlined'}
+            variant={
+              kycFilter === item.value
+                ? 'contained'
+                : 'outlined'
+            }
             onClick={() => setKycFilter(item.value)}
             sx={{
               borderRadius: 2,
@@ -3527,11 +3611,18 @@ const renderKyc = () => {
       {/* KYC queue */}
       <Card
         variant="outlined"
-        sx={{ borderColor: BRAND.border, borderRadius: 3 }}
+        sx={{
+          borderColor: BRAND.border,
+          borderRadius: 3,
+        }}
       >
         <CardContent>
           <Typography
-            sx={{ mb: 2, fontWeight: 800, color: BRAND.dark }}
+            sx={{
+              mb: 2,
+              fontWeight: 800,
+              color: BRAND.dark,
+            }}
           >
             Verification queue
           </Typography>
@@ -3552,120 +3643,142 @@ const renderKyc = () => {
               </TableHead>
 
               <TableBody>
-                {filteredKycRecords.map((record) => (
-                  <TableRow key={record.id} hover>
-                    <TableCell>
-                      <Typography sx={{ fontWeight: 700 }}>
-                        {record.full_name || 'Unnamed customer'}
-                      </Typography>
+                {filteredKycRecords.map((record) => {
+                  const method = getTier1Method(record);
 
-                      <Typography
-                        variant="body2"
-                        sx={{ color: BRAND.muted }}
-                      >
-                        {record.email || 'No email'}
-                      </Typography>
+                  const methodStatus =
+                    method === 'bvn'
+                      ? record.bvn_verified === true
+                        ? 'verified'
+                        : record.bvn_verification_status
+                      : method === 'nin'
+                        ? record.nin_verified === true
+                          ? 'verified'
+                          : record.nin_verification_status
+                        : '';
 
-                      <Typography
-                        variant="caption"
-                        sx={{ color: BRAND.muted }}
-                      >
-                        {record.phone || 'No phone'}
-                      </Typography>
-                    </TableCell>
+                  const tier2Status =
+                    record.id_verified === true
+                      ? 'verified'
+                      : record.id_verification_status;
 
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={`Tier ${Number(record.kyc_tier || 0)}`}
-                        color={Number(record.kyc_tier || 0) > 0 ? 'success' : 'default'}
-                      />
-                    </TableCell>
+                  const tier3Status =
+                    record.tier_3_verified === true
+                      ? 'verified'
+                      : record.tier_3_verification_status;
 
-                    <TableCell>
-                      {(() => {
-                        const method = getTier1Method(record);
-                        const methodStatus = method === 'bvn'
-                          ? (record.bvn_verified === true ? 'verified' : record.bvn_verification_status)
-                          : method === 'nin'
-                            ? (record.nin_verified === true ? 'verified' : record.nin_verification_status)
-                            : '';
-                        return (
-                          <Stack spacing={0.5} alignItems="flex-start">
-                            <Typography sx={{ fontSize: 12, fontWeight: 700 }}>
-                              {method ? method.toUpperCase() : 'Not identified'}
-                            </Typography>
-                            <Chip
-                              size="small"
-                              label={displayStatus(methodStatus)}
-                              color={statusColorForKyc(methodStatus)}
-                            />
-                          </Stack>
-                        );
-                      })()}
-                    </TableCell>
+                  return (
+                    <TableRow key={record.id} hover>
+                      <TableCell>
+                        <Typography sx={{ fontWeight: 700 }}>
+                          {record.full_name || 'Unnamed customer'}
+                        </Typography>
 
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={displayStatus(
-                          record.id_verification_status
-                        )}
-                        color={statusColorForKyc(
-                          record.id_verification_status
-                        )}
-                      />
-                    </TableCell>
+                        <Typography
+                          variant="body2"
+                          sx={{ color: BRAND.muted }}
+                        >
+                          {record.email || 'No email'}
+                        </Typography>
 
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={displayStatus(
-                          record.tier_3_verification_status
-                        )}
-                        color={statusColorForKyc(
-                          record.tier_3_verification_status
-                        )}
-                      />
-                    </TableCell>
+                        <Typography
+                          variant="caption"
+                          sx={{ color: BRAND.muted }}
+                        >
+                          {record.phone || 'No phone'}
+                        </Typography>
+                      </TableCell>
 
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={displayStatus(
-                          record.verification_status
-                        )}
-                        color={statusColorForKyc(
-                          record.verification_status
-                        )}
-                      />
-                    </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={`Tier ${getVerifiedTier(record)}`}
+                          color={
+                            getVerifiedTier(record) > 0
+                              ? 'success'
+                              : 'default'
+                          }
+                        />
+                      </TableCell>
 
-                    <TableCell>
-                      {displayDate(record.created_at)}
-                    </TableCell>
+                      <TableCell>
+                        <Stack
+                          spacing={0.5}
+                          alignItems="flex-start"
+                        >
+                          <Typography
+                            sx={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {method
+                              ? method.toUpperCase()
+                              : 'Not identified'}
+                          </Typography>
 
-                    <TableCell align="right">
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => {
-                          setSelectedKyc(record);
-                          setKycRejectionReason('');
-                          setError('');
-                        }}
-                        sx={{
-                          borderColor: BRAND.green,
-                          color: BRAND.green,
-                          textTransform: 'none',
-                          fontWeight: 700,
-                        }}
-                      >
-                        Review
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          <Chip
+                            size="small"
+                            label={displayStatus(methodStatus)}
+                            color={statusColorForKyc(methodStatus)}
+                          />
+                        </Stack>
+                      </TableCell>
+
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={displayStatus(tier2Status)}
+                          color={statusColorForKyc(tier2Status)}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={displayStatus(tier3Status)}
+                          color={statusColorForKyc(tier3Status)}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={displayStatus(
+                            record.verification_status
+                          )}
+                          color={statusColorForKyc(
+                            record.verification_status
+                          )}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        {displayDate(record.created_at)}
+                      </TableCell>
+
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => {
+                            setSelectedKyc(record);
+                            setKycRejectionReason('');
+                            setError('');
+                          }}
+                          sx={{
+                            borderColor: BRAND.green,
+                            color: BRAND.green,
+                            textTransform: 'none',
+                            fontWeight: 700,
+                          }}
+                        >
+                          Review
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
 
                 {filteredKycRecords.length === 0 && (
                   <TableRow>
@@ -3684,20 +3797,29 @@ const renderKyc = () => {
       {selectedKyc && (
         <Card
           variant="outlined"
-          sx={{ borderColor: BRAND.border, borderRadius: 3 }}
+          sx={{
+            borderColor: BRAND.border,
+            borderRadius: 3,
+          }}
         >
           <CardContent>
             <Stack spacing={2.5}>
               <Stack
                 direction={{ xs: 'column', sm: 'row' }}
                 justifyContent="space-between"
-                alignItems={{ xs: 'flex-start', sm: 'center' }}
+                alignItems={{
+                  xs: 'flex-start',
+                  sm: 'center',
+                }}
                 spacing={1}
               >
                 <Box>
                   <Typography
                     variant="h6"
-                    sx={{ fontWeight: 800, color: BRAND.dark }}
+                    sx={{
+                      fontWeight: 800,
+                      color: BRAND.dark,
+                    }}
                   >
                     Customer review
                   </Typography>
@@ -3706,8 +3828,8 @@ const renderKyc = () => {
                     variant="body2"
                     sx={{ color: BRAND.muted }}
                   >
-                    Review the submitted details and each verification
-                    stage separately.
+                    Review the submitted details and each
+                    verification stage separately.
                   </Typography>
                 </Box>
 
@@ -3753,38 +3875,63 @@ const renderKyc = () => {
                     value: selectedKyc.phone,
                   },
                   {
-                    label: 'KYC tier',
+                    label: 'KYC tier requested',
                     value: selectedKyc.kyc_tier,
                   },
                   {
                     label: 'Current verified tier',
-                    value: getVerifiedTier(selectedKyc) > 0
-                      ? `Tier ${getVerifiedTier(selectedKyc)} verified`
-                      : 'Not yet verified',
+                    value:
+                      getVerifiedTier(selectedKyc) > 0
+                        ? `Tier ${getVerifiedTier(selectedKyc)} verified`
+                        : 'Not yet verified',
                   },
-                  ...(getTier1Method(selectedKyc) === 'bvn' ? [{
-                    label: 'BVN',
-                    value: displaySubmittedValue(selectedKyc.bvn),
-                  }] : []),
-                  ...(getTier1Method(selectedKyc) === 'nin' ? [{
-                    label: 'NIN',
-                    value: displaySubmittedValue(selectedKyc.nin),
-                  }] : []),
+                  ...(getTier1Method(selectedKyc) === 'bvn'
+                    ? [
+                        {
+                          label: 'BVN',
+                          value: displaySubmittedValue(
+                            selectedKyc.bvn
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(getTier1Method(selectedKyc) === 'nin'
+                    ? [
+                        {
+                          label: 'NIN',
+                          value: displaySubmittedValue(
+                            selectedKyc.nin
+                          ),
+                        },
+                      ]
+                    : []),
                   {
                     label: 'Identity document type',
                     value: selectedKyc.document_type,
                   },
                   {
                     label: 'Identity document number',
-                    value: displaySubmittedValue(selectedKyc.document_number),
+                    value: displaySubmittedValue(
+                      selectedKyc.document_number
+                    ),
                   },
                   {
                     label: 'Address',
-                    value: [selectedKyc.address, selectedKyc.city, selectedKyc.lga, selectedKyc.state, selectedKyc.country].filter(Boolean).join(', '),
+                    value: [
+                      selectedKyc.address,
+                      selectedKyc.city,
+                      selectedKyc.lga,
+                      selectedKyc.state,
+                      selectedKyc.country,
+                    ]
+                      .filter(Boolean)
+                      .join(', '),
                   },
                   {
                     label: 'Tier 3 proof document type',
-                    value: selectedKyc.tier_3_document_type || selectedKyc.tier_3_method,
+                    value:
+                      selectedKyc.tier_3_document_type ||
+                      selectedKyc.tier_3_method,
                   },
                   {
                     label: 'Employment status',
@@ -3836,36 +3983,94 @@ const renderKyc = () => {
                 ))}
               </Box>
 
-              {/* Private KYC evidence: fetched only after an authorised admin requests a preview. */}
+              {/* Submitted private documents */}
               <Box>
-                <Typography sx={{ mb: 1.5, fontWeight: 800, color: BRAND.dark }}>
+                <Typography
+                  sx={{
+                    mb: 1.5,
+                    fontWeight: 800,
+                    color: BRAND.dark,
+                  }}
+                >
                   Submitted documents
                 </Typography>
-                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  useFlexGap
+                  flexWrap="wrap"
+                >
                   {[
-                    { key: 'id_front' as const, label: 'View ID front', available: selectedKyc.has_tier2_document_front },
-                    { key: 'id_back' as const, label: 'View ID back', available: selectedKyc.has_tier2_document_back },
-                    { key: 'tier2_selfie' as const, label: 'View Tier 2 selfie', available: selectedKyc.has_tier2_selfie },
-                    { key: 'proof_of_address' as const, label: 'View proof of address', available: selectedKyc.has_tier3_document },
-                    { key: 'tier3_selfie' as const, label: 'View Tier 3 selfie', available: selectedKyc.has_tier3_selfie },
-                  ].filter((item) => item.available === true).map((item) => (
-                    <Button key={item.key} size="small" variant="outlined"
-                      onClick={() => openPrivateDocument(selectedKyc, item.key)}>
-                      {item.label}
-                    </Button>
-                  ))}
+                    {
+                      key: 'id_front' as const,
+                      label: 'View ID front',
+                      available:
+                        selectedKyc.has_tier2_document_front === true,
+                    },
+                    {
+                      key: 'id_back' as const,
+                      label: 'View ID back',
+                      available:
+                        selectedKyc.has_tier2_document_back === true,
+                    },
+                    {
+                      key: 'tier2_selfie' as const,
+                      label: 'View Tier 2 selfie',
+                      available:
+                        selectedKyc.has_tier2_selfie === true,
+                    },
+                    {
+                      key: 'proof_of_address' as const,
+                      label: 'View proof of address',
+                      available:
+                        selectedKyc.has_tier3_document === true,
+                    },
+                    {
+                      key: 'tier3_selfie' as const,
+                      label: 'View Tier 3 selfie',
+                      available:
+                        selectedKyc.has_tier3_selfie === true,
+                    },
+                  ]
+                    .filter((item) => item.available)
+                    .map((item) => (
+                      <Button
+                        key={item.key}
+                        size="small"
+                        variant="outlined"
+                        onClick={() =>
+                          openPrivateDocument(
+                            selectedKyc,
+                            item.key
+                          )
+                        }
+                      >
+                        {item.label}
+                      </Button>
+                    ))}
+
                   {!selectedKyc.has_tier2_document_front &&
                     !selectedKyc.has_tier2_document_back &&
                     !selectedKyc.has_tier2_selfie &&
                     !selectedKyc.has_tier3_document &&
                     !selectedKyc.has_tier3_selfie && (
-                      <Typography variant="body2" sx={{ color: BRAND.muted }}>
-                        No private document references were returned for this KYC record. NIN number-only submissions do not include Tier 2 ID images.
+                      <Typography
+                        variant="body2"
+                        sx={{ color: BRAND.muted }}
+                      >
+                        No private document references were returned
+                        for this KYC record. A number-only NIN
+                        submission does not itself include Tier 2
+                        identity document images.
                       </Typography>
                     )}
                 </Stack>
+
                 <Alert severity="info" sx={{ mt: 1.5 }}>
-                  Document previews are retrieved from the authenticated admin endpoint and displayed here. Temporary links expire automatically.
+                  Document previews are retrieved from the
+                  authenticated admin endpoint. Temporary links
+                  expire automatically.
                 </Alert>
               </Box>
 
@@ -3873,37 +4078,65 @@ const renderKyc = () => {
 
               {/* Verification stages */}
               <Typography
-                sx={{ fontWeight: 800, color: BRAND.dark }}
+                sx={{
+                  fontWeight: 800,
+                  color: BRAND.dark,
+                }}
               >
                 Verification stages
               </Typography>
 
               {[
-                ...(getTier1Method(selectedKyc) === 'bvn' ? [{
-                  key: 'bvn' as const,
-                  label: 'BVN verification (Tier 1)',
-                  status: selectedKyc.bvn_verified === true ? 'verified' : selectedKyc.bvn_verification_status,
-                  reason: selectedKyc.bvn_rejection_reason,
-                  providerResult: selectedKyc.bvn_provider_validation_result,
-                }] : []),
-                ...(getTier1Method(selectedKyc) === 'nin' ? [{
-                  key: 'nin' as const,
-                  label: 'NIN verification (Tier 1)',
-                  status: selectedKyc.nin_verified === true ? 'verified' : selectedKyc.nin_verification_status,
-                  reason: selectedKyc.nin_rejection_reason,
-                  providerResult: selectedKyc.nin_provider_validation_result,
-                }] : []),
+                ...(getTier1Method(selectedKyc) === 'bvn'
+                  ? [
+                      {
+                        key: 'bvn' as const,
+                        label: 'BVN verification (Tier 1)',
+                        status:
+                          selectedKyc.bvn_verified === true
+                            ? 'verified'
+                            : selectedKyc.bvn_verification_status,
+                        reason: selectedKyc.bvn_rejection_reason,
+                        providerResult:
+                          selectedKyc.bvn_provider_validation_result,
+                      },
+                    ]
+                  : []),
+
+                ...(getTier1Method(selectedKyc) === 'nin'
+                  ? [
+                      {
+                        key: 'nin' as const,
+                        label: 'NIN verification (Tier 1)',
+                        status:
+                          selectedKyc.nin_verified === true
+                            ? 'verified'
+                            : selectedKyc.nin_verification_status,
+                        reason: selectedKyc.nin_rejection_reason,
+                        providerResult:
+                          selectedKyc.nin_provider_validation_result,
+                      },
+                    ]
+                  : []),
+
                 {
                   key: 'tier2' as const,
                   label: 'Identity verification (Tier 2)',
-                  status: selectedKyc.id_verification_status,
+                  status:
+                    selectedKyc.id_verified === true
+                      ? 'verified'
+                      : selectedKyc.id_verification_status,
                   reason: selectedKyc.id_rejection_reason,
                   providerResult: undefined,
                 },
+
                 {
                   key: 'tier3' as const,
                   label: 'Tier 3 verification',
-                  status: selectedKyc.tier_3_verification_status,
+                  status:
+                    selectedKyc.tier_3_verified === true
+                      ? 'verified'
+                      : selectedKyc.tier_3_verification_status,
                   reason: selectedKyc.tier_3_rejection_reason,
                   providerResult: undefined,
                 },
@@ -3925,7 +4158,12 @@ const renderKyc = () => {
                       minWidth: 0,
                     }}
                   >
-                    <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                      }}
+                    >
                       {stage.label}
                     </Typography>
 
@@ -3936,18 +4174,41 @@ const renderKyc = () => {
                       sx={{ mt: 0.75 }}
                     />
 
-                    {(stage.key === 'bvn' || stage.key === 'nin') && (
+                    {(stage.key === 'bvn' ||
+                      stage.key === 'nin') && (
                       <Box sx={{ mt: 1 }}>
-                        <Typography variant="caption" sx={{ color: BRAND.muted, display: 'block' }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: BRAND.muted,
+                            display: 'block',
+                          }}
+                        >
                           Provider validation result
                         </Typography>
+
                         <Chip
                           size="small"
-                          label={displayStatus(stage.providerResult)}
-                          color={statusColorForKyc(stage.providerResult)}
+                          label={displayStatus(
+                            stage.providerResult
+                          )}
+                          color={statusColorForKyc(
+                            stage.providerResult
+                          )}
                         />
-                        <Typography variant="caption" sx={{ color: BRAND.muted, display: 'block', mt: 0.75 }}>
-                          Provider validation is supporting evidence only. Final {stage.key.toUpperCase()} approval is made here by an authorised administrator.
+
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: BRAND.muted,
+                            display: 'block',
+                            mt: 0.75,
+                          }}
+                        >
+                          Provider validation is supporting
+                          evidence only. Final{' '}
+                          {stage.key.toUpperCase()} approval is
+                          made here by an authorised administrator.
                         </Typography>
                       </Box>
                     )}
@@ -3973,8 +4234,11 @@ const renderKyc = () => {
                           variant="contained"
                           disabled={
                             kycActionLoading ||
-                            ((stage.key === 'bvn' || stage.key === 'nin') &&
-                              String(stage.providerResult || '').toLowerCase() !== 'verified')
+                            ((stage.key === 'bvn' ||
+                              stage.key === 'nin') &&
+                              String(
+                                stage.providerResult || ''
+                              ).toLowerCase() !== 'verified')
                           }
                           onClick={() =>
                             handleKycDecision(
@@ -3995,10 +4259,16 @@ const renderKyc = () => {
                           Approve
                         </Button>
 
-                        {(stage.key === 'bvn' || stage.key === 'nin') &&
-                          String(stage.providerResult || '').toLowerCase() !== 'verified' && (
+                        {(stage.key === 'bvn' ||
+                          stage.key === 'nin') &&
+                          String(
+                            stage.providerResult || ''
+                          ).toLowerCase() !== 'verified' && (
                             <Alert severity="warning">
-                              Approval is locked until the backend records a successful {stage.key.toUpperCase()} provider validation result.
+                              Approval is locked until the backend
+                              records a successful{' '}
+                              {stage.key.toUpperCase()} provider
+                              validation result.
                             </Alert>
                           )}
 
@@ -4008,7 +4278,9 @@ const renderKyc = () => {
                           label="Reason for rejection"
                           value={kycRejectionReason}
                           onChange={(event) =>
-                            setKycRejectionReason(event.target.value)
+                            setKycRejectionReason(
+                              event.target.value
+                            )
                           }
                           inputProps={{ maxLength: 500 }}
                         />
@@ -4054,7 +4326,7 @@ const renderKyc = () => {
                 );
               })}
 
-              {/* Liveness is status-only */}
+              {/* Liveness status */}
               <Box
                 sx={{
                   p: 1.5,
@@ -4062,64 +4334,137 @@ const renderKyc = () => {
                   borderRadius: 2,
                 }}
               >
-                <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+                <Typography
+                  sx={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                  }}
+                >
                   Liveness check
                 </Typography>
 
                 <Chip
                   size="small"
-                  label={displayStatus(selectedKyc.liveness_status)}
-                  color={statusColorForKyc(selectedKyc.liveness_status)}
+                  label={displayStatus(
+                    selectedKyc.liveness_status
+                  )}
+                  color={statusColorForKyc(
+                    selectedKyc.liveness_status
+                  )}
                   sx={{ mt: 0.75 }}
                 />
               </Box>
 
               <Typography
-                sx={{ fontSize: 11, color: BRAND.muted }}
+                sx={{
+                  fontSize: 11,
+                  color: BRAND.muted,
+                }}
               >
-                Verification statuses come from the backend. Only pending
-                BVN, Tier 2, and Tier 3 stages can receive a manual decision.
-                Liveness is displayed as reported; no result is assumed.
+                Verification statuses come from the backend.
+                Only pending BVN, Tier 2, and Tier 3 stages can
+                receive a manual decision. Liveness is displayed
+                as reported; no result is assumed.
               </Typography>
             </Stack>
           </CardContent>
         </Card>
       )}
+
+      {/* Private document preview dialog */}
       <Dialog
         open={privateDocumentOpen}
-        onClose={() => { setPrivateDocumentOpen(false); setPrivateDocumentUrl(''); }}
+        onClose={() => {
+          setPrivateDocumentOpen(false);
+          setPrivateDocumentUrl('');
+        }}
         fullWidth
         maxWidth="lg"
       >
-        <DialogTitle sx={{ fontWeight: 800, pr: 7 }}>
+        <DialogTitle
+          sx={{
+            fontWeight: 800,
+            pr: 7,
+          }}
+        >
           {privateDocumentTitle}
-          <IconButton aria-label="Close document preview" onClick={() => { setPrivateDocumentOpen(false); setPrivateDocumentUrl(''); }}
-            sx={{ position: 'absolute', right: 12, top: 10 }}>
+
+          <IconButton
+            aria-label="Close document preview"
+            onClick={() => {
+              setPrivateDocumentOpen(false);
+              setPrivateDocumentUrl('');
+            }}
+            sx={{
+              position: 'absolute',
+              right: 12,
+              top: 10,
+            }}
+          >
             <Close />
           </IconButton>
         </DialogTitle>
-        <DialogContent dividers sx={{ minHeight: { xs: 360, md: 620 }, p: 1 }}>
+
+        <DialogContent
+          dividers
+          sx={{
+            minHeight: {
+              xs: 360,
+              md: 620,
+            },
+            p: 1,
+          }}
+        >
           {privateDocumentLoading && (
-            <Stack alignItems="center" justifyContent="center" sx={{ minHeight: 320 }} spacing={1}>
+            <Stack
+              alignItems="center"
+              justifyContent="center"
+              sx={{ minHeight: 320 }}
+              spacing={1}
+            >
               <CircularProgress />
-              <Typography variant="body2">Loading secure document…</Typography>
+
+              <Typography variant="body2">
+                Loading secure document…
+              </Typography>
             </Stack>
           )}
-          {!privateDocumentLoading && privateDocumentUrl && (
-            /\.pdf(?:[?#]|$)/i.test(privateDocumentUrl) ? (
-              <Box component="iframe" title={privateDocumentTitle} src={privateDocumentUrl}
-                sx={{ width: '100%', height: { xs: 480, md: 650 }, border: 0 }} />
+
+          {!privateDocumentLoading &&
+            privateDocumentUrl &&
+            (/\.pdf(?:[?#]|$)/i.test(privateDocumentUrl) ? (
+              <Box
+                component="iframe"
+                title={privateDocumentTitle}
+                src={privateDocumentUrl}
+                sx={{
+                  width: '100%',
+                  height: {
+                    xs: 480,
+                    md: 650,
+                  },
+                  border: 0,
+                }}
+              />
             ) : (
-              <Box component="img" src={privateDocumentUrl} alt={privateDocumentTitle}
-                sx={{ display: 'block', maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', mx: 'auto' }} />
-            )
-          )}
+              <Box
+                component="img"
+                src={privateDocumentUrl}
+                alt={privateDocumentTitle}
+                sx={{
+                  display: 'block',
+                  maxWidth: '100%',
+                  maxHeight: '70vh',
+                  objectFit: 'contain',
+                  mx: 'auto',
+                }}
+              />
+            ))}
         </DialogContent>
       </Dialog>
     </Stack>
   );
 };
-
 
   /* ============================================================
      PLACEHOLDER SECTIONS
