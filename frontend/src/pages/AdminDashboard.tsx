@@ -878,6 +878,7 @@ const [revenueApiSummary, setRevenueApiSummary] =
 
   const [kycFilter, setKycFilter] =
     useState('ALL');
+  const [kycSearch, setKycSearch] = useState('');
  const [selectedKyc, setSelectedKyc] =
   useState<KycRecord | null>(null);
  const [privateDocumentUrl, setPrivateDocumentUrl] = useState('');
@@ -1064,6 +1065,28 @@ const handleKycDecision = async (
     tier2: record.id_verification_status,
     tier3: record.tier_3_verification_status,
   }[stage];
+
+  // Tier 2 and Tier 3 require an administrator-verified BVN.
+  // Tier 3 additionally requires approved Tier 2 and successful liveness.
+  if (decision === 'verify' && stage === 'tier2' && record.bvn_verified !== true) {
+    setError('Tier 2 cannot be approved until the customer has an administrator-verified BVN.');
+    return;
+  }
+
+  if (decision === 'verify' && stage === 'tier3') {
+    if (record.bvn_verified !== true) {
+      setError('Tier 3 cannot be approved until the customer has an administrator-verified BVN.');
+      return;
+    }
+    if (record.id_verified !== true) {
+      setError('Tier 3 cannot be approved until Tier 2 identity verification is approved.');
+      return;
+    }
+    if (String(record.liveness_status || '').toLowerCase() !== 'verified') {
+      setError('Tier 3 cannot be approved until liveness verification is successful.');
+      return;
+    }
+  }
 
   if (stageStatus?.toLowerCase() !== 'pending') {
     setError(
@@ -3346,6 +3369,21 @@ const revenueChartData: Array<{
 const renderKyc = () => {
   const filteredKycRecords = kycRecords.filter((record) => {
     const filter = String(kycFilter || 'all').toLowerCase();
+    const query = kycSearch.trim().toLowerCase();
+
+    if (query) {
+      const searchable = [
+        record.full_name,
+        record.fullName,
+        record.email,
+        record.phone,
+        record.id,
+        record.user_id,
+        record.userId,
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      if (!searchable.includes(query)) return false;
+    }
 
     const overallStatus = String(
       record.verification_status || record.status || ''
@@ -3512,13 +3550,19 @@ const renderKyc = () => {
       record.bvn_verified === true ||
       record.nin_verified === true;
 
-    if (record.tier_3_verified === true) {
+    // Tier 2 and Tier 3 eligibility specifically require verified BVN.
+    if (
+      record.tier_3_verified === true &&
+      record.bvn_verified === true &&
+      record.id_verified === true &&
+      String(record.liveness_status || '').toLowerCase() === 'verified'
+    ) {
       return 3;
     }
 
     if (
       record.id_verified === true &&
-      tier1Verified
+      record.bvn_verified === true
     ) {
       return 2;
     }
@@ -3637,6 +3681,21 @@ const renderKyc = () => {
         ))}
 
         <Box sx={{ flexGrow: 1 }} />
+
+        <TextField
+          size="small"
+          value={kycSearch}
+          onChange={(event) => setKycSearch(event.target.value)}
+          placeholder="Search name, email, phone or ID"
+          sx={{ minWidth: { xs: '100%', sm: 280 } }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
 
         <Button
           variant="outlined"
@@ -4290,7 +4349,13 @@ const renderKyc = () => {
                               stage.key === 'nin') &&
                               String(
                                 stage.providerResult || ''
-                              ).toLowerCase() !== 'verified')
+                              ).toLowerCase() !== 'verified') ||
+                            (stage.key === 'tier2' &&
+                              selectedKyc.bvn_verified !== true) ||
+                            (stage.key === 'tier3' &&
+                              (selectedKyc.bvn_verified !== true ||
+                                selectedKyc.id_verified !== true ||
+                                String(selectedKyc.liveness_status || '').toLowerCase() !== 'verified'))
                           }
                           onClick={() =>
                             handleKycDecision(
@@ -4321,6 +4386,22 @@ const renderKyc = () => {
                               records a successful{' '}
                               {stage.key.toUpperCase()} provider
                               validation result.
+                            </Alert>
+                          )}
+
+                        {stage.key === 'tier2' &&
+                          selectedKyc.bvn_verified !== true && (
+                            <Alert severity="warning">
+                              Tier 2 approval requires an administrator-verified BVN.
+                            </Alert>
+                          )}
+
+                        {stage.key === 'tier3' &&
+                          (selectedKyc.bvn_verified !== true ||
+                            selectedKyc.id_verified !== true ||
+                            String(selectedKyc.liveness_status || '').toLowerCase() !== 'verified') && (
+                            <Alert severity="warning">
+                              Tier 3 approval requires verified BVN, approved Tier 2 identity verification, and successful liveness verification.
                             </Alert>
                           )}
 
