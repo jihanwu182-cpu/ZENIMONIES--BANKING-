@@ -424,22 +424,69 @@ const updateUserStatus = async (req, res) => {
 // GET KYC RECORDS
 // GET /api/admin/kyc
 // ============================================================
-
 const getKycRecords = async (req, res) => {
   try {
     const status = String(
       req.query.status ||
       req.query.verification_status ||
       ''
-    ).trim();
+    ).trim().toLowerCase();
+
+    const page = Math.max(
+      1,
+      Number.parseInt(req.query.page, 10) || 1
+    );
+
+    const limit = Math.min(
+      100,
+      Math.max(
+        1,
+        Number.parseInt(req.query.limit, 10) || 50
+      )
+    );
+
+    const offset = (page - 1) * limit;
+
+    const allowedStatuses = [
+      'pending',
+      'under_review',
+      'verified',
+      'approved',
+      'rejected',
+    ];
+
+    if (status && !allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid KYC status filter.',
+      });
+    }
 
     const values = [];
     let whereClause = '';
 
     if (status) {
       values.push(status);
-      whereClause = 'WHERE k.verification_status = $1';
+      whereClause = 'WHERE LOWER(k.verification_status) = $1';
     }
+
+    const countResult = await pool.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM kyc_records k
+      INNER JOIN users u ON u.id = k.user_id
+      ${whereClause}
+      `,
+      values
+    );
+
+    const total = countResult.rows[0].total;
+
+    const queryValues = [
+      ...values,
+      limit,
+      offset,
+    ];
 
     const result = await pool.query(
       `
@@ -447,7 +494,6 @@ const getKycRecords = async (req, res) => {
         k.id,
         k.user_id,
 
-        -- CUSTOMER PROFILE
         u.full_name,
         u.email,
         u.phone,
@@ -457,10 +503,11 @@ const getKycRecords = async (req, res) => {
         u.lga,
         u.country,
         u.kyc_tier,
+        u.kyc_status,
         u.is_verified,
 
-        -- TIER 1: SELECTED BVN OR NIN
         k.tier1_method,
+
         k.bvn,
         k.bvn_verification_status,
         u.bvn_verified,
@@ -475,7 +522,6 @@ const getKycRecords = async (req, res) => {
         k.nin_rejection_reason,
         k.nin_provider_validation_result,
 
-        -- TIER 2: IDENTITY DOCUMENT
         k.document_type,
         k.document_number,
         k.id_verification_status,
@@ -483,16 +529,18 @@ const getKycRecords = async (req, res) => {
         k.id_verified_at,
         k.id_rejection_reason,
 
-        (k.tier_2_document_front_public_id IS NOT NULL)
-          AS has_tier2_document_front,
+        (
+          k.tier_2_document_front_public_id IS NOT NULL
+        ) AS has_tier2_document_front,
 
-        (k.tier_2_document_back_public_id IS NOT NULL)
-          AS has_tier2_document_back,
+        (
+          k.tier_2_document_back_public_id IS NOT NULL
+        ) AS has_tier2_document_back,
 
-        (k.tier_2_selfie_public_id IS NOT NULL)
-          AS has_tier2_selfie,
+        (
+          k.tier_2_selfie_public_id IS NOT NULL
+        ) AS has_tier2_selfie,
 
-        -- TIER 3: PROOF OF ADDRESS
         k.tier_3_method,
         k.tier_3_document_type,
         k.employment_status,
@@ -504,16 +552,16 @@ const getKycRecords = async (req, res) => {
         k.tier_3_verified_at,
         k.tier_3_rejection_reason,
 
-        (k.tier_3_document_public_id IS NOT NULL)
-          AS has_tier3_document,
+        (
+          k.tier_3_document_public_id IS NOT NULL
+        ) AS has_tier3_document,
 
-        (k.tier_3_selfie_public_id IS NOT NULL)
-          AS has_tier3_selfie,
+        (
+          k.tier_3_selfie_public_id IS NOT NULL
+        ) AS has_tier3_selfie,
 
-        -- LIVENESS
         k.liveness_status,
 
-        -- OVERALL STATUS
         k.verification_status,
         k.rejection_reason,
 
@@ -527,16 +575,26 @@ const getKycRecords = async (req, res) => {
 
       ${whereClause}
 
-      ORDER BY k.created_at DESC
+      ORDER BY k.created_at DESC, k.id DESC
 
-      LIMIT 200
+      LIMIT $${queryValues.length - 1}
+      OFFSET $${queryValues.length}
       `,
-      values
+      queryValues
     );
 
     return res.status(200).json({
       success: true,
       kyc_records: result.rows,
+
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit),
+        has_next_page: offset + result.rows.length < total,
+        has_previous_page: page > 1,
+      },
     });
 
   } catch (error) {
@@ -551,8 +609,6 @@ const getKycRecords = async (req, res) => {
     });
   }
 };
-
-
 // ============================================================
 // KYC DECISION HELPERS
 // ============================================================
@@ -595,12 +651,11 @@ const KYC_TYPES = {
 // ============================================================
 // UPDATE OVERALL KYC STATE
 // ============================================================
-
 const refreshOverallKycState = async (
   client,
   userId
 ) => {
-  const result = await client.query(
+  const userResult = await client.query(
     `
     SELECT
       bvn_verified,
@@ -614,21 +669,21 @@ const refreshOverallKycState = async (
     [userId]
   );
 
-  if (result.rows.length === 0) {
+  if (!userResult.rows.length) {
     throw new Error('User not found');
   }
 
-  const user = result.rows[0];
+  const user = userResult.rows[0];
+
   const bvnVerified = user.bvn_verified === true;
   const ninVerified = user.nin_verified === true;
-  const tier1Verified = bvnVerified || ninVerified;
 
-  // Tier 2 specifically requires BVN plus an approved identity document.
-  // NIN alone is sufficient for Tier 1, but never substitutes for BVN at Tier 2.
+  const tier1Verified =
+    bvnVerified || ninVerified;
+
   const tier2Verified =
     bvnVerified && user.id_verified === true;
 
-  // Tier 3 cannot be counted unless Tier 2 has already been completed.
   const tier3Verified =
     tier2Verified && user.tier_3_verified === true;
 
@@ -640,33 +695,64 @@ const refreshOverallKycState = async (
         ? 1
         : 0;
 
-  // Tier 1 is sufficient for basic account verification.
-  const accountVerified = tier1Verified;
-
-  // A base account is rejected only when both available Tier 1 methods
-  // have been rejected and neither method has an approval.
-  const rejectedResult = await client.query(
+  // Read the latest selected Tier 1 method.
+  const latestTier1 = await client.query(
     `
     SELECT
-      BOOL_OR(bvn_verification_status = 'rejected') AS bvn_rejected,
-      BOOL_OR(nin_verification_status = 'rejected') AS nin_rejected
+      tier1_method,
+      bvn,
+      nin,
+      bvn_verification_status,
+      nin_verification_status
     FROM kyc_records
     WHERE user_id = $1
+      AND (
+        bvn IS NOT NULL
+        OR nin IS NOT NULL
+      )
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
     `,
     [userId]
   );
 
-  const attempts = rejectedResult.rows[0] || {};
-  const tier1Rejected =
-    !tier1Verified &&
-    attempts.bvn_rejected === true &&
-    attempts.nin_rejected === true;
+  const selectedRecord =
+    latestTier1.rows[0] || {};
+
+  let selectedMethod = String(
+    selectedRecord.tier1_method || ''
+  ).trim().toUpperCase();
+
+  // Legacy fallback: infer the method only when exactly
+  // one identity number exists on the latest record.
+  if (!selectedMethod) {
+    if (selectedRecord.bvn && !selectedRecord.nin) {
+      selectedMethod = 'BVN';
+    } else if (
+      selectedRecord.nin &&
+      !selectedRecord.bvn
+    ) {
+      selectedMethod = 'NIN';
+    }
+  }
+
+  let selectedMethodRejected = false;
+
+  if (selectedMethod === 'BVN') {
+    selectedMethodRejected =
+      selectedRecord.bvn_verification_status === 'rejected';
+  } else if (selectedMethod === 'NIN') {
+    selectedMethodRejected =
+      selectedRecord.nin_verification_status === 'rejected';
+  }
 
   const overallStatus = tier1Verified
     ? 'verified'
-    : tier1Rejected
+    : selectedMethodRejected
       ? 'rejected'
       : 'pending';
+
+  const accountVerified = tier1Verified;
 
   await client.query(
     `
@@ -678,11 +764,14 @@ const refreshOverallKycState = async (
       updated_at = CURRENT_TIMESTAMP
     WHERE id = $4
     `,
-    [overallStatus, highestVerifiedTier, accountVerified, userId]
+    [
+      overallStatus,
+      highestVerifiedTier,
+      accountVerified,
+      userId,
+    ]
   );
 
-  // Do not overwrite a KYC submission's per-method verification_status
-  // with the user's overall account status. Those are separate concepts.
   return {
     overallStatus,
     highestVerifiedTier,
@@ -693,7 +782,6 @@ const refreshOverallKycState = async (
     tier3Verified,
   };
 };
-
 // ============================================================
 // ADMIN KYC DECISION
 // ============================================================
@@ -772,7 +860,47 @@ const processKycDecision = async (
 
     const record =
       recordResult.rows[0];
+// ----------------------------------------------------------
+// ENFORCE THE CUSTOMER'S SELECTED TIER 1 METHOD
+// ----------------------------------------------------------
 
+if (type === 'BVN' || type === 'NIN') {
+  let selectedMethod = String(
+    record.tier1_method || ''
+  ).trim().toUpperCase();
+
+  // Safe fallback for older records.
+  if (!selectedMethod) {
+    if (record.bvn && !record.nin) {
+      selectedMethod = 'BVN';
+    } else if (record.nin && !record.bvn) {
+      selectedMethod = 'NIN';
+    }
+  }
+
+  if (!selectedMethod) {
+    await client.query('ROLLBACK');
+
+    return res.status(409).json({
+      success: false,
+      code: 'TIER1_METHOD_UNCLEAR',
+      message:
+        'The selected Tier 1 verification method could not be established. Review the submission before making a decision.',
+    });
+  }
+
+  if (selectedMethod !== type) {
+    await client.query('ROLLBACK');
+
+    return res.status(409).json({
+      success: false,
+      code: 'TIER1_METHOD_MISMATCH',
+      message:
+        `This customer selected ${selectedMethod} for Tier 1. ${type} decisions are not permitted for this submission.`,
+      selected_method: selectedMethod,
+    });
+  }
+}
     const currentStatus =
       String(
         record[config.statusColumn] || ''
@@ -1744,7 +1872,7 @@ const getPrivateTier3Document = async (req, res) => {
         resource_type: record.resource_type,
         type: 'authenticated',
         expires_at: expiresAt,
-        attachment: true,
+        attachment: false,
       }
     );
 
