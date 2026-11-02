@@ -452,22 +452,7 @@ const updateUserStatus = async (req, res) => {
 
 const getKycRecords = async (req, res) => {
   try {
-    const status = String(
-      req.query.status ||
-      req.query.verification_status ||
-      ''
-    ).trim();
-
-    const values = [];
-    let whereClause = '';
-
-    if (status) {
-      values.push(status);
-      whereClause = `WHERE k.verification_status = $1`;
-    }
-
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       SELECT
         k.id,
         k.user_id,
@@ -481,12 +466,14 @@ const getKycRecords = async (req, res) => {
         u.lga,
         u.country,
         u.kyc_tier,
+        u.kyc_status,
         u.bvn_verified,
         u.nin_verified,
         u.id_verified,
         u.tier_3_verified,
         u.is_verified,
 
+        -- Tier 1: BVN or NIN
         k.bvn,
         k.bvn_verification_status,
         k.bvn_verified_at,
@@ -500,9 +487,6 @@ const getKycRecords = async (req, res) => {
         k.nin_provider_validation_result,
 
         CASE
-          WHEN LOWER(COALESCE(k.dojah_verification_type, ''))
-            IN ('bvn', 'nin')
-            THEN LOWER(k.dojah_verification_type)
           WHEN NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NOT NULL
             AND NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NULL
             THEN 'bvn'
@@ -512,21 +496,50 @@ const getKycRecords = async (req, res) => {
           ELSE NULL
         END AS tier1_method,
 
-        k.document_type,
-        k.document_number,
-        k.id_verification_status,
-        k.id_verified_at,
-        k.id_rejection_reason,
+        -- Tier 2: retrieve the actual identity submission.
+        COALESCE(t2.id, k.id) AS tier2_record_id,
 
-        (k.tier_2_document_front_public_id IS NOT NULL)
-          AS has_tier2_document_front,
+        COALESCE(
+          NULLIF(BTRIM(t2.document_type), ''),
+          NULLIF(BTRIM(k.document_type), '')
+        ) AS document_type,
 
-        (k.tier_2_document_back_public_id IS NOT NULL)
-          AS has_tier2_document_back,
+        COALESCE(
+          NULLIF(BTRIM(t2.document_number), ''),
+          NULLIF(BTRIM(k.document_number), '')
+        ) AS document_number,
 
-        (k.tier_2_selfie_public_id IS NOT NULL)
-          AS has_tier2_selfie,
+        CASE
+          WHEN u.id_verified = TRUE THEN 'verified'
+          ELSE COALESCE(
+            NULLIF(t2.id_verification_status, ''),
+            NULLIF(k.id_verification_status, ''),
+            'not_verified'
+          )
+        END AS id_verification_status,
 
+        COALESCE(t2.id_verified_at, k.id_verified_at)
+          AS id_verified_at,
+
+        COALESCE(t2.id_rejection_reason, k.id_rejection_reason)
+          AS id_rejection_reason,
+
+        (
+          COALESCE(t2.tier_2_document_front_public_id,
+                   k.tier_2_document_front_public_id) IS NOT NULL
+        ) AS has_tier2_document_front,
+
+        (
+          COALESCE(t2.tier_2_document_back_public_id,
+                   k.tier_2_document_back_public_id) IS NOT NULL
+        ) AS has_tier2_document_back,
+
+        (
+          COALESCE(t2.tier_2_selfie_public_id,
+                   k.tier_2_selfie_public_id) IS NOT NULL
+        ) AS has_tier2_selfie,
+
+        -- Tier 3: keep its own submission data.
         k.tier_3_method,
         k.tier_3_document_type,
         k.employment_status,
@@ -539,7 +552,14 @@ const getKycRecords = async (req, res) => {
         (k.tier_3_selfie_public_id IS NOT NULL)
           AS has_tier3_selfie,
 
-        k.tier_3_verification_status,
+        CASE
+          WHEN u.tier_3_verified = TRUE THEN 'verified'
+          ELSE COALESCE(
+            NULLIF(k.tier_3_verification_status, ''),
+            'not_verified'
+          )
+        END AS tier_3_verification_status,
+
         k.tier_3_verified_at,
         k.tier_3_rejection_reason,
 
@@ -553,15 +573,37 @@ const getKycRecords = async (req, res) => {
         k.updated_at
 
       FROM kyc_records k
-      INNER JOIN users u ON u.id = k.user_id
+      INNER JOIN users u
+        ON u.id = k.user_id
 
-      ${whereClause}
+      LEFT JOIN LATERAL (
+        SELECT
+          t.id,
+          t.document_type,
+          t.document_number,
+          t.id_verification_status,
+          t.id_verified_at,
+          t.id_rejection_reason,
+          t.tier_2_document_front_public_id,
+          t.tier_2_document_back_public_id,
+          t.tier_2_selfie_public_id
+        FROM kyc_records t
+        WHERE t.user_id = k.user_id
+          AND (
+            NULLIF(BTRIM(COALESCE(t.document_type, '')), '') IS NOT NULL
+            OR NULLIF(BTRIM(COALESCE(t.document_number, '')), '') IS NOT NULL
+            OR t.tier_2_document_front_public_id IS NOT NULL
+            OR t.tier_2_document_back_public_id IS NOT NULL
+            OR t.tier_2_selfie_public_id IS NOT NULL
+          )
+        ORDER BY t.updated_at DESC NULLS LAST,
+                 t.created_at DESC
+        LIMIT 1
+      ) t2 ON TRUE
 
       ORDER BY k.created_at DESC
       LIMIT 200
-      `,
-      values
-    );
+    `);
 
     return res.status(200).json({
       success: true,
