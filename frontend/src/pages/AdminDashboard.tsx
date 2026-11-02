@@ -605,6 +605,15 @@ const statusLabel = (
     );
 };
 
+// KYC status helpers reuse the dashboard's existing status formatting.
+const displayStatus = (status?: string): string =>
+  statusLabel(status);
+
+const statusColorForKyc = (
+  status?: string
+): 'default' | 'success' | 'warning' | 'error' | 'info' =>
+  statusColor(status);
+
 const customerName = (
   customer?: Customer | Transaction
 ): string => {
