@@ -16,6 +16,9 @@ import {
   CircularProgress,
   Collapse,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
   Drawer,
   Grid,
   IconButton,
@@ -218,6 +221,15 @@ interface KycRecord {
   fullName?: string;
   email?: string;
   phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  lga?: string;
+  country?: string;
+  employment_status?: string;
+  occupation?: string;
+  annual_income_range?: string;
+  tier_3_document_type?: string;
   kyc_status?: string;
   kycStatus?: string;
   verification_type?: string;
@@ -867,6 +879,10 @@ const [revenueApiSummary, setRevenueApiSummary] =
     useState('ALL');
  const [selectedKyc, setSelectedKyc] =
   useState<KycRecord | null>(null);
+ const [privateDocumentUrl, setPrivateDocumentUrl] = useState('');
+ const [privateDocumentTitle, setPrivateDocumentTitle] = useState('');
+ const [privateDocumentLoading, setPrivateDocumentLoading] = useState(false);
+ const [privateDocumentOpen, setPrivateDocumentOpen] = useState(false);
 
 const [kycRejectionReason, setKycRejectionReason] =
   useState('');
@@ -3326,8 +3342,19 @@ const renderKyc = () => {
     record: KycRecord,
     document: 'id_front' | 'id_back' | 'tier2_selfie' | 'proof_of_address' | 'tier3_selfie'
   ) => {
+    const titles: Record<string, string> = {
+      id_front: 'Tier 2 identity document — front',
+      id_back: 'Tier 2 identity document — back',
+      tier2_selfie: 'Tier 2 selfie',
+      proof_of_address: 'Tier 3 proof of address',
+      tier3_selfie: 'Tier 3 selfie',
+    };
     try {
       setError('');
+      setPrivateDocumentLoading(true);
+      setPrivateDocumentUrl('');
+      setPrivateDocumentTitle(titles[document] || 'KYC document');
+      setPrivateDocumentOpen(true);
       const response = await api.get(
         `/admin/kyc/${encodeURIComponent(record.id)}/private-document/${document}`
       );
@@ -3335,9 +3362,12 @@ const renderKyc = () => {
       if (typeof url !== 'string' || !/^https:\/\//i.test(url)) {
         throw new Error('The secure document link was not returned by the server.');
       }
-      window.open(url, '_blank', 'noopener,noreferrer');
+      setPrivateDocumentUrl(url);
     } catch (documentError) {
+      setPrivateDocumentOpen(false);
       setError(getErrorMessage(documentError));
+    } finally {
+      setPrivateDocumentLoading(false);
     }
   };
 
@@ -3654,6 +3684,8 @@ const renderKyc = () => {
                   onClick={() => {
                     setSelectedKyc(null);
                     setKycRejectionReason('');
+                    setPrivateDocumentOpen(false);
+                    setPrivateDocumentUrl('');
                   }}
                   sx={{ textTransform: 'none' }}
                 >
@@ -3714,6 +3746,26 @@ const renderKyc = () => {
                     value: displaySubmittedValue(selectedKyc.document_number),
                   },
                   {
+                    label: 'Address',
+                    value: [selectedKyc.address, selectedKyc.city, selectedKyc.lga, selectedKyc.state, selectedKyc.country].filter(Boolean).join(', '),
+                  },
+                  {
+                    label: 'Tier 3 proof document type',
+                    value: selectedKyc.tier_3_document_type || selectedKyc.tier_3_method,
+                  },
+                  {
+                    label: 'Employment status',
+                    value: selectedKyc.employment_status,
+                  },
+                  {
+                    label: 'Occupation',
+                    value: selectedKyc.occupation,
+                  },
+                  {
+                    label: 'Annual income range',
+                    value: selectedKyc.annual_income_range,
+                  },
+                  {
                     label: 'Submitted',
                     value: displayDate(selectedKyc.created_at),
                   },
@@ -3751,51 +3803,36 @@ const renderKyc = () => {
                 ))}
               </Box>
 
-              {/* Private KYC evidence: links are short-lived and admin-authenticated. */}
+              {/* Private KYC evidence: fetched only after an authorised admin requests a preview. */}
               <Box>
-                <Typography
-                  sx={{ mb: 1.5, fontWeight: 800, color: BRAND.dark }}
-                >
+                <Typography sx={{ mb: 1.5, fontWeight: 800, color: BRAND.dark }}>
                   Submitted documents
                 </Typography>
                 <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                  {selectedKyc.has_tier2_document_front && (
-                    <Button size="small" variant="outlined" onClick={() => openPrivateDocument(selectedKyc, 'id_front')}>
-                      View ID front
+                  {[
+                    { key: 'id_front' as const, label: 'View ID front', available: selectedKyc.has_tier2_document_front },
+                    { key: 'id_back' as const, label: 'View ID back', available: selectedKyc.has_tier2_document_back },
+                    { key: 'tier2_selfie' as const, label: 'View Tier 2 selfie', available: selectedKyc.has_tier2_selfie },
+                    { key: 'proof_of_address' as const, label: 'View proof of address', available: selectedKyc.has_tier3_document },
+                    { key: 'tier3_selfie' as const, label: 'View Tier 3 selfie', available: selectedKyc.has_tier3_selfie },
+                  ].filter((item) => item.available === true).map((item) => (
+                    <Button key={item.key} size="small" variant="outlined"
+                      onClick={() => openPrivateDocument(selectedKyc, item.key)}>
+                      {item.label}
                     </Button>
-                  )}
-                  {selectedKyc.has_tier2_document_back && (
-                    <Button size="small" variant="outlined" onClick={() => openPrivateDocument(selectedKyc, 'id_back')}>
-                      View ID back
-                    </Button>
-                  )}
-                  {selectedKyc.has_tier2_selfie && (
-                    <Button size="small" variant="outlined" onClick={() => openPrivateDocument(selectedKyc, 'tier2_selfie')}>
-                      View Tier 2 selfie
-                    </Button>
-                  )}
-                  {selectedKyc.has_tier3_document && (
-                    <Button size="small" variant="outlined" onClick={() => openPrivateDocument(selectedKyc, 'proof_of_address')}>
-                      View proof of address
-                    </Button>
-                  )}
-                  {selectedKyc.has_tier3_selfie && (
-                    <Button size="small" variant="outlined" onClick={() => openPrivateDocument(selectedKyc, 'tier3_selfie')}>
-                      View Tier 3 selfie
-                    </Button>
-                  )}
+                  ))}
                   {!selectedKyc.has_tier2_document_front &&
                     !selectedKyc.has_tier2_document_back &&
                     !selectedKyc.has_tier2_selfie &&
                     !selectedKyc.has_tier3_document &&
                     !selectedKyc.has_tier3_selfie && (
                       <Typography variant="body2" sx={{ color: BRAND.muted }}>
-                        No submitted documents are available for this customer.
+                        No private document references were returned for this KYC record. NIN number-only submissions do not include Tier 2 ID images.
                       </Typography>
                     )}
                 </Stack>
                 <Alert severity="info" sx={{ mt: 1.5 }}>
-                  Documents open through a secure, audited admin-only link that expires automatically.
+                  Document previews are retrieved from the authenticated admin endpoint and displayed here. Temporary links expire automatically.
                 </Alert>
               </Box>
 
@@ -4015,6 +4052,37 @@ const renderKyc = () => {
           </CardContent>
         </Card>
       )}
+      <Dialog
+        open={privateDocumentOpen}
+        onClose={() => { setPrivateDocumentOpen(false); setPrivateDocumentUrl(''); }}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle sx={{ fontWeight: 800, pr: 7 }}>
+          {privateDocumentTitle}
+          <IconButton aria-label="Close document preview" onClick={() => { setPrivateDocumentOpen(false); setPrivateDocumentUrl(''); }}
+            sx={{ position: 'absolute', right: 12, top: 10 }}>
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ minHeight: { xs: 360, md: 620 }, p: 1 }}>
+          {privateDocumentLoading && (
+            <Stack alignItems="center" justifyContent="center" sx={{ minHeight: 320 }} spacing={1}>
+              <CircularProgress />
+              <Typography variant="body2">Loading secure document…</Typography>
+            </Stack>
+          )}
+          {!privateDocumentLoading && privateDocumentUrl && (
+            /\.pdf(?:[?#]|$)/i.test(privateDocumentUrl) ? (
+              <Box component="iframe" title={privateDocumentTitle} src={privateDocumentUrl}
+                sx={{ width: '100%', height: { xs: 480, md: 650 }, border: 0 }} />
+            ) : (
+              <Box component="img" src={privateDocumentUrl} alt={privateDocumentTitle}
+                sx={{ display: 'block', maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', mx: 'auto' }} />
+            )
+          )}
+        </DialogContent>
+      </Dialog>
     </Stack>
   );
 };
