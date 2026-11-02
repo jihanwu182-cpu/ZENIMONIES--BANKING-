@@ -473,7 +473,20 @@ const getKycRecords = async (req, res) => {
         u.tier_3_verified,
         u.is_verified,
 
-        -- Tier 1: BVN or NIN
+        -- Tier 1: use the explicitly selected method first.
+        COALESCE(
+          NULLIF(LOWER(BTRIM(k.tier1_method)), ''),
+          CASE
+            WHEN NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NOT NULL
+              AND NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NULL
+              THEN 'bvn'
+            WHEN NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NOT NULL
+              AND NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NULL
+              THEN 'nin'
+            ELSE NULL
+          END
+        ) AS tier1_method,
+
         k.bvn,
         k.bvn_verification_status,
         k.bvn_verified_at,
@@ -486,17 +499,7 @@ const getKycRecords = async (req, res) => {
         k.nin_rejection_reason,
         k.nin_provider_validation_result,
 
-        CASE
-          WHEN NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NOT NULL
-            AND NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NULL
-            THEN 'bvn'
-          WHEN NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NOT NULL
-            AND NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NULL
-            THEN 'nin'
-          ELSE NULL
-        END AS tier1_method,
-
-        -- Tier 2: retrieve the actual identity submission.
+        -- Tier 2: identity submission.
         COALESCE(t2.id, k.id) AS tier2_record_id,
 
         COALESCE(
@@ -518,64 +521,130 @@ const getKycRecords = async (req, res) => {
           )
         END AS id_verification_status,
 
-        COALESCE(t2.id_verified_at, k.id_verified_at)
-          AS id_verified_at,
+        COALESCE(
+          t2.id_verified_at,
+          k.id_verified_at
+        ) AS id_verified_at,
 
-        COALESCE(t2.id_rejection_reason, k.id_rejection_reason)
-          AS id_rejection_reason,
+        COALESCE(
+          t2.id_rejection_reason,
+          k.id_rejection_reason
+        ) AS id_rejection_reason,
 
         (
-          COALESCE(t2.tier_2_document_front_public_id,
-                   k.tier_2_document_front_public_id) IS NOT NULL
+          COALESCE(
+            t2.tier_2_document_front_public_id,
+            k.tier_2_document_front_public_id
+          ) IS NOT NULL
         ) AS has_tier2_document_front,
 
         (
-          COALESCE(t2.tier_2_document_back_public_id,
-                   k.tier_2_document_back_public_id) IS NOT NULL
+          COALESCE(
+            t2.tier_2_document_back_public_id,
+            k.tier_2_document_back_public_id
+          ) IS NOT NULL
         ) AS has_tier2_document_back,
 
         (
-          COALESCE(t2.tier_2_selfie_public_id,
-                   k.tier_2_selfie_public_id) IS NOT NULL
+          COALESCE(
+            t2.tier_2_selfie_public_id,
+            k.tier_2_selfie_public_id
+          ) IS NOT NULL
         ) AS has_tier2_selfie,
 
-        -- Tier 3: keep its own submission data.
-        k.tier_3_method,
-        k.tier_3_document_type,
-        k.employment_status,
-        k.occupation,
-        k.annual_income_range,
+        -- Tier 3: retrieve its actual submission record.
+        COALESCE(
+          NULLIF(BTRIM(t3.tier_3_method), ''),
+          NULLIF(BTRIM(k.tier_3_method), '')
+        ) AS tier_3_method,
 
-        (k.tier_3_document_public_id IS NOT NULL)
-          AS has_tier3_document,
+        COALESCE(
+          NULLIF(BTRIM(t3.tier_3_document_type), ''),
+          NULLIF(BTRIM(k.tier_3_document_type), '')
+        ) AS tier_3_document_type,
 
-        (k.tier_3_selfie_public_id IS NOT NULL)
-          AS has_tier3_selfie,
+        COALESCE(
+          NULLIF(BTRIM(t3.employment_status), ''),
+          NULLIF(BTRIM(k.employment_status), '')
+        ) AS employment_status,
+
+        COALESCE(
+          NULLIF(BTRIM(t3.occupation), ''),
+          NULLIF(BTRIM(k.occupation), '')
+        ) AS occupation,
+
+        COALESCE(
+          NULLIF(BTRIM(t3.annual_income_range), ''),
+          NULLIF(BTRIM(k.annual_income_range), '')
+        ) AS annual_income_range,
+
+        (
+          COALESCE(
+            t3.tier_3_document_public_id,
+            k.tier_3_document_public_id
+          ) IS NOT NULL
+        ) AS has_tier3_document,
+
+        (
+          COALESCE(
+            t3.tier_3_selfie_public_id,
+            k.tier_3_selfie_public_id
+          ) IS NOT NULL
+        ) AS has_tier3_selfie,
 
         CASE
           WHEN u.tier_3_verified = TRUE THEN 'verified'
           ELSE COALESCE(
+            NULLIF(t3.tier_3_verification_status, ''),
             NULLIF(k.tier_3_verification_status, ''),
             'not_verified'
           )
         END AS tier_3_verification_status,
 
-        k.tier_3_verified_at,
-        k.tier_3_rejection_reason,
+        COALESCE(
+          t3.tier_3_verified_at,
+          k.tier_3_verified_at
+        ) AS tier_3_verified_at,
 
-        k.liveness_status,
-        k.liveness_score,
-        k.selfie_match_score,
+        COALESCE(
+          t3.tier_3_rejection_reason,
+          k.tier_3_rejection_reason
+        ) AS tier_3_rejection_reason,
 
-        k.verification_status,
-        k.rejection_reason,
+        COALESCE(
+          NULLIF(t3.liveness_status, ''),
+          NULLIF(k.liveness_status, '')
+        ) AS liveness_status,
+
+        COALESCE(
+          t3.liveness_score,
+          k.liveness_score
+        ) AS liveness_score,
+
+        COALESCE(
+          t3.selfie_match_score,
+          k.selfie_match_score
+        ) AS selfie_match_score,
+
+        COALESCE(
+          NULLIF(t3.verification_status, ''),
+          NULLIF(k.verification_status, '')
+        ) AS verification_status,
+
+        COALESCE(
+          t3.rejection_reason,
+          k.rejection_reason
+        ) AS rejection_reason,
+
         k.created_at,
         k.updated_at
 
       FROM kyc_records k
+
       INNER JOIN users u
         ON u.id = k.user_id
 
+      -- Find the latest record containing Tier 2 identity evidence.
       LEFT JOIN LATERAL (
         SELECT
           t.id,
@@ -587,7 +656,9 @@ const getKycRecords = async (req, res) => {
           t.tier_2_document_front_public_id,
           t.tier_2_document_back_public_id,
           t.tier_2_selfie_public_id
+
         FROM kyc_records t
+
         WHERE t.user_id = k.user_id
           AND (
             NULLIF(BTRIM(COALESCE(t.document_type, '')), '') IS NOT NULL
@@ -596,12 +667,58 @@ const getKycRecords = async (req, res) => {
             OR t.tier_2_document_back_public_id IS NOT NULL
             OR t.tier_2_selfie_public_id IS NOT NULL
           )
-        ORDER BY t.updated_at DESC NULLS LAST,
-                 t.created_at DESC
+
+        ORDER BY
+          t.updated_at DESC NULLS LAST,
+          t.created_at DESC
+
         LIMIT 1
       ) t2 ON TRUE
 
-      ORDER BY k.created_at DESC
+      -- Find the latest record containing Tier 3 submission evidence.
+      LEFT JOIN LATERAL (
+        SELECT
+          t.id,
+          t.tier_3_method,
+          t.tier_3_document_type,
+          t.employment_status,
+          t.occupation,
+          t.annual_income_range,
+          t.tier_3_document_public_id,
+          t.tier_3_selfie_public_id,
+          t.tier_3_verification_status,
+          t.tier_3_verified_at,
+          t.tier_3_rejection_reason,
+          t.liveness_status,
+          t.liveness_score,
+          t.selfie_match_score,
+          t.verification_status,
+          t.rejection_reason
+
+        FROM kyc_records t
+
+        WHERE t.user_id = k.user_id
+          AND (
+            NULLIF(BTRIM(COALESCE(t.tier_3_method, '')), '') IS NOT NULL
+            OR NULLIF(BTRIM(COALESCE(t.tier_3_document_type, '')), '') IS NOT NULL
+            OR NULLIF(BTRIM(COALESCE(t.employment_status, '')), '') IS NOT NULL
+            OR NULLIF(BTRIM(COALESCE(t.occupation, '')), '') IS NOT NULL
+            OR NULLIF(BTRIM(COALESCE(t.annual_income_range, '')), '') IS NOT NULL
+            OR t.tier_3_document_public_id IS NOT NULL
+            OR t.tier_3_selfie_public_id IS NOT NULL
+            OR NULLIF(BTRIM(COALESCE(t.tier_3_verification_status, '')), '') IS NOT NULL
+          )
+
+        ORDER BY
+          t.updated_at DESC NULLS LAST,
+          t.created_at DESC
+
+        LIMIT 1
+      ) t3 ON TRUE
+
+      ORDER BY
+        k.created_at DESC
+
       LIMIT 200
     `);
 
