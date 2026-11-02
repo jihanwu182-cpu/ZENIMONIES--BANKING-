@@ -215,6 +215,7 @@ interface Account {
 
 interface KycRecord {
   id: string;
+  tier2_record_id?: string;
   user_id?: string;
   userId?: string;
   full_name?: string;
@@ -922,38 +923,70 @@ const [kycActionLoading, setKycActionLoading] =
   /* ==========================================================
      LOAD DASHBOARD
      ========================================================== */
-   const loadDashboard = useCallback(async () => {
+   
+const loadDashboard = useCallback(async () => {
   const response = await api.get('/admin/dashboard');
+
   const data =
-    response.data?.dashboard || response.data || {};
+    response.data?.dashboard ||
+    response.data ||
+    {};
+
   setDashboard({
     ...data,
-    totalUsers: data?.totalUsers ?? data?.users?.total,
-    activeUsers: data?.activeUsers ?? data?.users?.active,
+
+    totalUsers:
+      data?.totalUsers ?? data?.users?.total,
+
+    activeUsers:
+      data?.activeUsers ?? data?.users?.active,
+
     suspendedUsers:
       data?.suspendedUsers ?? data?.users?.suspended,
+
+    // Map backend nested KYC statistics to the fields
+    // used by the Overview cards.
+    pendingKyc:
+      data?.pendingKyc ?? data?.kyc?.pending ?? 0,
+
+    approvedKyc:
+      data?.approvedKyc ?? data?.kyc?.approved ?? 0,
+
+    rejectedKyc:
+      data?.rejectedKyc ?? data?.kyc?.rejected ?? 0,
+
+    pendingTransactions:
+      data?.pendingTransactions ?? data?.transactions?.pending ?? 0,
+
+    failedTransactions:
+      data?.failedTransactions ?? data?.transactions?.failed ?? 0,
   });
-  // Load verified revenue separately so a revenue API
-  // failure does not stop the main dashboard.
+
   try {
     const revenueResponse = await api.get(
       '/admin/revenue/summary'
     );
+
     const rows = Array.isArray(revenueResponse.data?.data)
       ? revenueResponse.data.data
       : [];
+
     const ngnSummary = rows.find(
       (row: RevenueSummary) => row.currency === 'NGN'
     );
+
     setRevenueApiSummary(ngnSummary || null);
+
   } catch (revenueError) {
     console.error(
       'Unable to load revenue summary:',
       revenueError
     );
+
     setRevenueApiSummary(null);
   }
 }, []);
+
   
   /* ==========================================================
      LOAD CUSTOMERS
@@ -1090,7 +1123,7 @@ const handleKycDecision = async (
         : stage === 'nin'
         ? `/admin/kyc/${record.id}/nin/${decision}`
         : stage === 'tier2'
-        ? `/admin/kyc/${record.id}/tier2/${decision}`
+        ? `/admin/kyc/${record.tier2_record_id || record.id}/tier2/${decision}`
         : `/admin/kyc/${record.id}/tier3/${decision}`;
 
     await api.post(
