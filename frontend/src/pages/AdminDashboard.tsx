@@ -3298,6 +3298,28 @@ const revenueChartData: Array<{
      KYC
      ============================================================ */
 
+// Tier 1 must show only the verification route selected by the customer.
+// Prefer the explicit backend field, then support older records by inferring
+// the route only when exactly one identifier is present.
+const getTier1Method = (
+  record: KycRecord
+): 'bvn' | 'nin' | null => {
+  const explicit = String(record.tier1_method || '').trim().toLowerCase();
+
+  if (explicit === 'bvn' || explicit === 'nin') {
+    return explicit;
+  }
+
+  const hasBvn = Boolean(String(record.bvn || '').trim());
+  const hasNin = Boolean(String(record.nin || '').trim());
+
+  if (hasBvn && !hasNin) return 'bvn';
+  if (hasNin && !hasBvn) return 'nin';
+
+  // Never guess when both or neither identifier is present.
+  return null;
+};
+
 const renderKyc = () => {
   const filteredKycRecords = kycRecords.filter((record) => {
     const filter = String(kycFilter || 'all').toLowerCase();
