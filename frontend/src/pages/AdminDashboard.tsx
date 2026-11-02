@@ -486,7 +486,7 @@ const formatMoneyOrPending = (
   return formatMoney(value, currency);
 };
 
-const getRevenueStatusLabel = (record: RevenueRecord): string => {
+const getRevenueStatusLabel = (record: { accounting_status?: string; status?: string }): string => {
   const accountingStatus = String(
     record.accounting_status || record.status || ''
   ).toLowerCase();
@@ -613,6 +613,14 @@ const statusColorForKyc = (
   status?: string
 ): 'default' | 'success' | 'warning' | 'error' | 'info' =>
   statusColor(status);
+
+// Highest verification tier actually confirmed by backend flags.
+const getVerifiedTier = (record: KycRecord): number => {
+  if (record.tier_3_verified === true) return 3;
+  if (record.bvn_verified === true && record.id_verified === true) return 2;
+  if (record.bvn_verified === true || record.nin_verified === true) return 1;
+  return 0;
+};
 
 const customerName = (
   customer?: Customer | Transaction
@@ -1061,6 +1069,56 @@ const loadKyc = useCallback(async () => {
 }, []);
 
   
+const openPrivateDocument = async (
+  record: KycRecord,
+  documentKey: 'id_front' | 'id_back' | 'tier2_selfie' | 'proof_of_address' | 'tier3_selfie'
+) => {
+  const titles: Record<typeof documentKey, string> = {
+    id_front: 'Identity document · Front',
+    id_back: 'Identity document · Back',
+    tier2_selfie: 'Tier 2 selfie',
+    proof_of_address: 'Proof of address',
+    tier3_selfie: 'Tier 3 selfie',
+  };
+
+  setPrivateDocumentTitle(titles[documentKey]);
+  setPrivateDocumentUrl('');
+  setPrivateDocumentLoading(true);
+  setPrivateDocumentOpen(true);
+  setError('');
+
+  try {
+    // Tier 2 evidence can live on a separate KYC row for the same user.
+    // The backend private-document route expects that exact row ID.
+    const documentRecordId =
+      documentKey === 'id_front' ||
+      documentKey === 'id_back' ||
+      documentKey === 'tier2_selfie'
+        ? (record.tier2_record_id || record.id)
+        : record.id;
+
+    const response = await api.get(
+      `/admin/kyc/${encodeURIComponent(documentRecordId)}/private-document/${documentKey}`
+    );
+    const url = response.data?.url || response.data?.document?.url;
+
+    if (typeof url !== 'string' || !/^https:\/\//i.test(url)) {
+      throw new Error('The secure document endpoint did not return a valid preview link.');
+    }
+
+    setPrivateDocumentUrl(url);
+  } catch (error) {
+    setPrivateDocumentOpen(false);
+    setError(
+      error instanceof Error
+        ? error.message
+        : 'Unable to open the private KYC document.'
+    );
+  } finally {
+    setPrivateDocumentLoading(false);
+  }
+};
+
 const handleKycDecision = async (
   record: KycRecord,
   stage: 'bvn' | 'nin' | 'tier2' | 'tier3',
@@ -2436,7 +2494,7 @@ const revenueChartData: Array<{
 
           <Button
             fullWidth
-            onClick={() => selectSection('pendingTransactions')}
+            onClick={() => selectSection('pending-transactions')}
 
             endIcon={<ChevronRight />}
             sx={{
@@ -8689,6 +8747,12 @@ const renderAuditLogs =
    COMPLIANCE
    ============================================================ */
 
+const openKycReview = (record: KycRecord) => {
+  setSelectedKyc(record);
+  setKycFilter('ALL');
+  selectSection('kyc');
+};
+
 const renderCompliance =
   () => (
     <Stack spacing={2.25}>
@@ -11429,7 +11493,7 @@ const renderSettings = () => {
                 fontWeight: 700,
               }}
               onClick={() =>
-                setSuccessMessage(
+                setSuccess(
                   `${item.title} will be connected to the backend configuration module.`
                 )
               }
