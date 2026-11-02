@@ -40,17 +40,43 @@ const getDashboard = async (req, res) => {
         WHERE status IN ('suspended', 'blocked')
       `),
 
+      // Count users with any pending KYC stage.
+      // This includes customers whose overall user KYC status
+      // does not currently say pending.
       pool.query(`
-        SELECT COUNT(*)::int AS total
-        FROM users
-        WHERE kyc_status IN ('pending', 'under_review')
+        SELECT COUNT(DISTINCT u.id)::int AS total
+        FROM users u
+        WHERE
+          u.kyc_status IN ('pending', 'under_review')
+          OR EXISTS (
+            SELECT 1
+            FROM kyc_records k
+            WHERE k.user_id = u.id
+              AND (
+                LOWER(COALESCE(k.verification_status, ''))
+                  IN ('pending', 'under_review')
+
+                OR LOWER(COALESCE(k.bvn_verification_status, ''))
+                  IN ('pending', 'under_review')
+
+                OR LOWER(COALESCE(k.nin_verification_status, ''))
+                  IN ('pending', 'under_review')
+
+                OR LOWER(COALESCE(k.id_verification_status, ''))
+                  IN ('pending', 'under_review')
+
+                OR LOWER(COALESCE(k.tier_3_verification_status, ''))
+                  IN ('pending', 'under_review')
+              )
+          )
       `),
 
       pool.query(`
         SELECT COUNT(*)::int AS total
         FROM users
         WHERE kyc_status = 'verified'
-     `),
+      `),
+
       pool.query(`
         SELECT COUNT(*)::int AS total
         FROM users
@@ -145,7 +171,6 @@ const getDashboard = async (req, res) => {
     });
   }
 };
-
 
 // ============================================================
 // GET USERS
@@ -424,69 +449,22 @@ const updateUserStatus = async (req, res) => {
 // GET KYC RECORDS
 // GET /api/admin/kyc
 // ============================================================
+
 const getKycRecords = async (req, res) => {
   try {
     const status = String(
       req.query.status ||
       req.query.verification_status ||
       ''
-    ).trim().toLowerCase();
-
-    const page = Math.max(
-      1,
-      Number.parseInt(req.query.page, 10) || 1
-    );
-
-    const limit = Math.min(
-      100,
-      Math.max(
-        1,
-        Number.parseInt(req.query.limit, 10) || 50
-      )
-    );
-
-    const offset = (page - 1) * limit;
-
-    const allowedStatuses = [
-      'pending',
-      'under_review',
-      'verified',
-      'approved',
-      'rejected',
-    ];
-
-    if (status && !allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid KYC status filter.',
-      });
-    }
+    ).trim();
 
     const values = [];
     let whereClause = '';
 
     if (status) {
       values.push(status);
-      whereClause = 'WHERE LOWER(k.verification_status) = $1';
+      whereClause = `WHERE k.verification_status = $1`;
     }
-
-    const countResult = await pool.query(
-      `
-      SELECT COUNT(*)::int AS total
-      FROM kyc_records k
-      INNER JOIN users u ON u.id = k.user_id
-      ${whereClause}
-      `,
-      values
-    );
-
-    const total = countResult.rows[0].total;
-
-    const queryValues = [
-      ...values,
-      limit,
-      offset,
-    ];
 
     const result = await pool.query(
       `
@@ -503,43 +481,51 @@ const getKycRecords = async (req, res) => {
         u.lga,
         u.country,
         u.kyc_tier,
-        u.kyc_status,
+        u.bvn_verified,
+        u.nin_verified,
+        u.id_verified,
+        u.tier_3_verified,
         u.is_verified,
-
-        k.tier1_method,
 
         k.bvn,
         k.bvn_verification_status,
-        u.bvn_verified,
         k.bvn_verified_at,
         k.bvn_rejection_reason,
         k.bvn_provider_validation_result,
 
         k.nin,
         k.nin_verification_status,
-        u.nin_verified,
         k.nin_verified_at,
         k.nin_rejection_reason,
         k.nin_provider_validation_result,
 
+        CASE
+          WHEN LOWER(COALESCE(k.dojah_verification_type, ''))
+            IN ('bvn', 'nin')
+            THEN LOWER(k.dojah_verification_type)
+          WHEN NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NOT NULL
+            AND NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NULL
+            THEN 'bvn'
+          WHEN NULLIF(BTRIM(COALESCE(k.nin, '')), '') IS NOT NULL
+            AND NULLIF(BTRIM(COALESCE(k.bvn, '')), '') IS NULL
+            THEN 'nin'
+          ELSE NULL
+        END AS tier1_method,
+
         k.document_type,
         k.document_number,
         k.id_verification_status,
-        u.id_verified,
         k.id_verified_at,
         k.id_rejection_reason,
 
-        (
-          k.tier_2_document_front_public_id IS NOT NULL
-        ) AS has_tier2_document_front,
+        (k.tier_2_document_front_public_id IS NOT NULL)
+          AS has_tier2_document_front,
 
-        (
-          k.tier_2_document_back_public_id IS NOT NULL
-        ) AS has_tier2_document_back,
+        (k.tier_2_document_back_public_id IS NOT NULL)
+          AS has_tier2_document_back,
 
-        (
-          k.tier_2_selfie_public_id IS NOT NULL
-        ) AS has_tier2_selfie,
+        (k.tier_2_selfie_public_id IS NOT NULL)
+          AS has_tier2_selfie,
 
         k.tier_3_method,
         k.tier_3_document_type,
@@ -547,61 +533,46 @@ const getKycRecords = async (req, res) => {
         k.occupation,
         k.annual_income_range,
 
+        (k.tier_3_document_public_id IS NOT NULL)
+          AS has_tier3_document,
+
+        (k.tier_3_selfie_public_id IS NOT NULL)
+          AS has_tier3_selfie,
+
         k.tier_3_verification_status,
-        u.tier_3_verified,
         k.tier_3_verified_at,
         k.tier_3_rejection_reason,
 
-        (
-          k.tier_3_document_public_id IS NOT NULL
-        ) AS has_tier3_document,
-
-        (
-          k.tier_3_selfie_public_id IS NOT NULL
-        ) AS has_tier3_selfie,
-
         k.liveness_status,
+        k.liveness_score,
+        k.selfie_match_score,
 
         k.verification_status,
         k.rejection_reason,
-
         k.created_at,
         k.updated_at
 
       FROM kyc_records k
-
-      INNER JOIN users u
-        ON u.id = k.user_id
+      INNER JOIN users u ON u.id = k.user_id
 
       ${whereClause}
 
-      ORDER BY k.created_at DESC, k.id DESC
-
-      LIMIT $${queryValues.length - 1}
-      OFFSET $${queryValues.length}
+      ORDER BY k.created_at DESC
+      LIMIT 200
       `,
-      queryValues
+      values
     );
 
     return res.status(200).json({
       success: true,
       kyc_records: result.rows,
-
-      pagination: {
-        page,
-        limit,
-        total,
-        total_pages: Math.ceil(total / limit),
-        has_next_page: offset + result.rows.length < total,
-        has_previous_page: page > 1,
-      },
     });
 
   } catch (error) {
-    console.error('Admin KYC records error:', {
-      message: error.message,
-      code: error.code,
-    });
+    console.error(
+      'Admin KYC records error:',
+      error?.message || 'Unknown error'
+    );
 
     return res.status(500).json({
       success: false,
@@ -609,6 +580,7 @@ const getKycRecords = async (req, res) => {
     });
   }
 };
+
 // ============================================================
 // KYC DECISION HELPERS
 // ============================================================
