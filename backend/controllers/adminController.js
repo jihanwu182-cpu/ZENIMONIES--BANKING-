@@ -531,25 +531,28 @@ const getKycRecords = async (req, res) => {
           k.id_rejection_reason
         ) AS id_rejection_reason,
 
-        (
-          COALESCE(
-            t2.tier_2_document_front_public_id,
-            k.tier_2_document_front_public_id
-          ) IS NOT NULL
+                EXISTS (
+          SELECT 1
+          FROM kyc_records evidence
+          WHERE evidence.user_id = k.user_id
+            AND evidence.tier_2_document_front_public_id IS NOT NULL
+            AND evidence.tier_2_document_front_public_id <> ''
         ) AS has_tier2_document_front,
 
-        (
-          COALESCE(
-            t2.tier_2_document_back_public_id,
-            k.tier_2_document_back_public_id
-          ) IS NOT NULL
+        EXISTS (
+          SELECT 1
+          FROM kyc_records evidence
+          WHERE evidence.user_id = k.user_id
+            AND evidence.tier_2_document_back_public_id IS NOT NULL
+            AND evidence.tier_2_document_back_public_id <> ''
         ) AS has_tier2_document_back,
 
-        (
-          COALESCE(
-            t2.tier_2_selfie_public_id,
-            k.tier_2_selfie_public_id
-          ) IS NOT NULL
+        EXISTS (
+          SELECT 1
+          FROM kyc_records evidence
+          WHERE evidence.user_id = k.user_id
+            AND evidence.tier_2_selfie_public_id IS NOT NULL
+            AND evidence.tier_2_selfie_public_id <> ''
         ) AS has_tier2_selfie,
 
         -- Tier 3: retrieve its actual submission record.
