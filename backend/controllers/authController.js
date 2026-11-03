@@ -239,9 +239,9 @@ const createPhoneOtp = async (
 // ZENIMONIES BANKING
 // CUSTOMER REGISTRATION
 // ============================================================
-
 const register = async (req, res) => {
   let client;
+  let transactionOpen = false;
 
   try {
     const {
@@ -289,8 +289,7 @@ const register = async (req, res) => {
       )
     ) {
       return res.status(400).json({
-        message:
-          'Invalid account type.',
+        message: 'Invalid account type.',
       });
     }
 
@@ -336,18 +335,14 @@ const register = async (req, res) => {
     // NAME VALIDATION
     // ----------------------------------------------------------
 
-    if (
-      normalizedFirstName.length < 2
-    ) {
+    if (normalizedFirstName.length < 2) {
       return res.status(400).json({
         message:
           'First name must contain at least 2 characters.',
       });
     }
 
-    if (
-      normalizedSurname.length < 2
-    ) {
+    if (normalizedSurname.length < 2) {
       return res.status(400).json({
         message:
           'Surname must contain at least 2 characters.',
@@ -371,11 +366,7 @@ const register = async (req, res) => {
     const emailRegex =
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (
-      !emailRegex.test(
-        normalizedEmail,
-      )
-    ) {
+    if (!emailRegex.test(normalizedEmail)) {
       return res.status(400).json({
         message:
           'Please provide a valid email address.',
@@ -386,9 +377,7 @@ const register = async (req, res) => {
     // PASSWORD VALIDATION
     // ----------------------------------------------------------
 
-    if (
-      normalizedPassword.length < 8
-    ) {
+    if (normalizedPassword.length < 8) {
       return res.status(400).json({
         message:
           'Password must contain at least 8 characters.',
@@ -413,9 +402,7 @@ const register = async (req, res) => {
     // GENDER VALIDATION
     // ----------------------------------------------------------
 
-    if (
-      !normalizedGender
-    ) {
+    if (!normalizedGender) {
       return res.status(400).json({
         message:
           'Please select your gender.',
@@ -424,10 +411,6 @@ const register = async (req, res) => {
 
     // ----------------------------------------------------------
     // BUILD OFFICIAL FULL NAME
-    //
-    // IMPORTANT:
-    // The backend owns the official full_name.
-    // We do NOT trust a full_name sent by the frontend.
     // ----------------------------------------------------------
 
     const normalizedFullName = [
@@ -438,9 +421,7 @@ const register = async (req, res) => {
       .filter(Boolean)
       .join(' ');
 
-    if (
-      !normalizedFullName
-    ) {
+    if (!normalizedFullName) {
       return res.status(400).json({
         message:
           'Unable to create your full name.',
@@ -451,12 +432,10 @@ const register = async (req, res) => {
     // DATABASE CLIENT
     // ----------------------------------------------------------
 
-    client =
-      await pool.connect();
+    client = await pool.connect();
 
-    await client.query(
-      'BEGIN',
-    );
+    await client.query('BEGIN');
+    transactionOpen = true;
 
     // ----------------------------------------------------------
     // CHECK EXISTING EMAIL / PHONE
@@ -480,20 +459,13 @@ const register = async (req, res) => {
         ],
       );
 
-    if (
-      existingUser.rows.length > 0
-    ) {
-      await client.query(
-        'ROLLBACK',
-      );
+    if (existingUser.rows.length > 0) {
+      await client.query('ROLLBACK');
+      transactionOpen = false;
 
-      const existing =
-        existingUser.rows[0];
+      const existing = existingUser.rows[0];
 
-      if (
-        existing.email ===
-        normalizedEmail
-      ) {
+      if (existing.email === normalizedEmail) {
         return res.status(409).json({
           message:
             'An account with this email address already exists.',
@@ -518,14 +490,6 @@ const register = async (req, res) => {
 
     // ----------------------------------------------------------
     // CREATE USER
-    //
-    // New users start:
-    //
-    // KYC = not_verified
-    // KYC Tier = 0
-    //
-    // They should NOT automatically be marked as KYC pending
-    // or Tier 1 before completing the required verification.
     // ----------------------------------------------------------
 
     const userResult =
@@ -583,7 +547,7 @@ const register = async (req, res) => {
 
           50000.00,
           20000.00,
-           0.00,
+          0.00,
           CURRENT_TIMESTAMP,
 
           CURRENT_TIMESTAMP
@@ -621,53 +585,48 @@ const register = async (req, res) => {
         ],
       );
 
-    const user =
-      userResult.rows[0];
-
+    const user = userResult.rows[0];
 
     // ----------------------------------------------------------
     // CREATE ACCOUNT
-    //
-    // IMPORTANT:
-    // We preserve the current account creation behavior here.
-    //
-    // The selected registration type is stored on users.
-    // Business onboarding/POS remains a separate flow.
     // ----------------------------------------------------------
 
-    
-const accountResult = await client.query(
-  `
-  INSERT INTO accounts (
-    user_id,
-    account_name,
-    account_type,
-    currency,
-    balance,
-    status
-  )
-  VALUES (
-    $1,
-    $2,
-    'personal',
-    'NGN',
-    0.00,
-    'active'
-  )
-  RETURNING
-    id,
-    account_number,
-    account_name,
-    account_type,
-    currency,
-    balance,
-    status,
-    created_at
-  `,
-  [user.id, normalizedFullName]
-);
+    const accountResult =
+      await client.query(
+        `
+        INSERT INTO accounts (
+          user_id,
+          account_name,
+          account_type,
+          currency,
+          balance,
+          status
+        )
+        VALUES (
+          $1,
+          $2,
+          'personal',
+          'NGN',
+          0.00,
+          'active'
+        )
+        RETURNING
+          id,
+          account_number,
+          account_name,
+          account_type,
+          currency,
+          balance,
+          status,
+          created_at
+        `,
+        [
+          user.id,
+          normalizedFullName,
+        ],
+      );
 
-const account = accountResult.rows[0];
+    const account = accountResult.rows[0];
 
     // ----------------------------------------------------------
     // CREATE PHONE OTP
@@ -684,23 +643,19 @@ const account = accountResult.rows[0];
     // SEND PHONE OTP
     // ----------------------------------------------------------
 
-    let smsResult = null;
-
     try {
-      smsResult =
-        await sendPhoneOtp(
-          normalizedPhone,
-          otp,
-        );
+      await sendPhoneOtp(
+        normalizedPhone,
+        otp,
+      );
     } catch (smsError) {
       console.error(
         'ZENIMONIES registration OTP send error:',
         smsError,
       );
 
-      await client.query(
-        'ROLLBACK',
-      );
+      await client.query('ROLLBACK');
+      transactionOpen = false;
 
       return res.status(500).json({
         message:
@@ -732,20 +687,15 @@ const account = accountResult.rows[0];
           user.id,
           'account_registration',
           JSON.stringify({
-            account_type:
-              accountType,
-            registration_account_type:
-              accountType,
+            account_type: accountType,
+            registration_account_type: accountType,
             phone_verified: false,
-            kyc_status:
-              'not_verified',
+            kyc_status: 'not_verified',
             kyc_tier: 0,
           }),
         ],
       );
     } catch (auditError) {
-      // Audit failure should not expose database details
-      // to the customer.
       console.error(
         'ZENIMONIES registration audit log error:',
         auditError,
@@ -753,48 +703,46 @@ const account = accountResult.rows[0];
     }
 
     // ----------------------------------------------------------
-    // COMMIT
+    // COMMIT TRANSACTION
     // ----------------------------------------------------------
 
-    await client.query(
-      'COMMIT',
-    );
+    await client.query('COMMIT');
+    transactionOpen = false;
 
     // ----------------------------------------------------------
-    // CREATE AUTH SESSION
+    // CREATE AUTHENTICATION SESSION
+    //
+    // IMPORTANT:
+    // sessionService.createAuthSession expects
+    // the complete user object, not user.id and req.
     // ----------------------------------------------------------
 
     const authSession =
-      await createAuthSession(
-        user.id,
-        req,
-      );
+      await createAuthSession(user);
 
     // ----------------------------------------------------------
     // DEVELOPMENT OTP
-    //
-    // Only expose this if your existing environment
-    // explicitly allows development OTP.
     // ----------------------------------------------------------
 
     const isDevelopment =
-      process.env.NODE_ENV !==
-      'production';
+      process.env.NODE_ENV !== 'production';
 
     const response = {
       message:
         'Registration successful. Please verify your phone number.',
-      token:
-        authSession?.token ||
-        authSession?.access_token ||
-        null,
-      access_token:
-        authSession?.token ||
-        authSession?.access_token ||
-        null,
 
-      phone_verification_required:
-        true,
+      token:
+        authSession.token,
+
+      access_token:
+        authSession.token,
+
+      session_expires_at:
+        authSession.expiresAt,
+
+      inactivity_timeout_minutes: 5,
+
+      phone_verification_required: true,
 
       user: {
         ...user,
@@ -802,43 +750,30 @@ const account = accountResult.rows[0];
 
       account: {
         id: account.id,
-        account_number:
-          account.account_number,
-        account_name:
-          account.account_name,
-        account_type:
-          account.account_type,
-        currency:
-          account.currency,
-        balance:
-          account.balance,
-        status:
-          account.status,
+        account_number: account.account_number,
+        account_name: account.account_name,
+        account_type: account.account_type,
+        currency: account.currency,
+        balance: account.balance,
+        status: account.status,
       },
     };
 
-    if (
-      isDevelopment &&
-      otp
-    ) {
-      response.development_otp =
-        otp;
+    if (isDevelopment && otp) {
+      response.development_otp = otp;
     }
 
-    return res.status(201).json(
-      response,
-    );
+    return res.status(201).json(response);
+
   } catch (error) {
     console.error(
       'ZENIMONIES registration error:',
       error,
     );
 
-    if (client) {
+    if (client && transactionOpen) {
       try {
-        await client.query(
-          'ROLLBACK',
-        );
+        await client.query('ROLLBACK');
       } catch (rollbackError) {
         console.error(
           'ZENIMONIES registration rollback error:',
@@ -851,9 +786,7 @@ const account = accountResult.rows[0];
     // UNIQUE CONSTRAINT HANDLING
     // ----------------------------------------------------------
 
-    if (
-      error?.code === '23505'
-    ) {
+    if (error?.code === '23505') {
       return res.status(409).json({
         message:
           'An account with some of these details already exists.',
@@ -864,13 +797,13 @@ const account = accountResult.rows[0];
       message:
         'Registration failed. Please try again.',
     });
+
   } finally {
     if (client) {
       client.release();
     }
   }
 };
-              
 // ============================================================
 // VERIFY PHONE OTP
 // ============================================================
