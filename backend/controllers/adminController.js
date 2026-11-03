@@ -1894,7 +1894,6 @@ const getPrivateTier3Document = async (req, res) => {
     const { id, document } = req.params;
 
     const allowedDocuments = {
-      // Tier 2 identity evidence
       id_front: {
         publicIdColumn: 'tier_2_document_front_public_id',
         resourceTypeColumn: 'tier_2_document_front_resource_type',
@@ -1913,8 +1912,6 @@ const getPrivateTier3Document = async (req, res) => {
         formatColumn: 'tier_2_selfie_format',
         label: 'Tier 2 selfie',
       },
-
-      // Tier 3 evidence
       proof_of_address: {
         publicIdColumn: 'tier_3_document_public_id',
         resourceTypeColumn: 'tier_3_document_resource_type',
@@ -1937,6 +1934,7 @@ const getPrivateTier3Document = async (req, res) => {
     }
 
     const selected = allowedDocuments[document];
+
     if (!selected) {
       return res.status(400).json({
         success: false,
@@ -1944,8 +1942,29 @@ const getPrivateTier3Document = async (req, res) => {
       });
     }
 
-    // Column names come only from the fixed allow-list above.
-    const result = await pool.query(
+    // Step 1: Identify the customer belonging to this KYC record.
+    const ownerResult = await pool.query(
+      `
+      SELECT user_id
+      FROM kyc_records
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    if (!ownerResult.rows.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'KYC record not found.',
+      });
+    }
+
+    const userId = ownerResult.rows[0].user_id;
+
+    // Step 2: Find the requested document across this customer's
+    // KYC records. Column names come only from the allow-list above.
+    const documentResult = await pool.query(
       `
       SELECT
         id,
@@ -1954,20 +1973,26 @@ const getPrivateTier3Document = async (req, res) => {
         ${selected.resourceTypeColumn} AS resource_type,
         ${selected.formatColumn} AS format
       FROM kyc_records
-      WHERE id = $1
+      WHERE user_id = $1
+        AND ${selected.publicIdColumn} IS NOT NULL
+        AND ${selected.publicIdColumn} <> ''
+      ORDER BY
+        updated_at DESC NULLS LAST,
+        created_at DESC NULLS LAST
       LIMIT 1
       `,
-      [id]
+      [userId]
     );
 
-    if (!result.rows.length || !result.rows[0].public_id) {
+    if (!documentResult.rows.length) {
       return res.status(404).json({
         success: false,
         message: 'Private KYC document not found.',
       });
     }
 
-    const record = result.rows[0];
+    const record = documentResult.rows[0];
+
     if (!['image', 'raw'].includes(record.resource_type)) {
       return res.status(404).json({
         success: false,
@@ -1975,8 +2000,18 @@ const getPrivateTier3Document = async (req, res) => {
       });
     }
 
-    const allowedFormats = new Set(['pdf', 'jpg', 'jpeg', 'png', 'webp']);
-    const format = String(record.format || '').trim().toLowerCase();
+    const allowedFormats = new Set([
+      'pdf',
+      'jpg',
+      'jpeg',
+      'png',
+      'webp',
+    ]);
+
+    const format = String(record.format || '')
+      .trim()
+      .toLowerCase();
+
     if (!allowedFormats.has(format)) {
       return res.status(409).json({
         success: false,
@@ -1994,8 +2029,11 @@ const getPrivateTier3Document = async (req, res) => {
       });
     }
 
+    // Step 3: Generate a short-lived private Cloudinary URL.
     configureCloudinary();
+
     const expiresAt = Math.floor(Date.now() / 1000) + 300;
+
     const downloadUrl = cloudinary.utils.private_download_url(
       record.public_id,
       format,
@@ -2007,13 +2045,23 @@ const getPrivateTier3Document = async (req, res) => {
       }
     );
 
-    // Audit before returning the temporary private URL.
+    // Step 4: Record administrator access in the audit log.
     await pool.query(
       `
       INSERT INTO audit_logs (
-        user_id, action, description, ip_address, user_agent
+        user_id,
+        action,
+        description,
+        ip_address,
+        user_agent
       )
-      VALUES ($1, 'admin_private_kyc_document_access', $2, $3, $4)
+      VALUES (
+        $1,
+        'admin_private_kyc_document_access',
+        $2,
+        $3,
+        $4
+      )
       `,
       [
         req.userId,
@@ -2029,18 +2077,19 @@ const getPrivateTier3Document = async (req, res) => {
       expires_at: expiresAt,
       url: downloadUrl,
     });
+
   } catch (error) {
     console.error(
       'Private KYC document access failed:',
       error?.message || 'Unknown error'
     );
+
     return res.status(500).json({
       success: false,
       message: 'Unable to access the private KYC document.',
     });
   }
 };
-
 // ============================================================
 // EXPORTS
 // ============================================================
