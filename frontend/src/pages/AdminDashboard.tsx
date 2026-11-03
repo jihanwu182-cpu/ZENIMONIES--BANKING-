@@ -4178,6 +4178,19 @@ const renderKyc = () => {
                     )}
                 </Stack>
 
+                {!selectedKyc.has_tier2_document_front &&
+                  !selectedKyc.has_tier2_document_back &&
+                  Boolean(
+                    String(selectedKyc.document_number || '').trim()
+                  ) && (
+                    <Alert severity="info" sx={{ mt: 1.5 }}>
+                      <strong>Tier 2 identity number submitted.</strong>{' '}
+                      No ID front or back images were uploaded with this
+                      submission. This is a number-only identity
+                      submission, so there are no ID image previews to open.
+                    </Alert>
+                  )}
+
                 <Alert severity="info" sx={{ mt: 1.5 }}>
                   Document previews are retrieved from the
                   authenticated admin endpoint. Temporary links
