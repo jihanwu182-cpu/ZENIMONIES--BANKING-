@@ -115,5 +115,8 @@ FROM kyc_records
 WHERE dojah_reference IS NOT NULL
   AND BTRIM(dojah_reference) <> ''
 ON CONFLICT (reference) DO NOTHING;
-
+-- Preserve the active Tier 3 liveness failure reason separately
+-- from the administrator's Tier 3 document-review decision.
+ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS liveness_rejection_reason TEXT;
 COMMIT;
