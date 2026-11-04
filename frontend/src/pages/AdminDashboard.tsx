@@ -274,6 +274,17 @@ interface KycRecord {
   tier_3_verified_at?: string;
   tier_3_rejection_reason?: string;
   liveness_status?: string;
+  liveness_rejection_reason?: string;
+  liveness_score?: number | string | null;
+  selfie_match_score?: number | string | null;
+  tier_3_liveness_attempts?: Array<{
+    attempt_status?: string | null;
+    liveness_status?: string | null;
+    rejection_reason?: string | null;
+    started_at?: string | null;
+    completed_at?: string | null;
+    archived_at?: string | null;
+  }>;
   rejection_reason?: string;
   rejectionReason?: string;
   created_at?: string;
@@ -4499,6 +4510,101 @@ const renderKyc = () => {
                   )}
                   sx={{ mt: 0.75 }}
                 />
+
+                {selectedKyc.liveness_rejection_reason && (
+                  <Alert severity="error" sx={{ mt: 1.25 }}>
+                    <Typography
+                      component="div"
+                      sx={{ fontSize: 12, fontWeight: 700, mb: 0.25 }}
+                    >
+                      Current liveness failure reason
+                    </Typography>
+                    <Typography
+                      component="div"
+                      sx={{ fontSize: 12, overflowWrap: 'anywhere' }}
+                    >
+                      {selectedKyc.liveness_rejection_reason}
+                    </Typography>
+                  </Alert>
+                )}
+
+                <Box sx={{ mt: 1.5 }}>
+                  <Typography
+                    sx={{ fontSize: 12, fontWeight: 700, mb: 0.75 }}
+                  >
+                    Previous liveness attempts
+                  </Typography>
+
+                  {Array.isArray(selectedKyc.tier_3_liveness_attempts) &&
+                  selectedKyc.tier_3_liveness_attempts.length > 0 ? (
+                    <Stack spacing={1}>
+                      {selectedKyc.tier_3_liveness_attempts.map(
+                        (attempt, index) => (
+                          <Box
+                            key={`${attempt.archived_at || attempt.started_at || 'attempt'}-${index}`}
+                            sx={{
+                              p: 1.25,
+                              border: `1px solid ${BRAND.border}`,
+                              borderRadius: 1.5,
+                            }}
+                          >
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              justifyContent="space-between"
+                              spacing={1}
+                              flexWrap="wrap"
+                            >
+                              <Typography sx={{ fontSize: 12, fontWeight: 700 }}>
+                                Attempt {selectedKyc.tier_3_liveness_attempts!.length - index}
+                              </Typography>
+                              <Chip
+                                size="small"
+                                label={displayStatus(
+                                  attempt.liveness_status || attempt.attempt_status
+                                )}
+                                color={statusColorForKyc(
+                                  attempt.liveness_status || attempt.attempt_status
+                                )}
+                              />
+                            </Stack>
+
+                            {attempt.rejection_reason && (
+                              <Typography
+                                sx={{
+                                  mt: 0.75,
+                                  fontSize: 12,
+                                  color: BRAND.muted,
+                                  overflowWrap: 'anywhere',
+                                }}
+                              >
+                                Failure reason: {attempt.rejection_reason}
+                              </Typography>
+                            )}
+
+                            {(attempt.started_at || attempt.archived_at) && (
+                              <Typography
+                                sx={{ mt: 0.5, fontSize: 11, color: BRAND.muted }}
+                              >
+                                {attempt.started_at
+                                  ? `Started: ${new Date(attempt.started_at).toLocaleString()}`
+                                  : ''}
+                                {attempt.started_at && attempt.archived_at ? ' · ' : ''}
+                                {attempt.archived_at
+                                  ? `Archived: ${new Date(attempt.archived_at).toLocaleString()}`
+                                  : ''}
+                              </Typography>
+                            )}
+                          </Box>
+                        )
+                      )}
+                    </Stack>
+                  ) : (
+                    <Typography sx={{ fontSize: 12, color: BRAND.muted }}>
+                      No previous liveness attempts are available.
+                    </Typography>
+                  )}
+                </Box>
               </Box>
 
               <Typography
