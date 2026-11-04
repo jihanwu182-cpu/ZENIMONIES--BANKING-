@@ -619,6 +619,11 @@ const getKycRecords = async (req, res) => {
           NULLIF(k.liveness_status, '')
         ) AS liveness_status,
 
+         COALESCE(
+           NULLIF(BTRIM(t3.liveness_rejection_reason), ''),
+           NULLIF(BTRIM(k.liveness_rejection_reason), '')
+         ) AS liveness_rejection_reason,
+         
         COALESCE(
           t3.liveness_score,
           k.liveness_score
@@ -693,6 +698,7 @@ const getKycRecords = async (req, res) => {
           t.tier_3_verified_at,
           t.tier_3_rejection_reason,
           t.liveness_status,
+          t.liveness_rejection_reason,
           t.liveness_score,
           t.selfie_match_score,
           t.verification_status,
@@ -710,6 +716,8 @@ const getKycRecords = async (req, res) => {
             OR t.tier_3_document_public_id IS NOT NULL
             OR t.tier_3_selfie_public_id IS NOT NULL
             OR NULLIF(BTRIM(COALESCE(t.tier_3_verification_status, '')), '') IS NOT NULL
+            OR NULLIF(BTRIM(COALESCE(t.liveness_status, '')), '') IS NOT NULL
+            OR NULLIF(BTRIM(COALESCE(t.liveness_rejection_reason, '')), '') IS NOT NULL
           )
 
         ORDER BY
