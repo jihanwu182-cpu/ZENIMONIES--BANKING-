@@ -2642,10 +2642,6 @@ const startDojahVerification = async (req, res) => {
       );
     }
 
-        [referenceId, record.id, userId]
-      );
-    }
-
     await client.query(
       `UPDATE users
        SET
