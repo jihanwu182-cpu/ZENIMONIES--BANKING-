@@ -10,11 +10,11 @@ const getEnv = (name) => {
     : null;
 };
 
-// Sandbox URL supplied by the ALAT Developer Playground.
-// Production URL must be confirmed by Wema before launch.
+// ALAT sandbox base URL.
+// Do not add /api here because endpoint paths already include /api.
 const BASE_URL =
   getEnv('ALAT_BASE_URL') ||
-  'https://apiplayground.alat.ng/create-account-face/api';
+  'https://apiplayground.alat.ng/create-account-face';
 
 const SUBSCRIPTION_KEY = getEnv(
   'ALAT_SUBSCRIPTION_KEY'
