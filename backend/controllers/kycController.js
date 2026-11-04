@@ -113,17 +113,28 @@ const archiveDojahAttempt = async (client, record, userId) => {
        k.id_verification_status,
        k.liveness_status,
        k.id_provider_validation_result,
-       COALESCE(k.id_rejection_reason, k.rejection_reason),
+       CASE
+         WHEN k.dojah_verification_type = 'tier_3_liveness'
+           THEN COALESCE(
+             NULLIF(k.liveness_rejection_reason, ''),
+             NULLIF(k.id_rejection_reason, ''),
+             NULLIF(k.rejection_reason, '')
+           )
+         ELSE COALESCE(
+           NULLIF(k.id_rejection_reason, ''),
+           NULLIF(k.rejection_reason, '')
+         )
+       END,
        k.dojah_started_at,
        k.dojah_checked_at,
        CURRENT_TIMESTAMP
      FROM kyc_records k
-     WHERE k.id = $3 AND k.user_id = $1
+     WHERE k.id = $3
+       AND k.user_id = $1
      ON CONFLICT (reference) DO NOTHING`,
     [userId, reference, record.id]
   );
 };
-
 
 // ============================================================
 // PROFILE COMPLETENESS
@@ -2614,18 +2625,21 @@ const startDojahVerification = async (req, res) => {
       );
     } else {
       await client.query(
-        `UPDATE kyc_records
-         SET
-           dojah_reference = $1,
-           dojah_verification_type = 'tier_3_liveness',
-           dojah_started_at = CURRENT_TIMESTAMP,
-           dojah_checked_at = NULL,
-           liveness_status = 'pending',
-           liveness_score = NULL,
-           selfie_match_score = NULL,
-           updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2
-           AND user_id = $3`,
+      
+UPDATE kyc_records
+SET
+  dojah_reference = $1,
+  dojah_verification_type = 'tier_3_liveness',
+  dojah_started_at = CURRENT_TIMESTAMP,
+  dojah_checked_at = NULL,
+  liveness_status = 'pending',
+  liveness_rejection_reason = NULL,
+  liveness_score = NULL,
+  selfie_match_score = NULL,
+  updated_at = CURRENT_TIMESTAMP
+WHERE id = $2
+  AND user_id = $3
+
         [referenceId, record.id, userId]
       );
     }
