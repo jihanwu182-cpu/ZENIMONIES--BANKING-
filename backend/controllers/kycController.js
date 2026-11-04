@@ -2623,22 +2623,24 @@ const startDojahVerification = async (req, res) => {
            AND user_id = $3`,
         [referenceId, record.id, userId]
       );
-    } else {
+      } else {
       await client.query(
-      
-UPDATE kyc_records
-SET
-  dojah_reference = $1,
-  dojah_verification_type = 'tier_3_liveness',
-  dojah_started_at = CURRENT_TIMESTAMP,
-  dojah_checked_at = NULL,
-  liveness_status = 'pending',
-  liveness_rejection_reason = NULL,
-  liveness_score = NULL,
-  selfie_match_score = NULL,
-  updated_at = CURRENT_TIMESTAMP
-WHERE id = $2
-  AND user_id = $3
+        `UPDATE kyc_records
+         SET
+           dojah_reference = $1,
+           dojah_verification_type = 'tier_3_liveness',
+           dojah_started_at = CURRENT_TIMESTAMP,
+           dojah_checked_at = NULL,
+           liveness_status = 'pending',
+           liveness_rejection_reason = NULL,
+           liveness_score = NULL,
+           selfie_match_score = NULL,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2
+           AND user_id = $3`,
+        [referenceId, record.id, userId]
+      );
+    }
 
         [referenceId, record.id, userId]
       );
