@@ -639,10 +639,31 @@ const getKycRecords = async (req, res) => {
           NULLIF(k.verification_status, '')
         ) AS verification_status,
 
-        COALESCE(
+                COALESCE(
           t3.rejection_reason,
           k.rejection_reason
         ) AS rejection_reason,
+
+        -- Tier 3: archived liveness attempt history for admin review.
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'attempt_status', a.attempt_status,
+                'liveness_status', a.liveness_status,
+                'rejection_reason', a.rejection_reason,
+                'started_at', a.started_at,
+                'completed_at', a.completed_at,
+                'archived_at', a.archived_at
+              )
+              ORDER BY a.archived_at DESC NULLS LAST
+            )
+            FROM kyc_verification_attempts a
+            WHERE a.user_id = k.user_id
+              AND a.verification_type = 'tier_3_liveness'
+          ),
+          '[]'::jsonb
+        ) AS tier_3_liveness_attempts,
 
         k.created_at,
         k.updated_at
