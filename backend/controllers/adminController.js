@@ -665,7 +665,6 @@ const getKycRecords = async (req, res) => {
           '[]'::jsonb
         ) AS tier_3_liveness_attempts,
 
-        k.created_at,
        
         k.created_at,
         k.updated_at
