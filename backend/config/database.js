@@ -181,6 +181,38 @@ const initializeDatabase = async () => {
       // Apply the NIN migration and Tier 1 normalization.
       await applyNinMigration(client);
 
+      // TEMPORARY: Check account number configuration.
+const accountNumberCheck = await client.query(`
+  SELECT
+    column_name,
+    column_default,
+    is_nullable
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'accounts'
+    AND column_name = 'account_number';
+`);
+
+const accountTriggerCheck = await client.query(`
+  SELECT
+    trigger_name,
+    action_timing,
+    event_manipulation,
+    action_statement
+  FROM information_schema.triggers
+  WHERE event_object_schema = 'public'
+    AND event_object_table = 'accounts';
+`);
+
+console.log(
+  'ACCOUNT NUMBER COLUMN CHECK:',
+  JSON.stringify(accountNumberCheck.rows)
+);
+
+console.log(
+  'ACCOUNT NUMBER TRIGGER CHECK:',
+  JSON.stringify(accountTriggerCheck.rows)
+);
       console.log(
         'Database initialization completed successfully.'
       );
