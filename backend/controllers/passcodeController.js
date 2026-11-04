@@ -1,4 +1,6 @@
+
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const pool = require('../config/database');
 
@@ -14,6 +16,7 @@ const {
 } = require('../services/sessionService');
 
 const MAX_PASSCODE_ATTEMPTS = 3;
+const MAX_JWT_LIFETIME_SECONDS = 24 * 60 * 60;
 
 // ============================================================
 // HELPERS
@@ -28,7 +31,6 @@ const getUserId = (req) => {
   );
 };
 
-
 const getRequestMetadata = (req) => {
   return {
     ipAddress:
@@ -42,23 +44,18 @@ const getRequestMetadata = (req) => {
   };
 };
 
-
 // ============================================================
 // ERROR RESPONSE
 // ============================================================
 
 const handlePasscodeError = (res, error) => {
-
   console.error(
     'Account Passcode error:',
     error?.message || error
   );
 
-
   switch (error?.code) {
-
     case 'INVALID_PASSCODE':
-
       return res.status(400).json({
         success: false,
         code: 'INVALID_PASSCODE',
@@ -66,9 +63,7 @@ const handlePasscodeError = (res, error) => {
           'Account Passcode must contain exactly 6 digits.',
       });
 
-
     case 'INVALID_CURRENT_PASSCODE':
-
       return res.status(400).json({
         success: false,
         code: 'INVALID_CURRENT_PASSCODE',
@@ -76,9 +71,7 @@ const handlePasscodeError = (res, error) => {
           'Current Account Passcode must contain exactly 6 digits.',
       });
 
-
     case 'INVALID_NEW_PASSCODE':
-
       return res.status(400).json({
         success: false,
         code: 'INVALID_NEW_PASSCODE',
@@ -86,9 +79,7 @@ const handlePasscodeError = (res, error) => {
           'New Account Passcode must contain exactly 6 digits.',
       });
 
-
     case 'PASSCODE_ALREADY_EXISTS':
-
       return res.status(409).json({
         success: false,
         code: 'PASSCODE_ALREADY_EXISTS',
@@ -96,9 +87,7 @@ const handlePasscodeError = (res, error) => {
           'An Account Passcode already exists.',
       });
 
-
     case 'PASSCODE_NOT_SET':
-
       return res.status(404).json({
         success: false,
         code: 'PASSCODE_NOT_SET',
@@ -106,9 +95,7 @@ const handlePasscodeError = (res, error) => {
           'You have not created an Account Passcode yet.',
       });
 
-
     case 'SAME_PASSCODE':
-
       return res.status(400).json({
         success: false,
         code: 'SAME_PASSCODE',
@@ -116,9 +103,7 @@ const handlePasscodeError = (res, error) => {
           'Your new Account Passcode must be different from the current Passcode.',
       });
 
-
     case 'INCORRECT_PASSCODE':
-
       return res.status(401).json({
         success: false,
         code: 'INCORRECT_PASSCODE',
@@ -134,9 +119,7 @@ const handlePasscodeError = (res, error) => {
           error.fallbackRequired === true,
       });
 
-
     case 'PASSCODE_LOCKED':
-
       return res.status(429).json({
         success: false,
         code: 'PASSCODE_LOCKED',
@@ -146,15 +129,12 @@ const handlePasscodeError = (res, error) => {
           error.failedAttempts || 3,
         max_failed_attempts:
           error.maxFailedAttempts || 3,
-        fallback_required:
-          true,
+        fallback_required: true,
         locked_until:
           error.lockedUntil || null,
       });
 
-
     default:
-
       return res.status(500).json({
         success: false,
         message:
@@ -163,30 +143,16 @@ const handlePasscodeError = (res, error) => {
   }
 };
 
-
 // ============================================================
 // GET PASSCODE STATUS
 // GET /api/passcode/status
 // ============================================================
-//
-// Used by Settings and account-security screens.
-//
-// Returns whether the user has created a 6-digit Account
-// Unlock Passcode.
-//
-// Does NOT return the Passcode or its hash.
-// ============================================================
 
 const getStatus = async (req, res) => {
-
   try {
-
-    const userId =
-      getUserId(req);
-
+    const userId = getUserId(req);
 
     if (!userId) {
-
       return res.status(401).json({
         success: false,
         message:
@@ -194,17 +160,13 @@ const getStatus = async (req, res) => {
       });
     }
 
-
     const status =
       await getPasscodeStatus(userId);
 
-
     return res.status(200).json({
-
       success: true,
 
       passcode: {
-
         exists:
           status.exists,
 
@@ -228,37 +190,21 @@ const getStatus = async (req, res) => {
       },
     });
 
-
   } catch (error) {
-
-    return handlePasscodeError(
-      res,
-      error
-    );
+    return handlePasscodeError(res, error);
   }
 };
-
 
 // ============================================================
 // SET UP ACCOUNT PASSCODE
 // POST /api/passcode/setup
 // ============================================================
-//
-// Creates the user's 6-digit Account Unlock Passcode.
-//
-// This is NOT the Transaction PIN.
-// ============================================================
 
 const setup = async (req, res) => {
-
   try {
-
-    const userId =
-      getUserId(req);
-
+    const userId = getUserId(req);
 
     if (!userId) {
-
       return res.status(401).json({
         success: false,
         message:
@@ -266,33 +212,18 @@ const setup = async (req, res) => {
       });
     }
 
-
     const {
       passcode,
       confirm_passcode,
     } = req.body || {};
 
-
     const normalizedPasscode =
       String(passcode || '').trim();
 
-
     const normalizedConfirmation =
-      String(
-        confirm_passcode || ''
-      ).trim();
+      String(confirm_passcode || '').trim();
 
-
-    // ========================================================
-    // VALIDATE FORMAT
-    // ========================================================
-
-    if (
-      !/^\d{6}$/.test(
-        normalizedPasscode
-      )
-    ) {
-
+    if (!/^\d{6}$/.test(normalizedPasscode)) {
       return res.status(400).json({
         success: false,
         code: 'INVALID_PASSCODE',
@@ -301,16 +232,10 @@ const setup = async (req, res) => {
       });
     }
 
-
-    // ========================================================
-    // CONFIRM PASSCODE
-    // ========================================================
-
     if (
       normalizedPasscode !==
       normalizedConfirmation
     ) {
-
       return res.status(400).json({
         success: false,
         code: 'PASSCODE_CONFIRMATION_MISMATCH',
@@ -319,87 +244,47 @@ const setup = async (req, res) => {
       });
     }
 
+    const metadata = getRequestMetadata(req);
 
-    const metadata =
-      getRequestMetadata(req);
-
-
-    const result =
-      await createPasscode({
-
-        userId,
-
-        passcode:
-          normalizedPasscode,
-
-        ipAddress:
-          metadata.ipAddress,
-
-        userAgent:
-          metadata.userAgent,
-      });
-
+    const result = await createPasscode({
+      userId,
+      passcode: normalizedPasscode,
+      ipAddress: metadata.ipAddress,
+      userAgent: metadata.userAgent,
+    });
 
     return res.status(201).json({
-
       success: true,
 
       message:
         'Your 6-digit Account Passcode has been created successfully.',
 
       passcode: {
-
         exists: true,
-
         failed_attempts:
           result.failedAttempts,
-
         max_failed_attempts:
-          3,
-
-        locked:
-          false,
-
-        locked_until:
-          null,
+          MAX_PASSCODE_ATTEMPTS,
+        locked: false,
+        locked_until: null,
       },
     });
 
-
   } catch (error) {
-
-    return handlePasscodeError(
-      res,
-      error
-    );
+    return handlePasscodeError(res, error);
   }
 };
-
 
 // ============================================================
 // VERIFY ACCOUNT PASSCODE
 // POST /api/passcode/verify
 // ============================================================
-//
-// Used specifically by the Account Locked screen.
-//
-// Successful verification means:
-// the 6-digit Account Unlock Passcode was correct.
-//
-// It does NOT authorize a transaction.
-// It does NOT replace the Transaction PIN.
-// ============================================================
 
 const verify = async (req, res) => {
-
   try {
-
-    const userId =
-      getUserId(req);
-
+    const userId = getUserId(req);
 
     if (!userId) {
-
       return res.status(401).json({
         success: false,
         message:
@@ -407,17 +292,10 @@ const verify = async (req, res) => {
       });
     }
 
-
     const passcode =
-      String(
-        req.body?.passcode || ''
-      ).trim();
+      String(req.body?.passcode || '').trim();
 
-
-    if (
-      !/^\d{6}$/.test(passcode)
-    ) {
-
+    if (!/^\d{6}$/.test(passcode)) {
       return res.status(400).json({
         success: false,
         code: 'INVALID_PASSCODE',
@@ -426,34 +304,21 @@ const verify = async (req, res) => {
       });
     }
 
+    const metadata = getRequestMetadata(req);
 
-    const metadata =
-      getRequestMetadata(req);
-
-
-    const result =
-      await verifyPasscode({
-
-        userId,
-
-        passcode,
-
-        ipAddress:
-          metadata.ipAddress,
-
-        userAgent:
-          metadata.userAgent,
-      });
-
+    const result = await verifyPasscode({
+      userId,
+      passcode,
+      ipAddress: metadata.ipAddress,
+      userAgent: metadata.userAgent,
+    });
 
     return res.status(200).json({
-
       success: true,
-
       verified: true,
 
       message:
-        'Passcode verified successfully. Account unlocked.',
+        'Passcode verified successfully.',
 
       failed_attempts:
         result.failedAttempts,
@@ -464,45 +329,25 @@ const verify = async (req, res) => {
       max_failed_attempts:
         result.maxFailedAttempts,
 
-      fallback_required:
-        false,
-
-      locked_until:
-        null,
+      fallback_required: false,
+      locked_until: null,
     });
 
-
   } catch (error) {
-
-    return handlePasscodeError(
-      res,
-      error
-    );
+    return handlePasscodeError(res, error);
   }
 };
-
 
 // ============================================================
 // CHANGE ACCOUNT PASSCODE
 // POST /api/passcode/change
 // ============================================================
-//
-// Allows an authenticated user to change their existing
-// 6-digit Account Unlock Passcode.
-//
-// This is NOT the Transaction PIN.
-// ============================================================
 
 const change = async (req, res) => {
-
   try {
-
-    const userId =
-      getUserId(req);
-
+    const userId = getUserId(req);
 
     if (!userId) {
-
       return res.status(401).json({
         success: false,
         message:
@@ -510,38 +355,22 @@ const change = async (req, res) => {
       });
     }
 
-
     const {
       current_passcode,
       new_passcode,
       confirm_passcode,
     } = req.body || {};
 
-
     const currentPasscode =
-      String(
-        current_passcode || ''
-      ).trim();
-
+      String(current_passcode || '').trim();
 
     const newPasscode =
-      String(
-        new_passcode || ''
-      ).trim();
-
+      String(new_passcode || '').trim();
 
     const confirmation =
-      String(
-        confirm_passcode || ''
-      ).trim();
+      String(confirm_passcode || '').trim();
 
-
-    if (
-      !/^\d{6}$/.test(
-        currentPasscode
-      )
-    ) {
-
+    if (!/^\d{6}$/.test(currentPasscode)) {
       return res.status(400).json({
         success: false,
         code: 'INVALID_CURRENT_PASSCODE',
@@ -550,13 +379,7 @@ const change = async (req, res) => {
       });
     }
 
-
-    if (
-      !/^\d{6}$/.test(
-        newPasscode
-      )
-    ) {
-
+    if (!/^\d{6}$/.test(newPasscode)) {
       return res.status(400).json({
         success: false,
         code: 'INVALID_NEW_PASSCODE',
@@ -565,12 +388,7 @@ const change = async (req, res) => {
       });
     }
 
-
-    if (
-      newPasscode !==
-      confirmation
-    ) {
-
+    if (newPasscode !== confirmation) {
       return res.status(400).json({
         success: false,
         code: 'PASSCODE_CONFIRMATION_MISMATCH',
@@ -579,62 +397,38 @@ const change = async (req, res) => {
       });
     }
 
+    const metadata = getRequestMetadata(req);
 
-    const metadata =
-      getRequestMetadata(req);
-
-
-    const result =
-      await changePasscode({
-
-        userId,
-
-        currentPasscode,
-
-        newPasscode,
-
-        ipAddress:
-          metadata.ipAddress,
-
-        userAgent:
-          metadata.userAgent,
-      });
-
+    const result = await changePasscode({
+      userId,
+      currentPasscode,
+      newPasscode,
+      ipAddress: metadata.ipAddress,
+      userAgent: metadata.userAgent,
+    });
 
     return res.status(200).json({
-
       success: true,
 
       message:
         'Your Account Passcode has been changed successfully.',
 
       passcode: {
-
         exists: true,
-
         failed_attempts:
           result.failedAttempts,
-
         max_failed_attempts:
-          3,
-
-        locked:
-          false,
-
-        locked_until:
-          null,
+          MAX_PASSCODE_ATTEMPTS,
+        locked: false,
+        locked_until: null,
       },
     });
 
-
   } catch (error) {
-
-    return handlePasscodeError(
-      res,
-      error
-    );
+    return handlePasscodeError(res, error);
   }
 };
+
 // ============================================================
 // ACCOUNT UNLOCK
 // POST /api/passcode/unlock
@@ -642,22 +436,20 @@ const change = async (req, res) => {
 //
 // This endpoint intentionally does NOT use authMiddleware.
 //
-// The user's database session may have expired because of
-// 5-minute inactivity, but the JWT can still be cryptographically
-// valid because JWT expiry is 24 hours.
+// Rules:
 //
-// We therefore:
+// 1. JWT signature must be valid.
+// 2. JWT must still be within its 24-hour lifetime.
+// 3. JWT must contain valid timing claims.
+// 4. User must exist and be active.
+// 5. Original database session must exist.
+// 6. Original database session must not be revoked.
+// 7. Original database session must have expired through
+//    the five-minute inactivity timeout.
+// 8. Account Unlock Passcode must be correct.
+// 9. A completely new authentication session is created.
 //
-// 1. Validate the JWT signature without requiring JWT expiry.
-// 2. Extract the user ID and session ID.
-// 3. Confirm the user still exists and is active.
-// 4. Confirm the JWT belongs to a real database session.
-// 5. Allow that session to be expired ONLY because of inactivity.
-// 6. Verify the 6-digit Account Unlock Passcode.
-// 7. Create a completely new authentication session.
-// 8. Return a brand-new JWT.
-//
-// The old session is never reused.
+// The original session is never reused.
 // ============================================================
 
 const unlock = async (req, res) => {
@@ -682,9 +474,7 @@ const unlock = async (req, res) => {
     }
 
     const token =
-      authHeader
-        .substring(7)
-        .trim();
+      authHeader.substring(7).trim();
 
     if (!token) {
       return res.status(401).json({
@@ -701,7 +491,7 @@ const unlock = async (req, res) => {
 
     if (!process.env.JWT_SECRET) {
       console.error(
-        'JWT_SECRET is not configured'
+        'JWT_SECRET is not configured.'
       );
 
       return res.status(500).json({
@@ -712,31 +502,59 @@ const unlock = async (req, res) => {
     }
 
     // ========================================================
-    // VERIFY JWT SIGNATURE
-    // ========================================================
-    //
-    // IMPORTANT:
-    //
-    // We intentionally use ignoreExpiration here.
-    //
-    // The database session is responsible for the 5-minute
-    // inactivity timeout.
-    //
-    // We still require the JWT signature to be valid.
+    // VERIFY JWT SIGNATURE AND EXPIRATION
     // ========================================================
 
     let decoded;
 
     try {
-      decoded =
-        jwt.verify(
-          token,
-          process.env.JWT_SECRET,
-          {
-            ignoreExpiration: true,
-          }
-        );
+      // Normal verification enforces the 24-hour JWT expiry.
+      // Do NOT use ignoreExpiration here.
+
+      decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET
+      );
+
     } catch (error) {
+      if (error?.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          success: false,
+          code: 'AUTHENTICATION_TOKEN_EXPIRED',
+          message:
+            'Your authentication has expired. Please sign in again.',
+        });
+      }
+
+      return res.status(401).json({
+        success: false,
+        code: 'INVALID_AUTHENTICATION_TOKEN',
+        message:
+          'Your authentication token is invalid. Please sign in again.',
+      });
+    }
+
+    // ========================================================
+    // VERIFY JWT TIMING CLAIMS
+    // ========================================================
+
+    const currentTime =
+      Math.floor(Date.now() / 1000);
+
+    const tokenIssuedAt =
+      decoded?.iat;
+
+    const tokenExpiresAt =
+      decoded?.exp;
+
+    if (
+      !Number.isInteger(tokenIssuedAt) ||
+      !Number.isInteger(tokenExpiresAt) ||
+      tokenIssuedAt > currentTime + 60 ||
+      tokenExpiresAt <= tokenIssuedAt ||
+      tokenExpiresAt - tokenIssuedAt >
+        MAX_JWT_LIFETIME_SECONDS
+    ) {
       return res.status(401).json({
         success: false,
         code: 'INVALID_AUTHENTICATION_TOKEN',
@@ -784,9 +602,8 @@ const unlock = async (req, res) => {
     // CONFIRM USER
     // ========================================================
 
-    const userResult =
-      await pool.query(
-        `
+    const userResult = await pool.query(
+      `
         SELECT
           id,
           full_name,
@@ -797,13 +614,11 @@ const unlock = async (req, res) => {
         FROM users
         WHERE id = $1
         LIMIT 1
-        `,
-        [userId]
-      );
+      `,
+      [userId]
+    );
 
-    if (
-      userResult.rows.length === 0
-    ) {
+    if (userResult.rows.length === 0) {
       return res.status(401).json({
         success: false,
         code: 'USER_NOT_FOUND',
@@ -812,8 +627,7 @@ const unlock = async (req, res) => {
       });
     }
 
-    const user =
-      userResult.rows[0];
+    const user = userResult.rows[0];
 
     // ========================================================
     // ACCOUNT STATUS
@@ -832,28 +646,16 @@ const unlock = async (req, res) => {
     }
 
     // ========================================================
-    // CONFIRM THE JWT SESSION
-    // ========================================================
-    //
-    // We hash the session ID exactly the same way
-    // sessionService.js does.
-    //
-    // This prevents someone from using an arbitrary valid
-    // JWT for the user to unlock the account.
+    // CONFIRM ORIGINAL DATABASE SESSION
     // ========================================================
 
-    const crypto =
-      require('crypto');
+    const sessionTokenHash = crypto
+      .createHash('sha256')
+      .update(String(sessionId))
+      .digest('hex');
 
-    const sessionTokenHash =
-      crypto
-        .createHash('sha256')
-        .update(String(sessionId))
-        .digest('hex');
-
-    const sessionResult =
-      await pool.query(
-        `
+    const sessionResult = await pool.query(
+      `
         SELECT
           id,
           user_id,
@@ -864,16 +666,14 @@ const unlock = async (req, res) => {
         WHERE user_id = $1
           AND session_token_hash = $2
         LIMIT 1
-        `,
-        [
-          userId,
-          sessionTokenHash,
-        ]
-      );
+      `,
+      [
+        userId,
+        sessionTokenHash,
+      ]
+    );
 
-    if (
-      sessionResult.rows.length === 0
-    ) {
+    if (sessionResult.rows.length === 0) {
       return res.status(401).json({
         success: false,
         code: 'SESSION_NOT_FOUND',
@@ -882,8 +682,7 @@ const unlock = async (req, res) => {
       });
     }
 
-    const session =
-      sessionResult.rows[0];
+    const session = sessionResult.rows[0];
 
     // ========================================================
     // REVOKED SESSION
@@ -897,66 +696,53 @@ const unlock = async (req, res) => {
           'This secure session has already been ended. Please sign in again.',
       });
     }
-   
-// ========================================================
-// SESSION EXPIRY CHECK
-// ========================================================
-//
-// IMPORTANT:
-//
-// sessionService.js uses PostgreSQL's clock when creating
-// and refreshing authentication sessions.
-//
-// This unlock endpoint must use the SAME clock.
-//
-// Do NOT use Date.now() here because the application
-// server clock and PostgreSQL clock can differ.
-//
-// ========================================================
 
-const expiryCheckResult =
-  await pool.query(
-    `
-    SELECT
-      expires_at <= CURRENT_TIMESTAMP AS expired
-    FROM auth_sessions
-    WHERE id = $1
-    LIMIT 1
-    `,
-    [
-      session.id,
-    ]
-  );
-
-const sessionExpired =
-  expiryCheckResult.rows[0]?.expired === true;
-
-// ========================================================
-// SESSION IS STILL ACTIVE
-// ========================================================
-
-if (!sessionExpired) {
-  return res.status(400).json({
-    success: false,
-    code: 'SESSION_NOT_LOCKED',
-    message:
-      'Your secure session is still active.',
-  });
-}
     // ========================================================
-    // PASSCODE
+    // SESSION EXPIRY CHECK
+    // ========================================================
+    //
+    // Use PostgreSQL's clock, matching sessionService.js.
+    //
+    // The application server clock and database clock can
+    // differ, so the database decides whether the session
+    // has expired.
+    // ========================================================
+
+    const expiryCheckResult = await pool.query(
+      `
+        SELECT
+          expires_at <= CURRENT_TIMESTAMP AS expired
+        FROM auth_sessions
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [session.id]
+    );
+
+    const sessionExpired =
+      expiryCheckResult.rows[0]?.expired === true;
+
+    // ========================================================
+    // SESSION IS STILL ACTIVE
+    // ========================================================
+
+    if (!sessionExpired) {
+      return res.status(400).json({
+        success: false,
+        code: 'SESSION_NOT_LOCKED',
+        message:
+          'Your secure session is still active.',
+      });
+    }
+
+    // ========================================================
+    // PASSCODE VALIDATION
     // ========================================================
 
     const passcode =
-      String(
-        req.body?.passcode || ''
-      ).trim();
+      String(req.body?.passcode || '').trim();
 
-    if (
-      !/^\d{6}$/.test(
-        passcode
-      )
-    ) {
+    if (!/^\d{6}$/.test(passcode)) {
       return res.status(400).json({
         success: false,
         code: 'INVALID_PASSCODE',
@@ -979,23 +765,15 @@ if (!sessionExpired) {
     let passcodeResult;
 
     try {
-      passcodeResult =
-        await verifyPasscode({
-          userId,
+      passcodeResult = await verifyPasscode({
+        userId,
+        passcode,
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+      });
 
-          passcode,
-
-          ipAddress:
-            metadata.ipAddress,
-
-          userAgent:
-            metadata.userAgent,
-        });
     } catch (error) {
-      return handlePasscodeError(
-        res,
-        error
-      );
+      return handlePasscodeError(res, error);
     }
 
     // ========================================================
@@ -1023,30 +801,25 @@ if (!sessionExpired) {
     // ========================================================
     // REVOKE OLD SESSION
     // ========================================================
-    //
-    // The old inactive session is no longer used.
-    // A completely new session is created below.
-    // ========================================================
 
     await pool.query(
       `
-      UPDATE auth_sessions
-      SET revoked_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-        AND revoked_at IS NULL
+        UPDATE auth_sessions
+        SET revoked_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+          AND revoked_at IS NULL
       `,
       [session.id]
     );
 
     // ========================================================
-    // CREATE BRAND-NEW AUTH SESSION
+    // CREATE BRAND-NEW AUTHENTICATION SESSION
     // ========================================================
 
-    const newSession =
-      await createAuthSession({
-        id: user.id,
-        role: user.role,
-      });
+    const newSession = await createAuthSession({
+      id: user.id,
+      role: user.role,
+    });
 
     // ========================================================
     // SUCCESS
@@ -1054,9 +827,7 @@ if (!sessionExpired) {
 
     return res.status(200).json({
       success: true,
-
       verified: true,
-
       unlocked: true,
 
       message:
@@ -1090,8 +861,7 @@ if (!sessionExpired) {
           newSession.expiresAt,
       },
 
-      failed_attempts:
-        0,
+      failed_attempts: 0,
 
       remaining_attempts:
         MAX_PASSCODE_ATTEMPTS,
@@ -1099,18 +869,15 @@ if (!sessionExpired) {
       max_failed_attempts:
         MAX_PASSCODE_ATTEMPTS,
 
-      fallback_required:
-        false,
+      fallback_required: false,
 
-      locked_until:
-        null,
+      locked_until: null,
     });
 
   } catch (error) {
     console.error(
       'Account unlock error:',
-      error?.message ||
-        error
+      error?.message || error
     );
 
     return res.status(500).json({
@@ -1120,6 +887,7 @@ if (!sessionExpired) {
     });
   }
 };
+
 // ============================================================
 // EXPORTS
 // ============================================================
