@@ -638,8 +638,8 @@ const getKycRecords = async (req, res) => {
           NULLIF(t3.verification_status, ''),
           NULLIF(k.verification_status, '')
         ) AS verification_status,
-
-                COALESCE(
+       
+        COALESCE(
           t3.rejection_reason,
           k.rejection_reason
         ) AS rejection_reason,
@@ -665,6 +665,8 @@ const getKycRecords = async (req, res) => {
           '[]'::jsonb
         ) AS tier_3_liveness_attempts,
 
+        k.created_at,
+       
         k.created_at,
         k.updated_at
 
