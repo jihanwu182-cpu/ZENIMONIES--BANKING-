@@ -81,7 +81,6 @@ const normalizeKycStatus = (status) => {
 // ARCHIVE ACTIVE PROVIDER ATTEMPT BEFORE REPLACING ITS REFERENCE
 // Requires ZENIMONIES_KYC_CONSOLIDATED_MIGRATION.sql to be run first.
 // ============================================================
-
 const archiveDojahAttempt = async (client, record, userId) => {
   const reference = String(record?.dojah_reference || '').trim();
 
@@ -111,31 +110,63 @@ const archiveDojahAttempt = async (client, record, userId) => {
        k.document_type,
        COALESCE(NULLIF(k.verification_status, ''), 'pending'),
        k.id_verification_status,
-       k.liveness_status,
-       k.id_provider_validation_result,
+
        CASE
          WHEN k.dojah_verification_type = 'tier_3_liveness'
            THEN COALESCE(
+             NULLIF(k.tier_3_liveness_status, ''),
+             NULLIF(k.liveness_status, ''),
+             'pending'
+           )
+         WHEN k.dojah_verification_type = 'identity'
+           THEN COALESCE(
+             NULLIF(k.tier_2_liveness_status, ''),
+             NULLIF(k.liveness_status, ''),
+             'pending'
+           )
+         ELSE COALESCE(
+           NULLIF(k.liveness_status, ''),
+           'pending'
+         )
+       END,
+
+       k.id_provider_validation_result,
+
+       CASE
+         WHEN k.dojah_verification_type = 'tier_3_liveness'
+           THEN COALESCE(
+             NULLIF(k.tier_3_liveness_rejection_reason, ''),
              NULLIF(k.liveness_rejection_reason, ''),
              NULLIF(k.id_rejection_reason, ''),
              NULLIF(k.rejection_reason, '')
            )
+
+         WHEN k.dojah_verification_type = 'identity'
+           THEN COALESCE(
+             NULLIF(k.tier_2_liveness_rejection_reason, ''),
+             NULLIF(k.liveness_rejection_reason, ''),
+             NULLIF(k.id_rejection_reason, ''),
+             NULLIF(k.rejection_reason, '')
+           )
+
          ELSE COALESCE(
            NULLIF(k.id_rejection_reason, ''),
            NULLIF(k.rejection_reason, '')
          )
        END,
+
        k.dojah_started_at,
        k.dojah_checked_at,
        CURRENT_TIMESTAMP
+
      FROM kyc_records k
      WHERE k.id = $3
        AND k.user_id = $1
+
      ON CONFLICT (reference) DO NOTHING`,
     [userId, reference, record.id]
   );
 };
-
 // ============================================================
 // PROFILE COMPLETENESS
 // ============================================================
@@ -1713,6 +1744,8 @@ const submitTier2 = async (req, res) => {
           id_verified_at = NULL,
           id_rejection_reason = NULL,
           liveness_status = 'pending',
+          tier_2_liveness_status = 'pending',
+          tier_2_liveness_rejection_reason = NULL,
           liveness_provider_reference = NULL,
           verification_status = 'pending',
           rejection_reason = NULL,
@@ -1743,15 +1776,16 @@ const submitTier2 = async (req, res) => {
           bvn_verification_status,
           id_verification_status,
           liveness_status,
+          tier_2_liveness_status,
+          tier_2_liveness_rejection_reason,
           tier_3_verification_status,
-          verification_status
         )
         VALUES (
           $1, $2, $3,
           $4, $5, $6, $7,
           $8, $9, $10, $11,
           $12, $13, $14, $15,
-          'not_verified', 'pending', 'pending', 'not_verified', 'pending'
+         'not_verified', 'pending', 'pending', NULL, 'not_verified', 'pending'
         )
         RETURNING id
         `,
@@ -2817,8 +2851,6 @@ if (
 // The server uses the logged-in user's stored reference.
 // It does not trust a reference supplied by the browser.
 // ============================================================
-
-
 const confirmDojahVerification = async (req, res) => {
   const userId =
     req.user?.id ||
@@ -2844,19 +2876,24 @@ const confirmDojahVerification = async (req, res) => {
   }
 
   try {
-    // This endpoint is deliberately read-only. The signed webhook
-    // records provider evidence; final approval remains administrator-controlled.
+    // Read-only endpoint.
+    // The signed Dojah webhook records provider evidence.
+    // Final approval remains administrator-controlled.
     const result = await pool.query(
       `SELECT
          id,
          id_verification_status,
-         liveness_status,
+         tier_2_liveness_status,
+         tier_3_liveness_status,
          tier_3_verification_status,
          dojah_checked_at
        FROM kyc_records
        WHERE user_id = $1
-         AND ($2 = 'tier_2' AND document_type IS NOT NULL
-              OR $2 = 'tier_3' AND tier_3_method IS NOT NULL)
+         AND (
+           ($2 = 'tier_2' AND document_type IS NOT NULL)
+           OR
+           ($2 = 'tier_3' AND tier_3_method IS NOT NULL)
+         )
        ORDER BY updated_at DESC, created_at DESC
        LIMIT 1`,
       [userId, requestedType]
@@ -2874,19 +2911,31 @@ const confirmDojahVerification = async (req, res) => {
     const idStatus = String(
       record.id_verification_status || 'not_verified'
     ).trim().toLowerCase();
+
     const livenessStatus = String(
-      record.liveness_status || 'pending'
+      requestedType === 'tier_2'
+        ? record.tier_2_liveness_status || 'pending'
+        : record.tier_3_liveness_status || 'pending'
     ).trim().toLowerCase();
+
     const tier3Status = String(
       record.tier_3_verification_status || 'pending'
     ).trim().toLowerCase();
 
-    const identityVerified = ['verified', 'approved'].includes(idStatus);
-    const livenessVerified = ['verified', 'approved'].includes(livenessStatus);
+    const identityVerified = [
+      'verified',
+      'approved',
+    ].includes(idStatus);
+
+    const livenessVerified = [
+      'verified',
+      'approved',
+    ].includes(livenessStatus);
 
     return res.status(200).json({
       success: true,
       verification_type: requestedType,
+
       status: requestedType === 'tier_2'
         ? identityVerified && livenessVerified
           ? 'verified'
@@ -2896,18 +2945,24 @@ const confirmDojahVerification = async (req, res) => {
         : livenessStatus === 'rejected'
           ? 'rejected'
           : 'pending',
+
       verified: requestedType === 'tier_2'
         ? identityVerified && livenessVerified
         : false,
+
       id_verification_status: requestedType === 'tier_2'
         ? idStatus
         : undefined,
+
       liveness_status: livenessStatus,
+
       tier_3_status: requestedType === 'tier_3'
         ? tier3Status
         : undefined,
+
       checked_at: record.dojah_checked_at || null,
     });
+
   } catch (error) {
     console.error('Read verification status failed:', {
       code: error?.code || null,
@@ -2919,7 +2974,6 @@ const confirmDojahVerification = async (req, res) => {
     });
   }
 };
-
 // ============================================================
 // EXPORTS
 // ============================================================
