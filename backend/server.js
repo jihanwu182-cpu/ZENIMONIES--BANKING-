@@ -711,7 +711,25 @@ await pool.query(`
     )
     AND tier_3_liveness_status = 'pending';
 `);
+// Preserve existing Tier 2 liveness rejection reasons.
+await pool.query(`
+  UPDATE kyc_records
+  SET tier_2_liveness_rejection_reason =
+    liveness_rejection_reason
+  WHERE dojah_verification_type = 'identity'
+    AND liveness_rejection_reason IS NOT NULL
+    AND tier_2_liveness_rejection_reason IS NULL;
+`);
 
+// Preserve existing Tier 3 liveness rejection reasons.
+await pool.query(`
+  UPDATE kyc_records
+  SET tier_3_liveness_rejection_reason =
+    liveness_rejection_reason
+  WHERE dojah_verification_type = 'tier_3_liveness'
+    AND liveness_rejection_reason IS NOT NULL
+    AND tier_3_liveness_rejection_reason IS NULL;
+`);
 console.log(
   'ZENIMONIES KYC migration completed: Tier 2 and Tier 3 liveness fields are separated.'
 );
