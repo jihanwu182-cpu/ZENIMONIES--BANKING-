@@ -531,7 +531,7 @@ const getKycStatus = async (req, res) => {
       FROM kyc_records
       WHERE user_id = $1
         AND nin IS NOT NULL
-        AND nin <> ''
+        AND nin <> ''q
       ORDER BY
         CASE
           WHEN nin_verification_status IN ('verified', 'approved')
@@ -2038,10 +2038,14 @@ const submitTier3 = async (req, res) => {
     // Lock the user to prevent concurrent Tier 3 submissions.
     const userResult = await client.query(
       `
-      SELECT id, tier_3_verified
-      FROM users
-      WHERE id = $1
-      FOR UPDATE
+       SELECT
+         id,
+         bvn_verified,
+         id_verified,
+         tier_3_verified
+       FROM users
+       WHERE id = $1
+       FOR UPDATE
       `,
       [userId]
     );
@@ -2057,6 +2061,23 @@ const submitTier3 = async (req, res) => {
     }
 
     const user = userResult.rows[0];
+
+// Tier 3 requires completed Tier 2 verification.
+if (
+  user.bvn_verified !== true ||
+  user.id_verified !== true
+) {
+  await client.query('ROLLBACK');
+  transactionStarted = false;
+
+  return res.status(403).json({
+    success: false,
+    code: 'TIER_2_REQUIRED_FOR_TIER_3',
+    message:
+      'Please complete BVN and identity verification (Tier 2) before submitting Tier 3.',
+    tier_2_required: true,
+  });
+}
 
     const existingKyc = await client.query(
       `
