@@ -2425,6 +2425,25 @@ const startDojahVerification = async (req, res) => {
 
     const user = userResult.rows[0];
 
+// Tier 3 requires completed Tier 2 verification.
+if (
+  verificationType === 'tier_3' &&
+  (
+    user.bvn_verified !== true ||
+    user.id_verified !== true
+  )
+) {
+  await client.query('ROLLBACK');
+
+  return res.status(403).json({
+    success: false,
+    code: 'TIER_2_REQUIRED_FOR_TIER_3',
+    message:
+      'Please complete BVN and identity verification (Tier 2) before starting Tier 3 liveness verification.',
+    tier_2_required: true,
+  });
+}
+
     if (
       verificationType === 'tier_1' &&
       (user.bvn_verified === true || user.nin_verified === true)
