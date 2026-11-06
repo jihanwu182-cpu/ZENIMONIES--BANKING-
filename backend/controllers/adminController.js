@@ -473,7 +473,10 @@ const getKycRecords = async (req, res) => {
         u.tier_3_verified,
         u.is_verified,
 
-        -- Tier 1: use the explicitly selected method first.
+        -- ------------------------------------------------------
+        -- TIER 1: SELECTED VERIFICATION METHOD
+        -- ------------------------------------------------------
+
         COALESCE(
           NULLIF(LOWER(BTRIM(k.tier1_method)), ''),
           CASE
@@ -499,7 +502,10 @@ const getKycRecords = async (req, res) => {
         k.nin_rejection_reason,
         k.nin_provider_validation_result,
 
-        -- Tier 2: identity submission.
+        -- ------------------------------------------------------
+        -- TIER 2: IDENTITY DOCUMENT
+        -- ------------------------------------------------------
+
         COALESCE(t2.id, k.id) AS tier2_record_id,
 
         COALESCE(
@@ -531,7 +537,31 @@ const getKycRecords = async (req, res) => {
           k.id_rejection_reason
         ) AS id_rejection_reason,
 
-                EXISTS (
+        -- Tier 2 has its own independent liveness status.
+        COALESCE(
+          NULLIF(
+            LOWER(BTRIM(t2.tier_2_liveness_status)),
+            ''
+          ),
+          NULLIF(
+            LOWER(BTRIM(k.tier_2_liveness_status)),
+            ''
+          ),
+          'pending'
+        ) AS tier_2_liveness_status,
+
+        COALESCE(
+          NULLIF(
+            BTRIM(t2.tier_2_liveness_rejection_reason),
+            ''
+          ),
+          NULLIF(
+            BTRIM(k.tier_2_liveness_rejection_reason),
+            ''
+          )
+        ) AS tier_2_liveness_rejection_reason,
+
+        EXISTS (
           SELECT 1
           FROM kyc_records evidence
           WHERE evidence.user_id = k.user_id
@@ -555,7 +585,10 @@ const getKycRecords = async (req, res) => {
             AND evidence.tier_2_selfie_public_id <> ''
         ) AS has_tier2_selfie,
 
-        -- Tier 3: retrieve its actual submission record.
+        -- ------------------------------------------------------
+        -- TIER 3: SUBMISSION DETAILS
+        -- ------------------------------------------------------
+
         COALESCE(
           NULLIF(BTRIM(t3.tier_3_method), ''),
           NULLIF(BTRIM(k.tier_3_method), '')
@@ -614,16 +647,35 @@ const getKycRecords = async (req, res) => {
           k.tier_3_rejection_reason
         ) AS tier_3_rejection_reason,
 
-        COALESCE(
-          NULLIF(t3.liveness_status, ''),
-          NULLIF(k.liveness_status, '')
-        ) AS liveness_status,
+        -- ------------------------------------------------------
+        -- TIER 3: INDEPENDENT LIVENESS STATUS
+        -- ------------------------------------------------------
 
-         COALESCE(
-           NULLIF(BTRIM(t3.liveness_rejection_reason), ''),
-           NULLIF(BTRIM(k.liveness_rejection_reason), '')
-         ) AS liveness_rejection_reason,
-         
+        COALESCE(
+          NULLIF(
+            LOWER(BTRIM(t3.tier_3_liveness_status)),
+            ''
+          ),
+          NULLIF(
+            LOWER(BTRIM(k.tier_3_liveness_status)),
+            ''
+          ),
+          'pending'
+        ) AS tier_3_liveness_status,
+
+        COALESCE(
+          NULLIF(
+            BTRIM(t3.tier_3_liveness_rejection_reason),
+            ''
+          ),
+          NULLIF(
+            BTRIM(k.tier_3_liveness_rejection_reason),
+            ''
+          )
+        ) AS tier_3_liveness_rejection_reason,
+
+        -- Existing score fields are retained for compatibility.
+        -- They have not yet been separated by tier in the schema.
         COALESCE(
           t3.liveness_score,
           k.liveness_score
@@ -638,13 +690,16 @@ const getKycRecords = async (req, res) => {
           NULLIF(t3.verification_status, ''),
           NULLIF(k.verification_status, '')
         ) AS verification_status,
-       
+
         COALESCE(
           t3.rejection_reason,
           k.rejection_reason
         ) AS rejection_reason,
 
-        -- Tier 3: archived liveness attempt history for admin review.
+        -- ------------------------------------------------------
+        -- TIER 3: ARCHIVED LIVENESS ATTEMPT HISTORY
+        -- ------------------------------------------------------
+
         COALESCE(
           (
             SELECT jsonb_agg(
@@ -665,7 +720,6 @@ const getKycRecords = async (req, res) => {
           '[]'::jsonb
         ) AS tier_3_liveness_attempts,
 
-       
         k.created_at,
         k.updated_at
 
@@ -674,7 +728,10 @@ const getKycRecords = async (req, res) => {
       INNER JOIN users u
         ON u.id = k.user_id
 
-      -- Find the latest record containing Tier 2 identity evidence.
+      -- --------------------------------------------------------
+      -- FIND THE LATEST TIER 2 IDENTITY SUBMISSION
+      -- --------------------------------------------------------
+
       LEFT JOIN LATERAL (
         SELECT
           t.id,
@@ -683,6 +740,10 @@ const getKycRecords = async (req, res) => {
           t.id_verification_status,
           t.id_verified_at,
           t.id_rejection_reason,
+
+          t.tier_2_liveness_status,
+          t.tier_2_liveness_rejection_reason,
+
           t.tier_2_document_front_public_id,
           t.tier_2_document_back_public_id,
           t.tier_2_selfie_public_id
@@ -696,6 +757,14 @@ const getKycRecords = async (req, res) => {
             OR t.tier_2_document_front_public_id IS NOT NULL
             OR t.tier_2_document_back_public_id IS NOT NULL
             OR t.tier_2_selfie_public_id IS NOT NULL
+            OR NULLIF(
+              BTRIM(COALESCE(t.tier_2_liveness_status, '')),
+              ''
+            ) IS NOT NULL
+            OR NULLIF(
+              BTRIM(COALESCE(t.tier_2_liveness_rejection_reason, '')),
+              ''
+            ) IS NOT NULL
           )
 
         ORDER BY
@@ -705,7 +774,10 @@ const getKycRecords = async (req, res) => {
         LIMIT 1
       ) t2 ON TRUE
 
-      -- Find the latest record containing Tier 3 submission evidence.
+      -- --------------------------------------------------------
+      -- FIND THE LATEST TIER 3 SUBMISSION
+      -- --------------------------------------------------------
+
       LEFT JOIN LATERAL (
         SELECT
           t.id,
@@ -714,13 +786,17 @@ const getKycRecords = async (req, res) => {
           t.employment_status,
           t.occupation,
           t.annual_income_range,
+
           t.tier_3_document_public_id,
           t.tier_3_selfie_public_id,
+
           t.tier_3_verification_status,
           t.tier_3_verified_at,
           t.tier_3_rejection_reason,
-          t.liveness_status,
-          t.liveness_rejection_reason,
+
+          t.tier_3_liveness_status,
+          t.tier_3_liveness_rejection_reason,
+
           t.liveness_score,
           t.selfie_match_score,
           t.verification_status,
@@ -737,9 +813,18 @@ const getKycRecords = async (req, res) => {
             OR NULLIF(BTRIM(COALESCE(t.annual_income_range, '')), '') IS NOT NULL
             OR t.tier_3_document_public_id IS NOT NULL
             OR t.tier_3_selfie_public_id IS NOT NULL
-            OR NULLIF(BTRIM(COALESCE(t.tier_3_verification_status, '')), '') IS NOT NULL
-            OR NULLIF(BTRIM(COALESCE(t.liveness_status, '')), '') IS NOT NULL
-            OR NULLIF(BTRIM(COALESCE(t.liveness_rejection_reason, '')), '') IS NOT NULL
+            OR NULLIF(
+              BTRIM(COALESCE(t.tier_3_verification_status, '')),
+              ''
+            ) IS NOT NULL
+            OR NULLIF(
+              BTRIM(COALESCE(t.tier_3_liveness_status, '')),
+              ''
+            ) IS NOT NULL
+            OR NULLIF(
+              BTRIM(COALESCE(t.tier_3_liveness_rejection_reason, '')),
+              ''
+            ) IS NOT NULL
           )
 
         ORDER BY
