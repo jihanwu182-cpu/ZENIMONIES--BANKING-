@@ -531,7 +531,7 @@ const getKycStatus = async (req, res) => {
       FROM kyc_records
       WHERE user_id = $1
         AND nin IS NOT NULL
-        AND nin <> ''q
+        AND nin <> ''
       ORDER BY
         CASE
           WHEN nin_verification_status IN ('verified', 'approved')
