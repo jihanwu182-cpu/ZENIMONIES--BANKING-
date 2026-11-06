@@ -216,6 +216,7 @@ interface Account {
 interface KycRecord {
   id: string;
   tier2_record_id?: string;
+  tier3_record_id?: string;
   user_id?: string;
   userId?: string;
   full_name?: string;
@@ -273,8 +274,10 @@ interface KycRecord {
   tier_3_verification_status?: string;
   tier_3_verified_at?: string;
   tier_3_rejection_reason?: string;
-  liveness_status?: string;
-  liveness_rejection_reason?: string;
+  tier_2_liveness_status?: string;
+  tier_2_liveness_rejection_reason?: string;
+  tier_3_liveness_status?: string;
+  tier_3_liveness_rejection_reason?: string;
   liveness_score?: number | string | null;
   selfie_match_score?: number | string | null;
   tier_3_liveness_attempts?: Array<{
@@ -1079,9 +1082,16 @@ const handleKycDecision = async (
 
   // Tier 2 and Tier 3 require an administrator-verified BVN.
   // Tier 3 additionally requires approved Tier 2 and successful liveness.
-  if (decision === 'verify' && stage === 'tier2' && record.bvn_verified !== true) {
-    setError('Tier 2 cannot be approved until the customer has an administrator-verified BVN.');
-    return;
+  if (decision === 'verify' && stage === 'tier2') {
+    if (record.bvn_verified !== true) {
+      setError('Tier 2 cannot be approved until the customer has an administrator-verified BVN.');
+      return;
+    }
+
+    if (String(record.tier_2_liveness_status || '').toLowerCase() !== 'verified') {
+      setError('Tier 2 cannot be approved until its own liveness verification is successful.');
+      return;
+    }
   }
 
   if (decision === 'verify' && stage === 'tier3') {
@@ -1093,8 +1103,8 @@ const handleKycDecision = async (
       setError('Tier 3 cannot be approved until Tier 2 identity verification is approved.');
       return;
     }
-    if (String(record.liveness_status || '').toLowerCase() !== 'verified') {
-      setError('Tier 3 cannot be approved until liveness verification is successful.');
+    if (String(record.tier_3_liveness_status || '').toLowerCase() !== 'verified') {
+      setError('Tier 3 cannot be approved until its own liveness verification is successful.');
       return;
     }
   }
@@ -1159,7 +1169,7 @@ const handleKycDecision = async (
         ? `/admin/kyc/${record.id}/nin/${decision}`
         : stage === 'tier2'
         ? `/admin/kyc/${record.tier2_record_id || record.id}/tier2/${decision}`
-        : `/admin/kyc/${record.id}/tier3/${decision}`;
+        : `/admin/kyc/${record.tier3_record_id || record.id}/tier3/${decision}`;
 
     await api.post(
       endpoint,
@@ -3526,7 +3536,7 @@ const renderKyc = () => {
         document === 'id_back' ||
         document === 'tier2_selfie'
           ? (record.tier2_record_id || record.id)
-          : record.id;
+          : (record.tier3_record_id || record.id);
 
       const response = await api.get(
         `/admin/kyc/${encodeURIComponent(documentRecordId)}/private-document/${document}`
@@ -3566,7 +3576,7 @@ const renderKyc = () => {
       record.tier_3_verified === true &&
       record.bvn_verified === true &&
       record.id_verified === true &&
-      String(record.liveness_status || '').toLowerCase() === 'verified'
+      String(record.tier_3_liveness_status || '').toLowerCase() === 'verified'
     ) {
       return 3;
     }
@@ -4375,11 +4385,12 @@ const renderKyc = () => {
                                 stage.providerResult || ''
                               ).toLowerCase() !== 'verified') ||
                             (stage.key === 'tier2' &&
-                              selectedKyc.bvn_verified !== true) ||
+                              (selectedKyc.bvn_verified !== true ||
+                                String(selectedKyc.tier_2_liveness_status || '').toLowerCase() !== 'verified')) ||
                             (stage.key === 'tier3' &&
                               (selectedKyc.bvn_verified !== true ||
                                 selectedKyc.id_verified !== true ||
-                                String(selectedKyc.liveness_status || '').toLowerCase() !== 'verified'))
+                                String(selectedKyc.tier_3_liveness_status || '').toLowerCase() !== 'verified'))
                           }
                           onClick={() =>
                             handleKycDecision(
@@ -4420,10 +4431,17 @@ const renderKyc = () => {
                             </Alert>
                           )}
 
+                        {stage.key === 'tier2' &&
+                          String(selectedKyc.tier_2_liveness_status || '').toLowerCase() !== 'verified' && (
+                            <Alert severity="warning">
+                              Tier 2 approval requires successful Tier 2 liveness verification.
+                            </Alert>
+                          )}
+
                         {stage.key === 'tier3' &&
                           (selectedKyc.bvn_verified !== true ||
                             selectedKyc.id_verified !== true ||
-                            String(selectedKyc.liveness_status || '').toLowerCase() !== 'verified') && (
+                            String(selectedKyc.tier_3_liveness_status || '').toLowerCase() !== 'verified') && (
                             <Alert severity="warning">
                               Tier 3 approval requires verified BVN, approved Tier 2 identity verification, and successful liveness verification.
                             </Alert>
@@ -4483,7 +4501,31 @@ const renderKyc = () => {
                 );
               })}
 
-              {/* Liveness status */}
+              {/* Independent Tier 2 liveness status */}
+              <Box
+                sx={{
+                  p: 1.5,
+                  border: `1px solid ${BRAND.border}`,
+                  borderRadius: 2,
+                }}
+              >
+                <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+                  Tier 2 liveness check
+                </Typography>
+                <Chip
+                  size="small"
+                  label={displayStatus(selectedKyc.tier_2_liveness_status)}
+                  color={statusColorForKyc(selectedKyc.tier_2_liveness_status)}
+                  sx={{ mt: 0.75 }}
+                />
+                {selectedKyc.tier_2_liveness_rejection_reason && (
+                  <Alert severity="error" sx={{ mt: 1.25 }}>
+                    {selectedKyc.tier_2_liveness_rejection_reason}
+                  </Alert>
+                )}
+              </Box>
+
+              {/* Independent Tier 3 liveness status and attempt history */}
               <Box
                 sx={{
                   p: 1.5,
@@ -4497,21 +4539,21 @@ const renderKyc = () => {
                     fontWeight: 700,
                   }}
                 >
-                  Liveness check
+                  Tier 3 liveness check
                 </Typography>
 
                 <Chip
                   size="small"
                   label={displayStatus(
-                    selectedKyc.liveness_status
+                    selectedKyc.tier_3_liveness_status
                   )}
                   color={statusColorForKyc(
-                    selectedKyc.liveness_status
+                    selectedKyc.tier_3_liveness_status
                   )}
                   sx={{ mt: 0.75 }}
                 />
 
-                {selectedKyc.liveness_rejection_reason && (
+                {selectedKyc.tier_3_liveness_rejection_reason && (
                   <Alert severity="error" sx={{ mt: 1.25 }}>
                     <Typography
                       component="div"
@@ -4523,7 +4565,7 @@ const renderKyc = () => {
                       component="div"
                       sx={{ fontSize: 12, overflowWrap: 'anywhere' }}
                     >
-                      {selectedKyc.liveness_rejection_reason}
+                      {selectedKyc.tier_3_liveness_rejection_reason}
                     </Typography>
                   </Alert>
                 )}
