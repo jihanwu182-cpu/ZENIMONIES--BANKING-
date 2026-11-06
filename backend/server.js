@@ -704,10 +704,11 @@ await pool.query(`
   SET tier_3_liveness_status = liveness_status
   WHERE dojah_verification_type = 'tier_3_liveness'
     AND liveness_status IN (
-      'pending',
-      'verified',
-      'approved',
-      'rejected'
+   'pending',
+   'verified',
+   'approved',
+   'rejected',
+   'failed'
     )
     AND tier_3_liveness_status = 'pending';
 `);
