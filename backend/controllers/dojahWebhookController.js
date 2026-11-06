@@ -1,19 +1,26 @@
+
 const crypto = require('crypto');
 const pool = require('../config/database');
 
 // ============================================================
 // ZENIMONIES BANKING — DOJAH WEBHOOK CONTROLLER
 // Handles Tier 1 BVN/NIN and Tier 2/Tier 3 verification callbacks.
+// Tier 2 and Tier 3 liveness statuses are stored separately.
 // ============================================================
 
 const getWebhookSecret = () => {
   const value = process.env.DOJAH_WEBHOOK_SECRET;
+
   return typeof value === 'string' && value.trim()
     ? value.trim()
     : null;
 };
 
-// Verify signature against the original request bytes.
+// ============================================================
+// SIGNATURE VERIFICATION
+// Verify against the original request bytes.
+// ============================================================
+
 const verifySignature = (signature, rawBody, secret) => {
   if (
     typeof signature !== 'string' ||
@@ -46,7 +53,10 @@ const verifySignature = (signature, rawBody, secret) => {
   );
 };
 
-// Extract the verification reference.
+// ============================================================
+// REFERENCE EXTRACTION
+// ============================================================
+
 const getReference = (body) => {
   const candidates = [
     body?.metadata?.reference_id,
@@ -63,6 +73,10 @@ const getReference = (body) => {
 
   return null;
 };
+
+// ============================================================
+// PROVIDER STATUS HELPERS
+// ============================================================
 
 const getVerificationStatus = (body) =>
   String(
@@ -85,7 +99,6 @@ const isFailed = (body) =>
     getVerificationStatus(body)
   );
 
-// Read provider step status.
 // A completed flow alone is not proof of successful verification.
 const getStepStatus = (step) => {
   if (!step || typeof step !== 'object') {
@@ -135,19 +148,33 @@ const getStepStatus = (step) => {
 };
 
 const getScore = (value) => {
-  if (value === null || value === undefined || value === '') {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
     return null;
   }
 
   const number = Number(value);
 
-  return Number.isFinite(number) && number >= 0 && number <= 100
+  return Number.isFinite(number) &&
+    number >= 0 &&
+    number <= 100
     ? number
     : null;
 };
-// Extract a short, provider-supplied liveness failure message.
+
+// ============================================================
+// SAFE LIVENESS FAILURE REASON
 // Never save the complete webhook payload or sensitive identifiers.
-const getLivenessFailureReason = (body, data, selfieData) => {
+// ============================================================
+
+const getLivenessFailureReason = (
+  body,
+  data,
+  selfieData
+) => {
   const candidates = [
     selfieData?.message,
     selfieData?.reason,
@@ -165,10 +192,16 @@ const getLivenessFailureReason = (body, data, selfieData) => {
   for (const candidate of candidates) {
     if (typeof candidate !== 'string') continue;
 
-    let reason = candidate
+    const reason = candidate
       .replace(/[\u0000-\u001F\u007F]/g, ' ')
-      .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted]')
-      .replace(/\b(?:\+?\d[\d\s().-]{7,}\d)\b/g, '[redacted]')
+      .replace(
+        /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+        '[redacted]'
+      )
+      .replace(
+        /\b(?:\+?\d[\d\s().-]{7,}\d)\b/g,
+        '[redacted]'
+      )
       .replace(/\b\d{6,}\b/g, '[redacted]')
       .replace(/https?:\/\/\S+/gi, '[redacted]')
       .replace(/\s+/g, ' ')
@@ -180,16 +213,21 @@ const getLivenessFailureReason = (body, data, selfieData) => {
 
   return 'Liveness verification was unsuccessful. Please retry.';
 };
+
 // ============================================================
 // WEBHOOK HANDLER
 // ============================================================
+
 const handleDojahWebhook = async (req, res) => {
   console.info('[KYC webhook] Handler entered.', {
     legacySignaturePresent:
       typeof req.headers['x-dojah-signature'] === 'string',
+
     v2SignaturePresent:
       typeof req.headers['x-dojah-signature-v2'] === 'string',
+
     rawBodyAvailable: Buffer.isBuffer(req.rawBody),
+
     webhookSecretConfigured: Boolean(getWebhookSecret()),
   });
 
@@ -319,7 +357,10 @@ const handleDojahWebhook = async (req, res) => {
     await client.query('BEGIN');
     transactionStarted = true;
 
-    // Find and lock the matching KYC record.
+    // ========================================================
+    // FIND AND LOCK MATCHING KYC RECORD
+    // ========================================================
+
     const recordResult = await client.query(
       `SELECT
          id,
@@ -330,18 +371,19 @@ const handleDojahWebhook = async (req, res) => {
          nin_verification_status,
          nin_provider_validation_result,
          id_verification_status,
+         tier_2_liveness_status,
          tier_3_verification_status,
-         liveness_status,
+         tier_3_liveness_status,
          dojah_reference,
          dojah_verification_type
        FROM kyc_records
        WHERE dojah_reference = $1
          AND dojah_verification_type IN (
-          'bvn',
-          'nin',
-          'identity',
-          'tier_3_liveness'
-       )
+           'bvn',
+           'nin',
+           'identity',
+           'tier_3_liveness'
+         )
        FOR UPDATE`,
       [reference]
     );
@@ -377,28 +419,31 @@ const handleDojahWebhook = async (req, res) => {
 
     // ========================================================
     // TIER 1 — NIN
-    // A completed widget flow is not approval. Require an
-    // explicit positive government_data status from Dojah.
+    // A completed widget flow is not approval.
+    // Require an explicit positive government_data status.
     // ========================================================
+
     if (record.dojah_verification_type === 'nin') {
       const governmentData =
         data.government_data &&
         typeof data.government_data === 'object'
           ? data.government_data
           : {};
+
       const providerStatus = getStepStatus(governmentData);
+
       const providerResult =
         record.nin_verification_status === 'verified' ||
         record.nin_provider_validation_result === 'verified'
           ? 'verified'
           : !failed && providerStatus === 'verified'
             ? 'verified'
-            : (failed || providerStatus === 'rejected')
+            : failed || providerStatus === 'rejected'
               ? 'rejected'
               : 'pending';
 
-      // A positive Dojah result is evidence for the admin queue, not
-      // final account approval. The admin action sets nin_verified.
+      // A positive Dojah result is evidence for the admin queue,
+      // not final account approval.
       const reviewStatus =
         record.nin_verification_status === 'verified'
           ? 'verified'
@@ -420,7 +465,8 @@ const handleDojahWebhook = async (req, res) => {
                ELSE NULL
              END,
              nin_rejection_reason = CASE
-               WHEN $1::text = 'rejected' THEN 'provider_nin_check_failed'
+               WHEN $1::text = 'rejected'
+                 THEN 'provider_nin_check_failed'
                ELSE NULL
              END,
              dojah_checked_at = NOW(),
@@ -429,12 +475,11 @@ const handleDojahWebhook = async (req, res) => {
         [providerResult, reviewStatus, record.id]
       );
 
-      // Provider callbacks are evidence only. They must never clear
-      // an existing customer approval or set the user-level flag.
       // The administrator decision endpoint owns nin_verified.
 
       await client.query('COMMIT');
       transactionStarted = false;
+
       return res.status(200).json({
         received: true,
         matched: true,
@@ -447,6 +492,7 @@ const handleDojahWebhook = async (req, res) => {
     // ========================================================
     // TIER 1 — BVN
     // ========================================================
+
     if (record.dojah_verification_type === 'bvn') {
       const governmentData =
         data.government_data &&
@@ -505,10 +551,8 @@ const handleDojahWebhook = async (req, res) => {
         [nextStatus, providerResult, record.id]
       );
 
-      // Do not set or clear users.bvn_verified here. A successful
-      // provider result remains pending for administrator approval.
-      // This avoids the admin endpoint's verified/permanently-locked
-      // conflict and prevents one method from undoing another.
+      // Do not set or clear users.bvn_verified here.
+      // Final approval remains with the administrator.
 
       await client.query('COMMIT');
       transactionStarted = false;
@@ -520,92 +564,101 @@ const handleDojahWebhook = async (req, res) => {
         status: nextStatus,
       });
     }
- // ========================================================
-// TIER 3 — LIVENESS ONLY
-// Address-document approval remains a separate admin action.
-// ========================================================
-if (
-  record.dojah_verification_type === 'tier_3_liveness'
-) {
-  const selfieData =
-    data.selfie &&
-    typeof data.selfie === 'object'
-      ? data.selfie
-      : {};
 
-  const providerLivenessStatus =
-    getStepStatus(selfieData);
+    // ========================================================
+    // TIER 3 — LIVENESS ONLY
+    // Address-document approval remains a separate admin action.
+    //
+    // IMPORTANT:
+    // This branch writes ONLY to Tier 3 liveness fields.
+    // It does not modify Tier 2 liveness.
+    // ========================================================
 
-  const nextLivenessStatus = failed
-    ? 'rejected'
-    : providerLivenessStatus;
+    if (
+      record.dojah_verification_type === 'tier_3_liveness'
+    ) {
+      const selfieData =
+        data.selfie &&
+        typeof data.selfie === 'object'
+          ? data.selfie
+          : {};
 
-  // Never downgrade previously verified liveness.
-  const savedLivenessStatus =
-    record.liveness_status === 'verified'
-      ? 'verified'
-      : nextLivenessStatus;
+      const providerLivenessStatus =
+        getStepStatus(selfieData);
 
-  const livenessFailureReason =
-    savedLivenessStatus === 'rejected'
-      ? getLivenessFailureReason(
-          body,
-          data,
-          selfieData
-        )
-      : null;
+      const nextLivenessStatus = failed
+        ? 'rejected'
+        : providerLivenessStatus;
 
-  await client.query(
-    `
-    UPDATE kyc_records
-    SET
-      liveness_status = $1::text,
+      // Never downgrade previously verified Tier 3 liveness.
+      const savedLivenessStatus =
+        record.tier_3_liveness_status === 'verified'
+          ? 'verified'
+          : nextLivenessStatus;
 
-      liveness_rejection_reason = CASE
-        WHEN $1::text = 'rejected'
-          THEN $2::text
-        WHEN liveness_status = 'verified'
-          THEN liveness_rejection_reason
-        ELSE NULL
-      END,
+      const livenessFailureReason =
+        savedLivenessStatus === 'rejected'
+          ? getLivenessFailureReason(
+              body,
+              data,
+              selfieData
+            )
+          : null;
 
-      dojah_checked_at = NOW(),
-      updated_at = NOW()
+      await client.query(
+        `UPDATE kyc_records
+         SET tier_3_liveness_status = $1::text,
 
-    WHERE id = $3
-    `,
-    [
-      savedLivenessStatus,
-      livenessFailureReason,
-      record.id,
-    ]
-  );
+             tier_3_liveness_rejection_reason = CASE
+               WHEN $1::text = 'rejected'
+                 THEN $2::text
+               WHEN $1::text = 'verified'
+                 THEN NULL
+               ELSE tier_3_liveness_rejection_reason
+             END,
 
-  console.info(
-    '[KYC webhook] Tier 3 liveness result saved.',
-    {
-      reference,
-      providerLivenessStatus,
-      savedLivenessStatus,
-      failureReasonCaptured:
-        Boolean(livenessFailureReason),
+             dojah_checked_at = NOW(),
+             updated_at = NOW()
+
+         WHERE id = $3`,
+        [
+          savedLivenessStatus,
+          livenessFailureReason,
+          record.id,
+        ]
+      );
+
+      console.info(
+        '[KYC webhook] Tier 3 liveness result saved.',
+        {
+          reference,
+          providerLivenessStatus,
+          savedLivenessStatus,
+          failureReasonCaptured:
+            Boolean(livenessFailureReason),
+        }
+      );
+
+      await client.query('COMMIT');
+      transactionStarted = false;
+
+      return res.status(200).json({
+        received: true,
+        matched: true,
+        verificationType: 'tier_3_liveness',
+        livenessStatus: savedLivenessStatus,
+        documentReviewRequired: true,
+      });
     }
-  );
 
-  await client.query('COMMIT');
-  transactionStarted = false;
-
-  return res.status(200).json({
-    received: true,
-    matched: true,
-    verificationType: 'tier_3_liveness',
-    livenessStatus: savedLivenessStatus,
-    documentReviewRequired: true,
-  });
-}
     // ========================================================
     // TIER 2 — IDENTITY + LIVENESS
+    //
+    // IMPORTANT:
+    // This branch writes ONLY to Tier 2 liveness fields.
+    // It does not modify Tier 3 liveness.
     // ========================================================
+
     const governmentData =
       data.government_data &&
       typeof data.government_data === 'object'
@@ -613,7 +666,8 @@ if (
         : {};
 
     const selfieData =
-      data.selfie && typeof data.selfie === 'object'
+      data.selfie &&
+      typeof data.selfie === 'object'
         ? data.selfie
         : {};
 
@@ -629,14 +683,6 @@ if (
     const livenessProviderStatus =
       getStepStatus(selfieData);
 
-    const identityStatus = failed
-      ? 'rejected'
-      : identityProviderStatus;
-
-    const livenessStatus = failed
-      ? 'rejected'
-      : livenessProviderStatus;
-
     const selfieMatchScore = getScore(
       selfieResult.match_score ?? selfieData.match_score
     );
@@ -645,69 +691,101 @@ if (
       selfieResult.liveness_score ?? selfieData.liveness_score
     );
 
-    // Preserve verified steps unless the event explicitly failed.
+    // Preserve previously verified identity evidence.
     const savedIdentityStatus =
       record.id_verification_status === 'verified'
         ? 'verified'
-        : (failed || ['rejected', 'failed'].includes(identityProviderStatus))
+        : (
+            failed ||
+            identityProviderStatus === 'rejected'
+          )
           ? 'rejected'
-          : ['verified', 'approved', 'success', 'completed'].includes(identityProviderStatus)
+          : identityProviderStatus === 'verified'
             ? 'verified'
             : 'pending';
 
-    const savedLivenessStatus =
-      record.liveness_status === 'verified'
+    // Preserve previously verified Tier 2 liveness evidence.
+    // Never read or write the old shared liveness_status field.
+    const savedTier2LivenessStatus =
+      record.tier_2_liveness_status === 'verified'
         ? 'verified'
         : failed
           ? 'rejected'
-          : ['verified', 'approved', 'success', 'completed'].includes(livenessProviderStatus)
-            ? 'verified'
-            : livenessProviderStatus === 'rejected'
-              ? 'rejected'
-              : 'pending';
+          : livenessProviderStatus;
 
-    // FIX: Explicit casts prevent PostgreSQL error 42P08.
+    const tier2LivenessFailureReason =
+      savedTier2LivenessStatus === 'rejected'
+        ? getLivenessFailureReason(
+            body,
+            data,
+            selfieData
+          )
+        : null;
+
     await client.query(
       `UPDATE kyc_records
        SET id_verification_status = $1::text,
+
            id_verified_at = CASE
              WHEN $1::text = 'verified'
                THEN COALESCE(id_verified_at, NOW())
              ELSE id_verified_at
            END,
+
            id_rejection_reason = CASE
              WHEN $1::text = 'rejected'
                THEN 'provider_identity_check_failed'
              ELSE NULL
            END,
-           liveness_status = $2::text,
+
+           tier_2_liveness_status = $2::text,
+
+           tier_2_liveness_rejection_reason = CASE
+             WHEN $2::text = 'rejected'
+               THEN $3::text
+             WHEN $2::text = 'verified'
+               THEN NULL
+             ELSE tier_2_liveness_rejection_reason
+           END,
+
            id_provider_validation_result = CASE
              WHEN $1::text = 'verified' THEN 'verified'
              WHEN $1::text = 'rejected' THEN 'rejected'
              ELSE id_provider_validation_result
            END,
+
            verification_status = CASE
-             WHEN $1::text = 'rejected' OR $2::text = 'rejected' THEN 'rejected'
-             WHEN $1::text = 'verified' AND $2::text = 'verified' THEN 'pending'
+             WHEN $1::text = 'rejected'
+               OR $2::text = 'rejected'
+               THEN 'rejected'
+             WHEN $1::text = 'verified'
+               AND $2::text = 'verified'
+               THEN 'pending'
              ELSE 'pending'
            END,
-           selfie_match_score = COALESCE($3, selfie_match_score),
-           liveness_score = COALESCE($4, liveness_score),
+
+           selfie_match_score = COALESCE($4, selfie_match_score),
+
+           liveness_score = COALESCE($5, liveness_score),
+
            dojah_checked_at = NOW(),
            updated_at = NOW()
-       WHERE id = $5`,
+
+       WHERE id = $6`,
       [
         savedIdentityStatus,
-        savedLivenessStatus,
+        savedTier2LivenessStatus,
+        tier2LivenessFailureReason,
         selfieMatchScore,
         livenessScore,
         record.id,
       ]
     );
 
-    // The webhook records provider evidence only. It must never approve
-    // the user's account, change users.id_verified, or advance kyc_tier.
-    // Final approval is performed by the administrator decision endpoint.
+    // The webhook records provider evidence only.
+    // It must never approve the user's account, change
+    // users.id_verified, or advance kyc_tier.
+    // Final approval belongs to the administrator endpoint.
 
     await client.query('COMMIT');
     transactionStarted = false;
@@ -717,8 +795,9 @@ if (
       matched: true,
       verificationType: 'identity',
       identityStatus: savedIdentityStatus,
-      livenessStatus: savedLivenessStatus,
+      livenessStatus: savedTier2LivenessStatus,
     });
+
   } catch (error) {
     if (client && transactionStarted) {
       try {
@@ -743,6 +822,7 @@ if (
       received: false,
       message: 'Webhook processing failed.',
     });
+
   } finally {
     if (client) {
       client.release();
