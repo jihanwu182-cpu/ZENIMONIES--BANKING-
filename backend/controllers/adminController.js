@@ -961,8 +961,7 @@ const processKycDecision = async (
   try {
     const { id } = req.params;
 
-    const config =
-      KYC_TYPES[type];
+    const config = KYC_TYPES[type];
 
     if (!config) {
       return res.status(400).json({
@@ -971,12 +970,11 @@ const processKycDecision = async (
       });
     }
 
-    let reason =
-      String(
-        req.body?.reason ||
-        req.body?.rejection_reason ||
-        ''
-      ).trim();
+    let reason = String(
+      req.body?.reason ||
+      req.body?.rejection_reason ||
+      ''
+    ).trim();
 
     if (
       decision === 'reject' &&
@@ -984,34 +982,29 @@ const processKycDecision = async (
     ) {
       return res.status(400).json({
         success: false,
-        message:
-          'A rejection reason is required.',
+        message: 'A rejection reason is required.',
       });
     }
 
     await client.query('BEGIN');
 
-    const recordResult =
-      await client.query(
-        `
-        SELECT
-          k.*,
-          u.full_name,
-          u.email,
-          u.bvn_verified,
-          u.nin_verified,
-          u.id_verified
-        FROM kyc_records k
-
-        INNER JOIN users u
-          ON u.id = k.user_id
-
-        WHERE k.id = $1
-
-        FOR UPDATE
-        `,
-        [id]
-      );
+    const recordResult = await client.query(
+      `
+      SELECT
+        k.*,
+        u.full_name,
+        u.email,
+        u.bvn_verified,
+        u.nin_verified,
+        u.id_verified
+      FROM kyc_records k
+      INNER JOIN users u
+        ON u.id = k.user_id
+      WHERE k.id = $1
+      FOR UPDATE
+      `,
+      [id]
+    );
 
     if (recordResult.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -1022,61 +1015,59 @@ const processKycDecision = async (
       });
     }
 
-    const record =
-      recordResult.rows[0];
-// ----------------------------------------------------------
-// ENFORCE THE CUSTOMER'S SELECTED TIER 1 METHOD
-// ----------------------------------------------------------
+    const record = recordResult.rows[0];
 
-if (type === 'BVN' || type === 'NIN') {
-  let selectedMethod = String(
-    record.tier1_method || ''
-  ).trim().toUpperCase();
+    // ----------------------------------------------------------
+    // ENFORCE THE CUSTOMER'S SELECTED TIER 1 METHOD
+    // ----------------------------------------------------------
 
-  // Safe fallback for older records.
-  if (!selectedMethod) {
-    if (record.bvn && !record.nin) {
-      selectedMethod = 'BVN';
-    } else if (record.nin && !record.bvn) {
-      selectedMethod = 'NIN';
+    if (type === 'BVN' || type === 'NIN') {
+      let selectedMethod = String(
+        record.tier1_method || ''
+      ).trim().toUpperCase();
+
+      // Safe fallback for older records.
+      if (!selectedMethod) {
+        if (record.bvn && !record.nin) {
+          selectedMethod = 'BVN';
+        } else if (record.nin && !record.bvn) {
+          selectedMethod = 'NIN';
+        }
+      }
+
+      if (!selectedMethod) {
+        await client.query('ROLLBACK');
+
+        return res.status(409).json({
+          success: false,
+          code: 'TIER1_METHOD_UNCLEAR',
+          message:
+            'The selected Tier 1 verification method could not be established. Review the submission before making a decision.',
+        });
+      }
+
+      if (selectedMethod !== type) {
+        await client.query('ROLLBACK');
+
+        return res.status(409).json({
+          success: false,
+          code: 'TIER1_METHOD_MISMATCH',
+          message:
+            `This customer selected ${selectedMethod} for Tier 1. ${type} decisions are not permitted for this submission.`,
+          selected_method: selectedMethod,
+        });
+      }
     }
-  }
 
-  if (!selectedMethod) {
-    await client.query('ROLLBACK');
-
-    return res.status(409).json({
-      success: false,
-      code: 'TIER1_METHOD_UNCLEAR',
-      message:
-        'The selected Tier 1 verification method could not be established. Review the submission before making a decision.',
-    });
-  }
-
-  if (selectedMethod !== type) {
-    await client.query('ROLLBACK');
-
-    return res.status(409).json({
-      success: false,
-      code: 'TIER1_METHOD_MISMATCH',
-      message:
-        `This customer selected ${selectedMethod} for Tier 1. ${type} decisions are not permitted for this submission.`,
-      selected_method: selectedMethod,
-    });
-  }
-}
-    const currentStatus =
-      String(
-        record[config.statusColumn] || ''
-      ).toLowerCase();
+    const currentStatus = String(
+      record[config.statusColumn] || ''
+    ).trim().toLowerCase();
 
     // ----------------------------------------------------------
     // VERIFIED = PERMANENT LOCK
     // ----------------------------------------------------------
 
-    if (
-      currentStatus === 'verified'
-    ) {
+    if (currentStatus === 'verified') {
       await client.query('ROLLBACK');
 
       return res.status(409).json({
@@ -1092,9 +1083,7 @@ if (type === 'BVN' || type === 'NIN') {
     // ONLY PENDING SUBMISSIONS CAN RECEIVE A DECISION
     // ----------------------------------------------------------
 
-    if (
-      currentStatus !== 'pending'
-    ) {
+    if (currentStatus !== 'pending') {
       await client.query('ROLLBACK');
 
       return res.status(409).json({
@@ -1102,82 +1091,140 @@ if (type === 'BVN' || type === 'NIN') {
         message:
           `This ${type} verification is not currently pending.`,
         status: currentStatus,
-        locked:
-          currentStatus === 'verified',
+        locked: false,
       });
     }
 
-    const now =
-      new Date();
+    const now = new Date();
 
     // ----------------------------------------------------------
     // VERIFY
     // ----------------------------------------------------------
- 
+
     if (decision === 'verify') {
 
-      // Tier 3 is only available after BVN + Tier 2 identity approval.
+      // --------------------------------------------------------
+      // TIER 3 MUST HAVE APPROVED TIER 1 AND TIER 2
+      // --------------------------------------------------------
+
       if (
         type === 'TIER3' &&
-        (record.bvn_verified !== true || record.id_verified !== true)
+        (
+          record.bvn_verified !== true ||
+          record.id_verified !== true
+        )
       ) {
         await client.query('ROLLBACK');
+
         return res.status(409).json({
           success: false,
           code: 'TIER3_TIER2_REQUIRED',
-          message: 'Tier 3 approval requires a verified BVN and an approved Tier 2 identity document.',
+          message:
+            'Tier 3 approval requires a verified BVN and an approved Tier 2 identity document.',
         });
       }
 
-      // Tier 3 approval requires successful liveness verification.
-      // Liveness is supporting evidence; it does not approve the address document by itself.
+      // --------------------------------------------------------
+      // TIER 2 MUST HAVE ITS OWN VERIFIED LIVENESS
+      // --------------------------------------------------------
+
+      if (type === 'TIER2') {
+        const tier2LivenessStatus = String(
+          record.tier_2_liveness_status || ''
+        ).trim().toLowerCase();
+
+        if (record.bvn_verified !== true) {
+          await client.query('ROLLBACK');
+
+          return res.status(409).json({
+            success: false,
+            code: 'TIER2_BVN_REQUIRED',
+            message:
+              'Tier 2 approval requires a verified BVN.',
+          });
+        }
+
+        if (tier2LivenessStatus !== 'verified') {
+          await client.query('ROLLBACK');
+
+          return res.status(409).json({
+            success: false,
+            code: 'TIER2_LIVENESS_NOT_VERIFIED',
+            message:
+              'Tier 2 cannot be approved until its own liveness verification has been completed successfully.',
+            tier_2_liveness_status:
+              tier2LivenessStatus || 'pending',
+          });
+        }
+      }
+
+      // --------------------------------------------------------
+      // TIER 3 MUST HAVE ITS OWN VERIFIED LIVENESS
+      // --------------------------------------------------------
+
+      if (type === 'TIER3') {
+        const tier3LivenessStatus = String(
+          record.tier_3_liveness_status || ''
+        ).trim().toLowerCase();
+
+        if (tier3LivenessStatus !== 'verified') {
+          await client.query('ROLLBACK');
+
+          return res.status(409).json({
+            success: false,
+            code: 'TIER3_LIVENESS_NOT_VERIFIED',
+            message:
+              'Tier 3 cannot be approved until its own liveness verification has been completed successfully.',
+            tier_3_liveness_status:
+              tier3LivenessStatus || 'pending',
+          });
+        }
+      }
+
+      // --------------------------------------------------------
+      // BVN MUST HAVE A VERIFIED PROVIDER RESULT
+      // --------------------------------------------------------
+
       if (
-        type === 'TIER3' &&
-        record.liveness_status !== 'verified'
+        type === 'BVN' &&
+        String(
+          record.bvn_provider_validation_result || ''
+        ).trim().toLowerCase() !== 'verified'
       ) {
         await client.query('ROLLBACK');
 
         return res.status(409).json({
           success: false,
-          code: 'TIER3_LIVENESS_NOT_VERIFIED',
-          message:
-            'Tier 3 cannot be approved until liveness verification has been completed successfully.',
-          liveness_status:
-            record.liveness_status || 'pending',
-        });
-      }
-
-      // Tier 1 must not be manually approved when the
-      // provider result is missing or unconfirmed.
-      if (type === 'BVN' &&
-          record.bvn_provider_validation_result !== 'verified') {
-        await client.query('ROLLBACK');
-        return res.status(409).json({
-          success: false,
           code: 'BVN_PROVIDER_VERIFICATION_REQUIRED',
-          message: 'BVN approval requires a verified provider result recorded by the backend.',
+          message:
+            'BVN approval requires a verified provider result recorded by the backend.',
         });
       }
 
-      if (type === 'TIER2' && record.bvn_verified !== true) {
-        await client.query('ROLLBACK');
-        return res.status(409).json({
-          success: false,
-          code: 'TIER2_BVN_REQUIRED',
-          message: 'Tier 2 approval requires a verified BVN and a verified identity document.',
-        });
-      }
+      // --------------------------------------------------------
+      // NIN MUST HAVE A VERIFIED PROVIDER RESULT
+      // --------------------------------------------------------
 
-      if (type === 'NIN' &&
-          record.nin_provider_validation_result !== 'verified') {
+      if (
+        type === 'NIN' &&
+        String(
+          record.nin_provider_validation_result || ''
+        ).trim().toLowerCase() !== 'verified'
+      ) {
         await client.query('ROLLBACK');
+
         return res.status(409).json({
           success: false,
           code: 'NIN_PROVIDER_VERIFICATION_REQUIRED',
-          message: 'NIN approval requires a verified provider result recorded by the backend.',
+          message:
+            'NIN approval requires a verified provider result recorded by the backend.',
         });
       }
-      
+
+      // --------------------------------------------------------
+      // APPROVE THE SELECTED KYC RECORD
+      // --------------------------------------------------------
+
       await client.query(
         `
         UPDATE kyc_records
@@ -1203,7 +1250,6 @@ if (type === 'BVN' || type === 'NIN') {
       );
     }
 
-
     // ----------------------------------------------------------
     // REJECT
     // ----------------------------------------------------------
@@ -1224,15 +1270,18 @@ if (type === 'BVN' || type === 'NIN') {
         ]
       );
 
-      // Preserve any previously approved method. The overall state is
-      // recalculated from the user's approved flags immediately below.
+      // Preserve previously approved methods.
+      // Overall KYC state is recalculated below.
     }
 
-    const overall =
-      await refreshOverallKycState(
-        client,
-        record.user_id
-      );
+    // ----------------------------------------------------------
+    // REFRESH OVERALL KYC STATE
+    // ----------------------------------------------------------
+
+    const overall = await refreshOverallKycState(
+      client,
+      record.user_id
+    );
 
     // ----------------------------------------------------------
     // AUDIT LOG
@@ -1257,13 +1306,7 @@ if (type === 'BVN' || type === 'NIN') {
         ip_address,
         user_agent
       )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5
-      )
+      VALUES ($1, $2, $3, $4, $5)
       `,
       [
         record.user_id,
@@ -1288,6 +1331,7 @@ if (type === 'BVN' || type === 'NIN') {
         id: record.id,
         user_id: record.user_id,
         type,
+
         status:
           decision === 'verify'
             ? 'verified'
@@ -1316,6 +1360,7 @@ if (type === 'BVN' || type === 'NIN') {
           overall.allVerified,
       },
     });
+
   } catch (error) {
     try {
       await client.query('ROLLBACK');
@@ -1336,11 +1381,11 @@ if (type === 'BVN' || type === 'NIN') {
       message:
         `Unable to ${decision} ${type} verification`,
     });
+
   } finally {
     client.release();
   }
 };
-
 
 // ============================================================
 // BVN VERIFICATION
