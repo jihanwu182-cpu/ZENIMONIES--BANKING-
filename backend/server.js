@@ -660,6 +660,62 @@ console.log(
 console.log(
   'ZENIMONIES KYC migration is ready.'
 );
+    
+// ========================================================
+// ZENIMONIES — SEPARATE TIER 2 AND TIER 3 LIVENESS
+// ========================================================
+
+await pool.query(`
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS
+    tier_2_liveness_status VARCHAR(30) NOT NULL DEFAULT 'pending';
+
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS
+    tier_3_liveness_status VARCHAR(30) NOT NULL DEFAULT 'pending';
+
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS
+    tier_2_liveness_rejection_reason TEXT;
+
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS
+    tier_3_liveness_rejection_reason TEXT;
+`);
+
+// Preserve existing verification evidence where the
+// verification type identifies which tier it belongs to.
+
+await pool.query(`
+  UPDATE kyc_records
+  SET tier_2_liveness_status = liveness_status
+  WHERE dojah_verification_type = 'identity'
+    AND liveness_status IN (
+      'pending',
+      'verified',
+      'approved',
+      'rejected'
+    )
+    AND tier_2_liveness_status = 'pending';
+`);
+
+await pool.query(`
+  UPDATE kyc_records
+  SET tier_3_liveness_status = liveness_status
+  WHERE dojah_verification_type = 'tier_3_liveness'
+    AND liveness_status IN (
+      'pending',
+      'verified',
+      'approved',
+      'rejected'
+    )
+    AND tier_3_liveness_status = 'pending';
+`);
+
+console.log(
+  'ZENIMONIES KYC migration completed: Tier 2 and Tier 3 liveness fields are separated.'
+);
+
   // ========================================================
 // TIER 3 EMPLOYMENT, INCOME AND DOCUMENT TYPE MIGRATION
 // ========================================================
