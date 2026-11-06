@@ -523,7 +523,6 @@ const handleDojahWebhook = async (req, res) => {
  // ========================================================
 // TIER 3 — LIVENESS ONLY
 // Address-document approval remains a separate admin action.
-// A failed liveness attempt must also release the Tier 3 retry lock.
 // ========================================================
 if (
   record.dojah_verification_type === 'tier_3_liveness'
@@ -561,13 +560,6 @@ if (
     UPDATE kyc_records
     SET
       liveness_status = $1::text,
-
-      tier_3_verification_status = CASE
-        WHEN $1::text = 'rejected'
-          AND tier_3_verification_status <> 'verified'
-          THEN 'rejected'
-        ELSE tier_3_verification_status
-      END,
 
       liveness_rejection_reason = CASE
         WHEN $1::text = 'rejected'
@@ -608,10 +600,6 @@ if (
     matched: true,
     verificationType: 'tier_3_liveness',
     livenessStatus: savedLivenessStatus,
-    tier3Status:
-      savedLivenessStatus === 'rejected'
-        ? 'rejected'
-        : 'pending',
     documentReviewRequired: true,
   });
 }
