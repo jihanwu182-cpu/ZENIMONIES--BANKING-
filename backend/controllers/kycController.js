@@ -2082,14 +2082,15 @@ if (
     const existingKyc = await client.query(
       `
       SELECT
-        id,
-        tier_3_verification_status
-      FROM kyc_records
-      WHERE user_id = $1
-        AND tier_3_method IS NOT NULL
-      ORDER BY created_at DESC
-      LIMIT 1
-      FOR UPDATE
+       id,
+       tier_3_verification_status,
+       dojah_reference
+     FROM kyc_records
+     WHERE user_id = $1
+      AND tier_3_method IS NOT NULL
+    ORDER BY created_at DESC
+    LIMIT 1
+    FOR UPDATE
       `,
       [userId]
     );
@@ -2134,6 +2135,10 @@ if (
         locked: true,
       });
     }
+ // Archive the previous Dojah attempt before clearing its reference.
+if (existingRecord?.dojah_reference) {
+  await archiveDojahAttempt(client, existingRecord, userId);
+}
 
     // Upload both files as authenticated Cloudinary assets.
     // Do not save or return public delivery URLs.
