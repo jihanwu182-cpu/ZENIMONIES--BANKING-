@@ -1849,6 +1849,7 @@ const submitTier2 = async (req, res) => {
 // tier_3_selfie
 //
 // ============================================================
+
 const submitTier3 = async (req, res) => {
   const userId =
     req.user?.id ||
@@ -2005,6 +2006,7 @@ const submitTier3 = async (req, res) => {
   let client;
   let transactionStarted = false;
   let transactionCommitted = false;
+
   let uploadedDocument = null;
   let uploadedSelfie = null;
 
@@ -2038,14 +2040,14 @@ const submitTier3 = async (req, res) => {
     // Lock the user to prevent concurrent Tier 3 submissions.
     const userResult = await client.query(
       `
-       SELECT
-         id,
-         bvn_verified,
-         id_verified,
-         tier_3_verified
-       FROM users
-       WHERE id = $1
-       FOR UPDATE
+      SELECT
+        id,
+        bvn_verified,
+        id_verified,
+        tier_3_verified
+      FROM users
+      WHERE id = $1
+      FOR UPDATE
       `,
       [userId]
     );
@@ -2062,35 +2064,43 @@ const submitTier3 = async (req, res) => {
 
     const user = userResult.rows[0];
 
-// Tier 3 requires completed Tier 2 verification.
-if (
-  user.bvn_verified !== true ||
-  user.id_verified !== true
-) {
-  await client.query('ROLLBACK');
-  transactionStarted = false;
+    // ========================================================
+    // TIER 2 REQUIREMENT
+    // Tier 3 requires completed Tier 2 verification.
+    // ========================================================
 
-  return res.status(403).json({
-    success: false,
-    code: 'TIER_2_REQUIRED_FOR_TIER_3',
-    message:
-      'Please complete BVN and identity verification (Tier 2) before submitting Tier 3.',
-    tier_2_required: true,
-  });
-}
+    if (
+      user.bvn_verified !== true ||
+      user.id_verified !== true
+    ) {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+
+      return res.status(403).json({
+        success: false,
+        code: 'TIER_2_REQUIRED_FOR_TIER_3',
+        message:
+          'Please complete BVN and identity verification (Tier 2) before submitting Tier 3.',
+        tier_2_required: true,
+      });
+    }
+
+    // ========================================================
+    // FIND EXISTING TIER 3 RECORD
+    // ========================================================
 
     const existingKyc = await client.query(
       `
       SELECT
-       id,
-       tier_3_verification_status,
-       dojah_reference
-     FROM kyc_records
-     WHERE user_id = $1
-      AND tier_3_method IS NOT NULL
-    ORDER BY created_at DESC
-    LIMIT 1
-    FOR UPDATE
+        id,
+        tier_3_verification_status,
+        dojah_reference
+      FROM kyc_records
+      WHERE user_id = $1
+        AND tier_3_method IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 1
+      FOR UPDATE
       `,
       [userId]
     );
@@ -2103,6 +2113,7 @@ if (
         existingRecord?.tier_3_verification_status
       );
 
+    // Do not allow changes after successful Tier 3 verification.
     if (
       user.tier_3_verified === true ||
       currentTier3Status === 'verified'
@@ -2121,6 +2132,7 @@ if (
       });
     }
 
+    // Do not allow a second submission while review is pending.
     if (currentTier3Status === 'pending') {
       await client.query('ROLLBACK');
       transactionStarted = false;
@@ -2135,13 +2147,25 @@ if (
         locked: true,
       });
     }
- // Archive the previous Dojah attempt before clearing its reference.
-if (existingRecord?.dojah_reference) {
-  await archiveDojahAttempt(client, existingRecord, userId);
-}
 
-    // Upload both files as authenticated Cloudinary assets.
+    // ========================================================
+    // ARCHIVE PREVIOUS DOJAH ATTEMPT
+    // Do this before clearing the previous reference.
+    // ========================================================
+
+    if (existingRecord?.dojah_reference) {
+      await archiveDojahAttempt(
+        client,
+        existingRecord,
+        userId
+      );
+    }
+
+    // ========================================================
+    // PRIVATE CLOUDINARY UPLOADS
     // Do not save or return public delivery URLs.
+    // ========================================================
+
     uploadedDocument = await uploadKycFile({
       file: tier3Document,
       userId,
@@ -2156,134 +2180,153 @@ if (existingRecord?.dojah_reference) {
 
     let kycId;
 
-    
-if (existingRecord) {
-  kycId = existingRecord.id;
+    // ========================================================
+    // UPDATE EXISTING TIER 3 RECORD
+    // ========================================================
 
-  await client.query(
-    `
-    UPDATE kyc_records
-    SET
-      tier_3_method = $1,
-      tier_3_document_type = $2,
-      employment_status = $3,
-      occupation = $4,
-      annual_income_range = $5,
+    if (existingRecord) {
+      kycId = existingRecord.id;
 
-      tier_3_document_asset_id = $6,
-      tier_3_document_public_id = $7,
-      tier_3_document_resource_type = $8,
-      tier_3_document_format = $9,
+      await client.query(
+        `
+        UPDATE kyc_records
+        SET
+          tier_3_method = $1,
+          tier_3_document_type = $2,
+          employment_status = $3,
+          occupation = $4,
+          annual_income_range = $5,
 
-      tier_3_selfie_asset_id = $10,
-      tier_3_selfie_public_id = $11,
-      tier_3_selfie_resource_type = $12,
-      tier_3_selfie_format = $13,
+          tier_3_document_asset_id = $6,
+          tier_3_document_public_id = $7,
+          tier_3_document_resource_type = $8,
+          tier_3_document_format = $9,
 
-      tier_3_document_url = NULL,
-      tier_3_verification_status = 'pending',
-      tier_3_verified_at = NULL,
-      tier_3_rejection_reason = NULL,
-      
-      dojah_reference = NULL,
-      dojah_verification_type = NULL,
-      dojah_started_at = NULL,
-      dojah_checked_at = NULL,
-      liveness_score = NULL,
-      selfie_match_score = NULL,
+          tier_3_selfie_asset_id = $10,
+          tier_3_selfie_public_id = $11,
+          tier_3_selfie_resource_type = $12,
+          tier_3_selfie_format = $13,
 
+          tier_3_document_url = NULL,
 
-      liveness_status = 'pending',
-      liveness_provider_reference = NULL,
-      verification_status = 'pending',
-      rejection_reason = NULL,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = $14
-      AND user_id = $15
-    `,
-    [
-      method,
-      documentType,
-      employmentStatus,
-      occupation,
-      annualIncomeRange,
+          tier_3_verification_status = 'pending',
+          tier_3_verified_at = NULL,
+          tier_3_rejection_reason = NULL,
 
-      uploadedDocument.assetId,
-      uploadedDocument.publicId,
-      uploadedDocument.resourceType,
-      uploadedDocument.format,
+          tier_3_liveness_status = 'pending',
+          tier_3_liveness_rejection_reason = NULL,
 
-      uploadedSelfie?.assetId || null,
-      uploadedSelfie?.publicId || null,
-      uploadedSelfie?.resourceType || null,
-      uploadedSelfie?.format || null,
+          dojah_reference = NULL,
+          dojah_verification_type = NULL,
+          dojah_started_at = NULL,
+          dojah_checked_at = NULL,
 
-      kycId,
-      userId,
-    ]
-  );
-} else {
-  const insertResult = await client.query(
-    `
-    INSERT INTO kyc_records (
-      user_id,
-      tier_3_method,
-      tier_3_document_type,
-      employment_status,
-      occupation,
-      annual_income_range,
+          liveness_provider_reference = NULL,
 
-      tier_3_document_asset_id,
-      tier_3_document_public_id,
-      tier_3_document_resource_type,
-      tier_3_document_format,
+          verification_status = 'pending',
+          rejection_reason = NULL,
 
-      tier_3_selfie_asset_id,
-      tier_3_selfie_public_id,
-      tier_3_selfie_resource_type,
-      tier_3_selfie_format,
+          updated_at = CURRENT_TIMESTAMP
 
-      bvn_verification_status,
-      id_verification_status,
-      liveness_status,
-      tier_3_verification_status,
-      verification_status
-    )
-    VALUES (
-      $1, $2, $3, $4, $5, $6,
-      $7, $8, $9, $10,
-      $11, $12, $13, $14,
-      'not_verified',
-      'not_verified',
-      'pending',
-      'pending',
-      'pending'
-    )
-    RETURNING id
-    `,
-    [
-      userId,
-      method,
-      documentType,
-      employmentStatus,
-      occupation,
-      annualIncomeRange,
+        WHERE id = $14
+          AND user_id = $15
+        `,
+        [
+          method,
+          documentType,
+          employmentStatus,
+          occupation,
+          annualIncomeRange,
 
-      uploadedDocument.assetId,
-      uploadedDocument.publicId,
-      uploadedDocument.resourceType,
-      uploadedDocument.format,
+          uploadedDocument.assetId,
+          uploadedDocument.publicId,
+          uploadedDocument.resourceType,
+          uploadedDocument.format,
 
-      uploadedSelfie?.assetId || null,
-      uploadedSelfie?.publicId || null,
-      uploadedSelfie?.resourceType || null,
-      uploadedSelfie?.format || null,
-    ]
-  );
+          uploadedSelfie?.assetId || null,
+          uploadedSelfie?.publicId || null,
+          uploadedSelfie?.resourceType || null,
+          uploadedSelfie?.format || null,
 
-  kycId = insertResult.rows[0].id;
-}
+          kycId,
+          userId,
+        ]
+      );
+    } else {
+      // ======================================================
+      // CREATE NEW TIER 3 RECORD
+      // ======================================================
 
+      const insertResult = await client.query(
+        `
+        INSERT INTO kyc_records (
+          user_id,
+
+          tier_3_method,
+          tier_3_document_type,
+          employment_status,
+          occupation,
+          annual_income_range,
+
+          tier_3_document_asset_id,
+          tier_3_document_public_id,
+          tier_3_document_resource_type,
+          tier_3_document_format,
+
+          tier_3_selfie_asset_id,
+          tier_3_selfie_public_id,
+          tier_3_selfie_resource_type,
+          tier_3_selfie_format,
+
+          bvn_verification_status,
+          id_verification_status,
+
+          tier_3_liveness_status,
+          tier_3_liveness_rejection_reason,
+
+          tier_3_verification_status,
+          verification_status
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6,
+          $7, $8, $9, $10,
+          $11, $12, $13, $14,
+          'not_verified',
+          'not_verified',
+          'pending',
+          NULL,
+          'pending',
+          'pending'
+        )
+        RETURNING id
+        `,
+        [
+          userId,
+
+          method,
+          documentType,
+          employmentStatus,
+          occupation,
+          annualIncomeRange,
+
+          uploadedDocument.assetId,
+          uploadedDocument.publicId,
+          uploadedDocument.resourceType,
+          uploadedDocument.format,
+
+          uploadedSelfie?.assetId || null,
+          uploadedSelfie?.publicId || null,
+          uploadedSelfie?.resourceType || null,
+          uploadedSelfie?.format || null,
+        ]
+      );
+
+      kycId = insertResult.rows[0].id;
+    }
+
+    // ========================================================
+    // UPDATE USER TIER 3 SUBMISSION STATUS
+    // ========================================================
 
     await client.query(
       `
@@ -2296,6 +2339,10 @@ if (existingRecord) {
       `,
       [method, userId]
     );
+
+    // ========================================================
+    // AUDIT LOG
+    // ========================================================
 
     await client.query(
       `
@@ -2312,7 +2359,12 @@ if (existingRecord) {
       ]
     );
 
+    // ========================================================
+    // COMMIT
+    // ========================================================
+
     await client.query('COMMIT');
+
     transactionStarted = false;
     transactionCommitted = true;
 
@@ -2320,31 +2372,40 @@ if (existingRecord) {
       success: true,
       message:
         'Your Tier 3 information has been received. Verification is pending.',
+
       kyc_record_id: kycId,
+
       tier: 3,
+
       status: 'pending',
       verified: false,
       locked: true,
+
       method,
       document_type: documentType,
+
       tier_3_verification_status: 'pending',
-      liveness_status: 'pending',
+      tier_3_liveness_status: 'pending',
+
       requirements: tier3Requirements[documentType],
     });
+
   } catch (error) {
     if (transactionStarted && client) {
       try {
         await client.query('ROLLBACK');
       } catch (_) {}
+
       transactionStarted = false;
     }
 
-    // If the database operation failed before commit, remove new assets.
+    // If database operation failed before commit,
+    // remove newly uploaded assets.
     if (!transactionCommitted) {
       await cleanupUploadedFiles();
     }
 
-    // Never return internal storage details or credentials to the client.
+    // Never return internal storage details or credentials.
     console.error(
       'Submit Tier 3 failed:',
       error?.message || 'Unknown error'
@@ -2355,12 +2416,14 @@ if (existingRecord) {
       message:
         'Unable to submit Tier 3 verification. Please try again later.',
     });
+
   } finally {
     if (client) {
       client.release();
     }
   }
 };
+
 // ============================================================
 // DOJAH WIDGET SESSION
 // START VERIFICATION
