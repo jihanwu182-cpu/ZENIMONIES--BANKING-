@@ -508,6 +508,8 @@ const getKycRecords = async (req, res) => {
 
         COALESCE(t2.id, k.id) AS tier2_record_id,
 
+        COALESCE(t3.id, k.id) AS tier3_record_id,
+
         COALESCE(
           NULLIF(BTRIM(t2.document_type), ''),
           NULLIF(BTRIM(k.document_type), '')
