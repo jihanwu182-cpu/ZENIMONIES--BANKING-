@@ -237,18 +237,21 @@ const getLivenessFailureReason = (
 // ============================================================
 // PRESERVE SUCCESSFUL RESULTS
 // ============================================================
-
 const preserveVerified = (currentStatus, newStatus) => {
-  if (
-    String(currentStatus || '').toLowerCase() ===
-    'verified'
-  ) {
+  const current = String(currentStatus || '')
+    .trim()
+    .toLowerCase();
+
+  if (current === 'verified') {
     return 'verified';
+  }
+
+  if (current === 'failed') {
+    return 'failed';
   }
 
   return newStatus;
 };
-
 // ============================================================
 // WEBHOOK HANDLER
 // ============================================================
