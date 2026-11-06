@@ -949,10 +949,32 @@ ADD COLUMN IF NOT EXISTS dojah_checked_at TIMESTAMP;
 ALTER TABLE kyc_records
 ADD COLUMN IF NOT EXISTS bvn_provider_validation_result VARCHAR(30);
 
-CREATE UNIQUE INDEX IF NOT EXISTS
-idx_kyc_dojah_reference_unique
-ON kyc_records (dojah_reference)
-WHERE dojah_reference IS NOT NULL;
+-- Create the unique Dojah reference index only when
+-- existing records contain no duplicate references.
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM kyc_records
+    WHERE dojah_reference IS NOT NULL
+    GROUP BY dojah_reference
+    HAVING COUNT(*) > 1
+  ) THEN
+
+    EXECUTE '
+      CREATE UNIQUE INDEX IF NOT EXISTS
+      idx_kyc_dojah_reference_unique
+      ON kyc_records (dojah_reference)
+      WHERE dojah_reference IS NOT NULL
+    ';
+
+  ELSE
+    RAISE WARNING
+      'Dojah reference index skipped: duplicate references exist.';
+  END IF;
+END
+$$;
 -- ============================================================
 -- ACCOUNT COMPATIBILITY
 -- ============================================================
