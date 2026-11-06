@@ -480,11 +480,14 @@ const handleDojahWebhook = async (req, res) => {
             );
 
       // Provider evidence is separate from admin approval.
-      const reviewStatus =
-        record.nin_verification_status === 'verified'
-          ? 'verified'
-          : 'pending';
-
+     
+const reviewStatus =
+  record.nin_verification_status === 'verified'
+    ? 'verified'
+    : record.nin_verification_status === 'rejected'
+      ? 'rejected'
+      : 'pending';
+      
       await client.query(
         `UPDATE kyc_records
          SET nin_provider_validation_result = $1::text,
@@ -553,10 +556,12 @@ const handleDojahWebhook = async (req, res) => {
 
       // Final BVN approval remains an administrator action.
       const nextStatus =
-        record.bvn_verification_status === 'verified'
-          ? 'verified'
-          : 'pending';
-
+  record.bvn_verification_status === 'verified'
+    ? 'verified'
+    : record.bvn_verification_status === 'rejected'
+      ? 'rejected'
+      : 'pending';
+      
       await client.query(
         `UPDATE kyc_records
          SET bvn_verification_status = $1::text,
