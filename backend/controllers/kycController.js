@@ -2622,6 +2622,7 @@ if (
            tier_3_method,
            tier_3_verification_status,
            liveness_status,
+           tier_3_liveness_status,
            dojah_reference,
            dojah_verification_type
          FROM kyc_records
@@ -2663,7 +2664,7 @@ if (
         ? (tier1Method === 'nin' ? record.nin_verification_status : record.bvn_verification_status) || ''
         : verificationType === 'tier_2'
           ? record.id_verification_status || ''
-          : record.liveness_status || ''
+          record.tier_3_liveness_status || ''
     ).trim().toLowerCase();
 
     if (
@@ -2756,6 +2757,8 @@ if (
            dojah_checked_at = NULL,
            id_verification_status = 'pending',
            liveness_status = 'pending',
+           tier_2_liveness_status = 'pending',
+           tier_2_liveness_rejection_reason = NULL,
            liveness_score = NULL,
            selfie_match_score = NULL,
            id_verified_at = NULL,
@@ -2767,22 +2770,23 @@ if (
       );
       } else {
       await client.query(
-        `UPDATE kyc_records
-         SET
-           dojah_reference = $1,
-           dojah_verification_type = 'tier_3_liveness',
-           dojah_started_at = CURRENT_TIMESTAMP,
-           dojah_checked_at = NULL,
-           liveness_status = 'pending',
-           liveness_rejection_reason = NULL,
-           liveness_score = NULL,
-           selfie_match_score = NULL,
-           updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2
-           AND user_id = $3`,
-        [referenceId, record.id, userId]
-      );
-    }
+    `UPDATE kyc_records
+  SET
+   dojah_reference = $1,
+   dojah_verification_type = 'tier_3_liveness',
+   dojah_started_at = CURRENT_TIMESTAMP,
+   dojah_checked_at = NULL,
+   tier_3_liveness_status = 'pending',
+   tier_3_liveness_rejection_reason = NULL,
+   liveness_status = 'pending',
+   liveness_rejection_reason = NULL,
+   liveness_score = NULL,
+   selfie_match_score = NULL,
+   updated_at = CURRENT_TIMESTAMP
+ WHERE id = $2
+   AND user_id = $3`,
+[referenceId, record.id, userId]
+);
 
     await client.query(
       `UPDATE users
