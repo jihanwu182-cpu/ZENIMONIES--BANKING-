@@ -1779,16 +1779,17 @@ const submitTier2 = async (req, res) => {
           tier_2_liveness_status,
           tier_2_liveness_rejection_reason,
           tier_3_verification_status,
+          verification_status
         )
         VALUES (
           $1, $2, $3,
           $4, $5, $6, $7,
           $8, $9, $10, $11,
           $12, $13, $14, $15,
-         'not_verified', 'pending', 'pending', NULL, 'not_verified', 'pending'
+          'not_verified', 'pending', 'pending',
+          'pending', NULL, 'not_verified', 'pending'
         )
         RETURNING id
-        `,
         [userId, documentType, documentNumber, ...storageValues]
       );
       kycId = insertResult.rows[0].id;
