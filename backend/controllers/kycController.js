@@ -2659,12 +2659,14 @@ if (
           ? 'identity'
           : 'tier_3_liveness';
 
-    const currentStatus = String(
+        const currentStatus = String(
       verificationType === 'tier_1'
-        ? (tier1Method === 'nin' ? record.nin_verification_status : record.bvn_verification_status) || ''
+        ? (tier1Method === 'nin'
+            ? record.nin_verification_status
+            : record.bvn_verification_status) || ''
         : verificationType === 'tier_2'
           ? record.id_verification_status || ''
-          record.tier_3_liveness_status || ''
+          : record.tier_3_liveness_status || ''
     ).trim().toLowerCase();
 
     if (
