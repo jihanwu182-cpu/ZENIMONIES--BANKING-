@@ -242,12 +242,8 @@ const preserveVerified = (currentStatus, newStatus) => {
     .trim()
     .toLowerCase();
 
-  // Preserve terminal results for this Dojah reference.
-  if (
-    current === 'verified' ||
-    current === 'failed'
-  ) {
-    return current;
+  if (current === 'verified') {
+    return 'verified';
   }
 
   return newStatus;
