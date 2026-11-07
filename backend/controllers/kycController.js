@@ -1790,7 +1790,9 @@ const submitTier2 = async (req, res) => {
           'pending', NULL, 'not_verified', 'pending'
         )
         RETURNING id
+        `,
         [userId, documentType, documentNumber, ...storageValues]
+        
       );
       kycId = insertResult.rows[0].id;
     }
@@ -2790,7 +2792,7 @@ if (
    AND user_id = $3`,
 [referenceId, record.id, userId]
 );
-
+}
     await client.query(
       `UPDATE users
        SET
