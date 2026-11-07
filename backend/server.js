@@ -2154,9 +2154,9 @@ console.log(
         );
 
         console.log(
-          'Dojah Webhook:',
-          '/api/webhooks/dojah'
-        );
+         'Verification Health:',
+         '/api/health/verification'
+       );
 
         console.log(
           '================================================'
