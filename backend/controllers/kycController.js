@@ -592,7 +592,7 @@ const tier3Result = await pool.query(
     tier_3_verification_status,
     tier_3_verified_at,
     tier_3_rejection_reason,
-    liveness_status,
+    tier_3_liveness_status,
     liveness_score,
     selfie_match_score,
     dojah_reference,
@@ -827,8 +827,7 @@ nin_rejection_reason: ninRecord?.nin_rejection_reason || null,
         tier_3_status:
           tier3Status,
          liveness_status:
-          tier3Record?.liveness_status || 'not_verified',
-
+           tier3Record?.tier_3_liveness_status || 'not_verified',
         tier_3_locked:
           tier3Locked,
 
