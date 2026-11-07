@@ -237,18 +237,19 @@ const getLivenessFailureReason = (
 // ============================================================
 // PRESERVE SUCCESSFUL RESULTS
 // ============================================================
-
 const preserveVerified = (currentStatus, newStatus) => {
   const current = String(currentStatus || '')
     .trim()
     .toLowerCase();
 
-  // Never downgrade a successful verification.
-  if (current === 'verified') {
-    return 'verified';
+  // Preserve terminal results for this Dojah reference.
+  if (
+    current === 'verified' ||
+    current === 'failed'
+  ) {
+    return current;
   }
 
-  // Allow a previously failed verification to succeed on retry.
   return newStatus;
 };
 // ============================================================
