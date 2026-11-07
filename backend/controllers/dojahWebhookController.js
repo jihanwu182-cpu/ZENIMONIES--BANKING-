@@ -719,10 +719,7 @@ const reviewStatus =
     );
 
     // Preserve identity provider success.
-    const nextIdentityProviderResult = failed
-      ? 'failed'
-      : identityProviderStatus;
-
+   const nextIdentityProviderResult = identityProviderStatus;
     const savedIdentityProviderResult =
       record.id_provider_validation_result === 'verified'
         ? 'verified'
@@ -742,9 +739,7 @@ const reviewStatus =
             ? 'failed'
             : record.tier_2_liveness_status;
 
-    const nextTier2LivenessStatus = failed
-      ? 'failed'
-      : livenessProviderStatus;
+    const nextTier2LivenessStatus = livenessProviderStatus;
 
     const savedTier2LivenessStatus = preserveVerified(
       currentTier2LivenessStatus,
