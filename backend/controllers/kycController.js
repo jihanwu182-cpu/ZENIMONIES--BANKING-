@@ -2736,21 +2736,40 @@ if (
          WHERE id = $2 AND user_id = $3`,
         [referenceId, record.id, userId]
       );
-    } else if (verificationType === 'tier_1') {
-      await client.query(
+      } else if (verificationType === 'tier_1') {
+      const bvnSaveResult = await client.query(
         `UPDATE kyc_records
          SET dojah_reference = $1,
              dojah_verification_type = 'bvn',
-                 tier1_method = 'bvn',
+             tier1_method = 'bvn',
              bvn_provider_reference = $1,
              dojah_started_at = CURRENT_TIMESTAMP,
              dojah_checked_at = NULL,
              bvn_verification_status = 'pending',
              bvn_rejection_reason = NULL,
              updated_at = CURRENT_TIMESTAMP
-         WHERE id = $2 AND user_id = $3`,
+         WHERE id = $2
+           AND user_id = $3`,
         [referenceId, record.id, userId]
       );
+
+      if (bvnSaveResult.rowCount !== 1) {
+        console.error('[Dojah] BVN reference save failed.', {
+          updatedRows: bvnSaveResult.rowCount,
+          verificationType: 'bvn',
+        });
+
+        const saveError = new Error(
+          'Unable to save BVN verification reference.'
+        );
+        saveError.code = 'DOJAH_REFERENCE_SAVE_FAILED';
+        throw saveError;
+      }
+
+      console.info('[Dojah] BVN reference saved successfully.', {
+        updatedRows: bvnSaveResult.rowCount,
+        verificationType: 'bvn',
+      });
     } else if (verificationType === 'tier_2') {
       await client.query(
         `UPDATE kyc_records
