@@ -660,24 +660,6 @@ console.log(
 console.log(
   'ZENIMONIES KYC migration is ready.'
 );
-// ============================================================
-// VERIFY TIER 2 BVN EVIDENCE COLUMN
-// ============================================================
-
-const tier2ColumnCheck = await pool.query(`
-  SELECT EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'kyc_records'
-      AND column_name = 'tier_2_bvn_provider_validation_result'
-  ) AS column_exists
-`);
-
-console.log(
-  '[KYC schema check] Tier 2 BVN evidence column exists:',
-  tier2ColumnCheck.rows[0].column_exists
-);
 // ========================================================
 // ZENIMONIES TIER 1 DOJAH LIVENESS MIGRATION
 // ========================================================
