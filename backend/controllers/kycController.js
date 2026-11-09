@@ -2489,6 +2489,9 @@ const startDojahVerification = async (req, res) => {
   const tier1Method = String(
     req.body?.verification_method || 'bvn'
   ).trim().toLowerCase();
+  // A deliberate Tier 1 launch from the current frontend starts a fresh
+  // provider session. The previous reference is archived before replacement.
+  const restartSession = req.body?.restart_session === true;
 
   const allowedTypes = [
     'tier_1',
@@ -2702,7 +2705,8 @@ if (
     if (
       existingReference &&
       record.dojah_verification_type === expectedType &&
-      currentStatus === 'pending'
+      currentStatus === 'pending' &&
+      !(verificationType === 'tier_1' && restartSession)
     ) {
       await client.query('COMMIT');
 
@@ -2718,6 +2722,8 @@ if (
     }
 
     // Preserve the prior provider attempt before assigning a new active reference.
+    // For Tier 1, restart_session=true intentionally bypasses pending-session
+    // reuse so a deleted/replaced Dojah widget cannot keep using its old session.
     await archiveDojahAttempt(client, record, userId);
 
     const referenceId = `zen_${crypto.randomUUID()}`;
