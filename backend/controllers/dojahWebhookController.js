@@ -1,4 +1,3 @@
-
 const crypto = require('crypto');
 const pool = require('../config/database');
 
@@ -426,16 +425,85 @@ const handleDojahWebhook = async (req, res) => {
     );
 
     if (recordResult.rows.length === 0) {
+      // A previous attempt may have been archived when the customer
+      // started a newer verification. Never apply an archived webhook
+      // to the current kyc_records row: it may belong to an older attempt.
+      const archivedResult = await client.query(
+        `SELECT
+           id,
+           kyc_record_id,
+           verification_type,
+           attempt_status,
+           archived_at
+         FROM kyc_verification_attempts
+         WHERE reference = $1
+         LIMIT 1`,
+        [reference]
+      );
+
+      if (archivedResult.rows.length > 0) {
+        const archivedAttempt = archivedResult.rows[0];
+
+        await client.query('ROLLBACK');
+        transactionStarted = false;
+
+        console.info(
+          '[KYC webhook] Reference belongs to an archived verification attempt; no current KYC record was changed.',
+          {
+            archivedAttemptFound: true,
+            verificationType: archivedAttempt.verification_type || null,
+            attemptStatus: archivedAttempt.attempt_status || null,
+            archivedAt: archivedAttempt.archived_at || null,
+          }
+        );
+
+        return res.status(200).json({
+          received: true,
+          matched: false,
+          archived: true,
+          updated: false,
+        });
+      }
+
+      // Check whether the reference exists on a current KYC row but has
+      // an unexpected verification type. Do not process unsupported types.
+      const typeMismatchResult = await client.query(
+        `SELECT
+           id,
+           dojah_verification_type
+         FROM kyc_records
+         WHERE dojah_reference = $1
+         LIMIT 1`,
+        [reference]
+      );
+
       await client.query('ROLLBACK');
       transactionStarted = false;
 
-      console.warn(
-        '[KYC webhook] No matching KYC record found.'
-      );
+      if (typeMismatchResult.rows.length > 0) {
+        console.warn(
+          '[KYC webhook] Reference exists on a current KYC record with an unsupported or unexpected verification type.',
+          {
+            currentRecordFound: true,
+            verificationType:
+              typeMismatchResult.rows[0].dojah_verification_type || null,
+          }
+        );
+      } else {
+        console.warn(
+          '[KYC webhook] Reference was not found in active or archived KYC attempts.',
+          {
+            activeMatch: false,
+            archivedMatch: false,
+          }
+        );
+      }
 
       return res.status(200).json({
         received: true,
         matched: false,
+        archived: false,
+        updated: false,
       });
     }
 
