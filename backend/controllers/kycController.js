@@ -112,6 +112,11 @@ const archiveDojahAttempt = async (client, record, userId) => {
        k.id_verification_status,
 
        CASE
+         WHEN k.dojah_verification_type IN ('bvn', 'nin')
+           THEN COALESCE(
+             NULLIF(k.tier_1_liveness_status, ''),
+             'pending'
+           )
          WHEN k.dojah_verification_type = 'tier_3_liveness'
            THEN COALESCE(
              NULLIF(k.tier_3_liveness_status, ''),
@@ -133,6 +138,12 @@ const archiveDojahAttempt = async (client, record, userId) => {
        k.id_provider_validation_result,
 
        CASE
+         WHEN k.dojah_verification_type IN ('bvn', 'nin')
+           THEN COALESCE(
+             NULLIF(k.tier_1_liveness_rejection_reason, ''),
+             NULLIF(k.id_rejection_reason, ''),
+             NULLIF(k.rejection_reason, '')
+           )
          WHEN k.dojah_verification_type = 'tier_3_liveness'
            THEN COALESCE(
              NULLIF(k.tier_3_liveness_rejection_reason, ''),
@@ -2737,7 +2748,12 @@ if (
              dojah_started_at = CURRENT_TIMESTAMP,
              dojah_checked_at = NULL,
              nin_verification_status = 'pending',
+             nin_provider_validation_result = 'pending',
+             nin_verified_at = NULL,
              nin_rejection_reason = NULL,
+             tier_1_liveness_status = 'pending',
+             tier_1_liveness_verified_at = NULL,
+             tier_1_liveness_rejection_reason = NULL,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $2 AND user_id = $3`,
         [referenceId, record.id, userId]
@@ -2752,7 +2768,12 @@ if (
              dojah_started_at = CURRENT_TIMESTAMP,
              dojah_checked_at = NULL,
              bvn_verification_status = 'pending',
+             bvn_provider_validation_result = 'pending',
+             bvn_verified_at = NULL,
              bvn_rejection_reason = NULL,
+             tier_1_liveness_status = 'pending',
+             tier_1_liveness_verified_at = NULL,
+             tier_1_liveness_rejection_reason = NULL,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $2
            AND user_id = $3`,
