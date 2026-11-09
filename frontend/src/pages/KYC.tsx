@@ -1825,11 +1825,11 @@ setTier1Method(method);
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        verification_type: 'tier_1',
-        verification_method: method,
-      }),
-    });
+  body: JSON.stringify({
+  verification_type: 'tier_1',
+  verification_method: method,
+  restart_session: true,
+}),
 
     const result = await response.json().catch(() => ({}));
 
