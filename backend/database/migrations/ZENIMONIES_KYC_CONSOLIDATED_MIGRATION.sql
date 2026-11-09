@@ -51,7 +51,8 @@ ALTER TABLE kyc_records
 
 -- Separate provider evidence from the administrator's final Tier 2 decision.
 ALTER TABLE kyc_records
-  ADD COLUMN IF NOT EXISTS id_provider_validation_result VARCHAR(30);
+  ADD COLUMN IF NOT EXISTS id_provider_validation_result VARCHAR(30),
+  ADD COLUMN IF NOT EXISTS tier_2_bvn_provider_validation_result VARCHAR(30);
 
 CREATE INDEX IF NOT EXISTS idx_kyc_records_id_provider_validation_result
   ON kyc_records (id_provider_validation_result);
