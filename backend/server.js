@@ -660,7 +660,28 @@ console.log(
 console.log(
   'ZENIMONIES KYC migration is ready.'
 );
-    
+// ========================================================
+// ZENIMONIES TIER 1 DOJAH LIVENESS MIGRATION
+// ========================================================
+
+await pool.query(`
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS
+    tier_1_liveness_status VARCHAR(30)
+    NOT NULL DEFAULT 'pending';
+
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS
+    tier_1_liveness_verified_at TIMESTAMP;
+
+  ALTER TABLE kyc_records
+  ADD COLUMN IF NOT EXISTS
+    tier_1_liveness_rejection_reason TEXT;
+`);
+
+console.log(
+  'ZENIMONIES Tier 1 liveness migration completed.'
+);  
 // ========================================================
 // ZENIMONIES — SEPARATE TIER 2 AND TIER 3 LIVENESS
 // ========================================================
