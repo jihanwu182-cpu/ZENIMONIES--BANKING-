@@ -1,4 +1,4 @@
- import React, {
+import React, {
   useEffect,
   useRef,
   useState,
@@ -20,8 +20,14 @@ const DOJAH_APP_ID =
 const DOJAH_PUBLIC_KEY =
   process.env.REACT_APP_DOJAH_PUBLIC_KEY || '';
 
-const DOJAH_WIDGET_ID =
-  process.env.REACT_APP_DOJAH_WIDGET_ID || '';
+const DOJAH_TIER_1_WIDGET_ID =
+  process.env.REACT_APP_DOJAH_TIER_1_WIDGET_ID || '';
+
+const DOJAH_TIER_2_WIDGET_ID =
+  process.env.REACT_APP_DOJAH_TIER_2_WIDGET_ID || '';
+
+const DOJAH_TIER_3_WIDGET_ID =
+  process.env.REACT_APP_DOJAH_TIER_3_WIDGET_ID || '';
 
 // ============================================================
 // TYPES
@@ -1792,7 +1798,7 @@ if (dojahLoading) {
 if (
   !DOJAH_APP_ID ||
   !DOJAH_PUBLIC_KEY ||
-  !DOJAH_WIDGET_ID
+  !DOJAH_TIER_1_WIDGET_ID
 ) {
   showAlert(
     'Verification is temporarily unavailable. Please try again later.',
@@ -1850,7 +1856,7 @@ const connect = new Connect({
   p_key: DOJAH_PUBLIC_KEY,
   type: 'custom',
   config: {
-    widget_id: DOJAH_WIDGET_ID,
+    widget_id: DOJAH_TIER_1_WIDGET_ID,
   },
   reference_id: referenceId,
   metadata: {
@@ -1987,7 +1993,7 @@ connect.open();
     if (
       !DOJAH_APP_ID ||
       !DOJAH_PUBLIC_KEY ||
-      !DOJAH_WIDGET_ID ||
+      !DOJAH_TIER_2_WIDGET_ID ||
       typeof window.Connect !== 'function'
     ) {
       showAlert(
@@ -2089,7 +2095,7 @@ connect.open();
         p_key: DOJAH_PUBLIC_KEY,
         type: 'custom',
         config: {
-          widget_id: DOJAH_WIDGET_ID,
+          widget_id: DOJAH_TIER_2_WIDGET_ID,
         },
         reference_id: referenceId,
         metadata: {
@@ -2268,7 +2274,7 @@ connect.open();
     if (
       !DOJAH_APP_ID ||
       !DOJAH_PUBLIC_KEY ||
-      !DOJAH_WIDGET_ID ||
+      !DOJAH_TIER_3_WIDGET_ID ||
       typeof window.Connect !== 'function'
     ) {
       showAlert(
@@ -2371,7 +2377,7 @@ connect.open();
         p_key: DOJAH_PUBLIC_KEY,
         type: 'custom',
         config: {
-          widget_id: DOJAH_WIDGET_ID,
+          widget_id: DOJAH_TIER_3_WIDGET_ID,
         },
         reference_id: referenceId,
         metadata: {
@@ -2520,7 +2526,7 @@ connect.open();
     if (
       !DOJAH_APP_ID ||
       !DOJAH_PUBLIC_KEY ||
-      !DOJAH_WIDGET_ID ||
+      !DOJAH_TIER_3_WIDGET_ID ||
       typeof window.Connect !== 'function'
     ) {
       showAlert(
@@ -2573,7 +2579,7 @@ connect.open();
         p_key: DOJAH_PUBLIC_KEY,
         type: 'custom',
         config: {
-          widget_id: DOJAH_WIDGET_ID,
+          widget_id: DOJAH_TIER_3_WIDGET_ID,
         },
         reference_id: referenceId,
         metadata: {
