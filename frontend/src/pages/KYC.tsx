@@ -1830,7 +1830,7 @@ setTier1Method(method);
   verification_method: method,
   restart_session: true,
 }),
-
+}
     const result = await response.json().catch(() => ({}));
 
     if (!response.ok || !result.reference_id) {
