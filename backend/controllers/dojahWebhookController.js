@@ -918,95 +918,98 @@ const handleDojahWebhook = async (req, res) => {
     const livenessProviderStatus =
       getStepStatus(selfieData);
 
-    // --------------------------------------------------------
-    // TIER 1 BVN MATCH
-    // --------------------------------------------------------
+   // --------------------------------------------------------
+// TIER 1 BVN MATCH
+// --------------------------------------------------------
 
-    const normalizeBvn = (value) => {
-      if (
-        typeof value !== 'string' &&
-        typeof value !== 'number'
-      ) {
-        return null;
-      }
+const normalizeBvn = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
 
-      const normalized = String(value).replace(/\D/g, '');
+  const normalized = value.trim();
 
-      return normalized.length === 11
-        ? normalized
-        : null;
-    };
+  return /^\d{11}$/.test(normalized)
+    ? normalized
+    : null;
+};
 
-    const submittedBvnCandidates = [
-      body.value,
-      body.verification_value,
-      data.value,
-      data.verification_value,
-    ]
-      .filter(
-        (value) =>
-          value !== null &&
-          value !== undefined &&
-          String(value).trim() !== ''
-      )
-      .map(normalizeBvn);
+// Collect every BVN value supplied by the webhook.
+// If multiple values are supplied, ALL must be valid
+// and identical.
 
-    const submittedBvnValid =
-      submittedBvnCandidates.length > 0 &&
-      submittedBvnCandidates.every(Boolean);
+const submittedBvnCandidates = [
+  body.value,
+  body.verification_value,
+  data.value,
+  data.verification_value,
+]
+  .filter(
+    (value) =>
+      value !== null &&
+      value !== undefined &&
+      String(value).trim() !== ''
+  )
+  .map(normalizeBvn);
 
-    const submittedBvn =
-      submittedBvnValid
-        ? submittedBvnCandidates[0]
-        : null;
+const submittedBvnValid =
+  submittedBvnCandidates.length > 0 &&
+  submittedBvnCandidates.every(Boolean);
 
-    const returnedBvn = normalizeBvn(
-      governmentData?.data?.bvn?.entity?.bvn
-    );
+const submittedBvn =
+  submittedBvnValid
+    ? submittedBvnCandidates[0]
+    : null;
 
-    const tier1Bvn = normalizeBvn(record.bvn);
+// BVN returned by Dojah government verification.
+const returnedBvn = normalizeBvn(
+  governmentData?.data?.bvn?.entity?.bvn
+);
 
-    const tier1BvnAlreadyVerified =
-      String(record.bvn_verification_status || '')
-        .trim()
-        .toLowerCase() === 'verified';
+// Previously verified Tier 1 BVN.
+const tier1Bvn = normalizeBvn(record.bvn);
 
-    const submittedBvnMatchesTier1 =
-      submittedBvnValid &&
-      submittedBvn === tier1Bvn &&
-      submittedBvnCandidates.every(
-        (value) => value === tier1Bvn
-      );
+const tier1BvnAlreadyVerified =
+  String(record.bvn_verification_status || '')
+    .trim()
+    .toLowerCase() === 'verified';
 
-    const returnedBvnMatchesTier1 =
-      returnedBvn !== null &&
-      returnedBvn === tier1Bvn;
+// Submitted BVN must match the stored Tier 1 BVN.
+const submittedBvnMatchesTier1 =
+  submittedBvnValid &&
+  tier1Bvn !== null &&
+  submittedBvn === tier1Bvn &&
+  submittedBvnCandidates.every(
+    (value) => value === tier1Bvn
+  );
 
-    const governmentBvnVerified =
-      getStepStatus(governmentData) === 'verified';
+// Dojah-returned BVN must also match Tier 1.
+const returnedBvnMatchesTier1 =
+  returnedBvn !== null &&
+  tier1Bvn !== null &&
+  returnedBvn === tier1Bvn;
 
-    const tier2BvnVerified =
-      !failed &&
-      verificationStatus === 'completed' &&
-      tier1BvnAlreadyVerified &&
-      tier1Bvn !== null &&
-      submittedBvnMatchesTier1 &&
-      returnedBvnMatchesTier1 &&
-      governmentBvnVerified;
+const governmentBvnVerified =
+  getStepStatus(governmentData) === 'verified';
 
-    const tier2BvnProviderResult =
-      tier2BvnVerified
-        ? 'verified'
-        : (
-            failed ||
-            (
-              submittedBvnValid &&
-              returnedBvn !== null
-            )
-          )
-          ? 'failed'
-          : 'pending';
+// All BVN evidence is mandatory for a completed
+// Tier 2 verification.
+const tier2BvnVerified =
+  !failed &&
+  verificationStatus === 'completed' &&
+  tier1BvnAlreadyVerified &&
+  tier1Bvn !== null &&
+  submittedBvnMatchesTier1 &&
+  returnedBvnMatchesTier1 &&
+  governmentBvnVerified;
 
+const tier2BvnProviderResult =
+  tier2BvnVerified
+    ? 'verified'
+    : failed
+      ? 'failed'
+      : 'failed';
+    
     // --------------------------------------------------------
     // GOVERNMENT ID PROVIDER RESULT
     // --------------------------------------------------------
