@@ -1201,6 +1201,18 @@ console.info(
     livenessStatus: savedTier2LivenessStatus,
     tier2Approved,
     administratorRejected,
+
+    // Safe diagnostic information — no customer BVN exposed.
+    tier2EvidenceComplete,
+    tier2BvnVerified,
+    tier1BvnAlreadyVerified,
+    submittedBvnValid,
+    submittedBvnMatchesTier1,
+    returnedBvnMatchesTier1,
+    governmentBvnStatus,
+    governmentIdStatus,
+    livenessProviderStatus,
+    verificationCompleted: completed,
   }
 );
 
