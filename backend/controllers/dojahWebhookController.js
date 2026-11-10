@@ -9,7 +9,8 @@ const pool = require('../config/database');
 // Tier 3: Tier 3 liveness
 //
 // Provider failures are stored as "failed".
-// Tier 2 and Tier 3 review workflows remain separate.
+// Tier 2 is automatically approved when all required checks pass.
+// Tier 3 liveness remains separate from Tier 3 document review.
 // ============================================================
 
 // ============================================================
@@ -961,7 +962,7 @@ const handleDojahWebhook = async (req, res) => {
 
     const tier2BvnVerified =
   !failed &&
-  verificationStatus === 'completed' &&
+  completed &&
   tier1BvnAlreadyVerified &&
   submittedBvnMatchesTier1 &&
   returnedBvnMatchesTier1 &&
@@ -1002,7 +1003,7 @@ const tier2EvidenceComplete =
   governmentIdStatus === 'verified' &&
   livenessProviderStatus === 'verified' &&
   !failed &&
-  verificationStatus === 'completed';
+  completed;
 
 const identityProviderResult = failed
   ? 'failed'
@@ -1111,6 +1112,8 @@ await client.query(
          THEN 'rejected'
        WHEN $6::boolean = TRUE
          THEN 'verified'
+       WHEN verification_status IN ('verified', 'rejected')
+         THEN verification_status
        WHEN $7::boolean = TRUE
          THEN 'failed'
        ELSE 'pending'
