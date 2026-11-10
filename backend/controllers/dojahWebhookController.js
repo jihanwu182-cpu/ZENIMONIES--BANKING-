@@ -113,7 +113,6 @@ const isFailed = (body) =>
 // Returns:
 // verified | failed | pending
 // ============================================================
-
 const getStepStatus = (step) => {
   if (!step || typeof step !== 'object') {
     return 'pending';
@@ -126,35 +125,22 @@ const getStepStatus = (step) => {
     step.data?.verification_status,
   ];
 
-  for (const candidate of candidates) {
-    if (candidate === true) return 'verified';
-    if (candidate === false) return 'failed';
+  for (const value of candidates) {
+    if (value === true) return 'verified';
+    if (value === false) return 'failed';
 
-    const value = String(candidate ?? '')
-      .trim()
-      .toLowerCase();
+    if (typeof value !== 'string') continue;
+
+    const status = value.trim().toLowerCase();
 
     if (
-      [
-        'verified',
-        'success',
-        'successful',
-        'approved',
-        'passed',
-      ].includes(value)
+      ['success', 'successful', 'verified', 'completed', 'complete', 'approved', 'passed'].includes(status)
     ) {
       return 'verified';
     }
 
     if (
-      [
-        'rejected',
-        'failed',
-        'failure',
-        'declined',
-        'abandoned',
-        'unsuccessful',
-      ].includes(value)
+      ['failed', 'failure', 'rejected', 'declined', 'abandoned', 'error'].includes(status)
     ) {
       return 'failed';
     }
@@ -162,7 +148,6 @@ const getStepStatus = (step) => {
 
   return 'pending';
 };
-
 // ============================================================
 // SCORE VALIDATION
 // ============================================================
@@ -876,16 +861,17 @@ const handleDojahWebhook = async (req, res) => {
         documentReviewRequired: true,
       });
     }
+ 
     // ========================================================
-    // TIER 2 — BVN MATCH + GOVERNMENT ID + LIVENESS
+    // TIER 2 — AUTOMATIC APPROVAL
     //
-    // Provider checks:
-    // 1. Submitted BVN matches existing verified Tier 1 BVN.
-    // 2. Returned government BVN matches existing Tier 1 BVN.
-    // 3. Government-issued ID verification passes.
-    // 4. Selfie/liveness verification passes.
-    //
-    // Final Tier 2 approval remains administrator-controlled.
+    // Approval requires:
+    // 1. Existing Tier 1 BVN is verified.
+    // 2. Submitted BVN matches the stored Tier 1 BVN.
+    // 3. Dojah-returned BVN matches the stored Tier 1 BVN.
+    // 4. Government ID verification passes.
+    // 5. Facial liveness passes.
+    // 6. Dojah reports a completed, successful verification.
     // ========================================================
 
     const governmentData =
@@ -912,271 +898,316 @@ const handleDojahWebhook = async (req, res) => {
         ? data.id
         : {};
 
-    const governmentIdStatus =
-      getStepStatus(idData);
+    const governmentIdStatus = getStepStatus(idData);
+    const livenessProviderStatus = getStepStatus(selfieData);
+    const governmentBvnStatus = getStepStatus(governmentData);
 
-    const livenessProviderStatus =
-      getStepStatus(selfieData);
+    const normalizeBvn = (value) => {
+      if (typeof value !== 'string') return null;
 
- // --------------------------------------------------------
-// TIER 1 BVN MATCH
-// --------------------------------------------------------
+      const normalized = value.trim();
 
-const normalizeBvn = (value) => {
-  if (typeof value !== 'string') {
-    return null;
-  }
+      return /^\d{11}$/.test(normalized)
+        ? normalized
+        : null;
+    };
 
-  const normalized = value.trim();
+    const submittedBvnCandidates = [
+      body.value,
+      body.verification_value,
+      data.value,
+      data.verification_value,
+    ]
+      .filter(
+        (value) =>
+          value !== null &&
+          value !== undefined &&
+          String(value).trim() !== ''
+      )
+      .map(normalizeBvn);
 
-  return /^\d{11}$/.test(normalized)
-    ? normalized
-    : null;
-};
+    const submittedBvnValid =
+      submittedBvnCandidates.length > 0 &&
+      submittedBvnCandidates.every(Boolean);
 
-// Collect every BVN value supplied by the webhook.
-// If multiple values are supplied, ALL must be valid
-// and identical.
+    const submittedBvn =
+      submittedBvnValid
+        ? submittedBvnCandidates[0]
+        : null;
 
-const submittedBvnCandidates = [
-  body.value,
-  body.verification_value,
-  data.value,
-  data.verification_value,
-]
-  .filter(
-    (value) =>
-      value !== null &&
-      value !== undefined &&
-      String(value).trim() !== ''
-  )
-  .map(normalizeBvn);
+    const returnedBvn = normalizeBvn(
+      governmentData?.data?.bvn?.entity?.bvn
+    );
 
-const submittedBvnValid =
-  submittedBvnCandidates.length > 0 &&
-  submittedBvnCandidates.every(Boolean);
+    const tier1Bvn = normalizeBvn(record.bvn);
 
-const submittedBvn =
-  submittedBvnValid
-    ? submittedBvnCandidates[0]
-    : null;
+    const tier1BvnAlreadyVerified =
+      String(record.bvn_verification_status || '')
+        .trim()
+        .toLowerCase() === 'verified';
 
-// BVN returned by Dojah government verification.
-const returnedBvn = normalizeBvn(
-  governmentData?.data?.bvn?.entity?.bvn
-);
+    const submittedBvnMatchesTier1 =
+      submittedBvnValid &&
+      tier1Bvn !== null &&
+      submittedBvn === tier1Bvn &&
+      submittedBvnCandidates.every(
+        (value) => value === tier1Bvn
+      );
 
-// Previously verified Tier 1 BVN.
-const tier1Bvn = normalizeBvn(record.bvn);
+    const returnedBvnMatchesTier1 =
+      returnedBvn !== null &&
+      tier1Bvn !== null &&
+      returnedBvn === tier1Bvn;
 
-const tier1BvnAlreadyVerified =
-  String(record.bvn_verification_status || '')
-    .trim()
-    .toLowerCase() === 'verified';
-
-// Submitted BVN must match the stored Tier 1 BVN.
-const submittedBvnMatchesTier1 =
-  submittedBvnValid &&
-  tier1Bvn !== null &&
-  submittedBvn === tier1Bvn &&
-  submittedBvnCandidates.every(
-    (value) => value === tier1Bvn
-  );
-
-// Dojah-returned BVN must also match Tier 1.
-const returnedBvnMatchesTier1 =
-  returnedBvn !== null &&
-  tier1Bvn !== null &&
-  returnedBvn === tier1Bvn;
-
-const governmentBvnVerified =
-  getStepStatus(governmentData) === 'verified';
-
-// All BVN evidence is mandatory for a completed
-// Tier 2 verification.
-const tier2BvnVerified =
+    const tier2BvnVerified =
   !failed &&
   verificationStatus === 'completed' &&
   tier1BvnAlreadyVerified &&
-  tier1Bvn !== null &&
   submittedBvnMatchesTier1 &&
   returnedBvnMatchesTier1 &&
-  governmentBvnVerified;
+  governmentBvnStatus === 'verified';
 
-const tier2BvnProviderResult =
+const bvnEvidenceMismatch =
+  (
+    submittedBvnValid &&
+    tier1Bvn !== null &&
+    !submittedBvnMatchesTier1
+  ) ||
+  (
+    returnedBvn !== null &&
+    tier1Bvn !== null &&
+    !returnedBvnMatchesTier1
+  );
+
+const bvnEvidenceInvalid =
+  submittedBvnCandidates.length > 0 &&
+  !submittedBvnValid;
+
+const tier2BvnProviderResult = preserveVerified(
+  record.tier_2_bvn_provider_validation_result,
   tier2BvnVerified
     ? 'verified'
-    : failed
+    : (
+        failed ||
+        governmentBvnStatus === 'failed' ||
+        bvnEvidenceMismatch ||
+        bvnEvidenceInvalid
+      )
       ? 'failed'
-      : 'failed';
-// --------------------------------------------------------
-// REQUIRE COMPLETE TIER 2 EVIDENCE
-// --------------------------------------------------------
+      : 'pending'
+);
 
 const tier2EvidenceComplete =
-  tier2BvnProviderResult === 'verified' &&
+  tier2BvnVerified &&
   governmentIdStatus === 'verified' &&
   livenessProviderStatus === 'verified' &&
   !failed &&
   verificationStatus === 'completed';
-    // --------------------------------------------------------
-    // GOVERNMENT ID PROVIDER RESULT
-    // --------------------------------------------------------
 
-    const identityProviderResult = failed
-      ? 'failed'
-      : governmentIdStatus;
+const identityProviderResult = failed
+  ? 'failed'
+  : governmentIdStatus;
 
-    // --------------------------------------------------------
-    // TIER 2 LIVENESS
-    // --------------------------------------------------------
+const selfieMatchScore = getScore(
+  selfieResult.match_score ??
+  selfieData.match_score
+);
 
-    const selfieMatchScore = getScore(
-      selfieResult.match_score ??
-      selfieData.match_score
-    );
+const livenessScore = getScore(
+  selfieResult.liveness_score ??
+  selfieData.liveness_score
+);
 
-    const livenessScore = getScore(
-      selfieResult.liveness_score ??
-      selfieData.liveness_score
-    );
+const currentTier2LivenessStatus =
+  record.tier_2_liveness_status === 'verified' ||
+  record.tier_2_liveness_status === 'failed'
+    ? record.tier_2_liveness_status
+    : record.liveness_status === 'verified'
+      ? 'verified'
+      : record.liveness_status === 'failed'
+        ? 'failed'
+        : record.tier_2_liveness_status;
 
-    const currentTier2LivenessStatus =
-      record.tier_2_liveness_status === 'verified' ||
-      record.tier_2_liveness_status === 'failed'
-        ? record.tier_2_liveness_status
-        : record.liveness_status === 'verified'
-          ? 'verified'
-          : record.liveness_status === 'failed'
-            ? 'failed'
-            : record.tier_2_liveness_status;
+const nextTier2LivenessStatus = failed
+  ? 'failed'
+  : livenessProviderStatus;
 
-    const nextTier2LivenessStatus = failed
-      ? 'failed'
-      : livenessProviderStatus;
+const savedTier2LivenessStatus =
+  preserveVerified(
+    currentTier2LivenessStatus,
+    nextTier2LivenessStatus
+  );
 
-    const savedTier2LivenessStatus =
-      preserveVerified(
-        currentTier2LivenessStatus,
-        nextTier2LivenessStatus
-      );
+const tier2FailureReason =
+  savedTier2LivenessStatus === 'failed'
+    ? getLivenessFailureReason(
+        body,
+        data,
+        selfieData
+      )
+    : null;
 
-    const tier2FailureReason =
-      savedTier2LivenessStatus === 'failed'
-        ? getLivenessFailureReason(
-            body,
-            data,
-            selfieData
-          )
-        : null;
-
-    // --------------------------------------------------------
-    // ADMINISTRATOR REVIEW
-    //
-    // Do not automatically approve Tier 2.
-    // Preserve existing administrator decisions.
-    // --------------------------------------------------------
-
-    const savedIdentityReviewStatus =
-      record.id_verification_status === 'verified'
+// Never downgrade an already verified or rejected identity.
+const savedIdentityStatus =
+  record.id_verification_status === 'verified'
+    ? 'verified'
+    : record.id_verification_status === 'rejected'
+      ? 'rejected'
+      : tier2EvidenceComplete
         ? 'verified'
-        : record.id_verification_status === 'rejected'
-          ? 'rejected'
-          : 'pending';
+        : 'pending';
 
-    const tier2ProviderFailure =
+    const tier2Approved =
+  tier2EvidenceComplete &&
+  savedIdentityStatus === 'verified' &&
+  savedTier2LivenessStatus === 'verified';
+
+const tier2ProviderFailure =
   failed ||
-  (
-    verificationStatus === 'completed' &&
-    !tier2EvidenceComplete
-  ) ||
-  tier2BvnProviderResult === 'failed' ||
-  identityProviderResult === 'failed' ||
-  savedTier2LivenessStatus === 'failed';
+  governmentIdStatus === 'failed' ||
+  livenessProviderStatus === 'failed' ||
+  governmentBvnStatus === 'failed' ||
+  bvnEvidenceMismatch ||
+  bvnEvidenceInvalid;
 
-    await client.query(
-      `UPDATE kyc_records
-       SET
-         tier_2_bvn_provider_validation_result = $1::text,
+// Preserve an existing administrator rejection.
+const administratorRejected =
+  record.id_verification_status === 'rejected';
 
-         id_verification_status = $2::text,
+// Save all provider results and approval status atomically.
+await client.query(
+  `UPDATE kyc_records
+   SET
+     tier_2_bvn_provider_validation_result = $1::text,
 
-         id_provider_validation_result = $3::text,
+     id_verification_status = $2::text,
 
-         tier_2_liveness_status = $4::text,
+     id_provider_validation_result = $3::text,
 
-         tier_2_liveness_rejection_reason = CASE
-           WHEN $4::text = 'failed'
-             THEN $5::text
-           WHEN $4::text = 'verified'
-             THEN NULL
-           ELSE tier_2_liveness_rejection_reason
-         END,
+     id_verified_at = CASE
+       WHEN $2::text = 'verified'
+         THEN COALESCE(id_verified_at, NOW())
+       ELSE id_verified_at
+     END,
 
-         verification_status = CASE
-           WHEN $6::boolean = TRUE
-             THEN 'failed'
-           ELSE 'pending'
-         END,
+     id_rejection_reason = CASE
+       WHEN $2::text = 'verified'
+         THEN NULL
+       ELSE id_rejection_reason
+     END,
 
-         selfie_match_score = COALESCE(
-           $7,
-           selfie_match_score
-         ),
+     tier_2_liveness_status = $4::text,
 
-         liveness_score = COALESCE(
-           $8,
-           liveness_score
-         ),
+     tier_2_liveness_rejection_reason = CASE
+       WHEN $4::text = 'failed'
+         THEN $5::text
+       WHEN $4::text = 'verified'
+         THEN NULL
+       ELSE tier_2_liveness_rejection_reason
+     END,
 
-         dojah_checked_at = NOW(),
-         updated_at = NOW()
+     verification_status = CASE
+       WHEN $11::boolean = TRUE
+         THEN 'rejected'
+       WHEN $6::boolean = TRUE
+         THEN 'verified'
+       WHEN $7::boolean = TRUE
+         THEN 'failed'
+       ELSE 'pending'
+     END,
 
-       WHERE id = $9`,
-      [
-        tier2BvnProviderResult,
-        savedIdentityReviewStatus,
-        identityProviderResult,
-        savedTier2LivenessStatus,
-        tier2FailureReason,
-        tier2ProviderFailure,
-        selfieMatchScore,
-        livenessScore,
-        record.id,
-      ]
+     selfie_match_score = COALESCE(
+       $8,
+       selfie_match_score
+     ),
+
+     liveness_score = COALESCE(
+       $9,
+       liveness_score
+     ),
+
+     dojah_checked_at = NOW(),
+     updated_at = NOW()
+
+   WHERE id = $10`,
+  [
+    tier2BvnProviderResult,
+    savedIdentityStatus,
+    identityProviderResult,
+    savedTier2LivenessStatus,
+    tier2FailureReason,
+    tier2Approved,
+    tier2ProviderFailure,
+    selfieMatchScore,
+    livenessScore,
+    record.id,
+    administratorRejected,
+  ]
+);
+
+// Automatically upgrade the user only after every
+// required provider check has passed.
+if (tier2Approved) {
+  const userUpdate = await client.query(
+    `UPDATE users
+     SET
+       id_verified = TRUE,
+       kyc_tier = GREATEST(COALESCE(kyc_tier, 0), 2),
+       kyc_status = 'verified',
+       updated_at = NOW()
+     WHERE id = $1
+       AND bvn_verified = TRUE`,
+    [record.user_id]
+  );
+
+  if (userUpdate.rowCount !== 1) {
+    throw new Error(
+      'Tier 2 approval failed: user record was not updated.'
     );
+  }
 
-    console.info(
-      '[KYC webhook] Tier 2 results saved.',
-      {
-        reference,
-        tier2BvnProviderResult,
-        tier1BvnWasVerified: tier1BvnAlreadyVerified,
-        submittedBvnMatchesTier1,
-        returnedBvnMatchesTier1,
-        governmentIdProviderResult:
-          identityProviderResult,
-        identityReviewStatus:
-          savedIdentityReviewStatus,
-        tier2LivenessStatus:
-          savedTier2LivenessStatus,
-      }
-    );
+  await client.query(
+    `INSERT INTO audit_logs (
+       user_id,
+       action,
+       description
+     )
+     VALUES ($1, $2, $3)`,
+    [
+      record.user_id,
+      'kyc_tier2_auto_approved',
+      'Tier 2 automatically approved after successful BVN match, government identity verification, and facial liveness verification by Dojah.',
+    ]
+  );
+}
 
-    await client.query('COMMIT');
-    transactionStarted = false;
+console.info(
+  '[KYC webhook] Tier 2 processing completed.',
+  {
+    reference,
+    tier2BvnProviderResult,
+    governmentIdProviderResult: identityProviderResult,
+    livenessStatus: savedTier2LivenessStatus,
+    tier2Approved,
+    administratorRejected,
+  }
+);
 
-    return res.status(200).json({
-      received: true,
-      matched: true,
-      verificationType: 'identity',
-      tier2BvnProviderResult,
-      identityProviderResult,
-      identityStatus: savedIdentityReviewStatus,
-      livenessStatus: savedTier2LivenessStatus,
-      administratorReviewRequired: true,
-    });
-   
+await client.query('COMMIT');
+transactionStarted = false;
+
+return res.status(200).json({
+  received: true,
+  matched: true,
+  verificationType: 'identity',
+  tier2BvnProviderResult,
+  identityProviderResult,
+  identityStatus: savedIdentityStatus,
+  livenessStatus: savedTier2LivenessStatus,
+  tier2Approved,
+  administratorReviewRequired: false,
+});
+
   } catch (error) {
     if (client && transactionStarted) {
       try {
