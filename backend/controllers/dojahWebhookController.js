@@ -918,7 +918,7 @@ const handleDojahWebhook = async (req, res) => {
     const livenessProviderStatus =
       getStepStatus(selfieData);
 
-   // --------------------------------------------------------
+ // --------------------------------------------------------
 // TIER 1 BVN MATCH
 // --------------------------------------------------------
 
@@ -1009,7 +1009,16 @@ const tier2BvnProviderResult =
     : failed
       ? 'failed'
       : 'failed';
-    
+// --------------------------------------------------------
+// REQUIRE COMPLETE TIER 2 EVIDENCE
+// --------------------------------------------------------
+
+const tier2EvidenceComplete =
+  tier2BvnProviderResult === 'verified' &&
+  governmentIdStatus === 'verified' &&
+  livenessProviderStatus === 'verified' &&
+  !failed &&
+  verificationStatus === 'completed';
     // --------------------------------------------------------
     // GOVERNMENT ID PROVIDER RESULT
     // --------------------------------------------------------
@@ -1076,10 +1085,14 @@ const tier2BvnProviderResult =
           : 'pending';
 
     const tier2ProviderFailure =
-      failed ||
-      tier2BvnProviderResult === 'failed' ||
-      identityProviderResult === 'failed' ||
-      savedTier2LivenessStatus === 'failed';
+  failed ||
+  (
+    verificationStatus === 'completed' &&
+    !tier2EvidenceComplete
+  ) ||
+  tier2BvnProviderResult === 'failed' ||
+  identityProviderResult === 'failed' ||
+  savedTier2LivenessStatus === 'failed';
 
     await client.query(
       `UPDATE kyc_records
