@@ -507,6 +507,8 @@ const getKycStatus = async (req, res) => {
         id_verified_at,
         id_rejection_reason,
         liveness_status,
+        tier_2_liveness_status,
+        tier_2_liveness_rejection_reason,
         tier_3_method,
         tier_3_verification_status,
         tier_3_verified_at,
@@ -639,6 +641,8 @@ const tier3Record =
     id_verified_at,
     id_rejection_reason,
     liveness_status,
+    tier_2_liveness_status,
+    tier_2_liveness_rejection_reason,
     dojah_checked_at,
     created_at,
     updated_at
@@ -691,6 +695,21 @@ const idStatus =
     : normalizeKycStatus(
         identityRecord?.id_verification_status
       );
+
+// Tier 2 liveness is stored separately from Tier 3 liveness.
+// A provider failure is exposed as rejected for a consistent client status.
+const tier2LivenessRaw = String(
+  identityRecord?.tier_2_liveness_status || 'not_verified'
+).trim().toLowerCase();
+
+const tier2LivenessStatus =
+  ['verified', 'approved'].includes(tier2LivenessRaw)
+    ? 'verified'
+    : ['rejected', 'failed', 'abandoned'].includes(tier2LivenessRaw)
+      ? 'rejected'
+      : ['pending', 'under_review'].includes(tier2LivenessRaw)
+        ? 'pending'
+        : 'not_verified';
 
 const tier3Status =
   user.tier_3_verified === true
@@ -747,13 +766,15 @@ const storedTier = Math.max(
 );
 
 // Tier 1 accepts either verified BVN or verified NIN.
-// Tier 2 specifically requires BVN plus approved identity verification.
+// Tier 2 requires verified BVN, identity and Tier 2 liveness.
 // Tier 3 requires the complete Tier 2 path plus Tier 3 approval.
 const tier1Verified =
   bvnStatus === 'verified' || ninStatus === 'verified';
 
 const tier2Verified =
-  bvnStatus === 'verified' && idStatus === 'verified';
+  bvnStatus === 'verified' &&
+  idStatus === 'verified' &&
+  tier2LivenessStatus === 'verified';
 
 const tier3Verified =
   tier2Verified && tier3Status === 'verified';
@@ -827,6 +848,19 @@ nin_rejection_reason: ninRecord?.nin_rejection_reason || null,
         id_rejection_reason:
           identityRecord?.id_rejection_reason ||
           null,
+
+        tier_2_status:
+          tier2Verified
+            ? 'verified'
+            : idStatus === 'rejected' || tier2LivenessStatus === 'rejected'
+              ? 'rejected'
+              : 'pending',
+
+        tier_2_liveness_status:
+          tier2LivenessStatus,
+
+        tier_2_liveness_rejection_reason:
+          identityRecord?.tier_2_liveness_rejection_reason || null,
 
         // ----------------------------------------------------
         // TIER 3
@@ -1807,8 +1841,9 @@ const submitTier2 = async (req, res) => {
       kycId = insertResult.rows[0].id;
     }
 
-    // Provider results do not approve the account. Final Tier 2 approval
-    // remains an administrator-controlled action.
+    // A new Tier 2 submission always resets the user's identity approval.
+    // The signed Dojah webhook can complete Tier 2 only after all required
+    // provider checks, including BVN evidence and liveness, pass.
     await client.query(
       `
       UPDATE users
@@ -2930,9 +2965,8 @@ const confirmDojahVerification = async (req, res) => {
   }
 
   try {
-    // Read-only endpoint.
-    // The signed Dojah webhook records provider evidence.
-    // Final approval remains administrator-controlled.
+    // Read-only endpoint. The signed Dojah webhook is the source of provider
+    // evidence; Tier 2 is complete only when identity and liveness both pass.
     const result = await pool.query(
       `SELECT
          id,
