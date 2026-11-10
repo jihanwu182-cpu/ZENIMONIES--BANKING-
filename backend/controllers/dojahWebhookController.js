@@ -557,7 +557,7 @@ const handleDojahWebhook = async (req, res) => {
 
       const checksPassed =
         !failed &&
-        verificationStatus === 'completed' &&
+        completed &&
         governmentStatus === 'verified' &&
         livenessStatus === 'verified';
 
@@ -693,7 +693,7 @@ const handleDojahWebhook = async (req, res) => {
 
       const checksPassed =
         !failed &&
-        verificationStatus === 'completed' &&
+        completed &&
         governmentStatus === 'verified' &&
         livenessStatus === 'verified';
 
@@ -1107,17 +1107,19 @@ await client.query(
        ELSE tier_2_liveness_rejection_reason
      END,
 
-     verification_status = CASE
-       WHEN $11::boolean = TRUE
-         THEN 'rejected'
-       WHEN $6::boolean = TRUE
-         THEN 'verified'
-       WHEN verification_status IN ('verified', 'rejected')
-         THEN verification_status
-       WHEN $7::boolean = TRUE
-         THEN 'failed'
-       ELSE 'pending'
-     END,
+verification_status = CASE
+  WHEN $11::boolean = TRUE
+    THEN 'rejected'
+  WHEN verification_status = 'rejected'
+    THEN 'rejected'
+  WHEN $6::boolean = TRUE
+    THEN 'verified'
+  WHEN verification_status = 'verified'
+    THEN 'verified'
+  WHEN $7::boolean = TRUE
+    THEN 'failed'
+  ELSE 'pending'
+END,
 
      selfie_match_score = COALESCE(
        $8,
@@ -1169,19 +1171,25 @@ if (tier2Approved) {
     );
   }
 
-  await client.query(
-    `INSERT INTO audit_logs (
-       user_id,
-       action,
-       description
-     )
-     VALUES ($1, $2, $3)`,
-    [
-      record.user_id,
-      'kyc_tier2_auto_approved',
-      'Tier 2 automatically approved after successful BVN match, government identity verification, and facial liveness verification by Dojah.',
-    ]
-  );
+await client.query(
+  `INSERT INTO audit_logs (
+     user_id,
+     action,
+     description
+   )
+   SELECT $1, $2, $3
+   WHERE NOT EXISTS (
+     SELECT 1
+     FROM audit_logs
+     WHERE user_id = $1
+       AND action = $2
+   )`,
+  [
+    record.user_id,
+    'kyc_tier2_auto_approved',
+    'Tier 2 automatically approved after successful BVN match, government identity verification, and facial liveness verification by Dojah.',
+  ]
+);
 }
 
 console.info(
