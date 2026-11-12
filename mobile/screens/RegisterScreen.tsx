@@ -23,7 +23,41 @@ type RegistrationStep =
   | 'emailOtp'
   | 'profile';
 
-export default function RegisterScreen() {
+type RegistrationAccount = {
+  id?: string;
+  account_number?: string | null;
+  account_name?: string;
+  account_type?: string;
+  currency?: string;
+  balance?: string | number;
+  status?: string;
+};
+
+type RegistrationSession = {
+  success: boolean;
+  token: string;
+  user?: {
+    id?: string;
+    full_name?: string;
+    first_name?: string;
+    surname?: string;
+    email?: string;
+    phone?: string;
+    role?: string;
+  };
+  account?: RegistrationAccount;
+  accounts?: RegistrationAccount[];
+};
+
+type RegisterScreenProps = {
+  onRegistrationSuccess?: (
+    session: RegistrationSession | null
+  ) => void;
+};
+
+export default function RegisterScreen({
+  onRegistrationSuccess,
+}: RegisterScreenProps) {
   const [step, setStep] = useState<RegistrationStep>('phone');
 
   const [phone, setPhone] = useState('');
@@ -44,15 +78,25 @@ export default function RegisterScreen() {
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
 
+  // ============================================================
+  // OTP RESEND COUNTDOWN
+  // ============================================================
+
   useEffect(() => {
     if (resendSeconds <= 0) return;
 
     const timer = setInterval(() => {
-      setResendSeconds((previous) => Math.max(0, previous - 1));
+      setResendSeconds((previous) =>
+        Math.max(0, previous - 1)
+      );
     }, 1000);
 
     return () => clearInterval(timer);
   }, [resendSeconds]);
+
+  // ============================================================
+  // API REQUEST HELPER
+  // ============================================================
 
   const request = async (
     endpoint: string,
@@ -72,12 +116,15 @@ export default function RegisterScreen() {
     try {
       data = await response.json();
     } catch {
-      throw new Error('The server returned an invalid response.');
+      throw new Error(
+        'The server returned an invalid response.'
+      );
     }
 
     if (!response.ok || data.success !== true) {
       const error: any = new Error(
-        data.message || 'Something went wrong. Please try again.'
+        data.message ||
+          'Something went wrong. Please try again.'
       );
 
       error.retryAfter = data.retry_after_seconds;
@@ -87,6 +134,10 @@ export default function RegisterScreen() {
     return data;
   };
 
+  // ============================================================
+  // ERROR HANDLER
+  // ============================================================
+
   const handleError = (error: any) => {
     if (error.retryAfter) {
       setResendSeconds(Number(error.retryAfter));
@@ -94,14 +145,21 @@ export default function RegisterScreen() {
 
     Alert.alert(
       'Registration',
-      error.message || 'Unable to complete this step. Please try again.'
+      error.message ||
+        'Unable to complete this step. Please try again.'
     );
   };
+
+  // ============================================================
+  // PHONE VERIFICATION — STEP 1
+  // ============================================================
 
   const startPhoneVerification = async () => {
     const cleanPhone = phone.trim();
 
-    if (!/^(\+234|234|0)?[0-9\s()-]{10,15}$/.test(cleanPhone)) {
+    if (
+      !/^(\+234|234|0)?[0-9\s()-]{10,15}$/.test(cleanPhone)
+    ) {
       Alert.alert(
         'Invalid phone number',
         'Enter a valid Nigerian phone number, for example 08012345678.'
@@ -138,6 +196,10 @@ export default function RegisterScreen() {
     }
   };
 
+  // ============================================================
+  // PHONE VERIFICATION — STEP 2
+  // ============================================================
+
   const verifyPhone = async () => {
     if (!/^\d{6}$/.test(otp.trim())) {
       Alert.alert(
@@ -170,6 +232,10 @@ export default function RegisterScreen() {
       setLoading(false);
     }
   };
+
+  // ============================================================
+  // EMAIL VERIFICATION — STEP 3
+  // ============================================================
 
   const startEmailVerification = async () => {
     const cleanEmail = email.trim().toLowerCase();
@@ -221,6 +287,10 @@ export default function RegisterScreen() {
     }
   };
 
+  // ============================================================
+  // EMAIL VERIFICATION — STEP 4
+  // ============================================================
+
   const verifyEmail = async () => {
     if (!/^\d{6}$/.test(otp.trim())) {
       Alert.alert(
@@ -254,6 +324,10 @@ export default function RegisterScreen() {
       setLoading(false);
     }
   };
+
+  // ============================================================
+  // RESEND VERIFICATION CODE
+  // ============================================================
 
   const resendCode = async () => {
     if (resendSeconds > 0 || loading) return;
@@ -297,6 +371,10 @@ export default function RegisterScreen() {
     }
   };
 
+  // ============================================================
+  // COMPLETE REGISTRATION — STEP 5
+  // ============================================================
+
   const completeRegistration = async () => {
     if (!phoneVerified || !emailVerified) {
       Alert.alert(
@@ -310,7 +388,10 @@ export default function RegisterScreen() {
     const cleanMiddleName = middleName.trim();
     const cleanSurname = surname.trim();
 
-    if (cleanFirstName.length < 2 || cleanSurname.length < 2) {
+    if (
+      cleanFirstName.length < 2 ||
+      cleanSurname.length < 2
+    ) {
       Alert.alert(
         'Name required',
         'Enter your first name and surname. Both must contain at least two characters.'
@@ -337,27 +418,53 @@ export default function RegisterScreen() {
     setLoading(true);
 
     try {
-      const data = await request('/registration/complete', {
-        phone: phone.trim(),
-        first_name: cleanFirstName,
-        middle_name: cleanMiddleName,
-        surname: cleanSurname,
-        password,
-      });
+      const data = await request(
+        '/registration/complete',
+        {
+          phone: phone.trim(),
+          first_name: cleanFirstName,
+          middle_name: cleanMiddleName,
+          surname: cleanSurname,
+          password,
+        }
+      );
 
+      // The account has been created successfully.
+      // Do not repeat registration if session creation fails.
       setPassword('');
       setConfirmPassword('');
+      setOtp('');
+
+      const registrationSession: RegistrationSession | null =
+        data.token && data.login_required !== true
+          ? {
+              success: true,
+              token: data.token,
+              user: data.user,
+              account: data.account || undefined,
+              accounts:
+                data.accounts ||
+                (data.account ? [data.account] : []),
+            }
+          : null;
 
       Alert.alert(
         'Welcome to ZENIMONIES',
-        data.message ||
-          'Your personal account has been created successfully.',
+        data.login_required === true || !data.token
+          ? 'Your account has been created successfully. Please log in to continue.'
+          : 'Your account has been created successfully. Your secure session is ready.',
         [
           {
             text: 'Continue',
             onPress: () => {
-              // Secure session storage and dashboard navigation
-              // will be connected in the authentication stage.
+              if (onRegistrationSuccess) {
+                onRegistrationSuccess(registrationSession);
+              } else {
+                Alert.alert(
+                  'Registration complete',
+                  'Please return to the login screen to continue.'
+                );
+              }
             },
           },
         ]
@@ -368,6 +475,10 @@ export default function RegisterScreen() {
       setLoading(false);
     }
   };
+
+  // ============================================================
+  // STEP INFORMATION
+  // ============================================================
 
   const stepNumber = {
     phone: 1,
@@ -393,13 +504,21 @@ export default function RegisterScreen() {
     profile: 'A few more details and your account will be ready.',
   }[step];
 
+  // ============================================================
+  // REUSABLE INPUT FIELD
+  // ============================================================
+
   const renderField = (
     label: string,
     value: string,
     onChangeText: (value: string) => void,
     placeholder: string,
     options: {
-      keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'number-pad';
+      keyboardType?:
+        | 'default'
+        | 'email-address'
+        | 'phone-pad'
+        | 'number-pad';
       secureTextEntry?: boolean;
       autoCapitalize?: 'none' | 'sentences' | 'words';
       maxLength?: number;
@@ -407,6 +526,7 @@ export default function RegisterScreen() {
   ) => (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
+
       <TextInput
         style={styles.input}
         value={value}
@@ -422,6 +542,10 @@ export default function RegisterScreen() {
     </View>
   );
 
+  // ============================================================
+  // SCREEN
+  // ============================================================
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -435,11 +559,15 @@ export default function RegisterScreen() {
         <View style={styles.header}>
           <Text style={styles.brand}>ZENIMONIES</Text>
 
-          <Text style={styles.eyebrow}>PERSONAL BANKING</Text>
+          <Text style={styles.eyebrow}>
+            PERSONAL BANKING
+          </Text>
 
           <Text style={styles.heading}>{heading}</Text>
 
-          <Text style={styles.description}>{description}</Text>
+          <Text style={styles.description}>
+            {description}
+          </Text>
         </View>
 
         <View style={styles.progressArea}>
@@ -447,6 +575,7 @@ export default function RegisterScreen() {
             <Text style={styles.progressText}>
               STEP {stepNumber} OF 5
             </Text>
+
             <Text style={styles.progressText}>
               {stepNumber * 20}%
             </Text>
@@ -462,30 +591,39 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.steps}>
-            {['Phone', 'Phone OTP', 'Email', 'Email OTP', 'Profile'].map(
-              (item, index) => (
-                <View key={item} style={styles.stepItem}>
-                  <View
-                    style={[
-                      styles.stepDot,
-                      index < stepNumber && styles.stepDotActive,
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.stepLabel,
-                      index < stepNumber && styles.stepLabelActive,
-                    ]}
-                  >
-                    {item}
-                  </Text>
-                </View>
-              )
-            )}
+            {[
+              'Phone',
+              'Phone OTP',
+              'Email',
+              'Email OTP',
+              'Profile',
+            ].map((item, index) => (
+              <View key={item} style={styles.stepItem}>
+                <View
+                  style={[
+                    styles.stepDot,
+                    index < stepNumber &&
+                      styles.stepDotActive,
+                  ]}
+                />
+
+                <Text
+                  style={[
+                    styles.stepLabel,
+                    index < stepNumber &&
+                      styles.stepLabelActive,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </View>
+            ))}
           </View>
         </View>
 
         <View style={styles.form}>
+          {/* PHONE */}
+
           {step === 'phone' && (
             <>
               {renderField(
@@ -493,7 +631,10 @@ export default function RegisterScreen() {
                 phone,
                 setPhone,
                 '08012345678',
-                { keyboardType: 'phone-pad', maxLength: 15 }
+                {
+                  keyboardType: 'phone-pad',
+                  maxLength: 15,
+                }
               )}
 
               <Text style={styles.note}>
@@ -508,6 +649,8 @@ export default function RegisterScreen() {
             </>
           )}
 
+          {/* PHONE OTP */}
+
           {step === 'phoneOtp' && (
             <>
               <View style={styles.verifiedInfo}>
@@ -521,7 +664,10 @@ export default function RegisterScreen() {
                 otp,
                 setOtp,
                 '000000',
-                { keyboardType: 'number-pad', maxLength: 6 }
+                {
+                  keyboardType: 'number-pad',
+                  maxLength: 6,
+                }
               )}
 
               <PrimaryButton
@@ -539,12 +685,17 @@ export default function RegisterScreen() {
               </Text>
 
               {resendSeconds === 0 && (
-                <Text style={styles.link} onPress={resendCode}>
+                <Text
+                  style={styles.link}
+                  onPress={resendCode}
+                >
                   Resend verification code
                 </Text>
               )}
             </>
           )}
+
+          {/* EMAIL */}
 
           {step === 'email' && (
             <>
@@ -577,12 +728,15 @@ export default function RegisterScreen() {
             </>
           )}
 
+          {/* EMAIL OTP */}
+
           {step === 'emailOtp' && (
             <>
               <View style={styles.verifiedInfo}>
                 <Text style={styles.verifiedText}>
                   ✓ Phone verified: {phone}
                 </Text>
+
                 <Text style={styles.verifiedText}>
                   Email: {email}
                 </Text>
@@ -593,7 +747,10 @@ export default function RegisterScreen() {
                 otp,
                 setOtp,
                 '000000',
-                { keyboardType: 'number-pad', maxLength: 6 }
+                {
+                  keyboardType: 'number-pad',
+                  maxLength: 6,
+                }
               )}
 
               <PrimaryButton
@@ -611,12 +768,17 @@ export default function RegisterScreen() {
               </Text>
 
               {resendSeconds === 0 && (
-                <Text style={styles.link} onPress={resendCode}>
+                <Text
+                  style={styles.link}
+                  onPress={resendCode}
+                >
                   Resend email code
                 </Text>
               )}
             </>
           )}
+
+          {/* PROFILE */}
 
           {step === 'profile' && (
             <>
@@ -624,6 +786,7 @@ export default function RegisterScreen() {
                 <Text style={styles.verifiedText}>
                   ✓ Phone verified
                 </Text>
+
                 <Text style={styles.verifiedText}>
                   ✓ Email verified
                 </Text>
@@ -651,7 +814,10 @@ export default function RegisterScreen() {
               )}
 
               <View style={styles.field}>
-                <Text style={styles.label}>Password</Text>
+                <Text style={styles.label}>
+                  Password
+                </Text>
+
                 <TextInput
                   style={styles.input}
                   value={password}
@@ -665,9 +831,13 @@ export default function RegisterScreen() {
 
                 <Text
                   style={styles.link}
-                  onPress={() => setShowPassword(!showPassword)}
+                  onPress={() =>
+                    setShowPassword(!showPassword)
+                  }
                 >
-                  {showPassword ? 'Hide password' : 'Show password'}
+                  {showPassword
+                    ? 'Hide password'
+                    : 'Show password'}
                 </Text>
               </View>
 
@@ -703,6 +873,10 @@ export default function RegisterScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+// ============================================================
+// STYLES
+// ============================================================
 
 const styles = StyleSheet.create({
   container: {
