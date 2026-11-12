@@ -198,6 +198,13 @@ const completeRegistration = async (req, res) => {
     .replace(/\s+/g, ' ');
 
   const password = String(body.password || '');
+  const fullName = [
+  firstName,
+  middleName,
+  surname,
+]
+  .filter(Boolean)
+  .join(' ');
 
   // ----------------------------------------------------------
   // VALIDATION
