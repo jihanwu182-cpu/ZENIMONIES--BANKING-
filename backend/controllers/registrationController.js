@@ -442,100 +442,10 @@ const completeRegistration = async (req, res) => {
     }
 
     // --------------------------------------------------------
-    // CREATE USER
-    // Gender is intentionally NULL.
-    // Customer can complete gender in Profile later.
-    // --------------------------------------------------------
-
-    const userResult = await client.query(
-      `
-      INSERT INTO users (
-        first_name,
-        middle_name,
-        surname,
-        full_name,
-        gender,
-        email,
-        phone,
-        password_hash,
-        role,
-        status,
-        registration_account_type,
-        kyc_status,
-        kyc_tier,
-        bvn_verified,
-        id_verified,
-        tier_3_verified,
-        is_verified,
-        account_limit,
-        daily_transfer_limit,
-        daily_transfer_used,
-        daily_transfer_reset_at,
-        password_changed_at
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        NULL,
-        $5,
-        $6,
-        $7,
-        'user',
-        'active',
-        'personal',
-        'not_verified',
-        0,
-        false,
-        false,
-        false,
-        false,
-        50000.00,
-        50000.00,
-        0.00,
-        CURRENT_TIMESTAMP,
-        CURRENT_TIMESTAMP
-      )
-      RETURNING
-        id,
-        first_name,
-        middle_name,
-        surname,
-        full_name,
-        gender,
-        email,
-        phone,
-        role,
-        status,
-        registration_account_type,
-        kyc_status,
-        kyc_tier,
-        bvn_verified,
-        id_verified,
-        tier_3_verified,
-        is_verified,
-        created_at
-      `,
-      [
-        firstName,
-        middleName,
-        surname,
-        fullName,
-        email,
-        phone,
-        passwordHash,
-      ]
-    );
-
-    user = userResult.rows[0];
-
-    
-    // --------------------------------------------------------
     // CREATE VERIFIED PERSONAL USER
-    // Phone and email OTP verification must be completed
-    // before this user record is created.
-    // Gender is intentionally NULL.
+    //
+    // Phone and email OTP verification must be completed.
+    // Gender is intentionally NULL for completion in Profile.
     // --------------------------------------------------------
 
     const userResult = await client.query(
@@ -623,6 +533,53 @@ const completeRegistration = async (req, res) => {
     );
 
     user = userResult.rows[0];
+
+    // --------------------------------------------------------
+    // CREATE PERSONAL ACCOUNT
+    //
+    // Do not generate a local account number.
+    // The official account number must come from an approved
+    // banking provider integration in the future.
+    // --------------------------------------------------------
+
+    const accountResult = await client.query(
+      `
+      INSERT INTO accounts (
+        user_id,
+        account_number,
+        account_name,
+        account_type,
+        currency,
+        balance,
+        status
+      )
+      VALUES (
+        $1,
+        NULL,
+        $2,
+        'personal',
+        'NGN',
+        0.00,
+        'active'
+      )
+      RETURNING
+        id,
+        account_number,
+        account_name,
+        account_type,
+        currency,
+        balance,
+        status,
+        created_at
+      `,
+      [
+        user.id,
+        fullName,
+      ]
+    );
+
+    account = accountResult.rows[0];
+
 
     // --------------------------------------------------------
     // MARK REGISTRATION AS COMPLETED
