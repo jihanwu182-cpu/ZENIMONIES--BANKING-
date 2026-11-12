@@ -16,8 +16,10 @@ import * as SecureStore from 'expo-secure-store';
 import colors from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
+import ProfileHeader from './components/ProfileHeader';
 
 const API_URL = 'https://zenimonies-banking.onrender.com/api/auth';
+const PROFILE_API_URL = 'https://zenimonies-banking.onrender.com/api/profile';
 const AUTH_TOKEN_KEY = 'zenimonies_auth_token';
 
 type Screen = 'welcome' | 'login' | 'register' | 'home';
@@ -41,7 +43,9 @@ type AuthUser = {
   email?: string;
   phone?: string;
   role?: string;
+  profile_photo?: string | null;
 };
+
 
 type AuthSession = {
   success: boolean;
