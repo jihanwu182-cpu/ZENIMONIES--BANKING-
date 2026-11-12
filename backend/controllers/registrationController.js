@@ -257,13 +257,12 @@ const completeRegistration = async (req, res) => {
     });
   }
 
-  const fullName = [
-    firstName,
-    middleName,
-    surname,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  if (fullName.length > 150) {
+  return res.status(400).json({
+    success: false,
+    message: 'Your full name must not exceed 150 characters.',
+  });
+}
 
   // ----------------------------------------------------------
   // HASH PASSWORD
