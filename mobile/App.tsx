@@ -139,7 +139,7 @@ try {
         const restoredSession: AuthSession = {
           success: true,
           token: savedToken,
-          user: data.user,
+          user: { ...data.user, ...(profileUser || {}) },
           account: data.account || undefined,
           accounts:
             data.accounts ||
