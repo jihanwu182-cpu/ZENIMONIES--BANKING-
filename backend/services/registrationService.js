@@ -59,15 +59,15 @@ const normalizePhone = (phone) => {
     .trim()
     .replace(/[\s()-]/g, '');
 
-  if (value.startsWith('0')) {
+  if (/^0\d{10}$/.test(value)) {
     value = `+234${value.substring(1)}`;
-  } else if (value.startsWith('234')) {
+  } else if (/^234\d{10}$/.test(value)) {
     value = `+${value}`;
   }
 
-  if (!/^\+[1-9]\d{7,14}$/.test(value)) {
+  if (!/^\+234\d{10}$/.test(value)) {
     throw new Error(
-      'Please enter a valid phone number with country code.'
+      'Please enter a valid Nigerian phone number.'
     );
   }
 
