@@ -983,7 +983,10 @@ ALTER TABLE accounts
 ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
 NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
-
+-- Account holder name for personal and business accounts.
+-- Nullable to preserve all existing account records.
+ALTER TABLE accounts
+ADD COLUMN IF NOT EXISTS account_name VARCHAR(150);
 -- ============================================================
 -- BANK TRANSFER COMPATIBILITY
 -- ============================================================
