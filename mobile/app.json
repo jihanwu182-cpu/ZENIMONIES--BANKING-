@@ -1,0 +1,30 @@
+
+{
+  "expo": {
+    "name": "ZENIMONIES",
+    "slug": "zenimonies-mobile",
+    "version": "1.0.0",
+    "scheme": "zenimonies",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zenimonies.mobile"
+    },
+    "android": {
+      "package": "com.zenimonies.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        "CAMERA"
+      ]
+    },
+    "splash": {
+      "backgroundColor": "#FFFFFF"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
