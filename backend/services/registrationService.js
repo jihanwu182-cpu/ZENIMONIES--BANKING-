@@ -3,13 +3,8 @@ const crypto = require('crypto');
 
 const pool = require('../config/database');
 
-const {
-  sendPhoneOtp,
-} = require('./termiiService');
-
-const {
-  sendRegistrationEmailOtp,
-} = require('./emailService');
+const { sendPhoneOtp } = require('./termiiService');
+const { sendRegistrationEmailOtp } = require('./emailService');
 
 // ============================================================
 // ZENIMONIES — STAGED REGISTRATION SERVICE
@@ -18,24 +13,16 @@ const {
 const OTP_EXPIRY_MINUTES = 10;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const MAX_OTP_ATTEMPTS = 5;
-const REGISTRATION_LIFETIME_MINUTES = 30;
 
 // ============================================================
 // HELPERS
 // ============================================================
 
-const generateOtp = () => {
-  return String(
-    crypto.randomInt(100000, 1000000)
-  );
-};
+const generateOtp = () =>
+  String(crypto.randomInt(100000, 1000000));
 
-const hashOtp = (otp) => {
-  return crypto
-    .createHash('sha256')
-    .update(String(otp))
-    .digest('hex');
-};
+const hashOtp = (otp) =>
+  crypto.createHash('sha256').update(String(otp)).digest('hex');
 
 const verifyOtpHash = (otp, storedHash) => {
   if (
@@ -75,13 +62,9 @@ const normalizePhone = (phone) => {
 };
 
 const normalizeEmail = (email) => {
-  const value = String(email || '')
-    .trim()
-    .toLowerCase();
+  const value = String(email || '').trim().toLowerCase();
 
-  if (
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-  ) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
     throw new Error('Please enter a valid email address.');
   }
 
@@ -100,11 +83,10 @@ const validateOtp = (otp) => {
   return value;
 };
 
-const getDevelopmentOtp = (otp) => {
-  return process.env.NODE_ENV !== 'production'
+const getDevelopmentOtp = (otp) =>
+  process.env.NODE_ENV !== 'production'
     ? otp
     : undefined;
-};
 
 // ============================================================
 // CHECK PHONE ALREADY REGISTERED
@@ -150,7 +132,6 @@ const checkEmailExists = async (client, email) => {
 
 const startPhoneVerification = async (phoneInput) => {
   const phone = normalizePhone(phoneInput);
-
   const client = await pool.connect();
 
   let otp;
@@ -158,7 +139,6 @@ const startPhoneVerification = async (phoneInput) => {
   try {
     await client.query('BEGIN');
 
-    // Serialize attempts for this phone number.
     await client.query(
       `
       SELECT pg_advisory_xact_lock(
@@ -191,6 +171,18 @@ const startPhoneVerification = async (phoneInput) => {
 
     const pending = existing.rows[0];
 
+    // Never reset the attempt counter by requesting another OTP.
+    if (
+      pending &&
+      pending.phone_otp_attempts >= MAX_OTP_ATTEMPTS
+    ) {
+      const error = new Error(
+        'Too many incorrect phone verification attempts. Please start again after your registration session expires.'
+      );
+      error.status = 429;
+      throw error;
+    }
+
     if (
       pending?.phone_otp_sent_at &&
       pending.phone_otp_expires_at &&
@@ -217,7 +209,6 @@ const startPhoneVerification = async (phoneInput) => {
     }
 
     otp = generateOtp();
-
     const otpHash = hashOtp(otp);
 
     if (pending) {
@@ -228,13 +219,11 @@ const startPhoneVerification = async (phoneInput) => {
           phone_otp_hash = $2,
           phone_otp_expires_at =
             CURRENT_TIMESTAMP + INTERVAL '10 minutes',
-          phone_otp_attempts = 0,
           phone_otp_sent_at = CURRENT_TIMESTAMP,
           phone_verified_at = NULL,
           email = NULL,
           email_otp_hash = NULL,
           email_otp_expires_at = NULL,
-          email_otp_attempts = 0,
           email_otp_sent_at = NULL,
           email_verified_at = NULL,
           expires_at =
@@ -269,20 +258,19 @@ const startPhoneVerification = async (phoneInput) => {
     }
 
     await client.query('COMMIT');
-
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      // Transaction may already be closed.
+    }
     throw error;
   } finally {
     client.release();
   }
 
-  // Send only after the database transaction commits.
   try {
-    await sendPhoneOtp({
-      phone,
-      otp,
-    });
+    await sendPhoneOtp({ phone, otp });
   } catch (error) {
     console.error(
       'Registration phone OTP delivery failed:',
@@ -319,13 +307,11 @@ const startPhoneVerification = async (phoneInput) => {
 
 // ============================================================
 // VERIFY PHONE OTP
-// POST /api/auth/registration/phone/verify
 // ============================================================
 
 const verifyPhoneOtp = async (phoneInput, otpInput) => {
   const phone = normalizePhone(phoneInput);
   const otp = validateOtp(otpInput);
-
   const client = await pool.connect();
 
   try {
@@ -377,7 +363,7 @@ const verifyPhoneOtp = async (phoneInput, otpInput) => {
       pending.phone_otp_attempts >= MAX_OTP_ATTEMPTS
     ) {
       throw new Error(
-        'Too many incorrect attempts. Please request a new code.'
+        'Too many incorrect attempts. Please start again after your registration session expires.'
       );
     }
 
@@ -398,7 +384,6 @@ const verifyPhoneOtp = async (phoneInput, otpInput) => {
       const error = new Error(
         'Incorrect phone verification code.'
       );
-
       error.status = 400;
       throw error;
     }
@@ -425,14 +410,12 @@ const verifyPhoneOtp = async (phoneInput, otpInput) => {
       message: 'Phone number verified successfully.',
       registration_step: 'email',
     };
-
   } catch (error) {
     try {
       await client.query('ROLLBACK');
     } catch (_) {
       // Transaction may already be committed.
     }
-
     throw error;
   } finally {
     client.release();
@@ -441,7 +424,6 @@ const verifyPhoneOtp = async (phoneInput, otpInput) => {
 
 // ============================================================
 // START EMAIL VERIFICATION
-// POST /api/auth/registration/email
 // ============================================================
 
 const startEmailVerification = async (
@@ -450,7 +432,6 @@ const startEmailVerification = async (
 ) => {
   const phone = normalizePhone(phoneInput);
   const email = normalizeEmail(emailInput);
-
   const client = await pool.connect();
 
   let otp;
@@ -458,16 +439,17 @@ const startEmailVerification = async (
 
   try {
     await client.query('BEGIN');
-// Prevent simultaneous registrations from claiming the same email.
-await client.query(
-  `
-  SELECT pg_advisory_xact_lock(
-    hashtext($1),
-    hashtext('zenimonies-registration-email')
-  )
-  `,
-  [email]
-);
+
+    await client.query(
+      `
+      SELECT pg_advisory_xact_lock(
+        hashtext($1),
+        hashtext('zenimonies-registration-email')
+      )
+      `,
+      [email]
+    );
+
     const result = await client.query(
       `
       SELECT *
@@ -496,6 +478,18 @@ await client.query(
       );
     }
 
+    // Keep the email attempt count across resends and email changes
+    // within the same pending registration.
+    if (
+      pending.email_otp_attempts >= MAX_OTP_ATTEMPTS
+    ) {
+      const error = new Error(
+        'Too many incorrect email verification attempts. Please start again after your registration session expires.'
+      );
+      error.status = 429;
+      throw error;
+    }
+
     if (
       pending.email_otp_sent_at &&
       pending.email &&
@@ -522,24 +516,25 @@ await client.query(
         throw error;
       }
     }
-    const pendingEmail = await client.query(
-  `
-  SELECT id
-  FROM pending_registrations
-  WHERE LOWER(email) = LOWER($1)
-    AND phone <> $2
-    AND completed_at IS NULL
-    AND expires_at > CURRENT_TIMESTAMP
-  LIMIT 1
-  `,
-  [email, phone]
-);
 
-if (pendingEmail.rows.length > 0) {
-  throw new Error(
-    'This email address is already being used in another registration.'
-  );
-}
+    const pendingEmail = await client.query(
+      `
+      SELECT id
+      FROM pending_registrations
+      WHERE LOWER(email) = LOWER($1)
+        AND phone <> $2
+        AND completed_at IS NULL
+        AND expires_at > CURRENT_TIMESTAMP
+      LIMIT 1
+      `,
+      [email, phone]
+    );
+
+    if (pendingEmail.rows.length > 0) {
+      throw new Error(
+        'This email address is already being used in another registration.'
+      );
+    }
 
     if (await checkEmailExists(client, email)) {
       throw new Error(
@@ -558,7 +553,6 @@ if (pendingEmail.rows.length > 0) {
         email_otp_hash = $3,
         email_otp_expires_at =
           CURRENT_TIMESTAMP + INTERVAL '10 minutes',
-        email_otp_attempts = 0,
         email_otp_sent_at = CURRENT_TIMESTAMP,
         email_verified_at = NULL,
         updated_at = CURRENT_TIMESTAMP
@@ -568,9 +562,12 @@ if (pendingEmail.rows.length > 0) {
     );
 
     await client.query('COMMIT');
-
   } catch (error) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      // Transaction may already be closed.
+    }
     throw error;
   } finally {
     client.release();
@@ -617,7 +614,6 @@ if (pendingEmail.rows.length > 0) {
 
 // ============================================================
 // VERIFY EMAIL OTP
-// POST /api/auth/registration/email/verify
 // ============================================================
 
 const verifyEmailOtp = async (
@@ -628,7 +624,6 @@ const verifyEmailOtp = async (
   const phone = normalizePhone(phoneInput);
   const email = normalizeEmail(emailInput);
   const otp = validateOtp(otpInput);
-
   const client = await pool.connect();
 
   try {
@@ -688,7 +683,7 @@ const verifyEmailOtp = async (
       pending.email_otp_attempts >= MAX_OTP_ATTEMPTS
     ) {
       throw new Error(
-        'Too many incorrect attempts. Please request a new code.'
+        'Too many incorrect attempts. Please start again after your registration session expires.'
       );
     }
 
@@ -709,7 +704,6 @@ const verifyEmailOtp = async (
       const error = new Error(
         'Incorrect email verification code.'
       );
-
       error.status = 400;
       throw error;
     }
@@ -737,14 +731,12 @@ const verifyEmailOtp = async (
       message: 'Email address verified successfully.',
       registration_step: 'profile',
     };
-
   } catch (error) {
     try {
       await client.query('ROLLBACK');
     } catch (_) {
       // Transaction may already be committed.
     }
-
     throw error;
   } finally {
     client.release();
