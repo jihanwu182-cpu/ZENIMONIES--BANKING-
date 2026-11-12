@@ -245,10 +245,7 @@ export default function App() {
   if (screen === 'login') {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar
-          barStyle="dark-content"
-          backgroundColor="#FFFFFF"
-        />
+       <StatusBar barStyle="dark-content" />
 
         <TouchableOpacity
           style={styles.backButton}
@@ -272,10 +269,7 @@ export default function App() {
   if (screen === 'register') {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar
-          barStyle="dark-content"
-          backgroundColor="#FFFFFF"
-        />
+        <StatusBar barStyle="dark-content" />
 
         <TouchableOpacity
           style={styles.backButton}
@@ -421,10 +415,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor="#FFFFFF"
-      />
+     <StatusBar barStyle="dark-content" />
 
       <View style={styles.content}>
         <View style={styles.brandArea}>
