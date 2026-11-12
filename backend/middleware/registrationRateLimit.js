@@ -8,8 +8,15 @@ const pool = require('../config/database');
 
 let cleanupCounter = 0;
 
+// ============================================================
+// NORMALIZE CUSTOMER IDENTITY
+// ============================================================
+
 const normalizeIdentity = (value, field) => {
-  if (typeof value !== 'string' && typeof value !== 'number') {
+  if (
+    typeof value !== 'string' &&
+    typeof value !== 'number'
+  ) {
     return null;
   }
 
@@ -19,6 +26,20 @@ const normalizeIdentity = (value, field) => {
 
   if (field === 'phone') {
     const digits = normalized.replace(/[^0-9]/g, '');
+
+    // Nigerian local format: 08012345678
+    if (/^0\d{10}$/.test(digits)) {
+      return `234${digits.substring(1)}`;
+    }
+
+    // Nigerian international format: 2348012345678
+    // Also handles +2348012345678 after punctuation removal.
+    if (/^234\d{10}$/.test(digits)) {
+      return digits;
+    }
+
+    // Retain a consistent digits-only identity for invalid
+    // inputs too, so formatting changes do not bypass limits.
     return digits.length >= 7 ? digits : null;
   }
 
@@ -29,10 +50,19 @@ const normalizeIdentity = (value, field) => {
   return normalized.toLowerCase();
 };
 
-const hashKey = (value) => crypto
-  .createHash('sha256')
-  .update(value)
-  .digest('hex');
+// ============================================================
+// HASH RATE-LIMIT KEYS
+// ============================================================
+
+const hashKey = (value) =>
+  crypto
+    .createHash('sha256')
+    .update(value)
+    .digest('hex');
+
+// ============================================================
+// RATE LIMIT FACTORY
+// ============================================================
 
 const createRegistrationRateLimit = ({
   windowSeconds,
@@ -60,19 +90,26 @@ const createRegistrationRateLimit = ({
       )
     )
   ) {
-    throw new Error('Invalid registration rate-limit configuration.');
+    throw new Error(
+      'Invalid registration rate-limit configuration.'
+    );
   }
 
   return async (req, res, next) => {
     let client;
 
     try {
-      const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+      const ip =
+        req.ip ||
+        req.socket?.remoteAddress ||
+        'unknown';
 
-      const counters = [{
-        keyHash: hashKey(`${bucket}:ip:${ip}`),
-        limit: maxRequests,
-      }];
+      const counters = [
+        {
+          keyHash: hashKey(`${bucket}:ip:${ip}`),
+          limit: maxRequests,
+        },
+      ];
 
       if (identityField) {
         const identity = normalizeIdentity(
@@ -85,12 +122,14 @@ const createRegistrationRateLimit = ({
             keyHash: hashKey(
               `${bucket}:${identityField}:${identity}`
             ),
-            limit: maxIdentityRequests || maxRequests,
+            limit:
+              maxIdentityRequests || maxRequests,
           });
         }
       }
 
       client = await pool.connect();
+
       await client.query('BEGIN');
 
       let blocked = null;
@@ -114,13 +153,15 @@ const createRegistrationRateLimit = ({
           DO UPDATE SET
             window_start = CASE
               WHEN api_rate_limits.window_start <=
-                CURRENT_TIMESTAMP - ($2 * INTERVAL '1 second')
+                CURRENT_TIMESTAMP -
+                ($2 * INTERVAL '1 second')
               THEN CURRENT_TIMESTAMP
               ELSE api_rate_limits.window_start
             END,
             request_count = CASE
               WHEN api_rate_limits.window_start <=
-                CURRENT_TIMESTAMP - ($2 * INTERVAL '1 second')
+                CURRENT_TIMESTAMP -
+                ($2 * INTERVAL '1 second')
               THEN 1
               ELSE api_rate_limits.request_count + 1
             END,
@@ -130,14 +171,18 @@ const createRegistrationRateLimit = ({
           [counter.keyHash, windowSeconds]
         );
 
-        const count = Number(result.rows[0].request_count);
+        const count = Number(
+          result.rows[0].request_count
+        );
 
         if (count > counter.limit) {
           const retryAfter = Math.max(
             1,
             Math.ceil(
               (
-                new Date(result.rows[0].window_start).getTime() +
+                new Date(
+                  result.rows[0].window_start
+                ).getTime() +
                 windowSeconds * 1000 -
                 Date.now()
               ) / 1000
@@ -156,7 +201,8 @@ const createRegistrationRateLimit = ({
 
         return res.status(429).json({
           success: false,
-          message: 'Too many registration requests. Please try again later.',
+          message:
+            'Too many registration requests. Please try again later.',
           retry_after_seconds: blocked,
         });
       }
@@ -196,7 +242,8 @@ const createRegistrationRateLimit = ({
 
       return res.status(503).json({
         success: false,
-        message: 'Registration security service is temporarily unavailable. Please try again.',
+        message:
+          'Registration security service is temporarily unavailable. Please try again.',
       });
 
     } finally {
@@ -206,6 +253,10 @@ const createRegistrationRateLimit = ({
     }
   };
 };
+
+// ============================================================
+// EXPORTS
+// ============================================================
 
 module.exports = {
   createRegistrationRateLimit,
