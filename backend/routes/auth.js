@@ -18,8 +18,8 @@ const {
   startEmailVerification,
   verifyEmailOtp: verifyRegistrationEmailOtp,
   getRegistrationStatus,
+  completeRegistration,
 } = require('../controllers/registrationController');
-
 const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -125,7 +125,11 @@ router.post(
   authMiddleware,
   resendPhoneOtp
 );
-
+// Step 6: Create the personal account after both OTPs are verified
+router.post(
+  '/registration/complete',
+  completeRegistration
+);
 // ============================================================
 // EXPORT ROUTER
 // ============================================================
