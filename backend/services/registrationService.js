@@ -458,7 +458,16 @@ const startEmailVerification = async (
 
   try {
     await client.query('BEGIN');
-
+// Prevent simultaneous registrations from claiming the same email.
+await client.query(
+  `
+  SELECT pg_advisory_xact_lock(
+    hashtext($1),
+    hashtext('zenimonies-registration-email')
+  )
+  `,
+  [email]
+);
     const result = await client.query(
       `
       SELECT *
@@ -513,6 +522,24 @@ const startEmailVerification = async (
         throw error;
       }
     }
+    const pendingEmail = await client.query(
+  `
+  SELECT id
+  FROM pending_registrations
+  WHERE LOWER(email) = LOWER($1)
+    AND phone <> $2
+    AND completed_at IS NULL
+    AND expires_at > CURRENT_TIMESTAMP
+  LIMIT 1
+  `,
+  [email, phone]
+);
+
+if (pendingEmail.rows.length > 0) {
+  throw new Error(
+    'This email address is already being used in another registration.'
+  );
+}
 
     if (await checkEmailExists(client, email)) {
       throw new Error(
