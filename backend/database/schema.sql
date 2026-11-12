@@ -987,6 +987,11 @@ NOT NULL DEFAULT CURRENT_TIMESTAMP;
 -- Nullable to preserve all existing account records.
 ALTER TABLE accounts
 ADD COLUMN IF NOT EXISTS account_name VARCHAR(150);
+-- Allow new accounts to exist before official bank
+-- account-number provisioning.
+-- Existing account numbers and records are preserved.
+ALTER TABLE accounts
+ALTER COLUMN account_number DROP NOT NULL;
 -- ============================================================
 -- BANK TRANSFER COMPATIBILITY
 -- ============================================================
