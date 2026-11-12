@@ -340,13 +340,13 @@ export default function RegisterScreen({
           ? '/registration/phone'
           : '/registration/email';
 
-      const body =
-        step === 'phoneOtp'
-          ? { phone: phone.trim() }
-          : {
-              phone: phone.trim(),
-              email: email.trim().toLowerCase(),
-            };
+const body: Record<string, string> =
+  step === 'phoneOtp'
+    ? { phone: phone.trim() }
+    : {
+        phone: phone.trim(),
+        email: email.trim().toLowerCase(),
+      };
 
       const data = await request(endpoint, body);
 
