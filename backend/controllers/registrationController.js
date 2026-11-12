@@ -529,13 +529,11 @@ const completeRegistration = async (req, res) => {
     );
 
     user = userResult.rows[0];
-
     // --------------------------------------------------------
-    // CREATE PERSONAL ACCOUNT
+    // CREATE VERIFIED PERSONAL USER
     //
-    // No locally generated account number.
-    // The official number must be supplied by an approved
-    // banking provider integration in the future.
+    // Phone and email OTP verification must be completed
+    // before this user record is created.
     // --------------------------------------------------------
     const userResult = await client.query(
       `
