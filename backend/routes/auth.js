@@ -1,3 +1,4 @@
+
 const express = require('express');
 
 const {
@@ -11,16 +12,58 @@ const {
   resendPhoneOtp,
 } = require('../controllers/authController');
 
+const {
+  startPhoneVerification,
+  verifyPhoneOtp: verifyRegistrationPhoneOtp,
+  startEmailVerification,
+  verifyEmailOtp: verifyRegistrationEmailOtp,
+  getRegistrationStatus,
+} = require('../controllers/registrationController');
+
 const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
+// ============================================================
+// PUBLIC STAGED REGISTRATION ROUTES
+// ============================================================
+
+// Step 1: Send phone verification code
+router.post(
+  '/registration/phone',
+  startPhoneVerification
+);
+
+// Step 2: Verify phone code
+router.post(
+  '/registration/phone/verify',
+  verifyRegistrationPhoneOtp
+);
+
+// Step 3: Send email verification code
+router.post(
+  '/registration/email',
+  startEmailVerification
+);
+
+// Step 4: Verify email code
+router.post(
+  '/registration/email/verify',
+  verifyRegistrationEmailOtp
+);
+
+// Step 5: Check verified registration status
+router.post(
+  '/registration/status',
+  getRegistrationStatus
+);
 
 // ============================================================
-// PUBLIC AUTH ROUTES
+// EXISTING PUBLIC AUTH ROUTES
 // ============================================================
 
-// Register
+// Existing registration endpoint.
+// Keep temporarily until staged registration is fully connected.
 router.post(
   '/register',
   register
@@ -32,18 +75,17 @@ router.post(
   login
 );
 
-// Forgot Password
+// Forgot password
 router.post(
   '/forgot-password',
   forgotPassword
 );
 
-// Reset Password
+// Reset password
 router.post(
   '/reset-password',
   resetPassword
 );
-
 
 // ============================================================
 // PROTECTED AUTH ROUTES
@@ -84,5 +126,8 @@ router.post(
   resendPhoneOtp
 );
 
+// ============================================================
+// EXPORT ROUTER
+// ============================================================
 
 module.exports = router;
