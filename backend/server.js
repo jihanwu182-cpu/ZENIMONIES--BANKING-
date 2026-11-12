@@ -95,6 +95,10 @@ const {
 
 const app = express();
 
+// Trust the Render reverse proxy so req.ip
+// identifies the original client IP address.
+app.set('trust proxy', 1);
+
 const PORT = process.env.PORT || 5000;
 
 // ============================================================
