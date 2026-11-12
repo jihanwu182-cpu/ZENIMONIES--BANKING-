@@ -359,44 +359,31 @@ setScreen('home');
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
 
+        
+        <ProfileHeader
+          userName={userName}
+          token={session.token}
+          profilePhoto={session.user?.profile_photo}
+          onPhotoUpdated={(photo) => {
+            setSession((current) =>
+              current
+                ? {
+                    ...current,
+                    user: {
+                      ...(current.user || {}),
+                      profile_photo: photo,
+                    },
+                  }
+                : current
+            );
+          }}
+          onLogout={handleLogout}
+        />
+
         <ScrollView
           contentContainerStyle={styles.homeContent}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.homeHeader}>
-            <View>
-              <Text style={styles.homeBrand}>
-                ZENIMONIES
-              </Text>
-
-              <Text style={styles.homeSubtitle}>
-                BANKING
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={handleLogout}
-            >
-              <Text style={styles.logoutText}>
-                Log out
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.welcomeArea}>
-            <Text style={styles.greeting}>
-              Welcome back,
-            </Text>
-
-            <Text style={styles.customerName}>
-              {userName}
-            </Text>
-
-            <Text style={styles.homeDescription}>
-              Your ZENIMONIES account is ready.
-            </Text>
-          </View>
 
           <View style={styles.balanceCard}>
             <Text style={styles.balanceLabel}>
