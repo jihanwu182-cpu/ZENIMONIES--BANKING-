@@ -173,7 +173,20 @@ export default function App() {
       );
     }
   };
+  // ============================================================
+  // REGISTRATION SUCCESS
+  // ============================================================
 
+  const handleRegistrationSuccess = async (
+    registrationSession: AuthSession | null
+  ) => {
+    if (!registrationSession?.token) {
+      setScreen('login');
+      return;
+    }
+
+    await handleLoginSuccess(registrationSession);
+  };
   // ============================================================
   // LOG OUT
   // ============================================================
@@ -271,7 +284,10 @@ export default function App() {
           <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
 
-        <RegisterScreen />
+        
+    <RegisterScreen
+    onRegistrationSuccess={handleRegistrationSuccess}
+  />
       </SafeAreaView>
     );
   }
