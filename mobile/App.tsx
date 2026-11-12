@@ -114,6 +114,28 @@ export default function App() {
 
         if (!mounted) return;
 
+let profileUser: AuthUser | undefined;
+try {
+  const profileResponse = await fetch(PROFILE_API_URL, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${savedToken}`,
+    },
+  });
+
+  const profileData = await profileResponse.json();
+
+  if (
+    profileResponse.ok &&
+    profileData.success === true &&
+    profileData.user
+  ) {
+    profileUser = profileData.user as AuthUser;
+  }
+} catch {
+  // Keep the session active if profile loading fails.
+}
         const restoredSession: AuthSession = {
           success: true,
           token: savedToken,
