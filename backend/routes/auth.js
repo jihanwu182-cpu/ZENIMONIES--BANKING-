@@ -1,4 +1,3 @@
-
 const express = require('express');
 
 const {
@@ -17,9 +16,9 @@ const {
   verifyPhoneOtp: verifyRegistrationPhoneOtp,
   startEmailVerification,
   verifyEmailOtp: verifyRegistrationEmailOtp,
-  getRegistrationStatus,
   completeRegistration,
 } = require('../controllers/registrationController');
+
 const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -52,18 +51,18 @@ router.post(
   verifyRegistrationEmailOtp
 );
 
-// Step 5: Check verified registration status
+// Step 5: Create personal account after both OTPs are verified
 router.post(
-  '/registration/status',
-  getRegistrationStatus
+  '/registration/complete',
+  completeRegistration
 );
 
 // ============================================================
 // EXISTING PUBLIC AUTH ROUTES
 // ============================================================
 
-// Existing registration endpoint.
-// Keep temporarily until staged registration is fully connected.
+// Keep existing registration temporarily until
+// staged registration is fully connected and tested.
 router.post(
   '/register',
   register
@@ -125,11 +124,7 @@ router.post(
   authMiddleware,
   resendPhoneOtp
 );
-// Step 6: Create the personal account after both OTPs are verified
-router.post(
-  '/registration/complete',
-  completeRegistration
-);
+
 // ============================================================
 // EXPORT ROUTER
 // ============================================================
