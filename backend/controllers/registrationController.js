@@ -529,12 +529,15 @@ const completeRegistration = async (req, res) => {
     );
 
     user = userResult.rows[0];
+
+    
     // --------------------------------------------------------
     // CREATE VERIFIED PERSONAL USER
-    //
     // Phone and email OTP verification must be completed
     // before this user record is created.
+    // Gender is intentionally NULL.
     // --------------------------------------------------------
+
     const userResult = await client.query(
       `
       INSERT INTO users (
@@ -621,7 +624,6 @@ const completeRegistration = async (req, res) => {
 
     user = userResult.rows[0];
 
-    
     // --------------------------------------------------------
     // MARK REGISTRATION AS COMPLETED
     // --------------------------------------------------------
