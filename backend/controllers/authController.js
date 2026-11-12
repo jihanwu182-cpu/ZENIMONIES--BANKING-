@@ -644,10 +644,10 @@ const register = async (req, res) => {
     // ----------------------------------------------------------
 
     try {
-      await sendPhoneOtp(
-        normalizedPhone,
-        otp,
-      );
+      await sendPhoneOtp({
+  phone: normalizedPhone,
+  otp,
+  });
     } catch (smsError) {
       console.error(
         'ZENIMONIES registration OTP send error:',
