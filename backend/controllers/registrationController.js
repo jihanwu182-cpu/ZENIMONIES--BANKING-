@@ -596,13 +596,13 @@ const completeRegistration = async (req, res) => {
     // AUDIT LOG
     // --------------------------------------------------------
 
-    try {
+        try {
       await client.query(
         `
         INSERT INTO audit_logs (
           user_id,
           action,
-          metadata,
+          description,
           created_at
         )
         VALUES (
@@ -629,7 +629,6 @@ const completeRegistration = async (req, res) => {
         auditError.message
       );
     }
-
     // --------------------------------------------------------
     // COMMIT
     // --------------------------------------------------------
