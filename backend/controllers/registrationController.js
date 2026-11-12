@@ -1,4 +1,3 @@
-
 const bcrypt = require('bcryptjs');
 
 const pool = require('../config/database');
@@ -167,55 +166,6 @@ const verifyEmailOtp = async (req, res) => {
       res,
       error,
       'Unable to verify email address. Please try again.'
-    );
-  }
-};
-
-// ============================================================
-// CHECK REGISTRATION VERIFICATION STATUS
-// POST /api/auth/registration/status
-// ============================================================
-
-const getRegistrationStatus = async (req, res) => {
-  try {
-    const phone = req.body?.phone;
-
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: 'Phone number is required.',
-      });
-    }
-
-    const registration =
-      await registrationService.getVerifiedRegistration(phone);
-
-    if (!registration) {
-      return res.status(404).json({
-        success: false,
-        phone_verified: false,
-        email_verified: false,
-        registration_complete: false,
-        message:
-          'Phone and email verification must be completed before continuing.',
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      phone_verified: true,
-      email_verified: true,
-      registration_complete: false,
-      registration_step: 'profile',
-      message:
-        'Phone and email verified. You can continue with your profile.',
-    });
-
-  } catch (error) {
-    return handleRegistrationError(
-      res,
-      error,
-      'Unable to check registration status.'
     );
   }
 };
@@ -580,7 +530,6 @@ const completeRegistration = async (req, res) => {
 
     account = accountResult.rows[0];
 
-
     // --------------------------------------------------------
     // MARK REGISTRATION AS COMPLETED
     // --------------------------------------------------------
@@ -601,7 +550,7 @@ const completeRegistration = async (req, res) => {
     // AUDIT LOG
     // --------------------------------------------------------
 
-        try {
+    try {
       await client.query(
         `
         INSERT INTO audit_logs (
@@ -629,11 +578,13 @@ const completeRegistration = async (req, res) => {
         ]
       );
     } catch (auditError) {
+      // An audit logging failure must not undo account creation.
       console.error(
         'Registration audit log could not be written:',
         auditError.message
       );
     }
+
     // --------------------------------------------------------
     // COMMIT
     // --------------------------------------------------------
@@ -723,6 +674,5 @@ module.exports = {
   verifyPhoneOtp,
   startEmailVerification,
   verifyEmailOtp,
-  getRegistrationStatus,
   completeRegistration,
 };
