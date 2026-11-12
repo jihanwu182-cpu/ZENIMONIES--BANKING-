@@ -725,39 +725,6 @@ const verifyEmailOtp = async (
 };
 
 // ============================================================
-// GET VERIFIED REGISTRATION
-// Used by the final registration controller.
-// Does not create an account.
-// ============================================================
-
-const getVerifiedRegistration = async (phoneInput) => {
-  const phone = normalizePhone(phoneInput);
-
-  const result = await pool.query(
-    `
-    SELECT
-      id,
-      phone,
-      email,
-      phone_verified_at,
-      email_verified_at,
-      expires_at
-    FROM pending_registrations
-    WHERE phone = $1
-      AND phone_verified_at IS NOT NULL
-      AND email_verified_at IS NOT NULL
-      AND completed_at IS NULL
-      AND expires_at > CURRENT_TIMESTAMP
-    ORDER BY created_at DESC
-    LIMIT 1
-    `,
-    [phone]
-  );
-
-  return result.rows[0] || null;
-};
-
-// ============================================================
 // EXPORTS
 // ============================================================
 
@@ -766,7 +733,6 @@ module.exports = {
   verifyPhoneOtp,
   startEmailVerification,
   verifyEmailOtp,
-  getVerifiedRegistration,
   normalizePhone,
   normalizeEmail,
 };
