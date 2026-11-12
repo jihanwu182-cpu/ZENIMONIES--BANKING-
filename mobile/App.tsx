@@ -212,10 +212,7 @@ export default function App() {
   if (checkingSession) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <StatusBar
-          barStyle="dark-content"
-          backgroundColor="#FFFFFF"
-        />
+        <StatusBar barStyle="dark-content" />
 
         <View style={styles.loadingContent}>
           <View style={styles.logo}>
