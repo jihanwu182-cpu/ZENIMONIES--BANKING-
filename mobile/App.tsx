@@ -346,10 +346,10 @@ setScreen('home');
 
   if (screen === 'home' && session) {
     const userName =
-      session.user?.first_name ||
-      session.user?.full_name ||
-      session.user?.name ||
-      'Customer';
+  session.user?.full_name ||
+  session.user?.name ||
+  session.user?.first_name ||
+  'Customer';
 
     const accounts =
       session.accounts ||
