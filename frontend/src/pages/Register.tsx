@@ -1,927 +1,957 @@
-import React, { FormEvent, useState } from 'react';
-import axios from 'axios';
+
+import React, { FormEvent, useEffect, useState } from 'react';
+import axios, { AxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 
 // ============================================================
-// ZENIMONIES BANKING
-// CUSTOMER REGISTRATION
+// ZENIMONIES BANKING — PERSONAL REGISTRATION
+// Five-step phone and email verification
 // ============================================================
 
 const API_URL =
   process.env.REACT_APP_API_URL ||
   'https://zenimonies-banking.onrender.com';
 
-type AccountType = 'personal' | 'business';
+const AUTH_URL = `${API_URL}/api/auth`;
 
-type RegisterUser = {
-  id: string;
-  full_name?: string;
-  first_name?: string;
-  middle_name?: string | null;
-  surname?: string;
-  gender?: string;
-  email?: string;
-  phone?: string;
-  role?: string;
-  status?: string;
-  kyc_status?: string;
-  kyc_tier?: number;
-  registration_account_type?: AccountType;
-};
-
-type RegisterAccount = {
-  id?: string;
-  account_number?: string;
-  account_name?: string;
-  account_type?: string;
-  currency?: string;
-  balance?: number;
-  status?: string;
-};
+type Step =
+  | 'phone'
+  | 'phoneOtp'
+  | 'email'
+  | 'emailOtp'
+  | 'profile';
 
 type RegisterResponse = {
+  success?: boolean;
   message?: string;
   token?: string;
   access_token?: string;
-  user?: RegisterUser;
-  account?: RegisterAccount;
-  phone_verification_required?: boolean;
+  session_expires_at?: string;
+  user?: any;
+  account?: any;
   development_otp?: string;
+  retry_after_seconds?: number;
 };
 
-// ============================================================
-// HELPERS
-// ============================================================
+const cleanText = (value: string) =>
+  value.trim().replace(/\s+/g, ' ');
 
-const cleanText = (value: string): string => {
-  return value.trim().replace(/\s+/g, ' ');
+const cleanEmail = (value: string) =>
+  value.trim().toLowerCase();
+
+const cleanPhone = (value: string) =>
+  value.trim().replace(/[\s()-]/g, '');
+
+const getErrorMessage = (error: unknown): string => {
+  if (axios.isAxiosError(error)) {
+    const axiosError = error as AxiosError<RegisterResponse>;
+    const response = axiosError.response;
+
+    if (response?.data?.message) {
+      return response.data.message;
+    }
+
+    if (axiosError.code === 'ECONNABORTED') {
+      return 'The server took too long to respond. Please try again.';
+    }
+
+    if (!response) {
+      return 'Unable to reach the ZENIMONIES server. Check your internet connection.';
+    }
+
+    return `Registration failed. Server returned HTTP ${response.status}.`;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Unable to complete registration. Please try again.';
 };
-
-const cleanEmail = (value: string): string => {
-  return value.trim().toLowerCase();
-};
-
-const cleanPhone = (value: string): string => {
-  return value.trim().replace(/\s+/g, '');
-};
-
-// ============================================================
-// COMPONENT
-// ============================================================
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
 
-  // ----------------------------------------------------------
-  // FORM STATE
-  // ----------------------------------------------------------
+  // ==========================================================
+  // REGISTRATION STATE
+  // ==========================================================
+
+  const [step, setStep] = useState<Step>('phone');
+
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
 
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [surname, setSurname] = useState('');
 
-  const [gender, setGender] = useState('');
-
-  const [accountType, setAccountType] = useState<AccountType | ''>('');
-
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // UI STATE
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] =
-    useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [countdown, setCountdown] = useState(0);
+
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   // ==========================================================
-  // VALIDATION
+  // RESEND COUNTDOWN
   // ==========================================================
 
-  const validateForm = (): string => {
-    const cleanFirstName = cleanText(firstName);
-    const cleanMiddleName = cleanText(middleName);
-    const cleanSurname = cleanText(surname);
-    const cleanEmailAddress = cleanEmail(email);
-    const cleanPhoneNumber = cleanPhone(phone);
+  useEffect(() => {
+    if (countdown <= 0) return;
 
-    if (!accountType) {
-      return 'Please select an account type.';
+    const timer = window.setInterval(() => {
+      setCountdown((previous) => Math.max(0, previous - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [countdown]);
+
+  // ==========================================================
+  // API REQUEST
+  // ==========================================================
+
+  const sendRequest = async (
+    endpoint: string,
+    payload: Record<string, string>
+  ): Promise<RegisterResponse> => {
+    const response = await axios.post<RegisterResponse>(
+      `${AUTH_URL}${endpoint}`,
+      payload,
+      {
+        timeout: 60000,
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      }
+    );
+
+    if (response.data?.success !== true) {
+      throw new Error(
+        response.data?.message || 'The server rejected this request.'
+      );
     }
 
-    if (!cleanFirstName) {
-      return 'Please enter your first name.';
-    }
+    return response.data;
+  };
 
-    if (cleanFirstName.length < 2) {
-      return 'First name must contain at least 2 characters.';
-    }
+  const resetMessages = () => {
+    setError('');
+    setSuccess('');
+  };
 
-    if (!cleanSurname) {
-      return 'Please enter your surname.';
-    }
-
-    if (cleanSurname.length < 2) {
-      return 'Surname must contain at least 2 characters.';
-    }
-
-    if (cleanMiddleName && cleanMiddleName.length < 2) {
-      return 'Middle name must contain at least 2 characters.';
-    }
-
-    if (!gender) {
-      return 'Please select your gender.';
-    }
-
-    if (!cleanEmailAddress) {
-      return 'Please enter your email address.';
-    }
-
+  const showRequestError = (err: unknown) => {
     if (
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        cleanEmailAddress,
-      )
+      axios.isAxiosError(err) &&
+      err.response?.data?.retry_after_seconds
     ) {
-      return 'Please enter a valid email address.';
+      setCountdown(
+        Number(err.response.data.retry_after_seconds)
+      );
     }
 
-    if (!cleanPhoneNumber) {
-      return 'Please enter your phone number.';
-    }
-
-    if (!/^[0-9+()\-.\s]{7,30}$/.test(cleanPhoneNumber)) {
-      return 'Please enter a valid phone number.';
-    }
-
-    if (!password) {
-      return 'Please create a password.';
-    }
-
-    if (password.length < 8) {
-      return 'Password must contain at least 8 characters.';
-    }
-
-    if (!confirmPassword) {
-      return 'Please confirm your password.';
-    }
-
-    if (password !== confirmPassword) {
-      return 'Passwords do not match.';
-    }
-
-    return '';
+    setError(getErrorMessage(err));
   };
 
   // ==========================================================
-  // REGISTER
+  // STEP 1 — SEND PHONE OTP
   // ==========================================================
 
-  const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>,
+  const startPhoneVerification = async (
+    event: FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
+    resetMessages();
 
-    setError('');
-    setSuccess('');
+    const cleanPhoneNumber = cleanPhone(phone);
 
-    const validationError = validateForm();
-
-    if (validationError) {
-      setError(validationError);
+    if (!/^(\+234\d{10}|234\d{10}|0\d{10})$/.test(cleanPhoneNumber)) {
+      setError(
+        'Enter a valid Nigerian phone number, for example 08012345678.'
+      );
       return;
     }
 
     setLoading(true);
 
     try {
-      const cleanFirstName = cleanText(firstName);
-      const cleanMiddleName = cleanText(middleName);
-      const cleanSurname = cleanText(surname);
-      const cleanEmailAddress = cleanEmail(email);
-      const cleanPhoneNumber = cleanPhone(phone);
-
-      // IMPORTANT:
-      // We intentionally DO NOT send full_name.
-      //
-      // The backend will construct:
-      //
-      // First + Middle + Surname
-      //
-      // This prevents the customer from controlling
-      // the official full_name value directly.
-
-      const response = await axios.post<RegisterResponse>(
-        `${API_URL}/api/auth/register`,
+      const data = await sendRequest(
+        '/registration/phone',
         {
-          first_name: cleanFirstName,
-          middle_name: cleanMiddleName || null,
-          surname: cleanSurname,
-          gender,
-          email: cleanEmailAddress,
           phone: cleanPhoneNumber,
-          password,
-          registration_account_type: accountType,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          timeout: 30000,
-        },
+        }
       );
 
-      const data = response.data;
-
-      // ------------------------------------------------------
-      // SAVE TOKEN
-      // ------------------------------------------------------
-
-      const token =
-        data.token ||
-        data.access_token ||
-        '';
-
-      if (token) {
-        localStorage.setItem(
-          'zenimonies_token',
-          token,
-        );
-      }
-
-      // ------------------------------------------------------
-      // SAVE USER
-      // ------------------------------------------------------
-
-      if (data.user) {
-        localStorage.setItem(
-          'zenimonies_user',
-          JSON.stringify(data.user),
-        );
-      }
-
-      // ------------------------------------------------------
-      // SAVE ACCOUNT
-      // ------------------------------------------------------
-
-      if (data.account) {
-        // Do not expose/store sensitive account number unnecessarily
-        // in the client registration payload.
-
-        const safeAccount = {
-          ...data.account,
-          account_number: undefined,
-        };
-
-        localStorage.setItem(
-          'zenimonies_accounts',
-          JSON.stringify([safeAccount]),
-        );
-      }
-
-      // ------------------------------------------------------
-      // SAVE ACCOUNT TYPE
-      // ------------------------------------------------------
-
-      if (accountType) {
-        sessionStorage.setItem(
-          'zenimonies_registration_account_type',
-          accountType,
-        );
-      }
-
-      // ------------------------------------------------------
-      // SAVE PHONE / EMAIL FOR OTP SCREEN
-      // ------------------------------------------------------
-
-      sessionStorage.setItem(
-        'zenimonies_verification_phone',
-        cleanPhoneNumber,
-      );
-
-      sessionStorage.setItem(
-        'zenimonies_verification_email',
-        cleanEmailAddress,
-      );
-
-      // ------------------------------------------------------
-      // DEVELOPMENT OTP
-      // ------------------------------------------------------
-
-      if (data.development_otp) {
-        sessionStorage.setItem(
-          'zenimonies_development_otp',
-          data.development_otp,
-        );
-      }
-
-      // ------------------------------------------------------
-      // SUCCESS
-      // ------------------------------------------------------
+      setPhone(cleanPhoneNumber);
+      setOtp('');
+      setCountdown(60);
+      setStep('phoneOtp');
 
       setSuccess(
-        data.message ||
-          'Your ZENIMONIES account has been created successfully.',
+        'A verification code has been sent to your phone.'
       );
 
-      // ------------------------------------------------------
-      // PHONE VERIFICATION
-      // ------------------------------------------------------
-
-      setTimeout(() => {
-        navigate('/verify-phone', {
-          replace: true,
-        });
-      }, 800);
-    } catch (err: any) {
-      console.error(
-        'ZENIMONIES registration error:',
-        err,
-      );
-
-      const serverMessage =
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        '';
-
-      if (
-        err?.code === 'ECONNABORTED'
-      ) {
-        setError(
-          'The server took too long to respond. Please try again.',
-        );
-      } else if (
-        err?.response?.status === 409
-      ) {
-        setError(
-          serverMessage ||
-            'An account with this email or phone number already exists.',
-        );
-      } else if (
-        err?.response?.status === 400
-      ) {
-        setError(
-          serverMessage ||
-            'Please check your registration details and try again.',
-        );
-      } else {
-        setError(
-          serverMessage ||
-            'Registration failed. Please try again.',
+      if (data.development_otp) {
+        setSuccess(
+          `Development test code: ${data.development_otp}`
         );
       }
+    } catch (err) {
+      showRequestError(err);
     } finally {
       setLoading(false);
     }
   };
 
   // ==========================================================
-  // UI
+  // STEP 2 — VERIFY PHONE OTP
+  // ==========================================================
+
+  const verifyPhone = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+    resetMessages();
+
+    if (!/^\d{6}$/.test(otp.trim())) {
+      setError('Enter the six-digit phone verification code.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await sendRequest(
+        '/registration/phone/verify',
+        {
+          phone,
+          otp: otp.trim(),
+        }
+      );
+
+      setPhoneVerified(true);
+      setOtp('');
+      setCountdown(0);
+      setStep('email');
+
+      setSuccess('Your phone number has been verified successfully.');
+    } catch (err) {
+      showRequestError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================================================
+  // STEP 3 — SEND EMAIL OTP
+  // ==========================================================
+
+  const startEmailVerification = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+    resetMessages();
+
+    const cleanEmailAddress = cleanEmail(email);
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmailAddress)) {
+      setError('Enter a valid email address.');
+      return;
+    }
+
+    if (!phoneVerified) {
+      setError('Verify your phone number before continuing.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const data = await sendRequest(
+        '/registration/email',
+        {
+          phone,
+          email: cleanEmailAddress,
+        }
+      );
+
+      setEmail(cleanEmailAddress);
+      setOtp('');
+      setCountdown(60);
+      setStep('emailOtp');
+
+      setSuccess(
+        'A verification code has been sent to your email.'
+      );
+
+      if (data.development_otp) {
+        setSuccess(
+          `Development test code: ${data.development_otp}`
+        );
+      }
+    } catch (err) {
+      showRequestError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================================================
+  // STEP 4 — VERIFY EMAIL OTP
+  // ==========================================================
+
+  const verifyEmail = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+    resetMessages();
+
+    if (!/^\d{6}$/.test(otp.trim())) {
+      setError('Enter the six-digit email verification code.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await sendRequest(
+        '/registration/email/verify',
+        {
+          phone,
+          email,
+          otp: otp.trim(),
+        }
+      );
+
+      setEmailVerified(true);
+      setOtp('');
+      setCountdown(0);
+      setStep('profile');
+
+      setSuccess(
+        'Your email has been verified. Complete your profile to create your account.'
+      );
+    } catch (err) {
+      showRequestError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================================================
+  // RESEND OTP
+  // ==========================================================
+
+  const resendCode = async () => {
+    if (loading || countdown > 0) return;
+
+    resetMessages();
+    setLoading(true);
+
+    try {
+      const isPhoneStep = step === 'phoneOtp';
+
+      const endpoint = isPhoneStep
+        ? '/registration/phone'
+        : '/registration/email';
+
+      const payload = isPhoneStep
+        ? { phone }
+        : { phone, email };
+
+      const data = await sendRequest(endpoint, payload);
+
+      setOtp('');
+      setCountdown(60);
+
+      setSuccess(
+        isPhoneStep
+          ? 'A new phone verification code has been sent.'
+          : 'A new email verification code has been sent.'
+      );
+
+      if (data.development_otp) {
+        setSuccess(
+          `Development test code: ${data.development_otp}`
+        );
+      }
+    } catch (err) {
+      showRequestError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================================================
+  // SAVE AUTHENTICATED SESSION
+  // ==========================================================
+
+  const saveAuthenticatedSession = (
+    data: RegisterResponse
+  ) => {
+    const token = data.token || data.access_token;
+
+    if (!token) {
+      throw new Error(
+        'Your account was created, but the server did not return a login token. Please sign in.'
+      );
+    }
+
+    // Keep the same authentication keys used by Login.tsx.
+    localStorage.setItem('zenimonies_token', token);
+    localStorage.setItem('token', token);
+
+    sessionStorage.setItem('zenimonies_token', token);
+    sessionStorage.setItem('token', token);
+
+    if (data.user) {
+      localStorage.setItem(
+        'zenimonies_user',
+        JSON.stringify(data.user)
+      );
+    }
+
+    localStorage.setItem(
+      'zenimonies_accounts',
+      JSON.stringify(data.account ? [data.account] : [])
+    );
+  };
+
+  // ==========================================================
+  // STEP 5 — COMPLETE PERSONAL REGISTRATION
+  // ==========================================================
+
+  const completeRegistration = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+    resetMessages();
+
+    if (!phoneVerified || !emailVerified) {
+      setError(
+        'Both your phone number and email address must be verified.'
+      );
+      return;
+    }
+
+    const cleanFirstName = cleanText(firstName);
+    const cleanMiddleName = cleanText(middleName);
+    const cleanSurname = cleanText(surname);
+
+    if (cleanFirstName.length < 2 || cleanFirstName.length > 100) {
+      setError('First name must contain between 2 and 100 characters.');
+      return;
+    }
+
+    if (cleanSurname.length < 2 || cleanSurname.length > 100) {
+      setError('Surname must contain between 2 and 100 characters.');
+      return;
+    }
+
+    if (
+      cleanMiddleName &&
+      (cleanMiddleName.length < 2 || cleanMiddleName.length > 100)
+    ) {
+      setError('Middle name must contain between 2 and 100 characters.');
+      return;
+    }
+
+    if (password.length < 8 || password.length > 128) {
+      setError('Password must contain between 8 and 128 characters.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Your passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const data = await sendRequest(
+        '/registration/complete',
+        {
+          phone,
+          first_name: cleanFirstName,
+          middle_name: cleanMiddleName,
+          surname: cleanSurname,
+          password,
+        }
+      );
+
+      // The account is now created only after both OTPs
+      // have been verified by the backend.
+
+      setPassword('');
+      setConfirmPassword('');
+
+      if (data.token || data.access_token) {
+        saveAuthenticatedSession(data);
+
+        setSuccess(
+          data.message ||
+            'Your ZENIMONIES Personal Banking account has been created.'
+        );
+
+        window.setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 900);
+      } else {
+        setSuccess(
+          'Your account has been created. Please sign in to continue.'
+        );
+
+        window.setTimeout(() => {
+          navigate('/login', { replace: true });
+        }, 1200);
+      }
+    } catch (err) {
+      showRequestError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================================================
+  // PROGRESS
+  // ==========================================================
+
+  const stepNumber: Record<Step, number> = {
+    phone: 1,
+    phoneOtp: 2,
+    email: 3,
+    emailOtp: 4,
+    profile: 5,
+  };
+
+  const stepTitles: Record<Step, string> = {
+    phone: 'Verify your phone',
+    phoneOtp: 'Confirm your phone',
+    email: 'Verify your email',
+    emailOtp: 'Confirm your email',
+    profile: 'Create your profile',
+  };
+
+  const stepDescriptions: Record<Step, string> = {
+    phone: 'Start with your Nigerian mobile number.',
+    phoneOtp: 'Enter the six-digit code sent to your phone.',
+    email: 'Add an email address you can access.',
+    emailOtp: 'Enter the six-digit code sent to your inbox.',
+    profile: 'Complete your details to create your personal account.',
+  };
+
+  const stepLabels = [
+    'Phone',
+    'Phone OTP',
+    'Email',
+    'Email OTP',
+    'Profile',
+  ];
+
+  // ==========================================================
+  // FIELD COMPONENT
+  // ==========================================================
+
+  const renderInput = (
+    label: string,
+    value: string,
+    onChange: (value: string) => void,
+    placeholder: string,
+    options: {
+      type?: string;
+      autoComplete?: string;
+      maxLength?: number;
+      inputMode?: 'text' | 'email' | 'tel' | 'numeric';
+    } = {}
+  ) => (
+    <div style={fieldStyle}>
+      <label style={labelStyle}>{label}</label>
+
+      <input
+        type={options.type || 'text'}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        autoComplete={options.autoComplete}
+        maxLength={options.maxLength}
+        inputMode={options.inputMode}
+        disabled={loading}
+        style={inputStyle}
+      />
+    </div>
+  );
+
+  // ==========================================================
+  // PAGE
   // ==========================================================
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-        background:
-          'linear-gradient(135deg, #f4fbf7 0%, #ffffff 55%, #eef8f2 100%)',
-        boxSizing: 'border-box',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '520px',
-          background: '#ffffff',
-          borderRadius: '22px',
-          padding: '30px',
-          boxShadow:
-            '0 12px 40px rgba(0, 0, 0, 0.08)',
-          boxSizing: 'border-box',
-        }}
-      >
-        {/* ====================================================
-            BRAND
-        ==================================================== */}
+    <div style={pageStyle}>
+      <div style={cardStyle}>
 
-        <div
-          style={{
-            textAlign: 'center',
-            marginBottom: '26px',
-          }}
-        >
-          <div
-            style={{
-              fontSize: '30px',
-              fontWeight: 800,
-              color: '#138a4b',
-              letterSpacing: '-0.8px',
-            }}
-          >
-            ZENIMONIES
+        {/* BRAND */}
+
+        <div style={brandStyle}>
+          <div style={brandNameStyle}>ZENIMONIES</div>
+          <div style={brandSubtitleStyle}>PERSONAL BANKING</div>
+        </div>
+
+        {/* HEADING */}
+
+        <div style={{ marginBottom: 24 }}>
+          <div style={eyebrowStyle}>
+            CREATE YOUR ACCOUNT
           </div>
 
-          <div
-            style={{
-              marginTop: '6px',
-              fontSize: '14px',
-              color: '#6b7280',
-            }}
-          >
-            Create your banking account
+          <h1 style={headingStyle}>
+            {stepTitles[step]}
+          </h1>
+
+          <p style={descriptionStyle}>
+            {stepDescriptions[step]}
+          </p>
+        </div>
+
+        {/* PROGRESS */}
+
+        <div style={{ marginBottom: 25 }}>
+          <div style={progressHeaderStyle}>
+            <span>STEP {stepNumber[step]} OF 5</span>
+            <span>{stepNumber[step] * 20}%</span>
+          </div>
+
+          <div style={progressTrackStyle}>
+            <div
+              style={{
+                ...progressFillStyle,
+                width: `${stepNumber[step] * 20}%`,
+              }}
+            />
+          </div>
+
+          <div style={stepLabelsStyle}>
+            {stepLabels.map((label, index) => {
+              const active = index < stepNumber[step];
+
+              return (
+                <div key={label} style={stepLabelItemStyle}>
+                  <div
+                    style={{
+                      ...stepDotStyle,
+                      background: active ? '#138a4b' : '#dce8e0',
+                    }}
+                  />
+
+                  <span
+                    style={{
+                      ...stepLabelTextStyle,
+                      color: active ? '#087443' : '#98a69d',
+                    }}
+                  >
+                    {label}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* ====================================================
-            ERROR
-        ==================================================== */}
+        {/* ALERTS */}
 
         {error && (
-          <div
-            style={{
-              marginBottom: '18px',
-              padding: '13px 14px',
-              borderRadius: '10px',
-              background: '#fff1f1',
-              border: '1px solid #ffd2d2',
-              color: '#b42318',
-              fontSize: '14px',
-              lineHeight: 1.45,
-            }}
-          >
+          <div style={errorStyle}>
             {error}
           </div>
         )}
 
-        {/* ====================================================
-            SUCCESS
-        ==================================================== */}
-
         {success && (
-          <div
-            style={{
-              marginBottom: '18px',
-              padding: '13px 14px',
-              borderRadius: '10px',
-              background: '#effbf4',
-              border: '1px solid #c8efd7',
-              color: '#087443',
-              fontSize: '14px',
-              lineHeight: 1.45,
-            }}
-          >
+          <div style={successStyle}>
             {success}
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          {/* ==================================================
-              ACCOUNT TYPE
-          ================================================== */}
+        {/* STEP 1 */}
 
-          <div
-            style={{
-              marginBottom: '20px',
-            }}
-          >
-            <label
-              style={{
-                display: 'block',
-                marginBottom: '8px',
-                fontSize: '14px',
-                fontWeight: 600,
-                color: '#1f2937',
-              }}
-            >
-              Account Type
-            </label>
+        {step === 'phone' && (
+          <form onSubmit={startPhoneVerification}>
+            {renderInput(
+              'Nigerian phone number',
+              phone,
+              setPhone,
+              '08012345678',
+              {
+                type: 'tel',
+                autoComplete: 'tel',
+                inputMode: 'tel',
+                maxLength: 15,
+              }
+            )}
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns:
-                  'repeat(2, minmax(0, 1fr))',
-                gap: '10px',
-              }}
+            <p style={noteStyle}>
+              We will send a one-time verification code to this number.
+            </p>
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={buttonStyle(loading)}
             >
-              {(
-                [
-                  ['personal', 'Personal'],
-                  ['business', 'Business'],
-                ] as const
-              ).map(([value, label]) => (
+              {loading ? 'Sending code...' : 'Send verification code'}
+            </button>
+          </form>
+        )}
+
+        {/* STEP 2 */}
+
+        {step === 'phoneOtp' && (
+          <form onSubmit={verifyPhone}>
+            <div style={verifiedBoxStyle}>
+              Verifying phone: {phone}
+            </div>
+
+            {renderInput(
+              'Six-digit verification code',
+              otp,
+              setOtp,
+              '000000',
+              {
+                inputMode: 'numeric',
+                maxLength: 6,
+              }
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={buttonStyle(loading)}
+            >
+              {loading ? 'Verifying...' : 'Verify phone number'}
+            </button>
+
+            <div style={resendTextStyle}>
+              {countdown > 0
+                ? `You can request another code in ${countdown} seconds.`
+                : "Didn't receive a code?"}
+            </div>
+
+            <button
+              type="button"
+              onClick={resendCode}
+              disabled={loading || countdown > 0}
+              style={linkButtonStyle(loading || countdown > 0)}
+            >
+              Resend phone code
+            </button>
+          </form>
+        )}
+
+        {/* STEP 3 */}
+
+        {step === 'email' && (
+          <form onSubmit={startEmailVerification}>
+            <div style={verifiedBoxStyle}>
+              ✓ Phone number verified
+            </div>
+
+            {renderInput(
+              'Email address',
+              email,
+              setEmail,
+              'you@example.com',
+              {
+                type: 'email',
+                autoComplete: 'email',
+                inputMode: 'email',
+              }
+            )}
+
+            <p style={noteStyle}>
+              Your email address will be used for important account notifications and security verification.
+            </p>
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={buttonStyle(loading)}
+            >
+              {loading ? 'Sending code...' : 'Send email verification code'}
+            </button>
+          </form>
+        )}
+
+        {/* STEP 4 */}
+
+        {step === 'emailOtp' && (
+          <form onSubmit={verifyEmail}>
+            <div style={verifiedBoxStyle}>
+              ✓ Phone verified
+              <br />
+              Email: {email}
+            </div>
+
+            {renderInput(
+              'Six-digit email verification code',
+              otp,
+              setOtp,
+              '000000',
+              {
+                inputMode: 'numeric',
+                maxLength: 6,
+              }
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={buttonStyle(loading)}
+            >
+              {loading ? 'Verifying...' : 'Verify email address'}
+            </button>
+
+            <div style={resendTextStyle}>
+              {countdown > 0
+                ? `You can request another code in ${countdown} seconds.`
+                : "Didn't receive a code?"}
+            </div>
+
+            <button
+              type="button"
+              onClick={resendCode}
+              disabled={loading || countdown > 0}
+              style={linkButtonStyle(loading || countdown > 0)}
+            >
+              Resend email code
+            </button>
+          </form>
+        )}
+
+        {/* STEP 5 */}
+
+        {step === 'profile' && (
+          <form onSubmit={completeRegistration}>
+            <div style={verifiedBoxStyle}>
+              ✓ Phone verified
+              <br />
+              ✓ Email verified
+            </div>
+
+            {renderInput(
+              'First name',
+              firstName,
+              setFirstName,
+              'Enter your first name',
+              { autoComplete: 'given-name' }
+            )}
+
+            {renderInput(
+              'Middle name (optional)',
+              middleName,
+              setMiddleName,
+              'Enter your middle name',
+              { autoComplete: 'additional-name' }
+            )}
+
+            {renderInput(
+              'Surname',
+              surname,
+              setSurname,
+              'Enter your surname',
+              { autoComplete: 'family-name' }
+            )}
+
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Password</label>
+
+              <div style={passwordWrapperStyle}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Create a secure password"
+                  autoComplete="new-password"
+                  disabled={loading}
+                  style={passwordInputStyle}
+                />
+
                 <button
-                  key={value}
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  style={showButtonStyle}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+
+              <span style={smallNoteStyle}>
+                Minimum 8 characters.
+              </span>
+            </div>
+
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Confirm password</label>
+
+              <div style={passwordWrapperStyle}>
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  placeholder="Enter your password again"
+                  autoComplete="new-password"
+                  disabled={loading}
+                  style={passwordInputStyle}
+                />
+
+                <button
                   type="button"
                   onClick={() =>
-                    setAccountType(value)
+                    setShowConfirmPassword((value) => !value)
                   }
-                  style={{
-                    padding: '13px',
-                    borderRadius: '10px',
-                    border:
-                      accountType === value
-                        ? '2px solid #138a4b'
-                        : '1px solid #d1d5db',
-                    background:
-                      accountType === value
-                        ? '#effbf4'
-                        : '#ffffff',
-                    color:
-                      accountType === value
-                        ? '#087443'
-                        : '#374151',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
+                  style={showButtonStyle}
                 >
-                  {label}
+                  {showConfirmPassword ? 'Hide' : 'Show'}
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ==================================================
-              FIRST NAME
-          ================================================== */}
-
-          <div style={{ marginBottom: '16px' }}>
-            <label
-              htmlFor="first-name"
-              style={labelStyle}
-            >
-              First Name
-            </label>
-
-            <input
-              id="first-name"
-              type="text"
-              value={firstName}
-              onChange={(e) =>
-                setFirstName(e.target.value)
-              }
-              autoComplete="given-name"
-              placeholder="Enter your first name"
-              style={inputStyle}
-              disabled={loading}
-            />
-          </div>
-
-          {/* ==================================================
-              MIDDLE NAME
-          ================================================== */}
-
-          <div style={{ marginBottom: '16px' }}>
-            <label
-              htmlFor="middle-name"
-              style={labelStyle}
-            >
-              Middle Name{' '}
-              <span
-                style={{
-                  color: '#9ca3af',
-                  fontWeight: 400,
-                }}
-              >
-                (Optional)
-              </span>
-            </label>
-
-            <input
-              id="middle-name"
-              type="text"
-              value={middleName}
-              onChange={(e) =>
-                setMiddleName(e.target.value)
-              }
-              autoComplete="additional-name"
-              placeholder="Enter your middle name"
-              style={inputStyle}
-              disabled={loading}
-            />
-          </div>
-
-          {/* ==================================================
-              SURNAME
-          ================================================== */}
-
-          <div style={{ marginBottom: '16px' }}>
-            <label
-              htmlFor="surname"
-              style={labelStyle}
-            >
-              Surname
-            </label>
-
-            <input
-              id="surname"
-              type="text"
-              value={surname}
-              onChange={(e) =>
-                setSurname(e.target.value)
-              }
-              autoComplete="family-name"
-              placeholder="Enter your surname"
-              style={inputStyle}
-              disabled={loading}
-            />
-          </div>
-
-          {/* ==================================================
-              GENDER
-          ================================================== */}
-
-          <div style={{ marginBottom: '16px' }}>
-            <label
-              htmlFor="gender"
-              style={labelStyle}
-            >
-              Gender
-            </label>
-
-            <select
-              id="gender"
-              value={gender}
-              onChange={(e) =>
-                setGender(e.target.value)
-              }
-              style={inputStyle}
-              disabled={loading}
-            >
-              <option value="">
-                Select gender
-              </option>
-
-              <option value="male">
-                Male
-              </option>
-
-              <option value="female">
-                Female
-              </option>
-
-              <option value="other">
-                Other
-              </option>
-            </select>
-          </div>
-
-          {/* ==================================================
-              EMAIL
-          ================================================== */}
-
-          <div style={{ marginBottom: '16px' }}>
-            <label
-              htmlFor="email"
-              style={labelStyle}
-            >
-              Email Address
-            </label>
-
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) =>
-                setEmail(e.target.value)
-              }
-              autoComplete="email"
-              placeholder="Enter your email address"
-              style={inputStyle}
-              disabled={loading}
-            />
-          </div>
-
-          {/* ==================================================
-              PHONE
-          ================================================== */}
-
-          <div style={{ marginBottom: '16px' }}>
-            <label
-              htmlFor="phone"
-              style={labelStyle}
-            >
-              Phone Number
-            </label>
-
-            <input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) =>
-                setPhone(e.target.value)
-              }
-              autoComplete="tel"
-              placeholder="Enter your phone number"
-              style={inputStyle}
-              disabled={loading}
-            />
-          </div>
-
-          {/* ==================================================
-              PASSWORD
-          ================================================== */}
-
-          <div style={{ marginBottom: '16px' }}>
-            <label
-              htmlFor="password"
-              style={labelStyle}
-            >
-              Password
-            </label>
-
-            <div
-              style={{
-                position: 'relative',
-              }}
-            >
-              <input
-                id="password"
-                type={
-                  showPassword
-                    ? 'text'
-                    : 'password'
-                }
-                value={password}
-                onChange={(e) =>
-                  setPassword(e.target.value)
-                }
-                autoComplete="new-password"
-                placeholder="Create a password"
-                style={{
-                  ...inputStyle,
-                  paddingRight: '80px',
-                }}
-                disabled={loading}
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowPassword(
-                    (previous) => !previous,
-                  )
-                }
-                style={showButtonStyle}
-              >
-                {showPassword
-                  ? 'Hide'
-                  : 'Show'}
-              </button>
+              </div>
             </div>
 
-            <div
-              style={{
-                marginTop: '6px',
-                fontSize: '12px',
-                color: '#6b7280',
-              }}
+            <p style={noteStyle}>
+              Your personal account will be created in Nigerian Naira (NGN).
+              You can complete identity verification from your profile.
+            </p>
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={buttonStyle(loading)}
             >
-              Minimum 8 characters.
-            </div>
-          </div>
+              {loading ? 'Creating your account...' : 'Create my account'}
+            </button>
+          </form>
+        )}
 
-          {/* ==================================================
-              CONFIRM PASSWORD
-          ================================================== */}
+        {/* FOOTER */}
 
-          <div style={{ marginBottom: '22px' }}>
-            <label
-              htmlFor="confirm-password"
-              style={labelStyle}
-            >
-              Confirm Password
-            </label>
-
-            <div
-              style={{
-                position: 'relative',
-              }}
-            >
-              <input
-                id="confirm-password"
-                type={
-                  showConfirmPassword
-                    ? 'text'
-                    : 'password'
-                }
-                value={confirmPassword}
-                onChange={(e) =>
-                  setConfirmPassword(
-                    e.target.value,
-                  )
-                }
-                autoComplete="new-password"
-                placeholder="Confirm your password"
-                style={{
-                  ...inputStyle,
-                  paddingRight: '80px',
-                }}
-                disabled={loading}
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowConfirmPassword(
-                    (previous) => !previous,
-                  )
-                }
-                style={showButtonStyle}
-              >
-                {showConfirmPassword
-                  ? 'Hide'
-                  : 'Show'}
-              </button>
-            </div>
-          </div>
-
-          {/* ==================================================
-              REGISTER BUTTON
-          ================================================== */}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '14px',
-              border: 'none',
-              borderRadius: '11px',
-              background:
-                loading
-                  ? '#7bbd9b'
-                  : '#138a4b',
-              color: '#ffffff',
-              fontSize: '16px',
-              fontWeight: 700,
-              cursor: loading
-                ? 'not-allowed'
-                : 'pointer',
-              boxShadow:
-                '0 6px 16px rgba(19, 138, 75, 0.20)',
-            }}
-          >
-            {loading
-              ? 'Creating account...'
-              : 'Create ZENIMONIES Account'}
-          </button>
-        </form>
-
-        {/* ====================================================
-            LOGIN
-        ==================================================== */}
-
-        <div
-          style={{
-            textAlign: 'center',
-            marginTop: '22px',
-            fontSize: '14px',
-            color: '#6b7280',
-          }}
-        >
+        <div style={footerStyle}>
           Already have a ZENIMONIES account?{' '}
-
-          <Link
-            to="/login"
-            style={{
-              color: '#138a4b',
-              fontWeight: 700,
-              textDecoration: 'none',
-            }}
-          >
+          <Link to="/login" style={loginLinkStyle}>
             Sign in
           </Link>
         </div>
 
-        {/* ====================================================
-            SECURITY NOTE
-        ==================================================== */}
-
-        <div
-          style={{
-            marginTop: '20px',
-            paddingTop: '16px',
-            borderTop: '1px solid #edf0f2',
-            textAlign: 'center',
-            fontSize: '11px',
-            lineHeight: 1.5,
-            color: '#9ca3af',
-          }}
-        >
-          Your information is protected by
-          ZENIMONIES security controls.
+        <div style={securityStyle}>
+          SECURE REGISTRATION • ZENIMONIES BANKING
         </div>
       </div>
     </div>
@@ -932,37 +962,275 @@ const Register: React.FC = () => {
 // STYLES
 // ============================================================
 
+const pageStyle: React.CSSProperties = {
+  minHeight: '100vh',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '24px 14px',
+  boxSizing: 'border-box',
+  background: 'linear-gradient(135deg, #f4fbf7 0%, #ffffff 55%, #eef8f2 100%)',
+  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+};
+
+const cardStyle: React.CSSProperties = {
+  width: '100%',
+  maxWidth: 520,
+  padding: '30px',
+  borderRadius: 22,
+  background: '#ffffff',
+  border: '1px solid #e2eee6',
+  boxShadow: '0 12px 40px rgba(0, 0, 0, 0.07)',
+  boxSizing: 'border-box',
+};
+
+const brandStyle: React.CSSProperties = {
+  textAlign: 'center',
+  marginBottom: 28,
+};
+
+const brandNameStyle: React.CSSProperties = {
+  color: '#138a4b',
+  fontSize: 30,
+  fontWeight: 900,
+  letterSpacing: '-0.8px',
+};
+
+const brandSubtitleStyle: React.CSSProperties = {
+  marginTop: 5,
+  color: '#718078',
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 3,
+};
+
+const eyebrowStyle: React.CSSProperties = {
+  color: '#138a4b',
+  fontSize: 11,
+  fontWeight: 900,
+  letterSpacing: 2,
+  marginBottom: 10,
+};
+
+const headingStyle: React.CSSProperties = {
+  margin: 0,
+  color: '#14251c',
+  fontSize: 28,
+  lineHeight: 1.25,
+  fontWeight: 900,
+};
+
+const descriptionStyle: React.CSSProperties = {
+  margin: '9px 0 0',
+  color: '#718078',
+  fontSize: 14,
+  lineHeight: 1.6,
+};
+
+const progressHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  marginBottom: 8,
+  color: '#087443',
+  fontSize: 10,
+  fontWeight: 900,
+  letterSpacing: 1,
+};
+
+const progressTrackStyle: React.CSSProperties = {
+  height: 6,
+  borderRadius: 10,
+  overflow: 'hidden',
+  background: '#edf3ef',
+};
+
+const progressFillStyle: React.CSSProperties = {
+  height: 6,
+  borderRadius: 10,
+  background: '#138a4b',
+  transition: 'width 0.25s ease',
+};
+
+const stepLabelsStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  gap: 3,
+  marginTop: 13,
+};
+
+const stepLabelItemStyle: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 6,
+};
+
+const stepDotStyle: React.CSSProperties = {
+  width: 9,
+  height: 9,
+  borderRadius: '50%',
+};
+
+const stepLabelTextStyle: React.CSSProperties = {
+  fontSize: 9,
+  fontWeight: 700,
+  textAlign: 'center',
+};
+
+const fieldStyle: React.CSSProperties = {
+  marginBottom: 17,
+};
+
 const labelStyle: React.CSSProperties = {
   display: 'block',
-  marginBottom: '7px',
-  fontSize: '14px',
-  fontWeight: 600,
+  marginBottom: 7,
   color: '#1f2937',
+  fontSize: 13,
+  fontWeight: 700,
 };
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
   boxSizing: 'border-box',
-  padding: '12px 13px',
-  borderRadius: '10px',
-  border: '1px solid #d1d5db',
-  background: '#ffffff',
-  color: '#111827',
-  fontSize: '14px',
+  padding: '14px 13px',
+  borderRadius: 11,
+  border: '1px solid #dce8e0',
+  background: '#f7faf8',
+  color: '#14251c',
+  fontSize: 15,
   outline: 'none',
+};
+
+const passwordWrapperStyle: React.CSSProperties = {
+  position: 'relative',
+};
+
+const passwordInputStyle: React.CSSProperties = {
+  ...inputStyle,
+  paddingRight: 75,
 };
 
 const showButtonStyle: React.CSSProperties = {
   position: 'absolute',
-  right: '10px',
+  right: 12,
   top: '50%',
   transform: 'translateY(-50%)',
-  border: 'none',
+  border: 0,
   background: 'transparent',
   color: '#138a4b',
-  fontSize: '12px',
-  fontWeight: 700,
+  fontSize: 12,
+  fontWeight: 800,
   cursor: 'pointer',
+};
+
+const smallNoteStyle: React.CSSProperties = {
+  display: 'block',
+  marginTop: 6,
+  color: '#718078',
+  fontSize: 11,
+};
+
+const noteStyle: React.CSSProperties = {
+  margin: '0 0 17px',
+  color: '#718078',
+  fontSize: 12,
+  lineHeight: 1.6,
+};
+
+const verifiedBoxStyle: React.CSSProperties = {
+  padding: 13,
+  marginBottom: 18,
+  borderRadius: 11,
+  background: '#effbf4',
+  border: '1px solid #c8efd7',
+  color: '#087443',
+  fontSize: 12,
+  fontWeight: 700,
+  lineHeight: 1.8,
+};
+
+const buttonStyle = (loading: boolean): React.CSSProperties => ({
+  width: '100%',
+  minHeight: 52,
+  padding: '13px 16px',
+  border: 0,
+  borderRadius: 11,
+  background: loading ? '#7bbd9b' : '#138a4b',
+  color: '#ffffff',
+  fontSize: 15,
+  fontWeight: 800,
+  cursor: loading ? 'not-allowed' : 'pointer',
+  boxShadow: '0 6px 16px rgba(19, 138, 75, 0.16)',
+});
+
+const errorStyle: React.CSSProperties = {
+  marginBottom: 17,
+  padding: 13,
+  borderRadius: 10,
+  background: '#fff1f1',
+  border: '1px solid #ffd2d2',
+  color: '#b42318',
+  fontSize: 13,
+  lineHeight: 1.5,
+  overflowWrap: 'anywhere',
+};
+
+const successStyle: React.CSSProperties = {
+  marginBottom: 17,
+  padding: 13,
+  borderRadius: 10,
+  background: '#effbf4',
+  border: '1px solid #c8efd7',
+  color: '#087443',
+  fontSize: 13,
+  lineHeight: 1.5,
+  overflowWrap: 'anywhere',
+};
+
+const resendTextStyle: React.CSSProperties = {
+  marginTop: 14,
+  color: '#718078',
+  fontSize: 12,
+  textAlign: 'center',
+};
+
+const linkButtonStyle = (disabled: boolean): React.CSSProperties => ({
+  display: 'block',
+  margin: '7px auto 0',
+  padding: 7,
+  border: 0,
+  background: 'transparent',
+  color: disabled ? '#98a69d' : '#138a4b',
+  fontSize: 13,
+  fontWeight: 800,
+  cursor: disabled ? 'not-allowed' : 'pointer',
+});
+
+const footerStyle: React.CSSProperties = {
+  marginTop: 24,
+  textAlign: 'center',
+  color: '#718078',
+  fontSize: 13,
+  lineHeight: 1.6,
+};
+
+const loginLinkStyle: React.CSSProperties = {
+  color: '#138a4b',
+  fontWeight: 800,
+  textDecoration: 'none',
+};
+
+const securityStyle: React.CSSProperties = {
+  marginTop: 20,
+  paddingTop: 15,
+  borderTop: '1px solid #edf0f2',
+  textAlign: 'center',
+  color: '#98a69d',
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: 1.2,
 };
 
 export default Register;
