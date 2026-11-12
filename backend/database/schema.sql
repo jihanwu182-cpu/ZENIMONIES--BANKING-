@@ -1524,7 +1524,20 @@ CREATE TABLE IF NOT EXISTS sms_preferences (
     updated_at TIMESTAMPTZ NOT NULL
         DEFAULT CURRENT_TIMESTAMP
 );
+-- ============================================================
+-- API RATE LIMITS
+-- ============================================================
 
+CREATE TABLE IF NOT EXISTS api_rate_limits (
+  key_hash CHAR(64) PRIMARY KEY,
+  window_start TIMESTAMPTZ NOT NULL,
+  request_count INTEGER NOT NULL DEFAULT 0
+    CHECK (request_count >= 0),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_rate_limits_window_start
+ON api_rate_limits (window_start);
 -- ============================================================
 -- INDEXES
 -- ============================================================
