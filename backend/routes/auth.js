@@ -1,3 +1,4 @@
+
 const express = require('express');
 
 const {
@@ -19,9 +20,47 @@ const {
   completeRegistration,
 } = require('../controllers/registrationController');
 
+const {
+  createRegistrationRateLimit,
+} = require('../middleware/registrationRateLimit');
+
 const authMiddleware = require('../middleware/authMiddleware');
 
 const router = express.Router();
+
+// ============================================================
+// DATABASE-BACKED REGISTRATION RATE LIMITS
+// ============================================================
+
+const phoneStartLimit = createRegistrationRateLimit({
+  windowSeconds: 15 * 60,
+  maxRequests: 5,
+  bucket: 'registration-phone-start',
+});
+
+const phoneVerifyLimit = createRegistrationRateLimit({
+  windowSeconds: 15 * 60,
+  maxRequests: 10,
+  bucket: 'registration-phone-verify',
+});
+
+const emailStartLimit = createRegistrationRateLimit({
+  windowSeconds: 15 * 60,
+  maxRequests: 5,
+  bucket: 'registration-email-start',
+});
+
+const emailVerifyLimit = createRegistrationRateLimit({
+  windowSeconds: 15 * 60,
+  maxRequests: 10,
+  bucket: 'registration-email-verify',
+});
+
+const registrationCompleteLimit = createRegistrationRateLimit({
+  windowSeconds: 15 * 60,
+  maxRequests: 5,
+  bucket: 'registration-complete',
+});
 
 // ============================================================
 // PUBLIC STAGED REGISTRATION ROUTES
@@ -30,30 +69,35 @@ const router = express.Router();
 // Step 1: Send phone verification code
 router.post(
   '/registration/phone',
+  phoneStartLimit,
   startPhoneVerification
 );
 
 // Step 2: Verify phone code
 router.post(
   '/registration/phone/verify',
+  phoneVerifyLimit,
   verifyRegistrationPhoneOtp
 );
 
 // Step 3: Send email verification code
 router.post(
   '/registration/email',
+  emailStartLimit,
   startEmailVerification
 );
 
 // Step 4: Verify email code
 router.post(
   '/registration/email/verify',
+  emailVerifyLimit,
   verifyRegistrationEmailOtp
 );
 
 // Step 5: Create personal account after both OTPs are verified
 router.post(
   '/registration/complete',
+  registrationCompleteLimit,
   completeRegistration
 );
 
