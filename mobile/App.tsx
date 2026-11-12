@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   SafeAreaView,
   StatusBar,
   StyleSheet,
@@ -8,10 +11,14 @@ import {
   View,
   ScrollView,
 } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 
 import colors from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
+
+const API_URL = 'https://zenimonies-banking.onrender.com/api/auth';
+const AUTH_TOKEN_KEY = 'zenimonies_auth_token';
 
 type Screen = 'welcome' | 'login' | 'register' | 'home';
 
@@ -25,43 +32,210 @@ type Account = {
   status?: string;
 };
 
+type AuthUser = {
+  id?: string;
+  full_name?: string;
+  first_name?: string;
+  surname?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+};
+
 type AuthSession = {
   success: boolean;
   token: string;
-  user?: {
-    id?: string;
-    full_name?: string;
-    first_name?: string;
-    surname?: string;
-    email?: string;
-    phone?: string;
-  };
+  user?: AuthUser;
   accounts?: Account[];
   account?: Account;
+  session_expires_at?: string;
+  inactivity_timeout_minutes?: number;
+};
+
+type MeResponse = {
+  success: boolean;
+  user?: AuthUser;
+  account?: Account | null;
+  accounts?: Account[];
+  message?: string;
 };
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('welcome');
   const [session, setSession] = useState<AuthSession | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
 
-  const handleLoginSuccess = (authData: AuthSession) => {
+  // ============================================================
+  // RESTORE A SAVED SESSION
+  // ============================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    const restoreSession = async () => {
+      try {
+        const savedToken = await SecureStore.getItemAsync(
+          AUTH_TOKEN_KEY
+        );
+
+        if (!savedToken) {
+          return;
+        }
+
+        const response = await fetch(`${API_URL}/me`, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${savedToken}`,
+          },
+        });
+
+        let data: MeResponse;
+
+        try {
+          data = await response.json();
+        } catch {
+          throw new Error('Invalid session response from server.');
+        }
+
+        if (
+          !response.ok ||
+          data.success !== true ||
+          !data.user
+        ) {
+          await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+          return;
+        }
+
+        if (!mounted) return;
+
+        const restoredSession: AuthSession = {
+          success: true,
+          token: savedToken,
+          user: data.user,
+          account: data.account || undefined,
+          accounts:
+            data.accounts ||
+            (data.account ? [data.account] : []),
+        };
+
+        setSession(restoredSession);
+        setScreen('home');
+      } catch (error) {
+        // Do not remove a saved token just because the network
+        // is temporarily unavailable. The customer can retry login.
+        if (mounted) {
+          Alert.alert(
+            'Session unavailable',
+            'We could not verify your saved session. Please check your internet connection and sign in again if necessary.'
+          );
+        }
+      } finally {
+        if (mounted) {
+          setCheckingSession(false);
+        }
+      }
+    };
+
+    restoreSession();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // ============================================================
+  // SAVE A SUCCESSFUL LOGIN
+  // ============================================================
+
+  const handleLoginSuccess = async (authData: AuthSession) => {
     if (!authData?.token) {
+      Alert.alert(
+        'Sign in incomplete',
+        'The server did not return a valid login token. Please try again.'
+      );
       return;
     }
 
-    setSession(authData);
-    setScreen('home');
+    try {
+      await SecureStore.setItemAsync(
+        AUTH_TOKEN_KEY,
+        authData.token
+      );
+
+      setSession(authData);
+      setScreen('home');
+    } catch {
+      Alert.alert(
+        'Secure storage unavailable',
+        'Your login was accepted, but this device could not securely save your session. Please try again.'
+      );
+    }
   };
 
-  const handleLogout = () => {
-    setSession(null);
-    setScreen('welcome');
+  // ============================================================
+  // LOG OUT
+  // ============================================================
+
+  const handleLogout = async () => {
+    try {
+      await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+
+      setSession(null);
+      setScreen('welcome');
+    } catch {
+      Alert.alert(
+        'Logout could not be completed',
+        'We could not clear the saved secure session. Please try again.'
+      );
+    }
   };
+
+  // ============================================================
+  // SESSION CHECK SCREEN
+  // ============================================================
+
+  if (checkingSession) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="#FFFFFF"
+        />
+
+        <View style={styles.loadingContent}>
+          <View style={styles.logo}>
+            <Text style={styles.logoText}>Z</Text>
+          </View>
+
+          <Text style={styles.loadingBrand}>ZENIMONIES</Text>
+
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+            style={styles.loadingIndicator}
+          />
+
+          <Text style={styles.loadingText}>
+            Securing your session...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ============================================================
+  // LOGIN SCREEN
+  // ============================================================
 
   if (screen === 'login') {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="#FFFFFF"
+        />
 
         <TouchableOpacity
           style={styles.backButton}
@@ -78,10 +252,17 @@ export default function App() {
     );
   }
 
+  // ============================================================
+  // REGISTRATION SCREEN
+  // ============================================================
+
   if (screen === 'register') {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="#FFFFFF"
+        />
 
         <TouchableOpacity
           style={styles.backButton}
@@ -95,10 +276,15 @@ export default function App() {
     );
   }
 
+  // ============================================================
+  // CUSTOMER HOME SCREEN
+  // ============================================================
+
   if (screen === 'home' && session) {
     const userName =
       session.user?.first_name ||
       session.user?.full_name ||
+      session.user?.name ||
       'Customer';
 
     const accounts =
@@ -107,7 +293,10 @@ export default function App() {
 
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="#FFFFFF"
+        />
 
         <ScrollView
           contentContainerStyle={styles.homeContent}
@@ -115,28 +304,43 @@ export default function App() {
         >
           <View style={styles.homeHeader}>
             <View>
-              <Text style={styles.homeBrand}>ZENIMONIES</Text>
-              <Text style={styles.homeSubtitle}>BANKING</Text>
+              <Text style={styles.homeBrand}>
+                ZENIMONIES
+              </Text>
+
+              <Text style={styles.homeSubtitle}>
+                BANKING
+              </Text>
             </View>
 
             <TouchableOpacity
               style={styles.logoutButton}
               onPress={handleLogout}
             >
-              <Text style={styles.logoutText}>Log out</Text>
+              <Text style={styles.logoutText}>
+                Log out
+              </Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.welcomeArea}>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.customerName}>{userName}</Text>
+            <Text style={styles.greeting}>
+              Welcome back,
+            </Text>
+
+            <Text style={styles.customerName}>
+              {userName}
+            </Text>
+
             <Text style={styles.homeDescription}>
               Your ZENIMONIES account is ready.
             </Text>
           </View>
 
           <View style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>ACCOUNT OVERVIEW</Text>
+            <Text style={styles.balanceLabel}>
+              ACCOUNT OVERVIEW
+            </Text>
 
             {accounts.length === 0 ? (
               <Text style={styles.accountMessage}>
@@ -151,10 +355,13 @@ export default function App() {
 
                   <Text style={styles.balanceAmount}>
                     {account.currency || 'NGN'}{' '}
-                    {Number(account.balance || 0).toLocaleString('en-NG', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    {Number(account.balance || 0).toLocaleString(
+                      'en-NG',
+                      {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }
+                    )}
                   </Text>
 
                   <Text style={styles.accountStatus}>
@@ -176,7 +383,10 @@ export default function App() {
           </View>
 
           <View style={styles.noticeCard}>
-            <Text style={styles.noticeTitle}>You're signed in</Text>
+            <Text style={styles.noticeTitle}>
+              You're signed in
+            </Text>
+
             <Text style={styles.noticeText}>
               Your login was accepted by the ZENIMONIES server.
               More banking services will appear here as we build
@@ -192,9 +402,16 @@ export default function App() {
     );
   }
 
+  // ============================================================
+  // WELCOME SCREEN
+  // ============================================================
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="#FFFFFF"
+      />
 
       <View style={styles.content}>
         <View style={styles.brandArea}>
@@ -202,8 +419,13 @@ export default function App() {
             <Text style={styles.logoText}>Z</Text>
           </View>
 
-          <Text style={styles.brand}>ZENIMONIES</Text>
-          <Text style={styles.tagline}>Banking made simple.</Text>
+          <Text style={styles.brand}>
+            ZENIMONIES
+          </Text>
+
+          <Text style={styles.tagline}>
+            Banking made simple.
+          </Text>
         </View>
 
         <View style={styles.hero}>
@@ -227,7 +449,9 @@ export default function App() {
             style={styles.primaryButton}
             onPress={() => setScreen('register')}
           >
-            <Text style={styles.primaryText}>Get Started</Text>
+            <Text style={styles.primaryText}>
+              Get Started
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -248,10 +472,39 @@ export default function App() {
   );
 }
 
+// ============================================================
+// STYLES
+// ============================================================
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContent: {
+    alignItems: 'center',
+    paddingHorizontal: 30,
+  },
+  loadingBrand: {
+    marginTop: 14,
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 3,
+    color: colors.primaryDark,
+  },
+  loadingIndicator: {
+    marginTop: 35,
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 14,
+    color: colors.textSecondary,
   },
   content: {
     flex: 1,
