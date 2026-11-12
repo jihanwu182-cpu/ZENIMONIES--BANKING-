@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   SafeAreaView,
@@ -7,28 +6,74 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ScrollView,
 } from 'react-native';
 
 import colors from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 
-type Screen = 'welcome' | 'login' | 'register';
+type Screen = 'welcome' | 'login' | 'register' | 'home';
+
+type Account = {
+  id?: string;
+  account_number?: string | null;
+  account_name?: string;
+  account_type?: string;
+  currency?: string;
+  balance?: string | number;
+  status?: string;
+};
+
+type AuthSession = {
+  success: boolean;
+  token: string;
+  user?: {
+    id?: string;
+    full_name?: string;
+    first_name?: string;
+    surname?: string;
+    email?: string;
+    phone?: string;
+  };
+  accounts?: Account[];
+  account?: Account;
+};
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('welcome');
+  const [session, setSession] = useState<AuthSession | null>(null);
+
+  const handleLoginSuccess = (authData: AuthSession) => {
+    if (!authData?.token) {
+      return;
+    }
+
+    setSession(authData);
+    setScreen('home');
+  };
+
+  const handleLogout = () => {
+    setSession(null);
+    setScreen('welcome');
+  };
 
   if (screen === 'login') {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => setScreen('welcome')}
         >
           <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
-        <LoginScreen />
+
+        <LoginScreen
+          onLoginSuccess={handleLoginSuccess}
+          onRegisterPress={() => setScreen('register')}
+        />
       </SafeAreaView>
     );
   }
@@ -37,13 +82,112 @@ export default function App() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => setScreen('welcome')}
         >
           <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
+
         <RegisterScreen />
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'home' && session) {
+    const userName =
+      session.user?.first_name ||
+      session.user?.full_name ||
+      'Customer';
+
+    const accounts =
+      session.accounts ||
+      (session.account ? [session.account] : []);
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+        <ScrollView
+          contentContainerStyle={styles.homeContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.homeHeader}>
+            <View>
+              <Text style={styles.homeBrand}>ZENIMONIES</Text>
+              <Text style={styles.homeSubtitle}>BANKING</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
+              <Text style={styles.logoutText}>Log out</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.welcomeArea}>
+            <Text style={styles.greeting}>Welcome back,</Text>
+            <Text style={styles.customerName}>{userName}</Text>
+            <Text style={styles.homeDescription}>
+              Your ZENIMONIES account is ready.
+            </Text>
+          </View>
+
+          <View style={styles.balanceCard}>
+            <Text style={styles.balanceLabel}>ACCOUNT OVERVIEW</Text>
+
+            {accounts.length === 0 ? (
+              <Text style={styles.accountMessage}>
+                Your account information is not available yet.
+              </Text>
+            ) : (
+              accounts.map((account, index) => (
+                <View key={account.id || String(index)}>
+                  <Text style={styles.accountName}>
+                    {account.account_name || 'Personal Account'}
+                  </Text>
+
+                  <Text style={styles.balanceAmount}>
+                    {account.currency || 'NGN'}{' '}
+                    {Number(account.balance || 0).toLocaleString('en-NG', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </Text>
+
+                  <Text style={styles.accountStatus}>
+                    Account status: {account.status || 'Available'}
+                  </Text>
+
+                  {account.account_number ? (
+                    <Text style={styles.accountNumber}>
+                      Account number: {account.account_number}
+                    </Text>
+                  ) : (
+                    <Text style={styles.accountNumber}>
+                      Account number provisioning is pending.
+                    </Text>
+                  )}
+                </View>
+              ))
+            )}
+          </View>
+
+          <View style={styles.noticeCard}>
+            <Text style={styles.noticeTitle}>You're signed in</Text>
+            <Text style={styles.noticeText}>
+              Your login was accepted by the ZENIMONIES server.
+              More banking services will appear here as we build
+              and connect your dashboard.
+            </Text>
+          </View>
+
+          <Text style={styles.footer}>
+            SECURE • SIMPLE • SMART
+          </Text>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -221,5 +365,112 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 16,
     fontWeight: '700',
+  },
+  homeContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 25,
+    paddingBottom: 35,
+  },
+  homeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  homeBrand: {
+    color: colors.primaryDark,
+    fontSize: 21,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  homeSubtitle: {
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 4,
+  },
+  logoutButton: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 9,
+  },
+  logoutText: {
+    color: colors.primaryDark,
+    fontWeight: '700',
+  },
+  welcomeArea: {
+    marginTop: 45,
+    marginBottom: 25,
+  },
+  greeting: {
+    color: colors.textSecondary,
+    fontSize: 16,
+  },
+  customerName: {
+    color: colors.text,
+    fontSize: 29,
+    fontWeight: '900',
+    marginTop: 5,
+  },
+  homeDescription: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 8,
+  },
+  balanceCard: {
+    backgroundColor: colors.primaryDark,
+    borderRadius: 20,
+    padding: 23,
+    marginBottom: 20,
+  },
+  balanceLabel: {
+    color: '#D8F1E2',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    marginBottom: 20,
+  },
+  accountName: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  balanceAmount: {
+    color: colors.white,
+    fontSize: 29,
+    fontWeight: '900',
+    marginTop: 12,
+  },
+  accountStatus: {
+    color: '#D8F1E2',
+    fontSize: 12,
+    marginTop: 12,
+  },
+  accountNumber: {
+    color: '#D8F1E2',
+    fontSize: 12,
+    marginTop: 8,
+  },
+  accountMessage: {
+    color: colors.white,
+    fontSize: 14,
+  },
+  noticeCard: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: 16,
+    padding: 20,
+  },
+  noticeTitle: {
+    color: colors.primaryDark,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  noticeText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 21,
+    marginTop: 8,
   },
 });
