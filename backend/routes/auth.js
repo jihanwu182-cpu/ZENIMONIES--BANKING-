@@ -32,34 +32,54 @@ const router = express.Router();
 // DATABASE-BACKED REGISTRATION RATE LIMITS
 // ============================================================
 
+// Phone OTP sending:
+// Maximum 5 requests per 15 minutes per IP and phone number.
 const phoneStartLimit = createRegistrationRateLimit({
   windowSeconds: 15 * 60,
   maxRequests: 5,
   bucket: 'registration-phone-start',
+  identityField: 'phone',
+  maxIdentityRequests: 5,
 });
 
+// Phone OTP verification:
+// Maximum 10 requests per 15 minutes per IP and phone number.
 const phoneVerifyLimit = createRegistrationRateLimit({
   windowSeconds: 15 * 60,
   maxRequests: 10,
   bucket: 'registration-phone-verify',
+  identityField: 'phone',
+  maxIdentityRequests: 10,
 });
 
+// Email OTP sending:
+// Maximum 5 requests per 15 minutes per IP and email address.
 const emailStartLimit = createRegistrationRateLimit({
   windowSeconds: 15 * 60,
   maxRequests: 5,
   bucket: 'registration-email-start',
+  identityField: 'email',
+  maxIdentityRequests: 5,
 });
 
+// Email OTP verification:
+// Maximum 10 requests per 15 minutes per IP and email address.
 const emailVerifyLimit = createRegistrationRateLimit({
   windowSeconds: 15 * 60,
   maxRequests: 10,
   bucket: 'registration-email-verify',
+  identityField: 'email',
+  maxIdentityRequests: 10,
 });
 
+// Account completion:
+// Maximum 5 requests per 15 minutes per IP and phone number.
 const registrationCompleteLimit = createRegistrationRateLimit({
   windowSeconds: 15 * 60,
   maxRequests: 5,
   bucket: 'registration-complete',
+  identityField: 'phone',
+  maxIdentityRequests: 5,
 });
 
 // ============================================================
