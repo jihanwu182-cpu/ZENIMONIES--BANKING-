@@ -353,7 +353,139 @@ const escapeHtml = (value) => {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 };
+// ============================================================
+// REGISTRATION EMAIL OTP
+// Sends an email verification code during staged registration.
+// ============================================================
 
+const sendRegistrationEmailOtp = async ({
+  to,
+  firstName,
+  otp,
+  expiresInMinutes = 10,
+}) => {
+  if (!to || !otp) {
+    throw new Error(
+      'Recipient email and verification code are required.'
+    );
+  }
+
+  if (!/^\d{6}$/.test(String(otp))) {
+    throw new Error('A valid six-digit OTP is required.');
+  }
+
+  const resend = getResendClient();
+
+  const safeName =
+    typeof firstName === 'string' && firstName.trim()
+      ? escapeHtml(firstName.trim())
+      : 'Customer';
+
+  const { data, error } = await resend.emails.send({
+    from: RESEND_FROM_EMAIL,
+    to: [to],
+    subject: 'Verify Your ZENIMONIES Email Address',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <body style="
+          margin: 0;
+          padding: 24px;
+          background-color: #f4f7f8;
+          font-family: Arial, sans-serif;
+          color: #14251c;
+        ">
+          <div style="
+            max-width: 560px;
+            margin: 0 auto;
+            padding: 32px;
+            background: #ffffff;
+            border-radius: 14px;
+          ">
+            <h2 style="color: #087A45;">
+              ZENIMONIES
+            </h2>
+
+            <h3>Email Verification</h3>
+
+            <p>Hello ${safeName},</p>
+
+            <p>
+              Use the verification code below to confirm
+              your email address during registration.
+            </p>
+
+            <div style="
+              margin: 28px 0;
+              padding: 22px;
+              text-align: center;
+              background: #E8F5ED;
+              border-radius: 10px;
+            ">
+              <div style="
+                font-size: 32px;
+                font-weight: bold;
+                letter-spacing: 8px;
+                color: #087A45;
+              ">
+                ${escapeHtml(otp)}
+              </div>
+            </div>
+
+            <p>
+              This code expires in
+              ${Number(expiresInMinutes)} minutes.
+            </p>
+
+            <p>
+              If you did not start this registration,
+              you can ignore this email.
+            </p>
+
+            <p style="
+              color: #718078;
+              font-size: 12px;
+            ">
+              Never share your verification code with anyone,
+              including anyone claiming to represent ZENIMONIES.
+            </p>
+
+            <hr style="
+              border: none;
+              border-top: 1px solid #DCE8E0;
+            " />
+
+            <p style="
+              color: #718078;
+              font-size: 12px;
+            ">
+              ZENIMONIES Banking<br />
+              Automated security notification.
+            </p>
+          </div>
+        </body>
+      </html>
+    `,
+  });
+
+  if (error) {
+    console.error(
+      'Registration email OTP failed:',
+      error.message
+    );
+
+    throw new Error(
+      'Unable to send registration verification email.'
+    );
+  }
+
+  console.log(
+    'Registration email OTP sent:',
+    data?.id
+  );
+
+  return data;
+};
 // ============================================================
 // EXPORTS
 // ============================================================
