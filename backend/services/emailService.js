@@ -493,4 +493,5 @@ const sendRegistrationEmailOtp = async ({
 module.exports = {
   sendPasswordResetEmail,
   sendAccountStatementEmail,
+  sendRegistrationEmailOtp,
 };
