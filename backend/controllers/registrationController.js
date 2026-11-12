@@ -537,45 +537,93 @@ const completeRegistration = async (req, res) => {
     // The official number must be supplied by an approved
     // banking provider integration in the future.
     // --------------------------------------------------------
-
-    const accountResult = await client.query(
+    const userResult = await client.query(
       `
-      INSERT INTO accounts (
-        user_id,
-        account_number,
-        account_name,
-        account_type,
-        currency,
-        balance,
-        status
+      INSERT INTO users (
+        first_name,
+        middle_name,
+        surname,
+        full_name,
+        gender,
+        email,
+        phone,
+        phone_verified,
+        password_hash,
+        role,
+        status,
+        registration_account_type,
+        kyc_status,
+        kyc_tier,
+        bvn_verified,
+        id_verified,
+        tier_3_verified,
+        is_verified,
+        account_limit,
+        daily_transfer_limit,
+        daily_transfer_used,
+        daily_transfer_reset_at,
+        password_changed_at
       )
       VALUES (
         $1,
-        NULL,
         $2,
+        $3,
+        $4,
+        NULL,
+        $5,
+        $6,
+        true,
+        $7,
+        'user',
+        'active',
         'personal',
-        'NGN',
+        'not_verified',
+        0,
+        false,
+        false,
+        false,
+        false,
+        50000.00,
+        50000.00,
         0.00,
-        'active'
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
       )
       RETURNING
         id,
-        account_number,
-        account_name,
-        account_type,
-        currency,
-        balance,
+        first_name,
+        middle_name,
+        surname,
+        full_name,
+        gender,
+        email,
+        phone,
+        phone_verified,
+        role,
         status,
+        registration_account_type,
+        kyc_status,
+        kyc_tier,
+        bvn_verified,
+        id_verified,
+        tier_3_verified,
+        is_verified,
         created_at
       `,
       [
-        user.id,
+        firstName,
+        middleName,
+        surname,
         fullName,
+        email,
+        phone,
+        passwordHash,
       ]
     );
 
-    account = accountResult.rows[0];
+    user = userResult.rows[0];
 
+    
     // --------------------------------------------------------
     // MARK REGISTRATION AS COMPLETED
     // --------------------------------------------------------
