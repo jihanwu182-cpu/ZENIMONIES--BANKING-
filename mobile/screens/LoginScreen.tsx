@@ -8,30 +8,172 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 
 import colors from '../theme/colors';
 import PrimaryButton from '../components/PrimaryButton';
 
-export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+const API_URL = 'https://zenimonies-banking.onrender.com/api/auth';
+
+type LoginScreenProps = {
+  onLoginSuccess?: (session: any) => void;
+  onRegisterPress?: () => void;
+  onForgotPasswordPress?: () => void;
+};
+
+type LoginResponse = {
+  success: boolean;
+  message?: string;
+  token?: string;
+  session_expires_at?: string;
+  inactivity_timeout_minutes?: number;
+  user?: any;
+  accounts?: any[];
+};
+
+export default function LoginScreen({
+  onLoginSuccess,
+  onRegisterPress,
+  onForgotPasswordPress,
+}: LoginScreenProps) {
+  const [step, setStep] = useState<'identifier' | 'password'>(
+    'identifier'
+  );
+
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    if (!email.trim() || !password) {
+  const normalizeIdentifier = (value: string) => {
+    const input = value.trim();
+
+    if (input.includes('@')) {
+      return input.toLowerCase();
+    }
+
+    const phone = input.replace(/[\s()-]/g, '');
+
+    // Convert Nigerian local format to international format.
+    if (/^0\d{10}$/.test(phone)) {
+      return `+234${phone.substring(1)}`;
+    }
+
+    if (/^234\d{10}$/.test(phone)) {
+      return `+${phone}`;
+    }
+
+    return phone;
+  };
+
+  const continueToPassword = () => {
+    const cleanIdentifier = identifier.trim();
+
+    if (!cleanIdentifier) {
       Alert.alert(
-        'Missing information',
-        'Please enter your email address and password.'
+        'Information required',
+        'Enter your mobile number or email address.'
       );
       return;
     }
 
-    Alert.alert(
-      'Login ready',
-      'The login form is ready. We will connect it to your secure ZENIMONIES backend next.'
-    );
+    const isEmail = cleanIdentifier.includes('@');
+    const normalized = normalizeIdentifier(cleanIdentifier);
+
+    if (
+      isEmail &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)
+    ) {
+      Alert.alert(
+        'Invalid email',
+        'Enter a valid email address.'
+      );
+      return;
+    }
+
+    if (
+      !isEmail &&
+      !/^\+234\d{10}$/.test(normalized)
+    ) {
+      Alert.alert(
+        'Invalid mobile number',
+        'Enter a valid Nigerian mobile number, for example 08012345678.'
+      );
+      return;
+    }
+
+    setIdentifier(normalized);
+    setStep('password');
+  };
+
+  const handleLogin = async () => {
+    if (!password) {
+      Alert.alert(
+        'Password required',
+        'Enter your account password.'
+      );
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          identifier: normalizeIdentifier(identifier),
+          password,
+        }),
+      });
+
+      let data: LoginResponse;
+
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(
+          'The server returned an invalid response. Please try again.'
+        );
+      }
+
+      if (
+        !response.ok ||
+        data.success !== true ||
+        !data.token
+      ) {
+        throw new Error(
+          data.message || 'Unable to sign in. Please try again.'
+        );
+      }
+
+      if (onLoginSuccess) {
+        onLoginSuccess(data);
+      } else {
+        Alert.alert(
+          'Login successful',
+          'Your credentials have been verified. Session setup is the next integration step.'
+        );
+      }
+    } catch (error: any) {
+      Alert.alert(
+        'Sign in failed',
+        error.message ||
+          'Unable to connect. Please check your internet connection and try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const changeIdentifier = () => {
+    setPassword('');
+    setStep('identifier');
   };
 
   return (
@@ -44,81 +186,171 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={
+              step === 'password'
+                ? changeIdentifier
+                : undefined
+            }
+          >
+            <Text style={styles.backText}>
+              {step === 'password' ? '‹ Back' : ''}
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={styles.helpText}>Help</Text>
+        </View>
+
+        <View style={styles.brandArea}>
           <View style={styles.logo}>
             <Text style={styles.logoText}>Z</Text>
           </View>
 
           <Text style={styles.brand}>ZENIMONIES</Text>
-          <Text style={styles.eyebrow}>WELCOME BACK</Text>
-          <Text style={styles.heading}>Your money is waiting.</Text>
-          <Text style={styles.description}>
-            Sign in securely to access your banking dashboard.
-          </Text>
+          <Text style={styles.brandSubtitle}>BANKING</Text>
         </View>
 
         <View style={styles.form}>
-          <View style={styles.field}>
-            <Text style={styles.label}>Email address</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email address"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              placeholderTextColor={colors.textMuted}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-            />
-
-            <Text
-              style={styles.showPassword}
-              onPress={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? 'Hide password' : 'Show password'}
-            </Text>
-          </View>
-
-          <Text
-            style={styles.forgot}
-            onPress={() => Alert.alert(
-              'Password recovery',
-              'Password recovery will be connected to the backend.'
-            )}
-          >
-            Forgot password?
+          <Text style={styles.heading}>
+            {step === 'identifier'
+              ? 'Log in to your account'
+              : 'Enter your password'}
           </Text>
 
-          <PrimaryButton
-            title="Sign In"
-            onPress={handleLogin}
-          />
+          {step === 'identifier' ? (
+            <>
+              <View style={styles.inputContainer}>
+                <Text style={styles.floatingLabel}>
+                  Enter your Mobile No./Email
+                </Text>
 
-          <View style={styles.security}>
-            <Text style={styles.securityIcon}>✓</Text>
-            <Text style={styles.securityText}>
-              Your security is our priority.
-            </Text>
-          </View>
+                <TextInput
+                  style={styles.input}
+                  value={identifier}
+                  onChangeText={setIdentifier}
+                  placeholder="Mobile number or email"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoFocus
+                  returnKeyType="next"
+                  onSubmitEditing={continueToPassword}
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={() =>
+                  Alert.alert(
+                    'Change mobile number',
+                    'If you have lost access to your registered number, please contact ZENIMONIES Support for account recovery.'
+                  )
+                }
+              >
+                <Text style={styles.supportText}>
+                  Lost Your Mobile Number?{' '}
+                  <Text style={styles.link}>Change Now</Text>
+                </Text>
+              </TouchableOpacity>
+
+              <PrimaryButton
+                title="NEXT"
+                onPress={continueToPassword}
+              />
+            </>
+          ) : (
+            <>
+              <View style={styles.accountInfo}>
+                <Text style={styles.accountLabel}>
+                  Signing in as
+                </Text>
+
+                <Text style={styles.accountIdentifier}>
+                  {identifier}
+                </Text>
+
+                <TouchableOpacity onPress={changeIdentifier}>
+                  <Text style={styles.link}>Change</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.floatingLabel}>
+                  Password
+                </Text>
+
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter your password"
+                  placeholderTextColor={colors.textMuted}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={styles.passwordToggle}
+                onPress={() =>
+                  setShowPassword(!showPassword)
+                }
+              >
+                <Text style={styles.link}>
+                  {showPassword
+                    ? 'Hide password'
+                    : 'Show password'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.forgotContainer}
+                onPress={() => {
+                  if (onForgotPasswordPress) {
+                    onForgotPasswordPress();
+                  } else {
+                    Alert.alert(
+                      'Password recovery',
+                      'Password recovery will be connected in the next step.'
+                    );
+                  }
+                }}
+              >
+                <Text style={styles.link}>
+                  Forgot Password?
+                </Text>
+              </TouchableOpacity>
+
+              <PrimaryButton
+                title="LOG IN"
+                onPress={handleLogin}
+                loading={loading}
+                disabled={loading}
+              />
+            </>
+          )}
         </View>
 
-        <Text style={styles.footer}>
-          New to ZENIMONIES?{' '}
-          <Text style={styles.register}>Create an account</Text>
-        </Text>
+        <View style={styles.footerArea}>
+          <Text style={styles.footer}>
+            Don't have an account?{' '}
+            <Text
+              style={styles.link}
+              onPress={onRegisterPress}
+            >
+              Click here to Sign Up
+            </Text>
+          </Text>
+
+          <Text style={styles.security}>
+            SECURE • SIMPLE • SMART
+          </Text>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -131,114 +363,139 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
+    paddingHorizontal: 25,
+    paddingTop: 12,
+    paddingBottom: 30,
     justifyContent: 'space-between',
-    paddingHorizontal: 26,
-    paddingTop: 45,
-    paddingBottom: 35,
   },
-  header: {
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 40,
+    minHeight: 42,
+  },
+  backText: {
+    color: colors.text,
+    fontSize: 28,
+    fontWeight: '600',
+  },
+  helpText: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  brandArea: {
+    alignItems: 'center',
+    marginTop: 35,
+    marginBottom: 55,
   },
   logo: {
-    width: 62,
-    height: 62,
-    borderRadius: 20,
+    width: 58,
+    height: 58,
+    borderRadius: 19,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
   },
   logoText: {
-    fontSize: 38,
-    fontWeight: '900',
     color: colors.white,
+    fontSize: 37,
+    fontWeight: '900',
   },
   brand: {
-    fontSize: 21,
-    fontWeight: '900',
-    letterSpacing: 3,
+    marginTop: 10,
     color: colors.primaryDark,
-    marginBottom: 38,
-  },
-  eyebrow: {
-    fontSize: 11,
+    fontSize: 23,
     fontWeight: '900',
     letterSpacing: 2,
+  },
+  brandSubtitle: {
     color: colors.primary,
-    marginBottom: 12,
-  },
-  heading: {
-    fontSize: 29,
-    fontWeight: '900',
-    color: colors.text,
-    textAlign: 'center',
-  },
-  description: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 23,
-    marginTop: 10,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 4,
   },
   form: {
-    gap: 21,
+    gap: 25,
+    marginTop: 5,
   },
-  field: {
-    gap: 9,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '700',
+  heading: {
     color: colors.text,
+    fontSize: 29,
+    fontWeight: '800',
+    marginBottom: 18,
+  },
+  inputContainer: {
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 13,
+    minHeight: 76,
+    justifyContent: 'center',
+    paddingHorizontal: 17,
+    position: 'relative',
+  },
+  floatingLabel: {
+    position: 'absolute',
+    top: -11,
+    left: 15,
+    paddingHorizontal: 5,
+    backgroundColor: colors.background,
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '600',
   },
   input: {
-    height: 57,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    fontSize: 14,
+    minHeight: 55,
     color: colors.text,
-    backgroundColor: colors.backgroundSoft,
-  },
-  showPassword: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'right',
-  },
-  forgot: {
-    textAlign: 'right',
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: '800',
-    marginTop: -8,
-  },
-  security: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-  },
-  securityIcon: {
-    color: colors.success,
     fontSize: 16,
-    fontWeight: '900',
+    paddingVertical: 10,
   },
-  securityText: {
+  supportText: {
     color: colors.textSecondary,
+    fontSize: 14,
+  },
+  link: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  accountInfo: {
+    backgroundColor: colors.backgroundSoft,
+    borderRadius: 12,
+    padding: 15,
+    gap: 5,
+  },
+  accountLabel: {
+    color: colors.textMuted,
     fontSize: 12,
+  },
+  accountIdentifier: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  passwordToggle: {
+    alignSelf: 'flex-end',
+    marginTop: -15,
+  },
+  forgotContainer: {
+    alignSelf: 'flex-end',
+    marginTop: -12,
+  },
+  footerArea: {
+    alignItems: 'center',
+    marginTop: 65,
+    gap: 28,
   },
   footer: {
-    textAlign: 'center',
     color: colors.textSecondary,
-    fontSize: 13,
-    marginTop: 35,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 23,
   },
-  register: {
-    color: colors.primary,
-    fontWeight: '900',
+  security: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 2,
   },
 });
