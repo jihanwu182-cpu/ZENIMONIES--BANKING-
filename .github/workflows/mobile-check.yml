@@ -1,0 +1,46 @@
+
+name: ZENIMONIES Mobile Checks
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-check.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-check.yml"
+  workflow_dispatch:
+
+jobs:
+  mobile-check:
+    name: Install and type-check mobile app
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Check Expo dependency compatibility
+        run: npx expo install --check
+
+      - name: TypeScript check
+        run: npm run typecheck
