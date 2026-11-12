@@ -1499,7 +1499,8 @@ BEGIN
     END IF;
 END
 $$;
-
+ALTER TABLE users
+ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP;
 -- ============================================================
 -- ZENIMONIES SMS ALERT PREFERENCES
 -- ============================================================
