@@ -128,6 +128,34 @@ const parseScheduledDate = (value) => {
   return date;
 };
 
+const writeAdminAuditLog = async ({
+  client,
+  req,
+  adminId,
+  action,
+  description,
+}) => {
+  await client.query(
+    `
+    INSERT INTO audit_logs (
+      user_id,
+      action,
+      description,
+      ip_address,
+      user_agent
+    )
+    VALUES ($1, $2, $3, $4, $5)
+    `,
+    [
+      adminId,
+      action,
+      description,
+      req.ip || null,
+      req.get('user-agent') || null,
+    ]
+  );
+};
+
 // ============================================================
 // AUDIENCE FILTER
 // ============================================================
