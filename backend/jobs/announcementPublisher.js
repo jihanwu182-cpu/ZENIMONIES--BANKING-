@@ -6,24 +6,21 @@ let scheduledTask = null;
 let isRunning = false;
 
 const publishDueAnnouncements = async () => {
-  if (isRunning) {
-    return;
-  }
+  if (isRunning) return;
 
   isRunning = true;
 
-  const client = await pool.connect();
+  let client;
 
   try {
+    client = await pool.connect();
+
     await client.query('BEGIN');
 
-    // Lock due announcements so multiple server instances
-    // cannot publish the same announcement simultaneously.
     const due = await client.query(`
       SELECT
         id,
-        title,
-        audience_type
+        title
       FROM announcements
       WHERE status = 'scheduled'
         AND scheduled_at <= CURRENT_TIMESTAMP
@@ -31,6 +28,8 @@ const publishDueAnnouncements = async () => {
       LIMIT 50
       FOR UPDATE SKIP LOCKED
     `);
+
+    let publishedCount = 0;
 
     for (const announcement of due.rows) {
       const result = await client.query(
@@ -48,13 +47,8 @@ const publishDueAnnouncements = async () => {
         [announcement.id]
       );
 
-      if (!result.rows.length) {
-        continue;
-      }
+      if (!result.rows.length) continue;
 
-      // System-generated publication audit record.
-      // user_id is NULL because no administrator performed
-      // this automatic scheduled publication.
       await client.query(
         `
         INSERT INTO audit_logs (
@@ -70,44 +64,40 @@ const publishDueAnnouncements = async () => {
           `Automatically published scheduled announcement ${announcement.id}: ${announcement.title}.`,
         ]
       );
+
+      publishedCount += 1;
     }
 
     await client.query('COMMIT');
 
-    if (due.rows.length > 0) {
+    if (publishedCount > 0) {
       console.log(
-        `Announcement publisher processed ${due.rows.length} due announcement(s).`
+        `Announcement publisher published ${publishedCount} announcement(s).`
       );
     }
   } catch (error) {
-    try {
-      await client.query('ROLLBACK');
-    } catch (_) {}
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+    }
 
     console.error(
       'Scheduled announcement publisher error:',
       error
     );
   } finally {
-    client.release();
+    if (client) client.release();
     isRunning = false;
   }
 };
 
 const startAnnouncementPublisher = () => {
-  if (scheduledTask) {
-    console.log(
-      'Announcement publisher is already running.'
-    );
-    return;
-  }
+  if (scheduledTask) return;
 
-  // Run once every minute.
   scheduledTask = cron.schedule(
     '* * * * *',
-    () => {
-      publishDueAnnouncements();
-    },
+    publishDueAnnouncements,
     {
       name: 'zenimonies-announcement-publisher',
       noOverlap: true,
@@ -118,8 +108,6 @@ const startAnnouncementPublisher = () => {
     'ZENIMONIES scheduled announcement publisher started.'
   );
 
-  // Process announcements that became due while the
-  // server was offline, without waiting for the next minute.
   publishDueAnnouncements();
 };
 
