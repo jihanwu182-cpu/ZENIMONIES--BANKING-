@@ -19,6 +19,7 @@ import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import Dashboard from './screens/Dashboard';
 import TransactionHistoryScreen from './screens/TransactionHistoryScreen';
+import TransactionDetailsScreen from './screens/TransactionDetailsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
 // ======================================================
@@ -42,7 +43,8 @@ type Screen =
   | 'register'
   | 'home'
   | 'profile'
-  | 'history';
+  | 'history'
+  | 'transaction-details';
 
 type Account = {
   id?: string;
@@ -95,6 +97,20 @@ type Transaction = {
   type: 'credit' | 'debit';
   date: string;
   status?: string;
+  reference?: string;
+  currency?: string;
+  transactionType?: string;
+  fee?: string;
+  totalDebit?: string;
+  recipientName?: string;
+  recipientAccount?: string;
+  recipientBank?: string;
+  senderName?: string;
+  senderAccount?: string;
+  provider?: string;
+  phone?: string;
+  customerNumber?: string;
+  electricityToken?: string;
 };
 
 type AccountResponse = {
@@ -261,6 +277,68 @@ const normalizeTransaction = (
     status: String(
       item.status || 'Unknown'
     ),
+
+    reference: item.reference
+      ? String(item.reference)
+      : undefined,
+
+    currency: item.currency
+      ? String(item.currency)
+      : 'NGN',
+
+    transactionType: rawType
+      ? rawType.replace(/_/g, ' ')
+      : undefined,
+
+    fee: Number(item.transaction_fee || item.fee || 0) > 0
+      ? `₦${Number(item.transaction_fee || item.fee).toLocaleString('en-NG', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      : undefined,
+
+    totalDebit: Number(item.total_debit || 0) > 0
+      ? `₦${Number(item.total_debit).toLocaleString('en-NG', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      : undefined,
+
+    recipientName: item.recipient_name
+      ? String(item.recipient_name)
+      : undefined,
+
+    recipientAccount: item.recipient_account
+      ? String(item.recipient_account)
+      : undefined,
+
+    recipientBank: item.recipient_bank
+      ? String(item.recipient_bank)
+      : undefined,
+
+    senderName: item.sender_name
+      ? String(item.sender_name)
+      : undefined,
+
+    senderAccount: item.sender_account
+      ? String(item.sender_account)
+      : undefined,
+
+    provider: item.provider
+      ? String(item.provider)
+      : undefined,
+
+    phone: item.phone
+      ? String(item.phone)
+      : undefined,
+
+    customerNumber: item.customer_number
+      ? String(item.customer_number)
+      : undefined,
+
+    electricityToken: item.electricity_token || item.token
+      ? String(item.electricity_token || item.token)
+      : undefined,
   };
 };
 
@@ -300,6 +378,9 @@ export default function App() {
   const [transactions, setTransactions] =
     useState<Transaction[]>([]);
 
+  const [selectedTransaction, setSelectedTransaction] =
+    useState<Transaction | null>(null);
+
   const [dashboardLoading, setDashboardLoading] =
     useState(false);
 
@@ -318,6 +399,7 @@ export default function App() {
     setSession(null);
     setAccount(null);
     setTransactions([]);
+    setSelectedTransaction(null);
     setRefreshing(false);
     setDashboardLoading(false);
     setScreen('welcome');
@@ -719,6 +801,17 @@ export default function App() {
   };
 
   // ====================================================
+  // SELECT TRANSACTION
+  // ====================================================
+
+  const handleSelectTransaction = (
+    transaction: Transaction
+  ) => {
+    setSelectedTransaction(transaction);
+    setScreen('transaction-details');
+  };
+
+  // ====================================================
   // DASHBOARD ACTIONS
   // ====================================================
 
@@ -764,7 +857,8 @@ export default function App() {
     if (tab === 'History') {
       setScreen('history');
       return;
-   }
+    }
+
     Alert.alert(
       tab,
       `${tab} screen will be connected in the next development stage.`
@@ -880,24 +974,48 @@ export default function App() {
       </SafeAreaView>
     );
   }
-// ====================================================
-// TRANSACTION HISTORY
-// ====================================================
 
-if (screen === 'history' && session) {
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+  // ====================================================
+  // TRANSACTION HISTORY
+  // ====================================================
 
-      <TransactionHistoryScreen
-        transactions={transactions}
-        onBack={() => setScreen('home')}
-        onRefresh={handleRefresh}
-        refreshing={refreshing}
-      />
-    </SafeAreaView>
-  );
-}
+  if (screen === 'history' && session) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+
+        <TransactionHistoryScreen
+          transactions={transactions}
+          onBack={() => setScreen('home')}
+          onSelectTransaction={handleSelectTransaction}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ====================================================
+  // TRANSACTION DETAILS
+  // ====================================================
+
+  if (
+    screen === 'transaction-details' &&
+    session &&
+    selectedTransaction
+  ) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+
+        <TransactionDetailsScreen
+          transaction={selectedTransaction}
+          onBack={() => setScreen('history')}
+        />
+      </SafeAreaView>
+    );
+  }
+
   // ====================================================
   // PERSONAL DASHBOARD
   // ====================================================
