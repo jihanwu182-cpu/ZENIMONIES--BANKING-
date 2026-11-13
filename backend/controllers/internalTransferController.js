@@ -1077,7 +1077,7 @@ const transferToZenimoniesUser = async (req, res) => {
       [
         recipientUser.id,
         'Money received',
-        `You received ₦${formatNaira(transferAmount)} from a Zenimonies user.`,
+        `You received ₦${formatNaira(transferAmount)} from ${senderUser.full_name}.`,
         'transfer',
       ]
     );
