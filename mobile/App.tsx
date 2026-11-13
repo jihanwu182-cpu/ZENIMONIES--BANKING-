@@ -18,6 +18,7 @@ import colors from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import Dashboard from './screens/Dashboard';
+import TransactionHistoryScreen from './screens/TransactionHistoryScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
 // ======================================================
@@ -40,7 +41,8 @@ type Screen =
   | 'login'
   | 'register'
   | 'home'
-  | 'profile';
+  | 'profile'
+  | 'history';
 
 type Account = {
   id?: string;
@@ -759,6 +761,10 @@ export default function App() {
       return;
     }
 
+    if (tab === 'History') {
+      setScreen('history');
+      return;
+   }
     Alert.alert(
       tab,
       `${tab} screen will be connected in the next development stage.`
@@ -874,7 +880,24 @@ export default function App() {
       </SafeAreaView>
     );
   }
+// ====================================================
+// TRANSACTION HISTORY
+// ====================================================
 
+if (screen === 'history' && session) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <TransactionHistoryScreen
+        transactions={transactions}
+        onBack={() => setScreen('home')}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+      />
+    </SafeAreaView>
+  );
+}
   // ====================================================
   // PERSONAL DASHBOARD
   // ====================================================
