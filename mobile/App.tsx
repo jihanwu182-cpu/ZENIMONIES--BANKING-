@@ -826,15 +826,19 @@ export default function App() {
   // ====================================================
 
   const handleLogout = async () => {
-    try {
-      await clearSession();
-    } catch {
-      Alert.alert(
-        'Logout failed',
-        'We could not clear your saved session. Please try again.'
-      );
+  try {
+    if (session?.token) {
+      await unregisterPushNotifications(session.token);
     }
-  };
+
+    await clearSession();
+  } catch {
+    Alert.alert(
+      'Logout failed',
+      'We could not complete logout. Please try again.'
+    );
+  }
+};
 
   // ====================================================
   // SELECT TRANSACTION
