@@ -64,6 +64,9 @@ const {
 const {
   startSupportTimeoutWorker,
 } = require('./services/supportTimeoutWorker');
+const {
+  startAnnouncementPublisher,
+} = require('./jobs/announcementPublisher');
 
 // ============================================================
 // PAYSTACK
@@ -2057,6 +2060,11 @@ startSupportTimeoutWorker();
 console.log(
   'Customer Care Timeout Worker is active.'
 );
+// ========================================================
+// START SCHEDULED ANNOUNCEMENT PUBLISHER
+// ========================================================
+
+startAnnouncementPublisher();
     // ========================================================
     // START SERVER
     // ========================================================
