@@ -190,19 +190,19 @@ const initializeDatabase = async () => {
       );
 
       await runAnnouncementMigration();
-  // ========================================================
-// PUSH DEVICE REGISTRATION MIGRATION
-// ========================================================
+      // ========================================================
+      // PUSH DEVICE REGISTRATION MIGRATION
+      // ========================================================
 
-console.log('Applying push device migration...');
+      console.log('Applying push device migration...');
 
-const {
-  runPushDeviceMigration,
-} = require(
-  '../database/migrations/runPushDeviceMigration'
-);
+      const {
+        runPushDeviceMigration,
+      } = require(
+        '../database/migrations/runPushDeviceMigration'
+      );
 
-await runPushDeviceMigration();
+      await runPushDeviceMigration();
       // Existing account-number diagnostic checks.
       const accountNumberCheck = await client.query(`
         SELECT
