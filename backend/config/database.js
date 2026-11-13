@@ -74,36 +74,33 @@ const applyNinMigration = async (client) => {
     `);
 
     // Tier 1 accepts either verified BVN or verified NIN.
-    // The schema runs before this migration, so NIN-aware
-    // normalization must happen here, after nin_verified exists.
-    //
     // Only promote users with an already verified NIN.
     // Do not downgrade or reset previously approved accounts.
     await client.query(`
-  UPDATE users
-  SET
-    kyc_status = 'verified',
-    is_verified = TRUE,
-    kyc_tier = GREATEST(COALESCE(kyc_tier, 0), 1),
-    account_limit = CASE
-      WHEN COALESCE(kyc_tier, 0) < 1
-        THEN 300000.00
-      ELSE account_limit
-    END,
-    daily_transfer_limit = CASE
-      WHEN COALESCE(kyc_tier, 0) < 1
-        THEN 50000.00
-      ELSE daily_transfer_limit
-    END
-  WHERE nin_verified = TRUE
-    AND kyc_status IN (
-      'pending',
-      'under_review',
-      'not_verified',
-      'rejected',
-      'approved'
-    );
-`);
+      UPDATE users
+      SET
+        kyc_status = 'verified',
+        is_verified = TRUE,
+        kyc_tier = GREATEST(COALESCE(kyc_tier, 0), 1),
+        account_limit = CASE
+          WHEN COALESCE(kyc_tier, 0) < 1
+            THEN 300000.00
+          ELSE account_limit
+        END,
+        daily_transfer_limit = CASE
+          WHEN COALESCE(kyc_tier, 0) < 1
+            THEN 50000.00
+          ELSE daily_transfer_limit
+        END
+      WHERE nin_verified = TRUE
+        AND kyc_status IN (
+          'pending',
+          'under_review',
+          'not_verified',
+          'rejected',
+          'approved'
+        );
+    `);
 
     await client.query('COMMIT');
 
@@ -178,41 +175,55 @@ const initializeDatabase = async () => {
         BOOLEAN NOT NULL DEFAULT false;
       `);
 
-      // Apply the NIN migration and Tier 1 normalization.
+      // Existing NIN and KYC migration.
       await applyNinMigration(client);
 
-      // TEMPORARY: Check account number configuration.
-const accountNumberCheck = await client.query(`
-  SELECT
-    column_name,
-    column_default,
-    is_nullable
-  FROM information_schema.columns
-  WHERE table_schema = 'public'
-    AND table_name = 'accounts'
-    AND column_name = 'account_number';
-`);
+      // New announcement migration.
+      // This uses the existing pool and does not replace
+      // or modify the customer notification system.
+      console.log('Applying announcement migration...');
 
-const accountTriggerCheck = await client.query(`
-  SELECT
-    trigger_name,
-    action_timing,
-    event_manipulation,
-    action_statement
-  FROM information_schema.triggers
-  WHERE event_object_schema = 'public'
-    AND event_object_table = 'accounts';
-`);
+      const {
+        runAnnouncementMigration,
+      } = require(
+        '../database/migrations/runAnnouncementMigration'
+      );
 
-console.log(
-  'ACCOUNT NUMBER COLUMN CHECK:',
-  JSON.stringify(accountNumberCheck.rows)
-);
+      await runAnnouncementMigration();
 
-console.log(
-  'ACCOUNT NUMBER TRIGGER CHECK:',
-  JSON.stringify(accountTriggerCheck.rows)
-);
+      // Existing account-number diagnostic checks.
+      const accountNumberCheck = await client.query(`
+        SELECT
+          column_name,
+          column_default,
+          is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'accounts'
+          AND column_name = 'account_number';
+      `);
+
+      const accountTriggerCheck = await client.query(`
+        SELECT
+          trigger_name,
+          action_timing,
+          event_manipulation,
+          action_statement
+        FROM information_schema.triggers
+        WHERE event_object_schema = 'public'
+          AND event_object_table = 'accounts';
+      `);
+
+      console.log(
+        'ACCOUNT NUMBER COLUMN CHECK:',
+        JSON.stringify(accountNumberCheck.rows)
+      );
+
+      console.log(
+        'ACCOUNT NUMBER TRIGGER CHECK:',
+        JSON.stringify(accountTriggerCheck.rows)
+      );
+
       console.log(
         'Database initialization completed successfully.'
       );
