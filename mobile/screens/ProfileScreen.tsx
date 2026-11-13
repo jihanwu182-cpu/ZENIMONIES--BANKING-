@@ -36,9 +36,9 @@ const displayValue = (
 };
 
 const getInitials = (name: string): string => {
-  const parts = name.trim().split(/\s+/);
-
-  return parts
+  return name
+    .trim()
+    .split(/\s+/)
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join('') || 'Z';
@@ -182,9 +182,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
             <InfoRow
               label="Date of birth"
-              value={displayValue(
-                user?.date_of_birth
-              )}
+              value={displayValue(user?.date_of_birth)}
             />
 
             <InfoRow
