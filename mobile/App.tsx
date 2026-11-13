@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 import {
   ActivityIndicator,
@@ -19,33 +19,25 @@ import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import Dashboard from './screens/Dashboard';
 
-// ============================================================
-// ZENIMONIES BANKING — MOBILE APPLICATION
-// Main application entry point
-// ============================================================
-
-const API_URL =
-  'https://zenimonies-banking.onrender.com/api/auth';
-
-const PROFILE_API_URL =
-  'https://zenimonies-banking.onrender.com/api/profile';
+const API_BASE = 'https://zenimonies-banking.onrender.com/api';
+const AUTH_URL = `${API_BASE}/auth`;
+const PROFILE_URL = `${API_BASE}/profile`;
+const ACCOUNT_URL = `${API_BASE}/account`;
+const TRANSACTIONS_URL = `${API_BASE}/account/transactions`;
 
 const AUTH_TOKEN_KEY = 'zenimonies_auth_token';
-
-// ============================================================
-// TYPES
-// ============================================================
 
 type Screen = 'welcome' | 'login' | 'register' | 'home';
 
 type Account = {
   id?: string;
   account_number?: string | null;
-  account_name?: string;
   account_type?: string;
   currency?: string;
-  balance?: string | number;
+  balance?: number | string;
   status?: string;
+  kyc_status?: string;
+  kyc_tier?: number | string;
 };
 
 type AuthUser = {
@@ -57,11 +49,9 @@ type AuthUser = {
   email?: string;
   phone?: string;
   role?: string;
-  profile_photo?: string | null;
-
-  verification_level?: string | number;
+  verification_level?: number | string;
   verification_status?: string;
-  kyc_level?: string | number;
+  kyc_level?: number | string;
   kyc_status?: string;
 };
 
@@ -69,79 +59,268 @@ type AuthSession = {
   success: boolean;
   token: string;
   user?: AuthUser;
-  accounts?: Account[];
   account?: Account;
-  session_expires_at?: string;
-  inactivity_timeout_minutes?: number;
+  accounts?: Account[];
 };
 
-type MeResponse = {
+type Transaction = {
+  id: string;
+  title: string;
+  description?: string;
+  amount: string;
+  type: 'credit' | 'debit';
+  date: string;
+  status?: string;
+};
+
+type AccountResponse = {
   success: boolean;
-  user?: AuthUser;
-  account?: Account | null;
-  accounts?: Account[];
+  account?: Account;
   message?: string;
 };
 
-// ============================================================
-// HELPERS
-// ============================================================
-
-const getAccounts = (session: AuthSession): Account[] => {
-  if (Array.isArray(session.accounts)) {
-    return session.accounts;
-  }
-
-  if (session.account) {
-    return [session.account];
-  }
-
-  return [];
+type TransactionsResponse = {
+  success: boolean;
+  transactions?: any[];
+  message?: string;
 };
 
-const formatBalance = (
-  balance: string | number | undefined,
-  currency: string
-): string | undefined => {
-  if (
-    balance === undefined ||
-    balance === null ||
-    balance === ''
-  ) {
+type ProfileResponse = {
+  success: boolean;
+  user?: AuthUser;
+};
+
+const formatNaira = (value: number | string | undefined): string | undefined => {
+  if (value === undefined || value === null || value === '') {
     return undefined;
   }
 
-  const numericBalance = Number(balance);
+  const amount = Number(value);
 
-  if (!Number.isFinite(numericBalance)) {
+  if (!Number.isFinite(amount)) {
     return undefined;
   }
 
-  return numericBalance.toLocaleString(
-    currency === 'ZAR' ? 'en-ZA' : 'en-NG',
-    {
+  return amount.toLocaleString('en-NG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const getTransactionTitle = (transaction: any): string => {
+  const type = String(transaction.type || '').toLowerCase();
+
+  if (type.includes('internal_transfer_received')) {
+    return 'Money received';
+  }
+
+  if (type.includes('transfer')) {
+    return 'Bank transfer';
+  }
+
+  if (type.includes('airtime')) {
+    return 'Airtime purchase';
+  }
+
+  if (type.includes('data')) {
+    return 'Data purchase';
+  }
+
+  if (type.includes('electricity')) {
+    return 'Electricity payment';
+  }
+
+  if (type.includes('bill')) {
+    return 'Bill payment';
+  }
+
+  return transaction.description || 'Account transaction';
+};
+
+const normalizeTransaction = (item: any): Transaction => {
+  const rawType = String(item.type || '').toLowerCase();
+
+  const isCredit =
+    rawType.includes('received') ||
+    rawType.includes('credit') ||
+    Number(item.amount || 0) > 0;
+
+  const amount = Math.abs(Number(item.amount || 0));
+
+  const dateValue = item.created_at
+    ? new Date(item.created_at)
+    : null;
+
+  const date =
+    dateValue && !Number.isNaN(dateValue.getTime())
+      ? dateValue.toLocaleString('en-NG', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        })
+      : 'Date unavailable';
+
+  return {
+    id: String(item.id || item.reference || `${item.type}-${item.created_at}`),
+    title: getTransactionTitle(item),
+    description:
+      item.description ||
+      item.recipient_name ||
+      item.provider ||
+      item.reference ||
+      '',
+    amount: `₦${amount.toLocaleString('en-NG', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }
-  );
+    })}`,
+    type: isCredit ? 'credit' : 'debit',
+    date,
+    status: String(item.status || 'Unknown'),
+  };
 };
 
-// ============================================================
-// MAIN APPLICATION
-// ============================================================
+async function readJson(response: Response): Promise<any> {
+  try {
+    return await response.json();
+  } catch {
+    throw new Error('The server returned an invalid response.');
+  }
+}
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('welcome');
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
 
-  const [session, setSession] =
-    useState<AuthSession | null>(null);
+  const [account, setAccount] = useState<Account | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [checkingSession, setCheckingSession] =
-    useState(true);
+  const clearSession = useCallback(async () => {
+    await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+    setSession(null);
+    setAccount(null);
+    setTransactions([]);
+    setScreen('welcome');
+  }, []);
 
-  // ==========================================================
-  // RESTORE SAVED AUTHENTICATION SESSION
-  // ==========================================================
+  const authenticatedFetch = useCallback(
+    async (url: string, token: string) => {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.status === 401) {
+        const data = await readJson(response);
+
+        if (
+          data.code === 'TOKEN_EXPIRED' ||
+          data.code === 'TOKEN_INVALID' ||
+          data.code === 'AUTH_REQUIRED'
+        ) {
+          throw new Error('SESSION_EXPIRED');
+        }
+
+        throw new Error(data.message || 'Authentication failed.');
+      }
+
+      return response;
+    },
+    []
+  );
+
+  const loadDashboardData = useCallback(
+    async (token: string, showLoader = true) => {
+      if (showLoader) {
+        setDashboardLoading(true);
+      }
+
+      try {
+        const [accountResponse, transactionResponse] = await Promise.all([
+          authenticatedFetch(ACCOUNT_URL, token),
+          authenticatedFetch(TRANSACTIONS_URL, token),
+        ]);
+
+        const accountData: AccountResponse =
+          await readJson(accountResponse);
+
+        const transactionData: TransactionsResponse =
+          await readJson(transactionResponse);
+
+        if (!accountResponse.ok || accountData.success !== true) {
+          throw new Error(
+            accountData.message || 'Unable to retrieve your account.'
+          );
+        }
+
+        if (
+          !transactionResponse.ok ||
+          transactionData.success !== true
+        ) {
+          throw new Error(
+            transactionData.message ||
+              'Unable to retrieve your transactions.'
+          );
+        }
+
+        if (!accountData.account) {
+          throw new Error('Your account details are unavailable.');
+        }
+
+        setAccount(accountData.account);
+
+        const rows = Array.isArray(transactionData.transactions)
+          ? transactionData.transactions
+          : [];
+
+        setTransactions(rows.map(normalizeTransaction));
+      } catch (error: any) {
+        if (error.message === 'SESSION_EXPIRED') {
+          Alert.alert(
+            'Session expired',
+            'Please sign in again to protect your account.',
+            [
+              {
+                text: 'Sign in',
+                onPress: () => {
+                  clearSession().catch(() => {});
+                },
+              },
+            ]
+          );
+          return;
+        }
+
+        throw error;
+      } finally {
+        setDashboardLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [authenticatedFetch, clearSession]
+  );
+
+  const loadProfile = useCallback(
+    async (token: string): Promise<AuthUser | undefined> => {
+      try {
+        const response = await authenticatedFetch(PROFILE_URL, token);
+        const data: ProfileResponse = await readJson(response);
+
+        if (response.ok && data.success && data.user) {
+          return data.user;
+        }
+      } catch {
+        // A profile failure must not discard a valid login.
+      }
+
+      return undefined;
+    },
+    [authenticatedFetch]
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -155,96 +334,59 @@ export default function App() {
           return;
         }
 
-        const response = await fetch(`${API_URL}/me`, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${savedToken}`,
-          },
-        });
+        const response = await authenticatedFetch(
+          `${AUTH_URL}/me`,
+          savedToken
+        );
 
-        let data: MeResponse;
-
-        try {
-          data = await response.json();
-        } catch {
-          throw new Error(
-            'Invalid session response from server.'
-          );
-        }
+        const data = await readJson(response);
 
         if (
           !response.ok ||
           data.success !== true ||
           !data.user
         ) {
-          await SecureStore.deleteItemAsync(
-            AUTH_TOKEN_KEY
-          );
-
+          await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
           return;
         }
 
-        if (!mounted) return;
-
-        // Retrieve the latest customer profile.
-
-        let profileUser: AuthUser | undefined;
-
-        try {
-          const profileResponse = await fetch(
-            PROFILE_API_URL,
-            {
-              method: 'GET',
-              headers: {
-                Accept: 'application/json',
-                Authorization: `Bearer ${savedToken}`,
-              },
-            }
-          );
-
-          const profileData = await profileResponse.json();
-
-          if (
-            profileResponse.ok &&
-            profileData.success === true &&
-            profileData.user
-          ) {
-            profileUser = profileData.user as AuthUser;
-          }
-        } catch {
-          // Keep the verified session if profile
-          // information is temporarily unavailable.
-        }
+        const profileUser = await loadProfile(savedToken);
 
         if (!mounted) return;
 
         const restoredSession: AuthSession = {
           success: true,
           token: savedToken,
-
           user: {
-            ...data.user,
+            ...(data.user || {}),
             ...(profileUser || {}),
           },
-
-          account: data.account || undefined,
-
-          accounts:
-            data.accounts ||
-            (data.account ? [data.account] : []),
         };
 
         setSession(restoredSession);
         setScreen('home');
-      } catch {
-        // Keep the saved token when the network
-        // is temporarily unavailable.
+
+        try {
+          await loadDashboardData(savedToken);
+        } catch (error: any) {
+          if (mounted) {
+            Alert.alert(
+              'Account information',
+              error.message ||
+                'Your account information could not be loaded. Please refresh.'
+            );
+          }
+        }
+      } catch (error: any) {
+        if (error.message === 'SESSION_EXPIRED') {
+          await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+          return;
+        }
 
         if (mounted) {
           Alert.alert(
-            'Session unavailable',
-            'We could not verify your saved session. Please check your internet connection and sign in again if necessary.'
+            'Connection unavailable',
+            'We could not verify your saved session. Check your internet connection and try again.'
           );
         }
       } finally {
@@ -259,21 +401,14 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [authenticatedFetch, loadDashboardData, loadProfile]);
 
-  // ==========================================================
-  // SUCCESSFUL LOGIN
-  // ==========================================================
-
-  const handleLoginSuccess = async (
-    authData: AuthSession
-  ) => {
+  const handleLoginSuccess = async (authData: AuthSession) => {
     if (!authData?.token) {
       Alert.alert(
         'Sign in incomplete',
-        'The server did not return a valid login token. Please try again.'
+        'The server did not return a valid login token.'
       );
-
       return;
     }
 
@@ -283,59 +418,37 @@ export default function App() {
         authData.token
       );
 
-      let profileUser: AuthUser | undefined;
-
-      try {
-        const profileResponse = await fetch(
-          PROFILE_API_URL,
-          {
-            method: 'GET',
-            headers: {
-              Accept: 'application/json',
-              Authorization: `Bearer ${authData.token}`,
-            },
-          }
-        );
-
-        const profileData = await profileResponse.json();
-
-        if (
-          profileResponse.ok &&
-          profileData.success === true &&
-          profileData.user
-        ) {
-          profileUser = profileData.user as AuthUser;
-        }
-      } catch {
-        // Continue login if profile loading fails.
-      }
+      const profileUser = await loadProfile(authData.token);
 
       const updatedSession: AuthSession = {
         ...authData,
-
         user: {
           ...(authData.user || {}),
           ...(profileUser || {}),
         },
-
-        accounts:
-          authData.accounts ||
-          (authData.account ? [authData.account] : []),
       };
 
       setSession(updatedSession);
+      setAccount(null);
+      setTransactions([]);
       setScreen('home');
+
+      try {
+        await loadDashboardData(authData.token);
+      } catch (error: any) {
+        Alert.alert(
+          'Account information',
+          error.message ||
+            'Your account details could not be loaded. Please refresh the dashboard.'
+        );
+      }
     } catch {
       Alert.alert(
         'Secure storage unavailable',
-        'Your login was accepted, but this device could not securely save your session. Please try again.'
+        'Your login was accepted, but this device could not securely save your session.'
       );
     }
   };
-
-  // ==========================================================
-  // REGISTRATION SUCCESS
-  // ==========================================================
 
   const handleRegistrationSuccess = async (
     registrationSession: AuthSession | null
@@ -348,27 +461,33 @@ export default function App() {
     await handleLoginSuccess(registrationSession);
   };
 
-  // ==========================================================
-  // SECURE LOGOUT
-  // ==========================================================
+  const handleRefresh = async () => {
+    if (!session?.token) return;
 
-  const handleLogout = async () => {
+    setRefreshing(true);
+
     try {
-      await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
-
-      setSession(null);
-      setScreen('welcome');
-    } catch {
+      await loadDashboardData(session.token, false);
+    } catch (error: any) {
       Alert.alert(
-        'Logout could not be completed',
-        'We could not clear the saved secure session. Please try again.'
+        'Refresh failed',
+        error.message || 'Unable to refresh your account information.'
       );
+    } finally {
+      setRefreshing(false);
     }
   };
 
-  // ==========================================================
-  // DASHBOARD ACTIONS
-  // ==========================================================
+  const handleLogout = async () => {
+    try {
+      await clearSession();
+    } catch {
+      Alert.alert(
+        'Logout failed',
+        'We could not clear your saved session. Please try again.'
+      );
+    }
+  };
 
   const handleDashboardAction = (action: string) => {
     const serviceNames: Record<string, string> = {
@@ -383,33 +502,21 @@ export default function App() {
       savings: 'ZENIMONIES Save',
     };
 
-    const serviceName =
-      serviceNames[action] || action;
-
     Alert.alert(
-      serviceName,
-      'This service is being connected to the secure ZENIMONIES banking backend. No transaction has been initiated.'
+      serviceNames[action] || 'ZENIMONIES',
+      'This service screen will be connected in the next development stage. No transaction has been initiated.'
     );
   };
 
-  // ==========================================================
-  // DASHBOARD NAVIGATION
-  // ==========================================================
-
   const handleDashboardNavigation = (tab: string) => {
-    if (tab === 'Home') {
-      return;
-    }
+    if (tab === 'Home') return;
 
     if (tab === 'Profile') {
       Alert.alert(
         'My Account',
         'Manage your ZENIMONIES account.',
         [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
+          { text: 'Cancel', style: 'cancel' },
           {
             text: 'Log out',
             style: 'destructive',
@@ -417,7 +524,6 @@ export default function App() {
           },
         ]
       );
-
       return;
     }
 
@@ -427,42 +533,16 @@ export default function App() {
     );
   };
 
-  // ==========================================================
-  // PROFILE PHOTO UPDATE
-  // ==========================================================
-
-  const handlePhotoUpdated = (photo: string) => {
-    setSession((current) =>
-      current
-        ? {
-            ...current,
-
-            user: {
-              ...(current.user || {}),
-              profile_photo: photo,
-            },
-          }
-        : current
-    );
-  };
-
-  // ==========================================================
-  // SESSION CHECK SCREEN
-  // ==========================================================
-
   if (checkingSession) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <StatusBar barStyle="dark-content" />
-
         <View style={styles.loadingContent}>
           <View style={styles.logo}>
             <Text style={styles.logoText}>Z</Text>
           </View>
 
-          <Text style={styles.loadingBrand}>
-            ZENIMONIES
-          </Text>
+          <Text style={styles.loadingBrand}>ZENIMONIES</Text>
 
           <ActivityIndicator
             size="large"
@@ -478,10 +558,6 @@ export default function App() {
     );
   }
 
-  // ==========================================================
-  // LOGIN SCREEN
-  // ==========================================================
-
   if (screen === 'login') {
     return (
       <SafeAreaView style={styles.container}>
@@ -491,9 +567,7 @@ export default function App() {
           style={styles.backButton}
           onPress={() => setScreen('welcome')}
         >
-          <Text style={styles.backText}>
-            ‹ Back
-          </Text>
+          <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
 
         <LoginScreen
@@ -504,10 +578,6 @@ export default function App() {
     );
   }
 
-  // ==========================================================
-  // REGISTRATION SCREEN
-  // ==========================================================
-
   if (screen === 'register') {
     return (
       <SafeAreaView style={styles.container}>
@@ -517,23 +587,15 @@ export default function App() {
           style={styles.backButton}
           onPress={() => setScreen('welcome')}
         >
-          <Text style={styles.backText}>
-            ‹ Back
-          </Text>
+          <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
 
         <RegisterScreen
-          onRegistrationSuccess={
-            handleRegistrationSuccess
-          }
+          onRegistrationSuccess={handleRegistrationSuccess}
         />
       </SafeAreaView>
     );
   }
-
-  // ==========================================================
-  // CUSTOMER HOME — PERSONAL DASHBOARD
-  // ==========================================================
 
   if (screen === 'home' && session) {
     const userName =
@@ -542,87 +604,86 @@ export default function App() {
       session.user?.first_name ||
       'Customer';
 
-    const accounts = getAccounts(session);
-
-    const primaryAccount = accounts[0];
-
-    const currency =
-      primaryAccount?.currency === 'ZAR'
-        ? 'ZAR'
-        : 'NGN';
-
-    const balance = formatBalance(
-      primaryAccount?.balance,
-      currency
-    );
-
     const verificationLevel =
+      account?.kyc_tier ??
       session.user?.verification_level ??
       session.user?.kyc_level;
 
     const verificationStatus =
+      account?.kyc_status ||
       session.user?.verification_status ||
       session.user?.kyc_status ||
       'Pending';
+
+    const balance = formatNaira(account?.balance);
 
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
 
-        <Dashboard
-          userName={userName}
-          currency={currency}
-          balance={balance}
-          accountNumber={
-            primaryAccount?.account_number || undefined
-          }
-          bankName="ZENIMONIES"
-          verificationLevel={
-            verificationLevel !== undefined
-              ? String(verificationLevel)
-              : undefined
-          }
-          verificationStatus={verificationStatus}
-          transactions={[]}
-          onAction={handleDashboardAction}
-          onNavigate={handleDashboardNavigation}
-        />
+        {dashboardLoading && !account ? (
+          <View style={styles.dashboardLoading}>
+            <ActivityIndicator
+              size="large"
+              color={colors.primary}
+            />
+            <Text style={styles.loadingText}>
+              Loading your account...
+            </Text>
+          </View>
+        ) : (
+          <Dashboard
+            userName={userName}
+            currency="NGN"
+            balance={balance}
+            accountNumber={account?.account_number || undefined}
+            bankName="ZENIMONIES"
+            verificationLevel={
+              verificationLevel !== undefined
+                ? String(verificationLevel)
+                : undefined
+            }
+            verificationStatus={verificationStatus}
+            transactions={transactions}
+            onAction={handleDashboardAction}
+            onNavigate={handleDashboardNavigation}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+          />
+        )}
+
+        {dashboardLoading && account ? (
+          <View style={styles.refreshIndicator}>
+            <ActivityIndicator
+              size="small"
+              color={colors.primary}
+            />
+          </View>
+        ) : null}
       </SafeAreaView>
     );
   }
-
-  // ==========================================================
-  // WELCOME SCREEN
-  // ==========================================================
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.content}>
-        {/* BRAND */}
-
         <View style={styles.brandArea}>
           <View style={styles.logo}>
             <Text style={styles.logoText}>Z</Text>
           </View>
 
-          <Text style={styles.brand}>
-            ZENIMONIES
-          </Text>
+          <Text style={styles.brand}>ZENIMONIES</Text>
 
           <Text style={styles.tagline}>
             Banking made simple.
           </Text>
         </View>
 
-        {/* HERO */}
-
         <View style={styles.hero}>
           <View style={styles.heroCircle}>
-            <Text style={styles.currency}>
-              ₦
-            </Text>
+            <Text style={styles.currency}>₦</Text>
           </View>
 
           <Text style={styles.heading}>
@@ -637,16 +698,12 @@ export default function App() {
           </Text>
         </View>
 
-        {/* ACTIONS */}
-
         <View style={styles.actions}>
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={() => setScreen('register')}
           >
-            <Text style={styles.primaryText}>
-              Get Started
-            </Text>
+            <Text style={styles.primaryText}>Get Started</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -666,10 +723,6 @@ export default function App() {
     </SafeAreaView>
   );
 }
-
-// ============================================================
-// STYLES
-// ============================================================
 
 const styles = StyleSheet.create({
   container: {
@@ -705,6 +758,18 @@ const styles = StyleSheet.create({
     marginTop: 15,
     fontSize: 14,
     color: colors.textSecondary,
+  },
+
+  dashboardLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  refreshIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 18,
   },
 
   content: {
