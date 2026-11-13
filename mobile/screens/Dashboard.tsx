@@ -28,7 +28,13 @@ type DashboardAction =
   | 'cards'
   | 'savings';
 
-type TabName = 'Home' | 'Cards' | 'Payments' | 'History' | 'Profile';
+type TabName =
+  | 'Home'
+  | 'Cards'
+  | 'Payments'
+  | 'History'
+  | 'Profile'
+  | 'Notifications';
 
 type Transaction = {
   id: string;
@@ -178,24 +184,20 @@ export default function Dashboard({
             </View>
 
             <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.notificationButton}
-                onPress={() =>
-                  Alert.alert(
-                    'Notifications',
-                    'Your notifications will appear here.'
-                  )
-                }
-              >
-                <Text style={styles.notificationIcon}>♧</Text>
-                <View style={styles.notificationDot} />
-              </TouchableOpacity>
+  <TouchableOpacity
+    style={styles.notificationButton}
+    onPress={() => handleNavigate('Notifications')}
+    accessibilityRole="button"
+    accessibilityLabel="Open notifications"
+  >
+    <Text style={styles.notificationIcon}>♧</Text>
+    <View style={styles.notificationDot} />
+  </TouchableOpacity>
 
-              <View style={styles.logoCircle}>
-                <Text style={styles.logoText}>Z</Text>
-              </View>
-            </View>
-          </View>
+  <View style={styles.logoCircle}>
+    <Text style={styles.logoText}>Z</Text>
+  </View>
+</View>
 
           {/* ACCOUNT BALANCE */}
 
