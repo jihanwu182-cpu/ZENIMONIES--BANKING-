@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 
 import {
   ScrollView,
@@ -10,6 +10,12 @@ import {
 } from 'react-native';
 
 import colors from '../theme/colors';
+import TransactionReceiptScreen from './TransactionReceiptScreen';
+
+// ======================================================
+// ZENIMONIES BANKING — TRANSACTION DETAILS
+// File: mobile/screens/TransactionDetailsScreen.tsx
+// ======================================================
 
 type Transaction = {
   id: string;
@@ -44,6 +50,9 @@ export default function TransactionDetailsScreen({
   transaction,
   onBack,
 }: Props) {
+  const [showReceipt, setShowReceipt] =
+    useState(false);
+
   const isCredit = transaction.type === 'credit';
 
   const status = (
@@ -83,6 +92,19 @@ export default function TransactionDetailsScreen({
       </View>
     );
   };
+
+  // ====================================================
+  // OPEN TRANSACTION RECEIPT
+  // ====================================================
+
+  if (showReceipt) {
+    return (
+      <TransactionReceiptScreen
+        transaction={transaction}
+        onBack={() => setShowReceipt(false)}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -297,6 +319,21 @@ export default function TransactionDetailsScreen({
           </Text>
         </View>
 
+        <TouchableOpacity
+          style={styles.receiptButton}
+          onPress={() => setShowReceipt(true)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+        >
+          <Text style={styles.receiptButtonIcon}>
+            ▤
+          </Text>
+
+          <Text style={styles.receiptButtonText}>
+            View Transaction Receipt
+          </Text>
+        </TouchableOpacity>
+
         <Text style={styles.footer}>
           ZENIMONIES BANKING
         </Text>
@@ -478,6 +515,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 18,
     color: colors.textSecondary,
+  },
+
+  receiptButton: {
+    minHeight: 55,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    marginTop: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  receiptButtonIcon: {
+    fontSize: 22,
+    color: colors.white,
+    marginRight: 10,
+  },
+
+  receiptButtonText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: colors.white,
   },
 
   footer: {
