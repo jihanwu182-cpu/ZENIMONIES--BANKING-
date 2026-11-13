@@ -759,7 +759,7 @@ export default function App() {
       setAccount(null);
       setTransactions([]);
       setScreen('home');
-
+      offerPushNotifications(authData.token);
       try {
         await loadDashboardData(
           authData.token
