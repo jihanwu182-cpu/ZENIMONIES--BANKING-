@@ -37,6 +37,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const kycRoutes = require('./routes/kycRoutes');
 const profileRoutes = require('./routes/profile');
 const notificationRoutes = require('./routes/notifications');
+const announcementRoutes = require('./routes/announcements');
 const passkeyRoutes = require('./routes/passkey');
 const passcodeRoutes = require('./routes/passcode');
 const transactionPinRoutes = require('./routes/transactionPin');
@@ -398,6 +399,10 @@ app.use(
 app.use(
   '/api/notifications',
   notificationRoutes
+);
+app.use(
+  '/api/announcements',
+  announcementRoutes
 );
 app.use(
   '/api/sms-preferences',
