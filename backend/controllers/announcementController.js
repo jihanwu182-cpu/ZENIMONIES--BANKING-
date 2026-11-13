@@ -4,70 +4,24 @@ const pool = require('../config/database');
 // ============================================================
 // ZENIMONIES BANKING — ANNOUNCEMENT CONTROLLER
 // ============================================================
-//
-// Separate from transaction/security notifications.
-//
-// ADMIN FUNCTIONS:
-// - Create announcement
-// - List announcements
-// - Edit draft or scheduled announcement
-// - Publish immediately
-// - Schedule publication
-// - Archive announcement
-// - View read statistics
-//
-// CUSTOMER FUNCTIONS:
-// - Get announcements for the authenticated customer
-// - Mark an announcement as read
-//
-// SECURITY:
-// - Admin routes MUST use the existing adminMiddleware.
-// - Customer routes MUST use the existing authMiddleware.
-// - All SQL values are parameterized.
-// - Customer responses only contain announcements matching
-//   their audience.
-// ============================================================
 
-const VALID_PRIORITIES = [
-  'normal',
-  'important',
-  'urgent',
-];
-
+const VALID_PRIORITIES = ['normal', 'important', 'urgent'];
 const VALID_AUDIENCES = [
   'all',
   'personal',
   'business',
   'verification_tier',
 ];
+const VALID_STATUSES = ['draft', 'scheduled'];
 
-const VALID_STATUSES = [
-  'draft',
-  'scheduled',
-];
+const sendError = (res, status, message) =>
+  res.status(status).json({ success: false, message });
 
-// ============================================================
-// HELPERS
-// ============================================================
+const getUserId = (req) =>
+  req.userId || req.user?.id || null;
 
-const sendError = (res, status, message) => {
-  return res.status(status).json({
-    success: false,
-    message,
-  });
-};
-
-const getUserId = (req) => {
-  return req.userId || req.user?.id || null;
-};
-
-const normalizeText = (value) => {
-  if (typeof value !== 'string') {
-    return '';
-  }
-
-  return value.trim();
-};
+const normalizeText = (value) =>
+  typeof value === 'string' ? value.trim() : '';
 
 const validateAnnouncement = ({
   title,
@@ -93,16 +47,13 @@ const validateAnnouncement = ({
   }
 
   if (audience_type === 'verification_tier') {
-    const tier = Number(audience_value);
-
-    if (![1, 2, 3].includes(tier)) {
+    if (![1, 2, 3].includes(Number(audience_value))) {
       return 'Verification tier must be 1, 2, or 3.';
     }
-  }
-
-  if (
-    audience_type !== 'verification_tier' &&
-    audience_value
+  } else if (
+    audience_value !== null &&
+    audience_value !== undefined &&
+    String(audience_value).trim() !== ''
   ) {
     return 'Audience value is only required for verification tier targeting.';
   }
@@ -111,22 +62,24 @@ const validateAnnouncement = ({
 };
 
 const parseScheduledDate = (value) => {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return false;
-  }
-
-  if (date.getTime() <= Date.now()) {
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getTime() <= Date.now()
+  ) {
     return false;
   }
 
   return date;
 };
+
+// ============================================================
+// ADMIN AUDIT LOGGING
+// Must use the same client and transaction as the action.
+// ============================================================
 
 const writeAdminAuditLog = async ({
   client,
@@ -151,22 +104,12 @@ const writeAdminAuditLog = async ({
       action,
       description,
       req.ip || null,
-      req.get('user-agent') || null,
+      typeof req.get === 'function'
+        ? req.get('user-agent') || null
+        : null,
     ]
   );
 };
-
-// ============================================================
-// AUDIENCE FILTER
-// ============================================================
-//
-// Personal/business targeting uses the customer's existing
-// accounts.account_type field.
-//
-// Verification tier targeting uses users.kyc_tier.
-//
-// No new customer accounts are created.
-// ============================================================
 
 const CUSTOMER_AUDIENCE_SQL = `
   (
@@ -205,76 +148,65 @@ const CUSTOMER_AUDIENCE_SQL = `
 // ============================================================
 
 const createAnnouncement = async (req, res) => {
+  const adminId = getUserId(req);
+
+  if (!adminId) {
+    return sendError(res, 401, 'Administrator authentication is required.');
+  }
+
+  const title = normalizeText(req.body?.title);
+  const message = normalizeText(req.body?.message);
+  const priority = req.body?.priority || 'normal';
+  const audience_type = req.body?.audience_type || 'all';
+
+  const audience_value =
+    req.body?.audience_value === undefined ||
+    req.body?.audience_value === null
+      ? null
+      : String(req.body.audience_value).trim();
+
+  const status = req.body?.status || 'draft';
+
+  const validationError = validateAnnouncement({
+    title,
+    message,
+    priority,
+    audience_type,
+    audience_value,
+  });
+
+  if (validationError) {
+    return sendError(res, 400, validationError);
+  }
+
+  if (!VALID_STATUSES.includes(status)) {
+    return sendError(
+      res,
+      400,
+      'New announcements can only be created as drafts or scheduled announcements.'
+    );
+  }
+
+  let scheduledAt = null;
+
+  if (status === 'scheduled') {
+    scheduledAt = parseScheduledDate(req.body?.scheduled_at);
+
+    if (!scheduledAt) {
+      return sendError(
+        res,
+        400,
+        'A valid future scheduled date and time are required.'
+      );
+    }
+  }
+
+  const client = await pool.connect();
+
   try {
-    const adminId = getUserId(req);
+    await client.query('BEGIN');
 
-    if (!adminId) {
-      return sendError(
-        res,
-        401,
-        'Administrator authentication is required.'
-      );
-    }
-
-    const title = normalizeText(req.body?.title);
-    const message = normalizeText(req.body?.message);
-
-    const priority =
-      req.body?.priority || 'normal';
-
-    const audience_type =
-      req.body?.audience_type || 'all';
-
-    const audience_value =
-      req.body?.audience_value === undefined ||
-      req.body?.audience_value === null
-        ? null
-        : String(req.body.audience_value).trim();
-
-    const status =
-      req.body?.status || 'draft';
-
-    const validationError = validateAnnouncement({
-      title,
-      message,
-      priority,
-      audience_type,
-      audience_value,
-    });
-
-    if (validationError) {
-      return sendError(
-        res,
-        400,
-        validationError
-      );
-    }
-
-    if (!VALID_STATUSES.includes(status)) {
-      return sendError(
-        res,
-        400,
-        'New announcements can only be created as drafts or scheduled announcements.'
-      );
-    }
-
-    let scheduledAt = null;
-
-    if (status === 'scheduled') {
-      scheduledAt = parseScheduledDate(
-        req.body?.scheduled_at
-      );
-
-      if (!scheduledAt) {
-        return sendError(
-          res,
-          400,
-          'A valid future scheduled date and time are required.'
-        );
-      }
-    }
-
-    const result = await pool.query(
+    const result = await client.query(
       `
       INSERT INTO announcements (
         title,
@@ -301,25 +233,35 @@ const createAnnouncement = async (req, res) => {
       ]
     );
 
+    const announcement = result.rows[0];
+
+    await writeAdminAuditLog({
+      client,
+      req,
+      adminId,
+      action: 'ANNOUNCEMENT_CREATED',
+      description: `Created announcement ${announcement.id}: ${title}. Status: ${status}. Audience: ${audience_type}.`,
+    });
+
+    await client.query('COMMIT');
+
     return res.status(201).json({
       success: true,
       message:
         status === 'scheduled'
           ? 'Announcement scheduled successfully.'
           : 'Announcement saved as a draft.',
-      announcement: result.rows[0],
+      announcement,
     });
   } catch (error) {
-    console.error(
-      'Create announcement error:',
-      error
-    );
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
 
-    return sendError(
-      res,
-      500,
-      'Unable to create announcement.'
-    );
+    console.error('Create announcement error:', error);
+    return sendError(res, 500, 'Unable to create announcement.');
+  } finally {
+    client.release();
   }
 };
 
@@ -333,23 +275,15 @@ const getAdminAnnouncements = async (req, res) => {
     const result = await pool.query(`
       SELECT
         a.*,
-
-        COALESCE(read_stats.read_count, 0)::INTEGER
-          AS read_count
-
+        COALESCE(read_stats.read_count, 0)::INTEGER AS read_count
       FROM announcements a
-
       LEFT JOIN (
-        SELECT
-          announcement_id,
-          COUNT(*) AS read_count
+        SELECT announcement_id, COUNT(*) AS read_count
         FROM announcement_reads
         GROUP BY announcement_id
       ) read_stats
         ON read_stats.announcement_id = a.id
-
       ORDER BY a.created_at DESC
-
       LIMIT 200
     `);
 
@@ -358,16 +292,8 @@ const getAdminAnnouncements = async (req, res) => {
       announcements: result.rows,
     });
   } catch (error) {
-    console.error(
-      'Get admin announcements error:',
-      error
-    );
-
-    return sendError(
-      res,
-      500,
-      'Unable to retrieve announcements.'
-    );
+    console.error('Get admin announcements error:', error);
+    return sendError(res, 500, 'Unable to retrieve announcements.');
   }
 };
 
@@ -377,40 +303,37 @@ const getAdminAnnouncements = async (req, res) => {
 // ============================================================
 
 const updateAnnouncement = async (req, res) => {
+  const adminId = getUserId(req);
+
+  if (!adminId) {
+    return sendError(res, 401, 'Administrator authentication is required.');
+  }
+
+  const announcementId = req.params.id;
+  const client = await pool.connect();
+
   try {
-    const announcementId = req.params.id;
+    await client.query('BEGIN');
 
-    if (!announcementId) {
-      return sendError(
-        res,
-        400,
-        'Announcement ID is required.'
-      );
-    }
-
-    const existing = await pool.query(
+    const existing = await client.query(
       `
       SELECT *
       FROM announcements
       WHERE id = $1
-      LIMIT 1
+      FOR UPDATE
       `,
       [announcementId]
     );
 
     if (!existing.rows.length) {
-      return sendError(
-        res,
-        404,
-        'Announcement not found.'
-      );
+      await client.query('ROLLBACK');
+      return sendError(res, 404, 'Announcement not found.');
     }
 
     const current = existing.rows[0];
 
-    if (
-      !['draft', 'scheduled'].includes(current.status)
-    ) {
+    if (!['draft', 'scheduled'].includes(current.status)) {
+      await client.query('ROLLBACK');
       return sendError(
         res,
         409,
@@ -454,27 +377,22 @@ const updateAnnouncement = async (req, res) => {
     });
 
     if (validationError) {
-      return sendError(
-        res,
-        400,
-        validationError
-      );
+      await client.query('ROLLBACK');
+      return sendError(res, 400, validationError);
     }
 
-    let scheduledAt = current.scheduled_at;
     let status = current.status;
 
     if (req.body?.status !== undefined) {
       if (!VALID_STATUSES.includes(req.body.status)) {
-        return sendError(
-          res,
-          400,
-          'Invalid announcement status.'
-        );
+        await client.query('ROLLBACK');
+        return sendError(res, 400, 'Invalid announcement status.');
       }
 
       status = req.body.status;
     }
+
+    let scheduledAt = current.scheduled_at;
 
     if (
       req.body?.scheduled_at !== undefined ||
@@ -482,11 +400,11 @@ const updateAnnouncement = async (req, res) => {
     ) {
       if (status === 'scheduled') {
         scheduledAt = parseScheduledDate(
-          req.body?.scheduled_at ??
-            current.scheduled_at
+          req.body?.scheduled_at ?? current.scheduled_at
         );
 
         if (!scheduledAt) {
+          await client.query('ROLLBACK');
           return sendError(
             res,
             400,
@@ -498,7 +416,7 @@ const updateAnnouncement = async (req, res) => {
       }
     }
 
-    const result = await pool.query(
+    const result = await client.query(
       `
       UPDATE announcements
       SET
@@ -511,7 +429,6 @@ const updateAnnouncement = async (req, res) => {
         scheduled_at = $7,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $8
-        AND status IN ('draft', 'scheduled')
       RETURNING *
       `,
       [
@@ -526,30 +443,32 @@ const updateAnnouncement = async (req, res) => {
       ]
     );
 
-    if (!result.rows.length) {
-      return sendError(
-        res,
-        409,
-        'Announcement could not be updated because its status changed.'
-      );
-    }
+    const announcement = result.rows[0];
+
+    await writeAdminAuditLog({
+      client,
+      req,
+      adminId,
+      action: 'ANNOUNCEMENT_UPDATED',
+      description: `Updated announcement ${announcementId}: ${title}. Status: ${status}.`,
+    });
+
+    await client.query('COMMIT');
 
     return res.json({
       success: true,
       message: 'Announcement updated successfully.',
-      announcement: result.rows[0],
+      announcement,
     });
   } catch (error) {
-    console.error(
-      'Update announcement error:',
-      error
-    );
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
 
-    return sendError(
-      res,
-      500,
-      'Unable to update announcement.'
-    );
+    console.error('Update announcement error:', error);
+    return sendError(res, 500, 'Unable to update announcement.');
+  } finally {
+    client.release();
   }
 };
 
@@ -559,10 +478,43 @@ const updateAnnouncement = async (req, res) => {
 // ============================================================
 
 const publishAnnouncement = async (req, res) => {
-  try {
-    const announcementId = req.params.id;
+  const adminId = getUserId(req);
 
-    const result = await pool.query(
+  if (!adminId) {
+    return sendError(res, 401, 'Administrator authentication is required.');
+  }
+
+  const announcementId = req.params.id;
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const existing = await client.query(
+      `
+      SELECT *
+      FROM announcements
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [announcementId]
+    );
+
+    if (!existing.rows.length) {
+      await client.query('ROLLBACK');
+      return sendError(res, 404, 'Announcement not found.');
+    }
+
+    if (!['draft', 'scheduled'].includes(existing.rows[0].status)) {
+      await client.query('ROLLBACK');
+      return sendError(
+        res,
+        409,
+        'This announcement cannot be published in its current status.'
+      );
+    }
+
+    const result = await client.query(
       `
       UPDATE announcements
       SET
@@ -571,54 +523,37 @@ const publishAnnouncement = async (req, res) => {
         scheduled_at = NULL,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
-        AND status IN ('draft', 'scheduled')
       RETURNING *
       `,
       [announcementId]
     );
 
-    if (!result.rows.length) {
-      const exists = await pool.query(
-        `
-        SELECT id, status
-        FROM announcements
-        WHERE id = $1
-        LIMIT 1
-        `,
-        [announcementId]
-      );
+    const announcement = result.rows[0];
 
-      if (!exists.rows.length) {
-        return sendError(
-          res,
-          404,
-          'Announcement not found.'
-        );
-      }
+    await writeAdminAuditLog({
+      client,
+      req,
+      adminId,
+      action: 'ANNOUNCEMENT_PUBLISHED',
+      description: `Published announcement ${announcementId}: ${announcement.title}.`,
+    });
 
-      return sendError(
-        res,
-        409,
-        'This announcement cannot be published in its current status.'
-      );
-    }
+    await client.query('COMMIT');
 
     return res.json({
       success: true,
       message: 'Announcement published successfully.',
-      announcement: result.rows[0],
+      announcement,
     });
   } catch (error) {
-    console.error(
-      'Publish announcement error:',
-      error
-    );
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
 
-    return sendError(
-      res,
-      500,
-      'Unable to publish announcement.'
-    );
+    console.error('Publish announcement error:', error);
+    return sendError(res, 500, 'Unable to publish announcement.');
+  } finally {
+    client.release();
   }
 };
 
@@ -628,10 +563,39 @@ const publishAnnouncement = async (req, res) => {
 // ============================================================
 
 const archiveAnnouncement = async (req, res) => {
-  try {
-    const announcementId = req.params.id;
+  const adminId = getUserId(req);
 
-    const result = await pool.query(
+  if (!adminId) {
+    return sendError(res, 401, 'Administrator authentication is required.');
+  }
+
+  const announcementId = req.params.id;
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const existing = await client.query(
+      `
+      SELECT *
+      FROM announcements
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [announcementId]
+    );
+
+    if (!existing.rows.length) {
+      await client.query('ROLLBACK');
+      return sendError(res, 404, 'Announcement not found.');
+    }
+
+    if (existing.rows[0].status === 'archived') {
+      await client.query('ROLLBACK');
+      return sendError(res, 409, 'Announcement is already archived.');
+    }
+
+    const result = await client.query(
       `
       UPDATE announcements
       SET
@@ -639,36 +603,37 @@ const archiveAnnouncement = async (req, res) => {
         scheduled_at = NULL,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
-        AND status <> 'archived'
       RETURNING *
       `,
       [announcementId]
     );
 
-    if (!result.rows.length) {
-      return sendError(
-        res,
-        404,
-        'Announcement not found or already archived.'
-      );
-    }
+    const announcement = result.rows[0];
+
+    await writeAdminAuditLog({
+      client,
+      req,
+      adminId,
+      action: 'ANNOUNCEMENT_ARCHIVED',
+      description: `Archived announcement ${announcementId}: ${announcement.title}.`,
+    });
+
+    await client.query('COMMIT');
 
     return res.json({
       success: true,
       message: 'Announcement archived successfully.',
-      announcement: result.rows[0],
+      announcement,
     });
   } catch (error) {
-    console.error(
-      'Archive announcement error:',
-      error
-    );
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
 
-    return sendError(
-      res,
-      500,
-      'Unable to archive announcement.'
-    );
+    console.error('Archive announcement error:', error);
+    return sendError(res, 500, 'Unable to archive announcement.');
+  } finally {
+    client.release();
   }
 };
 
@@ -676,27 +641,16 @@ const archiveAnnouncement = async (req, res) => {
 // CUSTOMER: GET ANNOUNCEMENTS
 // GET /api/announcements
 // ============================================================
-//
-// Scheduled announcements are visible only after their
-// scheduled time has arrived.
-//
-// Archived and draft announcements are never shown.
-// ============================================================
 
 const getCustomerAnnouncements = async (req, res) => {
   try {
     const userId = getUserId(req);
 
     if (!userId) {
-      return sendError(
-        res,
-        401,
-        'Authentication is required.'
-      );
+      return sendError(res, 401, 'Authentication is required.');
     }
 
     const requestedLimit = Number(req.query?.limit || 30);
-
     const limit = Number.isInteger(requestedLimit)
       ? Math.min(Math.max(requestedLimit, 1), 100)
       : 30;
@@ -712,23 +666,17 @@ const getCustomerAnnouncements = async (req, res) => {
         a.published_at,
         a.scheduled_at,
         a.created_at,
-
         CASE
           WHEN ar.id IS NULL THEN FALSE
           ELSE TRUE
         END AS is_read,
-
         ar.read_at
-
       FROM announcements a
-
       INNER JOIN users u
         ON u.id = $1
-
       LEFT JOIN announcement_reads ar
         ON ar.announcement_id = a.id
         AND ar.user_id = $1
-
       WHERE
         (
           a.status = 'published'
@@ -737,13 +685,10 @@ const getCustomerAnnouncements = async (req, res) => {
             AND a.scheduled_at <= CURRENT_TIMESTAMP
           )
         )
-
         AND ${CUSTOMER_AUDIENCE_SQL}
-
       ORDER BY
         COALESCE(a.published_at, a.scheduled_at) DESC,
         a.created_at DESC
-
       LIMIT $2
       `,
       [userId, limit]
@@ -759,16 +704,8 @@ const getCustomerAnnouncements = async (req, res) => {
       unread_count: unreadCount,
     });
   } catch (error) {
-    console.error(
-      'Get customer announcements error:',
-      error
-    );
-
-    return sendError(
-      res,
-      500,
-      'Unable to retrieve announcements.'
-    );
+    console.error('Get customer announcements error:', error);
+    return sendError(res, 500, 'Unable to retrieve announcements.');
   }
 };
 
@@ -785,11 +722,7 @@ const markAnnouncementAsRead = async (req, res) => {
     const announcementId = req.params.id;
 
     if (!userId) {
-      return sendError(
-        res,
-        401,
-        'Authentication is required.'
-      );
+      return sendError(res, 401, 'Authentication is required.');
     }
 
     await client.query('BEGIN');
@@ -797,14 +730,10 @@ const markAnnouncementAsRead = async (req, res) => {
     const visibleAnnouncement = await client.query(
       `
       SELECT a.id
-
       FROM announcements a
-
       INNER JOIN users u
         ON u.id = $1
-
       WHERE a.id = $2
-
         AND (
           a.status = 'published'
           OR (
@@ -812,9 +741,7 @@ const markAnnouncementAsRead = async (req, res) => {
             AND a.scheduled_at <= CURRENT_TIMESTAMP
           )
         )
-
         AND ${CUSTOMER_AUDIENCE_SQL}
-
       LIMIT 1
       `,
       [userId, announcementId]
@@ -822,12 +749,7 @@ const markAnnouncementAsRead = async (req, res) => {
 
     if (!visibleAnnouncement.rows.length) {
       await client.query('ROLLBACK');
-
-      return sendError(
-        res,
-        404,
-        'Announcement not found.'
-      );
+      return sendError(res, 404, 'Announcement not found.');
     }
 
     await client.query(
@@ -837,11 +759,7 @@ const markAnnouncementAsRead = async (req, res) => {
         user_id
       )
       VALUES ($1, $2)
-
-      ON CONFLICT (
-        announcement_id,
-        user_id
-      )
+      ON CONFLICT (announcement_id, user_id)
       DO NOTHING
       `,
       [announcementId, userId]
@@ -869,20 +787,10 @@ const markAnnouncementAsRead = async (req, res) => {
   } catch (error) {
     try {
       await client.query('ROLLBACK');
-    } catch (_) {
-      // No active transaction may exist.
-    }
+    } catch (_) {}
 
-    console.error(
-      'Mark announcement as read error:',
-      error
-    );
-
-    return sendError(
-      res,
-      500,
-      'Unable to mark announcement as read.'
-    );
+    console.error('Mark announcement as read error:', error);
+    return sendError(res, 500, 'Unable to mark announcement as read.');
   } finally {
     client.release();
   }
@@ -905,30 +813,19 @@ const getAnnouncementStatistics = async (req, res) => {
         a.status,
         a.audience_type,
         a.audience_value,
-
-        COUNT(DISTINCT ar.user_id)::INTEGER
-          AS read_count
-
+        COUNT(DISTINCT ar.user_id)::INTEGER AS read_count
       FROM announcements a
-
       LEFT JOIN announcement_reads ar
         ON ar.announcement_id = a.id
-
       WHERE a.id = $1
-
       GROUP BY a.id
-
       LIMIT 1
       `,
       [announcementId]
     );
 
     if (!result.rows.length) {
-      return sendError(
-        res,
-        404,
-        'Announcement not found.'
-      );
+      return sendError(res, 404, 'Announcement not found.');
     }
 
     return res.json({
@@ -936,16 +833,8 @@ const getAnnouncementStatistics = async (req, res) => {
       statistics: result.rows[0],
     });
   } catch (error) {
-    console.error(
-      'Announcement statistics error:',
-      error
-    );
-
-    return sendError(
-      res,
-      500,
-      'Unable to retrieve announcement statistics.'
-    );
+    console.error('Announcement statistics error:', error);
+    return sendError(res, 500, 'Unable to retrieve announcement statistics.');
   }
 };
 
