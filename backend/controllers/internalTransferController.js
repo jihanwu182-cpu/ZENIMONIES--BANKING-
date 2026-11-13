@@ -1,5 +1,8 @@
 const crypto = require('crypto');
 const pool = require('../config/database');
+const {
+  sendPushNotificationToUser,
+} = require('../services/pushNotificationService');
 
 const {
   applySpendSave,
