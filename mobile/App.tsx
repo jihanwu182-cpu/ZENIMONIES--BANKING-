@@ -1,5 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
+
 import {
   ActivityIndicator,
   Alert,
@@ -9,18 +10,31 @@ import {
   Text,
   TouchableOpacity,
   View,
-  ScrollView,
 } from 'react-native';
+
 import * as SecureStore from 'expo-secure-store';
 
 import colors from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
-import ProfileHeader from './components/ProfileHeader';
+import Dashboard from './screens/Dashboard';
 
-const API_URL = 'https://zenimonies-banking.onrender.com/api/auth';
-const PROFILE_API_URL = 'https://zenimonies-banking.onrender.com/api/profile';
+// ============================================================
+// ZENIMONIES BANKING — MOBILE APPLICATION
+// Main application entry point
+// ============================================================
+
+const API_URL =
+  'https://zenimonies-banking.onrender.com/api/auth';
+
+const PROFILE_API_URL =
+  'https://zenimonies-banking.onrender.com/api/profile';
+
 const AUTH_TOKEN_KEY = 'zenimonies_auth_token';
+
+// ============================================================
+// TYPES
+// ============================================================
 
 type Screen = 'welcome' | 'login' | 'register' | 'home';
 
@@ -44,8 +58,12 @@ type AuthUser = {
   phone?: string;
   role?: string;
   profile_photo?: string | null;
-};
 
+  verification_level?: string | number;
+  verification_status?: string;
+  kyc_level?: string | number;
+  kyc_status?: string;
+};
 
 type AuthSession = {
   success: boolean;
@@ -65,23 +83,73 @@ type MeResponse = {
   message?: string;
 };
 
+// ============================================================
+// HELPERS
+// ============================================================
+
+const getAccounts = (session: AuthSession): Account[] => {
+  if (Array.isArray(session.accounts)) {
+    return session.accounts;
+  }
+
+  if (session.account) {
+    return [session.account];
+  }
+
+  return [];
+};
+
+const formatBalance = (
+  balance: string | number | undefined,
+  currency: string
+): string | undefined => {
+  if (
+    balance === undefined ||
+    balance === null ||
+    balance === ''
+  ) {
+    return undefined;
+  }
+
+  const numericBalance = Number(balance);
+
+  if (!Number.isFinite(numericBalance)) {
+    return undefined;
+  }
+
+  return numericBalance.toLocaleString(
+    currency === 'ZAR' ? 'en-ZA' : 'en-NG',
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  );
+};
+
+// ============================================================
+// MAIN APPLICATION
+// ============================================================
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('welcome');
-  const [session, setSession] = useState<AuthSession | null>(null);
-  const [checkingSession, setCheckingSession] = useState(true);
 
-  // ============================================================
-  // RESTORE A SAVED SESSION
-  // ============================================================
+  const [session, setSession] =
+    useState<AuthSession | null>(null);
+
+  const [checkingSession, setCheckingSession] =
+    useState(true);
+
+  // ==========================================================
+  // RESTORE SAVED AUTHENTICATION SESSION
+  // ==========================================================
 
   useEffect(() => {
     let mounted = true;
 
     const restoreSession = async () => {
       try {
-        const savedToken = await SecureStore.getItemAsync(
-          AUTH_TOKEN_KEY
-        );
+        const savedToken =
+          await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
 
         if (!savedToken) {
           return;
@@ -100,7 +168,9 @@ export default function App() {
         try {
           data = await response.json();
         } catch {
-          throw new Error('Invalid session response from server.');
+          throw new Error(
+            'Invalid session response from server.'
+          );
         }
 
         if (
@@ -108,39 +178,58 @@ export default function App() {
           data.success !== true ||
           !data.user
         ) {
-          await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+          await SecureStore.deleteItemAsync(
+            AUTH_TOKEN_KEY
+          );
+
           return;
         }
 
         if (!mounted) return;
 
-let profileUser: AuthUser | undefined;
-try {
-  const profileResponse = await fetch(PROFILE_API_URL, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${savedToken}`,
-    },
-  });
+        // Retrieve the latest customer profile.
 
-  const profileData = await profileResponse.json();
+        let profileUser: AuthUser | undefined;
 
-  if (
-    profileResponse.ok &&
-    profileData.success === true &&
-    profileData.user
-  ) {
-    profileUser = profileData.user as AuthUser;
-  }
-} catch {
-  // Keep the session active if profile loading fails.
-}
+        try {
+          const profileResponse = await fetch(
+            PROFILE_API_URL,
+            {
+              method: 'GET',
+              headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${savedToken}`,
+              },
+            }
+          );
+
+          const profileData = await profileResponse.json();
+
+          if (
+            profileResponse.ok &&
+            profileData.success === true &&
+            profileData.user
+          ) {
+            profileUser = profileData.user as AuthUser;
+          }
+        } catch {
+          // Keep the verified session if profile
+          // information is temporarily unavailable.
+        }
+
+        if (!mounted) return;
+
         const restoredSession: AuthSession = {
           success: true,
           token: savedToken,
-          user: { ...data.user, ...(profileUser || {}) },
+
+          user: {
+            ...data.user,
+            ...(profileUser || {}),
+          },
+
           account: data.account || undefined,
+
           accounts:
             data.accounts ||
             (data.account ? [data.account] : []),
@@ -148,9 +237,10 @@ try {
 
         setSession(restoredSession);
         setScreen('home');
-      } catch (error) {
-        // Do not remove a saved token just because the network
-        // is temporarily unavailable. The customer can retry login.
+      } catch {
+        // Keep the saved token when the network
+        // is temporarily unavailable.
+
         if (mounted) {
           Alert.alert(
             'Session unavailable',
@@ -171,16 +261,19 @@ try {
     };
   }, []);
 
-  // ============================================================
-  // SAVE A SUCCESSFUL LOGIN
-  // ============================================================
+  // ==========================================================
+  // SUCCESSFUL LOGIN
+  // ==========================================================
 
-  const handleLoginSuccess = async (authData: AuthSession) => {
+  const handleLoginSuccess = async (
+    authData: AuthSession
+  ) => {
     if (!authData?.token) {
       Alert.alert(
         'Sign in incomplete',
         'The server did not return a valid login token. Please try again.'
       );
+
       return;
     }
 
@@ -190,39 +283,48 @@ try {
         authData.token
       );
 
-     let profileUser: AuthUser | undefined;
+      let profileUser: AuthUser | undefined;
 
-try {
-  const profileResponse = await fetch(PROFILE_API_URL, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${authData.token}`,
-    },
-  });
+      try {
+        const profileResponse = await fetch(
+          PROFILE_API_URL,
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${authData.token}`,
+            },
+          }
+        );
 
-  const profileData = await profileResponse.json();
+        const profileData = await profileResponse.json();
 
-  if (
-    profileResponse.ok &&
-    profileData.success === true &&
-    profileData.user
-  ) {
-    profileUser = profileData.user as AuthUser;
-  }
-} catch {
-  // Continue login if profile loading fails.
-}
+        if (
+          profileResponse.ok &&
+          profileData.success === true &&
+          profileData.user
+        ) {
+          profileUser = profileData.user as AuthUser;
+        }
+      } catch {
+        // Continue login if profile loading fails.
+      }
 
-setSession({
-  ...authData,
-  user: {
-    ...(authData.user || {}),
-    ...(profileUser || {}),
-  },
-});
+      const updatedSession: AuthSession = {
+        ...authData,
 
-setScreen('home'); 
+        user: {
+          ...(authData.user || {}),
+          ...(profileUser || {}),
+        },
+
+        accounts:
+          authData.accounts ||
+          (authData.account ? [authData.account] : []),
+      };
+
+      setSession(updatedSession);
+      setScreen('home');
     } catch {
       Alert.alert(
         'Secure storage unavailable',
@@ -230,9 +332,10 @@ setScreen('home');
       );
     }
   };
-  // ============================================================
+
+  // ==========================================================
   // REGISTRATION SUCCESS
-  // ============================================================
+  // ==========================================================
 
   const handleRegistrationSuccess = async (
     registrationSession: AuthSession | null
@@ -244,9 +347,10 @@ setScreen('home');
 
     await handleLoginSuccess(registrationSession);
   };
-  // ============================================================
-  // LOG OUT
-  // ============================================================
+
+  // ==========================================================
+  // SECURE LOGOUT
+  // ==========================================================
 
   const handleLogout = async () => {
     try {
@@ -262,9 +366,89 @@ setScreen('home');
     }
   };
 
-  // ============================================================
+  // ==========================================================
+  // DASHBOARD ACTIONS
+  // ==========================================================
+
+  const handleDashboardAction = (action: string) => {
+    const serviceNames: Record<string, string> = {
+      transfer: 'Bank transfers',
+      'add-money': 'Add money',
+      withdraw: 'Withdrawals',
+      airtime: 'Airtime',
+      data: 'Data purchases',
+      electricity: 'Electricity payments',
+      bills: 'Bill payments',
+      cards: 'Cards',
+      savings: 'ZENIMONIES Save',
+    };
+
+    const serviceName =
+      serviceNames[action] || action;
+
+    Alert.alert(
+      serviceName,
+      'This service is being connected to the secure ZENIMONIES banking backend. No transaction has been initiated.'
+    );
+  };
+
+  // ==========================================================
+  // DASHBOARD NAVIGATION
+  // ==========================================================
+
+  const handleDashboardNavigation = (tab: string) => {
+    if (tab === 'Home') {
+      return;
+    }
+
+    if (tab === 'Profile') {
+      Alert.alert(
+        'My Account',
+        'Manage your ZENIMONIES account.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Log out',
+            style: 'destructive',
+            onPress: handleLogout,
+          },
+        ]
+      );
+
+      return;
+    }
+
+    Alert.alert(
+      tab,
+      `${tab} screen will be connected in the next development stage.`
+    );
+  };
+
+  // ==========================================================
+  // PROFILE PHOTO UPDATE
+  // ==========================================================
+
+  const handlePhotoUpdated = (photo: string) => {
+    setSession((current) =>
+      current
+        ? {
+            ...current,
+
+            user: {
+              ...(current.user || {}),
+              profile_photo: photo,
+            },
+          }
+        : current
+    );
+  };
+
+  // ==========================================================
   // SESSION CHECK SCREEN
-  // ============================================================
+  // ==========================================================
 
   if (checkingSession) {
     return (
@@ -276,7 +460,9 @@ setScreen('home');
             <Text style={styles.logoText}>Z</Text>
           </View>
 
-          <Text style={styles.loadingBrand}>ZENIMONIES</Text>
+          <Text style={styles.loadingBrand}>
+            ZENIMONIES
+          </Text>
 
           <ActivityIndicator
             size="large"
@@ -292,20 +478,22 @@ setScreen('home');
     );
   }
 
-  // ============================================================
+  // ==========================================================
   // LOGIN SCREEN
-  // ============================================================
+  // ==========================================================
 
   if (screen === 'login') {
     return (
       <SafeAreaView style={styles.container}>
-       <StatusBar barStyle="dark-content" />
+        <StatusBar barStyle="dark-content" />
 
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => setScreen('welcome')}
         >
-          <Text style={styles.backText}>‹ Back</Text>
+          <Text style={styles.backText}>
+            ‹ Back
+          </Text>
         </TouchableOpacity>
 
         <LoginScreen
@@ -316,9 +504,9 @@ setScreen('home');
     );
   }
 
-  // ============================================================
+  // ==========================================================
   // REGISTRATION SCREEN
-  // ============================================================
+  // ==========================================================
 
   if (screen === 'register') {
     return (
@@ -329,136 +517,91 @@ setScreen('home');
           style={styles.backButton}
           onPress={() => setScreen('welcome')}
         >
-          <Text style={styles.backText}>‹ Back</Text>
+          <Text style={styles.backText}>
+            ‹ Back
+          </Text>
         </TouchableOpacity>
 
-        
-    <RegisterScreen
-    onRegistrationSuccess={handleRegistrationSuccess}
-  />
+        <RegisterScreen
+          onRegistrationSuccess={
+            handleRegistrationSuccess
+          }
+        />
       </SafeAreaView>
     );
   }
 
-  // ============================================================
-  // CUSTOMER HOME SCREEN
-  // ============================================================
+  // ==========================================================
+  // CUSTOMER HOME — PERSONAL DASHBOARD
+  // ==========================================================
 
   if (screen === 'home' && session) {
     const userName =
-  session.user?.full_name ||
-  session.user?.name ||
-  session.user?.first_name ||
-  'Customer';
+      session.user?.full_name ||
+      session.user?.name ||
+      session.user?.first_name ||
+      'Customer';
 
-    const accounts =
-      session.accounts ||
-      (session.account ? [session.account] : []);
+    const accounts = getAccounts(session);
+
+    const primaryAccount = accounts[0];
+
+    const currency =
+      primaryAccount?.currency === 'ZAR'
+        ? 'ZAR'
+        : 'NGN';
+
+    const balance = formatBalance(
+      primaryAccount?.balance,
+      currency
+    );
+
+    const verificationLevel =
+      session.user?.verification_level ??
+      session.user?.kyc_level;
+
+    const verificationStatus =
+      session.user?.verification_status ||
+      session.user?.kyc_status ||
+      'Pending';
 
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
 
-        
-        <ProfileHeader
+        <Dashboard
           userName={userName}
-          token={session.token}
-          profilePhoto={session.user?.profile_photo}
-          onPhotoUpdated={(photo) => {
-            setSession((current) =>
-              current
-                ? {
-                    ...current,
-                    user: {
-                      ...(current.user || {}),
-                      profile_photo: photo,
-                    },
-                  }
-                : current
-            );
-          }}
-          onLogout={handleLogout}
+          currency={currency}
+          balance={balance}
+          accountNumber={
+            primaryAccount?.account_number || undefined
+          }
+          bankName="ZENIMONIES"
+          verificationLevel={
+            verificationLevel !== undefined
+              ? String(verificationLevel)
+              : undefined
+          }
+          verificationStatus={verificationStatus}
+          transactions={[]}
+          onAction={handleDashboardAction}
+          onNavigate={handleDashboardNavigation}
         />
-
-        <ScrollView
-          contentContainerStyle={styles.homeContent}
-          showsVerticalScrollIndicator={false}
-        >
-
-          <View style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>
-              ACCOUNT OVERVIEW
-            </Text>
-
-            {accounts.length === 0 ? (
-              <Text style={styles.accountMessage}>
-                Your account information is not available yet.
-              </Text>
-            ) : (
-              accounts.map((account, index) => (
-                <View key={account.id || String(index)}>
-                  <Text style={styles.accountName}>
-                    {account.account_name || 'Personal Account'}
-                  </Text>
-
-                  <Text style={styles.balanceAmount}>
-                    {account.currency || 'NGN'}{' '}
-                    {Number(account.balance || 0).toLocaleString(
-                      'en-NG',
-                      {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      }
-                    )}
-                  </Text>
-
-                  <Text style={styles.accountStatus}>
-                    Account status: {account.status || 'Available'}
-                  </Text>
-
-                  {account.account_number ? (
-                    <Text style={styles.accountNumber}>
-                      Account number: {account.account_number}
-                    </Text>
-                  ) : (
-                    <Text style={styles.accountNumber}>
-                      Account number provisioning is pending.
-                    </Text>
-                  )}
-                </View>
-              ))
-            )}
-          </View>
-
-          <View style={styles.noticeCard}>
-            <Text style={styles.noticeTitle}>
-              You're signed in
-            </Text>
-
-            <Text style={styles.noticeText}>
-              Your login was accepted by the ZENIMONIES server.
-              More banking services will appear here as we build
-              and connect your dashboard.
-            </Text>
-          </View>
-
-          <Text style={styles.footer}>
-            SECURE • SIMPLE • SMART
-          </Text>
-        </ScrollView>
       </SafeAreaView>
     );
   }
 
-  // ============================================================
+  // ==========================================================
   // WELCOME SCREEN
-  // ============================================================
+  // ==========================================================
 
   return (
     <SafeAreaView style={styles.container}>
-     <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" />
 
       <View style={styles.content}>
+        {/* BRAND */}
+
         <View style={styles.brandArea}>
           <View style={styles.logo}>
             <Text style={styles.logoText}>Z</Text>
@@ -473,13 +616,18 @@ setScreen('home');
           </Text>
         </View>
 
+        {/* HERO */}
+
         <View style={styles.hero}>
           <View style={styles.heroCircle}>
-            <Text style={styles.currency}>₦</Text>
+            <Text style={styles.currency}>
+              ₦
+            </Text>
           </View>
 
           <Text style={styles.heading}>
-            Your money.{"\n"}Your freedom.
+            Your money.{"\n"}
+            Your freedom.
           </Text>
 
           <Text style={styles.description}>
@@ -488,6 +636,8 @@ setScreen('home');
             of your finances.
           </Text>
         </View>
+
+        {/* ACTIONS */}
 
         <View style={styles.actions}>
           <TouchableOpacity
@@ -526,16 +676,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+
   loadingContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   loadingContent: {
     alignItems: 'center',
     paddingHorizontal: 30,
   },
+
   loadingBrand: {
     marginTop: 14,
     fontSize: 22,
@@ -543,14 +696,17 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     color: colors.primaryDark,
   },
+
   loadingIndicator: {
     marginTop: 35,
   },
+
   loadingText: {
     marginTop: 15,
     fontSize: 14,
     color: colors.textSecondary,
   },
+
   content: {
     flex: 1,
     paddingHorizontal: 28,
@@ -558,9 +714,11 @@ const styles = StyleSheet.create({
     paddingBottom: 25,
     justifyContent: 'space-between',
   },
+
   brandArea: {
     alignItems: 'center',
   },
+
   logo: {
     width: 58,
     height: 58,
@@ -569,11 +727,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   logoText: {
     color: colors.white,
     fontSize: 36,
     fontWeight: '900',
   },
+
   brand: {
     marginTop: 12,
     fontSize: 23,
@@ -581,14 +741,17 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     color: colors.primaryDark,
   },
+
   tagline: {
     marginTop: 5,
     fontSize: 13,
     color: colors.textSecondary,
   },
+
   hero: {
     alignItems: 'center',
   },
+
   heroCircle: {
     width: 145,
     height: 145,
@@ -598,11 +761,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 28,
   },
+
   currency: {
     fontSize: 80,
     fontWeight: '900',
     color: colors.primary,
   },
+
   heading: {
     fontSize: 36,
     lineHeight: 44,
@@ -610,6 +775,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
   },
+
   description: {
     marginTop: 16,
     fontSize: 15,
@@ -618,9 +784,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 310,
   },
+
   actions: {
     gap: 14,
   },
+
   primaryButton: {
     minHeight: 58,
     borderRadius: 15,
@@ -628,11 +796,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   primaryText: {
     color: colors.white,
     fontSize: 16,
     fontWeight: '800',
   },
+
   secondaryButton: {
     minHeight: 56,
     borderRadius: 15,
@@ -641,11 +811,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   secondaryText: {
     color: colors.primaryDark,
     fontSize: 15,
     fontWeight: '700',
   },
+
   footer: {
     textAlign: 'center',
     color: colors.textMuted,
@@ -654,121 +826,16 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginTop: 18,
   },
+
   backButton: {
     paddingHorizontal: 20,
     paddingVertical: 10,
     alignSelf: 'flex-start',
   },
+
   backText: {
     color: colors.primary,
     fontSize: 16,
     fontWeight: '700',
-  },
-  homeContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 25,
-    paddingBottom: 35,
-  },
-  homeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  homeBrand: {
-    color: colors.primaryDark,
-    fontSize: 21,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  homeSubtitle: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 4,
-  },
-  logoutButton: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    paddingVertical: 9,
-  },
-  logoutText: {
-    color: colors.primaryDark,
-    fontWeight: '700',
-  },
-  welcomeArea: {
-    marginTop: 45,
-    marginBottom: 25,
-  },
-  greeting: {
-    color: colors.textSecondary,
-    fontSize: 16,
-  },
-  customerName: {
-    color: colors.text,
-    fontSize: 29,
-    fontWeight: '900',
-    marginTop: 5,
-  },
-  homeDescription: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    marginTop: 8,
-  },
-  balanceCard: {
-    backgroundColor: colors.primaryDark,
-    borderRadius: 20,
-    padding: 23,
-    marginBottom: 20,
-  },
-  balanceLabel: {
-    color: '#D8F1E2',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-    marginBottom: 20,
-  },
-  accountName: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  balanceAmount: {
-    color: colors.white,
-    fontSize: 29,
-    fontWeight: '900',
-    marginTop: 12,
-  },
-  accountStatus: {
-    color: '#D8F1E2',
-    fontSize: 12,
-    marginTop: 12,
-  },
-  accountNumber: {
-    color: '#D8F1E2',
-    fontSize: 12,
-    marginTop: 8,
-  },
-  accountMessage: {
-    color: colors.white,
-    fontSize: 14,
-  },
-  noticeCard: {
-    backgroundColor: colors.primaryLight,
-    borderRadius: 16,
-    padding: 20,
-  },
-  noticeTitle: {
-    color: colors.primaryDark,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  noticeText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 21,
-    marginTop: 8,
   },
 });
