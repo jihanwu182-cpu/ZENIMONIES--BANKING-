@@ -21,6 +21,11 @@ import Dashboard from './screens/Dashboard';
 import TransactionHistoryScreen from './screens/TransactionHistoryScreen';
 import TransactionDetailsScreen from './screens/TransactionDetailsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import {
+  registerPushNotifications,
+  unregisterPushNotifications,
+} from './services/pushNotificationService';
+
 
 // ======================================================
 // ZENIMONIES BANKING — MOBILE APPLICATION
