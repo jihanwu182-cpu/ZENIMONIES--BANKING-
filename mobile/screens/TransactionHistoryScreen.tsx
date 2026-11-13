@@ -29,6 +29,7 @@ type FilterType = 'All' | 'Money In' | 'Money Out';
 type Props = {
   transactions: Transaction[];
   onBack: () => void;
+  onSelectTransaction: (transaction: Transaction) => void;
   onRefresh?: () => void;
   refreshing?: boolean;
 };
@@ -36,6 +37,7 @@ type Props = {
 export default function TransactionHistoryScreen({
   transactions,
   onBack,
+  onSelectTransaction,
   onRefresh,
   refreshing = false,
 }: Props) {
@@ -86,21 +88,21 @@ export default function TransactionHistoryScreen({
       value.includes('success') ||
       value.includes('completed')
     ) {
-      return '#16864B';
+      return colors.success;
     }
 
     if (
       value.includes('pending') ||
       value.includes('processing')
     ) {
-      return '#D18A18';
+      return colors.warning;
     }
 
     if (
       value.includes('failed') ||
       value.includes('reversed')
     ) {
-      return '#D64545';
+      return colors.error;
     }
 
     return colors.textSecondary;
@@ -110,7 +112,14 @@ export default function TransactionHistoryScreen({
     const isCredit = item.type === 'credit';
 
     return (
-      <View key={item.id} style={styles.transactionRow}>
+      <TouchableOpacity
+        key={item.id}
+        style={styles.transactionRow}
+        onPress={() => onSelectTransaction(item)}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${item.title} transaction details`}
+      >
         <View
           style={[
             styles.transactionIcon,
@@ -171,7 +180,7 @@ export default function TransactionHistoryScreen({
           {isCredit ? '+' : '-'}
           {item.amount}
         </Text>
-      </View>
+      </TouchableOpacity>
     );
   };
 
