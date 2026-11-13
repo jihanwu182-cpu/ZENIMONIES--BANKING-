@@ -19,7 +19,14 @@ import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import Dashboard from './screens/Dashboard';
 
-const API_BASE = 'https://zenimonies-banking.onrender.com/api';
+// ======================================================
+// ZENIMONIES BANKING — MOBILE APPLICATION
+// File: mobile/App.tsx
+// ======================================================
+
+const API_BASE =
+  'https://zenimonies-banking.onrender.com/api';
+
 const AUTH_URL = `${API_BASE}/auth`;
 const PROFILE_URL = `${API_BASE}/profile`;
 const ACCOUNT_URL = `${API_BASE}/account`;
@@ -27,7 +34,11 @@ const TRANSACTIONS_URL = `${API_BASE}/account/transactions`;
 
 const AUTH_TOKEN_KEY = 'zenimonies_auth_token';
 
-type Screen = 'welcome' | 'login' | 'register' | 'home';
+type Screen =
+  | 'welcome'
+  | 'login'
+  | 'register'
+  | 'home';
 
 type Account = {
   id?: string;
@@ -90,8 +101,18 @@ type ProfileResponse = {
   user?: AuthUser;
 };
 
-const formatNaira = (value: number | string | undefined): string | undefined => {
-  if (value === undefined || value === null || value === '') {
+// ======================================================
+// CURRENCY FORMATTER
+// ======================================================
+
+const formatNaira = (
+  value: number | string | undefined
+): string | undefined => {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ''
+  ) {
     return undefined;
   }
 
@@ -107,8 +128,16 @@ const formatNaira = (value: number | string | undefined): string | undefined => 
   });
 };
 
-const getTransactionTitle = (transaction: any): string => {
-  const type = String(transaction.type || '').toLowerCase();
+// ======================================================
+// TRANSACTION TITLE
+// ======================================================
+
+const getTransactionTitle = (
+  transaction: any
+): string => {
+  const type = String(
+    transaction.type || ''
+  ).toLowerCase();
 
   if (type.includes('internal_transfer_received')) {
     return 'Money received';
@@ -134,25 +163,57 @@ const getTransactionTitle = (transaction: any): string => {
     return 'Bill payment';
   }
 
-  return transaction.description || 'Account transaction';
+  if (type.includes('deposit')) {
+    return 'Money deposited';
+  }
+
+  if (type.includes('withdraw')) {
+    return 'Withdrawal';
+  }
+
+  return (
+    transaction.description ||
+    'Account transaction'
+  );
 };
 
-const normalizeTransaction = (item: any): Transaction => {
-  const rawType = String(item.type || '').toLowerCase();
+// ======================================================
+// TRANSACTION NORMALIZER
+// ======================================================
+
+const normalizeTransaction = (
+  item: any
+): Transaction => {
+  const rawType = String(
+    item.type || ''
+  ).toLowerCase();
+
+  // Determine transaction direction from its type.
+  // Do not use amount > 0 because debit amounts may
+  // also be stored as positive values in the database.
 
   const isCredit =
     rawType.includes('received') ||
     rawType.includes('credit') ||
-    Number(item.amount || 0) > 0;
+    rawType.includes('incoming') ||
+    rawType.includes('refund') ||
+    rawType.includes('deposit');
 
-  const amount = Math.abs(Number(item.amount || 0));
+  const numericAmount = Number(
+    item.amount || 0
+  );
+
+  const amount = Number.isFinite(numericAmount)
+    ? Math.abs(numericAmount)
+    : 0;
 
   const dateValue = item.created_at
     ? new Date(item.created_at)
     : null;
 
   const date =
-    dateValue && !Number.isNaN(dateValue.getTime())
+    dateValue &&
+    !Number.isNaN(dateValue.getTime())
       ? dateValue.toLocaleString('en-NG', {
           dateStyle: 'medium',
           timeStyle: 'short',
@@ -160,52 +221,104 @@ const normalizeTransaction = (item: any): Transaction => {
       : 'Date unavailable';
 
   return {
-    id: String(item.id || item.reference || `${item.type}-${item.created_at}`),
+    id: String(
+      item.id ||
+        item.reference ||
+        `${item.type}-${item.created_at}`
+    ),
+
     title: getTransactionTitle(item),
+
     description:
       item.description ||
       item.recipient_name ||
       item.provider ||
       item.reference ||
       '',
+
     amount: `₦${amount.toLocaleString('en-NG', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`,
+
     type: isCredit ? 'credit' : 'debit',
+
     date,
-    status: String(item.status || 'Unknown'),
+
+    status: String(
+      item.status || 'Unknown'
+    ),
   };
 };
 
-async function readJson(response: Response): Promise<any> {
+// ======================================================
+// JSON RESPONSE HANDLER
+// ======================================================
+
+async function readJson(
+  response: Response
+): Promise<any> {
   try {
     return await response.json();
   } catch {
-    throw new Error('The server returned an invalid response.');
+    throw new Error(
+      'The server returned an invalid response.'
+    );
   }
 }
 
-export default function App() {
-  const [screen, setScreen] = useState<Screen>('welcome');
-  const [session, setSession] = useState<AuthSession | null>(null);
-  const [checkingSession, setCheckingSession] = useState(true);
+// ======================================================
+// MAIN APPLICATION
+// ======================================================
 
-  const [account, setAccount] = useState<Account | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [dashboardLoading, setDashboardLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+export default function App() {
+  const [screen, setScreen] =
+    useState<Screen>('welcome');
+
+  const [session, setSession] =
+    useState<AuthSession | null>(null);
+
+  const [checkingSession, setCheckingSession] =
+    useState(true);
+
+  const [account, setAccount] =
+    useState<Account | null>(null);
+
+  const [transactions, setTransactions] =
+    useState<Transaction[]>([]);
+
+  const [dashboardLoading, setDashboardLoading] =
+    useState(false);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  // ====================================================
+  // CLEAR SESSION
+  // ====================================================
 
   const clearSession = useCallback(async () => {
-    await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+    await SecureStore.deleteItemAsync(
+      AUTH_TOKEN_KEY
+    );
+
     setSession(null);
     setAccount(null);
     setTransactions([]);
+    setRefreshing(false);
+    setDashboardLoading(false);
     setScreen('welcome');
   }, []);
 
+  // ====================================================
+  // AUTHENTICATED API REQUEST
+  // ====================================================
+
   const authenticatedFetch = useCallback(
-    async (url: string, token: string) => {
+    async (
+      url: string,
+      token: string
+    ): Promise<Response> => {
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -225,7 +338,10 @@ export default function App() {
           throw new Error('SESSION_EXPIRED');
         }
 
-        throw new Error(data.message || 'Authentication failed.');
+        throw new Error(
+          data.message ||
+            'Authentication failed.'
+        );
       }
 
       return response;
@@ -233,16 +349,33 @@ export default function App() {
     []
   );
 
+  // ====================================================
+  // LOAD ACCOUNT AND TRANSACTIONS
+  // ====================================================
+
   const loadDashboardData = useCallback(
-    async (token: string, showLoader = true) => {
+    async (
+      token: string,
+      showLoader = true
+    ) => {
       if (showLoader) {
         setDashboardLoading(true);
       }
 
       try {
-        const [accountResponse, transactionResponse] = await Promise.all([
-          authenticatedFetch(ACCOUNT_URL, token),
-          authenticatedFetch(TRANSACTIONS_URL, token),
+        const [
+          accountResponse,
+          transactionResponse,
+        ] = await Promise.all([
+          authenticatedFetch(
+            ACCOUNT_URL,
+            token
+          ),
+
+          authenticatedFetch(
+            TRANSACTIONS_URL,
+            token
+          ),
         ]);
 
         const accountData: AccountResponse =
@@ -251,9 +384,13 @@ export default function App() {
         const transactionData: TransactionsResponse =
           await readJson(transactionResponse);
 
-        if (!accountResponse.ok || accountData.success !== true) {
+        if (
+          !accountResponse.ok ||
+          accountData.success !== true
+        ) {
           throw new Error(
-            accountData.message || 'Unable to retrieve your account.'
+            accountData.message ||
+              'Unable to retrieve your account.'
           );
         }
 
@@ -268,18 +405,26 @@ export default function App() {
         }
 
         if (!accountData.account) {
-          throw new Error('Your account details are unavailable.');
+          throw new Error(
+            'Your account details are unavailable.'
+          );
         }
 
         setAccount(accountData.account);
 
-        const rows = Array.isArray(transactionData.transactions)
+        const rows = Array.isArray(
+          transactionData.transactions
+        )
           ? transactionData.transactions
           : [];
 
-        setTransactions(rows.map(normalizeTransaction));
+        setTransactions(
+          rows.map(normalizeTransaction)
+        );
       } catch (error: any) {
-        if (error.message === 'SESSION_EXPIRED') {
+        if (
+          error.message === 'SESSION_EXPIRED'
+        ) {
           Alert.alert(
             'Session expired',
             'Please sign in again to protect your account.',
@@ -292,6 +437,7 @@ export default function App() {
               },
             ]
           );
+
           return;
         }
 
@@ -301,20 +447,39 @@ export default function App() {
         setRefreshing(false);
       }
     },
-    [authenticatedFetch, clearSession]
+    [
+      authenticatedFetch,
+      clearSession,
+    ]
   );
 
-  const loadProfile = useCallback(
-    async (token: string): Promise<AuthUser | undefined> => {
-      try {
-        const response = await authenticatedFetch(PROFILE_URL, token);
-        const data: ProfileResponse = await readJson(response);
+  // ====================================================
+  // LOAD CUSTOMER PROFILE
+  // ====================================================
 
-        if (response.ok && data.success && data.user) {
+  const loadProfile = useCallback(
+    async (
+      token: string
+    ): Promise<AuthUser | undefined> => {
+      try {
+        const response = await authenticatedFetch(
+          PROFILE_URL,
+          token
+        );
+
+        const data: ProfileResponse =
+          await readJson(response);
+
+        if (
+          response.ok &&
+          data.success &&
+          data.user
+        ) {
           return data.user;
         }
       } catch {
-        // A profile failure must not discard a valid login.
+        // A profile failure must not discard
+        // an otherwise valid login session.
       }
 
       return undefined;
@@ -322,13 +487,19 @@ export default function App() {
     [authenticatedFetch]
   );
 
+  // ====================================================
+  // RESTORE SAVED LOGIN SESSION
+  // ====================================================
+
   useEffect(() => {
     let mounted = true;
 
     const restoreSession = async () => {
       try {
         const savedToken =
-          await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+          await SecureStore.getItemAsync(
+            AUTH_TOKEN_KEY
+          );
 
         if (!savedToken) {
           return;
@@ -346,17 +517,22 @@ export default function App() {
           data.success !== true ||
           !data.user
         ) {
-          await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+          await SecureStore.deleteItemAsync(
+            AUTH_TOKEN_KEY
+          );
+
           return;
         }
 
-        const profileUser = await loadProfile(savedToken);
+        const profileUser =
+          await loadProfile(savedToken);
 
         if (!mounted) return;
 
         const restoredSession: AuthSession = {
           success: true,
           token: savedToken,
+
           user: {
             ...(data.user || {}),
             ...(profileUser || {}),
@@ -367,7 +543,9 @@ export default function App() {
         setScreen('home');
 
         try {
-          await loadDashboardData(savedToken);
+          await loadDashboardData(
+            savedToken
+          );
         } catch (error: any) {
           if (mounted) {
             Alert.alert(
@@ -378,8 +556,13 @@ export default function App() {
           }
         }
       } catch (error: any) {
-        if (error.message === 'SESSION_EXPIRED') {
-          await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+        if (
+          error.message === 'SESSION_EXPIRED'
+        ) {
+          await SecureStore.deleteItemAsync(
+            AUTH_TOKEN_KEY
+          );
+
           return;
         }
 
@@ -401,14 +584,25 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, [authenticatedFetch, loadDashboardData, loadProfile]);
+  }, [
+    authenticatedFetch,
+    loadDashboardData,
+    loadProfile,
+  ]);
 
-  const handleLoginSuccess = async (authData: AuthSession) => {
+  // ====================================================
+  // LOGIN SUCCESS
+  // ====================================================
+
+  const handleLoginSuccess = async (
+    authData: AuthSession
+  ) => {
     if (!authData?.token) {
       Alert.alert(
         'Sign in incomplete',
         'The server did not return a valid login token.'
       );
+
       return;
     }
 
@@ -418,10 +612,12 @@ export default function App() {
         authData.token
       );
 
-      const profileUser = await loadProfile(authData.token);
+      const profileUser =
+        await loadProfile(authData.token);
 
       const updatedSession: AuthSession = {
         ...authData,
+
         user: {
           ...(authData.user || {}),
           ...(profileUser || {}),
@@ -434,7 +630,9 @@ export default function App() {
       setScreen('home');
 
       try {
-        await loadDashboardData(authData.token);
+        await loadDashboardData(
+          authData.token
+        );
       } catch (error: any) {
         Alert.alert(
           'Account information',
@@ -450,6 +648,10 @@ export default function App() {
     }
   };
 
+  // ====================================================
+  // REGISTRATION SUCCESS
+  // ====================================================
+
   const handleRegistrationSuccess = async (
     registrationSession: AuthSession | null
   ) => {
@@ -458,8 +660,14 @@ export default function App() {
       return;
     }
 
-    await handleLoginSuccess(registrationSession);
+    await handleLoginSuccess(
+      registrationSession
+    );
   };
+
+  // ====================================================
+  // DASHBOARD REFRESH
+  // ====================================================
 
   const handleRefresh = async () => {
     if (!session?.token) return;
@@ -467,16 +675,24 @@ export default function App() {
     setRefreshing(true);
 
     try {
-      await loadDashboardData(session.token, false);
+      await loadDashboardData(
+        session.token,
+        false
+      );
     } catch (error: any) {
       Alert.alert(
         'Refresh failed',
-        error.message || 'Unable to refresh your account information.'
+        error.message ||
+          'Unable to refresh your account information.'
       );
     } finally {
       setRefreshing(false);
     }
   };
+
+  // ====================================================
+  // LOGOUT
+  // ====================================================
 
   const handleLogout = async () => {
     try {
@@ -489,7 +705,13 @@ export default function App() {
     }
   };
 
-  const handleDashboardAction = (action: string) => {
+  // ====================================================
+  // DASHBOARD ACTIONS
+  // ====================================================
+
+  const handleDashboardAction = (
+    action: string
+  ) => {
     const serviceNames: Record<string, string> = {
       transfer: 'Bank transfers',
       'add-money': 'Add money',
@@ -504,11 +726,18 @@ export default function App() {
 
     Alert.alert(
       serviceNames[action] || 'ZENIMONIES',
+
       'This service screen will be connected in the next development stage. No transaction has been initiated.'
     );
   };
 
-  const handleDashboardNavigation = (tab: string) => {
+  // ====================================================
+  // DASHBOARD NAVIGATION
+  // ====================================================
+
+  const handleDashboardNavigation = (
+    tab: string
+  ) => {
     if (tab === 'Home') return;
 
     if (tab === 'Profile') {
@@ -516,7 +745,10 @@ export default function App() {
         'My Account',
         'Manage your ZENIMONIES account.',
         [
-          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
           {
             text: 'Log out',
             style: 'destructive',
@@ -524,6 +756,7 @@ export default function App() {
           },
         ]
       );
+
       return;
     }
 
@@ -533,16 +766,27 @@ export default function App() {
     );
   };
 
+  // ====================================================
+  // SESSION CHECK LOADING SCREEN
+  // ====================================================
+
   if (checkingSession) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
+      <SafeAreaView
+        style={styles.loadingContainer}
+      >
         <StatusBar barStyle="dark-content" />
+
         <View style={styles.loadingContent}>
           <View style={styles.logo}>
-            <Text style={styles.logoText}>Z</Text>
+            <Text style={styles.logoText}>
+              Z
+            </Text>
           </View>
 
-          <Text style={styles.loadingBrand}>ZENIMONIES</Text>
+          <Text style={styles.loadingBrand}>
+            ZENIMONIES
+          </Text>
 
           <ActivityIndicator
             size="large"
@@ -558,6 +802,10 @@ export default function App() {
     );
   }
 
+  // ====================================================
+  // LOGIN SCREEN
+  // ====================================================
+
   if (screen === 'login') {
     return (
       <SafeAreaView style={styles.container}>
@@ -567,16 +815,24 @@ export default function App() {
           style={styles.backButton}
           onPress={() => setScreen('welcome')}
         >
-          <Text style={styles.backText}>‹ Back</Text>
+          <Text style={styles.backText}>
+            ‹ Back
+          </Text>
         </TouchableOpacity>
 
         <LoginScreen
           onLoginSuccess={handleLoginSuccess}
-          onRegisterPress={() => setScreen('register')}
+          onRegisterPress={() =>
+            setScreen('register')
+          }
         />
       </SafeAreaView>
     );
   }
+
+  // ====================================================
+  // REGISTRATION SCREEN
+  // ====================================================
 
   if (screen === 'register') {
     return (
@@ -587,15 +843,23 @@ export default function App() {
           style={styles.backButton}
           onPress={() => setScreen('welcome')}
         >
-          <Text style={styles.backText}>‹ Back</Text>
+          <Text style={styles.backText}>
+            ‹ Back
+          </Text>
         </TouchableOpacity>
 
         <RegisterScreen
-          onRegistrationSuccess={handleRegistrationSuccess}
+          onRegistrationSuccess={
+            handleRegistrationSuccess
+          }
         />
       </SafeAreaView>
     );
   }
+
+  // ====================================================
+  // PERSONAL DASHBOARD
+  // ====================================================
 
   if (screen === 'home' && session) {
     const userName =
@@ -615,7 +879,9 @@ export default function App() {
       session.user?.kyc_status ||
       'Pending';
 
-    const balance = formatNaira(account?.balance);
+    const balance = formatNaira(
+      account?.balance
+    );
 
     return (
       <SafeAreaView style={styles.container}>
@@ -627,6 +893,7 @@ export default function App() {
               size="large"
               color={colors.primary}
             />
+
             <Text style={styles.loadingText}>
               Loading your account...
             </Text>
@@ -636,14 +903,18 @@ export default function App() {
             userName={userName}
             currency="NGN"
             balance={balance}
-            accountNumber={account?.account_number || undefined}
+            accountNumber={
+              account?.account_number || undefined
+            }
             bankName="ZENIMONIES"
             verificationLevel={
               verificationLevel !== undefined
                 ? String(verificationLevel)
                 : undefined
             }
-            verificationStatus={verificationStatus}
+            verificationStatus={
+              verificationStatus
+            }
             transactions={transactions}
             onAction={handleDashboardAction}
             onNavigate={handleDashboardNavigation}
@@ -664,6 +935,10 @@ export default function App() {
     );
   }
 
+  // ====================================================
+  // WELCOME SCREEN
+  // ====================================================
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -671,10 +946,14 @@ export default function App() {
       <View style={styles.content}>
         <View style={styles.brandArea}>
           <View style={styles.logo}>
-            <Text style={styles.logoText}>Z</Text>
+            <Text style={styles.logoText}>
+              Z
+            </Text>
           </View>
 
-          <Text style={styles.brand}>ZENIMONIES</Text>
+          <Text style={styles.brand}>
+            ZENIMONIES
+          </Text>
 
           <Text style={styles.tagline}>
             Banking made simple.
@@ -683,7 +962,9 @@ export default function App() {
 
         <View style={styles.hero}>
           <View style={styles.heroCircle}>
-            <Text style={styles.currency}>₦</Text>
+            <Text style={styles.currency}>
+              ₦
+            </Text>
           </View>
 
           <Text style={styles.heading}>
@@ -701,14 +982,20 @@ export default function App() {
         <View style={styles.actions}>
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => setScreen('register')}
+            onPress={() =>
+              setScreen('register')
+            }
           >
-            <Text style={styles.primaryText}>Get Started</Text>
+            <Text style={styles.primaryText}>
+              Get Started
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.secondaryButton}
-            onPress={() => setScreen('login')}
+            onPress={() =>
+              setScreen('login')
+            }
           >
             <Text style={styles.secondaryText}>
               I already have an account
@@ -723,6 +1010,10 @@ export default function App() {
     </SafeAreaView>
   );
 }
+
+// ======================================================
+// STYLES
+// ======================================================
 
 const styles = StyleSheet.create({
   container: {
