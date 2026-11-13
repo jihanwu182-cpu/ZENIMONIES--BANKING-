@@ -852,7 +852,25 @@ const offerPushNotifications = useCallback((token: string) => {
     setSelectedTransaction(transaction);
     setScreen('transaction-details');
   };
+const handleOpenNotificationTransaction = (
+  transactionId: string
+) => {
+  const matchingTransaction = transactions.find(
+    (transaction) =>
+      transaction.id === transactionId ||
+      transaction.reference === transactionId
+  );
 
+  if (!matchingTransaction) {
+    Alert.alert(
+      'Transaction unavailable',
+      'We could not find the transaction linked to this notification. Please check your transaction history.'
+    );
+    return;
+  }
+
+  handleSelectTransaction(matchingTransaction);
+};
   // ====================================================
   // DASHBOARD ACTIONS
   // ====================================================
