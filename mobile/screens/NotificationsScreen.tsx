@@ -48,6 +48,7 @@ type NotificationsResponse = {
 type Props = {
   token: string;
   onBack: () => void;
+  onOpenTransaction: (transactionId: string) => void;
 };
 
 const getNotificationIcon = (type?: string) => {
@@ -101,9 +102,7 @@ const getNotificationColor = (type?: string) => {
   return colors.primary;
 };
 
-const formatNotificationDate = (
-  value: string
-) => {
+const formatNotificationDate = (value: string) => {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
@@ -119,6 +118,7 @@ const formatNotificationDate = (
 export default function NotificationsScreen({
   token,
   onBack,
+  onOpenTransaction,
 }: Props) {
   const [notifications, setNotifications] =
     useState<NotificationItem[]>([]);
@@ -213,14 +213,14 @@ export default function NotificationsScreen({
           : [];
 
         setNotifications(rows);
+
         setUnreadCount(
           Number(data.unread_count || 0)
         );
       } catch (error: any) {
         Alert.alert(
           'Notifications unavailable',
-          error.message ||
-            'Please try again.'
+          error.message || 'Please try again.'
         );
       } finally {
         setLoading(false);
@@ -247,39 +247,61 @@ export default function NotificationsScreen({
   // MARK ONE AS READ
   // ====================================================
 
+  const markNotificationAsRead = async (
+    item: NotificationItem
+  ) => {
+    if (item.is_read) {
+      return;
+    }
+
+    await request(
+      `/${encodeURIComponent(item.id)}/read`,
+      'PATCH'
+    );
+
+    setNotifications(previous =>
+      previous.map(notification =>
+        notification.id === item.id
+          ? {
+              ...notification,
+              is_read: true,
+              read_at: new Date().toISOString(),
+            }
+          : notification
+      )
+    );
+
+    setUnreadCount(previous =>
+      Math.max(0, previous - 1)
+    );
+  };
+
+  // ====================================================
+  // OPEN NOTIFICATION / TRANSACTION
+  // ====================================================
+
   const handleNotificationPress = async (
     item: NotificationItem
   ) => {
-    if (item.is_read || updatingId) {
+    if (updatingId) {
       return;
     }
 
     setUpdatingId(item.id);
 
     try {
-      await request(
-        `/${encodeURIComponent(item.id)}/read`,
-        'PATCH'
-      );
+      if (!item.is_read) {
+        await markNotificationAsRead(item);
+      }
 
-      setNotifications(previous =>
-        previous.map(notification =>
-          notification.id === item.id
-            ? {
-                ...notification,
-                is_read: true,
-                read_at: new Date().toISOString(),
-              }
-            : notification
-        )
-      );
-
-      setUnreadCount(previous =>
-        Math.max(0, previous - 1)
-      );
+      if (item.transaction_id) {
+        onOpenTransaction(
+          String(item.transaction_id)
+        );
+      }
     } catch (error: any) {
       Alert.alert(
-        'Unable to update notification',
+        'Unable to open notification',
         error.message ||
           'Please try again.'
       );
@@ -348,10 +370,13 @@ export default function NotificationsScreen({
           handleNotificationPress(item)
         }
         activeOpacity={0.8}
-        disabled={isUpdating}
+        disabled={Boolean(updatingId)}
         accessibilityRole="button"
         accessibilityLabel={
-          `${item.title}. ${item.is_read ? 'Read' : 'Unread'} notification`
+          `${item.title}. ${item.is_read ? 'Read' : 'Unread'} notification` +
+          (item.transaction_id
+            ? '. Opens transaction details'
+            : '')
         }
       >
         <View
@@ -397,6 +422,7 @@ export default function NotificationsScreen({
           {item.transaction_id ? (
             <Text style={styles.transactionReference}>
               Transaction: {item.transaction_id}
+              {'\n'}Tap to view transaction
             </Text>
           ) : null}
         </View>
@@ -406,6 +432,8 @@ export default function NotificationsScreen({
             size="small"
             color={colors.primary}
           />
+        ) : item.transaction_id ? (
+          <Text style={styles.openArrow}>›</Text>
         ) : null}
       </TouchableOpacity>
     );
@@ -538,9 +566,7 @@ export default function NotificationsScreen({
           </View>
         ) : (
           <View style={styles.list}>
-            {notifications.map(
-              renderNotification
-            )}
+            {notifications.map(renderNotification)}
           </View>
         )}
 
@@ -743,8 +769,17 @@ const styles = StyleSheet.create({
 
   transactionReference: {
     fontSize: 9,
+    lineHeight: 15,
     color: colors.primaryDark,
     marginTop: 6,
+  },
+
+  openArrow: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.primary,
+    marginLeft: 5,
+    alignSelf: 'center',
   },
 
   loadingArea: {
