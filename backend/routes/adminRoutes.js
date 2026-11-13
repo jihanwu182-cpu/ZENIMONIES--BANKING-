@@ -1,3 +1,4 @@
+
 const express = require('express');
 
 const router = express.Router();
@@ -8,6 +9,10 @@ const router = express.Router();
 // ============================================================
 
 const adminMiddleware = require('../middleware/adminMiddleware');
+
+// ============================================================
+// ADMIN CONTROLLER
+// ============================================================
 
 const {
   getDashboard,
@@ -36,14 +41,33 @@ const {
   getAuditLogs,
 } = require('../controllers/adminController');
 
-// Customer Care administration
+// ============================================================
+// ANNOUNCEMENT CONTROLLER
+// ============================================================
+
+const {
+  createAnnouncement,
+  getAdminAnnouncements,
+  updateAnnouncement,
+  publishAnnouncement,
+  archiveAnnouncement,
+  getAnnouncementStatistics,
+} = require('../controllers/announcementController');
+
+// ============================================================
+// CUSTOMER CARE ADMINISTRATION
+// ============================================================
+
 const {
   listCustomerCareAgents,
   assignCustomerCareRole,
   removeCustomerCareRole,
 } = require('../controllers/customerCareAdminController');
 
-// Customer Care support
+// ============================================================
+// CUSTOMER CARE SUPPORT
+// ============================================================
+
 const {
   getSupportTickets,
   getSupportTicket,
@@ -52,14 +76,20 @@ const {
   updateSupportTicketPriority,
 } = require('../controllers/adminSupportController');
 
-// Escalated support
+// ============================================================
+// ESCALATED SUPPORT
+// ============================================================
+
 const {
   getEscalatedSupportTickets,
   getEscalatedSupportTicket,
   takeEscalatedSupportTicket,
 } = require('../controllers/adminSupportEscalationController');
 
-// Revenue accounting and approvals
+// ============================================================
+// REVENUE ACCOUNTING AND APPROVALS
+// ============================================================
+
 const {
   getRevenueSummary,
   getRevenueEntries,
@@ -103,6 +133,7 @@ router.get(
   '/kyc/:id/private-document/:document',
   getPrivateTier3Document
 );
+
 // BVN
 router.post('/kyc/:id/bvn/verify', verifyBvn);
 router.post('/kyc/:id/bvn/reject', rejectBvn);
@@ -120,6 +151,47 @@ router.post('/kyc/:id/tier3/verify', verifyTier3);
 router.post('/kyc/:id/tier3/reject', rejectTier3);
 
 // ============================================================
+// ANNOUNCEMENT MANAGEMENT
+// All endpoints are protected by adminMiddleware.
+// ============================================================
+
+// GET /api/admin/announcements
+router.get(
+  '/announcements',
+  getAdminAnnouncements
+);
+
+// POST /api/admin/announcements
+router.post(
+  '/announcements',
+  createAnnouncement
+);
+
+// PATCH /api/admin/announcements/:id
+router.patch(
+  '/announcements/:id',
+  updateAnnouncement
+);
+
+// POST /api/admin/announcements/:id/publish
+router.post(
+  '/announcements/:id/publish',
+  publishAnnouncement
+);
+
+// POST /api/admin/announcements/:id/archive
+router.post(
+  '/announcements/:id/archive',
+  archiveAnnouncement
+);
+
+// GET /api/admin/announcements/:id/statistics
+router.get(
+  '/announcements/:id/statistics',
+  getAnnouncementStatistics
+);
+
+// ============================================================
 // TRANSACTIONS
 // ============================================================
 
@@ -129,13 +201,6 @@ router.get('/transactions/:id', getTransaction);
 router.post(
   '/transactions/:id/report-fraud',
   reportTransactionFraud
-);
-router.post(
-  '/revenue/reconcile-transfers',
-  reconcileHistoricalTransferRevenue
-);
-  
-router.get('/revenue/schema-check', checkRevenueLedgerSchema
 );
 
 // ============================================================
@@ -164,7 +229,10 @@ router.post(
 router.get('/support', getSupportTickets);
 router.get('/support/:id', getSupportTicket);
 
-router.post('/support/:id/reply', replyToSupportTicket);
+router.post(
+  '/support/:id/reply',
+  replyToSupportTicket
+);
 
 router.patch(
   '/support/:id/status',
@@ -205,41 +273,50 @@ router.get('/audit-logs', getAuditLogs);
 // REVENUE REPORTING
 // ============================================================
 
-// GET /api/admin/revenue/summary
-router.get('/revenue/summary', getRevenueSummary);
+router.get(
+  '/revenue/summary',
+  getRevenueSummary
+);
 
-// GET /api/admin/revenue/entries
-router.get('/revenue/entries', getRevenueEntries);
+router.get(
+  '/revenue/entries',
+  getRevenueEntries
+);
+
+router.post(
+  '/revenue/reconcile-transfers',
+  reconcileHistoricalTransferRevenue
+);
+
+router.get(
+  '/revenue/schema-check',
+  checkRevenueLedgerSchema
+);
 
 // ============================================================
 // REVENUE APPROVAL WORKFLOW
 // ============================================================
 
-// GET /api/admin/revenue/approvals/pending
 router.get(
   '/revenue/approvals/pending',
   getPendingRevenueApprovals
 );
 
-// POST /api/admin/revenue/entries/:id/prepare-approval
 router.post(
   '/revenue/entries/:id/prepare-approval',
   prepareRevenueApproval
 );
 
-// PATCH /api/admin/revenue/approvals/:id/decision
 router.patch(
   '/revenue/approvals/:id/decision',
   decideRevenueApproval
 );
 
-// POST /api/admin/revenue/entries/:id/post
 router.post(
   '/revenue/entries/:id/post',
   postRevenueEntry
 );
 
-// POST /api/admin/revenue/entries/:id/reverse
 router.post(
   '/revenue/entries/:id/reverse',
   reverseRevenueEntry
