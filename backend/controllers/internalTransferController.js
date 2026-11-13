@@ -1088,7 +1088,24 @@ const transferToZenimoniesUser = async (req, res) => {
 
     await client.query('COMMIT');
     transactionStarted = false;
+// ========================================================
+// INCOMING PAYMENT PUSH NOTIFICATION
+// ========================================================
 
+sendPushNotificationToUser({
+  userId: recipientUser.id,
+  title: 'Payment received',
+  body: `You received ₦${formatNaira(transferAmount)} from ${senderUser.full_name}.`,
+  data: {
+    type: 'incoming_payment',
+    reference: recipientReference,
+  },
+}).catch((error) => {
+  console.error(
+    'Incoming payment push notification failed:',
+    error.message
+  );
+});
     // ========================================================
     // SUCCESS RESPONSE
     // ========================================================
