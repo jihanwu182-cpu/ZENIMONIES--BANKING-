@@ -20,6 +20,15 @@
         "CAMERA"
       ]
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default",
+          "enableBackgroundRemoteNotifications": false
+        }
+      ]
+    ],
     "splash": {
       "backgroundColor": "#FFFFFF"
     },
