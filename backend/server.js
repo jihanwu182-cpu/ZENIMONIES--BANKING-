@@ -38,6 +38,7 @@ const kycRoutes = require('./routes/kycRoutes');
 const profileRoutes = require('./routes/profile');
 const notificationRoutes = require('./routes/notifications');
 const announcementRoutes = require('./routes/announcements');
+const pushDeviceRoutes = require('./routes/pushDevices');
 const passkeyRoutes = require('./routes/passkey');
 const passcodeRoutes = require('./routes/passcode');
 const transactionPinRoutes = require('./routes/transactionPin');
@@ -402,6 +403,14 @@ app.use(
 app.use(
   '/api/notifications',
   notificationRoutes
+);
+// ============================================================
+// PUSH DEVICE REGISTRATION
+// ============================================================
+
+app.use(
+  '/api/push-devices',
+  pushDeviceRoutes
 );
 app.use(
   '/api/announcements',
