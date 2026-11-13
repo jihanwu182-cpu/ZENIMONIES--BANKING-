@@ -18,6 +18,7 @@ import colors from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import Dashboard from './screens/Dashboard';
+import ProfileScreen from './screens/ProfileScreen';
 
 // ======================================================
 // ZENIMONIES BANKING — MOBILE APPLICATION
@@ -38,7 +39,8 @@ type Screen =
   | 'welcome'
   | 'login'
   | 'register'
-  | 'home';
+  | 'home'
+  | 'profile';
 
 type Account = {
   id?: string;
@@ -60,9 +62,18 @@ type AuthUser = {
   email?: string;
   phone?: string;
   role?: string;
+  status?: string;
+  date_of_birth?: string;
+  gender?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  bvn_verified?: boolean;
   verification_level?: number | string;
   verification_status?: string;
   kyc_level?: number | string;
+  kyc_tier?: number | string;
   kyc_status?: string;
 };
 
@@ -738,25 +749,13 @@ export default function App() {
   const handleDashboardNavigation = (
     tab: string
   ) => {
-    if (tab === 'Home') return;
+    if (tab === 'Home') {
+      setScreen('home');
+      return;
+    }
 
     if (tab === 'Profile') {
-      Alert.alert(
-        'My Account',
-        'Manage your ZENIMONIES account.',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Log out',
-            style: 'destructive',
-            onPress: handleLogout,
-          },
-        ]
-      );
-
+      setScreen('profile');
       return;
     }
 
@@ -852,6 +851,25 @@ export default function App() {
           onRegistrationSuccess={
             handleRegistrationSuccess
           }
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ====================================================
+  // CUSTOMER PROFILE
+  // ====================================================
+
+  if (screen === 'profile' && session) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+
+        <ProfileScreen
+          user={session.user}
+          account={account}
+          onBack={() => setScreen('home')}
+          onLogout={handleLogout}
         />
       </SafeAreaView>
     );
