@@ -391,7 +391,38 @@ export default function App() {
 
   const [refreshing, setRefreshing] =
     useState(false);
-
+const offerPushNotifications = useCallback((token: string) => {
+  Alert.alert(
+    'Stay updated',
+    'Would you like ZENIMONIES to send important account and service announcements to this device?',
+    [
+      {
+        text: 'Not now',
+        style: 'cancel',
+      },
+      {
+        text: 'Enable notifications',
+        onPress: () => {
+          registerPushNotifications(token)
+            .then((result) => {
+              if (!result.success && !result.permissionDenied) {
+                Alert.alert(
+                  'Notifications',
+                  'We could not enable notifications right now. Please try again later.',
+                );
+              }
+            })
+            .catch(() => {
+              Alert.alert(
+                'Notifications',
+                'We could not enable notifications right now. Please try again later.',
+              );
+            });
+        },
+      },
+    ],
+  );
+}, []);
   // ====================================================
   // CLEAR SESSION
   // ====================================================
