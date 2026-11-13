@@ -18,6 +18,7 @@ import colors from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import Dashboard from './screens/Dashboard';
+import NotificationsScreen from './screens/NotificationsScreen';
 import TransactionHistoryScreen from './screens/TransactionHistoryScreen';
 import TransactionDetailsScreen from './screens/TransactionDetailsScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -49,6 +50,7 @@ type Screen =
   | 'home'
   | 'profile'
   | 'history'
+  | 'notifications'
   | 'transaction-details';
 
 type Account = {
@@ -898,6 +900,10 @@ const offerPushNotifications = useCallback((token: string) => {
       setScreen('history');
       return;
     }
+    if (tab === 'Notifications') {
+      setScreen('notifications');
+      return;
+    }
 
     Alert.alert(
       tab,
@@ -995,7 +1001,17 @@ const offerPushNotifications = useCallback((token: string) => {
       </SafeAreaView>
     );
   }
-
+if (screen === 'notifications' && session) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <NotificationsScreen
+        token={session.token}
+        onBack={() => setScreen('home')}
+      />
+    </SafeAreaView>
+  );
+}
   // ====================================================
   // CUSTOMER PROFILE
   // ====================================================
