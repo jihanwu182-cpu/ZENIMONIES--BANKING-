@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -48,6 +49,8 @@ type DashboardProps = {
   verificationLevel?: string;
   verificationStatus?: string;
   transactions?: Transaction[];
+  refreshing?: boolean;
+  onRefresh?: () => void;
   onAction?: (action: DashboardAction) => void;
   onNavigate?: (tab: TabName) => void;
 };
@@ -69,12 +72,15 @@ export default function Dashboard({
   verificationLevel,
   verificationStatus = 'Pending',
   transactions = [],
+  refreshing = false,
+  onRefresh,
   onAction,
   onNavigate,
 }: DashboardProps) {
   const [balanceVisible, setBalanceVisible] = useState(true);
 
-  const displayName = userName.trim().split(' ')[0] || 'Customer';
+  const displayName =
+    userName.trim().split(' ')[0] || 'Customer';
 
   const handleAction = (action: DashboardAction) => {
     if (onAction) {
@@ -99,7 +105,10 @@ export default function Dashboard({
   };
 
   const formatBalance = () => {
-    if (!balance) return 'Unavailable';
+    if (balance === undefined || balance === null || balance === '') {
+      return 'Unavailable';
+    }
+
     return balanceVisible ? balance : '••••••••';
   };
 
@@ -147,6 +156,16 @@ export default function Dashboard({
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            onRefresh ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={GREEN}
+                colors={[GREEN]}
+              />
+            ) : undefined
+          }
         >
           {/* HEADER */}
 
@@ -155,6 +174,7 @@ export default function Dashboard({
               <Text style={styles.greeting}>
                 Good day,
               </Text>
+
               <Text style={styles.customerName}>
                 {displayName} 👋
               </Text>
@@ -189,7 +209,9 @@ export default function Dashboard({
               </Text>
 
               <TouchableOpacity
-                onPress={() => setBalanceVisible(!balanceVisible)}
+                onPress={() =>
+                  setBalanceVisible(!balanceVisible)
+                }
               >
                 <Text style={styles.hideBalance}>
                   {balanceVisible ? 'Hide  ◉' : 'Show  ◎'}
@@ -201,7 +223,10 @@ export default function Dashboard({
               <Text style={styles.balanceAmount}>
                 {formatBalance()}
               </Text>
-              <Text style={styles.currency}>{currency}</Text>
+
+              <Text style={styles.currency}>
+                {currency}
+              </Text>
             </View>
 
             <View style={styles.balanceDivider} />
@@ -211,6 +236,7 @@ export default function Dashboard({
                 <Text style={styles.accountLabel}>
                   Account number
                 </Text>
+
                 <Text style={styles.accountNumber}>
                   {accountNumber || 'Not yet assigned'}
                 </Text>
@@ -230,7 +256,10 @@ export default function Dashboard({
                 <Text style={styles.accountDetailsText}>
                   Details
                 </Text>
-                <Text style={styles.detailsArrow}>›</Text>
+
+                <Text style={styles.detailsArrow}>
+                  ›
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -242,6 +271,7 @@ export default function Dashboard({
               <Text style={styles.sectionTitle}>
                 Quick actions
               </Text>
+
               <Text style={styles.sectionSubtitle}>
                 Manage your money
               </Text>
@@ -260,6 +290,7 @@ export default function Dashboard({
                       {item.icon}
                     </Text>
                   </View>
+
                   <Text style={styles.actionTitle}>
                     {item.title}
                   </Text>
@@ -275,6 +306,7 @@ export default function Dashboard({
               <Text style={styles.sectionTitle}>
                 Payments & Services
               </Text>
+
               <TouchableOpacity
                 onPress={() => handleAction('bills')}
               >
@@ -296,6 +328,7 @@ export default function Dashboard({
                       {item.icon}
                     </Text>
                   </View>
+
                   <Text style={styles.serviceTitle}>
                     {item.title}
                   </Text>
@@ -317,11 +350,13 @@ export default function Dashboard({
               <Text style={styles.verificationTitle}>
                 Account verification
               </Text>
+
               <Text style={styles.verificationDescription}>
                 {verificationLevel
                   ? `Verification ${verificationLevel}`
                   : 'Complete your account verification'}
               </Text>
+
               <Text style={styles.verificationStatus}>
                 Status: {verificationStatus}
               </Text>
@@ -335,7 +370,9 @@ export default function Dashboard({
                 )
               }
             >
-              <Text style={styles.verificationArrow}>›</Text>
+              <Text style={styles.verificationArrow}>
+                ›
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -347,19 +384,24 @@ export default function Dashboard({
             activeOpacity={0.8}
           >
             <View style={styles.savingsIcon}>
-              <Text style={styles.savingsIconText}>◈</Text>
+              <Text style={styles.savingsIconText}>
+                ◈
+              </Text>
             </View>
 
             <View style={styles.savingsContent}>
               <Text style={styles.savingsTitle}>
                 ZENIMONIES Save
               </Text>
+
               <Text style={styles.savingsDescription}>
                 Manage your savings with ease.
               </Text>
             </View>
 
-            <Text style={styles.savingsArrow}>›</Text>
+            <Text style={styles.savingsArrow}>
+              ›
+            </Text>
           </TouchableOpacity>
 
           {/* RECENT TRANSACTIONS */}
@@ -382,7 +424,9 @@ export default function Dashboard({
             {transactions.length === 0 ? (
               <View style={styles.emptyTransactions}>
                 <View style={styles.emptyIcon}>
-                  <Text style={styles.emptyIconText}>◷</Text>
+                  <Text style={styles.emptyIconText}>
+                    ◷
+                  </Text>
                 </View>
 
                 <Text style={styles.emptyTitle}>
@@ -416,6 +460,7 @@ export default function Dashboard({
                     <Text style={styles.transactionTitle}>
                       {transaction.title}
                     </Text>
+
                     <Text style={styles.transactionDate}>
                       {transaction.description || transaction.date}
                     </Text>
@@ -449,6 +494,7 @@ export default function Dashboard({
             <Text style={styles.footerBrand}>
               ZENIMONIES
             </Text>
+
             <Text style={styles.footerText}>
               Banking made simpler.
             </Text>
