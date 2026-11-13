@@ -198,7 +198,7 @@ export default function Dashboard({
     <Text style={styles.logoText}>Z</Text>
   </View>
 </View>
-
+</View>
           {/* ACCOUNT BALANCE */}
 
           <View style={styles.balanceCard}>
