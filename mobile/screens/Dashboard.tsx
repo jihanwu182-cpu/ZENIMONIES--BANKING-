@@ -61,22 +61,20 @@ type DashboardProps = {
 };
 
 // ZENIMONIES official green-and-white palette, matched to supplied artwork.
-const GREEN = '#00B83F';
-const DARK_GREEN = '#005E2F';
-const DEEP_GREEN = '#003F25';
+const GREEN = '#02A339';       // Bright ZENIMONIES green
+const DARK_GREEN = '#015027';   // Deep ZENIMONIES green
+const DEEP_GREEN = '#005027';   // Banking-card deep green
 const BLACK = '#101A16';
 const MUTED = '#68736C';
 const BACKGROUND = '#FFFFFF';
 const WHITE = '#FFFFFF';
 const BORDER = '#E5ECE7';
-const LIGHT_GREEN = '#EAF8EF';
+const LIGHT_GREEN = '#EAF6ED';
 
 export default function Dashboard({
   userName = 'Customer',
   currency = 'NGN',
   balance,
-  accountNumber,
-  bankName = 'ZENIMONIES',
   verificationLevel,
   verificationStatus = 'Pending',
   transactions = [],
@@ -162,6 +160,7 @@ export default function Dashboard({
         <View style={styles.header}>
           <View style={styles.headerIdentity}>
             <View style={styles.logoCircle}>
+              <View style={styles.logoInner} />
               <Text style={styles.logoText}>Z</Text>
             </View>
 
@@ -239,35 +238,15 @@ export default function Dashboard({
             <View style={styles.balanceDivider} />
 
             <View style={styles.accountRow}>
-              <View>
+              <View style={styles.accountProvisioning}>
                 <Text style={styles.accountLabel}>
-                  Account number
+                  Bank account details
                 </Text>
 
                 <Text style={styles.accountNumber}>
-                  {accountNumber || 'Not yet assigned'}
+                  Your account details will appear here once assigned by our banking partner.
                 </Text>
               </View>
-
-              <TouchableOpacity
-                style={styles.accountDetailsButton}
-                onPress={() =>
-                  Alert.alert(
-                    'Account details',
-                    `Bank: ${bankName}\nAccount: ${
-                      accountNumber || 'Not yet assigned'
-                    }`
-                  )
-                }
-              >
-                <Text style={styles.accountDetailsText}>
-                  Details
-                </Text>
-
-                <Text style={styles.detailsArrow}>
-                  ›
-                </Text>
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -641,11 +620,19 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 15,
-    backgroundColor: DARK_GREEN,
+    backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: GREEN,
+    overflow: 'hidden',
+  },
+
+  logoInner: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: DARK_GREEN,
+    borderRadius: 14,
+    left: 2,
+    top: 2,
+    opacity: 0.96,
   },
 
   logoText: {
@@ -653,6 +640,7 @@ const styles = StyleSheet.create({
     fontSize: 29,
     fontWeight: '900',
     fontStyle: 'italic',
+    zIndex: 1,
   },
 
   scrollContent: {
@@ -715,20 +703,26 @@ const styles = StyleSheet.create({
 
   accountRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+
+  accountProvisioning: {
+    flex: 1,
   },
 
   accountLabel: {
     color: '#D5EBDD',
     fontSize: 12,
+    fontWeight: '600',
   },
 
   accountNumber: {
     color: WHITE,
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 5,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 19,
+    marginTop: 6,
+    maxWidth: 290,
   },
 
   accountDetailsButton: {
