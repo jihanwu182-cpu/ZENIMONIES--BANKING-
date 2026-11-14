@@ -1071,7 +1071,7 @@ export default function App() {
         <StatusBar barStyle="dark-content" />
 
         <ProfileScreen
-         user={session.user}
+          user={session.user}
           account={account}
           onBack={() => setScreen('home')}
           onLogout={handleLogout}
@@ -1198,67 +1198,105 @@ export default function App() {
   }
 
   // ====================================================
-  // WELCOME SCREEN
+  // PREMIUM WELCOME SCREEN
   // ====================================================
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      <View style={styles.content}>
-        <View style={styles.brandArea}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>Z</Text>
+      <View style={styles.premiumWelcome}>
+        <View style={styles.premiumBrand}>
+          <View style={styles.premiumLogo}>
+            <Text style={styles.premiumLogoText}>Z</Text>
           </View>
 
-          <Text style={styles.brand}>
+          <Text style={styles.premiumBrandName}>
             ZENIMONIES
           </Text>
 
-          <Text style={styles.tagline}>
-            Banking made simple.
+          <Text style={styles.premiumBrandSubtitle}>
+            BANKING
           </Text>
         </View>
 
-        <View style={styles.hero}>
-          <View style={styles.heroCircle}>
-            <Text style={styles.currency}>₦</Text>
+        <View style={styles.premiumHero}>
+          <View style={styles.premiumBadge}>
+            <View style={styles.premiumBadgeDot} />
+
+            <Text style={styles.premiumBadgeText}>
+              YOUR EVERYDAY BANKING PARTNER
+            </Text>
           </View>
 
-          <Text style={styles.heading}>
-            Your money.{"\n"}
-            Your freedom.
+          <Text style={styles.premiumHeading}>
+            Banking that moves{' \n'}
+            <Text style={styles.premiumHeadingGreen}>
+              with you.
+            </Text>
           </Text>
 
-          <Text style={styles.description}>
-            A smarter way to manage your money,
-            make payments and stay in control
-            of your finances.
+          <Text style={styles.premiumDescription}>
+            Manage your money, make payments and
+            stay in control of your finances with
+            ZENIMONIES.
           </Text>
+
+          <View style={styles.premiumFeatureRow}>
+            <View style={styles.premiumFeature}>
+              <Text style={styles.premiumFeatureIcon}>₦</Text>
+
+              <Text style={styles.premiumFeatureText}>
+                Payments
+              </Text>
+            </View>
+
+            <View style={styles.premiumFeature}>
+              <Text style={styles.premiumFeatureIcon}>↗</Text>
+
+              <Text style={styles.premiumFeatureText}>
+                Transfers
+              </Text>
+            </View>
+
+            <View style={styles.premiumFeature}>
+              <Text style={styles.premiumFeatureIcon}>✓</Text>
+
+              <Text style={styles.premiumFeatureText}>
+                Control
+              </Text>
+            </View>
+          </View>
         </View>
 
-        <View style={styles.actions}>
+        <View style={styles.premiumActions}>
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={styles.premiumPrimaryButton}
             onPress={() => setScreen('register')}
+            activeOpacity={0.85}
           >
-            <Text style={styles.primaryText}>
+            <Text style={styles.premiumPrimaryText}>
               Get Started
+            </Text>
+
+            <Text style={styles.premiumButtonArrow}>
+              →
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.secondaryButton}
+            style={styles.premiumSecondaryButton}
             onPress={() => setScreen('login')}
+            activeOpacity={0.85}
           >
-            <Text style={styles.secondaryText}>
+            <Text style={styles.premiumSecondaryText}>
               I already have an account
             </Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.footer}>
-          SECURE • SIMPLE • SMART
+        <Text style={styles.premiumFooter}>
+          SECURE  •  SIMPLE  •  SMART
         </Text>
       </View>
     </SafeAreaView>
@@ -1317,125 +1355,9 @@ const styles = StyleSheet.create({
     right: 18,
   },
 
-  content: {
-    flex: 1,
-    paddingHorizontal: 28,
-    paddingTop: 35,
-    paddingBottom: 25,
-    justifyContent: 'space-between',
-  },
-
-  brandArea: {
-    alignItems: 'center',
-  },
-
-  logo: {
-    width: 58,
-    height: 58,
-    borderRadius: 19,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  logoText: {
-    color: colors.white,
-    fontSize: 36,
-    fontWeight: '900',
-  },
-
-  brand: {
-    marginTop: 12,
-    fontSize: 23,
-    fontWeight: '900',
-    letterSpacing: 3,
-    color: colors.primaryDark,
-  },
-
-  tagline: {
-    marginTop: 5,
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-
-  hero: {
-    alignItems: 'center',
-  },
-
-  heroCircle: {
-    width: 145,
-    height: 145,
-    borderRadius: 73,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
-  },
-
-  currency: {
-    fontSize: 80,
-    fontWeight: '900',
-    color: colors.primary,
-  },
-
-  heading: {
-    fontSize: 36,
-    lineHeight: 44,
-    fontWeight: '900',
-    color: colors.text,
-    textAlign: 'center',
-  },
-
-  description: {
-    marginTop: 16,
-    fontSize: 15,
-    lineHeight: 25,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    maxWidth: 310,
-  },
-
-  actions: {
-    gap: 14,
-  },
-
-  primaryButton: {
-    minHeight: 58,
-    borderRadius: 15,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  primaryText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-
-  secondaryButton: {
-    minHeight: 56,
-    borderRadius: 15,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  secondaryText: {
-    color: colors.primaryDark,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  footer: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 2,
-    marginTop: 18,
-  },
+  // ====================================================
+  // EXISTING NAVIGATION AND SCREEN STYLES
+  // ====================================================
 
   backButton: {
     paddingHorizontal: 20,
@@ -1447,5 +1369,187 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 16,
     fontWeight: '700',
+  },
+
+  // ====================================================
+  // PREMIUM WELCOME SCREEN
+  // ====================================================
+
+  premiumWelcome: {
+    flex: 1,
+    paddingHorizontal: 27,
+    paddingTop: 25,
+    paddingBottom: 24,
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+  },
+
+  premiumBrand: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+
+  premiumLogo: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#087A45',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  premiumLogoText: {
+    color: '#FFFFFF',
+    fontSize: 34,
+    fontWeight: '900',
+  },
+
+  premiumBrandName: {
+    marginTop: 9,
+    fontSize: 21,
+    fontWeight: '900',
+    letterSpacing: 2.5,
+    color: '#075C36',
+  },
+
+  premiumBrandSubtitle: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 4,
+    color: '#718078',
+    marginTop: 2,
+  },
+
+  premiumHero: {
+    alignItems: 'flex-start',
+    paddingVertical: 20,
+  },
+
+  premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5ED',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 23,
+  },
+
+  premiumBadgeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#087A45',
+    marginRight: 8,
+  },
+
+  premiumBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
+    color: '#087A45',
+  },
+
+  premiumHeading: {
+    fontSize: 39,
+    lineHeight: 47,
+    fontWeight: '900',
+    letterSpacing: -1.3,
+    color: '#14251C',
+  },
+
+  premiumHeadingGreen: {
+    color: '#087A45',
+  },
+
+  premiumDescription: {
+    fontSize: 15,
+    lineHeight: 25,
+    color: '#718078',
+    marginTop: 17,
+    maxWidth: 315,
+  },
+
+  premiumFeatureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 29,
+    gap: 10,
+  },
+
+  premiumFeature: {
+    flex: 1,
+    minHeight: 68,
+    backgroundColor: '#F1F6F3',
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+  },
+
+  premiumFeatureIcon: {
+    color: '#087A45',
+    fontSize: 19,
+    fontWeight: '900',
+  },
+
+  premiumFeatureText: {
+    color: '#43574B',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+
+  premiumActions: {
+    gap: 12,
+  },
+
+  premiumPrimaryButton: {
+    minHeight: 59,
+    borderRadius: 14,
+    backgroundColor: '#087A45',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+
+  premiumPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+
+  premiumButtonArrow: {
+    position: 'absolute',
+    right: 20,
+    color: '#FFFFFF',
+    fontSize: 23,
+    fontWeight: '700',
+  },
+
+  premiumSecondaryButton: {
+    minHeight: 56,
+    borderRadius: 14,
+    borderWidth: 1.4,
+    borderColor: '#DCE8E0',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  premiumSecondaryText: {
+    color: '#075C36',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  premiumFooter: {
+    textAlign: 'center',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 2.5,
+    color: '#98A69D',
+    marginTop: 14,
   },
 });
