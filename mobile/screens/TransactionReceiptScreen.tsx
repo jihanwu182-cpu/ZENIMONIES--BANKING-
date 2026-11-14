@@ -12,11 +12,11 @@ import {
   View,
 } from 'react-native';
 
-import colors from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 // ======================================================
-// ZENIMONIES BANKING — TRANSACTION RECEIPT
-// File: mobile/screens/TransactionReceiptScreen.tsx
+// ZENIMONIES BANKING — COMPACT PREMIUM RECEIPT
+// Bank-issued Session ID only.
 // ======================================================
 
 export type ReceiptTransaction = {
@@ -28,6 +28,7 @@ export type ReceiptTransaction = {
   date: string;
   status?: string;
   reference?: string;
+  bankSessionId?: string;
   currency?: string;
   transactionType?: string;
   fee?: string;
@@ -52,15 +53,15 @@ type Props = {
 
 export default function TransactionReceiptScreen({
   transaction,
-  customerName,
-  accountNumber,
   onBack,
 }: Props) {
+  const { colors, mode } = useTheme();
+
+  const styles = createStyles(colors, mode === 'dark');
+
   const isCredit = transaction.type === 'credit';
 
-  const status = (
-    transaction.status || 'Unknown'
-  ).toLowerCase();
+  const status = (transaction.status || 'Unknown').toLowerCase();
 
   const isSuccessful =
     status.includes('success') ||
@@ -76,14 +77,6 @@ export default function TransactionReceiptScreen({
     status.includes('reversed') ||
     status.includes('declined');
 
-  const statusColor = isSuccessful
-    ? colors.success
-    : isPending
-      ? colors.warning
-      : isFailed
-        ? colors.error
-        : colors.textSecondary;
-
   const statusLabel = isSuccessful
     ? 'Successful'
     : isPending
@@ -92,74 +85,127 @@ export default function TransactionReceiptScreen({
         ? 'Failed'
         : transaction.status || 'Unknown';
 
+  const statusColor = isSuccessful
+    ? colors.success
+    : isPending
+      ? colors.warning
+      : isFailed
+        ? colors.error
+        : colors.textSecondary;
+
   const currency = transaction.currency || 'NGN';
 
-  const formatMoney = (value?: string) => {
-    if (!value) return undefined;
+  const reference = transaction.reference;
 
-    return value;
-  };
+  // Only accept a numeric Session ID supplied by the bank.
+  // Never use the internal transaction UUID as a substitute.
+  const bankSessionId =
+    transaction.bankSessionId &&
+    /^\d+$/.test(transaction.bankSessionId.trim())
+      ? transaction.bankSessionId.trim()
+      : undefined;
 
-  const receiptReference =
-    transaction.reference || transaction.id;
+  const amountLabel = isCredit
+    ? 'Amount received'
+    : 'Amount sent';
+
+  const directionLabel = isCredit
+    ? 'Money received'
+    : 'Money sent';
+
+  const receiptRows: {
+    label: string;
+    value?: string;
+  }[] = [
+    {
+      label: isCredit ? 'Sender' : 'Recipient',
+      value: isCredit
+        ? transaction.senderName
+        : transaction.recipientName,
+    },
+    {
+      label: 'Date and time',
+      value: transaction.date,
+    },
+    {
+      label: 'Reference',
+      value: reference,
+    },
+    {
+      label: 'Session ID',
+      value: bankSessionId,
+    },
+    {
+      label: 'Description',
+      value: transaction.description,
+    },
+  ];
+
+  // Additional details are shown only when relevant
+  // to the outgoing transaction.
+  if (!isCredit) {
+    receiptRows.push(
+      {
+        label: 'Recipient bank',
+        value: transaction.recipientBank,
+      },
+      {
+        label: 'Transaction fee',
+        value: transaction.fee,
+      },
+      {
+        label: 'Total debit',
+        value: transaction.totalDebit,
+      }
+    );
+  }
+
+  // Utility payment details.
+  if (
+    transaction.provider ||
+    transaction.phone ||
+    transaction.customerNumber ||
+    transaction.electricityToken
+  ) {
+    receiptRows.push(
+      {
+        label: 'Provider',
+        value: transaction.provider,
+      },
+      {
+        label: 'Phone number',
+        value: transaction.phone,
+      },
+      {
+        label: 'Customer number',
+        value: transaction.customerNumber,
+      },
+      {
+        label: 'Electricity token',
+        value: transaction.electricityToken,
+      }
+    );
+  }
+
+  const visibleRows = receiptRows.filter(
+    (row) => Boolean(row.value)
+  );
 
   const receiptMessage = [
     'ZENIMONIES BANKING',
     'TRANSACTION RECEIPT',
-    '--------------------------------',
-    `Transaction: ${transaction.title}`,
-    `Status: ${statusLabel}`,
-    `Amount: ${transaction.amount}`,
-    `Direction: ${isCredit ? 'Money received' : 'Money sent'}`,
-    `Date: ${transaction.date}`,
-    `Reference: ${receiptReference}`,
-    `Transaction ID: ${transaction.id}`,
-    `Currency: ${currency}`,
-    transaction.fee
-      ? `Transaction fee: ${transaction.fee}`
-      : undefined,
-    transaction.totalDebit
-      ? `Total debit: ${transaction.totalDebit}`
-      : undefined,
-    customerName
-      ? `Account holder: ${customerName}`
-      : undefined,
-    accountNumber
-      ? `Account number: ${accountNumber}`
-      : undefined,
-    transaction.senderName
-      ? `Sender: ${transaction.senderName}`
-      : undefined,
-    transaction.senderAccount
-      ? `Sender account: ${transaction.senderAccount}`
-      : undefined,
-    transaction.recipientName
-      ? `Recipient: ${transaction.recipientName}`
-      : undefined,
-    transaction.recipientAccount
-      ? `Recipient account: ${transaction.recipientAccount}`
-      : undefined,
-    transaction.recipientBank
-      ? `Recipient bank: ${transaction.recipientBank}`
-      : undefined,
-    transaction.provider
-      ? `Provider: ${transaction.provider}`
-      : undefined,
-    transaction.phone
-      ? `Phone: ${transaction.phone}`
-      : undefined,
-    transaction.customerNumber
-      ? `Customer number: ${transaction.customerNumber}`
-      : undefined,
-    transaction.electricityToken
-      ? `Electricity token: ${transaction.electricityToken}`
-      : undefined,
-    '--------------------------------',
+    '',
+    statusLabel.toUpperCase(),
+    `${isCredit ? '+' : '-'}${transaction.amount} ${currency}`,
+    '',
+    `Type: ${transaction.title || directionLabel}`,
+    ...visibleRows.map(
+      (row) => `${row.label}: ${row.value}`
+    ),
+    '',
     'Thank you for banking with ZENIMONIES.',
     'Banking made simple.',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  ].join('\n');
 
   const handleShareReceipt = async () => {
     try {
@@ -175,32 +221,15 @@ export default function TransactionReceiptScreen({
     }
   };
 
-  const ReceiptRow = ({
-    label,
-    value,
-  }: {
-    label: string;
-    value?: string;
-  }) => {
-    if (!value) return null;
-
-    return (
-      <View style={styles.detailRow}>
-        <Text style={styles.detailLabel}>
-          {label}
-        </Text>
-
-        <Text style={styles.detailValue}>
-          {value}
-        </Text>
-      </View>
-    );
-  };
-
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar
+        barStyle={
+          mode === 'dark' ? 'light-content' : 'dark-content'
+        }
+      />
 
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -222,239 +251,143 @@ export default function TransactionReceiptScreen({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
+        {/* Compact ZENIMONIES branding */}
         <View style={styles.brandArea}>
           <View style={styles.logo}>
             <Text style={styles.logoText}>Z</Text>
           </View>
 
-          <Text style={styles.brandName}>
-            ZENIMONIES
-          </Text>
-
-          <Text style={styles.brandSubtitle}>
-            BANKING
-          </Text>
-        </View>
-
-        <View style={styles.receiptCard}>
-          <View style={styles.statusArea}>
-            <View
-              style={[
-                styles.statusIcon,
-                { backgroundColor: `${statusColor}18` },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusIconText,
-                  { color: statusColor },
-                ]}
-              >
-                {isSuccessful
-                  ? '✓'
-                  : isPending
-                    ? '…'
-                    : isFailed
-                      ? '!'
-                      : '•'}
-              </Text>
-            </View>
-
-            <Text style={styles.statusHeading}>
-              {statusLabel}
+          <View>
+            <Text style={styles.brandName}>
+              ZENIMONIES
             </Text>
 
-            <Text style={styles.statusDescription}>
-              {isSuccessful
-                ? 'Your transaction was completed.'
-                : isPending
-                  ? 'Your transaction is being processed.'
-                  : isFailed
-                    ? 'This transaction was not completed successfully.'
-                    : 'Transaction status information.'}
+            <Text style={styles.brandSubtitle}>
+              BANKING
             </Text>
           </View>
+        </View>
 
-          <View style={styles.amountArea}>
-            <Text style={styles.amountLabel}>
-              {isCredit ? 'Amount received' : 'Amount paid'}
-            </Text>
+        {/* Main receipt */}
+        <View style={styles.receiptCard}>
+          {/* Status */}
+          <View style={styles.statusRow}>
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: statusColor },
+              ]}
+            />
 
             <Text
               style={[
-                styles.amount,
-                {
-                  color: isCredit
-                    ? colors.success
-                    : colors.text,
-                },
+                styles.statusText,
+                { color: statusColor },
               ]}
             >
-              {isCredit ? '+' : '-'}
-              {transaction.amount}
-            </Text>
-
-            <Text style={styles.currencyLabel}>
-              {currency}
+              {statusLabel.toUpperCase()}
             </Text>
           </View>
 
-          <View style={styles.dashedDivider}>
-            <View style={styles.leftNotch} />
-            <View style={styles.rightNotch} />
-          </View>
+          {/* Amount */}
+          <Text style={styles.amountLabel}>
+            {amountLabel}
+          </Text>
 
-          <View style={styles.detailsSection}>
+          <Text
+            style={[
+              styles.amount,
+              {
+                color: isCredit
+                  ? colors.success
+                  : colors.text,
+              },
+            ]}
+          >
+            {isCredit ? '+' : '-'}
+            {transaction.amount}
+          </Text>
+
+          <Text style={styles.currency}>
+            {currency}
+          </Text>
+
+          <View style={styles.divider} />
+
+          {/* Essential transaction information */}
+          <View style={styles.detailsHeader}>
             <Text style={styles.sectionTitle}>
-              Transaction information
+              TRANSACTION DETAILS
             </Text>
 
-            <ReceiptRow
-              label="Transaction type"
-              value={transaction.title}
-            />
-
-            <ReceiptRow
-              label="Reference number"
-              value={receiptReference}
-            />
-
-            <ReceiptRow
-              label="Transaction ID"
-              value={transaction.id}
-            />
-
-            <ReceiptRow
-              label="Date and time"
-              value={transaction.date}
-            />
-
-            <ReceiptRow
-              label="Description"
-              value={transaction.description}
-            />
-
-            <ReceiptRow
-              label="Transaction fee"
-              value={formatMoney(transaction.fee)}
-            />
-
-            <ReceiptRow
-              label="Total debit"
-              value={formatMoney(transaction.totalDebit)}
-            />
+            <Text style={styles.transactionType}>
+              {transaction.title.toUpperCase()}
+            </Text>
           </View>
 
-          {(customerName ||
-            accountNumber ||
-            transaction.senderName ||
-            transaction.recipientName ||
-            transaction.recipientAccount ||
-            transaction.recipientBank) && (
-            <View style={styles.detailsSection}>
-              <Text style={styles.sectionTitle}>
-                Account and transfer details
+          {visibleRows.map((item, index) => (
+            <View
+              key={`${item.label}-${index}`}
+              style={styles.detailRow}
+            >
+              <Text style={styles.detailLabel}>
+                {item.label}
               </Text>
 
-              <ReceiptRow
-                label="Account holder"
-                value={customerName}
-              />
+              <Text
+                selectable
+                style={[
+                  styles.detailValue,
+                  item.label === 'Session ID' &&
+                    styles.sessionValue,
+                ]}
+              >
+                {item.value}
+              </Text>
+            </View>
+          ))}
 
-              <ReceiptRow
-                label="Account number"
-                value={accountNumber}
-              />
-
-              <ReceiptRow
-                label="Sender"
-                value={transaction.senderName}
-              />
-
-              <ReceiptRow
-                label="Sender account"
-                value={transaction.senderAccount}
-              />
-
-              <ReceiptRow
-                label="Recipient"
-                value={transaction.recipientName}
-              />
-
-              <ReceiptRow
-                label="Recipient account"
-                value={transaction.recipientAccount}
-              />
-
-              <ReceiptRow
-                label="Recipient bank"
-                value={transaction.recipientBank}
-              />
+          {!bankSessionId && (
+            <View style={styles.sessionNotice}>
+              <Text style={styles.sessionNoticeText}>
+                Bank Session ID not yet available
+              </Text>
             </View>
           )}
 
-          {(transaction.provider ||
-            transaction.phone ||
-            transaction.customerNumber ||
-            transaction.electricityToken) && (
-            <View style={styles.detailsSection}>
-              <Text style={styles.sectionTitle}>
-                Payment details
-              </Text>
-
-              <ReceiptRow
-                label="Service provider"
-                value={transaction.provider}
-              />
-
-              <ReceiptRow
-                label="Phone number"
-                value={transaction.phone}
-              />
-
-              <ReceiptRow
-                label="Customer number"
-                value={transaction.customerNumber}
-              />
-
-              <ReceiptRow
-                label="Electricity token"
-                value={transaction.electricityToken}
-              />
-            </View>
-          )}
-
-          <View style={styles.receiptFooter}>
-            <Text style={styles.footerBrand}>
-              ZENIMONIES BANKING
-            </Text>
-
+          <View style={styles.footer}>
             <Text style={styles.footerText}>
-              Banking made simple.
-            </Text>
-
-            <Text style={styles.footerDisclaimer}>
-              This receipt reflects the transaction information
-              available on your ZENIMONIES account.
+              Thank you for banking with ZENIMONIES.
             </Text>
           </View>
         </View>
 
+        {/* Share */}
         <TouchableOpacity
           style={styles.shareButton}
           onPress={handleShareReceipt}
           activeOpacity={0.85}
           accessibilityRole="button"
+          accessibilityLabel="Share transaction receipt"
         >
           <Text style={styles.shareIcon}>↗</Text>
 
           <Text style={styles.shareButtonText}>
-            Share / Save Receipt
+            Share Receipt
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.backToTransactions}
+          onPress={onBack}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.backToTransactionsText}>
+            ‹  Back to Transactions
           </Text>
         </TouchableOpacity>
 
         <Text style={styles.securityNote}>
-          Keep your transaction reference safe.
           Never share your PIN, password or OTP.
         </Text>
       </ScrollView>
@@ -462,272 +395,268 @@ export default function TransactionReceiptScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundSoft,
-  },
+function createStyles(
+  colors: ReturnType<typeof import('../theme/colors').getColors>,
+  isDark: boolean
+) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.backgroundSoft,
+    },
 
-  header: {
-    minHeight: 66,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+    header: {
+      minHeight: 58,
+      paddingHorizontal: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
 
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceSecondary,
-  },
+    backButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.surfaceSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  backArrow: {
-    fontSize: 34,
-    lineHeight: 38,
-    color: colors.text,
-    marginTop: -4,
-  },
+    backArrow: {
+      fontSize: 30,
+      lineHeight: 34,
+      color: colors.text,
+      marginTop: -3,
+    },
 
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.text,
-  },
+    headerTitle: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: colors.text,
+    },
 
-  headerSpacer: {
-    width: 42,
-  },
+    headerSpacer: {
+      width: 38,
+    },
 
-  content: {
-    padding: 18,
-    paddingBottom: 35,
-  },
+    content: {
+      paddingHorizontal: 18,
+      paddingTop: 15,
+      paddingBottom: 24,
+    },
 
-  brandArea: {
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 20,
-  },
+    brandArea: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 15,
+      gap: 9,
+    },
 
-  logo: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    logo: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  logoText: {
-    fontSize: 30,
-    fontWeight: '900',
-    color: colors.white,
-  },
+    logoText: {
+      fontSize: 25,
+      fontWeight: '900',
+      color: '#FFFFFF',
+    },
 
-  brandName: {
-    fontSize: 19,
-    fontWeight: '900',
-    letterSpacing: 3,
-    color: colors.primaryDark,
-    marginTop: 9,
-  },
+    brandName: {
+      fontSize: 16,
+      fontWeight: '900',
+      letterSpacing: 2,
+      color: colors.primary,
+    },
 
-  brandSubtitle: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 3,
-    color: colors.textSecondary,
-    marginTop: 3,
-  },
+    brandSubtitle: {
+      fontSize: 8,
+      fontWeight: '800',
+      letterSpacing: 3,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
 
-  receiptCard: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
+    receiptCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 17,
+      paddingTop: 17,
+      paddingBottom: 12,
+    },
 
-  statusArea: {
-    alignItems: 'center',
-    paddingTop: 25,
-    paddingHorizontal: 18,
-  },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 12,
+    },
 
-  statusIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginRight: 7,
+    },
 
-  statusIconText: {
-    fontSize: 27,
-    fontWeight: '900',
-  },
+    statusText: {
+      fontSize: 11,
+      fontWeight: '900',
+      letterSpacing: 1,
+    },
 
-  statusHeading: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: colors.text,
-    marginTop: 12,
-  },
+    amountLabel: {
+      textAlign: 'center',
+      fontSize: 11,
+      color: colors.textSecondary,
+    },
 
-  statusDescription: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 5,
-    textAlign: 'center',
-  },
+    amount: {
+      textAlign: 'center',
+      fontSize: 29,
+      fontWeight: '900',
+      marginTop: 4,
+    },
 
-  amountArea: {
-    alignItems: 'center',
-    paddingVertical: 25,
-  },
+    currency: {
+      textAlign: 'center',
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 2,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
 
-  amountLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
+    divider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: 15,
+    },
 
-  amount: {
-    fontSize: 31,
-    fontWeight: '900',
-    marginTop: 9,
-  },
+    detailsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 3,
+    },
 
-  currencyLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.textMuted,
-    marginTop: 5,
-    letterSpacing: 2,
-  },
+    sectionTitle: {
+      fontSize: 10,
+      fontWeight: '900',
+      letterSpacing: 0.8,
+      color: colors.primary,
+    },
 
-  dashedDivider: {
-    height: 1,
-    borderTopWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-    marginHorizontal: 18,
-    position: 'relative',
-  },
+    transactionType: {
+      fontSize: 9,
+      fontWeight: '800',
+      color: colors.textSecondary,
+      maxWidth: '48%',
+      textAlign: 'right',
+    },
 
-  leftNotch: {
-    position: 'absolute',
-    left: -29,
-    top: -11,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.backgroundSoft,
-  },
+    detailRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      paddingVertical: 9,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      gap: 12,
+    },
 
-  rightNotch: {
-    position: 'absolute',
-    right: -29,
-    top: -11,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.backgroundSoft,
-  },
+    detailLabel: {
+      flex: 0.85,
+      fontSize: 11,
+      color: colors.textSecondary,
+    },
 
-  detailsSection: {
-    paddingHorizontal: 19,
-    paddingTop: 21,
-  },
+    detailValue: {
+      flex: 1.15,
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.text,
+      textAlign: 'right',
+    },
 
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: colors.text,
-    marginBottom: 8,
-  },
+    sessionValue: {
+      letterSpacing: 0.3,
+      color: colors.primary,
+    },
 
-  detailRow: {
-    paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+    sessionNotice: {
+      paddingTop: 9,
+      alignItems: 'center',
+    },
 
-  detailLabel: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    marginBottom: 5,
-  },
+    sessionNoticeText: {
+      fontSize: 9,
+      color: colors.textMuted,
+      fontStyle: 'italic',
+    },
 
-  detailValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.text,
-  },
+    footer: {
+      paddingTop: 13,
+      alignItems: 'center',
+    },
 
-  receiptFooter: {
-    alignItems: 'center',
-    padding: 20,
-    marginTop: 8,
-    backgroundColor: colors.backgroundSoft,
-  },
+    footerText: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
 
-  footerBrand: {
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 2,
-    color: colors.primaryDark,
-  },
+    shareButton: {
+      minHeight: 49,
+      borderRadius: 13,
+      backgroundColor: colors.primary,
+      marginTop: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  footerText: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    marginTop: 5,
-  },
+    shareIcon: {
+      fontSize: 20,
+      fontWeight: '900',
+      color: '#FFFFFF',
+      marginRight: 9,
+    },
 
-  footerDisclaimer: {
-    fontSize: 9,
-    lineHeight: 15,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: 12,
-  },
+    shareButtonText: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: '#FFFFFF',
+    },
 
-  shareButton: {
-    minHeight: 55,
-    borderRadius: 14,
-    backgroundColor: colors.primary,
-    marginTop: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    backToTransactions: {
+      alignItems: 'center',
+      paddingVertical: 13,
+    },
 
-  shareIcon: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: colors.white,
-    marginRight: 10,
-  },
+    backToTransactionsText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.text,
+    },
 
-  shareButtonText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: colors.white,
-  },
-
-  securityNote: {
-    fontSize: 10,
-    lineHeight: 16,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: 14,
-    paddingHorizontal: 15,
-  },
-});
+    securityNote: {
+      fontSize: 9,
+      color: colors.textMuted,
+      textAlign: 'center',
+      paddingBottom: 5,
+    },
+  });
+}
