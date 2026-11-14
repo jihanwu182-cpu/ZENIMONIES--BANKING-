@@ -1023,10 +1023,11 @@ if (screen === 'notifications' && session) {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <NotificationsScreen
-        token={session.token}
-        onBack={() => setScreen('home')}
-      />
+    <NotificationsScreen
+  token={session.token}
+  onBack={() => setScreen('home')}
+  onOpenTransaction={handleOpenNotificationTransaction}
+/>
     </SafeAreaView>
   );
 }
