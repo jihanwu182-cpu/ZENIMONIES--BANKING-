@@ -44,3 +44,6 @@ jobs:
 
       - name: TypeScript check
         run: npm run typecheck
+
+      - name: Build web app
+        run: npm run web:build
