@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+
 import {
   Alert,
   KeyboardAvoidingView,
@@ -12,10 +13,11 @@ import {
   View,
 } from 'react-native';
 
-import colors from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 import PrimaryButton from '../components/PrimaryButton';
 
-const API_URL = 'https://zenimonies-banking.onrender.com/api/auth';
+const API_URL =
+  'https://zenimonies-banking.onrender.com/api/auth';
 
 type LoginScreenProps = {
   onLoginSuccess?: (session: any) => void;
@@ -38,9 +40,8 @@ export default function LoginScreen({
   onRegisterPress,
   onForgotPasswordPress,
 }: LoginScreenProps) {
-  const [step, setStep] = useState<'identifier' | 'password'>(
-    'identifier'
-  );
+  const { colors, mode } = useTheme();
+  const styles = createStyles(colors);
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -56,7 +57,6 @@ export default function LoginScreen({
 
     const phone = input.replace(/[\s()-]/g, '');
 
-    // Convert Nigerian local format to international format.
     if (/^0\d{10}$/.test(phone)) {
       return `+234${phone.substring(1)}`;
     }
@@ -68,7 +68,7 @@ export default function LoginScreen({
     return phone;
   };
 
-  const continueToPassword = () => {
+  const validateIdentifier = () => {
     const cleanIdentifier = identifier.trim();
 
     if (!cleanIdentifier) {
@@ -76,39 +76,43 @@ export default function LoginScreen({
         'Information required',
         'Enter your mobile number or email address.'
       );
-      return;
+      return undefined;
     }
 
-    const isEmail = cleanIdentifier.includes('@');
     const normalized = normalizeIdentifier(cleanIdentifier);
 
-    if (
-      isEmail &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)
-    ) {
-      Alert.alert(
-        'Invalid email',
-        'Enter a valid email address.'
-      );
-      return;
+    if (cleanIdentifier.includes('@')) {
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)
+      ) {
+        Alert.alert(
+          'Invalid email',
+          'Enter a valid email address.'
+        );
+        return undefined;
+      }
+
+      return normalized;
     }
 
-    if (
-      !isEmail &&
-      !/^\+234\d{10}$/.test(normalized)
-    ) {
+    if (!/^\+234\d{10}$/.test(normalized)) {
       Alert.alert(
         'Invalid mobile number',
         'Enter a valid Nigerian mobile number, for example 08012345678.'
       );
-      return;
+      return undefined;
     }
 
-    setIdentifier(normalized);
-    setStep('password');
+    return normalized;
   };
 
   const handleLogin = async () => {
+    if (loading) return;
+
+    const normalizedIdentifier = validateIdentifier();
+
+    if (!normalizedIdentifier) return;
+
     if (!password) {
       Alert.alert(
         'Password required',
@@ -127,7 +131,7 @@ export default function LoginScreen({
           Accept: 'application/json',
         },
         body: JSON.stringify({
-          identifier: normalizeIdentifier(identifier),
+          identifier: normalizedIdentifier,
           password,
         }),
       });
@@ -157,7 +161,7 @@ export default function LoginScreen({
       } else {
         Alert.alert(
           'Login successful',
-          'Your credentials have been verified. Session setup is the next integration step.'
+          'Your credentials have been verified.'
         );
       }
     } catch (error: any) {
@@ -171,9 +175,15 @@ export default function LoginScreen({
     }
   };
 
-  const changeIdentifier = () => {
-    setPassword('');
-    setStep('identifier');
+  const handleForgotPassword = () => {
+    if (onForgotPasswordPress) {
+      onForgotPasswordPress();
+    } else {
+      Alert.alert(
+        'Password recovery',
+        'Password recovery will be connected in the next step.'
+      );
+    }
   };
 
   return (
@@ -186,156 +196,134 @@ export default function LoginScreen({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Top navigation */}
         <View style={styles.topBar}>
+          <View />
+
           <TouchableOpacity
-            onPress={
-              step === 'password'
-                ? changeIdentifier
-                : undefined
+            onPress={() =>
+              Alert.alert(
+                'ZENIMONIES Support',
+                'Please contact ZENIMONIES Support for assistance.'
+              )
             }
           >
-            <Text style={styles.backText}>
-              {step === 'password' ? '‹ Back' : ''}
-            </Text>
+            <Text style={styles.helpText}>Help</Text>
           </TouchableOpacity>
-
-          <Text style={styles.helpText}>Help</Text>
         </View>
 
+        {/* Branding */}
         <View style={styles.brandArea}>
           <View style={styles.logo}>
             <Text style={styles.logoText}>Z</Text>
           </View>
 
           <Text style={styles.brand}>ZENIMONIES</Text>
-          <Text style={styles.brandSubtitle}>BANKING</Text>
+
+          <Text style={styles.brandSubtitle}>
+            BANKING
+          </Text>
         </View>
 
+        {/* Single-step login */}
         <View style={styles.form}>
           <Text style={styles.heading}>
-            {step === 'identifier'
-              ? 'Log in to your account'
-              : 'Enter your password'}
+            Welcome back
           </Text>
 
-          {step === 'identifier' ? (
-            <>
-              <View style={styles.inputContainer}>
-                <Text style={styles.floatingLabel}>
-                  Enter your Mobile No./Email
-                </Text>
+          <Text style={styles.description}>
+            Log in securely to your ZENIMONIES account.
+          </Text>
 
-                <TextInput
-                  style={styles.input}
-                  value={identifier}
-                  onChangeText={setIdentifier}
-                  placeholder="Mobile number or email"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoFocus
-                  returnKeyType="next"
-                  onSubmitEditing={continueToPassword}
-                />
-              </View>
+          {/* Phone or email */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.floatingLabel}>
+              Phone number or email address
+            </Text>
 
-              <TouchableOpacity
-                onPress={() =>
-                  Alert.alert(
-                    'Change mobile number',
-                    'If you have lost access to your registered number, please contact ZENIMONIES Support for account recovery.'
-                  )
-                }
-              >
-                <Text style={styles.supportText}>
-                  Lost Your Mobile Number?{' '}
-                  <Text style={styles.link}>Change Now</Text>
-                </Text>
-              </TouchableOpacity>
+            <TextInput
+              style={styles.input}
+              value={identifier}
+              onChangeText={setIdentifier}
+              placeholder="Enter phone number or email"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="default"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="username"
+              textContentType="username"
+              editable={!loading}
+              returnKeyType="next"
+            />
+          </View>
 
-              <PrimaryButton
-                title="NEXT"
-                onPress={continueToPassword}
+          {/* Password */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.floatingLabel}>
+              Password
+            </Text>
+
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={styles.passwordInput}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Enter your password"
+                placeholderTextColor={colors.textMuted}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="current-password"
+                textContentType="password"
+                editable={!loading}
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
               />
-            </>
-          ) : (
-            <>
-              <View style={styles.accountInfo}>
-                <Text style={styles.accountLabel}>
-                  Signing in as
-                </Text>
-
-                <Text style={styles.accountIdentifier}>
-                  {identifier}
-                </Text>
-
-                <TouchableOpacity onPress={changeIdentifier}>
-                  <Text style={styles.link}>Change</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.floatingLabel}>
-                  Password
-                </Text>
-
-                <TextInput
-                  style={styles.input}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Enter your password"
-                  placeholderTextColor={colors.textMuted}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoFocus
-                  returnKeyType="done"
-                  onSubmitEditing={handleLogin}
-                />
-              </View>
 
               <TouchableOpacity
-                style={styles.passwordToggle}
                 onPress={() =>
                   setShowPassword(!showPassword)
                 }
-              >
-                <Text style={styles.link}>
-                  {showPassword
-                    ? 'Hide password'
-                    : 'Show password'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.forgotContainer}
-                onPress={() => {
-                  if (onForgotPasswordPress) {
-                    onForgotPasswordPress();
-                  } else {
-                    Alert.alert(
-                      'Password recovery',
-                      'Password recovery will be connected in the next step.'
-                    );
-                  }
-                }}
-              >
-                <Text style={styles.link}>
-                  Forgot Password?
-                </Text>
-              </TouchableOpacity>
-
-              <PrimaryButton
-                title="LOG IN"
-                onPress={handleLogin}
-                loading={loading}
                 disabled={loading}
-              />
-            </>
-          )}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  showPassword
+                    ? 'Hide password'
+                    : 'Show password'
+                }
+              >
+                <Text style={styles.showPassword}>
+                  {showPassword ? 'HIDE' : 'SHOW'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Forgot password */}
+          <TouchableOpacity
+            style={styles.forgotContainer}
+            onPress={handleForgotPassword}
+            disabled={loading}
+          >
+            <Text style={styles.link}>
+              Forgot Password?
+            </Text>
+          </TouchableOpacity>
+
+          {/* Login button */}
+          <PrimaryButton
+            title="LOG IN"
+            onPress={handleLogin}
+            loading={loading}
+            disabled={loading}
+          />
+
+          <Text style={styles.secureNote}>
+            Your account is protected with secure authentication.
+          </Text>
         </View>
 
+        {/* Footer */}
         <View style={styles.footerArea}>
           <Text style={styles.footer}>
             Don't have an account?{' '}
@@ -343,7 +331,7 @@ export default function LoginScreen({
               style={styles.link}
               onPress={onRegisterPress}
             >
-              Click here to Sign Up
+              Sign Up
             </Text>
           </Text>
 
@@ -356,146 +344,174 @@ export default function LoginScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    flexGrow: 1,
-    paddingHorizontal: 25,
-    paddingTop: 12,
-    paddingBottom: 30,
-    justifyContent: 'space-between',
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    minHeight: 42,
-  },
-  backText: {
-    color: colors.text,
-    fontSize: 28,
-    fontWeight: '600',
-  },
-  helpText: {
-    color: colors.primary,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  brandArea: {
-    alignItems: 'center',
-    marginTop: 35,
-    marginBottom: 55,
-  },
-  logo: {
-    width: 58,
-    height: 58,
-    borderRadius: 19,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    color: colors.white,
-    fontSize: 37,
-    fontWeight: '900',
-  },
-  brand: {
-    marginTop: 10,
-    color: colors.primaryDark,
-    fontSize: 23,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  brandSubtitle: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 4,
-  },
-  form: {
-    gap: 25,
-    marginTop: 5,
-  },
-  heading: {
-    color: colors.text,
-    fontSize: 29,
-    fontWeight: '800',
-    marginBottom: 18,
-  },
-  inputContainer: {
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    borderRadius: 13,
-    minHeight: 76,
-    justifyContent: 'center',
-    paddingHorizontal: 17,
-    position: 'relative',
-  },
-  floatingLabel: {
-    position: 'absolute',
-    top: -11,
-    left: 15,
-    paddingHorizontal: 5,
-    backgroundColor: colors.background,
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  input: {
-    minHeight: 55,
-    color: colors.text,
-    fontSize: 16,
-    paddingVertical: 10,
-  },
-  supportText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-  },
-  link: {
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  accountInfo: {
-    backgroundColor: colors.backgroundSoft,
-    borderRadius: 12,
-    padding: 15,
-    gap: 5,
-  },
-  accountLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-  accountIdentifier: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  passwordToggle: {
-    alignSelf: 'flex-end',
-    marginTop: -15,
-  },
-  forgotContainer: {
-    alignSelf: 'flex-end',
-    marginTop: -12,
-  },
-  footerArea: {
-    alignItems: 'center',
-    marginTop: 65,
-    gap: 28,
-  },
-  footer: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 23,
-  },
-  security: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof import('../theme/colors').getColors>
+) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+
+    content: {
+      flexGrow: 1,
+      paddingHorizontal: 25,
+      paddingTop: 12,
+      paddingBottom: 28,
+      justifyContent: 'space-between',
+    },
+
+    topBar: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      minHeight: 42,
+    },
+
+    helpText: {
+      color: colors.primary,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    brandArea: {
+      alignItems: 'center',
+      marginTop: 24,
+      marginBottom: 32,
+    },
+
+    logo: {
+      width: 55,
+      height: 55,
+      borderRadius: 17,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    logoText: {
+      color: '#FFFFFF',
+      fontSize: 35,
+      fontWeight: '900',
+    },
+
+    brand: {
+      marginTop: 9,
+      color: colors.primaryDark,
+      fontSize: 22,
+      fontWeight: '900',
+      letterSpacing: 2,
+    },
+
+    brandSubtitle: {
+      color: colors.primary,
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 4,
+    },
+
+    form: {
+      gap: 19,
+      marginTop: 3,
+    },
+
+    heading: {
+      color: colors.text,
+      fontSize: 28,
+      fontWeight: '800',
+    },
+
+    description: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      marginTop: -12,
+      marginBottom: 5,
+    },
+
+    inputContainer: {
+      borderWidth: 1.3,
+      borderColor: colors.border,
+      borderRadius: 13,
+      minHeight: 68,
+      justifyContent: 'center',
+      paddingHorizontal: 15,
+      position: 'relative',
+      backgroundColor: colors.surface,
+    },
+
+    floatingLabel: {
+      position: 'absolute',
+      top: -9,
+      left: 13,
+      paddingHorizontal: 5,
+      backgroundColor: colors.background,
+      color: colors.primary,
+      fontSize: 11,
+      fontWeight: '600',
+    },
+
+    input: {
+      minHeight: 52,
+      color: colors.text,
+      fontSize: 15,
+      paddingVertical: 9,
+    },
+
+    passwordRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    passwordInput: {
+      flex: 1,
+      minHeight: 52,
+      color: colors.text,
+      fontSize: 15,
+      paddingVertical: 9,
+    },
+
+    showPassword: {
+      color: colors.primary,
+      fontSize: 10,
+      fontWeight: '900',
+      paddingLeft: 10,
+    },
+
+    forgotContainer: {
+      alignSelf: 'flex-end',
+      marginTop: -8,
+    },
+
+    link: {
+      color: colors.primary,
+      fontWeight: '700',
+    },
+
+    secureNote: {
+      color: colors.textMuted,
+      fontSize: 10,
+      textAlign: 'center',
+      marginTop: -7,
+    },
+
+    footerArea: {
+      alignItems: 'center',
+      marginTop: 38,
+      gap: 22,
+    },
+
+    footer: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+
+    security: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: '800',
+      letterSpacing: 2,
+    },
+  });
+}
