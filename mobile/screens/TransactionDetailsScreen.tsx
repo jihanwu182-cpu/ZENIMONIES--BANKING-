@@ -9,12 +9,14 @@ import {
   View,
 } from 'react-native';
 
-import colors from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { getColors } from '../theme/colors';
+
 import TransactionReceiptScreen from './TransactionReceiptScreen';
 
 // ======================================================
 // ZENIMONIES BANKING — TRANSACTION DETAILS
-// File: mobile/screens/TransactionDetailsScreen.tsx
+// Theme-aware Light / Dark appearance
 // ======================================================
 
 type Transaction = {
@@ -50,8 +52,11 @@ export default function TransactionDetailsScreen({
   transaction,
   onBack,
 }: Props) {
-  const [showReceipt, setShowReceipt] =
-    useState(false);
+  const { colors, mode } = useTheme();
+
+  const styles = createStyles(colors, mode === 'dark');
+
+  const [showReceipt, setShowReceipt] = useState(false);
 
   const isCredit = transaction.type === 'credit';
 
@@ -342,209 +347,217 @@ export default function TransactionDetailsScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundSoft,
-  },
+// ======================================================
+// THEME-AWARE STYLES
+// ======================================================
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 17,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+const createStyles = (
+  colors: ReturnType<typeof getColors>,
+  isDark: boolean
+) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.backgroundSoft,
+    },
 
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.surfaceSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingVertical: 17,
+      backgroundColor: colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
 
-  backArrow: {
-    fontSize: 35,
-    lineHeight: 39,
-    color: colors.text,
-    marginTop: -4,
-  },
+    backButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: colors.surfaceSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: colors.text,
-  },
+    backArrow: {
+      fontSize: 35,
+      lineHeight: 39,
+      color: colors.text,
+      marginTop: -4,
+    },
 
-  headerSpacer: {
-    width: 42,
-  },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: '800',
+      color: colors.text,
+    },
 
-  content: {
-    padding: 18,
-    paddingBottom: 35,
-  },
+    headerSpacer: {
+      width: 42,
+    },
 
-  amountCard: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 25,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 18,
-  },
+    content: {
+      padding: 18,
+      paddingBottom: 35,
+    },
 
-  directionIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 15,
-  },
+    amountCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 25,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 18,
+    },
 
-  creditBackground: {
-    backgroundColor: '#E8F5ED',
-  },
+    directionIcon: {
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 15,
+    },
 
-  debitBackground: {
-    backgroundColor: '#FCECEC',
-  },
+    creditBackground: {
+      backgroundColor: colors.primaryLight,
+    },
 
-  directionIconText: {
-    fontSize: 31,
-    fontWeight: '800',
-  },
+    debitBackground: {
+      backgroundColor: isDark ? '#452725' : '#FCECEC',
+    },
 
-  transactionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
+    directionIconText: {
+      fontSize: 31,
+      fontWeight: '800',
+    },
 
-  amount: {
-    fontSize: 30,
-    fontWeight: '900',
-    marginTop: 12,
-  },
+    transactionTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
 
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderRadius: 20,
-    marginTop: 15,
-  },
+    amount: {
+      fontSize: 30,
+      fontWeight: '900',
+      marginTop: 12,
+    },
 
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginRight: 7,
-  },
+    statusBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 13,
+      paddingVertical: 7,
+      borderRadius: 20,
+      marginTop: 15,
+    },
 
-  statusText: {
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'capitalize',
-  },
+    statusDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      marginRight: 7,
+    },
 
-  dateText: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 12,
-  },
+    statusText: {
+      fontSize: 12,
+      fontWeight: '800',
+      textTransform: 'capitalize',
+    },
 
-  detailsCard: {
-    backgroundColor: colors.white,
-    borderRadius: 17,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
-  },
+    dateText: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 12,
+    },
 
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: colors.text,
-    marginBottom: 15,
-  },
+    detailsCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 17,
+      padding: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 16,
+    },
 
-  detailRow: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+    sectionTitle: {
+      fontSize: 15,
+      fontWeight: '900',
+      color: colors.text,
+      marginBottom: 15,
+    },
 
-  detailLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginBottom: 5,
-  },
+    detailRow: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
 
-  detailValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-  },
+    detailLabel: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginBottom: 5,
+    },
 
-  receiptNote: {
-    backgroundColor: colors.primaryLight,
-    borderRadius: 14,
-    padding: 17,
-    marginTop: 2,
-  },
+    detailValue: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+    },
 
-  receiptNoteTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: colors.primaryDark,
-    marginBottom: 7,
-  },
+    receiptNote: {
+      backgroundColor: colors.primaryLight,
+      borderRadius: 14,
+      padding: 17,
+      marginTop: 2,
+    },
 
-  receiptNoteText: {
-    fontSize: 11,
-    lineHeight: 18,
-    color: colors.textSecondary,
-  },
+    receiptNoteTitle: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: colors.primary,
+      marginBottom: 7,
+    },
 
-  receiptButton: {
-    minHeight: 55,
-    backgroundColor: colors.primary,
-    borderRadius: 14,
-    marginTop: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    receiptNoteText: {
+      fontSize: 11,
+      lineHeight: 18,
+      color: colors.textSecondary,
+    },
 
-  receiptButtonIcon: {
-    fontSize: 22,
-    color: colors.white,
-    marginRight: 10,
-  },
+    receiptButton: {
+      minHeight: 55,
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      marginTop: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  receiptButtonText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: colors.white,
-  },
+    receiptButtonIcon: {
+      fontSize: 22,
+      color: colors.white,
+      marginRight: 10,
+    },
 
-  footer: {
-    textAlign: 'center',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 2,
-    color: colors.textMuted,
-    marginTop: 25,
-  },
-});
+    receiptButtonText: {
+      fontSize: 14,
+      fontWeight: '900',
+      color: colors.white,
+    },
+
+    footer: {
+      textAlign: 'center',
+      fontSize: 10,
+      fontWeight: '900',
+      letterSpacing: 2,
+      color: colors.textMuted,
+      marginTop: 25,
+    },
+  });
