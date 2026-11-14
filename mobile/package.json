@@ -9,6 +9,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "web:build": "expo export --platform web",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -23,7 +24,7 @@
     "react-native-web": "^0.21.0"
   },
   "devDependencies": {
-  "@types/react": "~19.3.0",
-  "typescript": "~6.0.3"
-}
+    "@types/react": "~19.3.0",
+    "typescript": "~6.0.3"
+  }
 }
