@@ -14,14 +14,15 @@ import {
   View,
 } from 'react-native';
 
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+
 import { useTheme } from '../theme/ThemeContext';
 import { getColors } from '../theme/colors';
 
 // ======================================================
 // ZENIMONIES BANKING — PERSONAL DASHBOARD
-// Dynamic Light / Dark Theme
-// Original approved layout and functionality preserved.
+// Professional banking icons + Light / Dark Theme
 // ======================================================
 
 type DashboardAction =
@@ -72,6 +73,9 @@ type DashboardProps = {
   onProfilePhotoChange?: (uri: string) => void;
 };
 
+type IconName =
+  React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
 export default function Dashboard({
   userName = 'Customer',
   currency = 'NGN',
@@ -88,7 +92,8 @@ export default function Dashboard({
 }: DashboardProps) {
   const { colors, mode } = useTheme();
 
-  const styles = createStyles(colors, mode === 'dark');
+  const isDark = mode === 'dark';
+  const styles = createStyles(colors, isDark);
 
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [photoLoading, setPhotoLoading] = useState(false);
@@ -96,10 +101,12 @@ export default function Dashboard({
   const displayName =
     userName.trim().split(/\s+/)[0] || 'Customer';
 
-  const GREEN = mode === 'dark' ? '#20C875' : '#02A339';
+  const GREEN = isDark ? '#20C875' : '#02A339';
 
   const handlePhotoUpload = async () => {
     if (photoLoading) return;
+
+    setPhotoLoading(true);
 
     try {
       const permission =
@@ -112,8 +119,6 @@ export default function Dashboard({
         );
         return;
       }
-
-      setPhotoLoading(true);
 
       const result =
         await ImagePicker.launchImageLibraryAsync({
@@ -168,50 +173,114 @@ export default function Dashboard({
 
   const quickActions: {
     title: string;
-    icon: string;
+    icon: IconName;
     action: DashboardAction;
   }[] = [
-    { title: 'Add Money', icon: '+', action: 'add-money' },
-    { title: 'To Bank', icon: '▤', action: 'transfer' },
-    { title: 'Send to\nZENIMONIES', icon: '➜', action: 'transfer' },
-    { title: 'Withdraw', icon: '↓', action: 'withdraw' },
-    { title: 'Airtime', icon: '▯', action: 'airtime' },
-    { title: 'Data', icon: '▥', action: 'data' },
+    {
+      title: 'Add Money',
+      icon: 'plus-circle-outline',
+      action: 'add-money',
+    },
+    {
+      title: 'To Bank',
+      icon: 'bank-outline',
+      action: 'transfer',
+    },
+    {
+      title: 'Send to\nZENIMONIES',
+      icon: 'send',
+      action: 'transfer',
+    },
+    {
+      title: 'Withdraw',
+      icon: 'arrow-down',
+      action: 'withdraw',
+    },
+    {
+      title: 'Airtime',
+      icon: 'cellphone',
+      action: 'airtime',
+    },
+    {
+      title: 'Data',
+      icon: 'signal',
+      action: 'data',
+    },
   ];
 
   const serviceActions: {
     title: string;
-    icon: string;
+    icon: IconName;
     action: DashboardAction;
   }[] = [
-    { title: 'Betting', icon: '◉', action: 'betting' },
-    { title: 'TV', icon: '▣', action: 'tv' },
-    { title: 'Bills', icon: '▤', action: 'bills' },
-    { title: 'Savings', icon: '♙', action: 'savings' },
-    { title: 'More', icon: '•••', action: 'bills' },
+    {
+      title: 'Betting',
+      icon: 'soccer',
+      action: 'betting',
+    },
+    {
+      title: 'TV',
+      icon: 'television',
+      action: 'tv',
+    },
+    {
+      title: 'Bills',
+      icon: 'receipt-text-outline',
+      action: 'bills',
+    },
+    {
+      title: 'Savings',
+      icon: 'piggy-bank-outline',
+      action: 'savings',
+    },
+    {
+      title: 'More',
+      icon: 'dots-horizontal',
+      action: 'bills',
+    },
   ];
 
   const navigation: {
     title: TabName;
-    icon: string;
+    icon: IconName;
+    activeIcon: IconName;
   }[] = [
-    { title: 'Home', icon: '⌂' },
-    { title: 'Transactions', icon: '⇄' },
-    { title: 'Cards', icon: '▣' },
-    { title: 'Wallet', icon: '▱' },
-    { title: 'Profile', icon: '◎' },
+    {
+      title: 'Home',
+      icon: 'home-outline',
+      activeIcon: 'home',
+    },
+    {
+      title: 'Transactions',
+      icon: 'swap-horizontal',
+      activeIcon: 'swap-horizontal',
+    },
+    {
+      title: 'Cards',
+      icon: 'credit-card-outline',
+      activeIcon: 'credit-card',
+    },
+    {
+      title: 'Wallet',
+      icon: 'wallet-outline',
+      activeIcon: 'wallet',
+    },
+    {
+      title: 'Profile',
+      icon: 'account-circle-outline',
+      activeIcon: 'account-circle',
+    },
   ];
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar
-        barStyle={
-          mode === 'dark' ? 'light-content' : 'dark-content'
-        }
+        barStyle={isDark ? 'light-content' : 'dark-content'}
       />
 
       <View style={styles.container}>
-        {/* FIXED HEADER */}
+        {/* HEADER */}
+
         <View style={styles.header}>
           <View style={styles.headerIdentity}>
             <TouchableOpacity
@@ -228,10 +297,17 @@ export default function Dashboard({
                   resizeMode="cover"
                 />
               ) : (
-                <>
-                  <View style={styles.logoInner} />
-                  <Text style={styles.logoText}>Z</Text>
-                </>
+                <Text style={styles.logoText}>Z</Text>
+              )}
+
+              {photoLoading && (
+                <View style={styles.photoLoadingOverlay}>
+                  <MaterialCommunityIcons
+                    name="loading"
+                    size={19}
+                    color="#FFFFFF"
+                  />
+                </View>
               )}
             </TouchableOpacity>
 
@@ -258,7 +334,12 @@ export default function Dashboard({
             accessibilityRole="button"
             accessibilityLabel="Open notifications"
           >
-            <Text style={styles.notificationIcon}>♧</Text>
+            <MaterialCommunityIcons
+              name="bell-outline"
+              size={23}
+              color={colors.text}
+            />
+
             <View style={styles.notificationDot} />
           </TouchableOpacity>
         </View>
@@ -278,6 +359,7 @@ export default function Dashboard({
           }
         >
           {/* ACCOUNT BALANCE */}
+
           <View style={styles.balanceCard}>
             <View style={styles.balanceTop}>
               <Text style={styles.balanceLabel}>
@@ -285,14 +367,27 @@ export default function Dashboard({
               </Text>
 
               <TouchableOpacity
-                onPress={() => setBalanceVisible(!balanceVisible)}
+                style={styles.balanceVisibility}
+                onPress={() =>
+                  setBalanceVisible(!balanceVisible)
+                }
                 accessibilityRole="button"
                 accessibilityLabel={
                   balanceVisible ? 'Hide balance' : 'Show balance'
                 }
               >
+                <MaterialCommunityIcons
+                  name={
+                    balanceVisible
+                      ? 'eye-outline'
+                      : 'eye-off-outline'
+                  }
+                  size={17}
+                  color="#FFFFFF"
+                />
+
                 <Text style={styles.hideBalance}>
-                  {balanceVisible ? '◉ Hide' : '◎ Show'}
+                  {balanceVisible ? 'Hide' : 'Show'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -309,12 +404,15 @@ export default function Dashboard({
 
             <View style={styles.balanceBottomRow}>
               <View style={styles.secureDot} />
+
               <Text style={styles.secureText}>Secure</Text>
+
               <Text style={styles.balanceWatermark}>Z</Text>
             </View>
           </View>
 
           {/* QUICK ACTIONS */}
+
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <View>
@@ -337,9 +435,11 @@ export default function Dashboard({
                   activeOpacity={0.75}
                 >
                   <View style={styles.quickActionIcon}>
-                    <Text style={styles.quickActionIconText}>
-                      {item.icon}
-                    </Text>
+                    <MaterialCommunityIcons
+                      name={item.icon}
+                      size={24}
+                      color={colors.primary}
+                    />
                   </View>
 
                   <Text style={styles.quickActionTitle}>
@@ -351,6 +451,7 @@ export default function Dashboard({
           </View>
 
           {/* OTHER SERVICES */}
+
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
@@ -360,7 +461,9 @@ export default function Dashboard({
               <TouchableOpacity
                 onPress={() => handleAction('bills')}
               >
-                <Text style={styles.viewAll}>View all ›</Text>
+                <Text style={styles.viewAll}>
+                  View all ›
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -373,9 +476,11 @@ export default function Dashboard({
                   activeOpacity={0.75}
                 >
                   <View style={styles.serviceIcon}>
-                    <Text style={styles.serviceIconText}>
-                      {item.icon}
-                    </Text>
+                    <MaterialCommunityIcons
+                      name={item.icon}
+                      size={24}
+                      color={colors.primary}
+                    />
                   </View>
 
                   <Text style={styles.serviceTitle}>
@@ -387,9 +492,14 @@ export default function Dashboard({
           </View>
 
           {/* ACCOUNT VERIFICATION */}
+
           <View style={styles.verificationCard}>
             <View style={styles.verificationIcon}>
-              <Text style={styles.verificationIconText}>✓</Text>
+              <MaterialCommunityIcons
+                name="shield-check"
+                size={24}
+                color={colors.primary}
+              />
             </View>
 
             <View style={styles.verificationContent}>
@@ -416,18 +526,27 @@ export default function Dashboard({
                 )
               }
             >
-              <Text style={styles.verificationArrow}>›</Text>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={27}
+                color={colors.primary}
+              />
             </TouchableOpacity>
           </View>
 
           {/* SAVINGS */}
+
           <TouchableOpacity
             style={styles.savingsCard}
             onPress={() => handleAction('savings')}
             activeOpacity={0.8}
           >
             <View style={styles.savingsIcon}>
-              <Text style={styles.savingsIconText}>◈</Text>
+              <MaterialCommunityIcons
+                name="piggy-bank"
+                size={25}
+                color="#FFFFFF"
+              />
             </View>
 
             <View style={styles.savingsContent}>
@@ -440,10 +559,15 @@ export default function Dashboard({
               </Text>
             </View>
 
-            <Text style={styles.savingsArrow}>›</Text>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={26}
+              color={colors.primary}
+            />
           </TouchableOpacity>
 
           {/* RECENT TRANSACTIONS */}
+
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
@@ -453,14 +577,20 @@ export default function Dashboard({
               <TouchableOpacity
                 onPress={() => handleNavigate('Transactions')}
               >
-                <Text style={styles.viewAll}>See all ›</Text>
+                <Text style={styles.viewAll}>
+                  See all ›
+                </Text>
               </TouchableOpacity>
             </View>
 
             {transactions.length === 0 ? (
               <View style={styles.emptyTransactions}>
                 <View style={styles.emptyIcon}>
-                  <Text style={styles.emptyIconText}>◷</Text>
+                  <MaterialCommunityIcons
+                    name="clock-outline"
+                    size={27}
+                    color={colors.primary}
+                  />
                 </View>
 
                 <Text style={styles.emptyTitle}>
@@ -485,9 +615,19 @@ export default function Dashboard({
                         : styles.debitIcon,
                     ]}
                   >
-                    <Text style={styles.transactionIconText}>
-                      {transaction.type === 'credit' ? '↓' : '↑'}
-                    </Text>
+                    <MaterialCommunityIcons
+                      name={
+                        transaction.type === 'credit'
+                          ? 'arrow-down-left'
+                          : 'arrow-up-right'
+                      }
+                      size={22}
+                      color={
+                        transaction.type === 'credit'
+                          ? colors.success
+                          : colors.text
+                      }
+                    />
                   </View>
 
                   <View style={styles.transactionDetails}>
@@ -523,6 +663,7 @@ export default function Dashboard({
           </View>
 
           {/* FOOTER */}
+
           <View style={styles.footer}>
             <Text style={styles.footerBrand}>
               ZENIMONIES
@@ -535,6 +676,7 @@ export default function Dashboard({
         </ScrollView>
 
         {/* BOTTOM NAVIGATION */}
+
         <View style={styles.bottomNavigation}>
           {navigation.map((item) => {
             const active = item.title === 'Home';
@@ -544,15 +686,18 @@ export default function Dashboard({
                 key={item.title}
                 style={styles.navItem}
                 onPress={() => handleNavigate(item.title)}
+                accessibilityRole="button"
+                accessibilityLabel={item.title}
               >
-                <Text
-                  style={[
-                    styles.navIcon,
-                    active && styles.activeNavIcon,
-                  ]}
-                >
-                  {item.icon}
-                </Text>
+                <MaterialCommunityIcons
+                  name={active ? item.activeIcon : item.icon}
+                  size={24}
+                  color={
+                    active
+                      ? colors.primary
+                      : colors.textSecondary
+                  }
+                />
 
                 <Text
                   style={[
@@ -563,7 +708,9 @@ export default function Dashboard({
                   {item.title}
                 </Text>
 
-                {active && <View style={styles.activeIndicator} />}
+                {active && (
+                  <View style={styles.activeIndicator} />
+                )}
               </TouchableOpacity>
             );
           })}
@@ -647,11 +794,6 @@ const createStyles = (
       borderColor: colors.border,
     },
 
-    notificationIcon: {
-      fontSize: 22,
-      color: colors.text,
-    },
-
     notificationDot: {
       position: 'absolute',
       top: 8,
@@ -672,28 +814,23 @@ const createStyles = (
       overflow: 'hidden',
     },
 
-    logoInner: {
-      position: 'absolute',
-      top: 2,
-      right: 2,
-      bottom: 2,
-      left: 2,
-      backgroundColor: isDark ? '#075C36' : '#015027',
-      borderRadius: 13,
-      opacity: 0.96,
-    },
-
     logoText: {
       color: '#FFFFFF',
       fontSize: 27,
       fontWeight: '900',
       fontStyle: 'italic',
-      zIndex: 1,
     },
 
     profilePhoto: {
       width: '100%',
       height: '100%',
+    },
+
+    photoLoadingOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
 
     scrollContent: {
@@ -723,6 +860,12 @@ const createStyles = (
       color: '#E5F8EC',
       fontSize: 13,
       fontWeight: '700',
+    },
+
+    balanceVisibility: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
     },
 
     hideBalance: {
@@ -838,12 +981,6 @@ const createStyles = (
       borderColor: colors.border,
     },
 
-    quickActionIconText: {
-      fontSize: 22,
-      color: colors.primary,
-      fontWeight: '800',
-    },
-
     quickActionTitle: {
       color: colors.text,
       fontSize: 8,
@@ -878,12 +1015,6 @@ const createStyles = (
       alignItems: 'center',
     },
 
-    serviceIconText: {
-      color: colors.primary,
-      fontSize: 21,
-      fontWeight: '800',
-    },
-
     serviceTitle: {
       color: colors.text,
       fontSize: 9,
@@ -912,12 +1043,6 @@ const createStyles = (
       justifyContent: 'center',
     },
 
-    verificationIconText: {
-      fontSize: 20,
-      color: colors.primary,
-      fontWeight: '900',
-    },
-
     verificationContent: {
       flex: 1,
       marginLeft: 11,
@@ -942,11 +1067,6 @@ const createStyles = (
       marginTop: 3,
     },
 
-    verificationArrow: {
-      fontSize: 25,
-      color: colors.primary,
-    },
-
     savingsCard: {
       backgroundColor: colors.primaryLight,
       borderRadius: 16,
@@ -967,11 +1087,6 @@ const createStyles = (
       alignItems: 'center',
     },
 
-    savingsIconText: {
-      color: '#FFFFFF',
-      fontSize: 21,
-    },
-
     savingsContent: {
       flex: 1,
       marginLeft: 11,
@@ -987,11 +1102,6 @@ const createStyles = (
       fontSize: 10,
       color: colors.textSecondary,
       marginTop: 3,
-    },
-
-    savingsArrow: {
-      fontSize: 25,
-      color: colors.primary,
     },
 
     emptyTransactions: {
@@ -1010,11 +1120,6 @@ const createStyles = (
       backgroundColor: colors.primaryLight,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-
-    emptyIconText: {
-      fontSize: 26,
-      color: colors.primary,
     },
 
     emptyTitle: {
@@ -1057,12 +1162,6 @@ const createStyles = (
 
     debitIcon: {
       backgroundColor: isDark ? '#452725' : '#FCEEEB',
-    },
-
-    transactionIconText: {
-      fontSize: 20,
-      fontWeight: '800',
-      color: colors.text,
     },
 
     transactionDetails: {
@@ -1139,15 +1238,6 @@ const createStyles = (
       justifyContent: 'center',
       flex: 1,
       position: 'relative',
-    },
-
-    navIcon: {
-      fontSize: 21,
-      color: colors.textSecondary,
-    },
-
-    activeNavIcon: {
-      color: colors.primary,
     },
 
     navLabel: {
