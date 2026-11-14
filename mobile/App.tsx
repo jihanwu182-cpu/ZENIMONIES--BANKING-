@@ -970,10 +970,9 @@ export default function App() {
         <StatusBar barStyle="dark-content" />
 
         <View style={styles.loadingContent}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>Z</Text>
-          </View>
-
+         <View style={styles.premiumLogo}>
+           <Text style={styles.premiumLogoText}>Z</Text>
+        </View>
           <Text style={styles.loadingBrand}>
             ZENIMONIES
           </Text>
