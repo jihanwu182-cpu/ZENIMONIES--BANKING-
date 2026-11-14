@@ -3,18 +3,19 @@
   "expo": {
     "name": "ZENIMONIES",
     "slug": "zenimonies-mobile",
-    "version": "1.0.0",
+    "version": "4.0.0",
     "scheme": "zenimonies",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.zenimonies.mobile"
+      "bundleIdentifier": "com.zenimonies.mobile",
+      "buildNumber": "4"
     },
     "android": {
       "package": "com.zenimonies.mobile",
-      "versionCode": 1,
+      "versionCode": 4,
       "permissions": [
         "INTERNET",
         "CAMERA"
