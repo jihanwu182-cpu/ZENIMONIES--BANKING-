@@ -12,7 +12,11 @@ import {
   View,
 } from 'react-native';
 
-import * as SecureStore from 'expo-secure-store';
+import {
+  getAuthToken,
+  setAuthToken,
+  deleteAuthToken,
+} from './services/authTokenStorage';
 
 import colors from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
