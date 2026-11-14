@@ -1,6 +1,8 @@
+
 import React, { useState } from 'react';
 import {
   Alert,
+  Image,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -10,32 +12,23 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 // ======================================================
 // ZENIMONIES BANKING — PERSONAL DASHBOARD
 // File: mobile/screens/Dashboard.tsx
+// Original approved design preserved.
 // ======================================================
 
 type DashboardAction =
-  | 'transfer'
-  | 'add-money'
-  | 'withdraw'
-  | 'airtime'
-  | 'data'
-  | 'electricity'
-  | 'bills'
-  | 'cards'
-  | 'savings'
-  | 'betting'
-  | 'tv';
+  | 'transfer' | 'add-money' | 'withdraw'
+  | 'airtime' | 'data' | 'electricity'
+  | 'bills' | 'cards' | 'savings'
+  | 'betting' | 'tv';
 
 type TabName =
-  | 'Home'
-  | 'Transactions'
-  | 'Cards'
-  | 'Wallet'
-  | 'Profile'
-  | 'Notifications';
+  | 'Home' | 'Transactions' | 'Cards'
+  | 'Wallet' | 'Profile' | 'Notifications';
 
 type Transaction = {
   id: string;
@@ -60,9 +53,10 @@ type DashboardProps = {
   onRefresh?: () => void;
   onAction?: (action: DashboardAction) => void;
   onNavigate?: (tab: TabName) => void;
+  profilePhotoUri?: string | null;
+  onProfilePhotoChange?: (uri: string) => void;
 };
 
-// Existing ZENIMONIES green-and-white palette.
 const GREEN = '#02A339';
 const DARK_GREEN = '#015027';
 const DEEP_GREEN = '#005027';
@@ -84,12 +78,52 @@ export default function Dashboard({
   onRefresh,
   onAction,
   onNavigate,
+  profilePhotoUri,
+  onProfilePhotoChange,
 }: DashboardProps) {
   const [balanceVisible, setBalanceVisible] = useState(true);
+  const [photoLoading, setPhotoLoading] = useState(false);
 
-  // Use only the customer's first name in the compact fixed header.
   const displayName =
     userName.trim().split(/\s+/)[0] || 'Customer';
+
+  const handlePhotoUpload = async () => {
+    if (photoLoading) return;
+
+    try {
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert(
+          'Photo permission required',
+          'Please allow ZENIMONIES to access your photos so you can choose a profile picture.'
+        );
+        return;
+      }
+
+      setPhotoLoading(true);
+
+      const result =
+        await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.85,
+        });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        onProfilePhotoChange?.(result.assets[0].uri);
+      }
+    } catch {
+      Alert.alert(
+        'Photo upload',
+        'We could not open your photo library. Please try again.'
+      );
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
 
   const handleAction = (action: DashboardAction) => {
     if (onAction) {
@@ -120,7 +154,6 @@ export default function Dashboard({
     return balanceVisible ? balance : '••••••••';
   };
 
-  // Six actions arranged to match the approved feature-dashboard reference.
   const quickActions: {
     title: string;
     icon: string;
@@ -128,7 +161,7 @@ export default function Dashboard({
   }[] = [
     { title: 'Add Money', icon: '+', action: 'add-money' },
     { title: 'To Bank', icon: '▤', action: 'transfer' },
-    { title: 'Send to\\nZENIMONIES', icon: '➜', action: 'transfer' },
+    { title: 'Send to\nZENIMONIES', icon: '➜', action: 'transfer' },
     { title: 'Withdraw', icon: '↓', action: 'withdraw' },
     { title: 'Airtime', icon: '▯', action: 'airtime' },
     { title: 'Data', icon: '▥', action: 'data' },
@@ -165,10 +198,25 @@ export default function Dashboard({
         {/* FIXED HEADER */}
         <View style={styles.header}>
           <View style={styles.headerIdentity}>
-            <View style={styles.logoCircle}>
-              <View style={styles.logoInner} />
-              <Text style={styles.logoText}>Z</Text>
-            </View>
+            <TouchableOpacity
+              style={styles.logoCircle}
+              onPress={handlePhotoUpload}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Upload or change profile photo"
+            >
+              {profilePhotoUri ? (
+                <Image
+                  source={{ uri: profilePhotoUri }}
+                  style={styles.profilePhoto}
+                />
+              ) : (
+                <>
+                  <View style={styles.logoInner} />
+                  <Text style={styles.logoText}>Z</Text>
+                </>
+              )}
+            </TouchableOpacity>
 
             <View style={styles.customerIdentity}>
               <Text style={styles.greeting}>Good day,</Text>
@@ -208,7 +256,7 @@ export default function Dashboard({
             ) : undefined
           }
         >
-          {/* COMPACT ACCOUNT BALANCE — NO ACCOUNT NUMBER SHOWN */}
+          {/* ACCOUNT BALANCE */}
           <View style={styles.balanceCard}>
             <View style={styles.balanceTop}>
               <Text style={styles.balanceLabel}>Available Balance</Text>
@@ -458,7 +506,7 @@ export default function Dashboard({
 }
 
 // ======================================================
-// STYLES
+// ORIGINAL APPROVED DASHBOARD STYLES
 // ======================================================
 
 const styles = StyleSheet.create({
@@ -554,6 +602,11 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontStyle: 'italic',
     zIndex: 1,
+  },
+  profilePhoto: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   scrollContent: {
     paddingHorizontal: 20,
