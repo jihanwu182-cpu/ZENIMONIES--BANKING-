@@ -25,13 +25,15 @@ type DashboardAction =
   | 'electricity'
   | 'bills'
   | 'cards'
-  | 'savings';
+  | 'savings'
+  | 'betting'
+  | 'tv';
 
 type TabName =
   | 'Home'
+  | 'Transactions'
   | 'Cards'
-  | 'Payments'
-  | 'History'
+  | 'Wallet'
   | 'Profile'
   | 'Notifications';
 
@@ -60,10 +62,10 @@ type DashboardProps = {
   onNavigate?: (tab: TabName) => void;
 };
 
-// ZENIMONIES official green-and-white palette, matched to supplied artwork.
-const GREEN = '#02A339';       // Bright ZENIMONIES green
-const DARK_GREEN = '#015027';   // Deep ZENIMONIES green
-const DEEP_GREEN = '#005027';   // Banking-card deep green
+// Existing ZENIMONIES green-and-white palette.
+const GREEN = '#02A339';
+const DARK_GREEN = '#015027';
+const DEEP_GREEN = '#005027';
 const BLACK = '#101A16';
 const MUTED = '#68736C';
 const BACKGROUND = '#FFFFFF';
@@ -85,8 +87,9 @@ export default function Dashboard({
 }: DashboardProps) {
   const [balanceVisible, setBalanceVisible] = useState(true);
 
-  // Display the customer's full registered name in the fixed header.
-  const displayName = userName.trim() || 'Customer';
+  // Use only the customer's first name in the compact fixed header.
+  const displayName =
+    userName.trim().split(/\s+/)[0] || 'Customer';
 
   const handleAction = (action: DashboardAction) => {
     if (onAction) {
@@ -114,29 +117,32 @@ export default function Dashboard({
     if (balance === undefined || balance === null || balance === '') {
       return 'Unavailable';
     }
-
     return balanceVisible ? balance : '••••••••';
   };
 
+  // Six actions arranged to match the approved feature-dashboard reference.
   const quickActions: {
     title: string;
     icon: string;
     action: DashboardAction;
   }[] = [
-    { title: 'Transfer', icon: '↗', action: 'transfer' },
     { title: 'Add Money', icon: '+', action: 'add-money' },
+    { title: 'To Bank', icon: '▤', action: 'transfer' },
+    { title: 'Send to\\nZENIMONIES', icon: '➜', action: 'transfer' },
     { title: 'Withdraw', icon: '↓', action: 'withdraw' },
-    { title: 'Pay Bills', icon: '▤', action: 'bills' },
+    { title: 'Airtime', icon: '▯', action: 'airtime' },
+    { title: 'Data', icon: '▥', action: 'data' },
   ];
 
-  const paymentActions: {
+  const serviceActions: {
     title: string;
     icon: string;
     action: DashboardAction;
   }[] = [
-    { title: 'Airtime', icon: '▣', action: 'airtime' },
-    { title: 'Data', icon: '◉', action: 'data' },
-    { title: 'Electricity', icon: 'ϟ', action: 'electricity' },
+    { title: 'Betting', icon: '◉', action: 'betting' },
+    { title: 'TV', icon: '▣', action: 'tv' },
+    { title: 'Bills', icon: '▤', action: 'bills' },
+    { title: 'Savings', icon: '♙', action: 'savings' },
     { title: 'More', icon: '•••', action: 'bills' },
   ];
 
@@ -145,9 +151,9 @@ export default function Dashboard({
     icon: string;
   }[] = [
     { title: 'Home', icon: '⌂' },
+    { title: 'Transactions', icon: '⇄' },
     { title: 'Cards', icon: '▣' },
-    { title: 'Payments', icon: '⇄' },
-    { title: 'History', icon: '◷' },
+    { title: 'Wallet', icon: '▱' },
     { title: 'Profile', icon: '◎' },
   ];
 
@@ -156,7 +162,7 @@ export default function Dashboard({
       <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
 
       <View style={styles.container}>
-        {/* FIXED BRAND HEADER */}
+        {/* FIXED HEADER */}
         <View style={styles.header}>
           <View style={styles.headerIdentity}>
             <View style={styles.logoCircle}>
@@ -202,82 +208,62 @@ export default function Dashboard({
             ) : undefined
           }
         >
-          {/* ACCOUNT BALANCE */}
-
+          {/* COMPACT ACCOUNT BALANCE — NO ACCOUNT NUMBER SHOWN */}
           <View style={styles.balanceCard}>
             <View style={styles.balanceTop}>
-              <Text style={styles.balanceLabel}>
-                Total account balance
-              </Text>
-
+              <Text style={styles.balanceLabel}>Available Balance</Text>
               <TouchableOpacity
-                onPress={() =>
-                  setBalanceVisible(!balanceVisible)
-                }
+                onPress={() => setBalanceVisible(!balanceVisible)}
                 accessibilityRole="button"
                 accessibilityLabel={
                   balanceVisible ? 'Hide balance' : 'Show balance'
                 }
               >
                 <Text style={styles.hideBalance}>
-                  {balanceVisible ? 'Hide  ◉' : 'Show  ◎'}
+                  {balanceVisible ? '◉ Hide' : '◎ Show'}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.balanceRow}>
-              <Text style={styles.balanceAmount}>
-                {formatBalance()}
-              </Text>
+            <Text style={styles.accountType}>Personal</Text>
 
-              <Text style={styles.currency}>
-                {currency}
-              </Text>
+            <View style={styles.balanceRow}>
+              <Text style={styles.balanceAmount}>{formatBalance()}</Text>
+              <Text style={styles.currency}>{currency}</Text>
             </View>
 
-            <View style={styles.balanceDivider} />
-
-            <View style={styles.accountRow}>
-              <View style={styles.accountProvisioning}>
-                <Text style={styles.accountLabel}>
-                  Bank account details
-                </Text>
-
-                <Text style={styles.accountNumber}>
-                  Your account details will appear here once assigned by our banking partner.
-                </Text>
-              </View>
+            <View style={styles.balanceBottomRow}>
+              <View style={styles.secureDot} />
+              <Text style={styles.secureText}>Secure</Text>
+              <Text style={styles.balanceWatermark}>Z</Text>
             </View>
           </View>
 
           {/* QUICK ACTIONS */}
-
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                Quick actions
-              </Text>
-
-              <Text style={styles.sectionSubtitle}>
-                Manage your money
-              </Text>
+              <View>
+                <Text style={styles.sectionTitle}>Quick Actions</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Everything you need, in one place.
+                </Text>
+              </View>
             </View>
 
-            <View style={styles.actionGrid}>
-              {quickActions.map((item) => (
+            <View style={styles.quickActionsGrid}>
+              {quickActions.map((item, index) => (
                 <TouchableOpacity
-                  key={item.action}
-                  style={styles.actionItem}
+                  key={`${item.title}-${index}`}
+                  style={styles.quickActionItem}
                   onPress={() => handleAction(item.action)}
                   activeOpacity={0.75}
                 >
-                  <View style={styles.actionIcon}>
-                    <Text style={styles.actionIconText}>
+                  <View style={styles.quickActionIcon}>
+                    <Text style={styles.quickActionIconText}>
                       {item.icon}
                     </Text>
                   </View>
-
-                  <Text style={styles.actionTitle}>
+                  <Text style={styles.quickActionTitle}>
                     {item.title}
                   </Text>
                 </TouchableOpacity>
@@ -285,64 +271,47 @@ export default function Dashboard({
             </View>
           </View>
 
-          {/* PAYMENT SERVICES */}
-
+          {/* OTHER SERVICES */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                Payments & Services
-              </Text>
-
-              <TouchableOpacity
-                onPress={() => handleAction('bills')}
-              >
-                <Text style={styles.viewAll}>
-                  View all ›
-                </Text>
+              <Text style={styles.sectionTitle}>Other Services</Text>
+              <TouchableOpacity onPress={() => handleAction('bills')}>
+                <Text style={styles.viewAll}>View all ›</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.servicesCard}>
-              {paymentActions.map((item) => (
+              {serviceActions.map((item) => (
                 <TouchableOpacity
-                  key={item.action}
+                  key={item.title}
                   style={styles.serviceItem}
                   onPress={() => handleAction(item.action)}
+                  activeOpacity={0.75}
                 >
                   <View style={styles.serviceIcon}>
-                    <Text style={styles.serviceIconText}>
-                      {item.icon}
-                    </Text>
+                    <Text style={styles.serviceIconText}>{item.icon}</Text>
                   </View>
-
-                  <Text style={styles.serviceTitle}>
-                    {item.title}
-                  </Text>
+                  <Text style={styles.serviceTitle}>{item.title}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           </View>
 
-          {/* VERIFICATION */}
-
+          {/* ACCOUNT VERIFICATION */}
           <View style={styles.verificationCard}>
             <View style={styles.verificationIcon}>
-              <Text style={styles.verificationIconText}>
-                ✓
-              </Text>
+              <Text style={styles.verificationIconText}>✓</Text>
             </View>
 
             <View style={styles.verificationContent}>
               <Text style={styles.verificationTitle}>
                 Account verification
               </Text>
-
               <Text style={styles.verificationDescription}>
                 {verificationLevel
                   ? `Verification ${verificationLevel}`
                   : 'Complete your account verification'}
               </Text>
-
               <Text style={styles.verificationStatus}>
                 Status: {verificationStatus}
               </Text>
@@ -356,79 +325,52 @@ export default function Dashboard({
                 )
               }
             >
-              <Text style={styles.verificationArrow}>
-                ›
-              </Text>
+              <Text style={styles.verificationArrow}>›</Text>
             </TouchableOpacity>
           </View>
 
           {/* SAVINGS */}
-
           <TouchableOpacity
             style={styles.savingsCard}
             onPress={() => handleAction('savings')}
             activeOpacity={0.8}
           >
             <View style={styles.savingsIcon}>
-              <Text style={styles.savingsIconText}>
-                ◈
-              </Text>
+              <Text style={styles.savingsIconText}>◈</Text>
             </View>
-
             <View style={styles.savingsContent}>
-              <Text style={styles.savingsTitle}>
-                ZENIMONIES Save
-              </Text>
-
+              <Text style={styles.savingsTitle}>ZENIMONIES Save</Text>
               <Text style={styles.savingsDescription}>
                 Manage your savings with ease.
               </Text>
             </View>
-
-            <Text style={styles.savingsArrow}>
-              ›
-            </Text>
+            <Text style={styles.savingsArrow}>›</Text>
           </TouchableOpacity>
 
           {/* RECENT TRANSACTIONS */}
-
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                Recent transactions
-              </Text>
-
+              <Text style={styles.sectionTitle}>Recent transactions</Text>
               <TouchableOpacity
-                onPress={() => handleNavigate('History')}
+                onPress={() => handleNavigate('Transactions')}
               >
-                <Text style={styles.viewAll}>
-                  See all ›
-                </Text>
+                <Text style={styles.viewAll}>See all ›</Text>
               </TouchableOpacity>
             </View>
 
             {transactions.length === 0 ? (
               <View style={styles.emptyTransactions}>
                 <View style={styles.emptyIcon}>
-                  <Text style={styles.emptyIconText}>
-                    ◷
-                  </Text>
+                  <Text style={styles.emptyIconText}>◷</Text>
                 </View>
-
-                <Text style={styles.emptyTitle}>
-                  No transactions yet
-                </Text>
-
+                <Text style={styles.emptyTitle}>No transactions yet</Text>
                 <Text style={styles.emptyDescription}>
                   Your recent account activities will appear here.
                 </Text>
               </View>
             ) : (
               transactions.slice(0, 5).map((transaction) => (
-                <View
-                  key={transaction.id}
-                  style={styles.transactionItem}
-                >
+                <View key={transaction.id} style={styles.transactionItem}>
                   <View
                     style={[
                       styles.transactionIcon,
@@ -446,7 +388,6 @@ export default function Dashboard({
                     <Text style={styles.transactionTitle}>
                       {transaction.title}
                     </Text>
-
                     <Text style={styles.transactionDate}>
                       {transaction.description || transaction.date}
                     </Text>
@@ -464,7 +405,6 @@ export default function Dashboard({
                       {transaction.type === 'credit' ? '+' : '-'}
                       {transaction.amount}
                     </Text>
-
                     <Text style={styles.transactionStatus}>
                       {transaction.status || 'Completed'}
                     </Text>
@@ -475,24 +415,16 @@ export default function Dashboard({
           </View>
 
           {/* FOOTER */}
-
           <View style={styles.footer}>
-            <Text style={styles.footerBrand}>
-              ZENIMONIES
-            </Text>
-
-            <Text style={styles.footerText}>
-              Banking made simpler.
-            </Text>
+            <Text style={styles.footerBrand}>ZENIMONIES</Text>
+            <Text style={styles.footerText}>Banking made simpler.</Text>
           </View>
         </ScrollView>
 
         {/* BOTTOM NAVIGATION */}
-
         <View style={styles.bottomNavigation}>
           {navigation.map((item) => {
             const active = item.title === 'Home';
-
             return (
               <TouchableOpacity
                 key={item.title}
@@ -507,7 +439,6 @@ export default function Dashboard({
                 >
                   {item.icon}
                 </Text>
-
                 <Text
                   style={[
                     styles.navLabel,
@@ -516,10 +447,7 @@ export default function Dashboard({
                 >
                   {item.title}
                 </Text>
-
-                {active && (
-                  <View style={styles.activeIndicator} />
-                )}
+                {active && <View style={styles.activeIndicator} />}
               </TouchableOpacity>
             );
           })}
@@ -538,60 +466,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BACKGROUND,
   },
-
   container: {
     flex: 1,
     backgroundColor: BACKGROUND,
   },
-
-  // Fixed at the top while dashboard content scrolls.
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 15,
+    paddingTop: 10,
+    paddingBottom: 12,
     backgroundColor: WHITE,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
   },
-
   headerIdentity: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 12,
   },
-
   customerIdentity: {
     flex: 1,
-    marginLeft: 11,
+    marginLeft: 10,
   },
-
   greeting: {
-    fontSize: 12,
+    fontSize: 11,
     color: MUTED,
   },
-
   customerName: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '800',
     color: BLACK,
     marginTop: 2,
   },
-
   brandCaption: {
     color: DARK_GREEN,
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: '800',
-    letterSpacing: 2.2,
-    marginTop: 3,
+    letterSpacing: 2,
+    marginTop: 2,
   },
-
   notificationButton: {
-    width: 43,
-    height: 43,
+    width: 42,
+    height: 42,
     borderRadius: 22,
     backgroundColor: WHITE,
     alignItems: 'center',
@@ -599,528 +518,443 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
-
   notificationIcon: {
-    fontSize: 23,
+    fontSize: 22,
     color: BLACK,
   },
-
   notificationDot: {
     position: 'absolute',
-    top: 9,
-    right: 10,
+    top: 8,
+    right: 9,
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#E53935',
   },
-
-  // Approximation of the supplied green Z brand mark using native views.
   logoCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     backgroundColor: GREEN,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-
   logoInner: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: DARK_GREEN,
-    borderRadius: 14,
+    borderRadius: 13,
     left: 2,
     top: 2,
     opacity: 0.96,
   },
-
   logoText: {
     color: WHITE,
-    fontSize: 29,
+    fontSize: 27,
     fontWeight: '900',
     fontStyle: 'italic',
     zIndex: 1,
   },
-
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 25,
+    paddingTop: 15,
+    paddingBottom: 24,
   },
-
   balanceCard: {
     backgroundColor: DEEP_GREEN,
-    borderRadius: 22,
-    padding: 22,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: DARK_GREEN,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingTop: 15,
+    paddingBottom: 14,
+    marginBottom: 23,
+    minHeight: 142,
+    overflow: 'hidden',
   },
-
   balanceTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-
   balanceLabel: {
     color: '#E5F8EC',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
-
   hideBalance: {
     color: WHITE,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
-
+  accountType: {
+    color: '#D5EBDD',
+    fontSize: 10,
+    marginTop: 3,
+  },
   balanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 13,
-    gap: 10,
+    marginTop: 7,
+    gap: 8,
   },
-
   balanceAmount: {
     color: WHITE,
-    fontSize: 32,
+    fontSize: 25,
     fontWeight: '800',
   },
-
   currency: {
     color: WHITE,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700',
   },
-
-  balanceDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    marginVertical: 20,
-  },
-
-  accountRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-
-  accountProvisioning: {
-    flex: 1,
-  },
-
-  accountLabel: {
-    color: '#D5EBDD',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
-  accountNumber: {
-    color: WHITE,
-    fontSize: 13,
-    fontWeight: '600',
-    lineHeight: 19,
-    marginTop: 6,
-    maxWidth: 290,
-  },
-
-  accountDetailsButton: {
+  balanceBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    marginTop: 9,
   },
-
-  accountDetailsText: {
-    color: WHITE,
-    fontSize: 12,
-    fontWeight: '700',
+  secureDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#36E477',
+    marginRight: 6,
   },
-
-  detailsArrow: {
-    color: WHITE,
-    fontSize: 20,
-    marginLeft: 6,
+  secureText: {
+    color: '#E5F8EC',
+    fontSize: 10,
+    fontWeight: '600',
   },
-
+  balanceWatermark: {
+    position: 'absolute',
+    right: 4,
+    bottom: -27,
+    color: 'rgba(255,255,255,0.08)',
+    fontSize: 94,
+    fontWeight: '900',
+  },
   section: {
-    marginBottom: 27,
+    marginBottom: 22,
   },
-
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 17,
+    marginBottom: 12,
   },
-
   sectionTitle: {
     color: BLACK,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
   },
-
   sectionSubtitle: {
     color: MUTED,
-    fontSize: 11,
+    fontSize: 10,
+    marginTop: 3,
   },
-
   viewAll: {
     color: DARK_GREEN,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
-
-  actionGrid: {
+  quickActionsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    rowGap: 13,
   },
-
-  actionItem: {
+  quickActionItem: {
+    width: '16.1%',
+    minWidth: 0,
     alignItems: 'center',
-    width: '23%',
   },
-
-  actionIcon: {
-    width: 59,
-    height: 59,
-    borderRadius: 18,
+  quickActionIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 13,
     backgroundColor: WHITE,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: BORDER,
   },
-
-  actionIconText: {
-    fontSize: 25,
-    color: DARK_GREEN,
-    fontWeight: '700',
+  quickActionIconText: {
+    fontSize: 22,
+    color: GREEN,
+    fontWeight: '800',
   },
-
-  actionTitle: {
+  quickActionTitle: {
     color: BLACK,
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 9,
+    fontSize: 8,
+    fontWeight: '700',
+    marginTop: 6,
     textAlign: 'center',
+    lineHeight: 11,
   },
-
   servicesCard: {
     backgroundColor: WHITE,
-    borderRadius: 19,
-    paddingVertical: 19,
-    paddingHorizontal: 8,
+    borderRadius: 17,
+    paddingVertical: 14,
+    paddingHorizontal: 5,
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: BORDER,
   },
-
   serviceItem: {
     alignItems: 'center',
-    width: '24%',
+    width: '19%',
   },
-
   serviceIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    backgroundColor: LIGHT_GREEN,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  serviceIconText: {
-    color: DARK_GREEN,
-    fontSize: 22,
-    fontWeight: '800',
-  },
-
-  serviceTitle: {
-    color: BLACK,
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 9,
-  },
-
-  verificationCard: {
-    backgroundColor: WHITE,
-    borderRadius: 17,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 17,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-
-  verificationIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: LIGHT_GREEN,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  verificationIconText: {
-    fontSize: 21,
-    color: DARK_GREEN,
-    fontWeight: '900',
-  },
-
-  verificationContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-
-  verificationTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: BLACK,
-  },
-
-  verificationDescription: {
-    color: MUTED,
-    fontSize: 11,
-    marginTop: 4,
-  },
-
-  verificationStatus: {
-    color: DARK_GREEN,
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-
-  verificationArrow: {
-    fontSize: 27,
-    color: DARK_GREEN,
-  },
-
-  savingsCard: {
-    backgroundColor: LIGHT_GREEN,
-    borderRadius: 18,
-    padding: 17,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: '#D7EFDF',
-  },
-
-  savingsIcon: {
     width: 43,
     height: 43,
     borderRadius: 14,
+    backgroundColor: LIGHT_GREEN,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  serviceIconText: {
+    color: DARK_GREEN,
+    fontSize: 21,
+    fontWeight: '800',
+  },
+  serviceTitle: {
+    color: BLACK,
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: 7,
+    textAlign: 'center',
+  },
+  verificationCard: {
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  verificationIcon: {
+    width: 39,
+    height: 39,
+    borderRadius: 13,
+    backgroundColor: LIGHT_GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verificationIconText: {
+    fontSize: 20,
+    color: DARK_GREEN,
+    fontWeight: '900',
+  },
+  verificationContent: {
+    flex: 1,
+    marginLeft: 11,
+  },
+  verificationTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: BLACK,
+  },
+  verificationDescription: {
+    color: MUTED,
+    fontSize: 10,
+    marginTop: 3,
+  },
+  verificationStatus: {
+    color: DARK_GREEN,
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  verificationArrow: {
+    fontSize: 25,
+    color: DARK_GREEN,
+  },
+  savingsCard: {
+    backgroundColor: LIGHT_GREEN,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 22,
+    borderWidth: 1,
+    borderColor: '#D7EFDF',
+  },
+  savingsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
     backgroundColor: DARK_GREEN,
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   savingsIconText: {
     color: WHITE,
-    fontSize: 23,
+    fontSize: 21,
   },
-
   savingsContent: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 11,
   },
-
   savingsTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: BLACK,
   },
-
   savingsDescription: {
-    fontSize: 11,
+    fontSize: 10,
     color: MUTED,
-    marginTop: 4,
+    marginTop: 3,
   },
-
   savingsArrow: {
-    fontSize: 27,
+    fontSize: 25,
     color: DARK_GREEN,
   },
-
   emptyTransactions: {
     backgroundColor: WHITE,
-    borderRadius: 18,
-    padding: 27,
+    borderRadius: 16,
+    padding: 23,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: BORDER,
   },
-
   emptyIcon: {
-    width: 55,
-    height: 55,
-    borderRadius: 28,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: LIGHT_GREEN,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   emptyIconText: {
-    fontSize: 28,
+    fontSize: 26,
     color: DARK_GREEN,
   },
-
   emptyTitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: BLACK,
     fontWeight: '800',
-    marginTop: 12,
+    marginTop: 10,
   },
-
   emptyDescription: {
     color: MUTED,
-    fontSize: 12,
+    fontSize: 11,
     textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 19,
+    marginTop: 5,
+    lineHeight: 17,
   },
-
   transactionItem: {
     backgroundColor: WHITE,
-    padding: 14,
-    borderRadius: 14,
+    padding: 12,
+    borderRadius: 13,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 9,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: BORDER,
   },
-
   transactionIcon: {
-    width: 43,
-    height: 43,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   creditIcon: {
     backgroundColor: LIGHT_GREEN,
   },
-
   debitIcon: {
     backgroundColor: '#FCEEEB',
   },
-
   transactionIconText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: BLACK,
   },
-
   transactionDetails: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 11,
   },
-
   transactionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: BLACK,
     fontWeight: '700',
   },
-
   transactionDate: {
     color: MUTED,
-    fontSize: 10,
-    marginTop: 5,
+    fontSize: 9,
+    marginTop: 4,
   },
-
   transactionAmountContainer: {
     alignItems: 'flex-end',
   },
-
   transactionAmount: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
-
   creditText: {
     color: DARK_GREEN,
   },
-
   debitText: {
     color: BLACK,
   },
-
   transactionStatus: {
     color: MUTED,
-    fontSize: 10,
-    marginTop: 5,
+    fontSize: 9,
+    marginTop: 4,
   },
-
   footer: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 17,
   },
-
   footerBrand: {
     color: DARK_GREEN,
     fontWeight: '900',
-    fontSize: 15,
+    fontSize: 14,
     letterSpacing: 2,
   },
-
   footerText: {
     color: MUTED,
-    fontSize: 11,
-    marginTop: 5,
+    fontSize: 10,
+    marginTop: 4,
   },
-
   bottomNavigation: {
     backgroundColor: WHITE,
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 8,
+    paddingTop: 9,
+    paddingBottom: 7,
     borderTopWidth: 1,
     borderTopColor: BORDER,
   },
-
   navItem: {
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
     position: 'relative',
   },
-
   navIcon: {
-    fontSize: 23,
+    fontSize: 21,
     color: MUTED,
   },
-
   activeNavIcon: {
     color: DARK_GREEN,
   },
-
   navLabel: {
-    fontSize: 10,
+    fontSize: 9,
     color: MUTED,
-    marginTop: 4,
+    marginTop: 3,
   },
-
   activeNavLabel: {
     color: DARK_GREEN,
     fontWeight: '800',
   },
-
   activeIndicator: {
     width: 18,
     height: 3,
     borderRadius: 3,
     backgroundColor: GREEN,
-    marginTop: 5,
+    marginTop: 4,
   },
 });
