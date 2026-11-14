@@ -11,7 +11,10 @@ import {
   View,
 } from 'react-native';
 
-import colors from '../theme/colors';
+import {
+  useTheme,
+  ThemePreference,
+} from '../theme/ThemeContext';
 
 type ProfileScreenProps = {
   user?: any;
@@ -36,12 +39,14 @@ const displayValue = (
 };
 
 const getInitials = (name: string): string => {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('') || 'Z';
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join('') || 'Z'
+  );
 };
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({
@@ -50,6 +55,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onBack,
   onLogout,
 }) => {
+  const {
+    colors,
+    mode,
+    preference,
+    setPreference,
+  } = useTheme();
+
+  const styles = createStyles(colors);
+
   const fullName =
     user?.full_name ||
     user?.name ||
@@ -113,9 +127,47 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     );
   };
 
+  const selectTheme = (next: ThemePreference) => {
+    setPreference(next).catch(() => {
+      Alert.alert(
+        'Theme preference',
+        'Your theme could not be saved. Please try again.'
+      );
+    });
+  };
+
+  const themeOptions: {
+    value: ThemePreference;
+    label: string;
+    description: string;
+  }[] = [
+    {
+      value: 'system',
+      label: 'System',
+      description: 'Follow your phone settings',
+    },
+    {
+      value: 'light',
+      label: 'Light',
+      description: 'Use the classic ZENIMONIES appearance',
+    },
+    {
+      value: 'dark',
+      label: 'Dark',
+      description: 'Use the dark green appearance',
+    },
+  ];
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar
+        barStyle={
+          mode === 'dark'
+            ? 'light-content'
+            : 'dark-content'
+        }
+        backgroundColor={colors.backgroundSoft}
+      />
 
       <View style={styles.header}>
         <TouchableOpacity
@@ -161,6 +213,66 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
+            Appearance
+          </Text>
+
+          <View style={styles.card}>
+            <Text style={styles.appearanceHeading}>
+              App theme
+            </Text>
+
+            <Text style={styles.appearanceDescription}>
+              Choose how ZENIMONIES looks on your device.
+            </Text>
+
+            {themeOptions.map((option, index) => {
+              const selected =
+                preference === option.value;
+
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.themeOption,
+                    index === themeOptions.length - 1 &&
+                      styles.lastThemeOption,
+                    selected && styles.selectedThemeOption,
+                  ]}
+                  onPress={() => selectTheme(option.value)}
+                  activeOpacity={0.75}
+                  accessibilityRole="radio"
+                  accessibilityState={{
+                    selected,
+                  }}
+                >
+                  <View style={styles.themeOptionText}>
+                    <Text style={styles.themeOptionLabel}>
+                      {option.label}
+                    </Text>
+
+                    <Text style={styles.themeOptionDescription}>
+                      {option.description}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.radioOuter,
+                      selected && styles.radioOuterSelected,
+                    ]}
+                  >
+                    {selected && (
+                      <View style={styles.radioInner} />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
             Personal information
           </Text>
 
@@ -168,26 +280,31 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <InfoRow
               label="Full name"
               value={fullName}
+              colors={colors}
             />
 
             <InfoRow
               label="Email address"
               value={email}
+              colors={colors}
             />
 
             <InfoRow
               label="Phone number"
               value={phone}
+              colors={colors}
             />
 
             <InfoRow
               label="Date of birth"
               value={displayValue(user?.date_of_birth)}
+              colors={colors}
             />
 
             <InfoRow
               label="Gender"
               value={displayValue(user?.gender)}
+              colors={colors}
               last
             />
           </View>
@@ -202,6 +319,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <InfoRow
               label="Account number"
               value={accountNumber}
+              colors={colors}
             />
 
             <InfoRow
@@ -210,17 +328,20 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 account?.account_type,
                 'Personal'
               )}
+              colors={colors}
             />
 
             <InfoRow
               label="Currency"
               value="Nigerian Naira (NGN)"
+              colors={colors}
             />
 
             <InfoRow
               label="Account status"
               value={accountStatus}
               valueColor={colors.success}
+              colors={colors}
               last
             />
           </View>
@@ -239,6 +360,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   ? `Level ${verificationLevel}`
                   : 'Not available'
               }
+              colors={colors}
             />
 
             <InfoRow
@@ -250,6 +372,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   ? colors.success
                   : colors.warning
               }
+              colors={colors}
             />
 
             <InfoRow
@@ -259,6 +382,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   ? 'Verified'
                   : 'Not verified'
               }
+              colors={colors}
               last
             />
           </View>
@@ -301,6 +425,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 type InfoRowProps = {
   label: string;
   value: string;
+  colors: ReturnType<typeof import('../theme/colors').getColors>;
   valueColor?: string;
   last?: boolean;
 };
@@ -308,211 +433,291 @@ type InfoRowProps = {
 const InfoRow: React.FC<InfoRowProps> = ({
   label,
   value,
+  colors,
   valueColor,
   last = false,
-}) => (
-  <View
-    style={[
-      styles.infoRow,
-      last && styles.lastInfoRow,
-    ]}
-  >
-    <Text style={styles.infoLabel}>
-      {label}
-    </Text>
+}) => {
+  const styles = createStyles(colors);
 
-    <Text
+  return (
+    <View
       style={[
-        styles.infoValue,
-        valueColor ? { color: valueColor } : null,
+        styles.infoRow,
+        last && styles.lastInfoRow,
       ]}
     >
-      {value}
-    </Text>
-  </View>
-);
+      <Text style={styles.infoLabel}>
+        {label}
+      </Text>
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundSoft,
-  },
+      <Text
+        style={[
+          styles.infoValue,
+          valueColor ? { color: valueColor } : null,
+        ]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+};
 
-  header: {
-    minHeight: 58,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+const createStyles = (colors: ReturnType<typeof import('../theme/colors').getColors>) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.backgroundSoft,
+    },
 
-  backButton: {
-    width: 42,
-    height: 42,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-  },
+    header: {
+      minHeight: 58,
+      paddingHorizontal: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
 
-  backIcon: {
-    fontSize: 38,
-    lineHeight: 42,
-    color: colors.primary,
-  },
+    backButton: {
+      width: 42,
+      height: 42,
+      justifyContent: 'center',
+      alignItems: 'flex-start',
+    },
 
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.text,
-  },
+    backIcon: {
+      fontSize: 38,
+      lineHeight: 42,
+      color: colors.primary,
+    },
 
-  headerSpacer: {
-    width: 42,
-  },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: '800',
+      color: colors.text,
+    },
 
-  scrollContent: {
-    padding: 18,
-    paddingBottom: 35,
-  },
+    headerSpacer: {
+      width: 42,
+    },
 
-  identityCard: {
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: 18,
-    paddingVertical: 26,
-    paddingHorizontal: 18,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+    scrollContent: {
+      padding: 18,
+      paddingBottom: 35,
+    },
 
-  avatar: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
+    identityCard: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      paddingVertical: 26,
+      paddingHorizontal: 18,
+      marginBottom: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
 
-  avatarText: {
-    fontSize: 27,
-    fontWeight: '900',
-    color: colors.primary,
-  },
+    avatar: {
+      width: 78,
+      height: 78,
+      borderRadius: 39,
+      backgroundColor: colors.primaryLight,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 14,
+    },
 
-  customerName: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: colors.text,
-    textAlign: 'center',
-  },
+    avatarText: {
+      fontSize: 27,
+      fontWeight: '900',
+      color: colors.primary,
+    },
 
-  customerEmail: {
-    marginTop: 6,
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
+    customerName: {
+      fontSize: 20,
+      fontWeight: '900',
+      color: colors.text,
+      textAlign: 'center',
+    },
 
-  memberBadge: {
-    marginTop: 14,
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: colors.primaryLight,
-  },
+    customerEmail: {
+      marginTop: 6,
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
 
-  memberBadgeText: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
+    memberBadge: {
+      marginTop: 14,
+      paddingHorizontal: 13,
+      paddingVertical: 7,
+      borderRadius: 20,
+      backgroundColor: colors.primaryLight,
+    },
 
-  section: {
-    marginBottom: 21,
-  },
+    memberBadgeText: {
+      color: colors.primary,
+      fontSize: 10,
+      fontWeight: '900',
+      letterSpacing: 1,
+    },
 
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: colors.text,
-    marginBottom: 10,
-  },
+    section: {
+      marginBottom: 21,
+    },
 
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 15,
-    paddingHorizontal: 15,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+    sectionTitle: {
+      fontSize: 15,
+      fontWeight: '900',
+      color: colors.text,
+      marginBottom: 10,
+    },
 
-  infoRow: {
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 15,
+      paddingHorizontal: 15,
+      paddingVertical: 4,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
 
-  lastInfoRow: {
-    borderBottomWidth: 0,
-  },
+    appearanceHeading: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: colors.text,
+      marginTop: 12,
+    },
 
-  infoLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 5,
-  },
+    appearanceDescription: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: colors.textSecondary,
+      marginTop: 5,
+      marginBottom: 7,
+    },
 
-  infoValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-  },
+    themeOption: {
+      minHeight: 65,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingVertical: 11,
+    },
 
-  addressText: {
-    paddingVertical: 14,
-    fontSize: 14,
-    lineHeight: 22,
-    color: colors.text,
-  },
+    lastThemeOption: {
+      borderBottomWidth: 0,
+    },
 
-  logoutButton: {
-    minHeight: 52,
-    borderRadius: 13,
-    borderWidth: 1,
-    borderColor: colors.error,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 5,
-    backgroundColor: colors.white,
-  },
+    selectedThemeOption: {
+      backgroundColor: colors.primaryLight,
+      marginHorizontal: -8,
+      paddingHorizontal: 8,
+      borderRadius: 9,
+    },
 
-  logoutText: {
-    color: colors.error,
-    fontSize: 15,
-    fontWeight: '800',
-  },
+    themeOptionText: {
+      flex: 1,
+      paddingRight: 12,
+    },
 
-  footer: {
-    marginTop: 28,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 2,
-    color: colors.primary,
-  },
+    themeOptionLabel: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: colors.text,
+    },
 
-  version: {
-    marginTop: 6,
-    textAlign: 'center',
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-});
+    themeOptionDescription: {
+      marginTop: 4,
+      fontSize: 11,
+      color: colors.textSecondary,
+    },
+
+    radioOuter: {
+      width: 21,
+      height: 21,
+      borderRadius: 11,
+      borderWidth: 2,
+      borderColor: colors.textMuted,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+
+    radioOuterSelected: {
+      borderColor: colors.primary,
+    },
+
+    radioInner: {
+      width: 11,
+      height: 11,
+      borderRadius: 6,
+      backgroundColor: colors.primary,
+    },
+
+    infoRow: {
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+
+    lastInfoRow: {
+      borderBottomWidth: 0,
+    },
+
+    infoLabel: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginBottom: 5,
+    },
+
+    infoValue: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+    },
+
+    addressText: {
+      paddingVertical: 14,
+      fontSize: 14,
+      lineHeight: 22,
+      color: colors.text,
+    },
+
+    logoutButton: {
+      minHeight: 52,
+      borderRadius: 13,
+      borderWidth: 1,
+      borderColor: colors.error,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 5,
+      backgroundColor: colors.surface,
+    },
+
+    logoutText: {
+      color: colors.error,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+
+    footer: {
+      marginTop: 28,
+      textAlign: 'center',
+      fontSize: 12,
+      fontWeight: '900',
+      letterSpacing: 2,
+      color: colors.primary,
+    },
+
+    version: {
+      marginTop: 6,
+      textAlign: 'center',
+      fontSize: 11,
+      color: colors.textMuted,
+    },
+  });
 
 export default ProfileScreen;
