@@ -11,16 +11,20 @@ import {
   RefreshControl,
   SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 
-import colors from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { getColors } from '../theme/colors';
 
 // ======================================================
 // ZENIMONIES BANKING — NOTIFICATIONS CENTRE
+// Light / Dark Theme
+// Existing API and functionality preserved.
 // File: mobile/screens/NotificationsScreen.tsx
 // ======================================================
 
@@ -51,6 +55,10 @@ type Props = {
   onOpenTransaction: (transactionId: string) => void;
 };
 
+// ======================================================
+// NOTIFICATION HELPERS
+// ======================================================
+
 const getNotificationIcon = (type?: string) => {
   const value = String(type || '').toLowerCase();
 
@@ -58,48 +66,65 @@ const getNotificationIcon = (type?: string) => {
     value.includes('success') ||
     value.includes('completed') ||
     value.includes('credit')
-  ) return '✓';
+  ) {
+    return '✓';
+  }
 
   if (
     value.includes('failed') ||
     value.includes('declined') ||
     value.includes('error')
-  ) return '!';
+  ) {
+    return '!';
+  }
 
   if (
     value.includes('transfer') ||
     value.includes('payment')
-  ) return '↗';
+  ) {
+    return '↗';
+  }
 
   if (
     value.includes('security') ||
     value.includes('login')
-  ) return '⌑';
+  ) {
+    return '⌑';
+  }
 
   return '●';
 };
 
-const getNotificationColor = (type?: string) => {
+const getNotificationColor = (
+  type: string | undefined,
+  palette: ReturnType<typeof getColors>
+) => {
   const value = String(type || '').toLowerCase();
 
   if (
     value.includes('success') ||
     value.includes('completed') ||
     value.includes('credit')
-  ) return colors.success;
+  ) {
+    return palette.success;
+  }
 
   if (
     value.includes('failed') ||
     value.includes('declined') ||
     value.includes('error')
-  ) return colors.error;
+  ) {
+    return palette.error;
+  }
 
   if (
     value.includes('pending') ||
     value.includes('processing')
-  ) return colors.warning;
+  ) {
+    return palette.warning;
+  }
 
-  return colors.primary;
+  return palette.primary;
 };
 
 const formatNotificationDate = (value: string) => {
@@ -115,11 +140,22 @@ const formatNotificationDate = (value: string) => {
   });
 };
 
+// ======================================================
+// MAIN SCREEN
+// ======================================================
+
 export default function NotificationsScreen({
   token,
   onBack,
   onOpenTransaction,
 }: Props) {
+  const { colors, mode } = useTheme();
+
+  const styles = createStyles(
+    colors,
+    mode === 'dark'
+  );
+
   const [notifications, setNotifications] =
     useState<NotificationItem[]>([]);
 
@@ -302,8 +338,7 @@ export default function NotificationsScreen({
     } catch (error: any) {
       Alert.alert(
         'Unable to open notification',
-        error.message ||
-          'Please try again.'
+        error.message || 'Please try again.'
       );
     } finally {
       setUpdatingId(null);
@@ -338,8 +373,7 @@ export default function NotificationsScreen({
     } catch (error: any) {
       Alert.alert(
         'Unable to update notifications',
-        error.message ||
-          'Please try again.'
+        error.message || 'Please try again.'
       );
     } finally {
       setMarkingAll(false);
@@ -353,8 +387,10 @@ export default function NotificationsScreen({
   const renderNotification = (
     item: NotificationItem
   ) => {
-    const iconColor =
-      getNotificationColor(item.type);
+    const iconColor = getNotificationColor(
+      item.type,
+      colors
+    );
 
     const isUpdating =
       updatingId === item.id;
@@ -382,7 +418,9 @@ export default function NotificationsScreen({
         <View
           style={[
             styles.notificationIcon,
-            { backgroundColor: `${iconColor}18` },
+            {
+              backgroundColor: `${iconColor}18`,
+            },
           ]}
         >
           <Text
@@ -414,9 +452,7 @@ export default function NotificationsScreen({
           </Text>
 
           <Text style={styles.notificationDate}>
-            {formatNotificationDate(
-              item.created_at
-            )}
+            {formatNotificationDate(item.created_at)}
           </Text>
 
           {item.transaction_id ? (
@@ -445,6 +481,16 @@ export default function NotificationsScreen({
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar
+        barStyle={
+          mode === 'dark'
+            ? 'light-content'
+            : 'dark-content'
+        }
+      />
+
+      {/* HEADER */}
+
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -470,9 +516,12 @@ export default function NotificationsScreen({
             refreshing={refreshing}
             onRefresh={handleRefresh}
             tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
       >
+        {/* INTRODUCTION */}
+
         <View style={styles.intro}>
           <View>
             <Text style={styles.pageTitle}>
@@ -497,6 +546,8 @@ export default function NotificationsScreen({
           </View>
         </View>
 
+        {/* NOTIFICATION ACTIONS */}
+
         <View style={styles.actionsRow}>
           <Text style={styles.sectionTitle}>
             Recent notifications
@@ -507,6 +558,8 @@ export default function NotificationsScreen({
             disabled={
               unreadCount === 0 || markingAll
             }
+            accessibilityRole="button"
+            accessibilityLabel="Mark all notifications as read"
           >
             {markingAll ? (
               <ActivityIndicator
@@ -526,6 +579,8 @@ export default function NotificationsScreen({
             )}
           </TouchableOpacity>
         </View>
+
+        {/* LOADING / EMPTY / NOTIFICATION LIST */}
 
         {loading ? (
           <View style={styles.loadingArea}>
@@ -558,6 +613,7 @@ export default function NotificationsScreen({
             <TouchableOpacity
               style={styles.refreshButton}
               onPress={handleRefresh}
+              activeOpacity={0.8}
             >
               <Text style={styles.refreshButtonText}>
                 Refresh
@@ -570,6 +626,8 @@ export default function NotificationsScreen({
           </View>
         )}
 
+        {/* FOOTER */}
+
         <Text style={styles.footer}>
           ZENIMONIES BANKING
         </Text>
@@ -579,281 +637,288 @@ export default function NotificationsScreen({
 }
 
 // ======================================================
-// STYLES
+// THEME-AWARE STYLES
 // ======================================================
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundSoft,
-  },
+function createStyles(
+  colors: ReturnType<typeof getColors>,
+  isDark: boolean
+) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.backgroundSoft,
+    },
 
-  header: {
-    minHeight: 66,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+    header: {
+      minHeight: 66,
+      paddingHorizontal: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
 
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceSecondary,
-  },
+    backButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceSecondary,
+    },
 
-  backArrow: {
-    fontSize: 35,
-    lineHeight: 39,
-    color: colors.text,
-    marginTop: -4,
-  },
+    backArrow: {
+      fontSize: 35,
+      lineHeight: 39,
+      color: colors.text,
+      marginTop: -4,
+    },
 
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: colors.text,
-  },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: '900',
+      color: colors.text,
+    },
 
-  headerSpacer: {
-    width: 42,
-  },
+    headerSpacer: {
+      width: 42,
+    },
 
-  content: {
-    padding: 19,
-    paddingBottom: 35,
-  },
+    content: {
+      padding: 19,
+      paddingBottom: 35,
+    },
 
-  intro: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    marginBottom: 27,
-  },
+    intro: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 12,
+      marginBottom: 27,
+    },
 
-  pageTitle: {
-    fontSize: 25,
-    fontWeight: '900',
-    color: colors.text,
-  },
+    pageTitle: {
+      fontSize: 25,
+      fontWeight: '900',
+      color: colors.text,
+    },
 
-  pageSubtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 6,
-  },
+    pageSubtitle: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 6,
+    },
 
-  unreadCounter: {
-    minWidth: 65,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    borderRadius: 13,
-    alignItems: 'center',
-    backgroundColor: colors.primaryLight,
-  },
+    unreadCounter: {
+      minWidth: 65,
+      paddingHorizontal: 10,
+      paddingVertical: 9,
+      borderRadius: 13,
+      alignItems: 'center',
+      backgroundColor: colors.primaryLight,
+    },
 
-  unreadNumber: {
-    fontSize: 19,
-    fontWeight: '900',
-    color: colors.primaryDark,
-  },
+    unreadNumber: {
+      fontSize: 19,
+      fontWeight: '900',
+      color: colors.primary,
+    },
 
-  unreadLabel: {
-    fontSize: 8,
-    fontWeight: '900',
-    color: colors.primaryDark,
-    letterSpacing: 1,
-    marginTop: 2,
-  },
+    unreadLabel: {
+      fontSize: 8,
+      fontWeight: '900',
+      color: colors.primary,
+      letterSpacing: 1,
+      marginTop: 2,
+    },
 
-  actionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 13,
-  },
+    actionsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 13,
+    },
 
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: colors.text,
-  },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: '900',
+      color: colors.text,
+    },
 
-  markAllText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.primary,
-  },
+    markAllText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: colors.primary,
+    },
 
-  disabledText: {
-    color: colors.textMuted,
-  },
+    disabledText: {
+      color: colors.textMuted,
+    },
 
-  list: {
-    gap: 11,
-  },
+    list: {
+      gap: 11,
+    },
 
-  notificationCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 15,
-    borderRadius: 16,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+    notificationCard: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      padding: 15,
+      borderRadius: 16,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
 
-  unreadCard: {
-    borderColor: colors.primaryLight,
-    backgroundColor: '#FBFEFC',
-  },
+    unreadCard: {
+      borderColor: colors.primary,
+      backgroundColor: isDark
+        ? colors.surfaceSecondary
+        : '#FBFEFC',
+    },
 
-  notificationIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
+    notificationIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
 
-  notificationIconText: {
-    fontSize: 21,
-    fontWeight: '900',
-  },
+    notificationIconText: {
+      fontSize: 21,
+      fontWeight: '900',
+    },
 
-  notificationContent: {
-    flex: 1,
-  },
+    notificationContent: {
+      flex: 1,
+    },
 
-  notificationHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    notificationHeading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
 
-  notificationTitle: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '900',
-    color: colors.text,
-    marginRight: 8,
-  },
+    notificationTitle: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: '900',
+      color: colors.text,
+      marginRight: 8,
+    },
 
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
-  },
+    unreadDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.primary,
+    },
 
-  notificationMessage: {
-    fontSize: 11,
-    lineHeight: 17,
-    color: colors.textSecondary,
-    marginTop: 6,
-  },
+    notificationMessage: {
+      fontSize: 11,
+      lineHeight: 17,
+      color: colors.textSecondary,
+      marginTop: 6,
+    },
 
-  notificationDate: {
-    fontSize: 9,
-    color: colors.textMuted,
-    marginTop: 9,
-  },
+    notificationDate: {
+      fontSize: 9,
+      color: colors.textMuted,
+      marginTop: 9,
+    },
 
-  transactionReference: {
-    fontSize: 9,
-    lineHeight: 15,
-    color: colors.primaryDark,
-    marginTop: 6,
-  },
+    transactionReference: {
+      fontSize: 9,
+      lineHeight: 15,
+      color: colors.primary,
+      marginTop: 6,
+    },
 
-  openArrow: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.primary,
-    marginLeft: 5,
-    alignSelf: 'center',
-  },
+    openArrow: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: colors.primary,
+      marginLeft: 5,
+      alignSelf: 'center',
+    },
 
-  loadingArea: {
-    paddingVertical: 75,
-    alignItems: 'center',
-  },
+    loadingArea: {
+      paddingVertical: 75,
+      alignItems: 'center',
+    },
 
-  loadingText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 13,
-  },
+    loadingText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 13,
+    },
 
-  emptyCard: {
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 25,
-    paddingVertical: 35,
-    marginTop: 8,
-  },
+    emptyCard: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: 19,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 25,
+      paddingVertical: 35,
+      marginTop: 8,
+    },
 
-  emptyIcon: {
-    width: 65,
-    height: 65,
-    borderRadius: 33,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    emptyIcon: {
+      width: 65,
+      height: 65,
+      borderRadius: 33,
+      backgroundColor: colors.primaryLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  emptyIconText: {
-    fontSize: 29,
-    fontWeight: '900',
-    color: colors.primary,
-  },
+    emptyIconText: {
+      fontSize: 29,
+      fontWeight: '900',
+      color: colors.primary,
+    },
 
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: colors.text,
-    marginTop: 18,
-  },
+    emptyTitle: {
+      fontSize: 16,
+      fontWeight: '900',
+      color: colors.text,
+      marginTop: 18,
+    },
 
-  emptyMessage: {
-    fontSize: 12,
-    lineHeight: 19,
-    textAlign: 'center',
-    color: colors.textSecondary,
-    marginTop: 8,
-  },
+    emptyMessage: {
+      fontSize: 12,
+      lineHeight: 19,
+      textAlign: 'center',
+      color: colors.textSecondary,
+      marginTop: 8,
+    },
 
-  refreshButton: {
-    paddingHorizontal: 25,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-    marginTop: 20,
-  },
+    refreshButton: {
+      paddingHorizontal: 25,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      marginTop: 20,
+    },
 
-  refreshButtonText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: colors.white,
-  },
+    refreshButtonText: {
+      fontSize: 12,
+      fontWeight: '900',
+      color: colors.white,
+    },
 
-  footer: {
-    textAlign: 'center',
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 2,
-    color: colors.textMuted,
-    marginTop: 30,
-  },
-});
+    footer: {
+      textAlign: 'center',
+      fontSize: 9,
+      fontWeight: '900',
+      letterSpacing: 2,
+      color: colors.textMuted,
+      marginTop: 30,
+    },
+  });
+}
