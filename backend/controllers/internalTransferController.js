@@ -932,46 +932,47 @@ const transferToZenimoniesUser = async (req, res) => {
     // ========================================================
     // RECIPIENT TRANSACTION
     // ========================================================
+    const recipientTransactionResult =
+  await client.query(
+    `
+    INSERT INTO transactions (
+      account_id,
+      type,
+      amount,
+      currency,
+      reference,
+      description,
+      status,
+      balance_before,
+      balance_after,
+      transaction_fee
+    )
+    VALUES (
+      $1,
+      'internal_transfer_received',
+      $2,
+      'NGN',
+      $3,
+      $4,
+      'completed',
+      $5,
+      $6,
+      0
+    )
+    RETURNING id, created_at
+    `,
+    [
+      recipientAccount.id,
+      transferAmount,
+      recipientReference,
+      recipientDescription,
+      recipientOldBalance,
+      recipientNewBalance,
+    ]
+  );
 
-    const recipientReference =
-      `${reference}-R`;
-
-    await client.query(
-      `
-      INSERT INTO transactions (
-        account_id,
-        type,
-        amount,
-        currency,
-        reference,
-        description,
-        status,
-        balance_before,
-        balance_after,
-        transaction_fee
-      )
-      VALUES (
-        $1,
-        'internal_transfer_received',
-        $2,
-        'NGN',
-        $3,
-        $4,
-        'completed',
-        $5,
-        $6,
-        0
-      )
-      `,
-      [
-        recipientAccount.id,
-        transferAmount,
-        recipientReference,
-        recipientDescription,
-        recipientOldBalance,
-        recipientNewBalance,
-      ]
-    );
+const recipientTransaction =
+  recipientTransactionResult.rows[0];
 
     // ========================================================
     // BANK TRANSFER RECORD
@@ -1056,31 +1057,33 @@ const transferToZenimoniesUser = async (req, res) => {
     // ========================================================
     // RECIPIENT NOTIFICATION
     // ========================================================
-
-    await client.query(
-      `
-      INSERT INTO notifications (
-        user_id,
-        title,
-        message,
-        type,
-        is_read
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        false
-      )
-      `,
-      [
-        recipientUser.id,
-        'Money received',
-        `You received ₦${formatNaira(transferAmount)} from ${senderUser.full_name}.`,
-        'transfer',
-      ]
-    );
+   await client.query(
+  `
+  INSERT INTO notifications (
+    user_id,
+    title,
+    message,
+    type,
+    transaction_id,
+    is_read
+  )
+  VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    false
+  )
+  `,
+  [
+    recipientUser.id,
+    'Money received',
+    `You received ₦${formatNaira(transferAmount)} from ${senderUser.full_name}.`,
+    'transfer',
+    recipientTransaction.id,
+  ]
+);
 
     // ========================================================
     // COMMIT
