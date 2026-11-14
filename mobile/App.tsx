@@ -1071,10 +1071,8 @@ export default function App() {
         <StatusBar barStyle="dark-content" />
 
         <ProfileScreen
-          user={session.user}
+         user={session.user}
           account={account}
-          profilePhotoUri={profilePhotoUri}
-          onProfilePhotoChange={handleProfilePhotoChange}
           onBack={() => setScreen('home')}
           onLogout={handleLogout}
         />
