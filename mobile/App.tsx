@@ -1,3 +1,4 @@
+
 import React, { useCallback, useEffect, useState } from 'react';
 
 import {
@@ -25,11 +26,11 @@ import NotificationsScreen from './screens/NotificationsScreen';
 import TransactionHistoryScreen from './screens/TransactionHistoryScreen';
 import TransactionDetailsScreen from './screens/TransactionDetailsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+
 import {
   registerPushNotifications,
   unregisterPushNotifications,
 } from './services/pushNotificationService';
-
 
 // ======================================================
 // ZENIMONIES BANKING — MOBILE APPLICATION
@@ -227,10 +228,6 @@ const normalizeTransaction = (
     item.type || ''
   ).toLowerCase();
 
-  // Determine transaction direction from its type.
-  // Do not use amount > 0 because debit amounts may
-  // also be stored as positive values in the database.
-
   const isCredit =
     rawType.includes('received') ||
     rawType.includes('credit') ||
@@ -262,8 +259,8 @@ const normalizeTransaction = (
   return {
     id: String(
       item.id ||
-        item.reference ||
-        `${item.type}-${item.created_at}`
+      item.reference ||
+      `${item.type}-${item.created_at}`
     ),
 
     title: getTransactionTitle(item),
@@ -300,19 +297,26 @@ const normalizeTransaction = (
       ? rawType.replace(/_/g, ' ')
       : undefined,
 
-    fee: Number(item.transaction_fee || item.fee || 0) > 0
-      ? `₦${Number(item.transaction_fee || item.fee).toLocaleString('en-NG', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`
-      : undefined,
+    fee:
+      Number(item.transaction_fee || item.fee || 0) > 0
+        ? `₦${Number(
+            item.transaction_fee || item.fee
+          ).toLocaleString('en-NG', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`
+        : undefined,
 
-    totalDebit: Number(item.total_debit || 0) > 0
-      ? `₦${Number(item.total_debit).toLocaleString('en-NG', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`
-      : undefined,
+    totalDebit:
+      Number(item.total_debit || 0) > 0
+        ? `₦${Number(item.total_debit).toLocaleString(
+            'en-NG',
+            {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }
+          )}`
+        : undefined,
 
     recipientName: item.recipient_name
       ? String(item.recipient_name)
@@ -346,9 +350,12 @@ const normalizeTransaction = (
       ? String(item.customer_number)
       : undefined,
 
-    electricityToken: item.electricity_token || item.token
-      ? String(item.electricity_token || item.token)
-      : undefined,
+    electricityToken:
+      item.electricity_token || item.token
+        ? String(
+            item.electricity_token || item.token
+          )
+        : undefined,
   };
 };
 
@@ -396,51 +403,76 @@ export default function App() {
 
   const [refreshing, setRefreshing] =
     useState(false);
-const offerPushNotifications = useCallback((token: string) => {
-  Alert.alert(
-    'Stay updated',
-    'Would you like ZENIMONIES to send important account and service announcements to this device?',
-    [
-      {
-        text: 'Not now',
-        style: 'cancel',
-      },
-      {
-        text: 'Enable notifications',
-        onPress: () => {
-          registerPushNotifications(token)
-            .then((result) => {
-              if (!result.success && !result.permissionDenied) {
-                Alert.alert(
-                  'Notifications',
-                  'We could not enable notifications right now. Please try again later.',
-                );
-              }
-            })
-            .catch(() => {
-              Alert.alert(
-                'Notifications',
-                'We could not enable notifications right now. Please try again later.',
-              );
-            });
-        },
-      },
-    ],
+
+  // ====================================================
+  // CUSTOMER PROFILE PHOTO
+  // ====================================================
+
+  const [profilePhotoUri, setProfilePhotoUri] =
+    useState<string | null>(null);
+
+  const handleProfilePhotoChange = useCallback(
+    (uri: string) => {
+      setProfilePhotoUri(uri);
+    },
+    []
   );
-}, []);
+
+  // ====================================================
+  // PUSH NOTIFICATION OFFER
+  // ====================================================
+
+  const offerPushNotifications = useCallback(
+    (token: string) => {
+      Alert.alert(
+        'Stay updated',
+        'Would you like ZENIMONIES to send important account and service announcements to this device?',
+        [
+          {
+            text: 'Not now',
+            style: 'cancel',
+          },
+          {
+            text: 'Enable notifications',
+            onPress: () => {
+              registerPushNotifications(token)
+                .then((result) => {
+                  if (
+                    !result.success &&
+                    !result.permissionDenied
+                  ) {
+                    Alert.alert(
+                      'Notifications',
+                      'We could not enable notifications right now. Please try again later.'
+                    );
+                  }
+                })
+                .catch(() => {
+                  Alert.alert(
+                    'Notifications',
+                    'We could not enable notifications right now. Please try again later.'
+                  );
+                });
+            },
+          },
+        ]
+      );
+    },
+    []
+  );
+
   // ====================================================
   // CLEAR SESSION
   // ====================================================
 
   const clearSession = useCallback(async () => {
-    await deleteAuthToken(
-      AUTH_TOKEN_KEY
-    );
+    await deleteAuthToken(AUTH_TOKEN_KEY);
 
     setSession(null);
     setAccount(null);
     setTransactions([]);
     setSelectedTransaction(null);
+    setProfilePhotoUri(null);
     setRefreshing(false);
     setDashboardLoading(false);
     setScreen('welcome');
@@ -476,7 +508,7 @@ const offerPushNotifications = useCallback((token: string) => {
 
         throw new Error(
           data.message ||
-            'Authentication failed.'
+          'Authentication failed.'
         );
       }
 
@@ -526,7 +558,7 @@ const offerPushNotifications = useCallback((token: string) => {
         ) {
           throw new Error(
             accountData.message ||
-              'Unable to retrieve your account.'
+            'Unable to retrieve your account.'
           );
         }
 
@@ -536,7 +568,7 @@ const offerPushNotifications = useCallback((token: string) => {
         ) {
           throw new Error(
             transactionData.message ||
-              'Unable to retrieve your transactions.'
+            'Unable to retrieve your transactions.'
           );
         }
 
@@ -633,9 +665,7 @@ const offerPushNotifications = useCallback((token: string) => {
     const restoreSession = async () => {
       try {
         const savedToken =
-          await getAuthToken(
-            AUTH_TOKEN_KEY
-          );
+          await getAuthToken(AUTH_TOKEN_KEY);
 
         if (!savedToken) {
           return;
@@ -653,10 +683,7 @@ const offerPushNotifications = useCallback((token: string) => {
           data.success !== true ||
           !data.user
         ) {
-          await deleteAuthToken(
-            AUTH_TOKEN_KEY
-          );
-
+          await deleteAuthToken(AUTH_TOKEN_KEY);
           return;
         }
 
@@ -668,7 +695,6 @@ const offerPushNotifications = useCallback((token: string) => {
         const restoredSession: AuthSession = {
           success: true,
           token: savedToken,
-
           user: {
             ...(data.user || {}),
             ...(profileUser || {}),
@@ -679,15 +705,13 @@ const offerPushNotifications = useCallback((token: string) => {
         setScreen('home');
 
         try {
-          await loadDashboardData(
-            savedToken
-          );
+          await loadDashboardData(savedToken);
         } catch (error: any) {
           if (mounted) {
             Alert.alert(
               'Account information',
               error.message ||
-                'Your account information could not be loaded. Please refresh.'
+              'Your account information could not be loaded. Please refresh.'
             );
           }
         }
@@ -695,10 +719,7 @@ const offerPushNotifications = useCallback((token: string) => {
         if (
           error.message === 'SESSION_EXPIRED'
         ) {
-          await deleteAuthToken(
-            AUTH_TOKEN_KEY
-          );
-
+          await deleteAuthToken(AUTH_TOKEN_KEY);
           return;
         }
 
@@ -738,7 +759,6 @@ const offerPushNotifications = useCallback((token: string) => {
         'Sign in incomplete',
         'The server did not return a valid login token.'
       );
-
       return;
     }
 
@@ -753,7 +773,6 @@ const offerPushNotifications = useCallback((token: string) => {
 
       const updatedSession: AuthSession = {
         ...authData,
-
         user: {
           ...(authData.user || {}),
           ...(profileUser || {}),
@@ -764,16 +783,16 @@ const offerPushNotifications = useCallback((token: string) => {
       setAccount(null);
       setTransactions([]);
       setScreen('home');
+
       offerPushNotifications(authData.token);
+
       try {
-        await loadDashboardData(
-          authData.token
-        );
+        await loadDashboardData(authData.token);
       } catch (error: any) {
         Alert.alert(
           'Account information',
           error.message ||
-            'Your account details could not be loaded. Please refresh the dashboard.'
+          'Your account details could not be loaded. Please refresh the dashboard.'
         );
       }
     } catch {
@@ -796,9 +815,7 @@ const offerPushNotifications = useCallback((token: string) => {
       return;
     }
 
-    await handleLoginSuccess(
-      registrationSession
-    );
+    await handleLoginSuccess(registrationSession);
   };
 
   // ====================================================
@@ -819,7 +836,7 @@ const offerPushNotifications = useCallback((token: string) => {
       Alert.alert(
         'Refresh failed',
         error.message ||
-          'Unable to refresh your account information.'
+        'Unable to refresh your account information.'
       );
     } finally {
       setRefreshing(false);
@@ -831,19 +848,21 @@ const offerPushNotifications = useCallback((token: string) => {
   // ====================================================
 
   const handleLogout = async () => {
-  try {
-    if (session?.token) {
-      await unregisterPushNotifications(session.token);
-    }
+    try {
+      if (session?.token) {
+        await unregisterPushNotifications(
+          session.token
+        );
+      }
 
-    await clearSession();
-  } catch {
-    Alert.alert(
-      'Logout failed',
-      'We could not complete logout. Please try again.'
-    );
-  }
-};
+      await clearSession();
+    } catch {
+      Alert.alert(
+        'Logout failed',
+        'We could not complete logout. Please try again.'
+      );
+    }
+  };
 
   // ====================================================
   // SELECT TRANSACTION
@@ -855,25 +874,31 @@ const offerPushNotifications = useCallback((token: string) => {
     setSelectedTransaction(transaction);
     setScreen('transaction-details');
   };
-const handleOpenNotificationTransaction = (
-  transactionId: string
-) => {
-  const matchingTransaction = transactions.find(
-    (transaction) =>
-      transaction.id === transactionId ||
-      transaction.reference === transactionId
-  );
 
-  if (!matchingTransaction) {
-    Alert.alert(
-      'Transaction unavailable',
-      'We could not find the transaction linked to this notification. Please check your transaction history.'
+  // ====================================================
+  // OPEN NOTIFICATION TRANSACTION
+  // ====================================================
+
+  const handleOpenNotificationTransaction = (
+    transactionId: string
+  ) => {
+    const matchingTransaction = transactions.find(
+      (transaction) =>
+        transaction.id === transactionId ||
+        transaction.reference === transactionId
     );
-    return;
-  }
 
-  handleSelectTransaction(matchingTransaction);
-};
+    if (!matchingTransaction) {
+      Alert.alert(
+        'Transaction unavailable',
+        'We could not find the transaction linked to this notification. Please check your transaction history.'
+      );
+      return;
+    }
+
+    handleSelectTransaction(matchingTransaction);
+  };
+
   // ====================================================
   // DASHBOARD ACTIONS
   // ====================================================
@@ -895,7 +920,6 @@ const handleOpenNotificationTransaction = (
 
     Alert.alert(
       serviceNames[action] || 'ZENIMONIES',
-
       'This service screen will be connected in the next development stage. No transaction has been initiated.'
     );
   };
@@ -917,10 +941,14 @@ const handleOpenNotificationTransaction = (
       return;
     }
 
-    if (tab === 'History') {
+    if (
+      tab === 'History' ||
+      tab === 'Transactions'
+    ) {
       setScreen('history');
       return;
     }
+
     if (tab === 'Notifications') {
       setScreen('notifications');
       return;
@@ -938,16 +966,12 @@ const handleOpenNotificationTransaction = (
 
   if (checkingSession) {
     return (
-      <SafeAreaView
-        style={styles.loadingContainer}
-      >
+      <SafeAreaView style={styles.loadingContainer}>
         <StatusBar barStyle="dark-content" />
 
         <View style={styles.loadingContent}>
           <View style={styles.logo}>
-            <Text style={styles.logoText}>
-              Z
-            </Text>
+            <Text style={styles.logoText}>Z</Text>
           </View>
 
           <Text style={styles.loadingBrand}>
@@ -988,9 +1012,7 @@ const handleOpenNotificationTransaction = (
 
         <LoginScreen
           onLoginSuccess={handleLoginSuccess}
-          onRegisterPress={() =>
-            setScreen('register')
-          }
+          onRegisterPress={() => setScreen('register')}
         />
       </SafeAreaView>
     );
@@ -1015,25 +1037,30 @@ const handleOpenNotificationTransaction = (
         </TouchableOpacity>
 
         <RegisterScreen
-          onRegistrationSuccess={
-            handleRegistrationSuccess
-          }
+          onRegistrationSuccess={handleRegistrationSuccess}
         />
       </SafeAreaView>
     );
   }
-if (screen === 'notifications' && session) {
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-    <NotificationsScreen
-  token={session.token}
-  onBack={() => setScreen('home')}
-  onOpenTransaction={handleOpenNotificationTransaction}
-/>
-    </SafeAreaView>
-  );
-}
+
+  // ====================================================
+  // NOTIFICATIONS
+  // ====================================================
+
+  if (screen === 'notifications' && session) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+
+        <NotificationsScreen
+          token={session.token}
+          onBack={() => setScreen('home')}
+          onOpenTransaction={handleOpenNotificationTransaction}
+        />
+      </SafeAreaView>
+    );
+  }
+
   // ====================================================
   // CUSTOMER PROFILE
   // ====================================================
@@ -1046,6 +1073,8 @@ if (screen === 'notifications' && session) {
         <ProfileScreen
           user={session.user}
           account={account}
+          profilePhotoUri={profilePhotoUri}
+          onProfilePhotoChange={handleProfilePhotoChange}
           onBack={() => setScreen('home')}
           onLogout={handleLogout}
         />
@@ -1116,9 +1145,7 @@ if (screen === 'notifications' && session) {
       session.user?.kyc_status ||
       'Pending';
 
-    const balance = formatNaira(
-      account?.balance
-    );
+    const balance = formatNaira(account?.balance);
 
     return (
       <SafeAreaView style={styles.container}>
@@ -1140,6 +1167,8 @@ if (screen === 'notifications' && session) {
             userName={userName}
             currency="NGN"
             balance={balance}
+            profilePhotoUri={profilePhotoUri}
+            onProfilePhotoChange={handleProfilePhotoChange}
             accountNumber={
               account?.account_number || undefined
             }
@@ -1149,9 +1178,7 @@ if (screen === 'notifications' && session) {
                 ? String(verificationLevel)
                 : undefined
             }
-            verificationStatus={
-              verificationStatus
-            }
+            verificationStatus={verificationStatus}
             transactions={transactions}
             onAction={handleDashboardAction}
             onNavigate={handleDashboardNavigation}
@@ -1183,9 +1210,7 @@ if (screen === 'notifications' && session) {
       <View style={styles.content}>
         <View style={styles.brandArea}>
           <View style={styles.logo}>
-            <Text style={styles.logoText}>
-              Z
-            </Text>
+            <Text style={styles.logoText}>Z</Text>
           </View>
 
           <Text style={styles.brand}>
@@ -1199,9 +1224,7 @@ if (screen === 'notifications' && session) {
 
         <View style={styles.hero}>
           <View style={styles.heroCircle}>
-            <Text style={styles.currency}>
-              ₦
-            </Text>
+            <Text style={styles.currency}>₦</Text>
           </View>
 
           <Text style={styles.heading}>
@@ -1219,9 +1242,7 @@ if (screen === 'notifications' && session) {
         <View style={styles.actions}>
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() =>
-              setScreen('register')
-            }
+            onPress={() => setScreen('register')}
           >
             <Text style={styles.primaryText}>
               Get Started
@@ -1230,9 +1251,7 @@ if (screen === 'notifications' && session) {
 
           <TouchableOpacity
             style={styles.secondaryButton}
-            onPress={() =>
-              setScreen('login')
-            }
+            onPress={() => setScreen('login')}
           >
             <Text style={styles.secondaryText}>
               I already have an account
