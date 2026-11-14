@@ -1,4 +1,3 @@
-
 import React, { useCallback, useEffect, useState } from 'react';
 
 import {
@@ -434,7 +433,7 @@ const offerPushNotifications = useCallback((token: string) => {
   // ====================================================
 
   const clearSession = useCallback(async () => {
-    await SecureStore.deleteItemAsync(
+    await deleteAuthToken(
       AUTH_TOKEN_KEY
     );
 
@@ -634,7 +633,7 @@ const offerPushNotifications = useCallback((token: string) => {
     const restoreSession = async () => {
       try {
         const savedToken =
-          await SecureStore.getItemAsync(
+          await getAuthToken(
             AUTH_TOKEN_KEY
           );
 
@@ -654,7 +653,7 @@ const offerPushNotifications = useCallback((token: string) => {
           data.success !== true ||
           !data.user
         ) {
-          await SecureStore.deleteItemAsync(
+          await deleteAuthToken(
             AUTH_TOKEN_KEY
           );
 
@@ -696,7 +695,7 @@ const offerPushNotifications = useCallback((token: string) => {
         if (
           error.message === 'SESSION_EXPIRED'
         ) {
-          await SecureStore.deleteItemAsync(
+          await deleteAuthToken(
             AUTH_TOKEN_KEY
           );
 
@@ -744,7 +743,7 @@ const offerPushNotifications = useCallback((token: string) => {
     }
 
     try {
-      await SecureStore.setItemAsync(
+      await setAuthToken(
         AUTH_TOKEN_KEY,
         authData.token
       );
