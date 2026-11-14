@@ -206,10 +206,11 @@ export default function Dashboard({
               accessibilityLabel="Upload or change profile photo"
             >
               {profilePhotoUri ? (
-                <Image
-                  source={{ uri: profilePhotoUri }}
-                  style={styles.profilePhoto}
-                />
+             <Image
+               source={{ uri: profilePhotoUri }}
+                style={styles.profilePhoto}
+                resizeMode="cover"
+             />
               ) : (
                 <>
                   <View style={styles.logoInner} />
@@ -604,9 +605,8 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   profilePhoto: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
+  width: '100%',
+  height: '100%',
   },
   scrollContent: {
     paddingHorizontal: 20,
