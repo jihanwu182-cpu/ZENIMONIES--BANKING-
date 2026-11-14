@@ -160,14 +160,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle={
-          mode === 'dark'
-            ? 'light-content'
-            : 'dark-content'
-        }
-        backgroundColor={colors.backgroundSoft}
-      />
+    <StatusBar
+      barStyle={
+        mode === 'dark'
+        ? 'light-content'
+        : 'dark-content'
+     } 
+   />
 
       <View style={styles.header}>
         <TouchableOpacity
