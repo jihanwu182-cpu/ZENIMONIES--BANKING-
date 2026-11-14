@@ -192,7 +192,7 @@ export default function Dashboard({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
+      <StatusBar barStyle="dark-content" />
 
       <View style={styles.container}>
         {/* FIXED HEADER */}
