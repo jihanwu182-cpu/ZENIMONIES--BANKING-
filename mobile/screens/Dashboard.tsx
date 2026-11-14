@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   Alert,
@@ -61,13 +60,16 @@ type DashboardProps = {
   onNavigate?: (tab: TabName) => void;
 };
 
-const GREEN = '#78A900';
-const DARK_GREEN = '#527900';
-const BLACK = '#172018';
-const MUTED = '#858B83';
-const BACKGROUND = '#F6F8F3';
+// ZENIMONIES official green-and-white palette, matched to supplied artwork.
+const GREEN = '#00B83F';
+const DARK_GREEN = '#005E2F';
+const DEEP_GREEN = '#003F25';
+const BLACK = '#101A16';
+const MUTED = '#68736C';
+const BACKGROUND = '#FFFFFF';
 const WHITE = '#FFFFFF';
-const BORDER = '#E9EDE5';
+const BORDER = '#E5ECE7';
+const LIGHT_GREEN = '#EAF8EF';
 
 export default function Dashboard({
   userName = 'Customer',
@@ -85,8 +87,8 @@ export default function Dashboard({
 }: DashboardProps) {
   const [balanceVisible, setBalanceVisible] = useState(true);
 
-  const displayName =
-    userName.trim().split(' ')[0] || 'Customer';
+  // Display the customer's full registered name in the fixed header.
+  const displayName = userName.trim() || 'Customer';
 
   const handleAction = (action: DashboardAction) => {
     if (onAction) {
@@ -153,9 +155,40 @@ export default function Dashboard({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-     <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
 
       <View style={styles.container}>
+        {/* FIXED BRAND HEADER */}
+        <View style={styles.header}>
+          <View style={styles.headerIdentity}>
+            <View style={styles.logoCircle}>
+              <Text style={styles.logoText}>Z</Text>
+            </View>
+
+            <View style={styles.customerIdentity}>
+              <Text style={styles.greeting}>Good day,</Text>
+              <Text
+                style={styles.customerName}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {displayName}
+              </Text>
+              <Text style={styles.brandCaption}>DIGITAL BANKING</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => handleNavigate('Notifications')}
+            accessibilityRole="button"
+            accessibilityLabel="Open notifications"
+          >
+            <Text style={styles.notificationIcon}>♧</Text>
+            <View style={styles.notificationDot} />
+          </TouchableOpacity>
+        </View>
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
@@ -170,35 +203,6 @@ export default function Dashboard({
             ) : undefined
           }
         >
-          {/* HEADER */}
-
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.greeting}>
-                Good day,
-              </Text>
-
-              <Text style={styles.customerName}>
-                {displayName} 👋
-              </Text>
-            </View>
-
-            <View style={styles.headerActions}>
-  <TouchableOpacity
-    style={styles.notificationButton}
-    onPress={() => handleNavigate('Notifications')}
-    accessibilityRole="button"
-    accessibilityLabel="Open notifications"
-  >
-    <Text style={styles.notificationIcon}>♧</Text>
-    <View style={styles.notificationDot} />
-  </TouchableOpacity>
-
-  <View style={styles.logoCircle}>
-    <Text style={styles.logoText}>Z</Text>
-  </View>
-</View>
-</View>
           {/* ACCOUNT BALANCE */}
 
           <View style={styles.balanceCard}>
@@ -210,6 +214,10 @@ export default function Dashboard({
               <TouchableOpacity
                 onPress={() =>
                   setBalanceVisible(!balanceVisible)
+                }
+                accessibilityRole="button"
+                accessibilityLabel={
+                  balanceVisible ? 'Hide balance' : 'Show balance'
                 }
               >
                 <Text style={styles.hideBalance}>
@@ -557,35 +565,49 @@ const styles = StyleSheet.create({
     backgroundColor: BACKGROUND,
   },
 
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 15,
-    paddingBottom: 25,
-  },
-
+  // Fixed at the top while dashboard content scrolls.
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 25,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 15,
+    backgroundColor: WHITE,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+
+  headerIdentity: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+
+  customerIdentity: {
+    flex: 1,
+    marginLeft: 11,
   },
 
   greeting: {
-    fontSize: 14,
+    fontSize: 12,
     color: MUTED,
   },
 
   customerName: {
-    fontSize: 23,
+    fontSize: 17,
     fontWeight: '800',
     color: BLACK,
-    marginTop: 4,
+    marginTop: 2,
   },
 
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  brandCaption: {
+    color: DARK_GREEN,
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 2.2,
+    marginTop: 3,
   },
 
   notificationButton: {
@@ -611,29 +633,41 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#F05B50',
+    backgroundColor: '#E53935',
   },
 
+  // Approximation of the supplied green Z brand mark using native views.
   logoCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: GREEN,
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: DARK_GREEN,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: GREEN,
   },
 
   logoText: {
     color: WHITE,
-    fontSize: 23,
+    fontSize: 29,
     fontWeight: '900',
+    fontStyle: 'italic',
+  },
+
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 25,
   },
 
   balanceCard: {
-    backgroundColor: GREEN,
+    backgroundColor: DEEP_GREEN,
     borderRadius: 22,
     padding: 22,
     marginBottom: 28,
+    borderWidth: 1,
+    borderColor: DARK_GREEN,
   },
 
   balanceTop: {
@@ -643,14 +677,15 @@ const styles = StyleSheet.create({
   },
 
   balanceLabel: {
-    color: '#F0F7DE',
+    color: '#E5F8EC',
     fontSize: 14,
+    fontWeight: '700',
   },
 
   hideBalance: {
     color: WHITE,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
   balanceRow: {
@@ -674,7 +709,7 @@ const styles = StyleSheet.create({
 
   balanceDivider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     marginVertical: 20,
   },
 
@@ -685,7 +720,7 @@ const styles = StyleSheet.create({
   },
 
   accountLabel: {
-    color: '#E5F1D1',
+    color: '#D5EBDD',
     fontSize: 12,
   },
 
@@ -699,7 +734,7 @@ const styles = StyleSheet.create({
   accountDetailsButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 10,
     paddingVertical: 9,
     paddingHorizontal: 12,
@@ -768,7 +803,7 @@ const styles = StyleSheet.create({
 
   actionIconText: {
     fontSize: 25,
-    color: GREEN,
+    color: DARK_GREEN,
     fontWeight: '700',
   },
 
@@ -800,7 +835,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 15,
-    backgroundColor: '#F0F5E7',
+    backgroundColor: LIGHT_GREEN,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -833,14 +868,14 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: '#EEF5DF',
+    backgroundColor: LIGHT_GREEN,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   verificationIconText: {
     fontSize: 21,
-    color: GREEN,
+    color: DARK_GREEN,
     fontWeight: '900',
   },
 
@@ -870,23 +905,25 @@ const styles = StyleSheet.create({
 
   verificationArrow: {
     fontSize: 27,
-    color: GREEN,
+    color: DARK_GREEN,
   },
 
   savingsCard: {
-    backgroundColor: '#EDF3E3',
+    backgroundColor: LIGHT_GREEN,
     borderRadius: 18,
     padding: 17,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 28,
+    borderWidth: 1,
+    borderColor: '#D7EFDF',
   },
 
   savingsIcon: {
     width: 43,
     height: 43,
     borderRadius: 14,
-    backgroundColor: GREEN,
+    backgroundColor: DARK_GREEN,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -931,14 +968,14 @@ const styles = StyleSheet.create({
     width: 55,
     height: 55,
     borderRadius: 28,
-    backgroundColor: '#F0F5E7',
+    backgroundColor: LIGHT_GREEN,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   emptyIconText: {
     fontSize: 28,
-    color: GREEN,
+    color: DARK_GREEN,
   },
 
   emptyTitle: {
@@ -976,7 +1013,7 @@ const styles = StyleSheet.create({
   },
 
   creditIcon: {
-    backgroundColor: '#EAF5DF',
+    backgroundColor: LIGHT_GREEN,
   },
 
   debitIcon: {
@@ -1071,7 +1108,7 @@ const styles = StyleSheet.create({
   },
 
   activeNavIcon: {
-    color: GREEN,
+    color: DARK_GREEN,
   },
 
   navLabel: {
