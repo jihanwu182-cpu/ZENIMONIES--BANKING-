@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   logoInner: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: DARK_GREEN,
     borderRadius: 13,
     left: 2,
