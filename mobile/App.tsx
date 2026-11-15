@@ -655,8 +655,9 @@ export default function App() {
     [authenticatedFetch]
   );
 
+
   // ====================================================
-  // RESTORE SAVED LOGIN SESSION
+  // RESTORE SAVED LOGIN SESSION — OPTIMIZED
   // ====================================================
 
   useEffect(() => {
@@ -664,13 +665,13 @@ export default function App() {
 
     const restoreSession = async () => {
       try {
-        const savedToken =
-          await getAuthToken(AUTH_TOKEN_KEY);
+        const savedToken = await getAuthToken(AUTH_TOKEN_KEY);
 
         if (!savedToken) {
           return;
         }
 
+        // Always validate the saved token with the backend.
         const response = await authenticatedFetch(
           `${AUTH_URL}/me`,
           savedToken
@@ -687,26 +688,46 @@ export default function App() {
           return;
         }
 
-        const profileUser =
-          await loadProfile(savedToken);
-
         if (!mounted) return;
 
-        const restoredSession: AuthSession = {
+        // Open the dashboard immediately after authentication.
+        setSession({
           success: true,
           token: savedToken,
-          user: {
-            ...(data.user || {}),
-            ...(profileUser || {}),
-          },
-        };
+          user: data.user,
+          account: data.account,
+          accounts: data.accounts,
+        });
 
-        setSession(restoredSession);
+        setAccount(
+          data.account ||
+          data.accounts?.[0] ||
+          null
+        );
+
         setScreen('home');
+        setCheckingSession(false);
 
-        try {
-          await loadDashboardData(savedToken);
-        } catch (error: any) {
+        // Load secondary data in the background.
+        void loadProfile(savedToken).then((profileUser) => {
+          if (!mounted || !profileUser) return;
+
+          setSession((previous) => {
+            if (!previous || previous.token !== savedToken) {
+              return previous;
+            }
+
+            return {
+              ...previous,
+              user: {
+                ...(previous.user || {}),
+                ...profileUser,
+              },
+            };
+          });
+        });
+
+        void loadDashboardData(savedToken).catch((error: any) => {
           if (mounted) {
             Alert.alert(
               'Account information',
@@ -714,11 +735,9 @@ export default function App() {
               'Your account information could not be loaded. Please refresh.'
             );
           }
-        }
+        });
       } catch (error: any) {
-        if (
-          error.message === 'SESSION_EXPIRED'
-        ) {
+        if (error.message === 'SESSION_EXPIRED') {
           await deleteAuthToken(AUTH_TOKEN_KEY);
           return;
         }
@@ -736,7 +755,7 @@ export default function App() {
       }
     };
 
-    restoreSession();
+    void restoreSession();
 
     return () => {
       mounted = false;
@@ -748,7 +767,7 @@ export default function App() {
   ]);
 
   // ====================================================
-  // LOGIN SUCCESS
+  // LOGIN SUCCESS — FASTER DASHBOARD ENTRY
   // ====================================================
 
   const handleLoginSuccess = async (
@@ -763,38 +782,55 @@ export default function App() {
     }
 
     try {
+      // Securely save the token before opening the dashboard.
       await setAuthToken(
         AUTH_TOKEN_KEY,
         authData.token
       );
 
-      const profileUser =
-        await loadProfile(authData.token);
+      // Use account data already returned by login, if available.
+      const initialAccount =
+        authData.account ||
+        authData.accounts?.[0] ||
+        null;
 
-      const updatedSession: AuthSession = {
-        ...authData,
-        user: {
-          ...(authData.user || {}),
-          ...(profileUser || {}),
-        },
-      };
-
-      setSession(updatedSession);
-      setAccount(null);
+      setSession(authData);
+      setAccount(initialAccount);
       setTransactions([]);
       setScreen('home');
 
+      // Ask about notifications without waiting for data requests.
       offerPushNotifications(authData.token);
 
-      try {
-        await loadDashboardData(authData.token);
-      } catch (error: any) {
-        Alert.alert(
-          'Account information',
-          error.message ||
-          'Your account details could not be loaded. Please refresh the dashboard.'
-        );
-      }
+      // Fetch profile in the background.
+      void loadProfile(authData.token).then((profileUser) => {
+        if (!profileUser) return;
+
+        setSession((previous) => {
+          if (!previous || previous.token !== authData.token) {
+            return previous;
+          }
+
+          return {
+            ...previous,
+            user: {
+              ...(previous.user || {}),
+              ...profileUser,
+            },
+          };
+        });
+      });
+
+      // Fetch account and transactions in the background.
+      void loadDashboardData(authData.token).catch(
+        (error: any) => {
+          Alert.alert(
+            'Account information',
+            error.message ||
+            'Your account details could not be loaded. Please refresh the dashboard.'
+          );
+        }
+      );
     } catch {
       Alert.alert(
         'Secure storage unavailable',
@@ -803,6 +839,7 @@ export default function App() {
     }
   };
 
+ 
   // ====================================================
   // REGISTRATION SUCCESS
   // ====================================================
