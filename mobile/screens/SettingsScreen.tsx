@@ -498,13 +498,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   return (
     <View style={styles.container}>
       <StatusBar
-        barStyle={
-          mode === 'dark'
-            ? 'light-content'
-            : 'dark-content'
-        }
-        backgroundColor={colors.surface}
-      />
+  barStyle={
+    mode === 'dark'
+      ? 'light-content'
+      : 'dark-content'
+  }
+/>
 
       {/* HEADER */}
 
