@@ -618,8 +618,8 @@ export default function App() {
               {
                 text: 'Sign in',
                 onPress: () => {
-                  clearSession().catch(() => {});
-                },
+                clearSession();
+               },
               },
             ]
           );
