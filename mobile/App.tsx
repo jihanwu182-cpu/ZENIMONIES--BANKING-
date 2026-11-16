@@ -1134,11 +1134,10 @@ const loadProfile = useCallback(
         <StatusBar barStyle="dark-content" />
 
         <ProfileScreen
-          user={session.user}
-          account={account}
-          onBack={() => setScreen('home')}
-          onLogout={handleLogout}
-        />
+         user={session.user}
+         account={account}
+         onBack={() => setScreen('home')}
+      />
       </SafeAreaView>
     );
   }
