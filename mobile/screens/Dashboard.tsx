@@ -58,6 +58,7 @@ type Transaction = {
 
 type DashboardProps = {
   userName?: string;
+  token?: string;
   currency?: 'NGN' | 'ZAR';
   balance?: string;
   accountNumber?: string;
@@ -78,6 +79,7 @@ type IconName =
 
 export default function Dashboard({
   userName = 'Customer',
+  token,
   currency = 'NGN',
   balance,
   verificationLevel,
@@ -103,8 +105,20 @@ export default function Dashboard({
 
   const GREEN = isDark ? '#20C875' : '#02A339';
 
+  // ====================================================
+  // PROFILE PHOTO UPLOAD
+  // ====================================================
+
   const handlePhotoUpload = async () => {
     if (photoLoading) return;
+
+    if (!token) {
+      Alert.alert(
+        'Session unavailable',
+        'Please sign in again before changing your profile picture.'
+      );
+      return;
+    }
 
     setPhotoLoading(true);
 
@@ -128,18 +142,79 @@ export default function Dashboard({
           quality: 0.85,
         });
 
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        onProfilePhotoChange?.(result.assets[0].uri);
+      if (result.canceled || !result.assets?.[0]?.uri) {
+        return;
       }
-    } catch {
+
+      const photo = result.assets[0];
+
+      const formData = new FormData();
+
+      formData.append(
+        'profile_photo',
+        {
+          uri: photo.uri,
+          name: photo.fileName || 'profile-photo.jpg',
+          type: photo.mimeType || 'image/jpeg',
+        } as any
+      );
+
+      const response = await fetch(
+        'https://zenimonies-banking.onrender.com/api/profile/photo',
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      let data: any;
+
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(
+          'The server returned an invalid response.'
+        );
+      }
+
+      if (
+        !response.ok ||
+        data.success !== true ||
+        typeof data.profile_photo !== 'string' ||
+        !data.profile_photo.startsWith('data:image/')
+      ) {
+        throw new Error(
+          data.message || 'Profile picture upload failed.'
+        );
+      }
+
+      // Display the image returned by the backend.
+      // This is the permanent database-stored image,
+      // not the temporary local phone image.
+      onProfilePhotoChange?.(data.profile_photo);
+
       Alert.alert(
-        'Photo upload',
-        'We could not open your photo library. Please try again.'
+        'Profile picture updated',
+        'Your profile picture has been saved successfully.'
+      );
+    } catch (error: any) {
+      Alert.alert(
+        'Photo upload failed',
+        error?.message ||
+          'We could not upload your profile picture. Please try again.'
       );
     } finally {
       setPhotoLoading(false);
     }
   };
+
+  // ====================================================
+  // DASHBOARD ACTIONS
+  // ====================================================
 
   const handleAction = (action: DashboardAction) => {
     if (onAction) {
@@ -170,6 +245,10 @@ export default function Dashboard({
 
     return balanceVisible ? balance : '••••••••';
   };
+
+  // ====================================================
+  // QUICK ACTIONS
+  // ====================================================
 
   const quickActions: {
     title: string;
@@ -208,6 +287,10 @@ export default function Dashboard({
     },
   ];
 
+  // ====================================================
+  // OTHER SERVICES
+  // ====================================================
+
   const serviceActions: {
     title: string;
     icon: IconName;
@@ -239,6 +322,10 @@ export default function Dashboard({
       action: 'bills',
     },
   ];
+
+  // ====================================================
+  // BOTTOM NAVIGATION
+  // ====================================================
 
   const navigation: {
     title: TabName;
@@ -272,6 +359,10 @@ export default function Dashboard({
     },
   ];
 
+  // ====================================================
+  // DASHBOARD UI
+  // ====================================================
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar
@@ -287,6 +378,7 @@ export default function Dashboard({
               style={styles.logoCircle}
               onPress={handlePhotoUpload}
               activeOpacity={0.8}
+              disabled={photoLoading}
               accessibilityRole="button"
               accessibilityLabel="Upload or change profile photo"
             >
@@ -826,16 +918,16 @@ const createStyles = (
       height: '100%',
     },
 
-  photoLoadingOverlay: {
-  position: 'absolute',
-  top: 0,
-  right: 0,
-  bottom: 0,
-  left: 0,
-  backgroundColor: 'rgba(0,0,0,0.4)',
-  alignItems: 'center',
-  justifyContent: 'center',
-},
+    photoLoadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
     scrollContent: {
       paddingHorizontal: 20,
