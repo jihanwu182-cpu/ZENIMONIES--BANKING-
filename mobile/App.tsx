@@ -892,32 +892,33 @@ const loadProfile = useCallback(
   // LOGOUT
   // ====================================================
 
-const handleLogout = async () => {
+const handleLogout = useCallback(async () => {
   const token = session?.token;
 
-  // Clear the local session even if push unregistration fails.
+  // Clear the local session immediately.
   try {
-    if (token) {
-      await unregisterPushNotifications(token);
-    }
+    await clearSession();
   } catch (error) {
-    console.warn(
-      'Push notification unregistration failed:',
-      error
-    );
-  } finally {
-    try {
-      await clearSession();
-    } catch (error) {
-      console.error('Local logout error:', error);
+    console.error('Local logout error:', error);
 
-      Alert.alert(
-        'Logout error',
-        'We could not clear your saved login. Please try again.'
-      );
-    }
+    Alert.alert(
+      'Logout',
+      'Your session could not be cleared completely. Please try again.'
+    );
+
+    return;
   }
-};
+
+  // Push notification cleanup must never block logout.
+  if (token) {
+    void unregisterPushNotifications(token).catch((error) => {
+      console.warn(
+        'Push notification unregistration failed:',
+        error
+      );
+    });
+  }
+}, [session?.token, clearSession]);
 
  
   // ====================================================
