@@ -884,23 +884,34 @@ export default function App() {
   // LOGOUT
   // ====================================================
 
-  const handleLogout = async () => {
-    try {
-      if (session?.token) {
-        await unregisterPushNotifications(
-          session.token
-        );
-      }
+const handleLogout = async () => {
+  const token = session?.token;
 
+  // Clear the local session even if push unregistration fails.
+  try {
+    if (token) {
+      await unregisterPushNotifications(token);
+    }
+  } catch (error) {
+    console.warn(
+      'Push notification unregistration failed:',
+      error
+    );
+  } finally {
+    try {
       await clearSession();
-    } catch {
+    } catch (error) {
+      console.error('Local logout error:', error);
+
       Alert.alert(
-        'Logout failed',
-        'We could not complete logout. Please try again.'
+        'Logout error',
+        'We could not clear your saved login. Please try again.'
       );
     }
-  };
+  }
+};
 
+ 
   // ====================================================
   // SELECT TRANSACTION
   // ====================================================
