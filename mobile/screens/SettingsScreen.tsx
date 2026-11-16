@@ -62,9 +62,7 @@ type SettingRowProps = {
   title: string;
   description: string;
   onPress: () => void;
-  colors: any;
   danger?: boolean;
-  connected?: boolean;
 };
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -82,7 +80,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const styles = createStyles(colors);
 
   // ====================================================
-  // PASSCODE STATE
+  // STATE
   // ====================================================
 
   const [passcodeStatus, setPasscodeStatus] =
@@ -352,21 +350,21 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   // ====================================================
-  // SETTINGS NOT YET CONNECTED
+  // SETTINGS MENU ACTIONS
   // ====================================================
 
-  const showNotConnected = (feature: string) => {
+  const showSettingMessage = (feature: string) => {
     Alert.alert(
       feature,
-      'This setting is included in the ZENIMONIES mobile settings layout but has not yet been connected. We will integrate it in a later development stage.',
+      'This setting will be connected to its existing ZENIMONIES functionality during the next integration stage.',
       [{ text: 'OK' }]
     );
   };
 
-  const openProfileNotice = () => {
+  const openProfile = () => {
     Alert.alert(
       'My Profile',
-      'You can currently access your profile from the Profile tab on your dashboard.',
+      'You can currently manage your personal information from the Profile tab on your dashboard.',
       [{ text: 'OK' }]
     );
   };
@@ -374,7 +372,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const closeAccountNotice = () => {
     Alert.alert(
       'Close Account',
-      'Account closure is not yet available in the mobile app. Please contact ZENIMONIES support for assistance.',
+      'Please contact ZENIMONIES support to request account closure. Account closure is not performed from this screen.',
       [{ text: 'OK' }]
     );
   };
@@ -419,17 +417,17 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     {
       value: 'light',
       label: 'Light',
-      description: 'Classic ZENIMONIES appearance',
+      description: 'Use the classic ZENIMONIES appearance',
     },
     {
       value: 'dark',
       label: 'Dark',
-      description: 'Dark green appearance',
+      description: 'Use the dark green appearance',
     },
   ];
 
   // ====================================================
-  // SETTINGS ROW
+  // REUSABLE SETTING ROW
   // ====================================================
 
   const SettingRow: React.FC<SettingRowProps> = ({
@@ -437,9 +435,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     title,
     description,
     onPress,
-    colors: rowColors,
     danger = false,
-    connected = false,
   }) => (
     <TouchableOpacity
       style={styles.settingRow}
@@ -479,15 +475,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </Text>
       </View>
 
-      {connected ? (
-        <Text style={styles.rowArrow}>›</Text>
-      ) : (
-        <View style={styles.comingSoonBadge}>
-          <Text style={styles.comingSoonText}>
-            Soon
-          </Text>
-        </View>
-      )}
+      <Text
+        style={[
+          styles.rowArrow,
+          danger && styles.dangerText,
+        ]}
+      >
+        ›
+      </Text>
     </TouchableOpacity>
   );
 
@@ -498,12 +493,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   return (
     <View style={styles.container}>
       <StatusBar
-  barStyle={
-    mode === 'dark'
-      ? 'light-content'
-      : 'dark-content'
-  }
-/>
+        barStyle={
+          mode === 'dark'
+            ? 'light-content'
+            : 'dark-content'
+        }
+      />
 
       {/* HEADER */}
 
@@ -512,13 +507,20 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           onPress={onBack}
           style={styles.backButton}
           accessibilityLabel="Back to dashboard"
+          accessibilityRole="button"
         >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>
-          Settings
-        </Text>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerTitle}>
+            Settings
+          </Text>
+
+          <Text style={styles.headerSubtitle}>
+            Manage your Zenimonies account
+          </Text>
+        </View>
 
         <View style={styles.headerSpacer} />
       </View>
@@ -527,22 +529,22 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* INTRODUCTION */}
+
+        {/* HERO */}
 
         <View style={styles.heroCard}>
-          <View style={styles.heroLogo}>
-            <Text style={styles.heroLogoText}>Z</Text>
-          </View>
+          <Text style={styles.heroBrand}>
+            ZENIMONIES
+          </Text>
 
-          <View style={styles.heroText}>
-            <Text style={styles.heroTitle}>
-              Settings & Preferences
-            </Text>
+          <Text style={styles.heroTitle}>
+            Account Settings
+          </Text>
 
-            <Text style={styles.heroDescription}>
-              Manage your account, security and ZENIMONIES experience.
-            </Text>
-          </View>
+          <Text style={styles.heroDescription}>
+            Manage your profile, payments, login security,
+            savings and account preferences.
+          </Text>
         </View>
 
         {/* ACCOUNT */}
@@ -556,10 +558,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingRow
               icon="♙"
               title="My Profile"
-              description="View and manage your personal information"
-              onPress={openProfileNotice}
-              colors={colors}
-              connected
+              description="Manage your personal and contact information."
+              onPress={openProfile}
             />
           </View>
         </View>
@@ -575,14 +575,15 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingRow
               icon="₦"
               title="Payment Settings"
-              description="Manage your payment preferences"
-              onPress={() => showNotConnected('Payment Settings')}
-              colors={colors}
+              description="Manage your Transaction PIN and payment security."
+              onPress={() =>
+                showSettingMessage('Payment Settings')
+              }
             />
           </View>
         </View>
 
-        {/* LOGIN AND SECURITY */}
+        {/* LOGIN & SECURITY */}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
@@ -591,11 +592,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
           <View style={styles.card}>
             <SettingRow
-              icon="⌑"
+              icon="🔐"
               title="Login Settings"
-              description="Manage your login preferences"
-              onPress={() => showNotConnected('Login Settings')}
-              colors={colors}
+              description="Manage your password and Account Unlock Passcode."
+              onPress={() =>
+                showSettingMessage('Login Settings')
+              }
             />
 
             <View style={styles.rowDivider} />
@@ -603,19 +605,21 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingRow
               icon="?"
               title="Security Question"
-              description="Manage your account security question"
-              onPress={() => showNotConnected('Security Question')}
-              colors={colors}
+              description="Set or change your account security question."
+              onPress={() =>
+                showSettingMessage('Security Question')
+              }
             />
 
             <View style={styles.rowDivider} />
 
             <SettingRow
-              icon="✓"
+              icon="🛡"
               title="Security Center"
-              description="Review your account security settings"
-              onPress={() => showNotConnected('Security Center')}
-              colors={colors}
+              description="Review your account security and protection."
+              onPress={() =>
+                showSettingMessage('Security Center')
+              }
             />
           </View>
         </View>
@@ -641,7 +645,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 </Text>
 
                 <Text style={styles.passcodeDescription}>
-                  A separate six-digit Passcode used to unlock your account after an expired session.
+                  A separate six-digit Passcode used to unlock
+                  your account after an expired session.
                 </Text>
               </View>
             </View>
@@ -712,7 +717,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     </Text>
 
                     <Text style={styles.lockedDescription}>
-                      Too many incorrect attempts were made. Please wait until the lockout expires before trying again.
+                      Too many incorrect attempts were made.
+                      Please wait until the lockout expires
+                      before trying again.
                     </Text>
 
                     {passcodeStatus.locked_until ? (
@@ -887,11 +894,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
           <View style={styles.card}>
             <SettingRow
-              icon="◈"
+              icon="◇"
               title="Saving Settings"
-              description="Manage your ZENIMONIES savings preferences"
-              onPress={() => showNotConnected('Saving Settings')}
-              colors={colors}
+              description="Set the amount and frequency for your Savings."
+              onPress={() =>
+                showSettingMessage('Saving Settings')
+              }
             />
           </View>
         </View>
@@ -905,24 +913,27 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
           <View style={styles.card}>
             <SettingRow
-              icon="♧"
+              icon="SMS"
               title="SMS Alert Settings"
-              description="Manage your SMS notification preferences"
-              onPress={() => showNotConnected('SMS Alert Settings')}
-              colors={colors}
+              description="Control transaction and security SMS alerts."
+              onPress={() =>
+                showSettingMessage('SMS Alert Settings')
+              }
             />
 
             <View style={styles.rowDivider} />
 
             <TouchableOpacity
               style={styles.settingRow}
-              onPress={() => setShowThemeOptions((value) => !value)}
+              onPress={() =>
+                setShowThemeOptions((value) => !value)
+              }
               activeOpacity={0.75}
               accessibilityRole="button"
             >
               <View style={styles.rowIcon}>
                 <Text style={styles.rowIconText}>
-                  ◐
+                  ☼
                 </Text>
               </View>
 
@@ -932,7 +943,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 </Text>
 
                 <Text style={styles.rowDescription}>
-                  Change your app appearance
+                  Choose your preferred app appearance.
                 </Text>
               </View>
 
@@ -1003,9 +1014,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingRow
               icon="✉"
               title="Feedback and Suggestions"
-              description="Share your experience with us"
-              onPress={() => showNotConnected('Feedback and Suggestions')}
-              colors={colors}
+              description="Tell us how we can improve Zenimonies."
+              onPress={() =>
+                showSettingMessage('Feedback and Suggestions')
+              }
             />
 
             <View style={styles.rowDivider} />
@@ -1013,9 +1025,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingRow
               icon="ⓘ"
               title="About"
-              description="Learn more about ZENIMONIES Banking"
-              onPress={() => showNotConnected('About ZENIMONIES')}
-              colors={colors}
+              description="Learn more about Zenimonies and this app."
+              onPress={() =>
+                showSettingMessage('About ZENIMONIES')
+              }
             />
           </View>
         </View>
@@ -1031,11 +1044,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingRow
               icon="↪"
               title="Log Out"
-              description="Securely sign out of this device"
+              description="Sign out of your Zenimonies account."
               onPress={confirmLogout}
-              colors={colors}
-              danger
-              connected
             />
 
             <View style={styles.rowDivider} />
@@ -1043,9 +1053,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingRow
               icon="×"
               title="Close Account"
-              description="Request closure of your ZENIMONIES account"
+              description="Permanently close your Zenimonies account."
               onPress={closeAccountNotice}
-              colors={colors}
               danger
             />
           </View>
@@ -1054,20 +1063,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* FOOTER */}
 
         <View style={styles.footerContainer}>
-          <View style={styles.footerLogo}>
-            <Text style={styles.footerLogoText}>Z</Text>
-          </View>
-
           <Text style={styles.footer}>
-            ZENIMONIES BANKING
-          </Text>
-
-          <Text style={styles.version}>
-            Your money. Your freedom.
-          </Text>
-
-          <Text style={styles.footerSecure}>
-            SECURE  •  SIMPLE  •  SMART
+            Zenimonies • Secure Digital Banking
           </Text>
         </View>
       </ScrollView>
@@ -1088,141 +1085,151 @@ const createStyles = (
       backgroundColor: colors.backgroundSoft,
     },
 
+    // HEADER
+
     header: {
-      minHeight: 60,
+      minHeight: 82,
       paddingHorizontal: 18,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
       backgroundColor: colors.surface,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
     },
 
     backButton: {
-      width: 42,
-      height: 42,
+      width: 54,
+      height: 54,
+      borderRadius: 15,
+      backgroundColor: colors.primaryLight,
       justifyContent: 'center',
-      alignItems: 'flex-start',
+      alignItems: 'center',
+      marginRight: 13,
     },
 
     backIcon: {
-      fontSize: 38,
-      lineHeight: 42,
+      fontSize: 35,
+      lineHeight: 40,
+      fontWeight: '700',
       color: colors.primary,
     },
 
+    headerTextContainer: {
+      flex: 1,
+    },
+
     headerTitle: {
-      fontSize: 18,
-      fontWeight: '800',
+      fontSize: 21,
+      fontWeight: '900',
       color: colors.text,
     },
 
+    headerSubtitle: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      marginTop: 5,
+    },
+
     headerSpacer: {
-      width: 42,
+      width: 4,
     },
 
     scrollContent: {
-      padding: 18,
-      paddingBottom: 40,
+      padding: 17,
+      paddingBottom: 45,
     },
 
     // HERO
 
     heroCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      minHeight: 220,
       backgroundColor: colors.primary,
-      borderRadius: 17,
-      padding: 18,
-      marginBottom: 26,
-    },
-
-    heroLogo: {
-      width: 48,
-      height: 48,
-      borderRadius: 14,
-      backgroundColor: '#FFFFFF',
-      alignItems: 'center',
+      borderRadius: 24,
+      paddingHorizontal: 22,
+      paddingVertical: 25,
       justifyContent: 'center',
-      marginRight: 13,
+      marginBottom: 27,
     },
 
-    heroLogoText: {
-      fontSize: 30,
-      fontWeight: '900',
-      color: colors.primary,
-    },
-
-    heroText: {
-      flex: 1,
+    heroBrand: {
+      fontSize: 13,
+      fontWeight: '700',
+      letterSpacing: 1,
+      color: '#FFFFFF',
+      opacity: 0.85,
     },
 
     heroTitle: {
-      fontSize: 17,
+      fontSize: 29,
+      lineHeight: 37,
       fontWeight: '900',
       color: '#FFFFFF',
+      marginTop: 22,
     },
 
     heroDescription: {
-      fontSize: 11,
-      lineHeight: 17,
+      fontSize: 14,
+      lineHeight: 23,
+      fontWeight: '600',
       color: '#FFFFFF',
-      opacity: 0.9,
-      marginTop: 5,
+      opacity: 0.92,
+      marginTop: 15,
     },
 
     // SECTIONS
 
     section: {
-      marginBottom: 23,
+      marginBottom: 26,
     },
 
     sectionTitle: {
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '900',
-      letterSpacing: 1.4,
+      letterSpacing: 2,
       color: colors.textSecondary,
-      marginBottom: 10,
-      marginLeft: 3,
+      marginBottom: 13,
+      marginLeft: 5,
     },
 
     card: {
       backgroundColor: colors.surface,
-      borderRadius: 15,
-      paddingHorizontal: 14,
+      borderRadius: 22,
+      paddingHorizontal: 15,
       paddingVertical: 3,
       borderWidth: 1,
       borderColor: colors.border,
+      overflow: 'hidden',
     },
 
     // SETTING ROWS
 
     settingRow: {
-      minHeight: 76,
+      minHeight: 105,
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 10,
+      paddingVertical: 17,
     },
 
     rowIcon: {
-      width: 41,
-      height: 41,
-      borderRadius: 12,
+      width: 56,
+      height: 56,
+      borderRadius: 17,
       backgroundColor: colors.primaryLight,
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: 12,
+      marginRight: 14,
     },
 
     rowIconText: {
-      fontSize: 20,
+      fontSize: 21,
       fontWeight: '900',
       color: colors.primary,
+      textAlign: 'center',
     },
 
     rowIconDanger: {
-      backgroundColor: '#FCEAEA',
+      backgroundColor: '#FFF0F0',
     },
 
     rowIconTextDanger: {
@@ -1231,71 +1238,61 @@ const createStyles = (
 
     rowContent: {
       flex: 1,
-      paddingRight: 8,
+      paddingRight: 7,
     },
 
     rowTitle: {
-      fontSize: 13,
-      fontWeight: '800',
+      fontSize: 15,
+      lineHeight: 21,
+      fontWeight: '900',
       color: colors.text,
     },
 
     rowDescription: {
-      fontSize: 10,
-      lineHeight: 15,
+      fontSize: 12,
+      lineHeight: 19,
+      fontWeight: '500',
       color: colors.textSecondary,
-      marginTop: 4,
+      marginTop: 5,
     },
 
     rowArrow: {
-      fontSize: 25,
+      fontSize: 29,
+      fontWeight: '500',
       color: colors.textMuted,
-      paddingHorizontal: 5,
+      paddingLeft: 5,
     },
 
     rowDivider: {
       height: 1,
       backgroundColor: colors.border,
-      marginLeft: 53,
-    },
-
-    comingSoonBadge: {
-      backgroundColor: colors.primaryLight,
-      paddingHorizontal: 8,
-      paddingVertical: 5,
-      borderRadius: 20,
-    },
-
-    comingSoonText: {
-      color: colors.primary,
-      fontSize: 9,
-      fontWeight: '900',
+      marginLeft: 70,
     },
 
     dangerText: {
       color: colors.error,
     },
 
-    // PASSCODE
+    // ACCOUNT UNLOCK PASSCODE
 
     passcodeHeading: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 13,
+      paddingVertical: 16,
     },
 
     passcodeIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: 12,
+      width: 56,
+      height: 56,
+      borderRadius: 17,
       backgroundColor: colors.primaryLight,
       justifyContent: 'center',
       alignItems: 'center',
-      marginRight: 12,
+      marginRight: 14,
     },
 
     passcodeIconText: {
-      fontSize: 21,
+      fontSize: 24,
       fontWeight: '900',
       color: colors.primary,
     },
@@ -1305,22 +1302,23 @@ const createStyles = (
     },
 
     passcodeTitle: {
-      fontSize: 14,
+      fontSize: 15,
+      lineHeight: 21,
       fontWeight: '900',
       color: colors.text,
     },
 
     passcodeDescription: {
-      marginTop: 4,
-      fontSize: 11,
-      lineHeight: 17,
+      marginTop: 5,
+      fontSize: 12,
+      lineHeight: 19,
       color: colors.textSecondary,
     },
 
     statusLoading: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 15,
+      paddingVertical: 17,
     },
 
     statusLoadingText: {
@@ -1335,20 +1333,20 @@ const createStyles = (
       alignItems: 'center',
       borderTopWidth: 1,
       borderTopColor: colors.border,
-      paddingTop: 13,
+      paddingTop: 16,
       marginTop: 8,
     },
 
     statusLabel: {
-      fontSize: 12,
-      fontWeight: '700',
+      fontSize: 13,
+      fontWeight: '800',
       color: colors.textSecondary,
     },
 
     statusBadge: {
-      paddingHorizontal: 11,
-      paddingVertical: 6,
-      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 25,
     },
 
     statusActive: {
@@ -1360,8 +1358,8 @@ const createStyles = (
     },
 
     statusBadgeText: {
-      fontSize: 11,
-      fontWeight: '800',
+      fontSize: 12,
+      fontWeight: '900',
     },
 
     statusActiveText: {
@@ -1374,26 +1372,26 @@ const createStyles = (
 
     lockedNotice: {
       backgroundColor: '#FFF1F0',
-      borderRadius: 10,
-      padding: 12,
-      marginTop: 12,
+      borderRadius: 12,
+      padding: 13,
+      marginTop: 13,
     },
 
     lockedTitle: {
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: '900',
       color: '#B42318',
     },
 
     lockedDescription: {
-      marginTop: 5,
-      fontSize: 11,
-      lineHeight: 17,
+      marginTop: 6,
+      fontSize: 12,
+      lineHeight: 18,
       color: '#8A302A',
     },
 
     lockedTime: {
-      marginTop: 7,
+      marginTop: 8,
       fontSize: 11,
       fontWeight: '700',
       color: '#8A302A',
@@ -1406,20 +1404,21 @@ const createStyles = (
     },
 
     lastUsedText: {
-      marginTop: 9,
-      fontSize: 10,
+      marginTop: 12,
+      fontSize: 11,
       color: colors.textMuted,
     },
 
     passcodeForm: {
-      marginTop: 16,
+      marginTop: 17,
       borderTopWidth: 1,
       borderTopColor: colors.border,
-      paddingTop: 15,
+      paddingTop: 16,
+      paddingBottom: 12,
     },
 
     formTitle: {
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '900',
       color: colors.text,
       marginBottom: 13,
@@ -1430,14 +1429,14 @@ const createStyles = (
       fontWeight: '700',
       color: colors.text,
       marginBottom: 7,
-      marginTop: 11,
+      marginTop: 12,
     },
 
     passcodeInput: {
       minHeight: 49,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 10,
+      borderRadius: 11,
       paddingHorizontal: 13,
       fontSize: 15,
       letterSpacing: 4,
@@ -1460,18 +1459,18 @@ const createStyles = (
     },
 
     primaryButton: {
-      minHeight: 47,
+      minHeight: 53,
       backgroundColor: colors.primary,
-      borderRadius: 10,
+      borderRadius: 12,
       justifyContent: 'center',
       alignItems: 'center',
       paddingHorizontal: 13,
-      marginTop: 15,
+      marginTop: 17,
     },
 
     primaryButtonText: {
       color: '#FFFFFF',
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: '900',
       textAlign: 'center',
     },
@@ -1486,11 +1485,11 @@ const createStyles = (
     },
 
     cancelButton: {
-      minHeight: 47,
+      minHeight: 49,
       flex: 1,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 10,
+      borderRadius: 11,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -1506,9 +1505,9 @@ const createStyles = (
       marginTop: 12,
       borderWidth: 1,
       borderColor: colors.primary,
-      borderRadius: 9,
-      paddingHorizontal: 15,
-      paddingVertical: 10,
+      borderRadius: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 11,
     },
 
     secondaryButtonText: {
@@ -1522,26 +1521,26 @@ const createStyles = (
     themePanel: {
       borderTopWidth: 1,
       borderTopColor: colors.border,
-      paddingHorizontal: 7,
-      paddingTop: 12,
-      paddingBottom: 5,
+      paddingHorizontal: 5,
+      paddingTop: 13,
+      paddingBottom: 8,
     },
 
     themePanelTitle: {
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: '900',
       color: colors.text,
       marginBottom: 5,
     },
 
     themeOption: {
-      minHeight: 59,
+      minHeight: 63,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
-      paddingVertical: 10,
+      paddingVertical: 11,
     },
 
     lastThemeOption: {
@@ -1561,7 +1560,7 @@ const createStyles = (
 
     themeOptionDescription: {
       marginTop: 4,
-      fontSize: 10,
+      fontSize: 11,
       color: colors.textSecondary,
     },
 
@@ -1590,47 +1589,15 @@ const createStyles = (
 
     footerContainer: {
       alignItems: 'center',
-      paddingTop: 10,
-      paddingBottom: 15,
-    },
-
-    footerLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 11,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 9,
-    },
-
-    footerLogoText: {
-      fontSize: 23,
-      fontWeight: '900',
-      color: '#FFFFFF',
+      paddingTop: 13,
+      paddingBottom: 20,
     },
 
     footer: {
       textAlign: 'center',
-      fontSize: 11,
-      fontWeight: '900',
-      letterSpacing: 2,
-      color: colors.primary,
-    },
-
-    version: {
-      marginTop: 6,
-      textAlign: 'center',
-      fontSize: 11,
-      color: colors.textMuted,
-    },
-
-    footerSecure: {
-      marginTop: 13,
-      textAlign: 'center',
-      fontSize: 9,
-      fontWeight: '900',
-      letterSpacing: 2,
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 0.4,
       color: colors.textMuted,
     },
   });
