@@ -1215,6 +1215,7 @@ const handleLogout = async () => {
         ) : (
           <Dashboard
             userName={userName}
+            token={session.token}
             currency="NGN"
             balance={balance}
             profilePhotoUri={profilePhotoUri}
