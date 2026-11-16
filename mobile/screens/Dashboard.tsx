@@ -44,6 +44,7 @@ type TabName =
   | 'Cards'
   | 'Wallet'
   | 'Profile'
+  | 'Settings'
   | 'Notifications';
 
 type Transaction = {
@@ -358,7 +359,11 @@ export default function Dashboard({
       activeIcon: 'account-circle',
     },
   ];
-
+{
+      title: 'Settings',
+      icon: 'cog-outline',
+      activeIcon: 'cog',
+},
   // ====================================================
   // DASHBOARD UI
   // ====================================================
@@ -771,7 +776,8 @@ export default function Dashboard({
 
         <View style={styles.bottomNavigation}>
           {navigation.map((item) => {
-            const active = item.title === 'Home';
+            const active =
+              item.title === 'Home';
 
             return (
               <TouchableOpacity
