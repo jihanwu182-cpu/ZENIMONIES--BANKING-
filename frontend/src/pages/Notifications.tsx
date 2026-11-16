@@ -9,19 +9,47 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
+// ============================================================
+// TYPES
+// ============================================================
+
 interface NotificationItem {
   id: string;
   type: string;
   title: string;
   message: string;
   transaction_id?: string | null;
-  sender_name?: string | null;
   is_read: boolean;
   created_at: string;
   read_at?: string | null;
 }
 
+interface AnnouncementItem {
+  id: string;
+  title: string;
+  message: string;
+  priority?: string;
+  audience_type?: string;
+  is_read: boolean;
+  created_at: string;
+  published_at?: string | null;
+  scheduled_at?: string | null;
+  read_at?: string | null;
+}
+
 type Category = 'transactions' | 'events';
+
+type EventItem = {
+  id: string;
+  source: 'notification' | 'announcement';
+  type: string;
+  title: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+  read_at?: string | null;
+  priority?: string;
+};
 
 const API_ROOT =
   process.env.REACT_APP_API_URL ||
@@ -31,38 +59,49 @@ const API_BASE_URL = API_ROOT.endsWith('/api')
   ? API_ROOT
   : `${API_ROOT}/api`;
 
+// ============================================================
+// DESIGN SYSTEM
+// ============================================================
+
+const GREEN = '#087C43';
+const DARK_GREEN = '#063B2D';
+const TEXT = '#17382A';
+const MUTED = '#738178';
+const BORDER = '#E5ECE7';
+const BACKGROUND = '#F5F8F6';
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
-    background: '#F5F8F6',
-    color: '#172B22',
+    background: BACKGROUND,
+    color: TEXT,
     fontFamily:
       'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
-    paddingBottom: 50,
+    paddingBottom: 45,
   },
 
   header: {
     background: '#FFFFFF',
-    borderBottom: '1px solid #E6ECE8',
+    borderBottom: `1px solid ${BORDER}`,
     position: 'sticky',
     top: 0,
     zIndex: 20,
   },
 
   headerInner: {
-    width: 'min(1000px, 92%)',
-    minHeight: 72,
+    width: 'min(1050px, 94%)',
+    minHeight: 68,
     margin: '0 auto',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 15,
+    gap: 12,
   },
 
   brandButton: {
     display: 'flex',
     alignItems: 'center',
-    gap: 11,
+    gap: 10,
     border: 0,
     background: 'transparent',
     cursor: 'pointer',
@@ -71,21 +110,21 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   brandIcon: {
-    width: 43,
-    height: 43,
-    borderRadius: 13,
-    background: 'linear-gradient(135deg, #079B50, #006F3D)',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    background: `linear-gradient(135deg, #079B50, ${GREEN})`,
     color: '#FFFFFF',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 23,
+    fontSize: 22,
     fontWeight: 900,
   },
 
   brandName: {
-    color: '#063B2D',
-    fontSize: 17,
+    color: DARK_GREEN,
+    fontSize: 16,
     fontWeight: 900,
     letterSpacing: 0.3,
   },
@@ -93,91 +132,91 @@ const styles: Record<string, React.CSSProperties> = {
   brandSubtitle: {
     color: '#87958D',
     fontSize: 9,
-    fontWeight: 700,
-    letterSpacing: 1.8,
-    marginTop: 3,
+    fontWeight: 800,
+    letterSpacing: 1.5,
+    marginTop: 2,
   },
 
   dashboardButton: {
-    border: '1px solid #DCE9E1',
+    border: `1px solid #DCE9E1`,
     background: '#F5FAF7',
-    color: '#087C43',
-    borderRadius: 11,
-    padding: '10px 15px',
+    color: GREEN,
+    borderRadius: 10,
+    padding: '9px 13px',
     fontSize: 12,
     fontWeight: 800,
     cursor: 'pointer',
   },
 
   main: {
-    width: 'min(760px, 92%)',
+    width: 'min(760px, 94%)',
     margin: '0 auto',
-    paddingTop: 30,
+    paddingTop: 22,
   },
 
   backButton: {
     border: 0,
     background: 'transparent',
-    color: '#64766C',
-    fontSize: 13,
-    fontWeight: 700,
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: 800,
     cursor: 'pointer',
-    padding: 0,
-    marginBottom: 20,
+    padding: '7px 0',
+    marginBottom: 13,
   },
 
   hero: {
-    background: 'linear-gradient(135deg, #FFFFFF, #F1FAF5)',
-    border: '1px solid #E0EBE4',
-    borderRadius: 22,
-    padding: '25px 24px',
-    boxShadow: '0 8px 30px rgba(24, 65, 44, 0.045)',
-    marginBottom: 18,
+    background: 'linear-gradient(135deg, #FFFFFF, #F0FAF4)',
+    border: `1px solid #DFEBE3`,
+    borderRadius: 19,
+    padding: '21px 19px',
+    marginBottom: 17,
+    boxShadow: '0 5px 20px rgba(24,65,44,0.035)',
   },
 
   heroTop: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 15,
+    gap: 12,
   },
 
   eyebrow: {
-    color: '#07864A',
-    fontSize: 10,
+    color: GREEN,
+    fontSize: 9,
     fontWeight: 900,
-    letterSpacing: 1.7,
-    textTransform: 'uppercase',
-    marginBottom: 9,
+    letterSpacing: 1.5,
+    marginBottom: 7,
   },
 
   pageTitle: {
-    color: '#073B2C',
-    fontSize: 27,
+    color: DARK_GREEN,
+    fontSize: 'clamp(22px, 5vw, 28px)',
     fontWeight: 900,
     letterSpacing: -0.7,
     margin: 0,
   },
 
   pageDescription: {
-    color: '#697B70',
-    fontSize: 13,
+    color: MUTED,
+    fontSize: 12,
     lineHeight: 1.6,
-    margin: '8px 0 0',
+    margin: '7px 0 0',
+    maxWidth: 440,
   },
 
   unreadBox: {
-    minWidth: 75,
+    minWidth: 65,
     background: '#E5F5EC',
     border: '1px solid #D3EBDD',
-    borderRadius: 15,
-    padding: '12px 10px',
+    borderRadius: 13,
+    padding: '10px 8px',
     textAlign: 'center',
   },
 
   unreadNumber: {
-    color: '#087C43',
-    fontSize: 24,
+    color: GREEN,
+    fontSize: 23,
     fontWeight: 900,
     lineHeight: 1.2,
   },
@@ -186,40 +225,40 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#39825D',
     fontSize: 8,
     fontWeight: 900,
-    letterSpacing: 1.3,
-    marginTop: 4,
+    letterSpacing: 1,
+    marginTop: 3,
   },
 
   tabs: {
     display: 'flex',
     gap: 5,
-    padding: 5,
+    padding: 4,
     background: '#E9F0EB',
-    border: '1px solid #DCE8E0',
-    borderRadius: 15,
-    marginBottom: 25,
+    border: `1px solid #DCE8E0`,
+    borderRadius: 13,
+    marginBottom: 21,
   },
 
   tab: {
     flex: 1,
-    minHeight: 46,
+    minHeight: 43,
     border: 0,
-    borderRadius: 11,
+    borderRadius: 10,
     background: 'transparent',
     color: '#65766C',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 800,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 7,
   },
 
   activeTab: {
-    background: '#087C43',
+    background: GREEN,
     color: '#FFFFFF',
-    boxShadow: '0 4px 12px rgba(8, 124, 67, 0.18)',
+    boxShadow: '0 3px 10px rgba(8,124,67,0.17)',
   },
 
   tabBadge: {
@@ -228,7 +267,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 20,
     padding: '0 5px',
     background: '#DDF2E5',
-    color: '#087C43',
+    color: GREEN,
     fontSize: 10,
     fontWeight: 900,
     display: 'inline-flex',
@@ -238,78 +277,78 @@ const styles: Record<string, React.CSSProperties> = {
 
   tabBadgeActive: {
     background: '#FFFFFF',
-    color: '#087C43',
+    color: GREEN,
   },
 
   sectionHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 14,
+    gap: 10,
+    marginBottom: 13,
   },
 
   sectionTitle: {
-    color: '#17382A',
-    fontSize: 16,
+    color: TEXT,
+    fontSize: 15,
     fontWeight: 900,
     margin: 0,
   },
 
   sectionSubtitle: {
     color: '#89968E',
-    fontSize: 11,
-    marginTop: 5,
+    fontSize: 10,
+    marginTop: 4,
   },
 
   actionButton: {
-    border: '1px solid #D5E8DC',
+    border: `1px solid #D5E8DC`,
     background: '#FFFFFF',
-    color: '#087C43',
-    borderRadius: 10,
-    padding: '9px 12px',
-    fontSize: 11,
+    color: GREEN,
+    borderRadius: 9,
+    padding: '8px 10px',
+    fontSize: 10,
     fontWeight: 800,
     cursor: 'pointer',
+    whiteSpace: 'nowrap',
   },
 
-  notificationList: {
+  list: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 12,
+    gap: 9,
   },
 
   card: {
     background: '#FFFFFF',
-    border: '1px solid #E4EBE6',
-    borderRadius: 18,
-    padding: 19,
-    boxShadow: '0 5px 20px rgba(26, 61, 47, 0.035)',
-    transition: 'border-color 0.2s ease',
+    border: `1px solid ${BORDER}`,
+    borderRadius: 15,
+    padding: '14px 14px 12px',
+    boxShadow: '0 3px 12px rgba(26,61,47,0.025)',
   },
 
   unreadCard: {
-    border: '1px solid #BBDDC9',
+    borderColor: '#BBDDC9',
     background: '#FCFFFD',
   },
 
   cardTop: {
     display: 'flex',
     alignItems: 'flex-start',
-    gap: 14,
+    gap: 11,
   },
 
   iconBox: {
-    width: 47,
-    height: 47,
+    width: 42,
+    height: 42,
     flexShrink: 0,
-    borderRadius: 15,
+    borderRadius: 13,
     background: '#E8F6EE',
-    color: '#087C43',
+    color: GREEN,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 23,
+    fontSize: 19,
     fontWeight: 900,
   },
 
@@ -318,160 +357,166 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
 
-  cardHeading: {
+  heading: {
     display: 'flex',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
   },
 
   cardTitle: {
-    color: '#17382A',
-    fontSize: 14,
-    lineHeight: 1.5,
+    color: TEXT,
+    fontSize: 13,
+    lineHeight: 1.45,
     fontWeight: 900,
     margin: 0,
   },
 
   unreadDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: '50%',
     background: '#079447',
     flexShrink: 0,
-    marginTop: 6,
-  },
-
-  amount: {
-    color: '#087C43',
-    fontSize: 22,
-    fontWeight: 900,
-    letterSpacing: -0.5,
-    marginTop: 7,
   },
 
   message: {
-    color: '#65766C',
-    fontSize: 12,
-    lineHeight: 1.7,
-    margin: '7px 0 0',
+    color: '#687970',
+    fontSize: 11,
+    lineHeight: 1.65,
+    margin: '5px 0 0',
     overflowWrap: 'anywhere',
     whiteSpace: 'pre-wrap',
   },
 
-  date: {
-    color: '#929E96',
-    fontSize: 10,
-    marginTop: 9,
+  amount: {
+    color: GREEN,
+    fontSize: 16,
+    fontWeight: 900,
+    letterSpacing: -0.3,
+    marginTop: 5,
   },
 
-  divider: {
-    height: 1,
-    background: '#EDF1EE',
-    margin: '15px 0 12px',
+  date: {
+    color: '#929E96',
+    fontSize: 9,
+    marginTop: 7,
   },
 
   cardBottom: {
     display: 'flex',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    alignItems: 'center',
+    gap: 8,
+    borderTop: '1px solid #EDF1EE',
+    marginTop: 11,
+    paddingTop: 10,
   },
 
   status: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 6,
-    fontSize: 9,
+    gap: 5,
+    color: '#89968E',
+    fontSize: 8,
     fontWeight: 900,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
 
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: '50%',
-    background: '#079447',
+    background: '#AAB5AE',
   },
 
   viewButton: {
     border: 0,
-    borderRadius: 10,
-    background: '#087C43',
+    borderRadius: 9,
+    background: GREEN,
     color: '#FFFFFF',
-    padding: '10px 15px',
-    fontSize: 11,
+    padding: '9px 12px',
+    fontSize: 10,
     fontWeight: 900,
     cursor: 'pointer',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 8,
   },
 
   markReadButton: {
     border: 0,
     background: 'transparent',
     color: '#74877A',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 800,
     cursor: 'pointer',
     padding: 5,
   },
 
+  priority: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    borderRadius: 20,
+    padding: '4px 8px',
+    fontSize: 8,
+    fontWeight: 900,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginTop: 6,
+  },
+
   empty: {
     background: '#FFFFFF',
-    border: '1px solid #E4EBE6',
-    borderRadius: 20,
-    padding: '55px 22px',
+    border: `1px solid ${BORDER}`,
+    borderRadius: 17,
+    padding: '42px 18px',
     textAlign: 'center',
   },
 
   emptyIcon: {
-    width: 65,
-    height: 65,
-    margin: '0 auto 17px',
-    borderRadius: 20,
+    width: 57,
+    height: 57,
+    margin: '0 auto 14px',
+    borderRadius: 17,
     background: '#E8F6EE',
-    color: '#087C43',
+    color: GREEN,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 28,
+    fontSize: 25,
   },
 
   emptyTitle: {
-    color: '#17382A',
-    fontSize: 17,
+    color: TEXT,
+    fontSize: 15,
     fontWeight: 900,
     margin: 0,
   },
 
   emptyMessage: {
-    maxWidth: 360,
-    margin: '9px auto 0',
-    color: '#78877E',
-    fontSize: 12,
+    maxWidth: 340,
+    margin: '8px auto 0',
+    color: MUTED,
+    fontSize: 11,
     lineHeight: 1.7,
   },
 
   loading: {
     background: '#FFFFFF',
-    border: '1px solid #E4EBE6',
-    borderRadius: 18,
-    padding: 45,
+    border: `1px solid ${BORDER}`,
+    borderRadius: 15,
+    padding: 35,
     textAlign: 'center',
-    color: '#64766C',
-    fontSize: 13,
+    color: MUTED,
+    fontSize: 12,
   },
 
   error: {
     background: '#FFF5F5',
     border: '1px solid #F2CACA',
     color: '#B42318',
-    borderRadius: 13,
-    padding: 14,
-    marginBottom: 15,
-    fontSize: 12,
+    borderRadius: 11,
+    padding: 12,
+    marginBottom: 13,
+    fontSize: 11,
     lineHeight: 1.6,
   },
 
@@ -482,7 +527,7 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: 'underline',
     fontWeight: 800,
     cursor: 'pointer',
-    marginLeft: 8,
+    marginLeft: 7,
   },
 
   footer: {
@@ -490,67 +535,67 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#A0ACA4',
     fontSize: 9,
     fontWeight: 900,
-    letterSpacing: 2,
-    marginTop: 35,
+    letterSpacing: 1.7,
+    marginTop: 30,
   },
 
   overlay: {
     position: 'fixed',
     inset: 0,
     zIndex: 100,
-    background: 'rgba(8, 28, 19, 0.55)',
+    background: 'rgba(8,28,19,0.55)',
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'flex-end',
-    padding: 12,
+    padding: 10,
   },
 
   modal: {
-    width: 'min(540px, 100%)',
+    width: 'min(520px, 100%)',
     maxHeight: '85vh',
     overflowY: 'auto',
     background: '#FFFFFF',
-    borderRadius: '24px 24px 18px 18px',
-    padding: 23,
+    borderRadius: '21px 21px 15px 15px',
+    padding: 21,
     boxShadow: '0 20px 70px rgba(0,0,0,0.2)',
   },
 
   modalHandle: {
-    width: 42,
+    width: 40,
     height: 4,
     borderRadius: 10,
     background: '#DCE5DF',
-    margin: '0 auto 22px',
+    margin: '0 auto 19px',
   },
 
   modalHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 22,
+    marginBottom: 19,
   },
 
   modalTitle: {
-    color: '#17382A',
-    fontSize: 17,
+    color: TEXT,
+    fontSize: 16,
     fontWeight: 900,
     margin: 0,
   },
 
   closeButton: {
-    width: 34,
-    height: 34,
+    width: 33,
+    height: 33,
     border: 0,
     borderRadius: 50,
     background: '#F0F5F1',
     color: '#52665A',
-    fontSize: 21,
+    fontSize: 20,
     cursor: 'pointer',
   },
 
   modalMessage: {
     color: '#65766C',
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 1.8,
     whiteSpace: 'pre-wrap',
     overflowWrap: 'anywhere',
@@ -558,17 +603,21 @@ const styles: Record<string, React.CSSProperties> = {
 
   modalDone: {
     width: '100%',
-    minHeight: 47,
+    minHeight: 45,
     border: 0,
-    borderRadius: 12,
-    background: '#087C43',
+    borderRadius: 11,
+    background: GREEN,
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 900,
-    marginTop: 25,
+    marginTop: 21,
     cursor: 'pointer',
   },
 };
+
+// ============================================================
+// HELPERS
+// ============================================================
 
 const isTransactionNotification = (
   item: NotificationItem
@@ -613,7 +662,7 @@ const getIcon = (type: string) => {
     value.includes('security') ||
     value.includes('login')
   ) {
-    return '⌑';
+    return '◆';
   }
 
   if (
@@ -621,6 +670,21 @@ const getIcon = (type: string) => {
     value.includes('verified')
   ) {
     return '✓';
+  }
+
+  if (
+    value.includes('account_status') ||
+    value.includes('suspended') ||
+    value.includes('blocked')
+  ) {
+    return '!';
+  }
+
+  if (
+    value.includes('announcement') ||
+    value.includes('event')
+  ) {
+    return '◈';
   }
 
   if (
@@ -642,7 +706,7 @@ const formatDate = (value: string) => {
 
   return date.toLocaleString('en-NG', {
     day: 'numeric',
-    month: 'long',
+    month: 'short',
     year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
@@ -650,37 +714,40 @@ const formatDate = (value: string) => {
   });
 };
 
-// Avoid presenting the generic placeholder as if it were a real sender.
-// The backend must provide sender_name before a real name can be displayed.
-const getDisplayMessage = (item: NotificationItem) => {
-  const message = String(item.message || '').trim();
-  const sender = String(item.sender_name || '').trim();
+const getAmount = (message: string) => {
+  const match = String(message || '').match(
+    /(?:₦|NGN)\s?[\d,]+(?:\.\d{1,2})?/
+  );
 
-  if (sender) {
-    return message.replace(
-      /from a Zenimonies user/gi,
-      `from ${sender}`
-    );
-  }
-
-  return message.replace(
-    /\s+from a Zenimonies user\.?/gi,
-    ''
-  ).trim();
+  return match ? match[0] : null;
 };
 
-const getDisplayTitle = (item: NotificationItem) => {
-  const title = String(item.title || '').trim();
+const getPriorityStyle = (priority?: string) => {
+  const value = String(priority || 'normal').toLowerCase();
 
-  if (
-    item.sender_name &&
-    /^(money received|payment received)$/i.test(title)
-  ) {
-    return `Money received from ${item.sender_name}`;
+  if (value === 'urgent') {
+    return {
+      background: '#FDECEC',
+      color: '#B42318',
+    };
   }
 
-  return title || 'Account notification';
+  if (value === 'important') {
+    return {
+      background: '#FFF4DC',
+      color: '#996515',
+    };
+  }
+
+  return {
+    background: '#E8F6EE',
+    color: GREEN,
+  };
 };
+
+// ============================================================
+// COMPONENT
+// ============================================================
 
 const Notifications: React.FC = () => {
   const navigate = useNavigate();
@@ -688,9 +755,13 @@ const Notifications: React.FC = () => {
   const [notifications, setNotifications] =
     useState<NotificationItem[]>([]);
 
+  const [announcements, setAnnouncements] =
+    useState<AnnouncementItem[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+
   const [markingAll, setMarkingAll] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -698,7 +769,11 @@ const Notifications: React.FC = () => {
     useState<Category>('transactions');
 
   const [selectedEvent, setSelectedEvent] =
-    useState<NotificationItem | null>(null);
+    useState<EventItem | null>(null);
+
+  // ----------------------------------------------------------
+  // AUTHENTICATION
+  // ----------------------------------------------------------
 
   const getToken = useCallback(() =>
     localStorage.getItem('zenimonies_token') ||
@@ -712,7 +787,7 @@ const Notifications: React.FC = () => {
   }), [getToken]);
 
   // ----------------------------------------------------------
-  // LOAD NOTIFICATIONS
+  // LOAD BOTH DATA SOURCES
   // ----------------------------------------------------------
 
   const loadNotifications = useCallback(async (
@@ -730,25 +805,50 @@ const Notifications: React.FC = () => {
         return;
       }
 
-      const response = await axios.get(
-        `${API_BASE_URL}/notifications?limit=100`,
-        { headers: getHeaders() }
-      );
+      const [notificationResponse, announcementResponse] =
+        await Promise.all([
+          axios.get(
+            `${API_BASE_URL}/notifications?limit=100`,
+            { headers: getHeaders() }
+          ),
 
-      if (response.data?.success) {
-        setNotifications(
-          Array.isArray(response.data.notifications)
-            ? response.data.notifications
-            : []
-        );
-      } else {
-        setError(
-          response.data?.message ||
-          'Unable to load your notifications.'
+          axios.get(
+            `${API_BASE_URL}/announcements?limit=100`,
+            { headers: getHeaders() }
+          ),
+        ]);
+
+      if (!notificationResponse.data?.success) {
+        throw new Error(
+          notificationResponse.data?.message ||
+          'Unable to load notifications.'
         );
       }
+
+      if (!announcementResponse.data?.success) {
+        throw new Error(
+          announcementResponse.data?.message ||
+          'Unable to load announcements.'
+        );
+      }
+
+      setNotifications(
+        Array.isArray(notificationResponse.data.notifications)
+          ? notificationResponse.data.notifications
+          : []
+      );
+
+      setAnnouncements(
+        Array.isArray(announcementResponse.data.announcements)
+          ? announcementResponse.data.announcements
+          : []
+      );
+
     } catch (err) {
-      console.error('Failed to load notifications:', err);
+      console.error(
+        'Failed to load notification centre:',
+        err
+      );
 
       if (
         axios.isAxiosError(err) &&
@@ -759,7 +859,7 @@ const Notifications: React.FC = () => {
       }
 
       setError(
-        'Unable to load notifications. Please try again.'
+        'Unable to load your notification centre. Please try again.'
       );
     } finally {
       setLoading(false);
@@ -780,29 +880,69 @@ const Notifications: React.FC = () => {
     [notifications]
   );
 
-  const eventNotifications = useMemo(
+  const accountNotifications = useMemo(
     () => notifications.filter(
       item => !isTransactionNotification(item)
     ),
     [notifications]
   );
 
+  const eventItems = useMemo<EventItem[]>(() => {
+    const accountEvents: EventItem[] =
+      accountNotifications.map(item => ({
+        id: item.id,
+        source: 'notification',
+        type: item.type,
+        title: item.title,
+        message: item.message,
+        is_read: item.is_read,
+        created_at: item.created_at,
+        read_at: item.read_at,
+      }));
+
+    const announcementEvents: EventItem[] =
+      announcements.map(item => ({
+        id: item.id,
+        source: 'announcement',
+        type: 'announcement',
+        title: item.title,
+        message: item.message,
+        is_read: item.is_read,
+        created_at:
+          item.published_at ||
+          item.scheduled_at ||
+          item.created_at,
+        read_at: item.read_at,
+        priority: item.priority,
+      }));
+
+    return [
+      ...accountEvents,
+      ...announcementEvents,
+    ].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() -
+        new Date(a.created_at).getTime()
+    );
+  }, [accountNotifications, announcements]);
+
   const displayedNotifications =
     activeCategory === 'transactions'
       ? transactionNotifications
-      : eventNotifications;
+      : eventItems;
 
-  const unreadCount = notifications.filter(
-    item => !item.is_read
-  ).length;
+  const transactionUnread =
+    transactionNotifications.filter(
+      item => !item.is_read
+    ).length;
 
-  const transactionUnread = transactionNotifications.filter(
-    item => !item.is_read
-  ).length;
+  const eventUnread =
+    eventItems.filter(
+      item => !item.is_read
+    ).length;
 
-  const eventUnread = eventNotifications.filter(
-    item => !item.is_read
-  ).length;
+  const unreadCount =
+    transactionUnread + eventUnread;
 
   // ----------------------------------------------------------
   // REFRESH
@@ -814,10 +954,10 @@ const Notifications: React.FC = () => {
   };
 
   // ----------------------------------------------------------
-  // MARK ONE AS READ
+  // MARK ONE NOTIFICATION AS READ
   // ----------------------------------------------------------
 
-  const markAsRead = async (id: string) => {
+  const markNotificationAsRead = async (id: string) => {
     const item = notifications.find(
       notification => notification.id === id
     );
@@ -826,43 +966,99 @@ const Notifications: React.FC = () => {
       return;
     }
 
-    try {
-      const response = await axios.patch(
-        `${API_BASE_URL}/notifications/${encodeURIComponent(id)}/read`,
-        {},
-        { headers: getHeaders() }
+    const response = await axios.patch(
+      `${API_BASE_URL}/notifications/${encodeURIComponent(id)}/read`,
+      {},
+      { headers: getHeaders() }
+    );
+
+    if (!response.data?.success) {
+      throw new Error(
+        response.data?.message ||
+        'Unable to update notification.'
       );
-
-      if (response.data?.success) {
-        setNotifications(current =>
-          current.map(notification =>
-            notification.id === id
-              ? {
-                  ...notification,
-                  is_read: true,
-                  read_at:
-                    response.data.notification?.read_at ||
-                    new Date().toISOString(),
-                }
-              : notification
-          )
-        );
-
-        setSelectedEvent(current =>
-          current?.id === id
-            ? { ...current, is_read: true }
-            : current
-        );
-      } else {
-        throw new Error(
-          response.data?.message ||
-          'Unable to update notification.'
-        );
-      }
-    } catch (err) {
-      console.error('Failed to mark notification as read:', err);
-      setError('Unable to mark this notification as read.');
     }
+
+    const readAt =
+      response.data.notification?.read_at ||
+      new Date().toISOString();
+
+    setNotifications(current =>
+      current.map(notification =>
+        notification.id === id
+          ? {
+              ...notification,
+              is_read: true,
+              read_at: readAt,
+            }
+          : notification
+      )
+    );
+
+    setSelectedEvent(current =>
+      current?.id === id &&
+      current.source === 'notification'
+        ? {
+            ...current,
+            is_read: true,
+            read_at: readAt,
+          }
+        : current
+    );
+  };
+
+  // ----------------------------------------------------------
+  // MARK ONE ANNOUNCEMENT AS READ
+  // ----------------------------------------------------------
+
+  const markAnnouncementAsRead = async (id: string) => {
+    const item = announcements.find(
+      announcement => announcement.id === id
+    );
+
+    if (!item || item.is_read) {
+      return;
+    }
+
+    const response = await axios.patch(
+      `${API_BASE_URL}/announcements/${encodeURIComponent(id)}/read`,
+      {},
+      { headers: getHeaders() }
+    );
+
+    if (!response.data?.success) {
+      throw new Error(
+        response.data?.message ||
+        'Unable to mark announcement as read.'
+      );
+    }
+
+    const readAt =
+      response.data.read_at ||
+      new Date().toISOString();
+
+    setAnnouncements(current =>
+      current.map(announcement =>
+        announcement.id === id
+          ? {
+              ...announcement,
+              is_read: true,
+              read_at: readAt,
+            }
+          : announcement
+      )
+    );
+
+    setSelectedEvent(current =>
+      current?.id === id &&
+      current.source === 'announcement'
+        ? {
+            ...current,
+            is_read: true,
+            read_at: readAt,
+          }
+        : current
+    );
   };
 
   // ----------------------------------------------------------
@@ -876,105 +1072,185 @@ const Notifications: React.FC = () => {
 
     try {
       setMarkingAll(true);
+      setError('');
 
-      const response = await axios.patch(
-        `${API_BASE_URL}/notifications/read-all`,
-        {},
-        { headers: getHeaders() }
-      );
+      const unreadNotifications =
+        notifications.filter(item => !item.is_read);
 
-      if (response.data?.success) {
-        const now = new Date().toISOString();
+      const unreadAnnouncements =
+        announcements.filter(item => !item.is_read);
 
-        setNotifications(current =>
-          current.map(item => ({
-            ...item,
-            is_read: true,
-            read_at: item.read_at || now,
-          }))
-        );
+      const requests: Promise<unknown>[] = [];
 
-        setSelectedEvent(current =>
-          current
-            ? {
-                ...current,
-                is_read: true,
-                read_at: current.read_at || now,
-              }
-            : null
-        );
-      } else {
-        throw new Error(
-          response.data?.message ||
-          'Unable to update notifications.'
+      if (unreadNotifications.length > 0) {
+        requests.push(
+          axios.patch(
+            `${API_BASE_URL}/notifications/read-all`,
+            {},
+            { headers: getHeaders() }
+          )
         );
       }
+
+      for (const announcement of unreadAnnouncements) {
+        requests.push(
+          axios.patch(
+            `${API_BASE_URL}/announcements/${encodeURIComponent(announcement.id)}/read`,
+            {},
+            { headers: getHeaders() }
+          )
+        );
+      }
+
+      await Promise.all(requests);
+
+      const now = new Date().toISOString();
+
+      setNotifications(current =>
+        current.map(item => ({
+          ...item,
+          is_read: true,
+          read_at: item.read_at || now,
+        }))
+      );
+
+      setAnnouncements(current =>
+        current.map(item => ({
+          ...item,
+          is_read: true,
+          read_at: item.read_at || now,
+        }))
+      );
+
+      setSelectedEvent(current =>
+        current
+          ? {
+              ...current,
+              is_read: true,
+              read_at: current.read_at || now,
+            }
+          : null
+      );
+
     } catch (err) {
-      console.error('Failed to mark all as read:', err);
-      setError('Unable to update notifications.');
+      console.error(
+        'Failed to mark all items as read:',
+        err
+      );
+
+      setError(
+        'Some items could not be marked as read. Please refresh and try again.'
+      );
+
+      await loadNotifications(false);
+
     } finally {
       setMarkingAll(false);
     }
   };
 
   // ----------------------------------------------------------
-  // OPEN NOTIFICATION
+  // OPEN TRANSACTION
   // ----------------------------------------------------------
 
-  const openNotification = async (
+  const openTransaction = async (
     item: NotificationItem
+  ) => {
+    if (!item.transaction_id) {
+      setError(
+        'This transaction does not have a linked receipt yet. Please contact support if you need assistance.'
+      );
+      return;
+    }
+
+    await markNotificationAsRead(item.id);
+
+    navigate(
+      `/transactions/${encodeURIComponent(item.transaction_id)}/receipt`
+    );
+  };
+
+  // ----------------------------------------------------------
+  // OPEN EVENT
+  // ----------------------------------------------------------
+
+  const openEvent = async (item: EventItem) => {
+    if (item.source === 'notification') {
+      await markNotificationAsRead(item.id);
+    } else {
+      await markAnnouncementAsRead(item.id);
+    }
+
+    setSelectedEvent({
+      ...item,
+      is_read: true,
+    });
+  };
+
+  // ----------------------------------------------------------
+  // SAFE ACTION WRAPPER
+  // ----------------------------------------------------------
+
+  const handleOpen = async (
+    id: string,
+    action: () => Promise<void>
   ) => {
     if (updatingId) {
       return;
     }
 
-    setUpdatingId(item.id);
-
     try {
-      if (!item.is_read) {
-        await markAsRead(item.id);
-      }
+      setUpdatingId(id);
+      setError('');
+      await action();
+    } catch (err) {
+      console.error('Notification action failed:', err);
 
-      if (isTransactionNotification(item)) {
-        if (!item.transaction_id) {
-          setError(
-            'This transaction does not have a linked receipt yet. Please contact support if you need assistance.'
-          );
-          return;
-        }
-
-        navigate(
-          `/transactions/${encodeURIComponent(
-            item.transaction_id
-          )}/receipt`
-        );
-
-        return;
-      }
-
-      setSelectedEvent({
-        ...item,
-        is_read: true,
-      });
-
-      if (item.type === 'security') {
-        // Event details remain available in the notification panel.
-      }
+      setError(
+        'Unable to open this item. Please try again.'
+      );
     } finally {
       setUpdatingId(null);
     }
   };
 
   // ----------------------------------------------------------
-  // RENDER NOTIFICATION
+  // MARK SINGLE ITEM READ
   // ----------------------------------------------------------
 
-  const renderNotification = (
-    item: NotificationItem
+  const handleMarkSingleRead = async (
+    item: EventItem
   ) => {
-    const transaction = isTransactionNotification(item);
-    const title = getDisplayTitle(item);
-    const message = getDisplayMessage(item);
+    try {
+      setUpdatingId(item.id);
+
+      if (item.source === 'notification') {
+        await markNotificationAsRead(item.id);
+      } else {
+        await markAnnouncementAsRead(item.id);
+      }
+
+    } catch (err) {
+      console.error('Mark as read failed:', err);
+      setError('Unable to mark this item as read.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  // ----------------------------------------------------------
+  // TRANSACTION CARD
+  // ----------------------------------------------------------
+
+  const renderTransaction = (item: NotificationItem) => {
+    const amount = getAmount(item.message);
+
+    const title =
+      item.title || 'Transaction update';
+
+    const message = amount
+      ? item.message.replace(amount, '').trim()
+      : item.message;
 
     return (
       <article
@@ -985,12 +1261,12 @@ const Notifications: React.FC = () => {
         }}
       >
         <div style={styles.cardTop}>
-          <div style={styles.iconBox} aria-hidden="true">
+          <div style={styles.iconBox}>
             {getIcon(item.type)}
           </div>
 
           <div style={styles.cardContent}>
-            <div style={styles.cardHeading}>
+            <div style={styles.heading}>
               <h3 style={styles.cardTitle}>
                 {title}
               </h3>
@@ -1003,9 +1279,9 @@ const Notifications: React.FC = () => {
               )}
             </div>
 
-            {transaction && item.sender_name && (
+            {amount && (
               <div style={styles.amount}>
-                {item.sender_name}
+                {amount}
               </div>
             )}
 
@@ -1019,15 +1295,8 @@ const Notifications: React.FC = () => {
           </div>
         </div>
 
-        <div style={styles.divider} />
-
         <div style={styles.cardBottom}>
-          <div
-            style={{
-              ...styles.status,
-              color: item.is_read ? '#89968E' : '#087C43',
-            }}
-          >
+          <div style={styles.status}>
             <span
               style={{
                 ...styles.statusDot,
@@ -1036,36 +1305,158 @@ const Notifications: React.FC = () => {
                   : '#079447',
               }}
             />
-            {item.is_read ? 'READ' : 'UNREAD'}
+
+            {item.is_read ? 'READ' : 'NEW'}
           </div>
 
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 12,
+            gap: 7,
           }}>
             {!item.is_read && (
               <button
                 type="button"
                 style={styles.markReadButton}
-                onClick={() => markAsRead(item.id)}
+                onClick={() =>
+                  handleMarkSingleRead({
+                    id: item.id,
+                    source: 'notification',
+                    type: item.type,
+                    title: item.title,
+                    message: item.message,
+                    is_read: item.is_read,
+                    created_at: item.created_at,
+                  })
+                }
               >
-                Mark as read
+                Mark read
               </button>
             )}
 
             <button
               type="button"
               style={styles.viewButton}
-              onClick={() => openNotification(item)}
               disabled={Boolean(updatingId)}
+              onClick={() =>
+                handleOpen(
+                  item.id,
+                  () => openTransaction(item)
+                )
+              }
             >
               {updatingId === item.id
                 ? 'Opening...'
-                : transaction
-                  ? 'View transaction'
-                  : 'View details'}
-              <span aria-hidden="true">›</span>
+                : 'View receipt'}
+              {' ›'}
+            </button>
+          </div>
+        </div>
+      </article>
+    );
+  };
+
+  // ----------------------------------------------------------
+  // EVENT CARD
+  // ----------------------------------------------------------
+
+  const renderEvent = (item: EventItem) => {
+    const priority = getPriorityStyle(item.priority);
+
+    return (
+      <article
+        key={`${item.source}-${item.id}`}
+        style={{
+          ...styles.card,
+          ...(item.is_read ? {} : styles.unreadCard),
+        }}
+      >
+        <div style={styles.cardTop}>
+          <div style={styles.iconBox}>
+            {getIcon(item.type)}
+          </div>
+
+          <div style={styles.cardContent}>
+            <div style={styles.heading}>
+              <h3 style={styles.cardTitle}>
+                {item.title || 'Account update'}
+              </h3>
+
+              {!item.is_read && (
+                <span
+                  style={styles.unreadDot}
+                  aria-label="Unread"
+                />
+              )}
+            </div>
+
+            {item.source === 'announcement' && (
+              <span
+                style={{
+                  ...styles.priority,
+                  ...priority,
+                }}
+              >
+                {item.priority || 'Normal'} announcement
+              </span>
+            )}
+
+            <p style={styles.message}>
+              {item.message}
+            </p>
+
+            <div style={styles.date}>
+              {formatDate(item.created_at)}
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.cardBottom}>
+          <div style={styles.status}>
+            <span
+              style={{
+                ...styles.statusDot,
+                background: item.is_read
+                  ? '#AAB5AE'
+                  : '#079447',
+              }}
+            />
+
+            {item.is_read ? 'READ' : 'NEW'}
+          </div>
+
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+          }}>
+            {!item.is_read && (
+              <button
+                type="button"
+                style={styles.markReadButton}
+                onClick={() =>
+                  handleMarkSingleRead(item)
+                }
+              >
+                Mark read
+              </button>
+            )}
+
+            <button
+              type="button"
+              style={styles.viewButton}
+              disabled={Boolean(updatingId)}
+              onClick={() =>
+                handleOpen(
+                  item.id,
+                  () => openEvent(item)
+                )
+              }
+            >
+              {updatingId === item.id
+                ? 'Opening...'
+                : 'View details'}
+              {' ›'}
             </button>
           </div>
         </div>
@@ -1080,19 +1471,19 @@ const Notifications: React.FC = () => {
   const renderEmptyState = () => (
     <div style={styles.empty}>
       <div style={styles.emptyIcon}>
-        {activeCategory === 'transactions' ? '↗' : '●'}
+        {activeCategory === 'transactions' ? '↙' : '◈'}
       </div>
 
       <h2 style={styles.emptyTitle}>
         {activeCategory === 'transactions'
           ? 'No transaction updates'
-          : 'No account events yet'}
+          : 'You are all caught up'}
       </h2>
 
       <p style={styles.emptyMessage}>
         {activeCategory === 'transactions'
-          ? 'Your confirmed transfers, payments and transaction updates will appear here.'
-          : 'Your account, verification, security and service updates will appear here.'}
+          ? 'Your transfers, payments and other transaction updates will appear here.'
+          : 'Your KYC results, account updates, security alerts and administrator announcements will appear here.'}
       </p>
     </div>
   );
@@ -1155,7 +1546,7 @@ const Notifications: React.FC = () => {
               </h1>
 
               <p style={styles.pageDescription}>
-                Your financial activity and important account updates, all in one place.
+                Your transactions, account updates and important announcements in one place.
               </p>
             </div>
 
@@ -1244,14 +1635,14 @@ const Notifications: React.FC = () => {
             <div style={styles.sectionSubtitle}>
               {displayedNotifications.length}{' '}
               {displayedNotifications.length === 1
-                ? 'notification'
-                : 'notifications'}
+                ? 'item'
+                : 'items'}
             </div>
           </div>
 
           <div style={{
             display: 'flex',
-            gap: 8,
+            gap: 6,
             alignItems: 'center',
           }}>
             <button
@@ -1272,7 +1663,7 @@ const Notifications: React.FC = () => {
               >
                 {markingAll
                   ? 'Updating...'
-                  : 'Mark all as read'}
+                  : 'Read all'}
               </button>
             )}
           </div>
@@ -1298,13 +1689,15 @@ const Notifications: React.FC = () => {
 
         {loading ? (
           <div style={styles.loading}>
-            Loading your notifications...
+            Loading your notification centre...
           </div>
         ) : displayedNotifications.length === 0 ? (
           renderEmptyState()
         ) : (
-          <div style={styles.notificationList}>
-            {displayedNotifications.map(renderNotification)}
+          <div style={styles.list}>
+            {activeCategory === 'transactions'
+              ? transactionNotifications.map(renderTransaction)
+              : eventItems.map(renderEvent)}
           </div>
         )}
 
@@ -1334,7 +1727,9 @@ const Notifications: React.FC = () => {
                 id="event-details-title"
                 style={styles.modalTitle}
               >
-                Notification details
+                {selectedEvent.source === 'announcement'
+                  ? 'Announcement'
+                  : 'Account notification'}
               </h2>
 
               <button
@@ -1349,35 +1744,54 @@ const Notifications: React.FC = () => {
 
             <div style={{
               ...styles.iconBox,
-              marginBottom: 17,
+              marginBottom: 15,
             }}>
               {getIcon(selectedEvent.type)}
             </div>
 
             <h3 style={{
               ...styles.pageTitle,
-              fontSize: 20,
+              fontSize: 19,
             }}>
-              {getDisplayTitle(selectedEvent)}
+              {selectedEvent.title}
             </h3>
+
+            {selectedEvent.priority && (
+              <span
+                style={{
+                  ...styles.priority,
+                  ...getPriorityStyle(selectedEvent.priority),
+                }}
+              >
+                {selectedEvent.priority}
+              </span>
+            )}
 
             <div style={styles.date}>
               {formatDate(selectedEvent.created_at)}
             </div>
 
-            <div style={styles.divider} />
+            <div style={{
+              borderTop: '1px solid #EDF1EE',
+              margin: '15px 0',
+            }} />
 
             <p style={styles.modalMessage}>
-              {getDisplayMessage(selectedEvent)}
+              {selectedEvent.message}
             </p>
 
             <div style={{
               ...styles.status,
-              color: '#087C43',
-              marginTop: 20,
+              color: GREEN,
+              marginTop: 17,
             }}>
-              <span style={styles.statusDot} />
-              {selectedEvent.is_read ? 'READ' : 'UNREAD'}
+              <span
+                style={{
+                  ...styles.statusDot,
+                  background: GREEN,
+                }}
+              />
+              READ
             </div>
 
             <button
