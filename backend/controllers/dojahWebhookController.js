@@ -1,3 +1,4 @@
+
 const crypto = require('crypto');
 const pool = require('../config/database');
 
@@ -114,6 +115,7 @@ const isFailed = (body) =>
 // Returns:
 // verified | failed | pending
 // ============================================================
+
 const getStepStatus = (step) => {
   if (!step || typeof step !== 'object') {
     return 'pending';
@@ -135,13 +137,28 @@ const getStepStatus = (step) => {
     const status = value.trim().toLowerCase();
 
     if (
-      ['success', 'successful', 'verified', 'completed', 'complete', 'approved', 'passed'].includes(status)
+      [
+        'success',
+        'successful',
+        'verified',
+        'completed',
+        'complete',
+        'approved',
+        'passed',
+      ].includes(status)
     ) {
       return 'verified';
     }
 
     if (
-      ['failed', 'failure', 'rejected', 'declined', 'abandoned', 'error'].includes(status)
+      [
+        'failed',
+        'failure',
+        'rejected',
+        'declined',
+        'abandoned',
+        'error',
+      ].includes(status)
     ) {
       return 'failed';
     }
@@ -149,6 +166,7 @@ const getStepStatus = (step) => {
 
   return 'pending';
 };
+
 // ============================================================
 // SCORE VALIDATION
 // ============================================================
@@ -233,6 +251,69 @@ const preserveVerified = (currentStatus, newStatus) => {
   }
 
   return newStatus;
+};
+
+// ============================================================
+// CREATE KYC NOTIFICATION ONCE
+//
+// Must be called inside the existing database transaction.
+// A separate audit action is used as the idempotency marker.
+// ============================================================
+
+const createKycNotificationOnce = async (
+  client,
+  {
+    userId,
+    action,
+    title,
+    message,
+  }
+) => {
+  const auditResult = await client.query(
+    `
+    INSERT INTO audit_logs (
+      user_id,
+      action,
+      description
+    )
+    SELECT $1, $2, $3
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM audit_logs
+      WHERE user_id = $1
+        AND action = $2
+    )
+    `,
+    [
+      userId,
+      action,
+      message,
+    ]
+  );
+
+  if (auditResult.rowCount !== 1) {
+    return false;
+  }
+
+  await client.query(
+    `
+    INSERT INTO notifications (
+      user_id,
+      title,
+      message,
+      type,
+      is_read
+    )
+    VALUES ($1, $2, $3, 'kyc_event', false)
+    `,
+    [
+      userId,
+      title,
+      message,
+    ]
+  );
+
+  return true;
 };
 
 // ============================================================
@@ -366,9 +447,6 @@ const handleDojahWebhook = async (req, res) => {
 
     // ========================================================
     // FIND AND LOCK MATCHING KYC RECORD
-    //
-    // liveness_status is read ONLY as a legacy fallback
-    // for previously saved Tier 2 results.
     // ========================================================
 
     const recordResult = await client.query(
@@ -416,10 +494,8 @@ const handleDojahWebhook = async (req, res) => {
        FOR UPDATE`,
       [reference]
     );
-        if (recordResult.rows.length === 0) {
-      // A previous attempt may have been archived when the customer
-      // started a newer verification. Never apply an archived webhook
-      // to the current kyc_records row.
+
+    if (recordResult.rows.length === 0) {
       const archivedResult = await client.query(
         `SELECT
            id,
@@ -502,7 +578,6 @@ const handleDojahWebhook = async (req, res) => {
 
     const record = recordResult.rows[0];
 
-    // Do not change status for an event still processing.
     if (!completed) {
       await client.query('COMMIT');
       transactionStarted = false;
@@ -516,10 +591,6 @@ const handleDojahWebhook = async (req, res) => {
 
     // ========================================================
     // TIER 1 — NIN
-    // Automatic approval only when:
-    // 1. The webhook is completed successfully.
-    // 2. Government NIN verification passes.
-    // 3. Facial liveness passes.
     // ========================================================
 
     if (record.dojah_verification_type === 'nin') {
@@ -636,6 +707,32 @@ const handleDojahWebhook = async (req, res) => {
         );
       }
 
+      if (
+        reviewStatus === 'verified' &&
+        record.nin_verification_status !== 'verified'
+      ) {
+        await createKycNotificationOnce(client, {
+          userId: record.user_id,
+          action: `kyc_nin_verified_notification_${record.id}`,
+          title: 'NIN verification successful',
+          message:
+            'Your National Identification Number has been successfully verified.',
+        });
+      }
+
+      if (
+        savedLivenessStatus === 'failed' &&
+        record.tier_1_liveness_status !== 'failed'
+      ) {
+        await createKycNotificationOnce(client, {
+          userId: record.user_id,
+          action: `kyc_nin_liveness_failed_notification_${record.id}`,
+          title: 'NIN facial verification unsuccessful',
+          message:
+            'We could not complete your facial verification. Please try again.',
+        });
+      }
+
       await client.query('COMMIT');
       transactionStarted = false;
 
@@ -652,10 +749,6 @@ const handleDojahWebhook = async (req, res) => {
 
     // ========================================================
     // TIER 1 — BVN
-    // Automatic approval only when:
-    // 1. The webhook is completed successfully.
-    // 2. Government BVN verification passes.
-    // 3. Facial liveness passes.
     // ========================================================
 
     if (record.dojah_verification_type === 'bvn') {
@@ -772,6 +865,32 @@ const handleDojahWebhook = async (req, res) => {
         );
       }
 
+      if (
+        reviewStatus === 'verified' &&
+        record.bvn_verification_status !== 'verified'
+      ) {
+        await createKycNotificationOnce(client, {
+          userId: record.user_id,
+          action: `kyc_bvn_verified_notification_${record.id}`,
+          title: 'BVN verification successful',
+          message:
+            'Your Bank Verification Number has been successfully verified.',
+        });
+      }
+
+      if (
+        savedLivenessStatus === 'failed' &&
+        record.tier_1_liveness_status !== 'failed'
+      ) {
+        await createKycNotificationOnce(client, {
+          userId: record.user_id,
+          action: `kyc_bvn_liveness_failed_notification_${record.id}`,
+          title: 'BVN facial verification unsuccessful',
+          message:
+            'We could not complete your facial verification. Please try again.',
+        });
+      }
+
       await client.query('COMMIT');
       transactionStarted = false;
 
@@ -785,7 +904,8 @@ const handleDojahWebhook = async (req, res) => {
         tier1Approved: reviewStatus === 'verified',
       });
     }
-        // ========================================================
+
+    // ========================================================
     // TIER 3 — LIVENESS ONLY
     // ========================================================
 
@@ -842,6 +962,26 @@ const handleDojahWebhook = async (req, res) => {
         ]
       );
 
+      if (
+        savedLivenessStatus !== 'pending' &&
+        savedLivenessStatus !== record.tier_3_liveness_status
+      ) {
+        const successful =
+          savedLivenessStatus === 'verified';
+
+        await createKycNotificationOnce(client, {
+          userId: record.user_id,
+          action:
+            `kyc_tier3_liveness_notification_${savedLivenessStatus}_${record.id}`,
+          title: successful
+            ? 'Tier 3 facial verification successful'
+            : 'Tier 3 facial verification unsuccessful',
+          message: successful
+            ? 'Your Tier 3 facial verification has been completed. Your document review is still separate.'
+            : 'Your Tier 3 facial verification was unsuccessful. Please follow the instructions to retry.',
+        });
+      }
+
       console.info(
         '[KYC webhook] Tier 3 liveness result saved.',
         {
@@ -862,7 +1002,7 @@ const handleDojahWebhook = async (req, res) => {
         documentReviewRequired: true,
       });
     }
- 
+
     // ========================================================
     // TIER 2 — AUTOMATIC APPROVAL
     //
@@ -961,275 +1101,285 @@ const handleDojahWebhook = async (req, res) => {
       returnedBvn === tier1Bvn;
 
     const tier2BvnVerified =
-  !failed &&
-  completed &&
-  tier1BvnAlreadyVerified &&
-  submittedBvnMatchesTier1 &&
-  returnedBvnMatchesTier1 &&
-  governmentBvnStatus === 'verified';
+      !failed &&
+      completed &&
+      tier1BvnAlreadyVerified &&
+      submittedBvnMatchesTier1 &&
+      returnedBvnMatchesTier1 &&
+      governmentBvnStatus === 'verified';
 
-const bvnEvidenceMismatch =
-  (
-    submittedBvnValid &&
-    tier1Bvn !== null &&
-    !submittedBvnMatchesTier1
-  ) ||
-  (
-    returnedBvn !== null &&
-    tier1Bvn !== null &&
-    !returnedBvnMatchesTier1
-  );
+    const bvnEvidenceMismatch =
+      (
+        submittedBvnValid &&
+        tier1Bvn !== null &&
+        !submittedBvnMatchesTier1
+      ) ||
+      (
+        returnedBvn !== null &&
+        tier1Bvn !== null &&
+        !returnedBvnMatchesTier1
+      );
 
-const bvnEvidenceInvalid =
-  submittedBvnCandidates.length > 0 &&
-  !submittedBvnValid;
+    const bvnEvidenceInvalid =
+      submittedBvnCandidates.length > 0 &&
+      !submittedBvnValid;
 
-const tier2BvnProviderResult = preserveVerified(
-  record.tier_2_bvn_provider_validation_result,
-  tier2BvnVerified
-    ? 'verified'
-    : (
-        failed ||
-        governmentBvnStatus === 'failed' ||
-        bvnEvidenceMismatch ||
-        bvnEvidenceInvalid
-      )
-      ? 'failed'
-      : 'pending'
-);
-
-const tier2EvidenceComplete =
-  tier2BvnVerified &&
-  governmentIdStatus === 'verified' &&
-  livenessProviderStatus === 'verified' &&
-  !failed &&
-  completed;
-
-const identityProviderResult = failed
-  ? 'failed'
-  : governmentIdStatus;
-
-const selfieMatchScore = getScore(
-  selfieResult.match_score ??
-  selfieData.match_score
-);
-
-const livenessScore = getScore(
-  selfieResult.liveness_score ??
-  selfieData.liveness_score
-);
-
-const currentTier2LivenessStatus =
-  record.tier_2_liveness_status === 'verified' ||
-  record.tier_2_liveness_status === 'failed'
-    ? record.tier_2_liveness_status
-    : record.liveness_status === 'verified'
-      ? 'verified'
-      : record.liveness_status === 'failed'
-        ? 'failed'
-        : record.tier_2_liveness_status;
-
-const nextTier2LivenessStatus = failed
-  ? 'failed'
-  : livenessProviderStatus;
-
-const savedTier2LivenessStatus =
-  preserveVerified(
-    currentTier2LivenessStatus,
-    nextTier2LivenessStatus
-  );
-
-const tier2FailureReason =
-  savedTier2LivenessStatus === 'failed'
-    ? getLivenessFailureReason(
-        body,
-        data,
-        selfieData
-      )
-    : null;
-
-// Never downgrade an already verified or rejected identity.
-const savedIdentityStatus =
-  record.id_verification_status === 'verified'
-    ? 'verified'
-    : record.id_verification_status === 'rejected'
-      ? 'rejected'
-      : tier2EvidenceComplete
+    const tier2BvnProviderResult = preserveVerified(
+      record.tier_2_bvn_provider_validation_result,
+      tier2BvnVerified
         ? 'verified'
-        : 'pending';
+        : (
+            failed ||
+            governmentBvnStatus === 'failed' ||
+            bvnEvidenceMismatch ||
+            bvnEvidenceInvalid
+          )
+          ? 'failed'
+          : 'pending'
+    );
+
+    const tier2EvidenceComplete =
+      tier2BvnVerified &&
+      governmentIdStatus === 'verified' &&
+      livenessProviderStatus === 'verified' &&
+      !failed &&
+      completed;
+
+    const identityProviderResult = failed
+      ? 'failed'
+      : governmentIdStatus;
+
+    const selfieMatchScore = getScore(
+      selfieResult.match_score ??
+      selfieData.match_score
+    );
+
+    const livenessScore = getScore(
+      selfieResult.liveness_score ??
+      selfieData.liveness_score
+    );
+
+    const currentTier2LivenessStatus =
+      record.tier_2_liveness_status === 'verified' ||
+      record.tier_2_liveness_status === 'failed'
+        ? record.tier_2_liveness_status
+        : record.liveness_status === 'verified'
+          ? 'verified'
+          : record.liveness_status === 'failed'
+            ? 'failed'
+            : record.tier_2_liveness_status;
+
+    const nextTier2LivenessStatus = failed
+      ? 'failed'
+      : livenessProviderStatus;
+
+    const savedTier2LivenessStatus =
+      preserveVerified(
+        currentTier2LivenessStatus,
+        nextTier2LivenessStatus
+      );
+
+    const tier2FailureReason =
+      savedTier2LivenessStatus === 'failed'
+        ? getLivenessFailureReason(
+            body,
+            data,
+            selfieData
+          )
+        : null;
+
+    // Never downgrade an already verified or rejected identity.
+    const savedIdentityStatus =
+      record.id_verification_status === 'verified'
+        ? 'verified'
+        : record.id_verification_status === 'rejected'
+          ? 'rejected'
+          : tier2EvidenceComplete
+            ? 'verified'
+            : 'pending';
 
     const tier2Approved =
-  tier2EvidenceComplete &&
-  savedIdentityStatus === 'verified' &&
-  savedTier2LivenessStatus === 'verified';
+      tier2EvidenceComplete &&
+      savedIdentityStatus === 'verified' &&
+      savedTier2LivenessStatus === 'verified';
 
-const tier2ProviderFailure =
-  failed ||
-  governmentIdStatus === 'failed' ||
-  livenessProviderStatus === 'failed' ||
-  governmentBvnStatus === 'failed' ||
-  bvnEvidenceMismatch ||
-  bvnEvidenceInvalid;
+    const tier2ProviderFailure =
+      failed ||
+      governmentIdStatus === 'failed' ||
+      livenessProviderStatus === 'failed' ||
+      governmentBvnStatus === 'failed' ||
+      bvnEvidenceMismatch ||
+      bvnEvidenceInvalid;
 
-// Preserve an existing administrator rejection.
-const administratorRejected =
-  record.id_verification_status === 'rejected';
+    // Preserve an existing administrator rejection.
+    const administratorRejected =
+      record.id_verification_status === 'rejected';
 
-// Save all provider results and approval status atomically.
-await client.query(
-  `UPDATE kyc_records
-   SET
-     tier_2_bvn_provider_validation_result = $1::text,
+    // Save all provider results and approval status atomically.
+    await client.query(
+      `UPDATE kyc_records
+       SET
+         tier_2_bvn_provider_validation_result = $1::text,
 
-     id_verification_status = $2::text,
+         id_verification_status = $2::text,
 
-     id_provider_validation_result = $3::text,
+         id_provider_validation_result = $3::text,
 
-     id_verified_at = CASE
-       WHEN $2::text = 'verified'
-         THEN COALESCE(id_verified_at, NOW())
-       ELSE id_verified_at
-     END,
+         id_verified_at = CASE
+           WHEN $2::text = 'verified'
+             THEN COALESCE(id_verified_at, NOW())
+           ELSE id_verified_at
+         END,
 
-     id_rejection_reason = CASE
-       WHEN $2::text = 'verified'
-         THEN NULL
-       ELSE id_rejection_reason
-     END,
+         id_rejection_reason = CASE
+           WHEN $2::text = 'verified'
+             THEN NULL
+           ELSE id_rejection_reason
+         END,
 
-     tier_2_liveness_status = $4::text,
+         tier_2_liveness_status = $4::text,
 
-     tier_2_liveness_rejection_reason = CASE
-       WHEN $4::text = 'failed'
-         THEN $5::text
-       WHEN $4::text = 'verified'
-         THEN NULL
-       ELSE tier_2_liveness_rejection_reason
-     END,
+         tier_2_liveness_rejection_reason = CASE
+           WHEN $4::text = 'failed'
+             THEN $5::text
+           WHEN $4::text = 'verified'
+             THEN NULL
+           ELSE tier_2_liveness_rejection_reason
+         END,
 
-verification_status = CASE
-  WHEN $11::boolean = TRUE
-    THEN 'rejected'
-  WHEN verification_status = 'rejected'
-    THEN 'rejected'
-  WHEN $6::boolean = TRUE
-    THEN 'verified'
-  WHEN verification_status = 'verified'
-    THEN 'verified'
-  WHEN $7::boolean = TRUE
-    THEN 'failed'
-  ELSE 'pending'
-END,
+         verification_status = CASE
+           WHEN $11::boolean = TRUE
+             THEN 'rejected'
+           WHEN verification_status = 'rejected'
+             THEN 'rejected'
+           WHEN $6::boolean = TRUE
+             THEN 'verified'
+           WHEN verification_status = 'verified'
+             THEN 'verified'
+           WHEN $7::boolean = TRUE
+             THEN 'failed'
+           ELSE 'pending'
+         END,
 
-     selfie_match_score = COALESCE(
-       $8,
-       selfie_match_score
-     ),
+         selfie_match_score = COALESCE(
+           $8,
+           selfie_match_score
+         ),
 
-     liveness_score = COALESCE(
-       $9,
-       liveness_score
-     ),
+         liveness_score = COALESCE(
+           $9,
+           liveness_score
+         ),
 
-     dojah_checked_at = NOW(),
-     updated_at = NOW()
+         dojah_checked_at = NOW(),
+         updated_at = NOW()
 
-   WHERE id = $10`,
-  [
-    tier2BvnProviderResult,
-    savedIdentityStatus,
-    identityProviderResult,
-    savedTier2LivenessStatus,
-    tier2FailureReason,
-    tier2Approved,
-    tier2ProviderFailure,
-    selfieMatchScore,
-    livenessScore,
-    record.id,
-    administratorRejected,
-  ]
-);
-
-// Automatically upgrade the user only after every
-// required provider check has passed.
-if (tier2Approved) {
-  const userUpdate = await client.query(
-    `UPDATE users
-     SET
-       id_verified = TRUE,
-       kyc_tier = GREATEST(COALESCE(kyc_tier, 0), 2),
-       kyc_status = 'verified',
-       updated_at = NOW()
-     WHERE id = $1
-       AND bvn_verified = TRUE`,
-    [record.user_id]
-  );
-
-  if (userUpdate.rowCount !== 1) {
-    throw new Error(
-      'Tier 2 approval failed: user record was not updated.'
+       WHERE id = $10`,
+      [
+        tier2BvnProviderResult,
+        savedIdentityStatus,
+        identityProviderResult,
+        savedTier2LivenessStatus,
+        tier2FailureReason,
+        tier2Approved,
+        tier2ProviderFailure,
+        selfieMatchScore,
+        livenessScore,
+        record.id,
+        administratorRejected,
+      ]
     );
-  }
 
-await client.query(
-  `INSERT INTO audit_logs (
-     user_id,
-     action,
-     description
-   )
-   SELECT $1, $2, $3
-   WHERE NOT EXISTS (
-     SELECT 1
-     FROM audit_logs
-     WHERE user_id = $1
-       AND action = $2
-   )`,
-  [
-    record.user_id,
-    'kyc_tier2_auto_approved',
-    'Tier 2 automatically approved after successful BVN match, government identity verification, and facial liveness verification by Dojah.',
-  ]
-);
-}
+    // Automatically upgrade the user only after every
+    // required provider check has passed.
+    if (tier2Approved) {
+      const userUpdate = await client.query(
+        `UPDATE users
+         SET
+           id_verified = TRUE,
+           kyc_tier = GREATEST(COALESCE(kyc_tier, 0), 2),
+           kyc_status = 'verified',
+           updated_at = NOW()
+         WHERE id = $1
+           AND bvn_verified = TRUE`,
+        [record.user_id]
+      );
 
-console.info(
-  '[KYC webhook] Tier 2 processing completed.',
-  {
-    reference,
-    tier2BvnProviderResult,
-    governmentIdProviderResult: identityProviderResult,
-    livenessStatus: savedTier2LivenessStatus,
-    tier2Approved,
-    administratorRejected,
+      if (userUpdate.rowCount !== 1) {
+        throw new Error(
+          'Tier 2 approval failed: user record was not updated.'
+        );
+      }
 
-    // Safe diagnostic information — no customer BVN exposed.
-    tier2EvidenceComplete,
-    tier2BvnVerified,
-    tier1BvnAlreadyVerified,
-    submittedBvnValid,
-    submittedBvnMatchesTier1,
-    returnedBvnMatchesTier1,
-    governmentBvnStatus,
-    governmentIdStatus,
-    livenessProviderStatus,
-    verificationCompleted: completed,
-  }
-);
+      // Preserve the existing audit action.
+      await client.query(
+        `INSERT INTO audit_logs (
+           user_id,
+           action,
+           description
+         )
+         SELECT $1, $2, $3
+         WHERE NOT EXISTS (
+           SELECT 1
+           FROM audit_logs
+           WHERE user_id = $1
+             AND action = $2
+         )`,
+        [
+          record.user_id,
+          'kyc_tier2_auto_approved',
+          'Tier 2 automatically approved after successful BVN match, government identity verification, and facial liveness verification by Dojah.',
+        ]
+      );
 
-await client.query('COMMIT');
-transactionStarted = false;
+      // Separate idempotency marker for the customer notification.
+      await createKycNotificationOnce(client, {
+        userId: record.user_id,
+        action: `kyc_tier2_notification_${record.id}`,
+        title: 'Tier 2 verification successful',
+        message:
+          'Congratulations! Your Tier 2 identity verification has been successfully approved.',
+      });
+    }
 
-return res.status(200).json({
-  received: true,
-  matched: true,
-  verificationType: 'identity',
-  tier2BvnProviderResult,
-  identityProviderResult,
-  identityStatus: savedIdentityStatus,
-  livenessStatus: savedTier2LivenessStatus,
-  tier2Approved,
-  administratorReviewRequired: false,
-});
+    console.info(
+      '[KYC webhook] Tier 2 processing completed.',
+      {
+        reference,
+        tier2BvnProviderResult,
+        governmentIdProviderResult: identityProviderResult,
+        livenessStatus: savedTier2LivenessStatus,
+        tier2Approved,
+        administratorRejected,
+
+        // Safe diagnostic information — no customer BVN exposed.
+        tier2EvidenceComplete,
+        tier2BvnVerified,
+        tier1BvnAlreadyVerified,
+        submittedBvnValid,
+        submittedBvnMatchesTier1,
+        returnedBvnMatchesTier1,
+        governmentBvnStatus,
+        governmentIdStatus,
+        livenessProviderStatus,
+        verificationCompleted: completed,
+      }
+    );
+
+    await client.query('COMMIT');
+    transactionStarted = false;
+
+    return res.status(200).json({
+      received: true,
+      matched: true,
+      verificationType: 'identity',
+      tier2BvnProviderResult,
+      identityProviderResult,
+      identityStatus: savedIdentityStatus,
+      livenessStatus: savedTier2LivenessStatus,
+      tier2Approved,
+      administratorReviewRequired: false,
+    });
 
   } catch (error) {
     if (client && transactionStarted) {
