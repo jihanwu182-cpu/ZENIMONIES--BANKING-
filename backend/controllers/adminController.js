@@ -348,12 +348,24 @@ const getUser = async (req, res) => {
 };
 
 
+
 // ============================================================
 // UPDATE USER STATUS
 // PATCH /api/admin/users/:id/status
+//
+// Creates a customer notification only when the account
+// status genuinely changes.
+//
+// The following operations share one database transaction:
+// 1. Lock and read the customer.
+// 2. Update account status.
+// 3. Insert audit log.
+// 4. Insert customer notification.
 // ============================================================
 
 const updateUserStatus = async (req, res) => {
+  let client;
+
   try {
     const { id } = req.params;
     const { status } = req.body || {};
@@ -372,7 +384,69 @@ const updateUserStatus = async (req, res) => {
       });
     }
 
-    const result = await pool.query(
+    client = await pool.connect();
+
+    await client.query('BEGIN');
+
+    // --------------------------------------------------------
+    // LOCK CUSTOMER RECORD
+    // --------------------------------------------------------
+
+    const existingResult = await client.query(
+      `
+      SELECT
+        id,
+        full_name,
+        email,
+        phone,
+        role,
+        status,
+        kyc_status,
+        kyc_tier,
+        is_verified
+      FROM users
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [id]
+    );
+
+    if (!existingResult.rows.length) {
+      await client.query('ROLLBACK');
+
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    const existingUser = existingResult.rows[0];
+
+    const previousStatus = String(
+      existingUser.status || ''
+    ).toLowerCase();
+
+    // --------------------------------------------------------
+    // PREVENT DUPLICATE STATUS EVENTS
+    // --------------------------------------------------------
+
+    if (previousStatus === status) {
+      await client.query('COMMIT');
+
+      return res.status(200).json({
+        success: true,
+        changed: false,
+        message:
+          'The account already has this status. No changes were made.',
+        user: existingUser,
+      });
+    }
+
+    // --------------------------------------------------------
+    // UPDATE CUSTOMER ACCOUNT STATUS
+    // --------------------------------------------------------
+
+    const result = await client.query(
       `
       UPDATE users
       SET
@@ -394,14 +468,73 @@ const updateUserStatus = async (req, res) => {
       [status, id]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
+    const updatedUser = result.rows[0];
+
+    // --------------------------------------------------------
+    // PREPARE CUSTOMER NOTIFICATION
+    // --------------------------------------------------------
+
+    let notificationTitle = '';
+    let notificationMessage = '';
+
+    switch (status) {
+      case 'active':
+
+        if (
+          previousStatus === 'suspended' ||
+          previousStatus === 'blocked'
+        ) {
+          notificationTitle = 'Account reactivated';
+
+          notificationMessage =
+            'Your ZENIMONIES account has been reactivated. You can now access your account again.';
+        } else {
+          notificationTitle = 'Account activated';
+
+          notificationMessage =
+            'Your ZENIMONIES account has been activated.';
+        }
+
+        break;
+
+      case 'suspended':
+
+        notificationTitle = 'Account suspended';
+
+        notificationMessage =
+          'Your ZENIMONIES account has been suspended. Please contact customer support if you need assistance.';
+
+        break;
+
+      case 'blocked':
+
+        notificationTitle = 'Account blocked';
+
+        notificationMessage =
+          'Your ZENIMONIES account has been blocked. Please contact customer support for assistance.';
+
+        break;
+
+      case 'pending':
+
+        notificationTitle = 'Account status updated';
+
+        notificationMessage =
+          'Your ZENIMONIES account status has been changed to pending. Please contact customer support if you need assistance.';
+
+        break;
+
+      default:
+        throw new Error(
+          'Unsupported account status notification.'
+        );
     }
 
-    await pool.query(
+    // --------------------------------------------------------
+    // WRITE ADMIN AUDIT LOG
+    // --------------------------------------------------------
+
+    await client.query(
       `
       INSERT INTO audit_logs (
         user_id,
@@ -420,29 +553,93 @@ const updateUserStatus = async (req, res) => {
       `,
       [
         id,
-        `User account status changed to ${status}`,
+        `User account status changed from ${previousStatus} to ${status}.`,
         req.ip || null,
         req.get('user-agent') || null,
       ]
     );
 
+    // --------------------------------------------------------
+    // CREATE CUSTOMER NOTIFICATION
+    // --------------------------------------------------------
+
+    await client.query(
+      `
+      INSERT INTO notifications (
+        user_id,
+        type,
+        title,
+        message,
+        transaction_id,
+        is_read,
+        created_at
+      )
+      VALUES (
+        $1,
+        'account_status',
+        $2,
+        $3,
+        NULL,
+        FALSE,
+        CURRENT_TIMESTAMP
+      )
+      `,
+      [
+        id,
+        notificationTitle,
+        notificationMessage,
+      ]
+    );
+
+    // --------------------------------------------------------
+    // COMMIT ALL OPERATIONS
+    // --------------------------------------------------------
+
+    await client.query('COMMIT');
+
     return res.status(200).json({
       success: true,
-      message: 'User status updated successfully',
-      user: result.rows[0],
+      changed: true,
+      message: 'User status updated successfully.',
+      user: updatedUser,
+      notification: {
+        type: 'account_status',
+        title: notificationTitle,
+        message: notificationMessage,
+      },
     });
+
   } catch (error) {
+
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error(
+          'Admin status update rollback error:',
+          rollbackError?.message || rollbackError
+        );
+      }
+    }
+
     console.error(
       'Admin update user status error:',
-      error
+      error?.message || error
     );
 
     return res.status(500).json({
       success: false,
       message: 'Unable to update user status',
     });
+
+  } finally {
+
+    if (client) {
+      client.release();
+    }
   }
 };
+
 
 
 // ============================================================
