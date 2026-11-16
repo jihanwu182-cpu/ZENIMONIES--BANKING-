@@ -466,22 +466,36 @@ export default function App() {
   // CLEAR SESSION
   // ====================================================
 
-const clearSession = useCallback(async () => {
-  // Clear the visible authenticated session immediately.
-  setSession(null);
-  setAccount(null);
-  setTransactions([]);
-  setSelectedTransaction(null);
-  setProfilePhotoUri(null);
-  setRefreshing(false);
-  setDashboardLoading(false);
-  setScreen('welcome');
+  const clearSession = useCallback(() => {
+    // Immediately remove all authenticated app state.
+    setSession(null);
+    setAccount(null);
+    setTransactions([]);
+    setSelectedTransaction(null);
+    setProfilePhotoUri(null);
+    setRefreshing(false);
+    setDashboardLoading(false);
+    setScreen('welcome');
 
-  // Then clear the saved authentication token.
-  await deleteAuthToken(AUTH_TOKEN_KEY);
-}, []);
+    // Delete the saved token without blocking the screen transition.
+    void (async () => {
+      try {
+        await deleteAuthToken(AUTH_TOKEN_KEY);
+      } catch (error) {
+        console.error('Auth token deletion failed:', error);
 
-  
+        // Attempt to invalidate the saved token.
+        try {
+          await setAuthToken(AUTH_TOKEN_KEY, '');
+        } catch (fallbackError) {
+          console.error(
+            'Auth token invalidation failed:',
+            fallbackError
+          );
+        }
+      }
+    })();
+  }, []);
   // ====================================================
   // AUTHENTICATED API REQUEST
   // ====================================================
@@ -888,39 +902,27 @@ const loadProfile = useCallback(
     }
   };
 
+  
   // ====================================================
   // LOGOUT
   // ====================================================
 
-const handleLogout = useCallback(async () => {
-  const token = session?.token;
+  const handleLogout = useCallback(() => {
+    const token = session?.token;
 
-  // Clear the local session immediately.
-  try {
-    await clearSession();
-  } catch (error) {
-    console.error('Local logout error:', error);
+    // Do not wait for storage or network operations.
+    clearSession();
 
-    Alert.alert(
-      'Logout',
-      'Your session could not be cleared completely. Please try again.'
-    );
-
-    return;
-  }
-
-  // Push notification cleanup must never block logout.
-  if (token) {
-    void unregisterPushNotifications(token).catch((error) => {
-      console.warn(
-        'Push notification unregistration failed:',
-        error
-      );
-    });
-  }
-}, [session?.token, clearSession]);
-
- 
+    // Push notification cleanup happens separately.
+    if (token) {
+      void unregisterPushNotifications(token).catch((error) => {
+        console.warn(
+          'Push notification unregistration failed:',
+          error
+        );
+      });
+    }
+  }, [session?.token, clearSession]);
   // ====================================================
   // SELECT TRANSACTION
   // ====================================================
