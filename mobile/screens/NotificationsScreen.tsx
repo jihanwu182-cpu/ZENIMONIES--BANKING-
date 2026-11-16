@@ -24,14 +24,14 @@ import { useTheme } from '../theme/ThemeContext';
 import { getColors } from '../theme/colors';
 
 // ======================================================
-// ZENIMONIES BANKING — NOTIFICATIONS CENTRE
+// ZENIMONIES BANKING — PREMIUM NOTIFICATIONS CENTRE
 // Transactions / Events
 // Light and Dark Theme
 // File: mobile/screens/NotificationsScreen.tsx
 // ======================================================
 
-const API_URL =
-  'https://zenimonies-banking.onrender.com/api/notifications';
+const API_BASE_URL =
+  'https://zenimonies-banking.onrender.com/api';
 
 type NotificationItem = {
   id: string;
@@ -44,6 +44,19 @@ type NotificationItem = {
   read_at?: string | null;
 };
 
+type AnnouncementItem = {
+  id: string;
+  title: string;
+  message: string;
+  priority?: string;
+  audience_type?: string;
+  is_read: boolean;
+  created_at: string;
+  published_at?: string | null;
+  scheduled_at?: string | null;
+  read_at?: string | null;
+};
+
 type NotificationsResponse = {
   success: boolean;
   notifications?: NotificationItem[];
@@ -51,7 +64,26 @@ type NotificationsResponse = {
   message?: string;
 };
 
+type AnnouncementsResponse = {
+  success: boolean;
+  announcements?: AnnouncementItem[];
+  message?: string;
+};
+
 type Category = 'transactions' | 'events';
+
+type DisplayItem = {
+  id: string;
+  source: 'notification' | 'announcement';
+  type?: string;
+  title: string;
+  message: string;
+  transaction_id?: string | null;
+  is_read: boolean;
+  created_at: string;
+  read_at?: string | null;
+  priority?: string;
+};
 
 type Props = {
   token: string;
@@ -87,6 +119,8 @@ const getCategory = (
     return 'transactions';
   }
 
+  // Login, security, KYC, service and account alerts
+  // belong to Events.
   return 'events';
 };
 
@@ -111,16 +145,33 @@ const getNotificationIcon = (type?: string) => {
 
   if (
     value.includes('transfer') ||
-    value.includes('payment')
+    value.includes('payment') ||
+    value.includes('withdrawal') ||
+    value.includes('deposit')
   ) {
     return '↗';
   }
 
   if (
     value.includes('security') ||
-    value.includes('login')
+    value.includes('login') ||
+    value.includes('device')
   ) {
     return '⌑';
+  }
+
+  if (
+    value.includes('kyc') ||
+    value.includes('verification')
+  ) {
+    return '✓';
+  }
+
+  if (
+    value.includes('announcement') ||
+    value.includes('promotion')
+  ) {
+    return '✦';
   }
 
   return '●';
@@ -175,6 +226,27 @@ const formatNotificationDate = (value: string) => {
   });
 };
 
+const getAnnouncementDate = (
+  item: AnnouncementItem
+) =>
+  item.published_at ||
+  item.scheduled_at ||
+  item.created_at;
+
+const getPriorityLabel = (priority?: string) => {
+  const value = String(priority || '').toLowerCase();
+
+  if (value === 'high' || value === 'urgent' || value === 'critical') {
+    return 'IMPORTANT';
+  }
+
+  if (value === 'medium') {
+    return 'UPDATE';
+  }
+
+  return 'ANNOUNCEMENT';
+};
+
 // ======================================================
 // MAIN SCREEN
 // ======================================================
@@ -194,8 +266,8 @@ export default function NotificationsScreen({
   const [notifications, setNotifications] =
     useState<NotificationItem[]>([]);
 
-  const [unreadCount, setUnreadCount] =
-    useState(0);
+  const [announcements, setAnnouncements] =
+    useState<AnnouncementItem[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -213,7 +285,7 @@ export default function NotificationsScreen({
     useState<Category>('transactions');
 
   const [selectedEvent, setSelectedEvent] =
-    useState<NotificationItem | null>(null);
+    useState<DisplayItem | null>(null);
 
   // ====================================================
   // AUTHENTICATED REQUEST
@@ -224,8 +296,14 @@ export default function NotificationsScreen({
       path: string,
       method: 'GET' | 'PATCH' = 'GET'
     ) => {
+      if (!token) {
+        throw new Error(
+          'Your session has expired. Please sign in again.'
+        );
+      }
+
       const response = await fetch(
-        `${API_URL}${path}`,
+        `${API_BASE_URL}${path}`,
         {
           method,
           headers: {
@@ -265,7 +343,7 @@ export default function NotificationsScreen({
   );
 
   // ====================================================
-  // LOAD NOTIFICATIONS
+  // LOAD TRANSACTIONS AND EVENTS
   // ====================================================
 
   const loadNotifications = useCallback(
@@ -280,20 +358,24 @@ export default function NotificationsScreen({
       }
 
       try {
-        const data: NotificationsResponse =
-          await request('?limit=100');
+        const [notificationData, announcementData] =
+          await Promise.all([
+            request('/notifications?limit=100'),
+            request('/announcements?limit=100'),
+          ]);
 
-        const rows = Array.isArray(
-          data.notifications
-        )
-          ? data.notifications
-          : [];
+        const notificationRows =
+          Array.isArray(notificationData.notifications)
+            ? notificationData.notifications
+            : [];
 
-        setNotifications(rows);
+        const announcementRows =
+          Array.isArray(announcementData.announcements)
+            ? announcementData.announcements
+            : [];
 
-        setUnreadCount(
-          Number(data.unread_count || 0)
-        );
+        setNotifications(notificationRows);
+        setAnnouncements(announcementRows);
       } catch (error: any) {
         Alert.alert(
           'Notifications unavailable',
@@ -331,10 +413,53 @@ export default function NotificationsScreen({
     [notifications]
   );
 
+  const eventItems = useMemo<DisplayItem[]>(() => {
+    const regularEvents: DisplayItem[] =
+      eventNotifications.map(item => ({
+        ...item,
+        source: 'notification',
+      }));
+
+    const adminAnnouncements: DisplayItem[] =
+      announcements.map(item => ({
+        id: item.id,
+        source: 'announcement',
+        type: 'announcement',
+        title: item.title,
+        message: item.message,
+        is_read: item.is_read,
+        created_at: getAnnouncementDate(item),
+        read_at: item.read_at,
+        priority: item.priority,
+      }));
+
+    return [
+      ...regularEvents,
+      ...adminAnnouncements,
+    ].sort((a, b) => {
+      const first = new Date(a.created_at).getTime();
+      const second = new Date(b.created_at).getTime();
+
+      return (
+        (Number.isFinite(second) ? second : 0) -
+        (Number.isFinite(first) ? first : 0)
+      );
+    });
+  }, [eventNotifications, announcements]);
+
+  const transactionItems = useMemo<DisplayItem[]>(
+    () =>
+      transactionNotifications.map(item => ({
+        ...item,
+        source: 'notification',
+      })),
+    [transactionNotifications]
+  );
+
   const displayedNotifications =
     activeCategory === 'transactions'
-      ? transactionNotifications
-      : eventNotifications;
+      ? transactionItems
+      : eventItems;
 
   const transactionUnread = useMemo(
     () =>
@@ -348,15 +473,23 @@ export default function NotificationsScreen({
     () =>
       eventNotifications.filter(
         item => !item.is_read
+      ).length +
+      announcements.filter(
+        item => !item.is_read
       ).length,
-    [eventNotifications]
+    [eventNotifications, announcements]
   );
+
+  const unreadCount =
+    transactionUnread + eventUnread;
 
   // ====================================================
   // REFRESH
   // ====================================================
 
   const handleRefresh = async () => {
+    if (refreshing) return;
+
     setRefreshing(true);
     await loadNotifications(false);
   };
@@ -366,32 +499,44 @@ export default function NotificationsScreen({
   // ====================================================
 
   const markNotificationAsRead = async (
-    item: NotificationItem
+    item: DisplayItem
   ) => {
-    if (item.is_read) {
-      return;
+    if (item.is_read) return;
+
+    const endpoint =
+      item.source === 'announcement'
+        ? `/announcements/${encodeURIComponent(item.id)}/read`
+        : `/notifications/${encodeURIComponent(item.id)}/read`;
+
+    await request(endpoint, 'PATCH');
+
+    const now = new Date().toISOString();
+
+    if (item.source === 'announcement') {
+      setAnnouncements(previous =>
+        previous.map(announcement =>
+          announcement.id === item.id
+            ? {
+                ...announcement,
+                is_read: true,
+                read_at: now,
+              }
+            : announcement
+        )
+      );
+    } else {
+      setNotifications(previous =>
+        previous.map(notification =>
+          notification.id === item.id
+            ? {
+                ...notification,
+                is_read: true,
+                read_at: now,
+              }
+            : notification
+        )
+      );
     }
-
-    await request(
-      `/${encodeURIComponent(item.id)}/read`,
-      'PATCH'
-    );
-
-    setNotifications(previous =>
-      previous.map(notification =>
-        notification.id === item.id
-          ? {
-              ...notification,
-              is_read: true,
-              read_at: new Date().toISOString(),
-            }
-          : notification
-      )
-    );
-
-    setUnreadCount(previous =>
-      Math.max(0, previous - 1)
-    );
   };
 
   // ====================================================
@@ -399,29 +544,38 @@ export default function NotificationsScreen({
   // ====================================================
 
   const handleViewNotification = async (
-    item: NotificationItem
+    item: DisplayItem
   ) => {
-    if (updatingId) {
-      return;
-    }
+    if (updatingId) return;
 
-    setUpdatingId(item.id);
+    setUpdatingId(`${item.source}:${item.id}`);
 
     try {
       if (!item.is_read) {
         await markNotificationAsRead(item);
       }
 
-      if (getCategory(item) === 'transactions') {
-        if (item.transaction_id) {
-          onOpenTransaction(
-            String(item.transaction_id)
-          );
-        } else {
-          setSelectedEvent(item);
-        }
+      if (
+        item.source === 'notification' &&
+        getCategory({
+          id: item.id,
+          type: item.type,
+          title: item.title,
+          message: item.message,
+          transaction_id: item.transaction_id,
+          is_read: item.is_read,
+          created_at: item.created_at,
+        }) === 'transactions' &&
+        item.transaction_id
+      ) {
+        onOpenTransaction(
+          String(item.transaction_id)
+        );
       } else {
-        setSelectedEvent(item);
+        setSelectedEvent({
+          ...item,
+          is_read: true,
+        });
       }
     } catch (error: any) {
       Alert.alert(
@@ -438,26 +592,50 @@ export default function NotificationsScreen({
   // ====================================================
 
   const handleMarkAllRead = async () => {
-    if (unreadCount === 0 || markingAll) {
-      return;
-    }
+    if (unreadCount === 0 || markingAll) return;
 
     setMarkingAll(true);
 
     try {
-      await request('/read-all', 'PATCH');
+      const unreadRegular =
+        notifications.filter(item => !item.is_read);
 
-      const now = new Date().toISOString();
+      const unreadAnnouncements =
+        announcements.filter(item => !item.is_read);
 
-      setNotifications(previous =>
-        previous.map(item => ({
-          ...item,
-          is_read: true,
-          read_at: item.read_at || now,
-        }))
+      const tasks: Promise<any>[] = [];
+
+      if (unreadRegular.length > 0) {
+        tasks.push(
+          request('/notifications/read-all', 'PATCH')
+        );
+      }
+
+      unreadAnnouncements.forEach(item => {
+        tasks.push(
+          request(
+            `/announcements/${encodeURIComponent(item.id)}/read`,
+            'PATCH'
+          )
+        );
+      });
+
+      const results = await Promise.allSettled(tasks);
+
+      const failed = results.some(
+        result => result.status === 'rejected'
       );
 
-      setUnreadCount(0);
+      // Reload server state so the counters only reflect
+      // records that the backend has actually marked read.
+      await loadNotifications(false);
+
+      if (failed) {
+        Alert.alert(
+          'Some notifications were not updated',
+          'Some items could not be marked as read. Please try again.'
+        );
+      }
     } catch (error: any) {
       Alert.alert(
         'Unable to update notifications',
@@ -473,7 +651,7 @@ export default function NotificationsScreen({
   // ====================================================
 
   const renderNotification = (
-    item: NotificationItem
+    item: DisplayItem
   ) => {
     const iconColor = getNotificationColor(
       item.type,
@@ -481,14 +659,23 @@ export default function NotificationsScreen({
     );
 
     const isUpdating =
-      updatingId === item.id;
+      updatingId === `${item.source}:${item.id}`;
 
     const isTransaction =
-      getCategory(item) === 'transactions';
+      item.source === 'notification' &&
+      getCategory({
+        id: item.id,
+        type: item.type,
+        title: item.title,
+        message: item.message,
+        transaction_id: item.transaction_id,
+        is_read: item.is_read,
+        created_at: item.created_at,
+      }) === 'transactions';
 
     return (
       <View
-        key={item.id}
+        key={`${item.source}:${item.id}`}
         style={[
           styles.notificationCard,
           !item.is_read && styles.unreadCard,
@@ -496,7 +683,7 @@ export default function NotificationsScreen({
       >
         <View
           style={[
-            styles.notificationIcon,
+            styles.brandIcon,
             {
               backgroundColor: `${iconColor}18`,
             },
@@ -504,7 +691,7 @@ export default function NotificationsScreen({
         >
           <Text
             style={[
-              styles.notificationIconText,
+              styles.brandIconText,
               { color: iconColor },
             ]}
           >
@@ -526,27 +713,39 @@ export default function NotificationsScreen({
             )}
           </View>
 
+          {item.source === 'announcement' && (
+            <View style={styles.announcementLabel}>
+              <Text style={styles.announcementLabelText}>
+                {getPriorityLabel(item.priority)}
+              </Text>
+            </View>
+          )}
+
           <Text style={styles.notificationMessage}>
             {item.message}
           </Text>
 
-          <Text style={styles.notificationDate}>
-            {formatNotificationDate(item.created_at)}
-          </Text>
+          <View style={styles.cardDivider} />
 
           <View style={styles.cardBottom}>
-            <Text
-              style={[
-                styles.readStatus,
-                {
-                  color: item.is_read
-                    ? colors.textMuted
-                    : colors.primary,
-                },
-              ]}
-            >
-              {item.is_read ? 'READ' : 'UNREAD'}
-            </Text>
+            <View style={styles.dateContainer}>
+              <Text style={styles.notificationDate}>
+                {formatNotificationDate(item.created_at)}
+              </Text>
+
+              <Text
+                style={[
+                  styles.readStatus,
+                  {
+                    color: item.is_read
+                      ? colors.textMuted
+                      : colors.primary,
+                  },
+                ]}
+              >
+                {item.is_read ? 'READ' : 'UNREAD'}
+              </Text>
+            </View>
 
             <TouchableOpacity
               style={styles.viewButton}
@@ -595,7 +794,7 @@ export default function NotificationsScreen({
         <Text style={styles.emptyIconText}>
           {activeCategory === 'transactions'
             ? '↗'
-            : '●'}
+            : '✦'}
         </Text>
       </View>
 
@@ -607,8 +806,8 @@ export default function NotificationsScreen({
 
       <Text style={styles.emptyMessage}>
         {activeCategory === 'transactions'
-          ? 'Your payment and transaction notifications will appear here.'
-          : 'Your account, security and service updates will appear here.'}
+          ? 'Your transfers, payments and other transaction notifications will appear here.'
+          : 'Your announcements, login alerts, security notices and account updates will appear here.'}
       </Text>
 
       <TouchableOpacity
@@ -635,6 +834,7 @@ export default function NotificationsScreen({
             ? 'light-content'
             : 'dark-content'
         }
+        backgroundColor={colors.surface}
       />
 
       {/* HEADER */}
@@ -645,13 +845,19 @@ export default function NotificationsScreen({
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Go back"
+          activeOpacity={0.8}
         >
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>
-          Notifications
-        </Text>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>
+            Notifications
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            ZENIMONIES BANKING
+          </Text>
+        </View>
 
         <View style={styles.headerSpacer} />
       </View>
@@ -677,15 +883,13 @@ export default function NotificationsScreen({
             </Text>
 
             <Text style={styles.pageSubtitle}>
-              Stay informed about your account.
+              Stay informed. Stay in control.
             </Text>
           </View>
 
           <View style={styles.unreadCounter}>
             <Text style={styles.unreadNumber}>
-              {unreadCount > 99
-                ? '99+'
-                : unreadCount}
+              {unreadCount > 99 ? '99+' : unreadCount}
             </Text>
 
             <Text style={styles.unreadLabel}>
@@ -706,7 +910,7 @@ export default function NotificationsScreen({
             onPress={() =>
               setActiveCategory('transactions')
             }
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             <Text
               style={[
@@ -738,7 +942,7 @@ export default function NotificationsScreen({
             onPress={() =>
               setActiveCategory('events')
             }
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             <Text
               style={[
@@ -782,11 +986,10 @@ export default function NotificationsScreen({
 
           <TouchableOpacity
             onPress={handleMarkAllRead}
-            disabled={
-              unreadCount === 0 || markingAll
-            }
+            disabled={unreadCount === 0 || markingAll}
             accessibilityRole="button"
             accessibilityLabel="Mark all notifications as read"
+            activeOpacity={0.8}
           >
             {markingAll ? (
               <ActivityIndicator
@@ -830,14 +1033,12 @@ export default function NotificationsScreen({
           </View>
         )}
 
-        {/* FOOTER */}
-
         <Text style={styles.footer}>
           ZENIMONIES BANKING
         </Text>
       </ScrollView>
 
-      {/* EVENT DETAILS */}
+      {/* NOTIFICATION DETAILS */}
 
       <Modal
         visible={Boolean(selectedEvent)}
@@ -850,9 +1051,14 @@ export default function NotificationsScreen({
             <View style={styles.modalHandle} />
 
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Notification details
-              </Text>
+              <View>
+                <Text style={styles.modalTitle}>
+                  Notification details
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  ZENIMONIES BANKING
+                </Text>
+              </View>
 
               <TouchableOpacity
                 style={styles.modalCloseButton}
@@ -885,6 +1091,14 @@ export default function NotificationsScreen({
                     selectedEvent.created_at
                   )}
                 </Text>
+
+                {selectedEvent.source === 'announcement' && (
+                  <View style={styles.announcementLabel}>
+                    <Text style={styles.announcementLabelText}>
+                      {getPriorityLabel(selectedEvent.priority)}
+                    </Text>
+                  </View>
+                )}
 
                 <View style={styles.modalDivider} />
 
@@ -919,7 +1133,7 @@ export default function NotificationsScreen({
 }
 
 // ======================================================
-// THEME-AWARE STYLES
+// PREMIUM THEME-AWARE STYLES
 // ======================================================
 
 function createStyles(
@@ -933,7 +1147,7 @@ function createStyles(
     },
 
     header: {
-      minHeight: 66,
+      minHeight: 70,
       paddingHorizontal: 18,
       flexDirection: 'row',
       alignItems: 'center',
@@ -946,7 +1160,7 @@ function createStyles(
     backButton: {
       width: 42,
       height: 42,
-      borderRadius: 21,
+      borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surfaceSecondary,
@@ -959,10 +1173,23 @@ function createStyles(
       marginTop: -4,
     },
 
+    headerTitleContainer: {
+      flex: 1,
+      alignItems: 'center',
+    },
+
     headerTitle: {
       fontSize: 17,
       fontWeight: '900',
       color: colors.text,
+    },
+
+    headerSubtitle: {
+      fontSize: 8,
+      fontWeight: '800',
+      letterSpacing: 1.5,
+      color: colors.textMuted,
+      marginTop: 3,
     },
 
     headerSpacer: {
@@ -970,16 +1197,16 @@ function createStyles(
     },
 
     content: {
-      padding: 19,
-      paddingBottom: 35,
+      padding: 18,
+      paddingBottom: 38,
     },
 
     intro: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginTop: 12,
-      marginBottom: 24,
+      marginTop: 13,
+      marginBottom: 23,
     },
 
     introText: {
@@ -987,8 +1214,9 @@ function createStyles(
     },
 
     pageTitle: {
-      fontSize: 25,
+      fontSize: 26,
       fontWeight: '900',
+      letterSpacing: -0.6,
       color: colors.text,
     },
 
@@ -999,10 +1227,10 @@ function createStyles(
     },
 
     unreadCounter: {
-      minWidth: 65,
-      paddingHorizontal: 10,
+      minWidth: 67,
+      paddingHorizontal: 11,
       paddingVertical: 9,
-      borderRadius: 13,
+      borderRadius: 14,
       alignItems: 'center',
       backgroundColor: colors.primaryLight,
     },
@@ -1024,17 +1252,17 @@ function createStyles(
     tabs: {
       flexDirection: 'row',
       backgroundColor: colors.surfaceSecondary,
-      borderRadius: 14,
+      borderRadius: 15,
       padding: 5,
-      marginBottom: 23,
+      marginBottom: 24,
       borderWidth: 1,
       borderColor: colors.border,
     },
 
     tab: {
       flex: 1,
-      minHeight: 43,
-      borderRadius: 10,
+      minHeight: 45,
+      borderRadius: 11,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
@@ -1057,10 +1285,10 @@ function createStyles(
     },
 
     tabBadge: {
-      minWidth: 18,
-      height: 18,
+      minWidth: 19,
+      height: 19,
       paddingHorizontal: 4,
-      borderRadius: 9,
+      borderRadius: 10,
       backgroundColor: colors.error,
       alignItems: 'center',
       justifyContent: 'center',
@@ -1076,7 +1304,7 @@ function createStyles(
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 14,
+      marginBottom: 15,
     },
 
     sectionTitle: {
@@ -1102,14 +1330,14 @@ function createStyles(
     },
 
     list: {
-      gap: 11,
+      gap: 12,
     },
 
     notificationCard: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       padding: 15,
-      borderRadius: 16,
+      borderRadius: 17,
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
@@ -1122,22 +1350,23 @@ function createStyles(
         : '#FBFEFC',
     },
 
-    notificationIcon: {
-      width: 42,
-      height: 42,
+    brandIcon: {
+      width: 43,
+      height: 43,
       borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 12,
     },
 
-    notificationIconText: {
+    brandIconText: {
       fontSize: 21,
       fontWeight: '900',
     },
 
     notificationContent: {
       flex: 1,
+      minWidth: 0,
     },
 
     notificationHeading: {
@@ -1149,6 +1378,7 @@ function createStyles(
     notificationTitle: {
       flex: 1,
       fontSize: 13,
+      lineHeight: 19,
       fontWeight: '900',
       color: colors.text,
       marginRight: 8,
@@ -1161,35 +1391,63 @@ function createStyles(
       backgroundColor: colors.primary,
     },
 
-    notificationMessage: {
-      fontSize: 11,
-      lineHeight: 17,
-      color: colors.textSecondary,
-      marginTop: 6,
+    announcementLabel: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+      backgroundColor: colors.primaryLight,
+      marginTop: 8,
     },
 
-    notificationDate: {
-      fontSize: 10,
-      color: colors.textMuted,
-      marginTop: 9,
+    announcementLabelText: {
+      fontSize: 8,
+      fontWeight: '900',
+      letterSpacing: 0.8,
+      color: colors.primary,
+    },
+
+    notificationMessage: {
+      fontSize: 11,
+      lineHeight: 18,
+      color: colors.textSecondary,
+      marginTop: 7,
+    },
+
+    cardDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginTop: 13,
     },
 
     cardBottom: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginTop: 12,
+      marginTop: 11,
+    },
+
+    dateContainer: {
+      flex: 1,
+      paddingRight: 8,
+    },
+
+    notificationDate: {
+      fontSize: 9,
+      lineHeight: 14,
+      color: colors.textMuted,
     },
 
     readStatus: {
       fontSize: 8,
       fontWeight: '900',
       letterSpacing: 1,
+      marginTop: 5,
     },
 
     viewButton: {
       minWidth: 75,
-      minHeight: 33,
+      minHeight: 34,
       paddingHorizontal: 12,
       borderRadius: 9,
       backgroundColor: colors.primary,
@@ -1322,6 +1580,14 @@ function createStyles(
       fontSize: 17,
       fontWeight: '900',
       color: colors.text,
+    },
+
+    modalSubtitle: {
+      fontSize: 8,
+      fontWeight: '800',
+      letterSpacing: 1.2,
+      color: colors.textMuted,
+      marginTop: 4,
     },
 
     modalCloseButton: {
