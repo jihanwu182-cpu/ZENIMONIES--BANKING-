@@ -1226,41 +1226,42 @@ const openSection = (section: string) => {
   // LOGOUT
   // ==========================================================
 
-  const logout = () => {
-    localStorage.removeItem(
-      'zenimonies_token'
-    );
+const logout = () => {
+  try {
+    // Clear authentication tokens.
+    localStorage.removeItem('zenimonies_token');
+    localStorage.removeItem('token');
 
-    localStorage.removeItem(
-      'token'
-    );
+    sessionStorage.removeItem('zenimonies_token');
+    sessionStorage.removeItem('token');
 
-    localStorage.removeItem(
-      'zenimonies_user'
-    );
+    // Clear saved account information.
+    localStorage.removeItem('zenimonies_user');
+    localStorage.removeItem('zenimonies_accounts');
 
-    localStorage.removeItem(
-      'zenimonies_accounts'
-    );
+    // Clear temporary authentication information.
+    const sessionKeys = [
+      'zenimonies_otp_email',
+      'zenimonies_otp_token',
+      'zenimonies_account_locked',
+      'zenimonies_passkey_fallback',
+    ];
 
-    sessionStorage.removeItem(
-      'zenimonies_otp_email'
-    );
+    sessionKeys.forEach((key) => {
+      sessionStorage.removeItem(key);
+    });
 
-    sessionStorage.removeItem(
-      'zenimonies_otp_token'
-    );
+    // Reset the application and open the login screen.
+    window.location.replace('/login');
+  } catch (error) {
+    console.error('ZENIMONIES logout error:', error);
 
-    sessionStorage.removeItem(
-      'zenimonies_account_locked'
+    alert(
+      'Unable to complete logout. Please try again.'
     );
+  }
+};
 
-    sessionStorage.removeItem(
-      'zenimonies_passkey_fallback'
-    );
-
-    navigate('/login');
-  };
 
   return (
     <div
