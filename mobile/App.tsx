@@ -466,19 +466,22 @@ export default function App() {
   // CLEAR SESSION
   // ====================================================
 
-  const clearSession = useCallback(async () => {
-    await deleteAuthToken(AUTH_TOKEN_KEY);
+const clearSession = useCallback(async () => {
+  // Clear the visible authenticated session immediately.
+  setSession(null);
+  setAccount(null);
+  setTransactions([]);
+  setSelectedTransaction(null);
+  setProfilePhotoUri(null);
+  setRefreshing(false);
+  setDashboardLoading(false);
+  setScreen('welcome');
 
-    setSession(null);
-    setAccount(null);
-    setTransactions([]);
-    setSelectedTransaction(null);
-    setProfilePhotoUri(null);
-    setRefreshing(false);
-    setDashboardLoading(false);
-    setScreen('welcome');
-  }, []);
+  // Then clear the saved authentication token.
+  await deleteAuthToken(AUTH_TOKEN_KEY);
+}, []);
 
+  
   // ====================================================
   // AUTHENTICATED API REQUEST
   // ====================================================
