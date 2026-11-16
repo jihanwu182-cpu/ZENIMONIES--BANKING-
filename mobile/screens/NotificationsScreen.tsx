@@ -2,12 +2,14 @@
 import React, {
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from 'react';
 
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -23,8 +25,8 @@ import { getColors } from '../theme/colors';
 
 // ======================================================
 // ZENIMONIES BANKING — NOTIFICATIONS CENTRE
-// Light / Dark Theme
-// Existing API and functionality preserved.
+// Transactions / Events
+// Light and Dark Theme
 // File: mobile/screens/NotificationsScreen.tsx
 // ======================================================
 
@@ -49,6 +51,8 @@ type NotificationsResponse = {
   message?: string;
 };
 
+type Category = 'transactions' | 'events';
+
 type Props = {
   token: string;
   onBack: () => void;
@@ -56,8 +60,35 @@ type Props = {
 };
 
 // ======================================================
-// NOTIFICATION HELPERS
+// HELPERS
 // ======================================================
+
+const getCategory = (
+  item: NotificationItem
+): Category => {
+  const type = String(item.type || '').toLowerCase();
+
+  const transactionTypes = [
+    'transfer',
+    'payment',
+    'transaction',
+    'credit',
+    'debit',
+    'withdrawal',
+    'deposit',
+    'refund',
+    'reversal',
+  ];
+
+  if (
+    item.transaction_id ||
+    transactionTypes.some(value => type.includes(value))
+  ) {
+    return 'transactions';
+  }
+
+  return 'events';
+};
 
 const getNotificationIcon = (type?: string) => {
   const value = String(type || '').toLowerCase();
@@ -135,8 +166,12 @@ const formatNotificationDate = (value: string) => {
   }
 
   return date.toLocaleString('en-NG', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
   });
 };
 
@@ -173,6 +208,12 @@ export default function NotificationsScreen({
 
   const [markingAll, setMarkingAll] =
     useState(false);
+
+  const [activeCategory, setActiveCategory] =
+    useState<Category>('transactions');
+
+  const [selectedEvent, setSelectedEvent] =
+    useState<NotificationItem | null>(null);
 
   // ====================================================
   // AUTHENTICATED REQUEST
@@ -271,6 +312,47 @@ export default function NotificationsScreen({
   }, [loadNotifications]);
 
   // ====================================================
+  // CATEGORY FILTERING
+  // ====================================================
+
+  const transactionNotifications = useMemo(
+    () =>
+      notifications.filter(
+        item => getCategory(item) === 'transactions'
+      ),
+    [notifications]
+  );
+
+  const eventNotifications = useMemo(
+    () =>
+      notifications.filter(
+        item => getCategory(item) === 'events'
+      ),
+    [notifications]
+  );
+
+  const displayedNotifications =
+    activeCategory === 'transactions'
+      ? transactionNotifications
+      : eventNotifications;
+
+  const transactionUnread = useMemo(
+    () =>
+      transactionNotifications.filter(
+        item => !item.is_read
+      ).length,
+    [transactionNotifications]
+  );
+
+  const eventUnread = useMemo(
+    () =>
+      eventNotifications.filter(
+        item => !item.is_read
+      ).length,
+    [eventNotifications]
+  );
+
+  // ====================================================
   // REFRESH
   // ====================================================
 
@@ -313,10 +395,10 @@ export default function NotificationsScreen({
   };
 
   // ====================================================
-  // OPEN NOTIFICATION / TRANSACTION
+  // VIEW NOTIFICATION
   // ====================================================
 
-  const handleNotificationPress = async (
+  const handleViewNotification = async (
     item: NotificationItem
   ) => {
     if (updatingId) {
@@ -330,10 +412,16 @@ export default function NotificationsScreen({
         await markNotificationAsRead(item);
       }
 
-      if (item.transaction_id) {
-        onOpenTransaction(
-          String(item.transaction_id)
-        );
+      if (getCategory(item) === 'transactions') {
+        if (item.transaction_id) {
+          onOpenTransaction(
+            String(item.transaction_id)
+          );
+        } else {
+          setSelectedEvent(item);
+        }
+      } else {
+        setSelectedEvent(item);
       }
     } catch (error: any) {
       Alert.alert(
@@ -359,13 +447,13 @@ export default function NotificationsScreen({
     try {
       await request('/read-all', 'PATCH');
 
+      const now = new Date().toISOString();
+
       setNotifications(previous =>
         previous.map(item => ({
           ...item,
           is_read: true,
-          read_at:
-            item.read_at ||
-            new Date().toISOString(),
+          read_at: item.read_at || now,
         }))
       );
 
@@ -381,7 +469,7 @@ export default function NotificationsScreen({
   };
 
   // ====================================================
-  // NOTIFICATION ITEM
+  // NOTIFICATION CARD
   // ====================================================
 
   const renderNotification = (
@@ -395,25 +483,16 @@ export default function NotificationsScreen({
     const isUpdating =
       updatingId === item.id;
 
+    const isTransaction =
+      getCategory(item) === 'transactions';
+
     return (
-      <TouchableOpacity
+      <View
         key={item.id}
         style={[
           styles.notificationCard,
           !item.is_read && styles.unreadCard,
         ]}
-        onPress={() =>
-          handleNotificationPress(item)
-        }
-        activeOpacity={0.8}
-        disabled={Boolean(updatingId)}
-        accessibilityRole="button"
-        accessibilityLabel={
-          `${item.title}. ${item.is_read ? 'Read' : 'Unread'} notification` +
-          (item.transaction_id
-            ? '. Opens transaction details'
-            : '')
-        }
       >
         <View
           style={[
@@ -455,25 +534,94 @@ export default function NotificationsScreen({
             {formatNotificationDate(item.created_at)}
           </Text>
 
-          {item.transaction_id ? (
-            <Text style={styles.transactionReference}>
-              Transaction: {item.transaction_id}
-              {'\n'}Tap to view transaction
+          <View style={styles.cardBottom}>
+            <Text
+              style={[
+                styles.readStatus,
+                {
+                  color: item.is_read
+                    ? colors.textMuted
+                    : colors.primary,
+                },
+              ]}
+            >
+              {item.is_read ? 'READ' : 'UNREAD'}
             </Text>
-          ) : null}
-        </View>
 
-        {isUpdating ? (
-          <ActivityIndicator
-            size="small"
-            color={colors.primary}
-          />
-        ) : item.transaction_id ? (
-          <Text style={styles.openArrow}>›</Text>
-        ) : null}
-      </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.viewButton}
+              onPress={() =>
+                handleViewNotification(item)
+              }
+              disabled={Boolean(updatingId)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isTransaction
+                  ? 'View transaction'
+                  : 'View event'
+              }
+            >
+              {isUpdating ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.white}
+                />
+              ) : (
+                <>
+                  <Text style={styles.viewButtonText}>
+                    View
+                  </Text>
+
+                  <Text style={styles.viewButtonArrow}>
+                    ›
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
     );
   };
+
+  // ====================================================
+  // EMPTY STATE
+  // ====================================================
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyCard}>
+      <View style={styles.emptyIcon}>
+        <Text style={styles.emptyIconText}>
+          {activeCategory === 'transactions'
+            ? '↗'
+            : '●'}
+        </Text>
+      </View>
+
+      <Text style={styles.emptyTitle}>
+        {activeCategory === 'transactions'
+          ? 'No transaction updates'
+          : 'No events yet'}
+      </Text>
+
+      <Text style={styles.emptyMessage}>
+        {activeCategory === 'transactions'
+          ? 'Your payment and transaction notifications will appear here.'
+          : 'Your account, security and service updates will appear here.'}
+      </Text>
+
+      <TouchableOpacity
+        style={styles.refreshButton}
+        onPress={handleRefresh}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.refreshButtonText}>
+          Refresh
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   // ====================================================
   // SCREEN
@@ -523,7 +671,7 @@ export default function NotificationsScreen({
         {/* INTRODUCTION */}
 
         <View style={styles.intro}>
-          <View>
+          <View style={styles.introText}>
             <Text style={styles.pageTitle}>
               Your updates
             </Text>
@@ -546,12 +694,91 @@ export default function NotificationsScreen({
           </View>
         </View>
 
+        {/* CATEGORY TABS */}
+
+        <View style={styles.tabs}>
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              activeCategory === 'transactions' &&
+                styles.activeTab,
+            ]}
+            onPress={() =>
+              setActiveCategory('transactions')
+            }
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeCategory === 'transactions' &&
+                  styles.activeTabText,
+              ]}
+            >
+              Transactions
+            </Text>
+
+            {transactionUnread > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>
+                  {transactionUnread > 99
+                    ? '99+'
+                    : transactionUnread}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              activeCategory === 'events' &&
+                styles.activeTab,
+            ]}
+            onPress={() =>
+              setActiveCategory('events')
+            }
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeCategory === 'events' &&
+                  styles.activeTabText,
+              ]}
+            >
+              Events
+            </Text>
+
+            {eventUnread > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>
+                  {eventUnread > 99
+                    ? '99+'
+                    : eventUnread}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
         {/* NOTIFICATION ACTIONS */}
 
         <View style={styles.actionsRow}>
-          <Text style={styles.sectionTitle}>
-            Recent notifications
-          </Text>
+          <View>
+            <Text style={styles.sectionTitle}>
+              {activeCategory === 'transactions'
+                ? 'Transaction updates'
+                : 'Account events'}
+            </Text>
+
+            <Text style={styles.sectionSubtitle}>
+              {displayedNotifications.length}{' '}
+              {displayedNotifications.length === 1
+                ? 'notification'
+                : 'notifications'}
+            </Text>
+          </View>
 
           <TouchableOpacity
             onPress={handleMarkAllRead}
@@ -580,7 +807,7 @@ export default function NotificationsScreen({
           </TouchableOpacity>
         </View>
 
-        {/* LOADING / EMPTY / NOTIFICATION LIST */}
+        {/* LOADING / LIST / EMPTY */}
 
         {loading ? (
           <View style={styles.loadingArea}>
@@ -593,36 +820,13 @@ export default function NotificationsScreen({
               Loading your notifications...
             </Text>
           </View>
-        ) : notifications.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyIcon}>
-              <Text style={styles.emptyIconText}>
-                ♧
-              </Text>
-            </View>
-
-            <Text style={styles.emptyTitle}>
-              You're all caught up
-            </Text>
-
-            <Text style={styles.emptyMessage}>
-              You don't have any notifications yet.
-              We'll show your account updates here.
-            </Text>
-
-            <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={handleRefresh}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.refreshButtonText}>
-                Refresh
-              </Text>
-            </TouchableOpacity>
-          </View>
+        ) : displayedNotifications.length === 0 ? (
+          renderEmptyState()
         ) : (
           <View style={styles.list}>
-            {notifications.map(renderNotification)}
+            {displayedNotifications.map(
+              renderNotification
+            )}
           </View>
         )}
 
@@ -632,6 +836,84 @@ export default function NotificationsScreen({
           ZENIMONIES BANKING
         </Text>
       </ScrollView>
+
+      {/* EVENT DETAILS */}
+
+      <Modal
+        visible={Boolean(selectedEvent)}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedEvent(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Notification details
+              </Text>
+
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setSelectedEvent(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Close notification details"
+              >
+                <Text style={styles.modalCloseText}>
+                  ×
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedEvent && (
+              <>
+                <View style={styles.modalIcon}>
+                  <Text style={styles.modalIconText}>
+                    {getNotificationIcon(
+                      selectedEvent.type
+                    )}
+                  </Text>
+                </View>
+
+                <Text style={styles.modalEventTitle}>
+                  {selectedEvent.title}
+                </Text>
+
+                <Text style={styles.modalDate}>
+                  {formatNotificationDate(
+                    selectedEvent.created_at
+                  )}
+                </Text>
+
+                <View style={styles.modalDivider} />
+
+                <Text style={styles.modalMessage}>
+                  {selectedEvent.message}
+                </Text>
+
+                <View style={styles.modalStatus}>
+                  <Text style={styles.modalStatusText}>
+                    {selectedEvent.is_read
+                      ? 'READ'
+                      : 'UNREAD'}
+                  </Text>
+                </View>
+              </>
+            )}
+
+            <TouchableOpacity
+              style={styles.modalDoneButton}
+              onPress={() => setSelectedEvent(null)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalDoneText}>
+                Done
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -697,7 +979,11 @@ function createStyles(
       alignItems: 'center',
       justifyContent: 'space-between',
       marginTop: 12,
-      marginBottom: 27,
+      marginBottom: 24,
+    },
+
+    introText: {
+      flex: 1,
     },
 
     pageTitle: {
@@ -735,17 +1021,74 @@ function createStyles(
       marginTop: 2,
     },
 
+    tabs: {
+      flexDirection: 'row',
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: 14,
+      padding: 5,
+      marginBottom: 23,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+
+    tab: {
+      flex: 1,
+      minHeight: 43,
+      borderRadius: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 7,
+      paddingHorizontal: 5,
+    },
+
+    activeTab: {
+      backgroundColor: colors.primary,
+    },
+
+    tabText: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.textSecondary,
+    },
+
+    activeTabText: {
+      color: colors.white,
+    },
+
+    tabBadge: {
+      minWidth: 18,
+      height: 18,
+      paddingHorizontal: 4,
+      borderRadius: 9,
+      backgroundColor: colors.error,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    tabBadgeText: {
+      fontSize: 9,
+      fontWeight: '900',
+      color: colors.white,
+    },
+
     actionsRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 13,
+      marginBottom: 14,
     },
 
     sectionTitle: {
       fontSize: 14,
       fontWeight: '900',
       color: colors.text,
+    },
+
+    sectionSubtitle: {
+      fontSize: 10,
+      color: colors.textMuted,
+      marginTop: 4,
     },
 
     markAllText: {
@@ -826,24 +1169,47 @@ function createStyles(
     },
 
     notificationDate: {
-      fontSize: 9,
+      fontSize: 10,
       color: colors.textMuted,
       marginTop: 9,
     },
 
-    transactionReference: {
-      fontSize: 9,
-      lineHeight: 15,
-      color: colors.primary,
-      marginTop: 6,
+    cardBottom: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 12,
     },
 
-    openArrow: {
-      fontSize: 28,
-      fontWeight: '700',
-      color: colors.primary,
-      marginLeft: 5,
-      alignSelf: 'center',
+    readStatus: {
+      fontSize: 8,
+      fontWeight: '900',
+      letterSpacing: 1,
+    },
+
+    viewButton: {
+      minWidth: 75,
+      minHeight: 33,
+      paddingHorizontal: 12,
+      borderRadius: 9,
+      backgroundColor: colors.primary,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 5,
+    },
+
+    viewButtonText: {
+      fontSize: 11,
+      fontWeight: '900',
+      color: colors.white,
+    },
+
+    viewButtonArrow: {
+      fontSize: 19,
+      lineHeight: 21,
+      color: colors.white,
+      marginTop: -2,
     },
 
     loadingArea: {
@@ -919,6 +1285,130 @@ function createStyles(
       letterSpacing: 2,
       color: colors.textMuted,
       marginTop: 30,
+    },
+
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      justifyContent: 'flex-end',
+    },
+
+    modalCard: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 25,
+      borderTopRightRadius: 25,
+      paddingHorizontal: 23,
+      paddingTop: 12,
+      paddingBottom: 35,
+    },
+
+    modalHandle: {
+      width: 42,
+      height: 4,
+      borderRadius: 3,
+      backgroundColor: colors.border,
+      alignSelf: 'center',
+      marginBottom: 20,
+    },
+
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 24,
+    },
+
+    modalTitle: {
+      fontSize: 17,
+      fontWeight: '900',
+      color: colors.text,
+    },
+
+    modalCloseButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: colors.surfaceSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    modalCloseText: {
+      fontSize: 25,
+      color: colors.text,
+      marginTop: -2,
+    },
+
+    modalIcon: {
+      width: 52,
+      height: 52,
+      borderRadius: 16,
+      backgroundColor: colors.primaryLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+    },
+
+    modalIconText: {
+      fontSize: 25,
+      fontWeight: '900',
+      color: colors.primary,
+    },
+
+    modalEventTitle: {
+      fontSize: 18,
+      lineHeight: 25,
+      fontWeight: '900',
+      color: colors.text,
+    },
+
+    modalDate: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 8,
+    },
+
+    modalDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: 20,
+    },
+
+    modalMessage: {
+      fontSize: 13,
+      lineHeight: 22,
+      color: colors.textSecondary,
+    },
+
+    modalStatus: {
+      alignSelf: 'flex-start',
+      backgroundColor: colors.primaryLight,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 8,
+      marginTop: 20,
+    },
+
+    modalStatusText: {
+      fontSize: 9,
+      fontWeight: '900',
+      letterSpacing: 1,
+      color: colors.primary,
+    },
+
+    modalDoneButton: {
+      minHeight: 48,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 25,
+    },
+
+    modalDoneText: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: colors.white,
     },
   });
 }
