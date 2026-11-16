@@ -1,3 +1,4 @@
+
 const crypto = require('crypto');
 const pool = require('../config/database');
 const {
@@ -72,12 +73,10 @@ const generateReference = () => {
 // TRANSFER FEES
 // ============================================================
 
-
 const calculateTransferFee = (_amount) => {
   // All ZENIMONIES-to-ZENIMONIES transfers are free.
   return 0;
 };
-
 
 // ============================================================
 // PROFILE COMPLETION
@@ -842,7 +841,7 @@ const transferToZenimoniesUser = async (req, res) => {
 
     const recipientDescription =
       cleanNarration ||
-      `Transfer received from Zenimonies user`;
+      `Transfer received from ${senderUser.full_name}`;
 
     // ========================================================
     // DEBIT SENDER
@@ -932,47 +931,48 @@ const transferToZenimoniesUser = async (req, res) => {
     // ========================================================
     // RECIPIENT TRANSACTION
     // ========================================================
-    const recipientTransactionResult =
-  await client.query(
-    `
-    INSERT INTO transactions (
-      account_id,
-      type,
-      amount,
-      currency,
-      reference,
-      description,
-      status,
-      balance_before,
-      balance_after,
-      transaction_fee
-    )
-    VALUES (
-      $1,
-      'internal_transfer_received',
-      $2,
-      'NGN',
-      $3,
-      $4,
-      'completed',
-      $5,
-      $6,
-      0
-    )
-    RETURNING id, created_at
-    `,
-    [
-      recipientAccount.id,
-      transferAmount,
-      recipientReference,
-      recipientDescription,
-      recipientOldBalance,
-      recipientNewBalance,
-    ]
-  );
 
-const recipientTransaction =
-  recipientTransactionResult.rows[0];
+    const recipientTransactionResult =
+      await client.query(
+        `
+        INSERT INTO transactions (
+          account_id,
+          type,
+          amount,
+          currency,
+          reference,
+          description,
+          status,
+          balance_before,
+          balance_after,
+          transaction_fee
+        )
+        VALUES (
+          $1,
+          'internal_transfer_received',
+          $2,
+          'NGN',
+          $3,
+          $4,
+          'completed',
+          $5,
+          $6,
+          0
+        )
+        RETURNING id, created_at
+        `,
+        [
+          recipientAccount.id,
+          transferAmount,
+          reference,
+          recipientDescription,
+          recipientOldBalance,
+          recipientNewBalance,
+        ]
+      );
+
+    const recipientTransaction =
+      recipientTransactionResult.rows[0];
 
     // ========================================================
     // BANK TRANSFER RECORD
@@ -1057,33 +1057,34 @@ const recipientTransaction =
     // ========================================================
     // RECIPIENT NOTIFICATION
     // ========================================================
-   await client.query(
-  `
-  INSERT INTO notifications (
-    user_id,
-    title,
-    message,
-    type,
-    transaction_id,
-    is_read
-  )
-  VALUES (
-    $1,
-    $2,
-    $3,
-    $4,
-    $5,
-    false
-  )
-  `,
-  [
-    recipientUser.id,
-    'Money received',
-    `You received ₦${formatNaira(transferAmount)} from ${senderUser.full_name}.`,
-    'transfer',
-    recipientTransaction.id,
-  ]
-);
+
+    await client.query(
+      `
+      INSERT INTO notifications (
+        user_id,
+        title,
+        message,
+        type,
+        transaction_id,
+        is_read
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        false
+      )
+      `,
+      [
+        recipientUser.id,
+        `Payment received from ${senderUser.full_name}`,
+        `You received ₦${formatNaira(transferAmount)}.`,
+        'transfer',
+        recipientTransaction.id,
+      ]
+    );
 
     // ========================================================
     // COMMIT
@@ -1091,24 +1092,26 @@ const recipientTransaction =
 
     await client.query('COMMIT');
     transactionStarted = false;
-// ========================================================
-// INCOMING PAYMENT PUSH NOTIFICATION
-// ========================================================
 
-sendPushNotificationToUser({
-  userId: recipientUser.id,
-  title: 'Payment received',
-  body: `You received ₦${formatNaira(transferAmount)} from ${senderUser.full_name}.`,
-  data: {
-    type: 'incoming_payment',
-    reference: recipientReference,
-  },
-}).catch((error) => {
-  console.error(
-    'Incoming payment push notification failed:',
-    error.message
-  );
-});
+    // ========================================================
+    // INCOMING PAYMENT PUSH NOTIFICATION
+    // ========================================================
+
+    sendPushNotificationToUser({
+      userId: recipientUser.id,
+      title: 'Payment received',
+      body: `You received ₦${formatNaira(transferAmount)} from ${senderUser.full_name}.`,
+      data: {
+        type: 'incoming_payment',
+        reference,
+      },
+    }).catch((error) => {
+      console.error(
+        'Incoming payment push notification failed:',
+        error.message
+      );
+    });
+
     // ========================================================
     // SUCCESS RESPONSE
     // ========================================================
