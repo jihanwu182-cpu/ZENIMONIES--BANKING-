@@ -1150,10 +1150,11 @@ if (screen === 'settings' && session) {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      <SettingsScreen
-        onBack={() => setScreen('home')}
-        onLogout={handleLogout}
-      />
+<SettingsScreen
+  token={session.token}
+  onBack={() => setScreen('home')}
+  onLogout={handleLogout}
+/>
     </SafeAreaView>
   );
 }
