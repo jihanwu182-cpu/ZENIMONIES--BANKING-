@@ -78,6 +78,122 @@ type DashboardProps = {
 type IconName =
   React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
+// ======================================================
+// STATIC DASHBOARD DATA
+// Kept outside the component to avoid recreating arrays
+// on every render.
+// ======================================================
+
+const quickActions: {
+  title: string;
+  icon: IconName;
+  action: DashboardAction;
+}[] = [
+  {
+    title: 'Add Money',
+    icon: 'plus-circle-outline',
+    action: 'add-money',
+  },
+  {
+    title: 'To Bank',
+    icon: 'bank-outline',
+    action: 'transfer',
+  },
+  {
+    title: 'Send to\nZENIMONIES',
+    icon: 'send',
+    action: 'transfer',
+  },
+  {
+    title: 'Withdraw',
+    icon: 'arrow-down',
+    action: 'withdraw',
+  },
+  {
+    title: 'Airtime',
+    icon: 'cellphone',
+    action: 'airtime',
+  },
+  {
+    title: 'Data',
+    icon: 'signal',
+    action: 'data',
+  },
+];
+
+const serviceActions: {
+  title: string;
+  icon: IconName;
+  action: DashboardAction;
+}[] = [
+  {
+    title: 'Betting',
+    icon: 'soccer',
+    action: 'betting',
+  },
+  {
+    title: 'TV',
+    icon: 'television',
+    action: 'tv',
+  },
+  {
+    title: 'Bills',
+    icon: 'receipt-text-outline',
+    action: 'bills',
+  },
+  {
+    title: 'Savings',
+    icon: 'piggy-bank-outline',
+    action: 'savings',
+  },
+  {
+    title: 'More',
+    icon: 'dots-horizontal',
+    action: 'bills',
+  },
+];
+
+const navigation: {
+  title: TabName;
+  icon: IconName;
+  activeIcon: IconName;
+}[] = [
+  {
+    title: 'Home',
+    icon: 'home-outline',
+    activeIcon: 'home',
+  },
+  {
+    title: 'Transactions',
+    icon: 'swap-horizontal',
+    activeIcon: 'swap-horizontal',
+  },
+  {
+    title: 'Cards',
+    icon: 'credit-card-outline',
+    activeIcon: 'credit-card',
+  },
+  {
+    title: 'Wallet',
+    icon: 'wallet-outline',
+    activeIcon: 'wallet',
+  },
+  {
+    title: 'Profile',
+    icon: 'account-circle-outline',
+    activeIcon: 'account-circle',
+  },
+  {
+    title: 'Settings',
+    icon: 'cog-outline',
+    activeIcon: 'cog',
+  },
+];
+
+// ======================================================
+// DASHBOARD COMPONENT
+// ======================================================
+
 export default function Dashboard({
   userName = 'Customer',
   token,
@@ -193,9 +309,8 @@ export default function Dashboard({
         );
       }
 
-      // Display the image returned by the backend.
-      // This is the permanent database-stored image,
-      // not the temporary local phone image.
+      // Display the permanent database-stored image
+      // returned by the backend.
       onProfilePhotoChange?.(data.profile_photo);
 
       Alert.alert(
@@ -247,125 +362,6 @@ export default function Dashboard({
     return balanceVisible ? balance : '••••••••';
   };
 
-  // ====================================================
-  // QUICK ACTIONS
-  // ====================================================
-
-  const quickActions: {
-    title: string;
-    icon: IconName;
-    action: DashboardAction;
-  }[] = [
-    {
-      title: 'Add Money',
-      icon: 'plus-circle-outline',
-      action: 'add-money',
-    },
-    {
-      title: 'To Bank',
-      icon: 'bank-outline',
-      action: 'transfer',
-    },
-    {
-      title: 'Send to\nZENIMONIES',
-      icon: 'send',
-      action: 'transfer',
-    },
-    {
-      title: 'Withdraw',
-      icon: 'arrow-down',
-      action: 'withdraw',
-    },
-    {
-      title: 'Airtime',
-      icon: 'cellphone',
-      action: 'airtime',
-    },
-    {
-      title: 'Data',
-      icon: 'signal',
-      action: 'data',
-    },
-  ];
-
-  // ====================================================
-  // OTHER SERVICES
-  // ====================================================
-
-  const serviceActions: {
-    title: string;
-    icon: IconName;
-    action: DashboardAction;
-  }[] = [
-    {
-      title: 'Betting',
-      icon: 'soccer',
-      action: 'betting',
-    },
-    {
-      title: 'TV',
-      icon: 'television',
-      action: 'tv',
-    },
-    {
-      title: 'Bills',
-      icon: 'receipt-text-outline',
-      action: 'bills',
-    },
-    {
-      title: 'Savings',
-      icon: 'piggy-bank-outline',
-      action: 'savings',
-    },
-    {
-      title: 'More',
-      icon: 'dots-horizontal',
-      action: 'bills',
-    },
-  ];
-
-  // ====================================================
-  // BOTTOM NAVIGATION
-  // ====================================================
-
-const navigation: {
-  title: TabName;
-  icon: IconName;
-  activeIcon: IconName;
-}[] = [
-  {
-    title: 'Home',
-    icon: 'home-outline',
-    activeIcon: 'home',
-  },
-  {
-    title: 'Transactions',
-    icon: 'swap-horizontal',
-    activeIcon: 'swap-horizontal',
-  },
-  {
-    title: 'Cards',
-    icon: 'credit-card-outline',
-    activeIcon: 'credit-card',
-  },
-  {
-    title: 'Wallet',
-    icon: 'wallet-outline',
-    activeIcon: 'wallet',
-  },
-  {
-    title: 'Profile',
-    icon: 'account-circle-outline',
-    activeIcon: 'account-circle',
-  },
-  {
-    title: 'Settings',
-    icon: 'cog-outline',
-    activeIcon: 'cog',
-  },
-];
-
-  
   // ====================================================
   // DASHBOARD UI
   // ====================================================
