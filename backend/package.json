@@ -1,6 +1,7 @@
+
 {
   "name": "zenimonies-banking-backend",
-  "version": "1.0.0",
+  "version": "8.21.0",
   "description": "Zenimonies Banking API",
   "main": "server.js",
   "scripts": {
