@@ -1,7 +1,7 @@
 
 {
   "name": "zenimonies-frontend",
-  "version": "1.0.0",
+  "version": "8.21.0",
   "private": true,
   "dependencies": {
     "@simplewebauthn/browser": "^14.0.0",
