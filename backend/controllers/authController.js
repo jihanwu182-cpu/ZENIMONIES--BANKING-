@@ -50,7 +50,35 @@ const hashToken = (value) => {
 const normalizePhone = (phone) => {
   return String(phone || '').trim();
 };
+// ============================================================
+// CREATE SECURITY NOTIFICATION
+// ============================================================
 
+const createSecurityNotification = async ({
+  userId,
+  type = 'security',
+  title,
+  message,
+}) => {
+  if (!userId || !title || !message) {
+    return;
+  }
+
+  await pool.query(
+    `
+    INSERT INTO notifications (
+      user_id,
+      type,
+      title,
+      message,
+      is_read,
+      created_at
+    )
+    VALUES ($1, $2, $3, $4, false, CURRENT_TIMESTAMP)
+    `,
+    [userId, type, title, message]
+  );
+};
 // ============================================================
 // GET BEARER TOKEN
 // ============================================================
@@ -1758,15 +1786,30 @@ const login = async (
         user.password_hash
       );
 
+if (!passwordMatches) {
 
-    if (!passwordMatches) {
+  try {
+    await createSecurityNotification({
+      userId: user.id,
+      type: 'security',
+      title: 'Failed login attempt',
+      message:
+        'An unsuccessful login attempt was made using your account details. If this was not you, please secure your account.',
+    });
+  } catch (notificationError) {
+    console.error(
+      'Failed login notification error:',
+      notificationError
+    );
+  }
 
-      return res.status(401).json({
-        success: false,
-        message:
-          'Invalid email/phone or password',
-      });
-    }
+  return res.status(401).json({
+    success: false,
+    message:
+      'Invalid email/phone or password',
+  });
+}
+    
 
 
     console.log(
@@ -1909,7 +1952,24 @@ const login = async (
         req.get('user-agent') || null,
       ]
     );
+// ========================================================
+// CREATE SUCCESSFUL LOGIN NOTIFICATION
+// ========================================================
 
+try {
+  await createSecurityNotification({
+    userId: user.id,
+    type: 'security',
+    title: 'Successful login',
+    message:
+      'Your ZENIMONIES account was successfully accessed. If this was not you, please contact support immediately.',
+  });
+} catch (notificationError) {
+  console.error(
+    'Successful login notification error:',
+    notificationError
+  );
+}
 
     // ========================================================
     // SUCCESS
