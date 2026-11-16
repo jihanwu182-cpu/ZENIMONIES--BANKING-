@@ -828,9 +828,7 @@ export default function NotificationsScreen({
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar
-       barStyle={isDark ? 'light-content' : 'dark-content'}
-     />
+      <StatusBar barStyle="dark-content" />
 
       {/* HEADER */}
 
