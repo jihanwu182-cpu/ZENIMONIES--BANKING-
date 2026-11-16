@@ -90,6 +90,7 @@ type AuthUser = {
   kyc_level?: number | string;
   kyc_tier?: number | string;
   kyc_status?: string;
+  profile_photo?: string | null;
 };
 
 type AuthSession = {
@@ -625,37 +626,41 @@ export default function App() {
   // LOAD CUSTOMER PROFILE
   // ====================================================
 
-  const loadProfile = useCallback(
-    async (
-      token: string
-    ): Promise<AuthUser | undefined> => {
-      try {
-        const response = await authenticatedFetch(
-          PROFILE_URL,
-          token
+const loadProfile = useCallback(
+  async (
+    token: string
+  ): Promise<AuthUser | undefined> => {
+    try {
+      const response = await authenticatedFetch(
+        PROFILE_URL,
+        token
+      );
+
+      const data: ProfileResponse =
+        await readJson(response);
+
+      if (
+        response.ok &&
+        data.success &&
+        data.user
+      ) {
+        // Restore the profile picture saved by the website.
+        setProfilePhotoUri(
+          data.user.profile_photo || null
         );
 
-        const data: ProfileResponse =
-          await readJson(response);
-
-        if (
-          response.ok &&
-          data.success &&
-          data.user
-        ) {
-          return data.user;
-        }
-      } catch {
-        // A profile failure must not discard
-        // an otherwise valid login session.
+        return data.user;
       }
+    } catch (error) {
+      console.warn('Profile loading failed:', error);
+      // A profile failure must not discard
+      // an otherwise valid login session.
+    }
 
-      return undefined;
-    },
-    [authenticatedFetch]
-  );
-
-
+    return undefined;
+  },
+  [authenticatedFetch]
+);
   // ====================================================
   // RESTORE SAVED LOGIN SESSION — OPTIMIZED
   // ====================================================
