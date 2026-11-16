@@ -2,7 +2,6 @@
 import React from 'react';
 
 import {
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -20,7 +19,6 @@ type ProfileScreenProps = {
   user?: any;
   account?: any;
   onBack: () => void;
-  onLogout: () => void;
 };
 
 const displayValue = (
@@ -53,7 +51,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   user,
   account,
   onBack,
-  onLogout,
 }) => {
   const {
     colors,
@@ -109,31 +106,24 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     ? addressParts.join(', ')
     : 'Not provided';
 
-  const confirmLogout = () => {
-    Alert.alert(
-      'Log out of ZENIMONIES?',
-      'You will need to sign in again to access your account.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Log out',
-          style: 'destructive',
-          onPress: onLogout,
-        },
-      ]
-    );
-  };
-
   const selectTheme = (next: ThemePreference) => {
-    setPreference(next).catch(() => {
-      Alert.alert(
-        'Theme preference',
-        'Your theme could not be saved. Please try again.'
+    try {
+      const result = setPreference(next);
+
+      if (
+        result &&
+        typeof (result as any).catch === 'function'
+      ) {
+        (result as any).catch(() => {
+          // Keep the current theme if saving fails.
+        });
+      }
+    } catch (error) {
+      console.warn(
+        'Theme preference update failed:',
+        error
       );
-    });
+    }
   };
 
   const themeOptions: {
@@ -160,13 +150,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <View style={styles.container}>
-    <StatusBar
-      barStyle={
-        mode === 'dark'
-        ? 'light-content'
-        : 'dark-content'
-     } 
-   />
+      <StatusBar
+        barStyle={
+          mode === 'dark'
+            ? 'light-content'
+            : 'dark-content'
+        }
+      />
 
       <View style={styles.header}>
         <TouchableOpacity
@@ -399,16 +389,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={confirmLogout}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.logoutText}>
-            Log out
-          </Text>
-        </TouchableOpacity>
-
         <Text style={styles.footer}>
           ZENIMONIES BANKING
         </Text>
@@ -461,7 +441,9 @@ const InfoRow: React.FC<InfoRowProps> = ({
   );
 };
 
-const createStyles = (colors: ReturnType<typeof import('../theme/colors').getColors>) =>
+const createStyles = (
+  colors: ReturnType<typeof import('../theme/colors').getColors>
+) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -683,23 +665,6 @@ const createStyles = (colors: ReturnType<typeof import('../theme/colors').getCol
       fontSize: 14,
       lineHeight: 22,
       color: colors.text,
-    },
-
-    logoutButton: {
-      minHeight: 52,
-      borderRadius: 13,
-      borderWidth: 1,
-      borderColor: colors.error,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginTop: 5,
-      backgroundColor: colors.surface,
-    },
-
-    logoutText: {
-      color: colors.error,
-      fontSize: 15,
-      fontWeight: '800',
     },
 
     footer: {
