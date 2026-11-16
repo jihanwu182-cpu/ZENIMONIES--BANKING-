@@ -328,42 +328,44 @@ export default function Dashboard({
   // BOTTOM NAVIGATION
   // ====================================================
 
-  const navigation: {
-    title: TabName;
-    icon: IconName;
-    activeIcon: IconName;
-  }[] = [
-    {
-      title: 'Home',
-      icon: 'home-outline',
-      activeIcon: 'home',
-    },
-    {
-      title: 'Transactions',
-      icon: 'swap-horizontal',
-      activeIcon: 'swap-horizontal',
-    },
-    {
-      title: 'Cards',
-      icon: 'credit-card-outline',
-      activeIcon: 'credit-card',
-    },
-    {
-      title: 'Wallet',
-      icon: 'wallet-outline',
-      activeIcon: 'wallet',
-    },
-    {
-      title: 'Profile',
-      icon: 'account-circle-outline',
-      activeIcon: 'account-circle',
-    },
-  ];
-{
-      title: 'Settings',
-      icon: 'cog-outline',
-      activeIcon: 'cog',
-},
+const navigation: {
+  title: TabName;
+  icon: IconName;
+  activeIcon: IconName;
+}[] = [
+  {
+    title: 'Home',
+    icon: 'home-outline',
+    activeIcon: 'home',
+  },
+  {
+    title: 'Transactions',
+    icon: 'swap-horizontal',
+    activeIcon: 'swap-horizontal',
+  },
+  {
+    title: 'Cards',
+    icon: 'credit-card-outline',
+    activeIcon: 'credit-card',
+  },
+  {
+    title: 'Wallet',
+    icon: 'wallet-outline',
+    activeIcon: 'wallet',
+  },
+  {
+    title: 'Profile',
+    icon: 'account-circle-outline',
+    activeIcon: 'account-circle',
+  },
+  {
+    title: 'Settings',
+    icon: 'cog-outline',
+    activeIcon: 'cog',
+  },
+];
+
+  
   // ====================================================
   // DASHBOARD UI
   // ====================================================
