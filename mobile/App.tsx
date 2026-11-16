@@ -26,6 +26,7 @@ import NotificationsScreen from './screens/NotificationsScreen';
 import TransactionHistoryScreen from './screens/TransactionHistoryScreen';
 import TransactionDetailsScreen from './screens/TransactionDetailsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import SettingsScreen from './screens/SettingsScreen';
 
 import {
   registerPushNotifications,
@@ -46,13 +47,13 @@ const ACCOUNT_URL = `${API_BASE}/account`;
 const TRANSACTIONS_URL = `${API_BASE}/account/transactions`;
 
 const AUTH_TOKEN_KEY = 'zenimonies_auth_token';
-
 type Screen =
   | 'welcome'
   | 'login'
   | 'register'
   | 'home'
   | 'profile'
+  | 'settings'
   | 'history'
   | 'notifications'
   | 'transaction-details';
@@ -1012,6 +1013,10 @@ const loadProfile = useCallback(
       setScreen('notifications');
       return;
     }
+   if (tab === 'Settings') {
+      setScreen('settings');
+      return;
+     } 
 
     Alert.alert(
       tab,
@@ -1137,7 +1142,22 @@ const loadProfile = useCallback(
       </SafeAreaView>
     );
   }
+// ====================================================
+// CUSTOMER SETTINGS
+// ====================================================
 
+if (screen === 'settings' && session) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <SettingsScreen
+        onBack={() => setScreen('home')}
+        onLogout={handleLogout}
+      />
+    </SafeAreaView>
+  );
+}
   // ====================================================
   // TRANSACTION HISTORY
   // ====================================================
