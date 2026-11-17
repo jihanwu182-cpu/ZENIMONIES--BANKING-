@@ -134,7 +134,10 @@ const sogoRequest = async ({
         ).toLowerCase() === 'true',
     };
   } catch (error) {
-    if (error.code === 'ECONNABORTED') {
+    if (
+      error.code === 'ECONNABORTED' ||
+      error.code === 'ETIMEDOUT'
+    ) {
       throw createError(
         'Sogo Data request timed out. The transaction must be reconciled.',
         'SOGO_TIMEOUT',
@@ -158,7 +161,9 @@ const sogoRequest = async ({
       'Sogo request failed.';
 
     throw createError(
-      message,
+      typeof message === 'string'
+        ? message
+        : 'Sogo request failed.',
       responseData.code || 'SOGO_HTTP_ERROR',
       error.response.status,
       responseData
@@ -207,7 +212,10 @@ const extractPlans = (responseData) => {
 
       amount,
 
-      network: plan.network || null,
+      network:
+        plan.network ||
+        plan.network_slug ||
+        null,
 
       validity:
         plan.validity ||
@@ -270,7 +278,22 @@ const getDataPlans = async (
 
   const plans = extractPlans(result.data);
 
-  if (plans.length === 0) {
+  // If Sogo explicitly identifies a plan's network,
+  // exclude plans belonging to another network.
+  const verifiedPlans = plans.filter((plan) => {
+    if (!plan.network) {
+      return true;
+    }
+
+    const planNetwork = normalizeNetwork(plan.network);
+
+    return (
+      !planNetwork ||
+      planNetwork === normalizedNetwork
+    );
+  });
+
+  if (verifiedPlans.length === 0) {
     throw createError(
       'Sogo returned no valid data plans for this network.',
       'SOGO_EMPTY_DATA_CATALOGUE',
@@ -282,7 +305,7 @@ const getDataPlans = async (
   const response = {
     network: normalizedNetwork,
     serviceID: normalizedNetwork,
-    plans,
+    plans: verifiedPlans,
   };
 
   variationCache.set(normalizedNetwork, {
@@ -335,29 +358,25 @@ const purchaseDataPlan = async ({
     );
   }
 
-  if (!idempotencyKey) {
+  // Validate the saved idempotency key as a UUID.
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  if (
+    !idempotencyKey ||
+    !uuidPattern.test(String(idempotencyKey))
+  ) {
     throw createError(
-      'A saved transaction idempotency key is required.',
-      'IDEMPOTENCY_KEY_REQUIRED',
+      'A valid saved transaction idempotency key is required.',
+      'INVALID_IDEMPOTENCY_KEY',
       400
     );
   }
 
-  if (!crypto.validateUUID) {
-    // UUID format is checked below without relying on
-    // non-standard crypto methods.
-    const uuidPattern =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-    if (!uuidPattern.test(String(idempotencyKey))) {
-      throw createError(
-        'Invalid transaction idempotency key.',
-        'INVALID_IDEMPOTENCY_KEY',
-        400
-      );
-    }
-  }
-
+  // Sogo's documented Data purchase body requires:
+  // network, phone and variation_code.
+  // The amount is verified against the Sogo catalogue
+  // by the controller before this request.
   const result = await sogoRequest({
     endpoint: '/bills/data',
     method: 'POST',
@@ -370,6 +389,7 @@ const purchaseDataPlan = async ({
   });
 
   const transaction =
+    result.data?.data?.transaction ||
     result.data?.data ||
     result.data?.transaction ||
     result.data;
@@ -382,6 +402,7 @@ const purchaseDataPlan = async ({
     amount: Number(amount),
     response: result.data,
     transaction,
+    statusCode: result.statusCode,
     idempotencyReplayed: result.idempotencyReplayed,
   };
 };
