@@ -4,7 +4,7 @@ import { useTheme } from '../theme/Theme.tsx';
 
 const API_BASE_URL =
   'https://zenimonies-banking.onrender.com/api';
-
+const APP_VERSION = '8.21.0';
 type SettingItemProps = {
   icon: string;
   title: string;
@@ -3355,8 +3355,8 @@ const logout = () => {
                   </span>
 
                   <strong>
-                    1.0.0
-                  </strong>
+                   8.21.0
+                 </strong>
                 </div>
 
                 <div
