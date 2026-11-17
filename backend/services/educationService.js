@@ -1,862 +1,567 @@
-const {
-  generateRequestId,
-} = require('./vtpassService');
 
+const crypto = require('crypto');
 
 // ============================================================
 // ZENIMONIES BANKING
 // EDUCATION PAYMENT SERVICE
-// VTpass
+// SOGO
 //
 // Supported:
-// - WAEC Registration PIN
-// - WAEC Result Checker PIN
-// - JAMB PIN
+// - WAEC Registration
+// - WAEC Result Checker
+// - JAMB
 // ============================================================
 
+const SOGO_BASE_URL = (
+  process.env.SOGO_API_BASE_URL ||
+  'https://sandbox.sogo.africa/v1'
+).replace(/\/+$/, '');
 
-// ============================================================
-// VTPASS CONFIGURATION
-// ============================================================
-
-const VTPASS_BASE_URL =
-  process.env.VTPASS_BASE_URL ||
-  'https://sandbox.vtpass.com';
-
-const VTPASS_API_KEY =
-  process.env.VTPASS_API_KEY;
-
-const VTPASS_PUBLIC_KEY =
-  process.env.VTPASS_PUBLIC_KEY;
-
-const VTPASS_SECRET_KEY =
-  process.env.VTPASS_SECRET_KEY;
-
-
-// ============================================================
-// VTpass EDUCATION SERVICE IDs
-// ============================================================
+const SOGO_API_KEY = process.env.SOGO_API_KEY;
 
 const EDUCATION_SERVICE_IDS = {
-  WAEC_REGISTRATION:
-    'waec-registration',
-
-  WAEC_RESULT:
-    'waec',
-
-  JAMB:
-    'jamb',
+  WAEC_REGISTRATION: 'waec-registration',
+  WAEC_RESULT: 'waec',
+  JAMB: 'jamb',
 };
 
+// ============================================================
+// REQUEST ID
+// ============================================================
+
+const generateRequestId = () => crypto.randomUUID();
 
 // ============================================================
-// CONFIGURATION VALIDATION
+// CONFIGURATION
 // ============================================================
 
 const validateConfig = () => {
-  const missing = [];
-
-  if (!VTPASS_API_KEY) {
-    missing.push(
-      'VTPASS_API_KEY'
+  if (!SOGO_API_KEY) {
+    const error = new Error(
+      'SOGO_API_KEY is not configured.'
     );
-  }
 
-  if (!VTPASS_PUBLIC_KEY) {
-    missing.push(
-      'VTPASS_PUBLIC_KEY'
-    );
-  }
-
-  if (!VTPASS_SECRET_KEY) {
-    missing.push(
-      'VTPASS_SECRET_KEY'
-    );
-  }
-
-  if (missing.length > 0) {
-    const error =
-      new Error(
-        `Missing VTpass environment variables: ${missing.join(
-          ', '
-        )}`
-      );
-
-    error.code =
-      'VTPASS_CONFIGURATION_ERROR';
-
+    error.code = 'SOGO_CONFIGURATION_ERROR';
     throw error;
   }
 };
-
 
 // ============================================================
 // NORMALIZE EDUCATION SERVICE
 // ============================================================
 
-const normalizeEducationService = (
-  service
-) => {
-  if (!service) {
-    return null;
-  }
+const normalizeEducationService = (service) => {
+  if (!service) return null;
 
-  const value =
-    String(service)
-      .trim()
-      .toLowerCase();
+  const value = String(service)
+    .trim()
+    .toLowerCase();
 
   const serviceMap = {
     'waec-registration':
       EDUCATION_SERVICE_IDS.WAEC_REGISTRATION,
 
-    'waec_registration':
+    waec_registration:
       EDUCATION_SERVICE_IDS.WAEC_REGISTRATION,
 
-    'waec':
+    waec:
       EDUCATION_SERVICE_IDS.WAEC_RESULT,
 
     'waec-result':
       EDUCATION_SERVICE_IDS.WAEC_RESULT,
 
-    'waec_result':
+    waec_result:
       EDUCATION_SERVICE_IDS.WAEC_RESULT,
 
-    'jamb':
+    jamb:
       EDUCATION_SERVICE_IDS.JAMB,
   };
 
-  return (
-    serviceMap[value] ||
-    null
-  );
+  return serviceMap[value] || null;
 };
-
 
 // ============================================================
 // GET EDUCATION SERVICE ID
 // ============================================================
 
-const getEducationServiceId = (
-  service
-) => {
-  const serviceId =
-    normalizeEducationService(
-      service
-    );
+const getEducationServiceId = (service) => {
+  const serviceId = normalizeEducationService(service);
 
   if (!serviceId) {
-    const error =
-      new Error(
-        'Unsupported education service.'
-      );
+    const error = new Error(
+      'Unsupported education service.'
+    );
 
-    error.code =
-      'UNSUPPORTED_EDUCATION_SERVICE';
-
+    error.code = 'UNSUPPORTED_EDUCATION_SERVICE';
     throw error;
   }
 
   return serviceId;
 };
 
+// ============================================================
+// MAP SOGO PROVIDER
+// ============================================================
+
+const getSogoProvider = (service) => {
+  const serviceId = getEducationServiceId(service);
+
+  return serviceId === EDUCATION_SERVICE_IDS.JAMB
+    ? 'jamb'
+    : 'waec';
+};
 
 // ============================================================
-// VTpass HTTP REQUEST
+// SOGO HTTP REQUEST
 // ============================================================
 
-const vtpassRequest = async ({
+const sogoRequest = async ({
   endpoint,
   method = 'GET',
   body = null,
+  idempotencyKey = null,
 }) => {
   validateConfig();
 
   const headers = {
-    Accept:
-      'application/json',
-
-    'Content-Type':
-      'application/json',
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${SOGO_API_KEY}`,
   };
 
-
-  // ----------------------------------------------------------
-  // GET AUTHENTICATION
-  // ----------------------------------------------------------
-
-  if (
-    method === 'GET'
-  ) {
-    headers['api-key'] =
-      VTPASS_API_KEY;
-
-    headers['public-key'] =
-      VTPASS_PUBLIC_KEY;
+  if (idempotencyKey) {
+    headers['Idempotency-Key'] = idempotencyKey;
   }
 
+  const controller = new AbortController();
 
-  // ----------------------------------------------------------
-  // POST AUTHENTICATION
-  // ----------------------------------------------------------
-
-  if (
-    method === 'POST'
-  ) {
-    headers['api-key'] =
-      VTPASS_API_KEY;
-
-    headers['secret-key'] =
-      VTPASS_SECRET_KEY;
-  }
-
-
-  const controller =
-    new AbortController();
-
-  const timeout =
-    setTimeout(
-      () => {
-        controller.abort();
-      },
-      30000
-    );
-
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 30000);
 
   try {
-    const response =
-      await fetch(
-        `${VTPASS_BASE_URL}${endpoint}`,
-        {
-          method,
+    const response = await fetch(
+      `${SOGO_BASE_URL}${endpoint}`,
+      {
+        method,
+        headers,
+        body: body !== null
+          ? JSON.stringify(body)
+          : undefined,
+        signal: controller.signal,
+      }
+    );
 
-          headers,
-
-          body:
-            body !== null
-              ? JSON.stringify(
-                  body
-                )
-              : undefined,
-
-          signal:
-            controller.signal,
-        }
-      );
-
-
-    const text =
-      await response.text();
+    const responseText = await response.text();
 
     let data;
 
-
     try {
-      data =
-        text
-          ? JSON.parse(text)
-          : null;
+      data = responseText
+        ? JSON.parse(responseText)
+        : null;
     } catch {
-      data = {
-        raw: text,
-      };
+      data = { raw: responseText };
     }
 
-
     if (!response.ok) {
-      const error =
-        new Error(
-          data?.response_description ||
-            data?.message ||
-            `VTpass request failed with status ${response.status}.`
-        );
+      const error = new Error(
+        data?.message ||
+        data?.error ||
+        `Sogo request failed with status ${response.status}.`
+      );
 
       error.code =
-        'VTPASS_HTTP_ERROR';
+        data?.code || 'SOGO_HTTP_ERROR';
 
-      error.status =
-        response.status;
-
-      error.response =
-        data;
+      error.status = response.status;
+      error.response = data;
 
       throw error;
     }
 
-
     return data;
 
   } catch (error) {
-    if (
-      error?.name ===
-      'AbortError'
-    ) {
-      const timeoutError =
-        new Error(
-          'VTpass request timed out.'
-        );
+    if (error?.name === 'AbortError') {
+      const timeoutError = new Error(
+        'Sogo request timed out. The transaction outcome must be checked before retrying.'
+      );
 
-      timeoutError.code =
-        'VTPASS_TIMEOUT';
-
+      timeoutError.code = 'SOGO_TIMEOUT';
       throw timeoutError;
     }
 
     throw error;
 
   } finally {
-    clearTimeout(
-      timeout
-    );
+    clearTimeout(timeout);
   }
 };
 
+// ============================================================
+// EXTRACT EDUCATION PLANS
+// ============================================================
+
+const extractPlans = (result) => {
+  const candidates = [
+    result?.data?.plans,
+    result?.plans,
+    result?.data?.variations,
+    result?.variations,
+    result?.data?.items,
+    result?.items,
+    result?.data,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+};
 
 // ============================================================
 // GET EDUCATION VARIATIONS
 //
-// GET:
-// /api/service-variations?serviceID=waec-registration
-//
-// GET:
-// /api/service-variations?serviceID=waec
-//
-// GET:
-// /api/service-variations?serviceID=jamb
+// Sogo:
+// GET /v1/bills/education-plans
 // ============================================================
 
-const getEducationVariations =
-  async (
-    service
-  ) => {
-    const serviceId =
-      getEducationServiceId(
-        service
-      );
+const getEducationVariations = async (service) => {
+  const serviceId = getEducationServiceId(service);
+  const provider = getSogoProvider(service);
 
+  const result = await sogoRequest({
+    endpoint: '/bills/education-plans',
+    method: 'GET',
+  });
 
-    const result =
-      await vtpassRequest({
-        endpoint:
-          `/api/service-variations?serviceID=${encodeURIComponent(
-            serviceId
-          )}`,
+  const allPlans = extractPlans(result);
 
-        method:
-          'GET',
-      });
+  const variations = allPlans.filter((plan) => {
+    const planProvider = String(
+      plan?.provider ||
+      plan?.service ||
+      plan?.category ||
+      ''
+    ).trim().toLowerCase();
 
+    // If Sogo does not include a provider field,
+    // retain the returned catalogue for compatibility.
+    if (!planProvider) return true;
 
-    const variations =
-      result
-        ?.content
-        ?.variations ||
-      result
-        ?.content
-        ?.varations ||
-      [];
+    return planProvider === provider;
+  });
 
-
-    return {
-      serviceID:
-        serviceId,
-
-      variations,
-
-      responseDescription:
-        result
-          ?.response_description ||
-        null,
-
-      raw:
-        result,
-    };
+  return {
+    serviceID: serviceId,
+    provider,
+    variations,
+    responseDescription:
+      result?.message || null,
+    raw: result,
   };
-
+};
 
 // ============================================================
 // VERIFY JAMB PROFILE
 //
-// VTpass requires:
+// Sogo:
+// POST /v1/bills/education/verify-jamb
 //
-// billersCode = JAMB Profile ID
-// serviceID   = jamb
-// type        = selected variation code
-//
-// Example:
-//
-// type = utme-mock
-// type = utme-no-mock
+// Required:
+// profile_id
 // ============================================================
 
-const verifyJambProfile =
-  async ({
-    profileId,
+const verifyJambProfile = async ({
+  profileId,
+  variationCode = null,
+  service = 'jamb',
+}) => {
+  const serviceId = getEducationServiceId(service);
+
+  if (serviceId !== EDUCATION_SERVICE_IDS.JAMB) {
+    const error = new Error(
+      'JAMB profile verification is only available for JAMB.'
+    );
+
+    error.code = 'INVALID_JAMB_SERVICE';
+    throw error;
+  }
+
+  const cleanProfileId = String(
+    profileId || ''
+  ).trim();
+
+  if (!cleanProfileId) {
+    const error = new Error(
+      'JAMB Profile ID is required.'
+    );
+
+    error.code = 'JAMB_PROFILE_ID_REQUIRED';
+    throw error;
+  }
+
+  const result = await sogoRequest({
+    endpoint: '/bills/education/verify-jamb',
+    method: 'POST',
+    body: {
+      profile_id: cleanProfileId,
+    },
+  });
+
+  return {
+    requestId: null,
+    serviceID: serviceId,
+    profileId: cleanProfileId,
     variationCode,
-    service = 'jamb',
-  }) => {
-
-    const serviceId =
-      getEducationServiceId(
-        service
-      );
-
-
-    if (
-      serviceId !==
-      EDUCATION_SERVICE_IDS.JAMB
-    ) {
-      const error =
-        new Error(
-          'JAMB profile verification is only available for JAMB.'
-        );
-
-      error.code =
-        'INVALID_JAMB_SERVICE';
-
-      throw error;
-    }
-
-
-    const cleanProfileId =
-      String(
-        profileId || ''
-      ).trim();
-
-
-    if (!cleanProfileId) {
-      const error =
-        new Error(
-          'JAMB Profile ID is required.'
-        );
-
-      error.code =
-        'JAMB_PROFILE_ID_REQUIRED';
-
-      throw error;
-    }
-
-
-    const cleanVariationCode =
-      String(
-        variationCode || ''
-      ).trim();
-
-
-    if (
-      !cleanVariationCode
-    ) {
-      const error =
-        new Error(
-          'JAMB variation code is required for profile verification.'
-        );
-
-      error.code =
-        'JAMB_VARIATION_REQUIRED';
-
-      throw error;
-    }
-
-
-    const requestId =
-      generateRequestId();
-
-
-    const result =
-      await vtpassRequest({
-        endpoint:
-          '/api/merchant-verify',
-
-        method:
-          'POST',
-
-        body: {
-          request_id:
-            requestId,
-
-          serviceID:
-            serviceId,
-
-          billersCode:
-            cleanProfileId,
-
-          type:
-            cleanVariationCode,
-        },
-      });
-
-
-    return {
-      requestId,
-
-      serviceID:
-        serviceId,
-
-      profileId:
-        cleanProfileId,
-
-      variationCode:
-        cleanVariationCode,
-
-      response:
-        result,
-    };
+    response: result,
   };
-
+};
 
 // ============================================================
 // PURCHASE EDUCATION PRODUCT
 //
-// WAEC:
-// - variation_code
-// - phone
-// - amount optional
+// Sogo:
+// POST /v1/bills/education
 //
 // JAMB:
-// - variation_code
-// - billersCode (Profile ID)
-// - phone
-// - amount optional
+// provider: jamb
+// profile_id: candidate profile ID
 //
-// Additional fields such as quantity can be supplied through
-// additionalFields.
+// WAEC:
+// provider: waec
+// service_type: result_checker or registration
+//
+// Both:
+// variation_code
+// amount
+// Idempotency-Key header
 // ============================================================
 
-const purchaseEducation =
-  async ({
-    service,
-    billersCode = null,
-    variationCode = null,
-    amount,
-    phone,
-    additionalFields = {},
-  }) => {
+const purchaseEducation = async ({
+  service,
+  billersCode = null,
+  profileId = null,
+  variationCode = null,
+  amount,
+  phone = null,
+  additionalFields = {},
+  requestId = null,
+}) => {
+  const serviceId = getEducationServiceId(service);
+  const provider = getSogoProvider(service);
 
-    const serviceId =
-      getEducationServiceId(
-        service
-      );
+  const cleanVariationCode = String(
+    variationCode || ''
+  ).trim();
 
+  if (!cleanVariationCode) {
+    const error = new Error(
+      'Education variation code is required.'
+    );
 
-    const cleanVariationCode =
-      String(
-        variationCode || ''
-      ).trim();
+    error.code = 'EDUCATION_VARIATION_REQUIRED';
+    throw error;
+  }
 
+  const numericAmount = Number(amount);
 
-    if (
-      !cleanVariationCode
-    ) {
-      const error =
-        new Error(
-          'Education variation code is required.'
-        );
+  if (
+    !Number.isFinite(numericAmount) ||
+    numericAmount <= 0
+  ) {
+    const error = new Error(
+      'A valid education payment amount is required.'
+    );
 
-      error.code =
-        'EDUCATION_VARIATION_REQUIRED';
+    error.code = 'INVALID_EDUCATION_AMOUNT';
+    throw error;
+  }
 
-      throw error;
-    }
+  // Reuse the ID saved in the local database.
+  // Generate one only for callers that do not supply it.
+  const cleanRequestId = String(
+    requestId || generateRequestId()
+  ).trim();
 
+  if (!cleanRequestId) {
+    const error = new Error(
+      'A valid Sogo idempotency key is required.'
+    );
 
-    const numericAmount =
-      Number(amount);
+    error.code = 'REQUEST_ID_REQUIRED';
+    throw error;
+  }
 
-
-    if (
-      !Number.isFinite(
-        numericAmount
-      ) ||
-      numericAmount <= 0
-    ) {
-      const error =
-        new Error(
-          'A valid education payment amount is required.'
-        );
-
-      error.code =
-        'INVALID_EDUCATION_AMOUNT';
-
-      throw error;
-    }
-
-
-    const cleanPhone =
-      phone
-        ? String(phone)
-            .replace(/\s+/g, '')
-            .trim()
-        : null;
-
-
-    if (
-      !cleanPhone ||
-      !/^0\d{10}$/.test(
-        cleanPhone
-      )
-    ) {
-      const error =
-        new Error(
-          'A valid Nigerian phone number is required.'
-        );
-
-      error.code =
-        'INVALID_PHONE_NUMBER';
-
-      throw error;
-    }
-
-
-    // --------------------------------------------------------
-    // JAMB REQUIRES PROFILE ID
-    // --------------------------------------------------------
-
-    let cleanBillersCode =
-      null;
-
-
-    if (
-      serviceId ===
-      EDUCATION_SERVICE_IDS.JAMB
-    ) {
-      cleanBillersCode =
-        String(
-          billersCode || ''
-        ).trim();
-
-
-      if (!cleanBillersCode) {
-        const error =
-          new Error(
-            'JAMB Profile ID is required.'
-          );
-
-        error.code =
-          'JAMB_PROFILE_ID_REQUIRED';
-
-        throw error;
-      }
-    }
-
-
-    const requestId =
-      generateRequestId();
-
-
-    // ========================================================
-    // BASE PAYLOAD
-    // ========================================================
-
-    const payload = {
-      request_id:
-        requestId,
-
-      serviceID:
-        serviceId,
-
-      variation_code:
-        cleanVariationCode,
-
-      amount:
-        numericAmount,
-
-      phone:
-        cleanPhone,
-    };
-
-
-    // ========================================================
-    // JAMB PROFILE ID
-    // ========================================================
-
-    if (
-      serviceId ===
-      EDUCATION_SERVICE_IDS.JAMB
-    ) {
-      payload.billersCode =
-        cleanBillersCode;
-    }
-
-
-    // ========================================================
-    // ADDITIONAL PROVIDER FIELDS
-    //
-    // Examples:
-    // quantity
-    // ========================================================
-
-    if (
-      additionalFields &&
-      typeof additionalFields ===
-        'object' &&
-      !Array.isArray(
-        additionalFields
-      )
-    ) {
-      Object.assign(
-        payload,
-        additionalFields
-      );
-    }
-
-
-    // ========================================================
-    // SEND TO VTPASS
-    // ========================================================
-
-    const result =
-      await vtpassRequest({
-        endpoint:
-          '/api/pay',
-
-        method:
-          'POST',
-
-        body:
-          payload,
-      });
-
-
-    return {
-      requestId,
-
-      serviceID:
-        serviceId,
-
-      billersCode:
-        cleanBillersCode,
-
-      variationCode:
-        cleanVariationCode,
-
-      amount:
-        numericAmount,
-
-      phone:
-        cleanPhone,
-
-      response:
-        result,
-    };
+  const payload = {
+    provider,
+    variation_code: cleanVariationCode,
+    amount: numericAmount,
   };
 
+  if (serviceId === EDUCATION_SERVICE_IDS.JAMB) {
+    const cleanProfileId = String(
+      profileId || billersCode || ''
+    ).trim();
+
+    if (!cleanProfileId) {
+      const error = new Error(
+        'JAMB Profile ID is required.'
+      );
+
+      error.code = 'JAMB_PROFILE_ID_REQUIRED';
+      throw error;
+    }
+
+    payload.profile_id = cleanProfileId;
+
+  } else {
+    const normalizedService = String(
+      additionalFields?.service_type ||
+      (
+        serviceId === EDUCATION_SERVICE_IDS.WAEC_REGISTRATION
+          ? 'registration'
+          : 'result_checker'
+      )
+    ).trim().toLowerCase();
+
+    if (
+      !['registration', 'result_checker'].includes(
+        normalizedService
+      )
+    ) {
+      const error = new Error(
+        'Invalid WAEC service type.'
+      );
+
+      error.code = 'INVALID_WAEC_SERVICE_TYPE';
+      throw error;
+    }
+
+    payload.service_type = normalizedService;
+  }
+
+  const result = await sogoRequest({
+    endpoint: '/bills/education',
+    method: 'POST',
+    body: payload,
+    idempotencyKey: cleanRequestId,
+  });
+
+  return {
+    requestId: cleanRequestId,
+    serviceID: serviceId,
+    provider,
+    billersCode:
+      serviceId === EDUCATION_SERVICE_IDS.JAMB
+        ? payload.profile_id
+        : null,
+    variationCode: cleanVariationCode,
+    amount: numericAmount,
+    phone,
+    response: result,
+  };
+};
 
 // ============================================================
 // REQUERY EDUCATION TRANSACTION
+//
+// Live:
+// GET /v1/transactions/{reference}?type=bill_payment
+//
+// Sandbox transactions are not persisted for lookup.
+// Use webhook and original purchase response.
 // ============================================================
 
-const requeryEducationTransaction =
-  async (
-    requestId
-  ) => {
+const requeryEducationTransaction = async (requestId) => {
+  const cleanRequestId = String(
+    requestId || ''
+  ).trim();
 
-    const cleanRequestId =
-      String(
-        requestId || ''
-      ).trim();
+  if (!cleanRequestId) {
+    const error = new Error(
+      'Sogo transaction reference is required.'
+    );
 
+    error.code = 'REQUEST_ID_REQUIRED';
+    throw error;
+  }
 
-    if (!cleanRequestId) {
-      const error =
-        new Error(
-          'VTpass request ID is required.'
-        );
+  if (
+    SOGO_BASE_URL.includes('sandbox.sogo.africa')
+  ) {
+    const error = new Error(
+      'Sogo sandbox does not support transaction lookup. Use the purchase response and webhook status.'
+    );
 
-      error.code =
-        'REQUEST_ID_REQUIRED';
+    error.code = 'SOGO_SANDBOX_REQUERY_UNAVAILABLE';
+    throw error;
+  }
 
-      throw error;
-    }
-
-
-    return vtpassRequest({
-      endpoint:
-        '/api/requery',
-
-      method:
-        'POST',
-
-      body: {
-        request_id:
-          cleanRequestId,
-      },
-    });
-  };
-
+  return sogoRequest({
+    endpoint:
+      `/transactions/${encodeURIComponent(cleanRequestId)}?type=bill_payment`,
+    method: 'GET',
+  });
+};
 
 // ============================================================
 // GET PROVIDER STATUS
 // ============================================================
 
-const getEducationProviderStatus =
-  (
-    providerResponse
-  ) => {
+const getEducationProviderStatus = (providerResponse) => {
+  const transaction =
+    providerResponse?.data?.transaction ||
+    providerResponse?.transaction ||
+    providerResponse?.data ||
+    providerResponse;
 
-    const code =
-      String(
-        providerResponse?.code ||
-          providerResponse
-            ?.response_code ||
-          ''
-      ).trim();
+  const status = String(
+    transaction?.status ||
+    transaction?.transaction_status ||
+    providerResponse?.status ||
+    ''
+  ).trim().toLowerCase();
 
+  if (
+    [
+      'completed',
+      'success',
+      'successful',
+    ].includes(status)
+  ) {
+    return 'completed';
+  }
 
-    const transactionStatus =
-      String(
-        providerResponse
-          ?.content
-          ?.transactions
-          ?.status ||
-          ''
-      )
-        .trim()
-        .toLowerCase();
+  if (
+    [
+      'pending',
+      'processing',
+      'initiated',
+    ].includes(status)
+  ) {
+    return 'pending';
+  }
 
-
-    // --------------------------------------------------------
-    // SUCCESS
-    // --------------------------------------------------------
-
-    if (
-      code === '000' &&
-      [
-        'delivered',
-        'completed',
-        'successful',
-      ].includes(
-        transactionStatus
-      )
-    ) {
-      return 'completed';
-    }
-
-
-    // --------------------------------------------------------
-    // PENDING
-    // --------------------------------------------------------
-
-    if (
-      code === '099' ||
-      [
-        'pending',
-        'initiated',
-        'processing',
-      ].includes(
-        transactionStatus
-      )
-    ) {
-      return 'pending';
-    }
-
-
-    // --------------------------------------------------------
-    // FAILED
-    // --------------------------------------------------------
-
+  if (
+    [
+      'failed',
+      'failure',
+      'cancelled',
+      'canceled',
+      'refunded',
+    ].includes(status)
+  ) {
     return 'failed';
-  };
+  }
 
+  // Unknown responses must not trigger a refund.
+  return 'pending';
+};
 
 // ============================================================
 // EXPORTS
@@ -865,17 +570,14 @@ const getEducationProviderStatus =
 module.exports = {
   EDUCATION_SERVICE_IDS,
 
-  normalizeEducationService,
+  generateRequestId,
 
+  normalizeEducationService,
   getEducationServiceId,
 
   getEducationVariations,
-
   verifyJambProfile,
-
   purchaseEducation,
-
   requeryEducationTransaction,
-
   getEducationProviderStatus,
 };
