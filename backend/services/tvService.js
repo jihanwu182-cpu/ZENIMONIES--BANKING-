@@ -1,403 +1,344 @@
-const https = require('https');
 
-const VTpassBaseURL =
-  process.env.VTPASS_BASE_URL ||
-  'https://sandbox.vtpass.com';
-
-const VTpassApiKey =
-  process.env.VTPASS_API_KEY;
-
-const VTpassPublicKey =
-  process.env.VTPASS_PUBLIC_KEY;
-
-const VTpassSecretKey =
-  process.env.VTPASS_SECRET_KEY;
-
+const crypto = require('crypto');
 
 // ============================================================
-// TV SERVICE IDs
+// ZENIMONIES BANKING — SOGO TV SERVICE
+// Providers: DSTV, GOTV, STARTIMES
 // ============================================================
 
-const TV_SERVICE_IDS = {
+const SOGO_BASE_URL = (
+  process.env.SOGO_API_BASE_URL ||
+  'https://sandbox.sogo.africa/v1'
+).replace(/\/+$/, '');
+
+const SOGO_API_KEY = process.env.SOGO_API_KEY;
+
+const TV_PROVIDERS = {
   DSTV: 'dstv',
   GOTV: 'gotv',
   STARTIMES: 'startimes',
 };
 
-
-// ============================================================
-// VALIDATE CONFIGURATION
-// ============================================================
-
-const validateConfig = () => {
-  const missing = [];
-
-  if (!VTpassApiKey) {
-    missing.push('VTPASS_API_KEY');
-  }
-
-  if (!VTpassPublicKey) {
-    missing.push('VTPASS_PUBLIC_KEY');
-  }
-
-  if (!VTpassSecretKey) {
-    missing.push('VTPASS_SECRET_KEY');
-  }
-
-  if (missing.length > 0) {
-    throw new Error(
-      `VTpass configuration is incomplete: ${missing.join(', ')}`
-    );
-  }
-};
-
-
-// ============================================================
-// NORMALIZE TV PROVIDER
-// ============================================================
-
 const normalizeProvider = (provider) => {
-  if (!provider) {
-    return '';
-  }
-
-  const value = String(provider)
+  const value = String(provider || '')
     .trim()
     .toUpperCase();
 
-  if (
-    value === 'DSTV' ||
-    value === 'DStv'.toUpperCase()
-  ) {
-    return 'DSTV';
-  }
-
-  if (
-    value === 'GOTV' ||
-    value === 'GOtv'.toUpperCase()
-  ) {
-    return 'GOTV';
-  }
-
-  if (
-    value === 'STARTIMES' ||
-    value === 'STARTIMES'.toUpperCase()
-  ) {
-    return 'STARTIMES';
-  }
-
-  return '';
+  return TV_PROVIDERS[value] ? value : '';
 };
-
-
-// ============================================================
-// GET SERVICE ID
-// ============================================================
 
 const getTVServiceId = (provider) => {
-  const normalizedProvider =
-    normalizeProvider(provider);
+  const normalized = normalizeProvider(provider);
 
-  const serviceID =
-    TV_SERVICE_IDS[normalizedProvider];
-
-  if (!serviceID) {
-    throw new Error(
-      'Unsupported TV provider.'
-    );
+  if (!normalized) {
+    const error = new Error('Unsupported TV provider.');
+    error.code = 'UNSUPPORTED_TV_PROVIDER';
+    throw error;
   }
 
-  return serviceID;
+  return TV_PROVIDERS[normalized];
 };
 
+const generateRequestId = () => crypto.randomUUID();
 
-// ============================================================
-// GENERATE VTpass REQUEST ID
-// ============================================================
-
-const generateRequestId = () => {
-  const now = new Date();
-
-  const lagosTime = new Intl.DateTimeFormat(
-    'en-CA',
-    {
-      timeZone: 'Africa/Lagos',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    }
-  ).formatToParts(now);
-
-  const values = {};
-
-  lagosTime.forEach((part) => {
-    if (part.type !== 'literal') {
-      values[part.type] = part.value;
-    }
-  });
-
-  const timestamp =
-    `${values.year}` +
-    `${values.month}` +
-    `${values.day}` +
-    `${values.hour}` +
-    `${values.minute}`;
-
-  const randomPart =
-    Math.random()
-      .toString(16)
-      .slice(2)
-      .toUpperCase();
-
-  return `${timestamp}${randomPart}`;
+const validateConfig = () => {
+  if (!SOGO_API_KEY) {
+    const error = new Error(
+      'SOGO_API_KEY is missing from the backend environment.'
+    );
+    error.code = 'SOGO_CONFIGURATION_ERROR';
+    throw error;
+  }
 };
 
-
-// ============================================================
-// VTpass HTTPS REQUEST
-// ============================================================
-
-const vtpassRequest = ({
+const sogoRequest = async ({
   method = 'GET',
   path,
   body = null,
+  idempotencyKey = null,
 }) => {
-  return new Promise((resolve, reject) => {
-    try {
-      validateConfig();
+  validateConfig();
 
-      const url =
-        new URL(
-          path,
-          VTpassBaseURL
-        );
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
 
-      const payload =
-        body
-          ? JSON.stringify(body)
-          : null;
+  try {
+    const headers = {
+      Accept: 'application/json',
+      Authorization: `Bearer ${SOGO_API_KEY}`,
+      'Content-Type': 'application/json',
+    };
 
-      const headers = {
-        'api-key': VTpassApiKey,
-        'public-key': VTpassPublicKey,
-        Accept: 'application/json',
-      };
-
-      if (method !== 'GET') {
-        headers['Content-Type'] =
-          'application/json';
-
-        headers['secret-key'] =
-          VTpassSecretKey;
-
-        headers['Content-Length'] =
-          Buffer.byteLength(payload || '');
-      }
-
-      const request =
-        https.request(
-          {
-            hostname: url.hostname,
-            port:
-              url.port ||
-              (url.protocol === 'https:'
-                ? 443
-                : 80),
-            path:
-              `${url.pathname}${url.search}`,
-            method,
-            headers,
-          },
-          (response) => {
-            let data = '';
-
-            response.on(
-              'data',
-              (chunk) => {
-                data += chunk;
-              }
-            );
-
-            response.on(
-              'end',
-              () => {
-                let parsed;
-
-                try {
-                  parsed =
-                    data
-                      ? JSON.parse(data)
-                      : null;
-                } catch (error) {
-                  return reject(
-                    new Error(
-                      'VTpass returned an invalid JSON response.'
-                    )
-                  );
-                }
-
-                resolve({
-                  httpStatus:
-                    response.statusCode,
-                  data: parsed,
-                });
-              }
-            );
-          }
-        );
-
-      request.setTimeout(
-        30000,
-        () => {
-          request.destroy(
-            new Error(
-              'VTpass request timed out.'
-            )
-          );
-        }
-      );
-
-      request.on(
-        'error',
-        (error) => {
-          reject(error);
-        }
-      );
-
-      if (payload) {
-        request.write(payload);
-      }
-
-      request.end();
-    } catch (error) {
-      reject(error);
+    if (idempotencyKey) {
+      headers['Idempotency-Key'] = idempotencyKey;
     }
-  });
+
+    const response = await fetch(
+      `${SOGO_BASE_URL}${path}`,
+      {
+        method,
+        headers,
+        body: body === null ? undefined : JSON.stringify(body),
+        signal: controller.signal,
+      }
+    );
+
+    const responseText = await response.text();
+
+    let data;
+
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch (_) {
+      const error = new Error(
+        'Sogo returned an invalid JSON response.'
+      );
+      error.code = 'SOGO_INVALID_RESPONSE';
+      error.status = response.status;
+      throw error;
+    }
+
+    if (!response.ok) {
+      const error = new Error(
+        data?.message ||
+        data?.error?.message ||
+        `Sogo request failed with HTTP ${response.status}.`
+      );
+
+      error.code =
+        data?.code ||
+        data?.error?.code ||
+        'SOGO_HTTP_ERROR';
+
+      error.status = response.status;
+      error.response = data;
+
+      throw error;
+    }
+
+    return {
+      httpStatus: response.status,
+      data,
+    };
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      const timeoutError = new Error(
+        'Sogo request timed out. The transaction outcome may be unknown.'
+      );
+      timeoutError.code = 'SOGO_TIMEOUT';
+      throw timeoutError;
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
+// ============================================================
+// RESPONSE HELPERS
+// ============================================================
+
+const getPayload = (response) => (
+  response?.data?.data ||
+  response?.data ||
+  response?.verification ||
+  response ||
+  {}
+);
+
+const normalizePlan = (plan, provider) => ({
+  variation_code:
+    plan?.variation_code ||
+    plan?.variationCode ||
+    plan?.code ||
+    plan?.id ||
+    null,
+
+  name:
+    plan?.name ||
+    plan?.package_name ||
+    plan?.package ||
+    plan?.label ||
+    null,
+
+  amount: Number(
+    plan?.amount ??
+    plan?.price ??
+    plan?.monthly_price ??
+    plan?.variation_amount ??
+    0
+  ),
+
+  fixedPrice:
+    plan?.fixedPrice ??
+    plan?.fixed_price ??
+    null,
+
+  channels:
+    plan?.channels ??
+    null,
+
+  provider,
+});
+
+const extractPlans = (response) => {
+  const payload = getPayload(response);
+
+  if (Array.isArray(payload)) return payload;
+
+  const candidates = [
+    payload?.packages,
+    payload?.plans,
+    payload?.variations,
+    payload?.cable_packages,
+    payload?.items,
+    response?.data?.packages,
+    response?.data?.plans,
+    response?.data?.variations,
+  ];
+
+  return candidates.find(Array.isArray) || [];
+};
 
 // ============================================================
 // GET TV PLANS
+// GET /v1/bills/cable-packages?provider=dstv
 // ============================================================
 
-const getTVPlans = async (
-  provider
-) => {
-  const serviceID =
-    getTVServiceId(provider);
+const getTVPlans = async (provider) => {
+  const normalizedProvider = normalizeProvider(provider);
+  const providerSlug = getTVServiceId(provider);
 
-  const result =
-    await vtpassRequest({
-      method: 'GET',
-      path:
-        `/api/service-variations?serviceID=${encodeURIComponent(
-          serviceID
-        )}`,
-    });
+  const result = await sogoRequest({
+    method: 'GET',
+    path: `/bills/cable-packages?provider=${encodeURIComponent(
+      providerSlug
+    )}`,
+  });
 
-  const response =
-    result.data;
+  const plans = extractPlans(result);
 
-  if (
-    !response ||
-    !Array.isArray(
-      response?.content?.variations
-    )
-  ) {
-    throw new Error(
-      'VTpass did not return TV plans.'
+  if (!plans.length) {
+    const error = new Error(
+      'Sogo did not return any TV packages for this provider.'
     );
+    error.code = 'SOGO_TV_PLANS_EMPTY';
+    throw error;
+  }
+
+  const normalizedPlans = plans
+    .map((plan) => normalizePlan(plan, normalizedProvider))
+    .filter((plan) => (
+      plan.variation_code &&
+      Number.isFinite(plan.amount) &&
+      plan.amount > 0
+    ));
+
+  if (!normalizedPlans.length) {
+    const error = new Error(
+      'Sogo returned TV packages without usable variation codes or prices.'
+    );
+    error.code = 'SOGO_TV_PLANS_INVALID';
+    throw error;
   }
 
   return {
-    provider:
-      normalizeProvider(provider),
-
-    serviceID,
-
-    plans:
-      response.content.variations.map(
-        (variation) => ({
-          variation_code:
-            variation.variation_code,
-
-          name:
-            variation.name,
-
-          amount:
-            Number(
-              variation.variation_amount
-            ),
-
-          fixedPrice:
-            variation.fixedPrice,
-
-          serviceID,
-        })
-      ),
+    provider: normalizedProvider,
+    serviceID: providerSlug,
+    plans: normalizedPlans,
+    raw: result.data,
   };
 };
 
-
 // ============================================================
 // VERIFY SMARTCARD / IUC
+// POST /v1/bills/cable-tv/verify-smartcard
 // ============================================================
 
 const verifyTVAccount = async ({
   provider,
   billersCode,
 }) => {
-  const serviceID =
-    getTVServiceId(provider);
+  const normalizedProvider = normalizeProvider(provider);
+  const providerSlug = getTVServiceId(provider);
 
-  const cleanBillersCode =
-    String(billersCode || '')
-      .replace(/\D/g, '')
-      .trim();
+  const smartcardNumber = String(billersCode || '')
+    .replace(/\D/g, '')
+    .trim();
 
-  if (!cleanBillersCode) {
-    throw new Error(
+  if (!smartcardNumber) {
+    const error = new Error(
       'Smartcard or IUC number is required.'
     );
+    error.code = 'TV_SMARTCARD_REQUIRED';
+    throw error;
   }
 
-  const result =
-    await vtpassRequest({
-      method: 'POST',
-      path:
-        '/api/merchant-verify',
+  const result = await sogoRequest({
+    method: 'POST',
+    path: '/bills/cable-tv/verify-smartcard',
+    body: {
+      provider: providerSlug,
+      smartcard_number: smartcardNumber,
+    },
+  });
 
-      body: {
-        billersCode:
-          cleanBillersCode,
+  const payload = getPayload(result);
 
-        serviceID,
-      },
-    });
+  const verification =
+    payload?.verification ||
+    payload?.customer ||
+    payload?.data ||
+    payload;
 
   return {
-    provider:
-      normalizeProvider(provider),
+    provider: normalizedProvider,
+    serviceID: providerSlug,
+    billersCode: smartcardNumber,
+    httpStatus: result.httpStatus,
+    response: {
+      ...result.data,
+      content: {
+        Customer_Name:
+          verification?.customer_name ||
+          verification?.Customer_Name ||
+          verification?.name ||
+          verification?.customer?.name ||
+          '',
 
-    serviceID,
+        Current_Bouquet:
+          verification?.current_bouquet ||
+          verification?.Current_Bouquet ||
+          verification?.current_package ||
+          '',
 
-    billersCode:
-      cleanBillersCode,
+        Renewal_Amount: Number(
+          verification?.renewal_amount ||
+          verification?.Renewal_Amount ||
+          0
+        ),
 
-    httpStatus:
-      result.httpStatus,
+        Due_Date:
+          verification?.due_date ||
+          verification?.Due_Date ||
+          '',
 
-    response:
-      result.data,
+        Status:
+          verification?.status ||
+          verification?.Status ||
+          '',
+      },
+    },
   };
 };
 
-
 // ============================================================
 // PURCHASE TV SUBSCRIPTION
+// POST /v1/bills/cable-tv
+//
+// The controller creates and stores the UUID before calling
+// this function. The same UUID is sent as Idempotency-Key.
 // ============================================================
 
 const purchaseTV = async ({
@@ -408,158 +349,120 @@ const purchaseTV = async ({
   phone,
   subscriptionType = 'change',
   quantity = 1,
+  requestId,
+  idempotencyKey,
 }) => {
-  const serviceID =
-    getTVServiceId(provider);
+  const normalizedProvider = normalizeProvider(provider);
+  const providerSlug = getTVServiceId(provider);
 
-  const cleanBillersCode =
-    String(billersCode || '')
-      .replace(/\D/g, '')
-      .trim();
+  const smartcardNumber = String(billersCode || '')
+    .replace(/\D/g, '')
+    .trim();
 
-  const cleanPhone =
-    String(phone || '')
-      .replace(/\D/g, '')
-      .trim();
+  const numericAmount = Number(amount);
 
-  const numericAmount =
-    Number(amount);
+  const cleanPhone = String(phone || '')
+    .replace(/\s+/g, '')
+    .trim();
 
-  if (!cleanBillersCode) {
-    throw new Error(
-      'Smartcard or IUC number is required.'
+  const key = idempotencyKey || requestId;
+
+  if (!key) {
+    const error = new Error(
+      'A Sogo idempotency key is required.'
     );
+    error.code = 'SOGO_IDEMPOTENCY_KEY_REQUIRED';
+    throw error;
+  }
+
+  if (!smartcardNumber) {
+    throw new Error('Smartcard or IUC number is required.');
   }
 
   if (!variationCode) {
-    throw new Error(
-      'TV subscription plan is required.'
-    );
+    throw new Error('TV subscription plan is required.');
   }
 
-  if (
-    !Number.isFinite(numericAmount) ||
-    numericAmount <= 0
-  ) {
-    throw new Error(
-      'A valid TV subscription amount is required.'
-    );
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    throw new Error('A valid TV subscription amount is required.');
   }
 
-  if (!cleanPhone) {
-    throw new Error(
-      'Customer phone number is required.'
-    );
+  if (!/^0\d{10}$/.test(cleanPhone)) {
+    throw new Error('A valid Nigerian phone number is required.');
   }
 
-  const requestId =
-    generateRequestId();
+  if (!['change', 'renew'].includes(subscriptionType)) {
+    throw new Error('Invalid TV subscription type.');
+  }
 
-  const result =
-    await vtpassRequest({
-      method: 'POST',
-      path: '/api/pay',
-
-      body: {
-        request_id:
-          requestId,
-
-        serviceID,
-
-        billersCode:
-          cleanBillersCode,
-
-        variation_code:
-          variationCode,
-
-        amount:
-          numericAmount,
-
-        phone:
-          cleanPhone,
-
-        subscription_type:
-          subscriptionType,
-
-        quantity:
-          Number(quantity) || 1,
-      },
-    });
+  const result = await sogoRequest({
+    method: 'POST',
+    path: '/bills/cable-tv',
+    idempotencyKey: key,
+    body: {
+      provider: providerSlug,
+      smartcard_number: smartcardNumber,
+      subscription_type: subscriptionType,
+      variation_code: String(variationCode),
+      amount: numericAmount,
+    },
+  });
 
   return {
-    requestId,
-
-    provider:
-      normalizeProvider(provider),
-
-    serviceID,
-
-    billersCode:
-      cleanBillersCode,
-
-    httpStatus:
-      result.httpStatus,
-
-    response:
-      result.data,
+    requestId: key,
+    provider: normalizedProvider,
+    serviceID: providerSlug,
+    billersCode: smartcardNumber,
+    httpStatus: result.httpStatus,
+    response: result.data,
   };
 };
 
-
 // ============================================================
-// REQUERY TV TRANSACTION
+// REQUERY
+//
+// Sogo sandbox does not persist transactions for lookup.
+// Live lookup uses the stored idempotency key.
 // ============================================================
 
 const requeryTVTransaction = async ({
   requestId,
 }) => {
-  if (!requestId) {
-    throw new Error(
-      'VTpass request ID is required.'
-    );
+  const key = String(requestId || '').trim();
+
+  if (!key) {
+    throw new Error('Sogo idempotency key is required.');
   }
 
-  const result =
-    await vtpassRequest({
-      method: 'POST',
-      path: '/api/requery',
+  if (SOGO_BASE_URL.includes('sandbox')) {
+    const error = new Error(
+      'Sogo sandbox does not support transaction lookup. Use the webhook result.'
+    );
+    error.code = 'SOGO_SANDBOX_REQUERY_UNAVAILABLE';
+    throw error;
+  }
 
-      body: {
-        request_id:
-          requestId,
-      },
-    });
+  const result = await sogoRequest({
+    method: 'GET',
+    path: `/transactions/${encodeURIComponent(
+      key
+    )}?type=bill_payment`,
+  });
 
   return {
-    requestId,
-
-    httpStatus:
-      result.httpStatus,
-
-    response:
-      result.data,
+    requestId: key,
+    httpStatus: result.httpStatus,
+    response: result.data,
   };
 };
 
-
-// ============================================================
-// EXPORTS
-// ============================================================
-
 module.exports = {
-  TV_SERVICE_IDS,
-
+  TV_PROVIDERS,
   normalizeProvider,
-
   getTVServiceId,
-
   generateRequestId,
-
   getTVPlans,
-
   verifyTVAccount,
-
   purchaseTV,
-
   requeryTVTransaction,
 };
