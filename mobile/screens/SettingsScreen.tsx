@@ -24,10 +24,6 @@ import {
   ThemePreference,
 } from '../theme/ThemeContext';
 
-// ============================================================
-// ZENIMONIES BANKING — MOBILE SETTINGS
-// ============================================================
-
 const API_BASE =
   'https://zenimonies-banking.onrender.com/api';
 
@@ -43,13 +39,7 @@ type ApiResponse = {
   code?: string;
   data?: any;
   passcode?: PasscodeStatus;
-  failed_attempts?: number;
-  remaining_attempts?: number;
-  max_failed_attempts?: number;
-  locked_until?: string | null;
   preferences?: SmsPreferences;
-  settings?: any;
-  wallet?: any;
 };
 
 type PasscodeStatus = {
@@ -84,15 +74,6 @@ type SupportCategory = {
   description?: string;
 };
 
-type SectionKey =
-  | 'account'
-  | 'payments'
-  | 'security'
-  | 'savings'
-  | 'preferences'
-  | 'support'
-  | 'actions';
-
 type PanelKey =
   | 'profile'
   | 'transaction-pin'
@@ -106,6 +87,15 @@ type PanelKey =
   | 'about'
   | 'close-account';
 
+type SectionKey =
+  | 'account'
+  | 'payments'
+  | 'security'
+  | 'savings'
+  | 'preferences'
+  | 'support'
+  | 'actions';
+
 const DEFAULT_SMS: SmsPreferences = {
   transaction_alerts: true,
   security_alerts: true,
@@ -115,55 +105,146 @@ const DEFAULT_SMS: SmsPreferences = {
 const SECTION_ITEMS: {
   key: SectionKey;
   title: string;
-  description: string;
-  icon: string;
+  items: {
+    panel?: PanelKey;
+    title: string;
+    description: string;
+    icon: string;
+    danger?: boolean;
+    action?: 'logout';
+  }[];
 }[] = [
   {
     key: 'account',
     title: 'ACCOUNT',
-    description: 'Manage your personal account',
-    icon: '👤',
+    items: [
+      {
+        panel: 'profile',
+        title: 'My Profile',
+        description:
+          'Manage your personal and contact information.',
+        icon: '♙',
+      },
+    ],
   },
   {
     key: 'payments',
     title: 'PAYMENTS',
-    description: 'Manage your payment security',
-    icon: '💳',
+    items: [
+      {
+        panel: 'transaction-pin',
+        title: 'Payment Settings',
+        description:
+          'Manage your Transaction PIN and payment security.',
+        icon: '₦',
+      },
+    ],
   },
   {
     key: 'security',
     title: 'LOGIN & SECURITY',
-    description: 'Protect your account and login',
-    icon: '🔐',
+    items: [
+      {
+        panel: 'login-settings',
+        title: 'Login Settings',
+        description:
+          'Manage your password and Account Unlock Passcode.',
+        icon: '🔐',
+      },
+      {
+        panel: 'security-question',
+        title: 'Security Question',
+        description:
+          'Set or change your account security question.',
+        icon: '?',
+      },
+      {
+        panel: 'security-center',
+        title: 'Security Center',
+        description:
+          'Review your account security and protection.',
+        icon: '🛡️',
+      },
+    ],
   },
   {
     key: 'savings',
     title: 'SAVINGS',
-    description: 'Manage your Save Wallet settings',
-    icon: '💰',
+    items: [
+      {
+        panel: 'savings',
+        title: 'Saving Settings',
+        description:
+          'Manage your Spend + Save and Save Wallet settings.',
+        icon: '▣',
+      },
+    ],
   },
   {
     key: 'preferences',
     title: 'PREFERENCES',
-    description: 'Manage alerts and appearance',
-    icon: '⚙️',
+    items: [
+      {
+        panel: 'sms',
+        title: 'SMS Alert Settings',
+        description:
+          'Control transaction and security SMS alerts.',
+        icon: 'SMS',
+      },
+      {
+        panel: 'theme',
+        title: 'Themes',
+        description:
+          'Choose your preferred app appearance.',
+        icon: '☼',
+      },
+    ],
   },
   {
     key: 'support',
     title: 'SUPPORT',
-    description: 'Get assistance from Zenimonies',
-    icon: '💬',
+    items: [
+      {
+        panel: 'feedback',
+        title: 'Feedback and Suggestions',
+        description:
+          'Tell us how we can improve Zenimonies.',
+        icon: '✉',
+      },
+      {
+        panel: 'about',
+        title: 'About',
+        description:
+          'Learn more about Zenimonies and this app.',
+        icon: 'ⓘ',
+      },
+    ],
   },
   {
     key: 'actions',
     title: 'ACCOUNT ACTIONS',
-    description: 'Manage your account access',
-    icon: '📋',
+    items: [
+      {
+        title: 'Log Out',
+        description:
+          'Sign out of your Zenimonies account.',
+        icon: '↪',
+        action: 'logout',
+      },
+      {
+        panel: 'close-account',
+        title: 'Close Account',
+        description:
+          'Permanently close your Zenimonies account.',
+        icon: '×',
+        danger: true,
+      },
+    ],
   },
 ];
 
 // ============================================================
-// HELPERS
+// API HELPERS
 // ============================================================
 
 async function apiRequest<T = ApiResponse>(
@@ -228,12 +309,13 @@ function formatDate(value?: string | null): string {
 function normalizePasscodeStatus(
   data: any,
 ): PasscodeStatus | null {
-  const source = data?.passcode || data?.data?.passcode || data;
+  const source =
+    data?.passcode ||
+    data?.data?.passcode ||
+    data?.data ||
+    data;
 
-  if (
-    !source ||
-    typeof source.exists !== 'boolean'
-  ) {
+  if (!source || typeof source.exists !== 'boolean') {
     return null;
   }
 
@@ -273,6 +355,7 @@ function normalizeTransactionPinStatus(
     data?.transaction_pin ||
     data?.data?.transactionPin ||
     data?.data?.transaction_pin ||
+    data?.data ||
     data;
 
   if (!source || typeof source.exists !== 'boolean') {
@@ -345,13 +428,8 @@ export default function SettingsScreen({
 }: SettingsScreenProps) {
   const { colors, preference, setPreference } = useTheme();
 
-  const [activeSection, setActiveSection] =
-    useState<SectionKey | null>(null);
-
   const [activePanel, setActivePanel] =
     useState<PanelKey | null>(null);
-
-  const [loading, setLoading] = useState(false);
 
   const [passcodeStatus, setPasscodeStatus] =
     useState<PasscodeStatus | null>(null);
@@ -409,7 +487,7 @@ export default function SettingsScreen({
     useState<SupportCategory[]>([]);
 
   const [selectedCategory, setSelectedCategory] =
-    useState<string>('');
+    useState('');
 
   const [feedbackSubject, setFeedbackSubject] =
     useState('');
@@ -430,9 +508,9 @@ export default function SettingsScreen({
     [colors],
   );
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // PASSCODE STATUS
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const loadPasscodeStatus = useCallback(async () => {
     if (!token) return;
@@ -460,9 +538,9 @@ export default function SettingsScreen({
     }
   }, [token]);
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // TRANSACTION PIN STATUS
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const loadTransactionPinStatus =
     useCallback(async () => {
@@ -500,9 +578,9 @@ export default function SettingsScreen({
     loadTransactionPinStatus,
   ]);
 
-  // ----------------------------------------------------------
-  // SAVINGS SETTINGS
-  // ----------------------------------------------------------
+  // ==========================================================
+  // SAVINGS
+  // ==========================================================
 
   const loadSavingsSettings = useCallback(async () => {
     if (!token) return;
@@ -593,9 +671,9 @@ export default function SettingsScreen({
     }
   };
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // SMS PREFERENCES
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const loadSmsPreferences = useCallback(async () => {
     if (!token) return;
@@ -654,9 +732,9 @@ export default function SettingsScreen({
     }
   };
 
-  // ----------------------------------------------------------
-  // CUSTOMER CARE / FEEDBACK
-  // ----------------------------------------------------------
+  // ==========================================================
+  // CUSTOMER CARE
+  // ==========================================================
 
   const loadSupportCategories =
     useCallback(async () => {
@@ -781,9 +859,9 @@ export default function SettingsScreen({
     }
   };
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // ACCOUNT UNLOCK PASSCODE
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const submitPasscode = async () => {
     if (savingPasscode) return;
@@ -821,7 +899,9 @@ export default function SettingsScreen({
     setSavingPasscode(true);
 
     try {
-      if (passcodeStatus?.exists) {
+      const changing = Boolean(passcodeStatus?.exists);
+
+      if (changing) {
         await apiRequest(
           '/passcode/change',
           token,
@@ -854,7 +934,7 @@ export default function SettingsScreen({
 
       Alert.alert(
         'Success',
-        passcodeStatus?.exists
+        changing
           ? 'Your Account Unlock Passcode has been changed.'
           : 'Your Account Unlock Passcode has been set up successfully.',
       );
@@ -896,9 +976,9 @@ export default function SettingsScreen({
     }
   };
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // TRANSACTION PIN
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const submitTransactionPin = async () => {
     if (savingTransactionPin) return;
@@ -936,7 +1016,10 @@ export default function SettingsScreen({
     setSavingTransactionPin(true);
 
     try {
-      if (transactionPinStatus?.exists) {
+      const changing =
+        Boolean(transactionPinStatus?.exists);
+
+      if (changing) {
         await apiRequest(
           '/transaction-pin/change',
           token,
@@ -969,7 +1052,7 @@ export default function SettingsScreen({
 
       Alert.alert(
         'Success',
-        transactionPinStatus?.exists
+        changing
           ? 'Your Transaction PIN has been changed successfully.'
           : 'Your Transaction PIN has been set up successfully.',
       );
@@ -997,26 +1080,12 @@ export default function SettingsScreen({
     }
   };
 
-  // ----------------------------------------------------------
-  // NAVIGATION / PANELS
-  // ----------------------------------------------------------
-
-  const openSection = (section: SectionKey) => {
-    setActiveSection(previous =>
-      previous === section ? null : section,
-    );
-    setActivePanel(null);
-  };
+  // ==========================================================
+  // OPEN PANELS
+  // ==========================================================
 
   const openPanel = (panel: PanelKey) => {
     setActivePanel(panel);
-
-    if (panel === 'profile') {
-      Alert.alert(
-        'My Profile',
-        'Your personal information is managed from the Profile section of the app.',
-      );
-    }
 
     if (panel === 'transaction-pin') {
       loadTransactionPinStatus();
@@ -1024,6 +1093,11 @@ export default function SettingsScreen({
 
     if (panel === 'login-settings') {
       loadPasscodeStatus();
+    }
+
+    if (panel === 'security-center') {
+      loadPasscodeStatus();
+      loadTransactionPinStatus();
     }
 
     if (panel === 'savings') {
@@ -1036,6 +1110,13 @@ export default function SettingsScreen({
 
     if (panel === 'feedback') {
       loadSupportCategories();
+    }
+
+    if (panel === 'profile') {
+      Alert.alert(
+        'My Profile',
+        'Your personal information is managed from the Profile section of the app.',
+      );
     }
 
     if (panel === 'close-account') {
@@ -1068,37 +1149,49 @@ export default function SettingsScreen({
     );
   };
 
-  // ----------------------------------------------------------
-  // REUSABLE UI
-  // ----------------------------------------------------------
+  // ==========================================================
+  // REUSABLE COMPONENTS
+  // ==========================================================
 
-  const renderMenuItem = (
-    title: string,
-    description: string,
-    onPress: () => void,
-    trailing?: string,
+  const renderInput = (
+    label: string,
+    value: string,
+    onChangeText: (value: string) => void,
+    options?: {
+      secure?: boolean;
+      numeric?: boolean;
+      placeholder?: string;
+      multiline?: boolean;
+      maxLength?: number;
+    },
   ) => (
-    <TouchableOpacity
-      key={title}
-      style={styles.menuItem}
-      activeOpacity={0.75}
-      onPress={onPress}
-    >
-      <View style={styles.menuText}>
-        <Text style={styles.menuTitle}>{title}</Text>
-        <Text style={styles.menuDescription}>
-          {description}
-        </Text>
-      </View>
+    <View style={styles.inputGroup}>
+      <Text style={styles.inputLabel}>{label}</Text>
 
-      {trailing ? (
-        <Text style={styles.menuTrailing}>
-          {trailing}
-        </Text>
-      ) : (
-        <Text style={styles.chevron}>›</Text>
-      )}
-    </TouchableOpacity>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        style={[
+          styles.input,
+          options?.multiline && styles.multilineInput,
+        ]}
+        placeholder={options?.placeholder || label}
+        placeholderTextColor={colors.textMuted}
+        secureTextEntry={Boolean(options?.secure)}
+        keyboardType={
+          options?.numeric ? 'number-pad' : 'default'
+        }
+        maxLength={
+          options?.maxLength ??
+          (options?.numeric ? 6 : undefined)
+        }
+        multiline={Boolean(options?.multiline)}
+        textAlignVertical={
+          options?.multiline ? 'top' : 'center'
+        }
+        autoCapitalize="none"
+      />
+    </View>
   );
 
   const renderButton = (
@@ -1126,51 +1219,6 @@ export default function SettingsScreen({
     </TouchableOpacity>
   );
 
-  const renderInput = (
-    label: string,
-    value: string,
-    onChangeText: (value: string) => void,
-    options?: {
-      secure?: boolean;
-      numeric?: boolean;
-      placeholder?: string;
-      multiline?: boolean;
-    },
-  ) => (
-    <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
-
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        style={[
-          styles.input,
-          options?.multiline && styles.multilineInput,
-        ]}
-        placeholder={
-          options?.placeholder || label
-        }
-        placeholderTextColor={colors.textMuted}
-        secureTextEntry={Boolean(options?.secure)}
-        keyboardType={
-          options?.numeric
-            ? 'number-pad'
-            : 'default'
-        }
-        maxLength={
-          options?.numeric
-            ? 6
-            : undefined
-        }
-        multiline={Boolean(options?.multiline)}
-        textAlignVertical={
-          options?.multiline ? 'top' : 'center'
-        }
-        autoCapitalize="none"
-      />
-    </View>
-  );
-
   const renderStatus = (
     label: string,
     value: string,
@@ -1178,7 +1226,6 @@ export default function SettingsScreen({
   ) => (
     <View style={styles.statusRow}>
       <Text style={styles.statusLabel}>{label}</Text>
-
       <Text
         style={[
           styles.statusValue,
@@ -1218,125 +1265,9 @@ export default function SettingsScreen({
     </View>
   );
 
-  // ----------------------------------------------------------
-  // SECTION CONTENT
-  // ----------------------------------------------------------
-
-  const renderSectionContent = (
-    section: SectionKey,
-  ) => {
-    switch (section) {
-      case 'account':
-        return renderMenuItem(
-          'My Profile',
-          'View and manage your personal information',
-          () => openPanel('profile'),
-        );
-
-      case 'payments':
-        return renderMenuItem(
-          'Payment Settings',
-          'Set up or change your Transaction PIN',
-          () => openPanel('transaction-pin'),
-          transactionPinStatus?.exists
-            ? 'Protected'
-            : undefined,
-        );
-
-      case 'security':
-        return (
-          <>
-            {renderMenuItem(
-              'Login Settings',
-              'Password recovery and Account Unlock Passcode',
-              () => openPanel('login-settings'),
-            )}
-
-            {renderMenuItem(
-              'Security Question',
-              'Security question information',
-              () => openPanel('security-question'),
-            )}
-
-            {renderMenuItem(
-              'Security Center',
-              'Review your account security status',
-              () => openPanel('security-center'),
-            )}
-          </>
-        );
-
-      case 'savings':
-        return renderMenuItem(
-          'Saving Settings',
-          'Manage your Spend + Save preferences',
-          () => openPanel('savings'),
-        );
-
-      case 'preferences':
-        return (
-          <>
-            {renderMenuItem(
-              'SMS Alert Settings',
-              'Choose the SMS alerts you receive',
-              () => openPanel('sms'),
-            )}
-
-            {renderMenuItem(
-              'Themes',
-              'Choose your app appearance',
-              () => openPanel('theme'),
-              preference === 'system'
-                ? 'System'
-                : preference === 'dark'
-                  ? 'Dark'
-                  : 'Light',
-            )}
-          </>
-        );
-
-      case 'support':
-        return (
-          <>
-            {renderMenuItem(
-              'Feedback and Suggestions',
-              'Send a message to Customer Care',
-              () => openPanel('feedback'),
-            )}
-
-            {renderMenuItem(
-              'About',
-              'Information about Zenimonies Banking',
-              () => openPanel('about'),
-            )}
-          </>
-        );
-
-      case 'actions':
-        return (
-          <>
-            {renderMenuItem(
-              'Log Out',
-              'Securely sign out of your account',
-              confirmLogout,
-            )}
-
-            {renderMenuItem(
-              'Close Account',
-              'Contact Customer Care about account closure',
-              () => openPanel('close-account'),
-            )}
-          </>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  // ----------------------------------------------------------
+  // ==========================================================
   // PANEL CONTENT
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const renderPanelContent = () => {
     if (!activePanel) return null;
@@ -1415,6 +1346,7 @@ export default function SettingsScreen({
                   {
                     secure: true,
                     numeric: true,
+                    maxLength: 4,
                   },
                 )
               : null}
@@ -1432,6 +1364,7 @@ export default function SettingsScreen({
               {
                 secure: true,
                 numeric: true,
+                maxLength: 4,
               },
             )}
 
@@ -1446,6 +1379,7 @@ export default function SettingsScreen({
               {
                 secure: true,
                 numeric: true,
+                maxLength: 4,
               },
             )}
 
@@ -1535,6 +1469,7 @@ export default function SettingsScreen({
                   {
                     secure: true,
                     numeric: true,
+                    maxLength: 6,
                   },
                 )
               : null}
@@ -1552,6 +1487,7 @@ export default function SettingsScreen({
               {
                 secure: true,
                 numeric: true,
+                maxLength: 6,
               },
             )}
 
@@ -1566,6 +1502,7 @@ export default function SettingsScreen({
               {
                 secure: true,
                 numeric: true,
+                maxLength: 6,
               },
             )}
 
@@ -1921,9 +1858,17 @@ export default function SettingsScreen({
 
             <View style={styles.divider} />
 
-            {renderStatus('Application', 'ZENIMONIES Banking')}
+            {renderStatus(
+              'Application',
+              'ZENIMONIES Banking',
+            )}
+
             {renderStatus('Version', '1.0.0')}
-            {renderStatus('Platform', 'Digital Banking')}
+
+            {renderStatus(
+              'Platform',
+              'Digital Banking',
+            )}
           </View>
         );
 
@@ -1949,15 +1894,52 @@ export default function SettingsScreen({
   };
 
   // ==========================================================
+  // PANEL TITLE
+  // ==========================================================
+
+  const getPanelTitle = () => {
+    switch (activePanel) {
+      case 'profile':
+        return 'My Profile';
+      case 'transaction-pin':
+        return 'Payment Settings';
+      case 'login-settings':
+        return 'Login Settings';
+      case 'security-question':
+        return 'Security Question';
+      case 'security-center':
+        return 'Security Center';
+      case 'savings':
+        return 'Saving Settings';
+      case 'sms':
+        return 'SMS Alert Settings';
+      case 'theme':
+        return 'Themes';
+      case 'feedback':
+        return 'Feedback and Suggestions';
+      case 'about':
+        return 'About';
+      case 'close-account':
+        return 'Close Account';
+      default:
+        return '';
+    }
+  };
+
+  // ==========================================================
   // RENDER
   // ==========================================================
 
   return (
     <View style={styles.container}>
       <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
+        barStyle={
+          isDark ? 'light-content' : 'dark-content'
+        }
+        backgroundColor={colors.surface}
       />
+
+      {/* HEADER */}
 
       <View style={styles.header}>
         <TouchableOpacity
@@ -1968,11 +1950,15 @@ export default function SettingsScreen({
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>
-          Settings
-        </Text>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.headerTitle}>
+            Settings
+          </Text>
 
-        <View style={styles.headerSpacer} />
+          <Text style={styles.headerSubtitle}>
+            Manage your Zenimonies account
+          </Text>
+        </View>
       </View>
 
       <ScrollView
@@ -1980,69 +1966,99 @@ export default function SettingsScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* COMPACT GREEN HERO */}
+        {/* GREEN ACCOUNT SETTINGS BANNER */}
 
         <View style={styles.hero}>
-          <View style={styles.heroTextContainer}>
-            <Text style={styles.heroTitle}>
-              Account Settings
-            </Text>
+          <Text style={styles.heroBrand}>
+            ZENIMONIES
+          </Text>
 
-            <Text style={styles.heroDescription}>
-              Manage your account, security and preferences.
-            </Text>
-          </View>
+          <Text style={styles.heroTitle}>
+            Account Settings
+          </Text>
 
-          <Text style={styles.heroIcon}>⚙</Text>
+          <Text style={styles.heroDescription}>
+            Manage your profile, payments, login security,
+            savings and account preferences.
+          </Text>
         </View>
 
-        {/* SETTINGS SECTIONS */}
+        {/* SETTINGS GROUPS */}
 
-        {SECTION_ITEMS.map(section => {
-          const expanded =
-            activeSection === section.key;
+        {SECTION_ITEMS.map(section => (
+          <View
+            key={section.key}
+            style={styles.sectionWrapper}
+          >
+            <Text style={styles.sectionHeading}>
+              {section.title}
+            </Text>
 
-          return (
-            <View
-              key={section.key}
-              style={styles.sectionCard}
-            >
-              <TouchableOpacity
-                style={styles.sectionHeader}
-                activeOpacity={0.75}
-                onPress={() =>
-                  openSection(section.key)
-                }
-              >
-                <View style={styles.sectionIcon}>
-                  <Text style={styles.sectionIconText}>
-                    {section.icon}
+            <View style={styles.sectionCard}>
+              {section.items.map((item, index) => (
+                <TouchableOpacity
+                  key={`${section.key}-${item.title}`}
+                  style={[
+                    styles.settingRow,
+                    index < section.items.length - 1 &&
+                      styles.settingRowBorder,
+                  ]}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    if (item.action === 'logout') {
+                      confirmLogout();
+                      return;
+                    }
+
+                    if (item.panel) {
+                      openPanel(item.panel);
+                    }
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.settingIcon,
+                      item.danger &&
+                        styles.dangerIcon,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.settingIconText,
+                        item.danger &&
+                          styles.dangerIconText,
+                        item.icon === 'SMS' &&
+                          styles.smsIconText,
+                      ]}
+                    >
+                      {item.icon}
+                    </Text>
+                  </View>
+
+                  <View style={styles.settingText}>
+                    <Text
+                      style={[
+                        styles.settingTitle,
+                        item.danger &&
+                          styles.dangerTitle,
+                      ]}
+                    >
+                      {item.title}
+                    </Text>
+
+                    <Text style={styles.settingDescription}>
+                      {item.description}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.rowChevron}>
+                    ›
                   </Text>
-                </View>
-
-                <View style={styles.sectionText}>
-                  <Text style={styles.sectionTitle}>
-                    {section.title}
-                  </Text>
-
-                  <Text style={styles.sectionDescription}>
-                    {section.description}
-                  </Text>
-                </View>
-
-                <Text style={styles.sectionChevron}>
-                  {expanded ? '−' : '+'}
-                </Text>
-              </TouchableOpacity>
-
-              {expanded ? (
-                <View style={styles.sectionContent}>
-                  {renderSectionContent(section.key)}
-                </View>
-              ) : null}
+                </TouchableOpacity>
+              ))}
             </View>
-          );
-        })}
+          </View>
+        ))}
 
         {/* SELECTED SETTINGS PANEL */}
 
@@ -2050,27 +2066,7 @@ export default function SettingsScreen({
           <View style={styles.panel}>
             <View style={styles.panelHeader}>
               <Text style={styles.panelTitle}>
-                {activePanel === 'transaction-pin'
-                  ? 'Payment Settings'
-                  : activePanel === 'login-settings'
-                    ? 'Login Settings'
-                    : activePanel === 'security-question'
-                      ? 'Security Question'
-                      : activePanel === 'security-center'
-                        ? 'Security Center'
-                        : activePanel === 'savings'
-                          ? 'Saving Settings'
-                          : activePanel === 'sms'
-                            ? 'SMS Alert Settings'
-                            : activePanel === 'theme'
-                              ? 'Themes'
-                              : activePanel === 'feedback'
-                                ? 'Feedback and Suggestions'
-                                : activePanel === 'about'
-                                  ? 'About'
-                                  : activePanel === 'close-account'
-                                    ? 'Close Account'
-                                    : 'My Profile'}
+                {getPanelTitle()}
               </Text>
 
               <TouchableOpacity
@@ -2089,13 +2085,13 @@ export default function SettingsScreen({
           </View>
         ) : null}
 
-        <Text style={styles.footerText}>
-          ZENIMONIES BANKING
-        </Text>
+        {/* FOOTER */}
 
-        <Text style={styles.footerVersion}>
-          Version 1.0.0
-        </Text>
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            Zenimonies • Secure Digital Banking
+          </Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -2112,39 +2108,55 @@ function createStyles(colors: any) {
       backgroundColor: colors.background,
     },
 
+    // HEADER
+
     header: {
-      height: 58,
+      minHeight: 76,
       paddingHorizontal: 18,
+      paddingVertical: 10,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      backgroundColor: colors.surface,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-      backgroundColor: colors.surface,
     },
 
     backButton: {
-      width: 38,
-      height: 38,
+      width: 48,
+      height: 48,
+      borderRadius: 15,
+      backgroundColor: colors.backgroundSoft,
       justifyContent: 'center',
       alignItems: 'center',
+      marginRight: 14,
     },
 
     backArrow: {
-      color: colors.text,
+      color: colors.primary,
       fontSize: 34,
       lineHeight: 38,
+      fontWeight: '700',
+      marginTop: -3,
+    },
+
+    headerTextContainer: {
+      flex: 1,
     },
 
     headerTitle: {
       color: colors.text,
-      fontSize: 18,
-      fontWeight: '700',
+      fontSize: 23,
+      fontWeight: '900',
+      marginBottom: 3,
     },
 
-    headerSpacer: {
-      width: 38,
+    headerSubtitle: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: '500',
     },
+
+    // PAGE
 
     scroll: {
       flex: 1,
@@ -2152,162 +2164,160 @@ function createStyles(colors: any) {
 
     scrollContent: {
       paddingHorizontal: 16,
-      paddingTop: 14,
-      paddingBottom: 40,
+      paddingTop: 0,
+      paddingBottom: 35,
     },
+
+    // HERO
 
     hero: {
-      minHeight: 112,
-      paddingHorizontal: 18,
-      paddingVertical: 16,
-      borderRadius: 15,
+      minHeight: 190,
       backgroundColor: colors.primary,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 16,
+      borderRadius: 0,
+      borderBottomLeftRadius: 34,
+      borderBottomRightRadius: 34,
+      paddingHorizontal: 22,
+      paddingVertical: 23,
+      justifyContent: 'center',
+      marginBottom: 27,
     },
 
-    heroTextContainer: {
-      flex: 1,
-      paddingRight: 12,
+    heroBrand: {
+      color: '#D9F3E5',
+      fontSize: 13,
+      fontWeight: '700',
+      letterSpacing: 1,
+      marginBottom: 16,
     },
 
     heroTitle: {
       color: '#FFFFFF',
-      fontSize: 20,
-      fontWeight: '800',
-      marginBottom: 5,
+      fontSize: 29,
+      fontWeight: '900',
+      marginBottom: 12,
     },
 
     heroDescription: {
-      color: '#FFFFFF',
-      fontSize: 12,
-      lineHeight: 18,
-      opacity: 0.95,
+      color: '#E6F6ED',
+      fontSize: 14,
+      lineHeight: 22,
+      fontWeight: '500',
     },
 
-    heroIcon: {
-      color: '#FFFFFF',
-      fontSize: 31,
-      opacity: 0.9,
+    // SECTION GROUPS
+
+    sectionWrapper: {
+      marginBottom: 25,
+    },
+
+    sectionHeading: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontWeight: '900',
+      letterSpacing: 2,
+      marginBottom: 13,
+      marginLeft: 5,
     },
 
     sectionCard: {
       backgroundColor: colors.surface,
-      borderRadius: 13,
+      borderRadius: 25,
       borderWidth: 1,
       borderColor: colors.border,
-      marginBottom: 11,
       overflow: 'hidden',
     },
 
-    sectionHeader: {
-      minHeight: 76,
+    // SETTING ROWS
+
+    settingRow: {
+      minHeight: 105,
+      paddingHorizontal: 16,
+      paddingVertical: 16,
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingVertical: 12,
     },
 
-    sectionIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.backgroundSoft,
-      marginRight: 12,
-    },
-
-    sectionIconText: {
-      fontSize: 20,
-    },
-
-    sectionText: {
-      flex: 1,
-    },
-
-    sectionTitle: {
-      color: colors.text,
-      fontSize: 13,
-      fontWeight: '800',
-      letterSpacing: 0.4,
-      marginBottom: 4,
-    },
-
-    sectionDescription: {
-      color: colors.textSecondary,
-      fontSize: 11,
-      lineHeight: 16,
-    },
-
-    sectionChevron: {
-      color: colors.primary,
-      fontSize: 25,
-      fontWeight: '500',
-      paddingLeft: 8,
-    },
-
-    sectionContent: {
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      paddingHorizontal: 14,
-      paddingBottom: 6,
-    },
-
-    menuItem: {
-      minHeight: 64,
-      paddingVertical: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
+    settingRowBorder: {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
 
-    menuText: {
-      flex: 1,
-      paddingRight: 10,
+    settingIcon: {
+      width: 58,
+      height: 58,
+      borderRadius: 19,
+      backgroundColor: colors.backgroundSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 15,
+      flexShrink: 0,
     },
 
-    menuTitle: {
-      color: colors.text,
-      fontSize: 14,
-      fontWeight: '600',
-      marginBottom: 4,
-    },
-
-    menuDescription: {
-      color: colors.textSecondary,
-      fontSize: 11,
-      lineHeight: 16,
-    },
-
-    menuTrailing: {
+    settingIconText: {
       color: colors.primary,
-      fontSize: 11,
-      fontWeight: '700',
+      fontSize: 24,
+      fontWeight: '800',
     },
 
-    chevron: {
-      color: colors.textSecondary,
-      fontSize: 24,
-      paddingHorizontal: 5,
+    smsIconText: {
+      fontSize: 17,
+      fontWeight: '900',
     },
+
+    dangerIcon: {
+      backgroundColor: '#FFF0EF',
+    },
+
+    dangerIconText: {
+      color: '#D13B2E',
+      fontSize: 28,
+    },
+
+    settingText: {
+      flex: 1,
+      paddingRight: 7,
+    },
+
+    settingTitle: {
+      color: colors.text,
+      fontSize: 17,
+      fontWeight: '900',
+      marginBottom: 6,
+    },
+
+    dangerTitle: {
+      color: '#D13B2E',
+    },
+
+    settingDescription: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      lineHeight: 19,
+      fontWeight: '500',
+    },
+
+    rowChevron: {
+      color: colors.textSecondary,
+      fontSize: 29,
+      fontWeight: '500',
+      marginLeft: 5,
+    },
+
+    // PANEL
 
     panel: {
       backgroundColor: colors.surface,
-      borderRadius: 15,
+      borderRadius: 22,
       borderWidth: 1,
       borderColor: colors.border,
       marginTop: 5,
-      marginBottom: 18,
+      marginBottom: 22,
       overflow: 'hidden',
     },
 
     panelHeader: {
-      minHeight: 58,
-      paddingHorizontal: 16,
+      minHeight: 64,
+      paddingHorizontal: 17,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -2317,16 +2327,16 @@ function createStyles(colors: any) {
 
     panelTitle: {
       color: colors.text,
-      fontSize: 16,
-      fontWeight: '800',
+      fontSize: 17,
+      fontWeight: '900',
       flex: 1,
       paddingRight: 10,
     },
 
     closeButton: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
       backgroundColor: colors.backgroundSoft,
       alignItems: 'center',
       justifyContent: 'center',
@@ -2335,37 +2345,41 @@ function createStyles(colors: any) {
     closeButtonText: {
       color: colors.text,
       fontSize: 15,
-      fontWeight: '700',
+      fontWeight: '800',
     },
 
     panelContent: {
-      padding: 16,
+      padding: 17,
     },
+
+    // TEXT
 
     bodyText: {
       color: colors.textSecondary,
-      fontSize: 12,
-      lineHeight: 19,
-      marginBottom: 13,
+      fontSize: 13,
+      lineHeight: 21,
+      marginBottom: 14,
     },
 
     subheading: {
       color: colors.text,
-      fontSize: 15,
-      fontWeight: '800',
-      marginBottom: 9,
+      fontSize: 16,
+      fontWeight: '900',
+      marginBottom: 10,
     },
+
+    // STATUS
 
     statusCard: {
       backgroundColor: colors.backgroundSoft,
-      borderRadius: 11,
-      paddingHorizontal: 12,
+      borderRadius: 13,
+      paddingHorizontal: 13,
       paddingVertical: 5,
-      marginBottom: 15,
+      marginBottom: 16,
     },
 
     statusRow: {
-      minHeight: 39,
+      minHeight: 43,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -2383,7 +2397,7 @@ function createStyles(colors: any) {
     statusValue: {
       color: colors.text,
       fontSize: 12,
-      fontWeight: '700',
+      fontWeight: '800',
       textAlign: 'right',
       flexShrink: 1,
     },
@@ -2392,47 +2406,51 @@ function createStyles(colors: any) {
       color: colors.primary,
     },
 
+    // INPUTS
+
     inputGroup: {
-      marginBottom: 14,
+      marginBottom: 15,
     },
 
     inputLabel: {
       color: colors.text,
-      fontSize: 12,
-      fontWeight: '700',
-      marginBottom: 7,
+      fontSize: 13,
+      fontWeight: '800',
+      marginBottom: 8,
     },
 
     input: {
-      minHeight: 47,
+      minHeight: 49,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 9,
-      paddingHorizontal: 13,
+      borderRadius: 11,
+      paddingHorizontal: 14,
       color: colors.text,
       backgroundColor: colors.background,
       fontSize: 14,
     },
 
     multilineInput: {
-      minHeight: 115,
-      paddingTop: 12,
+      minHeight: 120,
+      paddingTop: 13,
     },
 
+    // BUTTONS
+
     primaryButton: {
-      minHeight: 48,
+      minHeight: 50,
       backgroundColor: colors.primary,
-      borderRadius: 10,
+      borderRadius: 12,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 16,
-      marginTop: 7,
+      paddingHorizontal: 17,
+      marginTop: 8,
     },
 
     primaryButtonText: {
       color: '#FFFFFF',
-      fontSize: 13,
-      fontWeight: '800',
+      fontSize: 14,
+      fontWeight: '900',
     },
 
     disabledButton: {
@@ -2440,46 +2458,48 @@ function createStyles(colors: any) {
     },
 
     secondaryButton: {
-      minHeight: 43,
+      minHeight: 46,
       borderWidth: 1,
       borderColor: colors.primary,
-      borderRadius: 9,
+      borderRadius: 11,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 7,
+      marginTop: 8,
     },
 
     secondaryButtonText: {
       color: colors.primary,
-      fontSize: 12,
-      fontWeight: '700',
+      fontSize: 13,
+      fontWeight: '800',
     },
 
     loader: {
-      marginVertical: 18,
+      marginVertical: 20,
     },
 
     infoBox: {
       backgroundColor: colors.backgroundSoft,
-      borderRadius: 10,
-      padding: 13,
-      marginVertical: 8,
+      borderRadius: 12,
+      padding: 14,
+      marginVertical: 9,
     },
 
     divider: {
       height: 1,
       backgroundColor: colors.border,
-      marginVertical: 16,
+      marginVertical: 17,
     },
 
+    // SWITCHES
+
     switchRow: {
-      minHeight: 72,
+      minHeight: 76,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-      paddingVertical: 10,
+      paddingVertical: 12,
     },
 
     switchText: {
@@ -2487,38 +2507,55 @@ function createStyles(colors: any) {
       paddingRight: 12,
     },
 
+    menuTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: '800',
+      marginBottom: 5,
+    },
+
+    menuDescription: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 18,
+    },
+
+    // THEMES
+
     themeOption: {
-      minHeight: 54,
+      minHeight: 58,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-      paddingVertical: 10,
+      paddingVertical: 11,
     },
 
     themeRadio: {
       color: colors.textMuted,
-      fontSize: 20,
+      fontSize: 21,
     },
 
     themeRadioSelected: {
       color: colors.primary,
     },
 
+    // SUPPORT CATEGORIES
+
     categoryList: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      marginBottom: 15,
+      marginBottom: 16,
       gap: 8,
     },
 
     categoryOption: {
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 18,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
+      borderRadius: 20,
+      paddingHorizontal: 13,
+      paddingVertical: 9,
       backgroundColor: colors.background,
     },
 
@@ -2529,64 +2566,64 @@ function createStyles(colors: any) {
 
     categoryText: {
       color: colors.text,
-      fontSize: 11,
-      fontWeight: '600',
+      fontSize: 12,
+      fontWeight: '700',
     },
 
     categoryTextSelected: {
       color: '#FFFFFF',
     },
 
+    // ABOUT
+
     aboutCard: {
       alignItems: 'center',
-      paddingVertical: 12,
+      paddingVertical: 13,
     },
 
     logoCircle: {
-      width: 66,
-      height: 66,
-      borderRadius: 33,
+      width: 72,
+      height: 72,
+      borderRadius: 36,
       backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 12,
+      marginBottom: 13,
     },
 
     logoLetter: {
       color: '#FFFFFF',
-      fontSize: 35,
+      fontSize: 38,
       fontWeight: '900',
     },
 
     aboutName: {
       color: colors.text,
-      fontSize: 19,
+      fontSize: 21,
       fontWeight: '900',
       letterSpacing: 1,
     },
 
     aboutSubtitle: {
       color: colors.textSecondary,
-      fontSize: 12,
-      marginTop: 4,
-      marginBottom: 8,
+      fontSize: 13,
+      marginTop: 5,
+      marginBottom: 10,
+    },
+
+    // FOOTER
+
+    footer: {
+      alignItems: 'center',
+      paddingVertical: 22,
+      marginTop: 3,
     },
 
     footerText: {
       color: colors.textMuted,
-      textAlign: 'center',
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: '800',
-      letterSpacing: 1.5,
-      marginTop: 12,
-    },
-
-    footerVersion: {
-      color: colors.textMuted,
-      textAlign: 'center',
-      fontSize: 10,
-      marginTop: 5,
-      marginBottom: 10,
+      letterSpacing: 0.5,
     },
   });
 }
