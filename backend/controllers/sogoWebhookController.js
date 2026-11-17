@@ -829,7 +829,13 @@ const refundBillPayment = async (
 // UPDATE PROCESSING STATUS
 // ============================================================
 
-const markProcessing = async (table, row, payload, providerReference, message) => {
+const markProcessing = async (
+  table,
+  row,
+  payload,
+  providerReference,
+  message
+) => {
   const allowedTables = [
     'airtime_transactions',
     'data_transactions',
@@ -840,21 +846,54 @@ const markProcessing = async (table, row, payload, providerReference, message) =
     throw new Error('Invalid transaction table');
   }
 
+  if (table === 'bill_payments') {
+    await pool.query(
+      `
+      UPDATE bill_payments
+      SET
+        status = 'processing',
+        provider_reference =
+          COALESCE($1, provider_reference),
+        provider_response = $2,
+        provider_response_message = $3
+      WHERE id = $4
+        AND status NOT IN (
+          'completed',
+          'failed',
+          'refunded',
+          'cancelled'
+        )
+      `,
+      [
+        providerReference,
+        safeJson(payload),
+        message,
+        row.id,
+      ]
+    );
+
+    return;
+  }
+
   await pool.query(
     `
     UPDATE ${table}
     SET
       status = 'processing',
-      provider_reference = COALESCE($1, provider_reference),
-      provider_response = $2,
-      provider_response_message = $3
-    WHERE id = $4
-      AND status NOT IN ('completed', 'failed', 'refunded', 'cancelled')
+      provider_reference =
+        COALESCE($1, provider_reference),
+      provider_response = $2
+    WHERE id = $3
+      AND status NOT IN (
+        'completed',
+        'failed',
+        'refunded',
+        'cancelled'
+      )
     `,
     [
       providerReference,
       safeJson(payload),
-      message,
       row.id,
     ]
   );
