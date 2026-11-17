@@ -3,9 +3,10 @@ const crypto = require('crypto');
 const axios = require('axios');
 const pool = require('../config/database');
 
-const SOGO_API_BASE_URL =
+const SOGO_API_BASE_URL = (
   process.env.SOGO_API_BASE_URL ||
-  'https://sandbox.sogo.africa/v1';
+  'https://sandbox.sogo.africa/v1'
+).replace(/\/+$/, '');
 
 const SOGO_API_KEY = process.env.SOGO_API_KEY;
 
@@ -530,6 +531,12 @@ const completeSeparateTransaction = async (
 
 // ============================================================
 // REFUND AIRTIME / DATA — EXACTLY ONCE
+//
+// Uses the same deterministic refund-reference pattern
+// as the Data controller.
+//
+// Refund ledger is inserted before wallet credit.
+// A duplicate refund reference cannot credit twice.
 // ============================================================
 
 const refundSeparateTransaction = async (
@@ -554,6 +561,7 @@ const refundSeparateTransaction = async (
   try {
     await client.query('BEGIN');
 
+    // Lock the original transaction.
     const locked = await client.query(
       `
       SELECT *
@@ -571,16 +579,37 @@ const refundSeparateTransaction = async (
 
     const current = locked.rows[0];
 
+    // Immediate controller refund or another webhook
+    // may already have finalized this transaction.
     if (isFinalStatus(current.status)) {
       await client.query('COMMIT');
 
       console.log(
-        `${kind} final transaction already processed.`
+        `${kind} final transaction already processed:`,
+        current.reference
       );
 
       return;
     }
 
+    if (!current.account_id) {
+      throw new Error(
+        `${kind} original wallet account is missing`
+      );
+    }
+
+    const amount = Number(current.amount);
+
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      throw new Error(
+        `Invalid ${kind} refund amount`
+      );
+    }
+
+    // Lock the original wallet account.
     const accountResult = await client.query(
       `
       SELECT id, balance
@@ -597,36 +626,29 @@ const refundSeparateTransaction = async (
       );
     }
 
-    const amount = Number(current.amount);
     const balance = Number(
       accountResult.rows[0].balance
     );
 
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0 ||
-      !Number.isFinite(balance)
-    ) {
+    if (!Number.isFinite(balance)) {
       throw new Error(
-        `Invalid ${kind} refund amount or balance`
+        `Invalid ${kind} refund wallet balance`
       );
     }
 
-    await client.query(
-      `
-      UPDATE accounts
-      SET
-        balance = balance + $1,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      `,
-      [amount, current.account_id]
-    );
+    const balanceAfter = balance + amount;
 
+    // This reference is deterministic.
+    // For Data, it matches:
+    // ZEN-DATA-REFUND-{original-reference}
+    //
+    // For Airtime:
+    // ZEN-AIRTIME-REFUND-{original-reference}
     const refundReference =
-      `ZEN-${kind.toUpperCase()}-REFUND-${crypto.randomUUID()}`;
+      `ZEN-${kind.toUpperCase()}-REFUND-${current.reference}`;
 
-    await client.query(
+    // Insert the refund ledger FIRST.
+    const refundLedger = await client.query(
       `
       INSERT INTO transactions (
         account_id,
@@ -635,9 +657,23 @@ const refundSeparateTransaction = async (
         currency,
         reference,
         description,
-        status
+        status,
+        balance_before,
+        balance_after
       )
-      VALUES ($1, $2, $3, 'NGN', $4, $5, 'completed')
+      VALUES (
+        $1,
+        $2,
+        $3,
+        'NGN',
+        $4,
+        $5,
+        'completed',
+        $6,
+        $7
+      )
+      ON CONFLICT (reference) DO NOTHING
+      RETURNING id
       `,
       [
         current.account_id,
@@ -645,9 +681,78 @@ const refundSeparateTransaction = async (
         amount,
         refundReference,
         `${kind} purchase refund - ${current.reference}`,
+        balance,
+        balanceAfter,
       ]
     );
 
+    // A matching refund ledger already exists.
+    // Do not credit the wallet a second time.
+    if (!refundLedger.rows.length) {
+      await client.query(
+        `
+        UPDATE ${table}
+        SET
+          status = 'failed',
+          provider_reference =
+            COALESCE($1, provider_reference),
+          provider_response = $2,
+          failure_reason = $3,
+          completed_at =
+            COALESCE(completed_at, CURRENT_TIMESTAMP)
+        WHERE id = $4
+        `,
+        [
+          providerReference,
+          safeJson(payload),
+          providerMessage ||
+            'Sogo transaction failed',
+          current.id,
+        ]
+      );
+
+      await client.query(
+        `
+        UPDATE transactions
+        SET status = 'failed'
+        WHERE reference = $1
+          AND type = $2
+        `,
+        [
+          current.reference,
+          kind === 'airtime'
+            ? 'airtime_purchase'
+            : 'data_purchase',
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      console.log(
+        `${kind} refund ledger already exists; duplicate wallet credit prevented:`,
+        refundReference
+      );
+
+      return;
+    }
+
+    // Credit wallet only after successful ledger insertion.
+    await client.query(
+      `
+      UPDATE accounts
+      SET
+        balance = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      `,
+      [
+        balanceAfter,
+        current.account_id,
+      ]
+    );
+
+    // Mark original Airtime/Data transaction as failed.
+    // Cancelled Airtime and Data purchases also show Failed.
     await client.query(
       `
       UPDATE ${table}
@@ -664,18 +769,26 @@ const refundSeparateTransaction = async (
       [
         providerReference,
         safeJson(payload),
-        providerMessage || 'Sogo transaction failed',
+        providerMessage ||
+          'Sogo transaction failed',
         current.id,
       ]
     );
 
+    // Update the original central transaction.
     await client.query(
       `
       UPDATE transactions
       SET status = 'failed'
       WHERE reference = $1
+        AND type = $2
       `,
-      [current.reference]
+      [
+        current.reference,
+        kind === 'airtime'
+          ? 'airtime_purchase'
+          : 'data_purchase',
+      ]
     );
 
     await client.query('COMMIT');
@@ -855,6 +968,7 @@ const refundBillPayment = async (
     }
 
     const current = result.rows[0];
+
     const currentStatus = String(
       current.status || ''
     ).toLowerCase();
@@ -912,6 +1026,7 @@ const refundBillPayment = async (
     }
 
     const amount = Number(current.amount);
+
     const balance = Number(
       accountResult.rows[0].balance
     );
@@ -981,7 +1096,8 @@ const refundBillPayment = async (
       [
         providerReference,
         safeJson(payload),
-        providerMessage || 'Sogo transaction failed or refunded',
+        providerMessage ||
+          'Sogo transaction failed or refunded',
         current.id,
       ]
     );
@@ -1260,7 +1376,6 @@ const handleSogoWebhook = async (req, res) => {
           providerMessage
         );
       } else if (status === 'processing') {
-        // IMPORTANT: pass actual database table names.
         await markProcessing(
           separate.kind === 'airtime'
             ? 'airtime_transactions'
@@ -1336,7 +1451,6 @@ const handleSogoWebhook = async (req, res) => {
         isElectricity &&
         (!electricityToken || !units)
       ) {
-        // Prefer the original idempotency key for lookup.
         const lookup = await fetchSogoTransaction(
           idempotencyKey || providerReference
         );
@@ -1390,14 +1504,6 @@ const handleSogoWebhook = async (req, res) => {
 
     // --------------------------------------------------------
     // ELECTRICITY FAILURE / CANCELLATION / REFUND
-    //
-    // IMPORTANT:
-    // Electricity may fail asynchronously after the original
-    // controller has already returned a processing response.
-    //
-    // Refund through the shared row-locked helper.
-    // The original electricity controller's immediate refund
-    // is protected because it also finalizes the same bill row.
     // --------------------------------------------------------
 
     if (
