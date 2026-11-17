@@ -660,7 +660,7 @@ export default function DataScreen({
                 result.status === 'completed'
                   ? colors.success
                   : result.status === 'failed'
-                  ? colors.danger
+                  '#D64545'
                   : '#C58A19'
               }
             />
