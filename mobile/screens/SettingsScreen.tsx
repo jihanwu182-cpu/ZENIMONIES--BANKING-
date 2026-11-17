@@ -1865,7 +1865,7 @@ export default function SettingsScreen({
               'ZENIMONIES Banking',
             )}
 
-            {renderStatus('Version', '1.0.0')}
+            {renderStatus('Version', '8.21.0')}
 
             {renderStatus(
               'Platform',
