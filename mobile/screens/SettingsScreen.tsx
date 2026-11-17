@@ -2085,12 +2085,15 @@ export default function SettingsScreen({
         ) : null}
 
         {/* FOOTER */}
+         <View style={styles.footer}>
+       <Text style={styles.footerText}>
+       Zenimonies • Secure Digital Banking
+      </Text>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Zenimonies • Secure Digital Banking
-          </Text>
-        </View>
+      <Text style={styles.footerVersion}>
+       Version 8.21.0
+       </Text>
+       </View>
       </ScrollView>
     </View>
   );
