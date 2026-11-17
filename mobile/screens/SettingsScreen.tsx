@@ -40,6 +40,8 @@ type ApiResponse = {
   data?: any;
   passcode?: PasscodeStatus;
   preferences?: SmsPreferences;
+  settings?: any;
+  wallet?: any;
 };
 
 type PasscodeStatus = {
@@ -1933,10 +1935,7 @@ export default function SettingsScreen({
   return (
     <View style={styles.container}>
       <StatusBar
-        barStyle={
-          isDark ? 'light-content' : 'dark-content'
-        }
-        backgroundColor={colors.surface}
+       barStyle={isDark ? 'light-content' : 'dark-content'}
       />
 
       {/* HEADER */}
