@@ -15,48 +15,94 @@ const SOGO_API_KEY = process.env.SOGO_API_KEY;
 
 const firstValue = (...values) => {
   for (const value of values) {
-    if (value !== undefined && value !== null && value !== '') {
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ''
+    ) {
       return value;
     }
   }
+
   return null;
 };
 
 const safeJson = (value) => JSON.stringify(value || {});
 
 const isFinalStatus = (status) =>
-  ['completed', 'failed', 'refunded', 'cancelled'].includes(
+  [
+    'completed',
+    'failed',
+    'refunded',
+    'cancelled',
+  ].includes(
     String(status || '').toLowerCase()
   );
 
 const normalizeStatus = (event, status) => {
   const value = String(status || '').toLowerCase();
 
-  if (event === 'transaction.completed' || [
-    'completed', 'success', 'successful', 'succeeded',
-  ].includes(value)) return 'completed';
+  if (
+    event === 'transaction.completed' ||
+    [
+      'completed',
+      'success',
+      'successful',
+      'succeeded',
+    ].includes(value)
+  ) {
+    return 'completed';
+  }
 
-  if (event === 'transaction.processing' || [
-    'processing', 'pending', 'initiated', 'queued',
-  ].includes(value)) return 'processing';
+  if (
+    event === 'transaction.processing' ||
+    [
+      'processing',
+      'pending',
+      'initiated',
+      'queued',
+    ].includes(value)
+  ) {
+    return 'processing';
+  }
 
-  if (event === 'transaction.cancelled' || [
-    'cancelled', 'canceled',
-  ].includes(value)) return 'cancelled';
+  if (
+    event === 'transaction.cancelled' ||
+    ['cancelled', 'canceled'].includes(value)
+  ) {
+    return 'cancelled';
+  }
 
-  if (event === 'transaction.refunded' || value === 'refunded') {
+  if (
+    event === 'transaction.refunded' ||
+    value === 'refunded'
+  ) {
     return 'refunded';
   }
 
-  if (event === 'transaction.failed' || [
-    'failed', 'failure', 'declined',
-  ].includes(value)) return 'failed';
+  if (
+    event === 'transaction.failed' ||
+    [
+      'failed',
+      'failure',
+      'declined',
+    ].includes(value)
+  ) {
+    return 'failed';
+  }
 
   return value || 'unknown';
 };
 
+// ============================================================
+// WEBHOOK PAYLOAD EXTRACTION
+// ============================================================
+
 const extractTransaction = (payload) => {
-  const eventData = payload?.data || payload?.payload || {};
+  const eventData =
+    payload?.data ||
+    payload?.payload ||
+    {};
 
   return (
     eventData?.transaction ||
@@ -66,54 +112,87 @@ const extractTransaction = (payload) => {
   );
 };
 
-const extractProviderReference = (transaction, eventData, payload) =>
+const extractProviderReference = (
+  transaction,
+  eventData,
+  payload
+) =>
   firstValue(
     transaction?.reference,
     transaction?.provider_reference,
     transaction?.providerReference,
+
     eventData?.reference,
     eventData?.provider_reference,
     eventData?.providerReference,
+
     payload?.reference,
     payload?.provider_reference,
     payload?.providerReference,
+
     transaction?.id,
     eventData?.id
   );
 
-const extractIdempotencyKey = (transaction, eventData, payload) =>
+const extractIdempotencyKey = (
+  transaction,
+  eventData,
+  payload
+) =>
   firstValue(
     transaction?.idempotency_key,
     transaction?.idempotencyKey,
+
     eventData?.idempotency_key,
     eventData?.idempotencyKey,
+
     payload?.idempotency_key
   );
 
-const extractProviderMessage = (transaction, eventData, payload) =>
+const extractProviderMessage = (
+  transaction,
+  eventData,
+  payload
+) =>
   firstValue(
     transaction?.message,
     transaction?.description,
+
     eventData?.message,
     eventData?.description,
+
     payload?.message,
     payload?.description
   );
 
-const extractProviderStatus = (transaction, eventData, payload) => {
+const extractProviderStatus = (
+  transaction,
+  eventData,
+  payload
+) => {
   const rawStatus = firstValue(
     transaction?.status,
     eventData?.status,
     payload?.status
   );
 
-  if (rawStatus && typeof rawStatus === 'object') {
+  if (
+    rawStatus &&
+    typeof rawStatus === 'object'
+  ) {
     return String(
-      firstValue(rawStatus.value, rawStatus.status) || ''
-    ).trim().toLowerCase();
+      firstValue(
+        rawStatus.value,
+        rawStatus.status
+      ) || ''
+    )
+      .trim()
+      .toLowerCase();
   }
 
-  return String(rawStatus || '').trim().toLowerCase();
+  return String(rawStatus || '')
+    .trim()
+    .toLowerCase();
 };
 
 // ============================================================
@@ -197,8 +276,14 @@ const extractUnits = (payload) => {
 // SIGNATURE VERIFICATION
 // ============================================================
 
-const verifySignature = (rawBody, signature, secret) => {
-  if (!rawBody || !signature || !secret) return false;
+const verifySignature = (
+  rawBody,
+  signature,
+  secret
+) => {
+  if (!rawBody || !signature || !secret) {
+    return false;
+  }
 
   const expected =
     'sha256=' +
@@ -210,30 +295,45 @@ const verifySignature = (rawBody, signature, secret) => {
   const expectedBuffer = Buffer.from(expected);
   const receivedBuffer = Buffer.from(String(signature));
 
-  if (expectedBuffer.length !== receivedBuffer.length) {
+  if (
+    expectedBuffer.length !==
+    receivedBuffer.length
+  ) {
     return false;
   }
 
-  return crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
+  return crypto.timingSafeEqual(
+    expectedBuffer,
+    receivedBuffer
+  );
 };
 
 // ============================================================
-// LIVE SOGO LOOKUP
+// LIVE SOGO TRANSACTION LOOKUP
 // ============================================================
 
 const fetchSogoTransaction = async (reference) => {
-  if (!reference || !SOGO_API_KEY) return null;
+  if (!reference || !SOGO_API_KEY) {
+    return null;
+  }
 
   if (
-    SOGO_API_BASE_URL.toLowerCase().includes('sandbox.sogo.africa')
+    SOGO_API_BASE_URL
+      .toLowerCase()
+      .includes('sandbox.sogo.africa')
   ) {
-    console.log('Sogo sandbox: transaction lookup skipped.');
+    console.log(
+      'Sogo sandbox: transaction lookup skipped.'
+    );
+
     return null;
   }
 
   try {
     const response = await axios.get(
-      `${SOGO_API_BASE_URL}/transactions/${encodeURIComponent(reference)}?type=bill_payment`,
+      `${SOGO_API_BASE_URL}/transactions/${encodeURIComponent(
+        reference
+      )}?type=bill_payment`,
       {
         headers: {
           Authorization: `Bearer ${SOGO_API_KEY}`,
@@ -249,6 +349,7 @@ const fetchSogoTransaction = async (reference) => {
       'Sogo transaction lookup failed:',
       error?.response?.data || error?.message
     );
+
     return null;
   }
 };
@@ -257,7 +358,10 @@ const fetchSogoTransaction = async (reference) => {
 // FIND AIRTIME / DATA TRANSACTION
 // ============================================================
 
-const findSeparateTransaction = async (idempotencyKey, reference) => {
+const findSeparateTransaction = async (
+  idempotencyKey,
+  reference
+) => {
   if (idempotencyKey) {
     const airtime = await pool.query(
       `
@@ -382,15 +486,17 @@ const completeSeparateTransaction = async (
       UPDATE ${table}
       SET
         status = 'completed',
-        provider_reference = COALESCE($1, provider_reference),
+        provider_reference =
+          COALESCE($1, provider_reference),
         provider_response = $2,
-        completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP)
+        completed_at =
+          COALESCE(completed_at, CURRENT_TIMESTAMP)
       WHERE id = $3
       `,
       [
         providerReference,
         safeJson(payload),
-        row.id,
+        current.id,
       ]
     );
 
@@ -399,14 +505,21 @@ const completeSeparateTransaction = async (
       UPDATE transactions
       SET status = 'completed'
       WHERE reference = $1
-        AND status NOT IN ('failed', 'refunded', 'cancelled')
+        AND status NOT IN (
+          'failed',
+          'refunded',
+          'cancelled'
+        )
       `,
       [current.reference]
     );
 
     await client.query('COMMIT');
 
-    console.log(`${kind} transaction completed:`, current.reference);
+    console.log(
+      `${kind} transaction completed:`,
+      current.reference
+    );
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -458,10 +571,13 @@ const refundSeparateTransaction = async (
 
     const current = locked.rows[0];
 
-    // A previous controller action or webhook already finalized it.
     if (isFinalStatus(current.status)) {
       await client.query('COMMIT');
-      console.log(`${kind} final transaction already processed.`);
+
+      console.log(
+        `${kind} final transaction already processed.`
+      );
+
       return;
     }
 
@@ -476,23 +592,35 @@ const refundSeparateTransaction = async (
     );
 
     if (!accountResult.rows.length) {
-      throw new Error(`${kind} refund account not found`);
+      throw new Error(
+        `${kind} refund account not found`
+      );
     }
 
     const amount = Number(current.amount);
-    const balance = Number(accountResult.rows[0].balance);
+    const balance = Number(
+      accountResult.rows[0].balance
+    );
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw new Error(`Invalid ${kind} refund amount`);
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !Number.isFinite(balance)
+    ) {
+      throw new Error(
+        `Invalid ${kind} refund amount or balance`
+      );
     }
 
     await client.query(
       `
       UPDATE accounts
-      SET balance = $1
+      SET
+        balance = balance + $1,
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
       `,
-      [balance + amount, current.account_id]
+      [amount, current.account_id]
     );
 
     const refundReference =
@@ -504,11 +632,12 @@ const refundSeparateTransaction = async (
         account_id,
         type,
         amount,
+        currency,
         reference,
         description,
         status
       )
-      VALUES ($1, $2, $3, $4, $5, 'completed')
+      VALUES ($1, $2, $3, 'NGN', $4, $5, 'completed')
       `,
       [
         current.account_id,
@@ -524,10 +653,12 @@ const refundSeparateTransaction = async (
       UPDATE ${table}
       SET
         status = 'failed',
-        provider_reference = COALESCE($1, provider_reference),
+        provider_reference =
+          COALESCE($1, provider_reference),
         provider_response = $2,
         failure_reason = $3,
-        completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP)
+        completed_at =
+          COALESCE(completed_at, CURRENT_TIMESTAMP)
       WHERE id = $4
       `,
       [
@@ -549,7 +680,10 @@ const refundSeparateTransaction = async (
 
     await client.query('COMMIT');
 
-    console.log(`${kind} wallet refund completed:`, refundReference);
+    console.log(
+      `${kind} wallet refund completed:`,
+      refundReference
+    );
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -562,7 +696,10 @@ const refundSeparateTransaction = async (
 // FIND BILL PAYMENT
 // ============================================================
 
-const findBillPayment = async (idempotencyKey, providerReference) => {
+const findBillPayment = async (
+  idempotencyKey,
+  providerReference
+) => {
   if (idempotencyKey) {
     const result = await pool.query(
       `
@@ -574,7 +711,9 @@ const findBillPayment = async (idempotencyKey, providerReference) => {
       [idempotencyKey]
     );
 
-    if (result.rows.length) return result.rows[0];
+    if (result.rows.length) {
+      return result.rows[0];
+    }
   }
 
   if (providerReference) {
@@ -588,7 +727,9 @@ const findBillPayment = async (idempotencyKey, providerReference) => {
       [providerReference]
     );
 
-    if (result.rows.length) return result.rows[0];
+    if (result.rows.length) {
+      return result.rows[0];
+    }
   }
 
   return null;
@@ -638,12 +779,15 @@ const completeBillPayment = async (
       UPDATE bill_payments
       SET
         status = 'completed',
-        provider_reference = COALESCE($1, provider_reference),
+        provider_reference =
+          COALESCE($1, provider_reference),
         provider_response = $2,
         provider_response_message = $3,
-        electricity_token = COALESCE(electricity_token, $4),
+        electricity_token =
+          COALESCE(electricity_token, $4),
         units = COALESCE(units, $5),
-        completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP)
+        completed_at =
+          COALESCE(completed_at, CURRENT_TIMESTAMP)
       WHERE id = $6
       `,
       [
@@ -661,7 +805,11 @@ const completeBillPayment = async (
       UPDATE transactions
       SET status = 'completed'
       WHERE reference = $1
-        AND status NOT IN ('failed', 'refunded', 'cancelled')
+        AND status NOT IN (
+          'failed',
+          'refunded',
+          'cancelled'
+        )
       `,
       [current.reference]
     );
@@ -676,9 +824,8 @@ const completeBillPayment = async (
 };
 
 // ============================================================
-// REFUND BILL PAYMENT — TV / EDUCATION / BETTING
-// Electricity is deliberately excluded because its existing
-// purchase flow handles its own wallet refund.
+// REFUND BILL PAYMENT — ELECTRICITY / TV / EDUCATION / BETTING
+// Row lock prevents duplicate wallet refunds.
 // ============================================================
 
 const refundBillPayment = async (
@@ -708,12 +855,46 @@ const refundBillPayment = async (
     }
 
     const current = result.rows[0];
-    const currentStatus = String(current.status || '').toLowerCase();
+    const currentStatus = String(
+      current.status || ''
+    ).toLowerCase();
 
+    // A previous controller action or webhook may
+    // already have finalized and refunded this payment.
     if (isFinalStatus(currentStatus)) {
       await client.query('COMMIT');
-      console.log('Bill payment already finalized; duplicate refund ignored.');
+
+      console.log(
+        'Bill payment already finalized; duplicate refund ignored:',
+        current.reference
+      );
+
       return;
+    }
+
+    const category = String(
+      current.category || ''
+    ).toLowerCase();
+
+    let refundType;
+    let prefix;
+
+    if (category === 'electricity') {
+      refundType = 'electricity_refund';
+      prefix = 'ZEL';
+    } else if (category === 'betting') {
+      refundType = 'betting_refund';
+      prefix = 'ZBET';
+    } else if (category === 'cable_tv') {
+      refundType = 'tv_refund';
+      prefix = 'ZEN-TV';
+    } else if (category === 'education') {
+      refundType = 'education_refund';
+      prefix = 'ZEDU';
+    } else {
+      throw new Error(
+        `Unsupported bill refund category: ${category}`
+      );
     }
 
     const accountResult = await client.query(
@@ -731,51 +912,48 @@ const refundBillPayment = async (
     }
 
     const amount = Number(current.amount);
-    const balance = Number(accountResult.rows[0].balance);
+    const balance = Number(
+      accountResult.rows[0].balance
+    );
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw new Error('Invalid bill refund amount');
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !Number.isFinite(balance)
+    ) {
+      throw new Error(
+        'Invalid bill refund amount or account balance'
+      );
     }
 
+    // Credit the customer wallet.
     await client.query(
       `
       UPDATE accounts
-      SET balance = $1
+      SET
+        balance = balance + $1,
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
       `,
-      [balance + amount, current.account_id]
+      [amount, current.account_id]
     );
-
-    const category = String(current.category || '').toLowerCase();
-
-    const refundType =
-      category === 'betting'
-        ? 'betting_refund'
-        : category === 'cable_tv'
-          ? 'tv_refund'
-          : 'education_refund';
-
-    const prefix =
-      category === 'betting'
-        ? 'ZBET'
-        : category === 'cable_tv'
-          ? 'ZEN-TV'
-          : 'ZEDU';
 
     const refundReference =
       `${prefix}-REFUND-${crypto.randomUUID()}`;
 
+    // Create the refund ledger entry.
     await client.query(
       `
       INSERT INTO transactions (
         account_id,
         type,
         amount,
+        currency,
         reference,
         description,
         status
       )
-      VALUES ($1, $2, $3, $4, $5, 'completed')
+      VALUES ($1, $2, $3, 'NGN', $4, $5, 'completed')
       `,
       [
         current.account_id,
@@ -786,25 +964,29 @@ const refundBillPayment = async (
       ]
     );
 
+    // Mark the original bill as refunded.
     await client.query(
       `
       UPDATE bill_payments
       SET
         status = 'refunded',
-        provider_reference = COALESCE($1, provider_reference),
+        provider_reference =
+          COALESCE($1, provider_reference),
         provider_response = $2,
         provider_response_message = $3,
-        completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP)
+        completed_at =
+          COALESCE(completed_at, CURRENT_TIMESTAMP)
       WHERE id = $4
       `,
       [
         providerReference,
         safeJson(payload),
-        providerMessage || 'Sogo transaction refunded',
+        providerMessage || 'Sogo transaction failed or refunded',
         current.id,
       ]
     );
 
+    // Update the original transaction.
     await client.query(
       `
       UPDATE transactions
@@ -816,7 +998,10 @@ const refundBillPayment = async (
 
     await client.query('COMMIT');
 
-    console.log('Bill payment refund completed:', refundReference);
+    console.log(
+      `${category} wallet refund completed:`,
+      refundReference
+    );
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -904,11 +1089,14 @@ const markProcessing = async (
 // ============================================================
 
 const handleSogoWebhook = async (req, res) => {
-  const webhookSecret = process.env.SOGO_WEBHOOK_SECRET;
+  const webhookSecret =
+    process.env.SOGO_WEBHOOK_SECRET;
 
   try {
     if (!webhookSecret) {
-      console.error('SOGO_WEBHOOK_SECRET is not configured');
+      console.error(
+        'SOGO_WEBHOOK_SECRET is not configured'
+      );
 
       return res.status(500).json({
         success: false,
@@ -924,10 +1112,19 @@ const handleSogoWebhook = async (req, res) => {
             : JSON.stringify(req.body || {})
         );
 
-    const signature = req.headers['x-sogo-signature-256'];
+    const signature =
+      req.headers['x-sogo-signature-256'];
 
-    if (!verifySignature(rawBody, signature, webhookSecret)) {
-      console.error('Invalid Sogo webhook signature');
+    if (
+      !verifySignature(
+        rawBody,
+        signature,
+        webhookSecret
+      )
+    ) {
+      console.error(
+        'Invalid Sogo webhook signature'
+      );
 
       return res.status(401).json({
         success: false,
@@ -938,7 +1135,9 @@ const handleSogoWebhook = async (req, res) => {
     let payload;
 
     try {
-      payload = JSON.parse(rawBody.toString('utf8'));
+      payload = JSON.parse(
+        rawBody.toString('utf8')
+      );
     } catch (error) {
       return res.status(400).json({
         success: false,
@@ -966,34 +1165,46 @@ const handleSogoWebhook = async (req, res) => {
       });
     }
 
-    const eventData = payload?.data || payload?.payload || {};
-    const transaction = extractTransaction(payload);
+    const eventData =
+      payload?.data ||
+      payload?.payload ||
+      {};
 
-    const providerReference = extractProviderReference(
-      transaction,
-      eventData,
-      payload
+    const transaction =
+      extractTransaction(payload);
+
+    const providerReference =
+      extractProviderReference(
+        transaction,
+        eventData,
+        payload
+      );
+
+    const idempotencyKey =
+      extractIdempotencyKey(
+        transaction,
+        eventData,
+        payload
+      );
+
+    const providerMessage =
+      extractProviderMessage(
+        transaction,
+        eventData,
+        payload
+      );
+
+    const providerStatus =
+      extractProviderStatus(
+        transaction,
+        eventData,
+        payload
+      );
+
+    const status = normalizeStatus(
+      event,
+      providerStatus
     );
-
-    const idempotencyKey = extractIdempotencyKey(
-      transaction,
-      eventData,
-      payload
-    );
-
-    const providerMessage = extractProviderMessage(
-      transaction,
-      eventData,
-      payload
-    );
-
-    const providerStatus = extractProviderStatus(
-      transaction,
-      eventData,
-      payload
-    );
-
-    const status = normalizeStatus(event, providerStatus);
 
     console.log('Sogo webhook received:', {
       event,
@@ -1002,12 +1213,18 @@ const handleSogoWebhook = async (req, res) => {
       idempotencyKey,
     });
 
-    if (!providerReference && !idempotencyKey) {
-      console.warn('Sogo webhook has no transaction reference or idempotency key');
+    if (
+      !providerReference &&
+      !idempotencyKey
+    ) {
+      console.warn(
+        'Sogo webhook has no transaction reference or idempotency key'
+      );
 
       return res.status(200).json({
         success: true,
-        message: 'Webhook received without transaction identifiers',
+        message:
+          'Webhook received without transaction identifiers',
       });
     }
 
@@ -1015,10 +1232,11 @@ const handleSogoWebhook = async (req, res) => {
     // 1. AIRTIME / DATA
     // --------------------------------------------------------
 
-    const separate = await findSeparateTransaction(
-      idempotencyKey,
-      providerReference
-    );
+    const separate =
+      await findSeparateTransaction(
+        idempotencyKey,
+        providerReference
+      );
 
     if (separate) {
       if (status === 'completed') {
@@ -1042,6 +1260,7 @@ const handleSogoWebhook = async (req, res) => {
           providerMessage
         );
       } else if (status === 'processing') {
+        // IMPORTANT: pass actual database table names.
         await markProcessing(
           separate.kind === 'airtime'
             ? 'airtime_transactions'
@@ -1055,12 +1274,14 @@ const handleSogoWebhook = async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: `${separate.kind} webhook processed`,
+        message:
+          `${separate.kind} webhook processed`,
       });
     }
 
     // --------------------------------------------------------
-    // 2. BILL PAYMENTS: TV, EDUCATION, ELECTRICITY, BETTING
+    // 2. BILL PAYMENTS
+    // TV, EDUCATION, ELECTRICITY, BETTING
     // --------------------------------------------------------
 
     const bill = await findBillPayment(
@@ -1069,45 +1290,65 @@ const handleSogoWebhook = async (req, res) => {
     );
 
     if (!bill) {
-      console.warn('No local Sogo transaction found:', {
-        providerReference,
-        idempotencyKey,
-      });
+      console.warn(
+        'No local Sogo transaction found:',
+        {
+          providerReference,
+          idempotencyKey,
+        }
+      );
 
       return res.status(200).json({
         success: true,
-        message: 'Webhook received; local transaction not found',
+        message:
+          'Webhook received; local transaction not found',
       });
     }
 
-    const category = String(bill.category || '').toLowerCase();
+    const category = String(
+      bill.category || ''
+    ).toLowerCase();
 
-    const isBetting = category === 'betting';
-    const isElectricity = category === 'electricity';
-    const isTV = category === 'cable_tv';
-    const isEducation = category === 'education';
+    const isBetting =
+      category === 'betting';
+
+    const isElectricity =
+      category === 'electricity';
+
+    const isTV =
+      category === 'cable_tv';
+
+    const isEducation =
+      category === 'education';
 
     // --------------------------------------------------------
     // BILL PAYMENT COMPLETED
     // --------------------------------------------------------
 
     if (status === 'completed') {
-      let electricityToken = extractElectricityToken(payload);
-      let units = extractUnits(payload);
+      let electricityToken =
+        extractElectricityToken(payload);
+
+      let units =
+        extractUnits(payload);
 
       if (
         isElectricity &&
         (!electricityToken || !units)
       ) {
+        // Prefer the original idempotency key for lookup.
         const lookup = await fetchSogoTransaction(
-          providerReference || idempotencyKey
+          idempotencyKey || providerReference
         );
 
         if (lookup) {
           electricityToken =
-            electricityToken || extractElectricityToken(lookup);
+            electricityToken ||
+            extractElectricityToken(lookup);
 
-          units = units || extractUnits(lookup);
+          units =
+            units ||
+            extractUnits(lookup);
         }
       }
 
@@ -1122,7 +1363,8 @@ const handleSogoWebhook = async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: `${category} transaction completed`,
+        message:
+          `${category} transaction completed`,
       });
     }
 
@@ -1141,64 +1383,47 @@ const handleSogoWebhook = async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: `${category} transaction still processing`,
+        message:
+          `${category} transaction still processing`,
       });
     }
 
     // --------------------------------------------------------
-    // ELECTRICITY FAILURE
-    // Its existing purchase controller handles customer
-    // wallet refunds. Never refund electricity here.
+    // ELECTRICITY FAILURE / CANCELLATION / REFUND
+    //
+    // IMPORTANT:
+    // Electricity may fail asynchronously after the original
+    // controller has already returned a processing response.
+    //
+    // Refund through the shared row-locked helper.
+    // The original electricity controller's immediate refund
+    // is protected because it also finalizes the same bill row.
     // --------------------------------------------------------
 
-    if (isElectricity) {
-      if (
+    if (
+      isElectricity &&
+      (
         status === 'failed' ||
         status === 'cancelled' ||
         status === 'refunded'
-      ) {
-        await pool.query(
-          `
-          UPDATE bill_payments
-          SET
-            status = $1,
-            provider_reference = COALESCE($2, provider_reference),
-            provider_response = $3,
-            provider_response_message = $4
-          WHERE id = $5
-            AND status NOT IN ('completed', 'refunded')
-          `,
-          [
-            status,
-            providerReference,
-            safeJson(payload),
-            providerMessage,
-            bill.id,
-          ]
-        );
+      )
+    ) {
+      await refundBillPayment(
+        bill,
+        payload,
+        providerReference,
+        providerMessage
+      );
 
-        if (status !== 'refunded') {
-          await pool.query(
-            `
-            UPDATE transactions
-            SET status = $1
-            WHERE reference = $2
-              AND status <> 'completed'
-            `,
-            [status, bill.reference]
-          );
-        }
-
-        return res.status(200).json({
-          success: true,
-          message: 'Electricity result recorded; existing refund flow preserved',
-        });
-      }
+      return res.status(200).json({
+        success: true,
+        message:
+          'Electricity refund event processed safely',
+      });
     }
 
     // --------------------------------------------------------
     // BETTING / TV / EDUCATION FAILURE OR REFUND
-    // Refund once, under a row lock.
     // --------------------------------------------------------
 
     if (
@@ -1218,7 +1443,8 @@ const handleSogoWebhook = async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: `${category} refund event processed`,
+        message:
+          `${category} refund event processed`,
       });
     }
 
@@ -1230,7 +1456,8 @@ const handleSogoWebhook = async (req, res) => {
       `
       UPDATE bill_payments
       SET
-        provider_reference = COALESCE($1, provider_reference),
+        provider_reference =
+          COALESCE($1, provider_reference),
         provider_response = $2,
         provider_response_message = $3
       WHERE id = $4
@@ -1250,7 +1477,9 @@ const handleSogoWebhook = async (req, res) => {
   } catch (error) {
     console.error(
       'SOGO WEBHOOK ERROR:',
-      error?.response?.data || error?.message || error
+      error?.response?.data ||
+      error?.message ||
+      error
     );
 
     return res.status(500).json({
@@ -1259,6 +1488,10 @@ const handleSogoWebhook = async (req, res) => {
     });
   }
 };
+
+// ============================================================
+// EXPORTS
+// ============================================================
 
 module.exports = {
   handleSogoWebhook,
