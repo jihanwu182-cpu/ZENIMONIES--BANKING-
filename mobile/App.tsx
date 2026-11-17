@@ -27,7 +27,7 @@ import TransactionHistoryScreen from './screens/TransactionHistoryScreen';
 import TransactionDetailsScreen from './screens/TransactionDetailsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
-
+import AirtimeScreen from './screens/AirtimeScreen';
 import {
   registerPushNotifications,
   unregisterPushNotifications,
@@ -56,7 +56,8 @@ type Screen =
   | 'settings'
   | 'history'
   | 'notifications'
-  | 'transaction-details';
+  | 'transaction-details'
+  | 'airtime';
 
 type Account = {
   id?: string;
@@ -962,28 +963,32 @@ const loadProfile = useCallback(
   // ====================================================
   // DASHBOARD ACTIONS
   // ====================================================
+const handleDashboardAction = (
+  action: string
+) => {
+  if (action === 'airtime') {
+    setScreen('airtime');
+    return;
+  }
 
-  const handleDashboardAction = (
-    action: string
-  ) => {
-    const serviceNames: Record<string, string> = {
-      transfer: 'Bank transfers',
-      'add-money': 'Add money',
-      withdraw: 'Withdrawals',
-      airtime: 'Airtime',
-      data: 'Data purchases',
-      electricity: 'Electricity payments',
-      bills: 'Bill payments',
-      cards: 'Cards',
-      savings: 'ZENIMONIES Save',
-    };
-
-    Alert.alert(
-      serviceNames[action] || 'ZENIMONIES',
-      'This service screen will be connected in the next development stage. No transaction has been initiated.'
-    );
+  const serviceNames: Record<string, string> = {
+    transfer: 'Bank transfers',
+    'add-money': 'Add money',
+    withdraw: 'Withdrawals',
+    data: 'Data purchases',
+    electricity: 'Electricity payments',
+    bills: 'Bill payments',
+    cards: 'Cards',
+    savings: 'ZENIMONIES Save',
   };
 
+  Alert.alert(
+    serviceNames[action] || 'ZENIMONIES',
+    'This service screen will be connected in the next development stage. No transaction has been initiated.'
+  );
+};
+  
+    
   // ====================================================
   // DASHBOARD NAVIGATION
   // ====================================================
@@ -1198,7 +1203,33 @@ if (screen === 'settings' && session) {
       </SafeAreaView>
     );
   }
+// ====================================================
+// AIRTIME PURCHASE
+// ====================================================
 
+if (screen === 'airtime' && session) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <AirtimeScreen
+        token={session.token}
+        onBack={() => setScreen('home')}
+        onComplete={() => {
+          void loadDashboardData(
+            session.token,
+            false
+          ).catch((error: any) => {
+            console.warn(
+              'Airtime dashboard refresh failed:',
+              error
+            );
+          });
+        }}
+      />
+    </SafeAreaView>
+  );
+}
   // ====================================================
   // PERSONAL DASHBOARD
   // ====================================================
