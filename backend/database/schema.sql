@@ -483,6 +483,13 @@ ADD COLUMN IF NOT EXISTS commission_details JSONB;
 ALTER TABLE data_transactions
 ADD COLUMN IF NOT EXISTS provider_response JSONB;
 
+ALTER TABLE data_transactions
+ADD COLUMN IF NOT EXISTS provider_request_id VARCHAR(150);
+
+CREATE INDEX IF NOT EXISTS
+idx_data_transactions_provider_request
+ON data_transactions(provider_request_id);
+
 -- ============================================================
 -- BILLERS
 -- ============================================================
