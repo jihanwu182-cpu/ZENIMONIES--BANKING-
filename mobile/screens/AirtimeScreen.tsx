@@ -561,10 +561,10 @@ export default function AirtimeScreen({
               size={26}
               color={
                 result.status === 'completed'
-                  ? colors.success
-                  : result.status === 'failed'
-                  : '#D64545'
-                  : '#C58A19'
+                ? colors.success
+                : result.status === 'failed'
+                ? '#D64545'
+                : '#C58A19'
               }
             />
 
