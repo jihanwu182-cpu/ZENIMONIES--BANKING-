@@ -72,7 +72,14 @@ const getProviderStatus = (providerResponse) => {
   }
 
   if (
-    ['failed', 'failure', 'declined', 'cancelled', 'canceled', 'refunded'].includes(status)
+    [
+      'failed',
+      'failure',
+      'declined',
+      'cancelled',
+      'canceled',
+      'refunded',
+    ].includes(status)
   ) {
     return 'failed';
   }
@@ -259,9 +266,14 @@ const refundDataTransaction = async ({
   try {
     await client.query('BEGIN');
 
+    // Lock the original data transaction first.
     const dataResult = await client.query(
       `
-      SELECT id, account_id, amount, status
+      SELECT
+        id,
+        account_id,
+        amount,
+        status
       FROM data_transactions
       WHERE id = $1
         AND reference = $2
@@ -275,6 +287,7 @@ const refundDataTransaction = async ({
     }
 
     const dataTransaction = dataResult.rows[0];
+
     const currentStatus = String(
       dataTransaction.status || ''
     ).toLowerCase();
@@ -290,6 +303,33 @@ const refundDataTransaction = async ({
       };
     }
 
+    // Always use the account recorded on the original transaction.
+    const originalAccountId = dataTransaction.account_id;
+
+    if (!originalAccountId) {
+      throw new Error('Original wallet account is missing.');
+    }
+
+    // Verify that the supplied account matches the original account.
+    if (
+      accountId &&
+      String(accountId) !== String(originalAccountId)
+    ) {
+      throw new Error(
+        'Refund account does not match the original transaction account.'
+      );
+    }
+
+    const refundAmount = Number(dataTransaction.amount);
+
+    if (
+      !Number.isFinite(refundAmount) ||
+      refundAmount <= 0
+    ) {
+      throw new Error('Invalid data transaction refund amount.');
+    }
+
+    // Lock the original wallet account.
     const lockedAccount = await client.query(
       `
       SELECT id, balance
@@ -297,43 +337,29 @@ const refundDataTransaction = async ({
       WHERE id = $1
       FOR UPDATE
       `,
-      [accountId]
+      [originalAccountId]
     );
 
     if (!lockedAccount.rows.length) {
-      throw new Error('Wallet account not found during refund.');
+      throw new Error('Original wallet account not found.');
     }
 
     const currentBalance = Number(
       lockedAccount.rows[0].balance
     );
 
-    const refundAmount = Number(dataTransaction.amount);
-
-    if (
-      !Number.isFinite(currentBalance) ||
-      !Number.isFinite(refundAmount) ||
-      refundAmount <= 0
-    ) {
-      throw new Error('Invalid wallet balance or refund amount.');
+    if (!Number.isFinite(currentBalance)) {
+      throw new Error('Invalid wallet balance during refund.');
     }
 
     const balanceAfter = currentBalance + refundAmount;
 
-    await client.query(
-      `
-      UPDATE accounts
-      SET
-        balance = $1,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      `,
-      [balanceAfter, accountId]
-    );
-
     const refundReference = `ZEN-DATA-REFUND-${reference}`;
 
-    await client.query(
+    // IMPORTANT:
+    // Create the refund ledger entry FIRST.
+    // ON CONFLICT prevents a duplicate refund reference.
+    const refundLedger = await client.query(
       `
       INSERT INTO transactions (
         account_id,
@@ -358,9 +384,10 @@ const refundDataTransaction = async ({
         $6
       )
       ON CONFLICT (reference) DO NOTHING
+      RETURNING id
       `,
       [
-        accountId,
+        originalAccountId,
         refundAmount,
         refundReference,
         `Refund for failed data purchase ${reference}`,
@@ -369,6 +396,59 @@ const refundDataTransaction = async ({
       ]
     );
 
+    // A refund ledger entry already exists.
+    // Do not credit the wallet a second time.
+    if (!refundLedger.rows.length) {
+      await client.query(
+        `
+        UPDATE data_transactions
+        SET
+          provider_reference = COALESCE($1, provider_reference),
+          provider_response = $2::jsonb,
+          status = 'failed',
+          failure_reason = $3
+        WHERE id = $4
+        `,
+        [
+          providerReference,
+          JSON.stringify(providerResponse || {}),
+          failureReason || 'Sogo reported that the data purchase failed.',
+          transactionId,
+        ]
+      );
+
+      await client.query(
+        `
+        UPDATE transactions
+        SET status = 'failed'
+        WHERE reference = $1
+          AND type = 'data_purchase'
+        `,
+        [reference]
+      );
+
+      await client.query('COMMIT');
+
+      return {
+        alreadyProcessed: true,
+        status: 'failed',
+      };
+    }
+
+    // Credit the original wallet only after the refund ledger
+    // entry has been successfully inserted.
+    await client.query(
+      `
+      UPDATE accounts
+      SET
+        balance = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      `,
+      [balanceAfter, originalAccountId]
+    );
+
+    // Mark the original data transaction as failed.
     await client.query(
       `
       UPDATE data_transactions
@@ -387,11 +467,13 @@ const refundDataTransaction = async ({
       ]
     );
 
+    // Mark the original central transaction as failed.
     await client.query(
       `
       UPDATE transactions
       SET status = 'failed'
       WHERE reference = $1
+        AND type = 'data_purchase'
       `,
       [reference]
     );
