@@ -1,610 +1,298 @@
-// ============================================================
-// ZENIMONIES - VTPASS AIRTIME SERVICE
-// ============================================================
 
 const crypto = require('crypto');
 
 // ============================================================
-// CONFIGURATION
+// ZENIMONIES — SOGO AIRTIME SERVICE
 // ============================================================
 
-const VTPASS_BASE_URL =
-  process.env.VTPASS_BASE_URL ||
-  'https://sandbox.vtpass.com';
+const SOGO_API_BASE_URL = (
+  process.env.SOGO_API_BASE_URL ||
+  'https://sandbox.sogo.africa/v1'
+).replace(/\/+$/, '');
 
-const VTPASS_API_KEY =
-  process.env.VTPASS_API_KEY;
+const SOGO_API_KEY = process.env.SOGO_API_KEY;
 
-const VTPASS_PUBLIC_KEY =
-  process.env.VTPASS_PUBLIC_KEY;
-
-const VTPASS_SECRET_KEY =
-  process.env.VTPASS_SECRET_KEY;
-
+const REQUEST_TIMEOUT = 60000;
 
 // ============================================================
-// AIRTIME SERVICE IDs
+// NETWORK SLUGS — SOGO
 // ============================================================
 
-const AIRTIME_SERVICE_IDS = {
+const AIRTIME_NETWORKS = {
   MTN: 'mtn',
   Airtel: 'airtel',
   Glo: 'glo',
-  '9mobile': 'etisalat',
+  '9mobile': 't2mobile',
 };
 
+// ============================================================
+// ENVIRONMENT
+// ============================================================
+
+const isSandbox = () => {
+  return (
+    SOGO_API_BASE_URL.includes('sandbox.sogo.africa') ||
+    SOGO_API_KEY?.startsWith('sogo_sk_test_')
+  );
+};
 
 // ============================================================
-// CONFIG VALIDATION
+// CONFIGURATION VALIDATION
 // ============================================================
 
 const validateConfig = () => {
-
-  if (!VTPASS_API_KEY) {
-
-    const error =
-      new Error(
-        'VTPASS_API_KEY is not configured.'
-      );
-
-    error.code =
-      'VTPASS_CONFIG_ERROR';
-
+  if (!SOGO_API_KEY) {
+    const error = new Error(
+      'SOGO_API_KEY is not configured.'
+    );
+    error.code = 'SOGO_CONFIG_ERROR';
     throw error;
   }
 
-
-  if (!VTPASS_PUBLIC_KEY) {
-
-    const error =
-      new Error(
-        'VTPASS_PUBLIC_KEY is not configured.'
-      );
-
-    error.code =
-      'VTPASS_CONFIG_ERROR';
-
+  if (!SOGO_API_KEY.startsWith('sogo_sk_')) {
+    const error = new Error(
+      'A Sogo secret API key is required.'
+    );
+    error.code = 'SOGO_INVALID_API_KEY';
     throw error;
   }
 
+  if (
+    isSandbox() &&
+    !SOGO_API_KEY.startsWith('sogo_sk_test_')
+  ) {
+    const error = new Error(
+      'Sogo Sandbox URL requires a Sandbox secret key.'
+    );
+    error.code = 'SOGO_ENVIRONMENT_MISMATCH';
+    throw error;
+  }
 
-  if (!VTPASS_SECRET_KEY) {
-
-    const error =
-      new Error(
-        'VTPASS_SECRET_KEY is not configured.'
-      );
-
-    error.code =
-      'VTPASS_CONFIG_ERROR';
-
+  if (
+    !isSandbox() &&
+    SOGO_API_BASE_URL.includes('api.sogo.africa') &&
+    !SOGO_API_KEY.startsWith('sogo_sk_live_')
+  ) {
+    const error = new Error(
+      'Sogo Live URL requires a Live secret key.'
+    );
+    error.code = 'SOGO_ENVIRONMENT_MISMATCH';
     throw error;
   }
 };
-
 
 // ============================================================
 // NORMALIZE NETWORK
 // ============================================================
 
-const normalizeNetwork = (
-  network
-) => {
+const normalizeNetwork = (network) => {
+  const value = String(network || '')
+    .trim()
+    .toLowerCase();
 
-  const value =
-    String(network || '')
-      .trim()
-      .toLowerCase();
-
-
-  if (
-    value === 'mtn'
-  ) {
-    return 'MTN';
-  }
-
-
-  if (
-    value === 'airtel'
-  ) {
-    return 'Airtel';
-  }
-
-
-  if (
-    value === 'glo'
-  ) {
-    return 'Glo';
-  }
-
+  if (value === 'mtn') return 'MTN';
+  if (value === 'airtel') return 'Airtel';
+  if (value === 'glo') return 'Glo';
 
   if (
     value === '9mobile' ||
-    value === 'etisalat'
+    value === 'etisalat' ||
+    value === 't2' ||
+    value === 't2mobile'
   ) {
     return '9mobile';
   }
 
-
   return null;
 };
 
-
 // ============================================================
-// GET SERVICE ID
+// GET SOGO NETWORK SLUG
 // ============================================================
 
-const getAirtimeServiceId = (
-  network
-) => {
+const getAirtimeServiceId = (network) => {
+  const normalizedNetwork = normalizeNetwork(network);
 
-  const normalizedNetwork =
-    normalizeNetwork(
-      network
+  if (!normalizedNetwork) {
+    const error = new Error(
+      'Unsupported Sogo airtime network.'
     );
-
-
-  if (
-    !normalizedNetwork
-  ) {
-
-    const error =
-      new Error(
-        'Unsupported airtime network.'
-      );
-
-    error.code =
-      'UNSUPPORTED_NETWORK';
-
+    error.code = 'UNSUPPORTED_NETWORK';
     throw error;
   }
 
-
   return {
-
-    network:
-      normalizedNetwork,
-
-    serviceID:
-      AIRTIME_SERVICE_IDS[
-        normalizedNetwork
-      ],
-
+    network: normalizedNetwork,
+    serviceID: AIRTIME_NETWORKS[normalizedNetwork],
   };
 };
 
-
 // ============================================================
-// GENERATE VTPASS REQUEST ID
+// GENERATE SOGO IDEMPOTENCY KEY
 //
-// VTpass requires the first 12 characters to contain
-// Lagos date/time:
-//
-// YYYYMMDDHHII
-//
-// The remaining characters provide uniqueness.
+// Sogo recommends UUID v4.
+// This key must be stored before the purchase request.
 // ============================================================
 
 const generateRequestId = () => {
-
-  const now =
-    new Date();
-
-
-  const lagosParts =
-    new Intl.DateTimeFormat(
-      'en-GB',
-      {
-        timeZone:
-          'Africa/Lagos',
-
-        year:
-          'numeric',
-
-        month:
-          '2-digit',
-
-        day:
-          '2-digit',
-
-        hour:
-          '2-digit',
-
-        minute:
-          '2-digit',
-
-        hourCycle:
-          'h23',
-      }
-    ).formatToParts(
-      now
-    );
-
-
-  const parts = {};
-
-
-  for (
-    const part of lagosParts
-  ) {
-
-    parts[
-      part.type
-    ] =
-      part.value;
-
-  }
-
-
-  const datePrefix =
-    `${parts.year}${parts.month}${parts.day}${parts.hour}${parts.minute}`;
-
-
-  const randomPart =
-    crypto
-      .randomBytes(6)
-      .toString('hex')
-      .toUpperCase();
-
-
-  return (
-    `${datePrefix}${randomPart}`
-  );
+  return crypto.randomUUID();
 };
 
+// ============================================================
+// NORMALIZE SOGO RESPONSE
+// ============================================================
+
+const normalizeSogoResponse = (data) => {
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+
+  const transaction =
+    data.transaction ||
+    data.data?.transaction ||
+    data.data ||
+    data;
+
+  return {
+    ...data,
+
+    status:
+      transaction?.status ||
+      data?.status ||
+      null,
+
+    reference:
+      transaction?.reference ||
+      data?.reference ||
+      null,
+
+    transaction,
+  };
+};
 
 // ============================================================
-// VTPASS HTTP REQUEST
+// SOGO HTTP REQUEST
 // ============================================================
 
-const vtpassRequest = async ({
+const sogoRequest = async ({
   endpoint,
   method = 'GET',
   body = null,
+  idempotencyKey = null,
 }) => {
-
   validateConfig();
 
-
   const headers = {
-
-    Accept:
-      'application/json',
-
-    'Content-Type':
-      'application/json',
-
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${SOGO_API_KEY}`,
   };
 
-
-  // ----------------------------------------------------------
-  // GET
-  // ----------------------------------------------------------
-
-  if (
-    method === 'GET'
-  ) {
-
-    headers['api-key'] =
-      VTPASS_API_KEY;
-
-    headers['public-key'] =
-      VTPASS_PUBLIC_KEY;
-
+  if (idempotencyKey) {
+    headers['Idempotency-Key'] = idempotencyKey;
   }
 
+  const controller = new AbortController();
 
-  // ----------------------------------------------------------
-  // POST
-  // ----------------------------------------------------------
-
-  if (
-    method === 'POST'
-  ) {
-
-    headers['api-key'] =
-      VTPASS_API_KEY;
-
-    headers['secret-key'] =
-      VTPASS_SECRET_KEY;
-
-  }
-
-
-  const controller =
-    new AbortController();
-
-
-  const timeout =
-    setTimeout(
-      () => {
-
-        controller.abort();
-
-      },
-      30000
-    );
-
-
-  // ==========================================================
-  // SAFE REQUEST DIAGNOSTIC
-  // ==========================================================
-
-  const diagnosticPhone =
-    body?.phone
-      ? String(
-          body.phone
-        ).slice(-4)
-      : 'N/A';
-
-
-  console.log(
-    '================================================'
-  );
-
-
-  console.log(
-    'VTPASS PROVIDER REQUEST'
-  );
-
-
-  console.log(
-    '================================================'
-  );
-
-
-  console.log(
-    'Environment:',
-    VTPASS_BASE_URL.includes(
-      'sandbox'
-    )
-      ? 'SANDBOX'
-      : 'LIVE'
-  );
-
-
-  console.log(
-    'Endpoint:',
-    endpoint
-  );
-
-
-  console.log(
-    'Method:',
-    method
-  );
-
-
-  console.log(
-    'Service ID:',
-    body?.serviceID ||
-      'N/A'
-  );
-
-
-  console.log(
-    'Amount:',
-    body?.amount ||
-      'N/A'
-  );
-
-
-  console.log(
-    'Request ID:',
-    body?.request_id ||
-      'N/A'
-  );
-
-
-  console.log(
-    'Phone last 4:',
-    diagnosticPhone
-  );
-
-
-  console.log(
-    '================================================'
-  );
-
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, REQUEST_TIMEOUT);
 
   try {
+    console.log('SOGO AIRTIME REQUEST', {
+      environment: isSandbox() ? 'SANDBOX' : 'LIVE',
+      endpoint,
+      method,
+      hasIdempotencyKey: Boolean(idempotencyKey),
+    });
 
-    const response =
-      await fetch(
-        `${VTPASS_BASE_URL}${endpoint}`,
-        {
-          method,
+    const response = await fetch(
+      `${SOGO_API_BASE_URL}${endpoint}`,
+      {
+        method,
+        headers,
+        body:
+          body !== null
+            ? JSON.stringify(body)
+            : undefined,
+        signal: controller.signal,
+      }
+    );
 
-          headers,
-
-          body:
-            body !== null
-              ? JSON.stringify(
-                  body
-                )
-              : undefined,
-
-          signal:
-            controller.signal,
-
-        }
-      );
-
-
-    const text =
-      await response.text();
-
+    const responseText = await response.text();
 
     let data;
 
-
     try {
-
-      data =
-        text
-          ? JSON.parse(
-              text
-            )
-          : null;
-
+      data = responseText
+        ? JSON.parse(responseText)
+        : null;
     } catch {
-
       data = {
-        raw:
-          text,
+        raw: responseText,
       };
-
     }
 
+    if (!response.ok) {
+      const providerError =
+        data?.error || data;
 
-    // ========================================================
-    // SAFE RESPONSE DIAGNOSTIC
-    // ========================================================
-
-    console.log(
-      'VTPASS PROVIDER RESPONSE CODE:',
-      data?.code ||
-        data?.response_code ||
-        'N/A'
-    );
-
-
-    console.log(
-      'VTPASS PROVIDER RESPONSE DESCRIPTION:',
-      data?.response_description ||
-        data?.message ||
-        'N/A'
-    );
-
-
-    console.log(
-      'VTPASS PROVIDER TRANSACTION STATUS:',
-      data?.content
-        ?.transactions
-        ?.status ||
-        'N/A'
-    );
-
-
-    console.log(
-      'VTPASS PROVIDER TRANSACTION ID:',
-      data?.content
-        ?.transactions
-        ?.transactionId ||
-        data?.transactionId ||
-        'N/A'
-    );
-
-
-    // --------------------------------------------------------
-    // HTTP ERROR
-    // --------------------------------------------------------
-
-    if (
-      !response.ok
-    ) {
-
-      const error =
-        new Error(
-          data?.response_description ||
-            data?.message ||
-            `VTpass request failed with status ${response.status}.`
-        );
-
+      const error = new Error(
+        providerError?.message ||
+        `Sogo request failed with HTTP ${response.status}.`
+      );
 
       error.code =
-        'VTPASS_HTTP_ERROR';
+        providerError?.code ||
+        'SOGO_HTTP_ERROR';
 
-
-      error.status =
-        response.status;
-
-
-      error.response =
-        data;
-
+      error.status = response.status;
+      error.response = data;
 
       throw error;
     }
 
-
-    return data;
-
+    return {
+      data: normalizeSogoResponse(data),
+      headers: {
+        idempotencyReplayed:
+          response.headers.get('idempotency-replayed') === 'true',
+      },
+    };
 
   } catch (error) {
+    if (error?.name === 'AbortError') {
+      const timeoutError = new Error(
+        'Sogo Airtime request timed out. Transaction outcome must be reconciled.'
+      );
 
-    console.error(
-      'VTPASS PROVIDER REQUEST ERROR:',
-      {
-
-        code:
-          error?.code ||
-          'UNKNOWN',
-
-        status:
-          error?.status ||
-          null,
-
-        message:
-          error?.message ||
-          'Unknown provider error',
-
-        providerCode:
-          error?.response?.code ||
-          error?.response
-            ?.response_code ||
-          null,
-
-        providerDescription:
-          error?.response
-            ?.response_description ||
-          error?.response
-            ?.message ||
-          null,
-
-      }
-    );
-
-
-    if (
-      error?.name ===
-      'AbortError'
-    ) {
-
-      const timeoutError =
-        new Error(
-          'VTpass request timed out.'
-        );
-
-
-      timeoutError.code =
-        'VTPASS_TIMEOUT';
-
-
+      timeoutError.code = 'SOGO_TIMEOUT';
       throw timeoutError;
     }
 
+    console.error('SOGO AIRTIME REQUEST ERROR:', {
+      code: error?.code || 'UNKNOWN',
+      status: error?.status || null,
+      message: error?.message || 'Unknown Sogo error',
+    });
 
     throw error;
 
-
   } finally {
-
-    clearTimeout(
-      timeout
-    );
-
+    clearTimeout(timeout);
   }
 };
-
 
 // ============================================================
 // PURCHASE AIRTIME
 //
-// IMPORTANT:
-// The controller can provide a requestId that was already
-// saved in the database. This guarantees that the exact same
-// request ID is sent to VTpass.
+// POST /v1/bills/airtime
+//
+// Sogo requires:
+// network
+// phone
+// amount
+// Idempotency-Key header
 // ============================================================
 
 const purchaseAirtime = async ({
@@ -613,205 +301,136 @@ const purchaseAirtime = async ({
   amount,
   requestId,
 }) => {
-
   const {
-    network:
-      normalizedNetwork,
-
+    network: normalizedNetwork,
     serviceID,
-
-  } =
-    getAirtimeServiceId(
-      network
-    );
-
+  } = getAirtimeServiceId(network);
 
   const finalRequestId =
-    requestId ||
-    generateRequestId();
+    requestId || generateRequestId();
 
+  const cleanPhone = String(phone || '')
+    .replace(/\s+/g, '')
+    .trim();
 
-  const cleanPhone =
-    String(
-      phone || ''
-    )
-      .replace(
-        /\s+/g,
-        ''
-      )
-      .trim();
+  const numericAmount = Number(amount);
 
-
-  const numericAmount =
-    Number(
-      amount
+  if (!cleanPhone) {
+    const error = new Error(
+      'Airtime phone number is required.'
     );
-
-
-  // ----------------------------------------------------------
-  // PHONE VALIDATION
-  // ----------------------------------------------------------
-
-  if (
-    !cleanPhone
-  ) {
-
-    const error =
-      new Error(
-        'Airtime phone number is required.'
-      );
-
-
-    error.code =
-      'INVALID_PHONE';
-
-
+    error.code = 'INVALID_PHONE';
     throw error;
   }
 
-
-  // ----------------------------------------------------------
-  // AMOUNT VALIDATION
-  // ----------------------------------------------------------
-
   if (
-    !Number.isFinite(
-      numericAmount
-    ) ||
+    !Number.isFinite(numericAmount) ||
     numericAmount <= 0
   ) {
-
-    const error =
-      new Error(
-        'A valid airtime amount is required.'
-      );
-
-
-    error.code =
-      'INVALID_AMOUNT';
-
-
+    const error = new Error(
+      'A valid airtime amount is required.'
+    );
+    error.code = 'INVALID_AMOUNT';
     throw error;
   }
 
+  if (
+    numericAmount < 50 ||
+    numericAmount > 50000
+  ) {
+    const error = new Error(
+      'Sogo airtime amount must be between ₦50 and ₦50,000.'
+    );
+    error.code = 'INVALID_AMOUNT';
+    throw error;
+  }
 
-  // ----------------------------------------------------------
-  // VTPASS AIRTIME PURCHASE
-  // ----------------------------------------------------------
+  const result = await sogoRequest({
+    endpoint: '/bills/airtime',
+    method: 'POST',
 
-  const response =
-    await vtpassRequest({
+    idempotencyKey: finalRequestId,
 
-      endpoint:
-        '/api/pay',
-
-      method:
-        'POST',
-
-      body: {
-
-        request_id:
-          finalRequestId,
-
-        serviceID:
-          serviceID,
-
-        amount:
-          numericAmount,
-
-        phone:
-          cleanPhone,
-
-      },
-
-    });
-
+    body: {
+      network: serviceID,
+      phone: cleanPhone,
+      amount: numericAmount,
+    },
+  });
 
   return {
+    response: result.data,
 
-    response,
+    requestId: finalRequestId,
 
-    requestId:
-      finalRequestId,
-
-    network:
-      normalizedNetwork,
+    network: normalizedNetwork,
 
     serviceID,
 
+    idempotencyReplayed:
+      result.headers.idempotencyReplayed,
   };
 };
 
-
 // ============================================================
 // REQUERY AIRTIME TRANSACTION
+//
+// LIVE:
+// GET /v1/transactions/{idempotency-key}?type=bill_payment
+//
+// SANDBOX:
+// Sogo does not persist Sandbox transactions.
+// Resolve them using the registered Sandbox webhook
+// and the original purchase response.
 // ============================================================
 
 const requeryAirtimeTransaction = async ({
   requestId,
 }) => {
+  validateConfig();
 
-  if (
-    !requestId
-  ) {
+  if (!requestId) {
+    const error = new Error(
+      'Sogo idempotency key is required for requery.'
+    );
+    error.code = 'INVALID_REQUEST_ID';
+    throw error;
+  }
 
-    const error =
-      new Error(
-        'VTpass request ID is required for requery.'
-      );
+  if (isSandbox()) {
+    const error = new Error(
+      'Sogo Sandbox transactions cannot be retrieved through the transaction lookup endpoint. Use the Sandbox webhook and original purchase response.'
+    );
 
-
-    error.code =
-      'INVALID_REQUEST_ID';
-
+    error.code = 'SOGO_SANDBOX_REQUERY_UNAVAILABLE';
 
     throw error;
   }
 
+  const encodedRequestId =
+    encodeURIComponent(requestId);
 
-  const response =
-    await vtpassRequest({
+  const result = await sogoRequest({
+    endpoint:
+      `/transactions/${encodedRequestId}?type=bill_payment`,
 
-      endpoint:
-        '/api/requery',
-
-      method:
-        'POST',
-
-      body: {
-
-        request_id:
-          requestId,
-
-      },
-
-    });
-
+    method: 'GET',
+  });
 
   return {
-
-    response,
-
+    response: result.data,
     requestId,
-
   };
 };
-
 
 // ============================================================
 // EXPORTS
 // ============================================================
 
 module.exports = {
-
   purchaseAirtime,
-
   requeryAirtimeTransaction,
-
   generateRequestId,
-
   normalizeNetwork,
-
   getAirtimeServiceId,
-
 };
