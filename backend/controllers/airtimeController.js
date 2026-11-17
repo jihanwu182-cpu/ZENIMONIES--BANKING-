@@ -86,20 +86,37 @@ const getProviderStatus = (response) => {
   ).trim().toLowerCase();
 
   if (
-    ['completed', 'complete', 'successful', 'success'].includes(status)
+    [
+      'completed',
+      'complete',
+      'successful',
+      'success',
+    ].includes(status)
   ) {
     return 'completed';
   }
 
   if (
-    ['processing', 'pending', 'initiated', 'queued'].includes(status)
+    [
+      'processing',
+      'pending',
+      'initiated',
+      'queued',
+    ].includes(status)
   ) {
     return 'pending';
   }
 
   if (
-    ['failed', 'failure', 'declined'].includes(status)
+    [
+      'failed',
+      'failure',
+      'declined',
+      'cancelled',
+      'canceled',
+    ].includes(status)
   ) {
+    // Cancelled Airtime purchases display as FAILED.
     return 'failed';
   }
 
@@ -107,24 +124,25 @@ const getProviderStatus = (response) => {
     return 'refunded';
   }
 
-  if (status === 'cancelled' || status === 'canceled') {
-    return 'failed';
-  }
-
   // Unknown responses must never trigger an automatic refund.
   return 'unknown';
 };
 
-const getProviderReference = (response, fallback) => {
+// Provider reference and idempotency key are separate values.
+// Never substitute one for the other.
+const getProviderReference = (response) => {
   const transaction = getSogoTransaction(response);
 
   return (
+    transaction?.reference ||
+    transaction?.provider_reference ||
+    transaction?.providerReference ||
+    response?.reference ||
+    response?.provider_reference ||
+    response?.providerReference ||
     transaction?.id ||
     transaction?.transaction_id ||
-    transaction?.reference ||
-    response?.reference ||
     response?.transaction_id ||
-    fallback ||
     null
   );
 };
@@ -208,7 +226,11 @@ const completeAirtimeTransaction = async ({
 
     if (currentStatus === 'completed') {
       await client.query('COMMIT');
-      return { status: 'completed', alreadyProcessed: true };
+
+      return {
+        status: 'completed',
+        alreadyProcessed: true,
+      };
     }
 
     if (currentStatus !== 'pending') {
@@ -312,8 +334,10 @@ const refundAirtimeTransaction = async ({
 
     const airtimeRecord = lockedResult.rows[0];
 
-    if (airtimeRecord.status === 'failed' ||
-        airtimeRecord.status === 'refunded') {
+    if (
+      airtimeRecord.status === 'failed' ||
+      airtimeRecord.status === 'refunded'
+    ) {
       await client.query('COMMIT');
 
       return {
@@ -396,6 +420,12 @@ const refundAirtimeTransaction = async ({
       ]
     );
 
+    // Normalize cancelled purchases to FAILED.
+    const normalizedFinalStatus =
+      finalStatus === 'refunded'
+        ? 'refunded'
+        : 'failed';
+
     // Update Airtime transaction.
     await client.query(
       `
@@ -412,12 +442,13 @@ const refundAirtimeTransaction = async ({
         providerReference,
         providerRequestId,
         JSON.stringify(providerResponse || {}),
-        finalStatus,
+        normalizedFinalStatus,
         airtimeRecord.id,
       ]
     );
 
     // Update original central transaction.
+    // Failed remains the customer's displayed outcome.
     await client.query(
       `
       UPDATE transactions
@@ -477,7 +508,7 @@ const refundAirtimeTransaction = async ({
     await client.query('COMMIT');
 
     return {
-      status: finalStatus,
+      status: normalizedFinalStatus,
       refunded: true,
       alreadyProcessed: false,
       refundReference,
@@ -785,11 +816,14 @@ const buyAirtime = async (req, res) => {
 
   } catch (providerError) {
     // Do not refund a timeout or ambiguous provider error.
-    console.error('Sogo Airtime request outcome requires reconciliation:', {
-      code: providerError?.code || null,
-      status: providerError?.status || null,
-      message: providerError?.message || 'Unknown provider error',
-    });
+    console.error(
+      'Sogo Airtime request outcome requires reconciliation:',
+      {
+        code: providerError?.code || null,
+        status: providerError?.status || null,
+        message: providerError?.message || 'Unknown provider error',
+      }
+    );
 
     return res.status(202).json({
       success: true,
@@ -828,8 +862,7 @@ const buyAirtime = async (req, res) => {
   const providerStatus = getProviderStatus(providerResponse);
 
   const providerReference = getProviderReference(
-    providerResponse,
-    providerRequestId
+    providerResponse
   );
 
   const providerMessage = getProviderMessage(providerResponse);
@@ -937,7 +970,7 @@ const buyAirtime = async (req, res) => {
           phone: normalizedPhone,
           amount: numericAmount,
           currency: 'NGN',
-          status: providerStatus,
+          status: result.status,
           refunded: true,
           refund_reference: result.refundReference,
           balance_after: result.refundedBalance,
