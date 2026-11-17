@@ -28,6 +28,8 @@ import TransactionDetailsScreen from './screens/TransactionDetailsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import AirtimeScreen from './screens/AirtimeScreen';
+import DataScreen from './screens/DataScreen';
+
 import {
   registerPushNotifications,
   unregisterPushNotifications,
@@ -57,7 +59,8 @@ type Screen =
   | 'history'
   | 'notifications'
   | 'transaction-details'
-  | 'airtime';
+  | 'airtime'
+  | 'data';
 
 type Account = {
   id?: string;
@@ -970,7 +973,10 @@ const handleDashboardAction = (
     setScreen('airtime');
     return;
   }
-
+if (action === 'data') {
+  setScreen('data');
+  return;
+}
   const serviceNames: Record<string, string> = {
     transfer: 'Bank transfers',
     'add-money': 'Add money',
@@ -1222,6 +1228,33 @@ if (screen === 'airtime' && session) {
           ).catch((error: any) => {
             console.warn(
               'Airtime dashboard refresh failed:',
+              error
+            );
+          });
+        }}
+      />
+    </SafeAreaView>
+  );
+}
+  // ====================================================
+// DATA PURCHASE
+// ====================================================
+
+if (screen === 'data' && session) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+
+      <DataScreen
+        token={session.token}
+        onBack={() => setScreen('home')}
+        onComplete={() => {
+          void loadDashboardData(
+            session.token,
+            false
+          ).catch((error: any) => {
+            console.warn(
+              'Data dashboard refresh failed:',
               error
             );
           });
