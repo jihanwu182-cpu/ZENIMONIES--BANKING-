@@ -2620,12 +2620,20 @@ function createStyles(colors: any) {
       paddingVertical: 22,
       marginTop: 3,
     },
+  footerText: {
+  color: colors.textMuted,
+  fontSize: 12,
+  fontWeight: '800',
+  letterSpacing: 0.5,
+},
 
-    footerText: {
-      color: colors.textMuted,
-      fontSize: 12,
-      fontWeight: '800',
-      letterSpacing: 0.5,
-    },
+footerVersion: {
+  color: colors.textMuted,
+  fontSize: 10,
+  textAlign: 'center',
+  marginTop: 5,
+  marginBottom: 10,
+},
+    
   });
 }
