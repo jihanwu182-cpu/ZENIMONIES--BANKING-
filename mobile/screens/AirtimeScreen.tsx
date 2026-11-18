@@ -43,22 +43,22 @@ const NETWORKS: NetworkItem[] = [
   {
     value: 'MTN',
     label: 'MTN',
-    logo: require('../../assets/network-logos/mtn.png'),
+    logo: require('../assets/network-logos/mtn-nigeria-communications-plc--600.png'),
   },
   {
     value: 'Airtel',
     label: 'Airtel',
-    logo: require('../../assets/network-logos/airtel.png'),
+    logo: require('../assets/network-logos/airtel.png'),
   },
   {
     value: 'Glo',
     label: 'Glo',
-    logo: require('../../assets/network-logos/glo.png'),
+    logo: require('../assets/network-logos/glo.png'),
   },
   {
     value: '9mobile',
     label: 'T2 Mobile',
-    logo: require('../../assets/network-logos/t2.png'),
+    logo: require('../assets/network-logos/T2-Mobilr.jpg'),
   },
 ];
 
