@@ -1,5 +1,4 @@
 const express = require('express');
-
 const router = express.Router();
 
 const {
@@ -17,8 +16,14 @@ const {
 
 const authMiddleware = require('../middleware/authMiddleware');
 
+const transactionPinMiddleware = require('../middleware/transactionPinMiddleware');
+
 // ============================================================
 // ELECTRICITY METER VERIFICATION
+// ============================================================
+// POST /api/bills/electricity/verify
+// Authentication required.
+// No transaction PIN required for verification.
 // ============================================================
 
 router.post(
@@ -30,18 +35,24 @@ router.post(
 // ============================================================
 // ELECTRICITY PAYMENT
 // ============================================================
+// POST /api/bills/electricity/pay
+//
+// Authentication required.
+// Transaction PIN verification required.
+// ============================================================
 
 router.post(
   '/electricity/pay',
   authMiddleware,
+  transactionPinMiddleware,
   purchaseElectricity
 );
 
 // ============================================================
 // ELECTRICITY RECONCILIATION
 // ============================================================
-// READ ONLY
-// Does not debit, refund, create, or change payments.
+// GET /api/bills/electricity/reconciliation
+// Authentication required.
 // ============================================================
 
 router.get(
@@ -51,7 +62,10 @@ router.get(
 );
 
 // ============================================================
-// GENERAL BILL PAYMENT
+// GENERIC BILL PAYMENT
+// ============================================================
+// POST /api/bills
+// Existing route preserved.
 // ============================================================
 
 router.post(
