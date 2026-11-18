@@ -1,4 +1,3 @@
-
 const axios = require('axios');
 const crypto = require('crypto');
 
@@ -25,6 +24,7 @@ const NETWORKS = {
   '9mobile': 't2mobile',
   etisalat: 't2mobile',
   t2mobile: 't2mobile',
+  't2 mobile': 't2mobile',
   smile: 'smile',
 };
 
@@ -32,11 +32,18 @@ const NETWORKS = {
 // ERRORS
 // ============================================================
 
-const createError = (message, code, status, response = null) => {
+const createError = (
+  message,
+  code,
+  status,
+  response = null
+) => {
   const error = new Error(message);
+
   error.code = code;
   error.status = status;
   error.response = response;
+
   return error;
 };
 
@@ -128,6 +135,7 @@ const sogoRequest = async ({
     return {
       data: response.data,
       statusCode: response.status,
+
       idempotencyReplayed:
         String(
           response.headers?.['idempotency-replayed'] || ''
@@ -170,108 +178,355 @@ const sogoRequest = async ({
     );
   }
 };
+
 // ============================================================
-// PLAN RESPONSE NORMALIZATION
+// PLAN HELPERS
+// ============================================================
+
+const firstValue = (...values) => {
+  for (const value of values) {
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ''
+    ) {
+      return value;
+    }
+  }
+
+  return null;
+};
+
+const normalizeAmount = (plan) => {
+  const value = firstValue(
+    plan.amount,
+    plan.price,
+    plan.variation_amount,
+    plan.variationAmount,
+    plan.cost,
+    plan.selling_price,
+    plan.sellingPrice,
+    plan.amount_ngn,
+    plan.price_ngn
+  );
+
+  if (value === null) {
+    return NaN;
+  }
+
+  if (typeof value === 'string') {
+    return Number(
+      value.replace(/[₦,\s]/g, '')
+    );
+  }
+
+  return Number(value);
+};
+
+const normalizeVariationCode = (plan) => {
+  return String(
+    firstValue(
+      plan.variation_code,
+      plan.variationCode,
+      plan.variation_id,
+      plan.variationId,
+      plan.plan_code,
+      plan.planCode,
+      plan.code,
+      plan.product_code,
+      plan.productCode,
+      plan.id
+    ) || ''
+  ).trim();
+};
+
+const normalizePlanName = (plan) => {
+  return String(
+    firstValue(
+      plan.name,
+      plan.plan_name,
+      plan.planName,
+      plan.bundle_name,
+      plan.bundleName,
+      plan.product_name,
+      plan.productName,
+      plan.title,
+      plan.description,
+      plan.details,
+      plan.plan_description,
+      plan.planDescription
+    ) || 'Data bundle'
+  ).trim();
+};
+
+const normalizeAllowance = (plan) => {
+  return firstValue(
+    plan.allowance,
+    plan.bundle,
+    plan.data_size,
+    plan.dataSize,
+    plan.volume,
+    plan.size,
+    plan.data,
+    plan.data_volume,
+    plan.dataVolume,
+    plan.capacity
+  );
+};
+
+const normalizeValidity = (plan) => {
+  return firstValue(
+    plan.validity,
+    plan.validity_period,
+    plan.validityPeriod,
+    plan.duration,
+    plan.expiry,
+    plan.expiration,
+    plan.period
+  );
+};
+
+// ============================================================
+// PLAN ARRAY DETECTION
+// ============================================================
+
+const PLAN_ARRAY_KEYS = [
+  'plans',
+  'variations',
+  'bundles',
+  'data_plans',
+  'dataPlans',
+  'products',
+  'packages',
+  'available_plans',
+  'availablePlans',
+];
+
+const looksLikePlan = (item) => {
+  if (!item || typeof item !== 'object') {
+    return false;
+  }
+
+  const hasCode = Boolean(
+    firstValue(
+      item.variation_code,
+      item.variationCode,
+      item.variation_id,
+      item.plan_code,
+      item.planCode,
+      item.code,
+      item.product_code,
+      item.id
+    )
+  );
+
+  const hasAmount = firstValue(
+    item.amount,
+    item.price,
+    item.variation_amount,
+    item.variationAmount,
+    item.cost,
+    item.selling_price
+  ) !== null;
+
+  const hasPlanName = Boolean(
+    firstValue(
+      item.name,
+      item.plan_name,
+      item.planName,
+      item.bundle_name,
+      item.product_name,
+      item.title,
+      item.description
+    )
+  );
+
+  return hasCode && (hasAmount || hasPlanName);
+};
+
+// ============================================================
+// EXTRACT PLAN ARRAYS
+// ============================================================
+
+const extractPlanArrays = (responseData) => {
+  const foundArrays = [];
+  const visited = new Set();
+
+  const walk = (value, depth = 0) => {
+    if (
+      value === null ||
+      value === undefined ||
+      depth > 8
+    ) {
+      return;
+    }
+
+    if (typeof value !== 'object') {
+      return;
+    }
+
+    if (visited.has(value)) {
+      return;
+    }
+
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      const validItems = value.filter(looksLikePlan);
+
+      if (validItems.length > 0) {
+        foundArrays.push(validItems);
+      }
+
+      value.forEach(item => walk(item, depth + 1));
+
+      return;
+    }
+
+    // Look at recognized catalog keys first.
+    for (const key of PLAN_ARRAY_KEYS) {
+      if (value[key] !== undefined) {
+        walk(value[key], depth + 1);
+      }
+    }
+
+    // Support nested provider response structures.
+    for (const key of Object.keys(value)) {
+      if (PLAN_ARRAY_KEYS.includes(key)) {
+        continue;
+      }
+
+      walk(value[key], depth + 1);
+    }
+  };
+
+  walk(responseData);
+
+  return foundArrays;
+};
+
+// ============================================================
+// PLAN NORMALIZATION
 // ============================================================
 
 const extractPlans = (responseData) => {
-  const data = responseData?.data;
+  const planArrays = extractPlanArrays(responseData);
 
-  const plans =
-    Array.isArray(data) ? data :
-    Array.isArray(data?.plans) ? data.plans :
-    Array.isArray(data?.variations) ? data.variations :
-    Array.isArray(data?.data) ? data.data :
-    Array.isArray(responseData?.plans) ? responseData.plans :
-    Array.isArray(responseData?.variations)
-      ? responseData.variations
-      : [];
+  const allPlans = planArrays.flat();
 
-  return plans
-    .map((plan) => {
-      const amount = Number(
-        plan.amount ??
-        plan.price ??
-        plan.variation_amount ??
-        plan.cost
-      );
+  const normalizedPlans = allPlans
+    .map(plan => {
+      const amount = normalizeAmount(plan);
 
-      const variationCode = String(
-        plan.variation_code ??
-        plan.variationCode ??
-        plan.code ??
-        ''
-      ).trim();
+      const variationCode =
+        normalizeVariationCode(plan);
 
       const name =
-        plan.name ||
-        plan.plan_name ||
-        plan.description ||
-        plan.bundle_name ||
-        'Data bundle';
-
-      const validity =
-        plan.validity ||
-        plan.validity_period ||
-        plan.duration ||
-        plan.expiry ||
-        null;
+        normalizePlanName(plan);
 
       const allowance =
-        plan.allowance ||
-        plan.bundle ||
-        plan.data_size ||
-        plan.volume ||
-        plan.size ||
-        null;
+        normalizeAllowance(plan);
 
-      const description =
-        plan.description ||
-        plan.details ||
-        plan.plan_description ||
-        null;
+      const validity =
+        normalizeValidity(plan);
 
-      const category =
-        plan.category ||
-        plan.plan_category ||
-        plan.type ||
-        plan.plan_type ||
-        null;
+      const description = firstValue(
+        plan.description,
+        plan.details,
+        plan.plan_description,
+        plan.planDescription
+      );
+
+      const category = firstValue(
+        plan.category,
+        plan.plan_category,
+        plan.planCategory,
+        plan.type,
+        plan.plan_type,
+        plan.planType
+      );
+
+      const network = firstValue(
+        plan.network,
+        plan.network_slug,
+        plan.networkSlug,
+        plan.serviceID,
+        plan.service_id
+      );
+
+      const promotional =
+        firstValue(
+          plan.is_promotional,
+          plan.isPromotional,
+          plan.promotion,
+          plan.promotional,
+          plan.promo,
+          false
+        );
 
       return {
         variation_code: variationCode,
         name,
         amount,
 
-        network:
-          plan.network ||
-          plan.network_slug ||
-          null,
+        network,
 
-        validity,
-        allowance,
-        description,
-        category,
+        validity:
+          validity !== null
+            ? String(validity)
+            : null,
 
-        // Additional provider metadata
-        fixedPrice: plan.fixedPrice ?? plan.fixed_price ?? null,
+        allowance:
+          allowance !== null
+            ? String(allowance)
+            : null,
+
+        description:
+          description !== null
+            ? String(description)
+            : null,
+
+        category:
+          category !== null
+            ? String(category)
+            : null,
+
+        fixedPrice: firstValue(
+          plan.fixedPrice,
+          plan.fixed_price,
+          plan.fixedprice
+        ),
+
         isPromotional:
-          plan.is_promotional ??
-          plan.promotion ??
-          plan.promotional ??
-          false,
+          Boolean(promotional),
 
-        // Preserve provider's original response
         raw: plan,
       };
     })
-    .filter((plan) => {
+    .filter(plan => {
       return (
         plan.variation_code &&
         Number.isFinite(plan.amount) &&
         plan.amount > 0
       );
     });
+
+  // ----------------------------------------------------------
+  // REMOVE DUPLICATE VARIATION CODES
+  // ----------------------------------------------------------
+
+  const uniquePlans = new Map();
+
+  for (const plan of normalizedPlans) {
+    if (!uniquePlans.has(plan.variation_code)) {
+      uniquePlans.set(
+        plan.variation_code,
+        plan
+      );
+    }
+  }
+
+  return Array.from(uniquePlans.values());
 };
 
 // ============================================================
@@ -283,7 +538,8 @@ const getDataPlans = async (
   network,
   { forceRefresh = false } = {}
 ) => {
-  const normalizedNetwork = normalizeNetwork(network);
+  const normalizedNetwork =
+    normalizeNetwork(network);
 
   if (!normalizedNetwork) {
     throw createError(
@@ -293,15 +549,25 @@ const getDataPlans = async (
     );
   }
 
-  const cached = variationCache.get(normalizedNetwork);
+  // ----------------------------------------------------------
+  // CACHE
+  // ----------------------------------------------------------
+
+  const cached =
+    variationCache.get(normalizedNetwork);
 
   if (
     cached &&
     !forceRefresh &&
-    Date.now() - cached.timestamp < CACHE_DURATION_MS
+    Date.now() - cached.timestamp <
+      CACHE_DURATION_MS
   ) {
     return cached.data;
   }
+
+  // ----------------------------------------------------------
+  // REQUEST PROVIDER CATALOG
+  // ----------------------------------------------------------
 
   const result = await sogoRequest({
     endpoint:
@@ -311,16 +577,23 @@ const getDataPlans = async (
     method: 'GET',
   });
 
+  // ----------------------------------------------------------
+  // NORMALIZE RESPONSE
+  // ----------------------------------------------------------
+
   const plans = extractPlans(result.data);
 
-  // If Sogo explicitly identifies a plan's network,
-  // exclude plans belonging to another network.
-  const verifiedPlans = plans.filter((plan) => {
+  // ----------------------------------------------------------
+  // NETWORK VALIDATION
+  // ----------------------------------------------------------
+
+  const verifiedPlans = plans.filter(plan => {
     if (!plan.network) {
       return true;
     }
 
-    const planNetwork = normalizeNetwork(plan.network);
+    const planNetwork =
+      normalizeNetwork(plan.network);
 
     return (
       !planNetwork ||
@@ -328,7 +601,20 @@ const getDataPlans = async (
     );
   });
 
+  // ----------------------------------------------------------
+  // EMPTY CATALOG
+  // ----------------------------------------------------------
+
   if (verifiedPlans.length === 0) {
+    console.error(
+      'Sogo returned no valid data plans.',
+      {
+        network: normalizedNetwork,
+        responseStructure:
+          Object.keys(result.data || {}),
+      }
+    );
+
     throw createError(
       'Sogo returned no valid data plans for this network.',
       'SOGO_EMPTY_DATA_CATALOGUE',
@@ -337,16 +623,35 @@ const getDataPlans = async (
     );
   }
 
+  // ----------------------------------------------------------
+  // SORT PLANS BY PRICE
+  // ----------------------------------------------------------
+
+  verifiedPlans.sort(
+    (a, b) => a.amount - b.amount
+  );
+
+  // ----------------------------------------------------------
+  // RESPONSE
+  // ----------------------------------------------------------
+
   const response = {
     network: normalizedNetwork,
     serviceID: normalizedNetwork,
     plans: verifiedPlans,
   };
 
-  variationCache.set(normalizedNetwork, {
-    timestamp: Date.now(),
-    data: response,
-  });
+  // ----------------------------------------------------------
+  // CACHE
+  // ----------------------------------------------------------
+
+  variationCache.set(
+    normalizedNetwork,
+    {
+      timestamp: Date.now(),
+      data: response,
+    }
+  );
 
   return response;
 };
@@ -363,7 +668,8 @@ const purchaseDataPlan = async ({
   amount,
   idempotencyKey,
 }) => {
-  const normalizedNetwork = normalizeNetwork(network);
+  const normalizedNetwork =
+    normalizeNetwork(network);
 
   if (!normalizedNetwork) {
     throw createError(
@@ -393,7 +699,10 @@ const purchaseDataPlan = async ({
     );
   }
 
-  // Validate the saved idempotency key as a UUID.
+  // ----------------------------------------------------------
+  // VALIDATE IDEMPOTENCY KEY
+  // ----------------------------------------------------------
+
   const uuidPattern =
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -408,20 +717,28 @@ const purchaseDataPlan = async ({
     );
   }
 
-  // Sogo's documented Data purchase body requires:
-  // network, phone and variation_code.
-  // The amount is verified against the Sogo catalogue
-  // by the controller before this request.
+  // ----------------------------------------------------------
+  // PURCHASE REQUEST
+  // ----------------------------------------------------------
+
   const result = await sogoRequest({
     endpoint: '/bills/data',
     method: 'POST',
-    idempotencyKey: String(idempotencyKey),
+
+    idempotencyKey:
+      String(idempotencyKey),
+
     body: {
       network: normalizedNetwork,
       phone: cleanPhone,
-      variation_code: String(variationCode),
+      variation_code:
+        String(variationCode),
     },
   });
+
+  // ----------------------------------------------------------
+  // RESPONSE NORMALIZATION
+  // ----------------------------------------------------------
 
   const transaction =
     result.data?.data?.transaction ||
@@ -430,15 +747,31 @@ const purchaseDataPlan = async ({
     result.data;
 
   return {
-    requestId: String(idempotencyKey),
-    network: normalizedNetwork,
-    phone: cleanPhone,
-    variationCode: String(variationCode),
-    amount: Number(amount),
-    response: result.data,
+    requestId:
+      String(idempotencyKey),
+
+    network:
+      normalizedNetwork,
+
+    phone:
+      cleanPhone,
+
+    variationCode:
+      String(variationCode),
+
+    amount:
+      Number(amount),
+
+    response:
+      result.data,
+
     transaction,
-    statusCode: result.statusCode,
-    idempotencyReplayed: result.idempotencyReplayed,
+
+    statusCode:
+      result.statusCode,
+
+    idempotencyReplayed:
+      result.idempotencyReplayed,
   };
 };
 
@@ -446,7 +779,9 @@ const purchaseDataPlan = async ({
 // REQUERY TRANSACTION
 // ============================================================
 
-const requeryTransaction = async (requestId) => {
+const requeryTransaction = async (
+  requestId
+) => {
   if (!requestId) {
     throw createError(
       'Sogo idempotency key is required.',
@@ -456,7 +791,11 @@ const requeryTransaction = async (requestId) => {
   }
 
   // Sandbox transactions are not persisted for lookup.
-  if (SOGO_API_BASE_URL.includes('sandbox.sogo.africa')) {
+  if (
+    SOGO_API_BASE_URL.includes(
+      'sandbox.sogo.africa'
+    )
+  ) {
     throw createError(
       'Sogo Sandbox does not support transaction lookup. Use the purchase response and webhook.',
       'SOGO_SANDBOX_REQUERY_UNAVAILABLE',
@@ -476,6 +815,28 @@ const requeryTransaction = async (requestId) => {
 };
 
 // ============================================================
+// CLEAR PLAN CACHE
+// ============================================================
+
+const clearDataPlanCache = (
+  network = null
+) => {
+  if (!network) {
+    variationCache.clear();
+    return;
+  }
+
+  const normalizedNetwork =
+    normalizeNetwork(network);
+
+  if (normalizedNetwork) {
+    variationCache.delete(
+      normalizedNetwork
+    );
+  }
+};
+
+// ============================================================
 // EXPORTS
 // ============================================================
 
@@ -485,4 +846,5 @@ module.exports = {
   getDataPlans,
   purchaseDataPlan,
   requeryTransaction,
+  clearDataPlanCache,
 };
