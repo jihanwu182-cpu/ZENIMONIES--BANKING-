@@ -1,5 +1,10 @@
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   ActivityIndicator,
@@ -49,6 +54,7 @@ const ACCOUNT_URL = `${API_BASE}/account`;
 const TRANSACTIONS_URL = `${API_BASE}/account/transactions`;
 
 const AUTH_TOKEN_KEY = 'zenimonies_auth_token';
+
 type Screen =
   | 'welcome'
   | 'login'
@@ -410,6 +416,9 @@ export default function App() {
   const [refreshing, setRefreshing] =
     useState(false);
 
+  // Prevent duplicate pull-to-refresh requests.
+  const refreshLock = useRef(false);
+
   // ====================================================
   // CUSTOMER PROFILE PHOTO
   // ====================================================
@@ -472,7 +481,6 @@ export default function App() {
   // ====================================================
 
   const clearSession = useCallback(() => {
-    // Immediately remove all authenticated app state.
     setSession(null);
     setAccount(null);
     setTransactions([]);
@@ -480,18 +488,23 @@ export default function App() {
     setProfilePhotoUri(null);
     setRefreshing(false);
     setDashboardLoading(false);
+    refreshLock.current = false;
     setScreen('welcome');
 
-    // Delete the saved token without blocking the screen transition.
     void (async () => {
       try {
         await deleteAuthToken(AUTH_TOKEN_KEY);
       } catch (error) {
-        console.error('Auth token deletion failed:', error);
+        console.error(
+          'Auth token deletion failed:',
+          error
+        );
 
-        // Attempt to invalidate the saved token.
         try {
-          await setAuthToken(AUTH_TOKEN_KEY, '');
+          await setAuthToken(
+            AUTH_TOKEN_KEY,
+            ''
+          );
         } catch (fallbackError) {
           console.error(
             'Auth token invalidation failed:',
@@ -501,6 +514,7 @@ export default function App() {
       }
     })();
   }, []);
+
   // ====================================================
   // AUTHENTICATED API REQUEST
   // ====================================================
@@ -548,7 +562,7 @@ export default function App() {
     async (
       token: string,
       showLoader = true
-    ) => {
+    ): Promise<boolean> => {
       if (showLoader) {
         setDashboardLoading(true);
       }
@@ -612,6 +626,8 @@ export default function App() {
         setTransactions(
           rows.map(normalizeTransaction)
         );
+
+        return true;
       } catch (error: any) {
         if (
           error.message === 'SESSION_EXPIRED'
@@ -622,20 +638,17 @@ export default function App() {
             [
               {
                 text: 'Sign in',
-                onPress: () => {
-                clearSession();
-               },
+                onPress: clearSession,
               },
             ]
           );
 
-          return;
+          return false;
         }
 
         throw error;
       } finally {
         setDashboardLoading(false);
-        setRefreshing(false);
       }
     },
     [
@@ -648,43 +661,44 @@ export default function App() {
   // LOAD CUSTOMER PROFILE
   // ====================================================
 
-const loadProfile = useCallback(
-  async (
-    token: string
-  ): Promise<AuthUser | undefined> => {
-    try {
-      const response = await authenticatedFetch(
-        PROFILE_URL,
-        token
-      );
-
-      const data: ProfileResponse =
-        await readJson(response);
-
-      if (
-        response.ok &&
-        data.success &&
-        data.user
-      ) {
-        // Restore the profile picture saved by the website.
-        setProfilePhotoUri(
-          data.user.profile_photo || null
+  const loadProfile = useCallback(
+    async (
+      token: string
+    ): Promise<AuthUser | undefined> => {
+      try {
+        const response = await authenticatedFetch(
+          PROFILE_URL,
+          token
         );
 
-        return data.user;
-      }
-    } catch (error) {
-      console.warn('Profile loading failed:', error);
-      // A profile failure must not discard
-      // an otherwise valid login session.
-    }
+        const data: ProfileResponse =
+          await readJson(response);
 
-    return undefined;
-  },
-  [authenticatedFetch]
-);
+        if (
+          response.ok &&
+          data.success &&
+          data.user
+        ) {
+          setProfilePhotoUri(
+            data.user.profile_photo || null
+          );
+
+          return data.user;
+        }
+      } catch (error) {
+        console.warn(
+          'Profile loading failed:',
+          error
+        );
+      }
+
+      return undefined;
+    },
+    [authenticatedFetch]
+  );
+
   // ====================================================
-  // RESTORE SAVED LOGIN SESSION — OPTIMIZED
+  // RESTORE SAVED LOGIN SESSION
   // ====================================================
 
   useEffect(() => {
@@ -692,13 +706,14 @@ const loadProfile = useCallback(
 
     const restoreSession = async () => {
       try {
-        const savedToken = await getAuthToken(AUTH_TOKEN_KEY);
+        const savedToken = await getAuthToken(
+          AUTH_TOKEN_KEY
+        );
 
         if (!savedToken) {
           return;
         }
 
-        // Always validate the saved token with the backend.
         const response = await authenticatedFetch(
           `${AUTH_URL}/me`,
           savedToken
@@ -711,13 +726,14 @@ const loadProfile = useCallback(
           data.success !== true ||
           !data.user
         ) {
-          await deleteAuthToken(AUTH_TOKEN_KEY);
+          await deleteAuthToken(
+            AUTH_TOKEN_KEY
+          );
           return;
         }
 
         if (!mounted) return;
 
-        // Open the dashboard immediately after authentication.
         setSession({
           success: true,
           token: savedToken,
@@ -735,26 +751,39 @@ const loadProfile = useCallback(
         setScreen('home');
         setCheckingSession(false);
 
-        // Load secondary data in the background.
-        void loadProfile(savedToken).then((profileUser) => {
-          if (!mounted || !profileUser) return;
-
-          setSession((previous) => {
-            if (!previous || previous.token !== savedToken) {
-              return previous;
+        // Load profile in the background.
+        void loadProfile(savedToken).then(
+          (profileUser) => {
+            if (
+              !mounted ||
+              !profileUser
+            ) {
+              return;
             }
 
-            return {
-              ...previous,
-              user: {
-                ...(previous.user || {}),
-                ...profileUser,
-              },
-            };
-          });
-        });
+            setSession((previous) => {
+              if (
+                !previous ||
+                previous.token !== savedToken
+              ) {
+                return previous;
+              }
 
-        void loadDashboardData(savedToken).catch((error: any) => {
+              return {
+                ...previous,
+                user: {
+                  ...(previous.user || {}),
+                  ...profileUser,
+                },
+              };
+            });
+          }
+        );
+
+        // Load account and transactions.
+        void loadDashboardData(
+          savedToken
+        ).catch((error: any) => {
           if (mounted) {
             Alert.alert(
               'Account information',
@@ -764,8 +793,12 @@ const loadProfile = useCallback(
           }
         });
       } catch (error: any) {
-        if (error.message === 'SESSION_EXPIRED') {
-          await deleteAuthToken(AUTH_TOKEN_KEY);
+        if (
+          error.message === 'SESSION_EXPIRED'
+        ) {
+          await deleteAuthToken(
+            AUTH_TOKEN_KEY
+          );
           return;
         }
 
@@ -794,7 +827,7 @@ const loadProfile = useCallback(
   ]);
 
   // ====================================================
-  // LOGIN SUCCESS — FASTER DASHBOARD ENTRY
+  // LOGIN SUCCESS
   // ====================================================
 
   const handleLoginSuccess = async (
@@ -809,13 +842,11 @@ const loadProfile = useCallback(
     }
 
     try {
-      // Securely save the token before opening the dashboard.
       await setAuthToken(
         AUTH_TOKEN_KEY,
         authData.token
       );
 
-      // Use account data already returned by login, if available.
       const initialAccount =
         authData.account ||
         authData.accounts?.[0] ||
@@ -826,15 +857,21 @@ const loadProfile = useCallback(
       setTransactions([]);
       setScreen('home');
 
-      // Ask about notifications without waiting for data requests.
-      offerPushNotifications(authData.token);
+      offerPushNotifications(
+        authData.token
+      );
 
-      // Fetch profile in the background.
-      void loadProfile(authData.token).then((profileUser) => {
+      // Load profile in the background.
+      void loadProfile(
+        authData.token
+      ).then((profileUser) => {
         if (!profileUser) return;
 
         setSession((previous) => {
-          if (!previous || previous.token !== authData.token) {
+          if (
+            !previous ||
+            previous.token !== authData.token
+          ) {
             return previous;
           }
 
@@ -848,16 +885,16 @@ const loadProfile = useCallback(
         });
       });
 
-      // Fetch account and transactions in the background.
-      void loadDashboardData(authData.token).catch(
-        (error: any) => {
-          Alert.alert(
-            'Account information',
-            error.message ||
-            'Your account details could not be loaded. Please refresh the dashboard.'
-          );
-        }
-      );
+      // Load account and transactions in the background.
+      void loadDashboardData(
+        authData.token
+      ).catch((error: any) => {
+        Alert.alert(
+          'Account information',
+          error.message ||
+          'Your account details could not be loaded. Please refresh the dashboard.'
+        );
+      });
     } catch {
       Alert.alert(
         'Secure storage unavailable',
@@ -866,7 +903,6 @@ const loadProfile = useCallback(
     }
   };
 
- 
   // ====================================================
   // REGISTRATION SUCCESS
   // ====================================================
@@ -879,35 +915,82 @@ const loadProfile = useCallback(
       return;
     }
 
-    await handleLoginSuccess(registrationSession);
+    await handleLoginSuccess(
+      registrationSession
+    );
   };
 
   // ====================================================
   // DASHBOARD REFRESH
   // ====================================================
 
-  const handleRefresh = async () => {
-    if (!session?.token) return;
+  const handleRefresh = useCallback(
+    async () => {
+      if (
+        !session?.token ||
+        refreshLock.current
+      ) {
+        return;
+      }
 
-    setRefreshing(true);
+      refreshLock.current = true;
+      setRefreshing(true);
 
-    try {
-      await loadDashboardData(
-        session.token,
-        false
-      );
-    } catch (error: any) {
-      Alert.alert(
-        'Refresh failed',
-        error.message ||
-        'Unable to refresh your account information.'
-      );
-    } finally {
-      setRefreshing(false);
-    }
-  };
+      try {
+        // Refresh account and transactions first.
+        const dashboardSuccess =
+          await loadDashboardData(
+            session.token,
+            false
+          );
 
-  
+        // Do not continue if the session expired.
+        if (!dashboardSuccess) {
+          return;
+        }
+
+        // Refresh profile information.
+        const refreshedProfile =
+          await loadProfile(
+            session.token
+          );
+
+        if (refreshedProfile) {
+          setSession((previous) => {
+            if (
+              !previous ||
+              previous.token !== session.token
+            ) {
+              return previous;
+            }
+
+            return {
+              ...previous,
+              user: {
+                ...(previous.user || {}),
+                ...refreshedProfile,
+              },
+            };
+          });
+        }
+      } catch (error: any) {
+        Alert.alert(
+          'Refresh failed',
+          error?.message ||
+          'Unable to refresh your account information. Please check your internet connection and try again.'
+        );
+      } finally {
+        refreshLock.current = false;
+        setRefreshing(false);
+      }
+    },
+    [
+      session?.token,
+      loadDashboardData,
+      loadProfile,
+    ]
+  );
+
   // ====================================================
   // LOGOUT
   // ====================================================
@@ -915,19 +998,23 @@ const loadProfile = useCallback(
   const handleLogout = useCallback(() => {
     const token = session?.token;
 
-    // Do not wait for storage or network operations.
     clearSession();
 
-    // Push notification cleanup happens separately.
     if (token) {
-      void unregisterPushNotifications(token).catch((error) => {
+      void unregisterPushNotifications(
+        token
+      ).catch((error) => {
         console.warn(
           'Push notification unregistration failed:',
           error
         );
       });
     }
-  }, [session?.token, clearSession]);
+  }, [
+    session?.token,
+    clearSession,
+  ]);
+
   // ====================================================
   // SELECT TRANSACTION
   // ====================================================
@@ -946,55 +1033,61 @@ const loadProfile = useCallback(
   const handleOpenNotificationTransaction = (
     transactionId: string
   ) => {
-    const matchingTransaction = transactions.find(
-      (transaction) =>
-        transaction.id === transactionId ||
-        transaction.reference === transactionId
-    );
+    const matchingTransaction =
+      transactions.find(
+        (transaction) =>
+          transaction.id === transactionId ||
+          transaction.reference === transactionId
+      );
 
     if (!matchingTransaction) {
       Alert.alert(
         'Transaction unavailable',
         'We could not find the transaction linked to this notification. Please check your transaction history.'
       );
+
       return;
     }
 
-    handleSelectTransaction(matchingTransaction);
+    handleSelectTransaction(
+      matchingTransaction
+    );
   };
 
   // ====================================================
   // DASHBOARD ACTIONS
   // ====================================================
-const handleDashboardAction = (
-  action: string
-) => {
-  if (action === 'airtime') {
-    setScreen('airtime');
-    return;
-  }
-if (action === 'data') {
-  setScreen('data');
-  return;
-}
-  const serviceNames: Record<string, string> = {
-    transfer: 'Bank transfers',
-    'add-money': 'Add money',
-    withdraw: 'Withdrawals',
-    data: 'Data purchases',
-    electricity: 'Electricity payments',
-    bills: 'Bill payments',
-    cards: 'Cards',
-    savings: 'ZENIMONIES Save',
+
+  const handleDashboardAction = (
+    action: string
+  ) => {
+    if (action === 'airtime') {
+      setScreen('airtime');
+      return;
+    }
+
+    if (action === 'data') {
+      setScreen('data');
+      return;
+    }
+
+    const serviceNames: Record<string, string> = {
+      transfer: 'Bank transfers',
+      'add-money': 'Add money',
+      withdraw: 'Withdrawals',
+      data: 'Data purchases',
+      electricity: 'Electricity payments',
+      bills: 'Bill payments',
+      cards: 'Cards',
+      savings: 'ZENIMONIES Save',
+    };
+
+    Alert.alert(
+      serviceNames[action] || 'ZENIMONIES',
+      'This service screen will be connected in the next development stage. No transaction has been initiated.'
+    );
   };
 
-  Alert.alert(
-    serviceNames[action] || 'ZENIMONIES',
-    'This service screen will be connected in the next development stage. No transaction has been initiated.'
-  );
-};
-  
-    
   // ====================================================
   // DASHBOARD NAVIGATION
   // ====================================================
@@ -1024,10 +1117,11 @@ if (action === 'data') {
       setScreen('notifications');
       return;
     }
-   if (tab === 'Settings') {
+
+    if (tab === 'Settings') {
       setScreen('settings');
       return;
-     } 
+    }
 
     Alert.alert(
       tab,
@@ -1041,13 +1135,18 @@ if (action === 'data') {
 
   if (checkingSession) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
+      <SafeAreaView
+        style={styles.loadingContainer}
+      >
         <StatusBar barStyle="dark-content" />
 
         <View style={styles.loadingContent}>
-         <View style={styles.premiumLogo}>
-           <Text style={styles.premiumLogoText}>Z</Text>
-        </View>
+          <View style={styles.premiumLogo}>
+            <Text style={styles.premiumLogoText}>
+              Z
+            </Text>
+          </View>
+
           <Text style={styles.loadingBrand}>
             ZENIMONIES
           </Text>
@@ -1072,7 +1171,9 @@ if (action === 'data') {
 
   if (screen === 'login') {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={styles.container}
+      >
         <StatusBar barStyle="dark-content" />
 
         <TouchableOpacity
@@ -1086,7 +1187,9 @@ if (action === 'data') {
 
         <LoginScreen
           onLoginSuccess={handleLoginSuccess}
-          onRegisterPress={() => setScreen('register')}
+          onRegisterPress={() =>
+            setScreen('register')
+          }
         />
       </SafeAreaView>
     );
@@ -1098,7 +1201,9 @@ if (action === 'data') {
 
   if (screen === 'register') {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={styles.container}
+      >
         <StatusBar barStyle="dark-content" />
 
         <TouchableOpacity
@@ -1111,7 +1216,9 @@ if (action === 'data') {
         </TouchableOpacity>
 
         <RegisterScreen
-          onRegistrationSuccess={handleRegistrationSuccess}
+          onRegistrationSuccess={
+            handleRegistrationSuccess
+          }
         />
       </SafeAreaView>
     );
@@ -1121,15 +1228,22 @@ if (action === 'data') {
   // NOTIFICATIONS
   // ====================================================
 
-  if (screen === 'notifications' && session) {
+  if (
+    screen === 'notifications' &&
+    session
+  ) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={styles.container}
+      >
         <StatusBar barStyle="dark-content" />
 
         <NotificationsScreen
           token={session.token}
           onBack={() => setScreen('home')}
-          onOpenTransaction={handleOpenNotificationTransaction}
+          onOpenTransaction={
+            handleOpenNotificationTransaction
+          }
         />
       </SafeAreaView>
     );
@@ -1139,49 +1253,68 @@ if (action === 'data') {
   // CUSTOMER PROFILE
   // ====================================================
 
-  if (screen === 'profile' && session) {
+  if (
+    screen === 'profile' &&
+    session
+  ) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={styles.container}
+      >
         <StatusBar barStyle="dark-content" />
 
         <ProfileScreen
-         user={session.user}
-         account={account}
-         onBack={() => setScreen('home')}
-      />
+          user={session.user}
+          account={account}
+          onBack={() => setScreen('home')}
+        />
       </SafeAreaView>
     );
   }
-// ====================================================
-// CUSTOMER SETTINGS
-// ====================================================
 
-if (screen === 'settings' && session) {
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+  // ====================================================
+  // CUSTOMER SETTINGS
+  // ====================================================
 
-<SettingsScreen
-  token={session.token}
-  onBack={() => setScreen('home')}
-  onLogout={handleLogout}
-/>
-    </SafeAreaView>
-  );
-}
+  if (
+    screen === 'settings' &&
+    session
+  ) {
+    return (
+      <SafeAreaView
+        style={styles.container}
+      >
+        <StatusBar barStyle="dark-content" />
+
+        <SettingsScreen
+          token={session.token}
+          onBack={() => setScreen('home')}
+          onLogout={handleLogout}
+        />
+      </SafeAreaView>
+    );
+  }
+
   // ====================================================
   // TRANSACTION HISTORY
   // ====================================================
 
-  if (screen === 'history' && session) {
+  if (
+    screen === 'history' &&
+    session
+  ) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={styles.container}
+      >
         <StatusBar barStyle="dark-content" />
 
         <TransactionHistoryScreen
           transactions={transactions}
           onBack={() => setScreen('home')}
-          onSelectTransaction={handleSelectTransaction}
+          onSelectTransaction={
+            handleSelectTransaction
+          }
           onRefresh={handleRefresh}
           refreshing={refreshing}
         />
@@ -1199,7 +1332,9 @@ if (screen === 'settings' && session) {
     selectedTransaction
   ) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={styles.container}
+      >
         <StatusBar barStyle="dark-content" />
 
         <TransactionDetailsScreen
@@ -1209,65 +1344,81 @@ if (screen === 'settings' && session) {
       </SafeAreaView>
     );
   }
-// ====================================================
-// AIRTIME PURCHASE
-// ====================================================
 
-if (screen === 'airtime' && session) {
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-
-      <AirtimeScreen
-        token={session.token}
-        onBack={() => setScreen('home')}
-        onComplete={() => {
-          void loadDashboardData(
-            session.token,
-            false
-          ).catch((error: any) => {
-            console.warn(
-              'Airtime dashboard refresh failed:',
-              error
-            );
-          });
-        }}
-      />
-    </SafeAreaView>
-  );
-}
   // ====================================================
-// DATA PURCHASE
-// ====================================================
+  // AIRTIME PURCHASE
+  // ====================================================
 
-if (screen === 'data' && session) {
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+  if (
+    screen === 'airtime' &&
+    session
+  ) {
+    return (
+      <SafeAreaView
+        style={styles.container}
+      >
+        <StatusBar barStyle="dark-content" />
 
-      <DataScreen
-        token={session.token}
-        onBack={() => setScreen('home')}
-        onComplete={() => {
-          void loadDashboardData(
-            session.token,
-            false
-          ).catch((error: any) => {
-            console.warn(
-              'Data dashboard refresh failed:',
-              error
-            );
-          });
-        }}
-      />
-    </SafeAreaView>
-  );
-}
+        <AirtimeScreen
+          token={session.token}
+          onBack={() => setScreen('home')}
+          onComplete={() => {
+            void loadDashboardData(
+              session.token,
+              false
+            ).catch((error: any) => {
+              console.warn(
+                'Airtime dashboard refresh failed:',
+                error
+              );
+            });
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // ====================================================
+  // DATA PURCHASE
+  // ====================================================
+
+  if (
+    screen === 'data' &&
+    session
+  ) {
+    return (
+      <SafeAreaView
+        style={styles.container}
+      >
+        <StatusBar barStyle="dark-content" />
+
+        <DataScreen
+          token={session.token}
+          onBack={() => setScreen('home')}
+          onComplete={() => {
+            void loadDashboardData(
+              session.token,
+              false
+            ).catch((error: any) => {
+              console.warn(
+                'Data dashboard refresh failed:',
+                error
+              );
+            });
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
   // ====================================================
   // PERSONAL DASHBOARD
   // ====================================================
 
-  if (screen === 'home' && session) {
+  if (
+    screen === 'home' &&
+    session
+  ) {
     const userName =
       session.user?.full_name ||
       session.user?.name ||
@@ -1285,10 +1436,13 @@ if (screen === 'data' && session) {
       session.user?.kyc_status ||
       'Pending';
 
-    const balance = formatNaira(account?.balance);
+    const balance =
+      formatNaira(account?.balance);
 
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView
+        style={styles.container}
+      >
         <StatusBar barStyle="dark-content" />
 
         {dashboardLoading && !account ? (
@@ -1309,9 +1463,12 @@ if (screen === 'data' && session) {
             currency="NGN"
             balance={balance}
             profilePhotoUri={profilePhotoUri}
-            onProfilePhotoChange={handleProfilePhotoChange}
+            onProfilePhotoChange={
+              handleProfilePhotoChange
+            }
             accountNumber={
-              account?.account_number || undefined
+              account?.account_number ||
+              undefined
             }
             bankName="ZENIMONIES"
             verificationLevel={
@@ -1319,23 +1476,18 @@ if (screen === 'data' && session) {
                 ? String(verificationLevel)
                 : undefined
             }
-            verificationStatus={verificationStatus}
+            verificationStatus={
+              verificationStatus
+            }
             transactions={transactions}
             onAction={handleDashboardAction}
-            onNavigate={handleDashboardNavigation}
+            onNavigate={
+              handleDashboardNavigation
+            }
             refreshing={refreshing}
             onRefresh={handleRefresh}
           />
         )}
-
-        {dashboardLoading && account ? (
-          <View style={styles.refreshIndicator}>
-            <ActivityIndicator
-              size="small"
-              color={colors.primary}
-            />
-          </View>
-        ) : null}
       </SafeAreaView>
     );
   }
@@ -1345,13 +1497,17 @@ if (screen === 'data' && session) {
   // ====================================================
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+    >
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.premiumWelcome}>
         <View style={styles.premiumBrand}>
           <View style={styles.premiumLogo}>
-            <Text style={styles.premiumLogoText}>Z</Text>
+            <Text style={styles.premiumLogoText}>
+              Z
+            </Text>
           </View>
 
           <Text style={styles.premiumBrandName}>
@@ -1387,7 +1543,9 @@ if (screen === 'data' && session) {
 
           <View style={styles.premiumFeatureRow}>
             <View style={styles.premiumFeature}>
-              <Text style={styles.premiumFeatureIcon}>₦</Text>
+              <Text style={styles.premiumFeatureIcon}>
+                ₦
+              </Text>
 
               <Text style={styles.premiumFeatureText}>
                 Payments
@@ -1395,7 +1553,9 @@ if (screen === 'data' && session) {
             </View>
 
             <View style={styles.premiumFeature}>
-              <Text style={styles.premiumFeatureIcon}>↗</Text>
+              <Text style={styles.premiumFeatureIcon}>
+                ↗
+              </Text>
 
               <Text style={styles.premiumFeatureText}>
                 Transfers
@@ -1403,7 +1563,9 @@ if (screen === 'data' && session) {
             </View>
 
             <View style={styles.premiumFeature}>
-              <Text style={styles.premiumFeatureIcon}>✓</Text>
+              <Text style={styles.premiumFeatureIcon}>
+                ✓
+              </Text>
 
               <Text style={styles.premiumFeatureText}>
                 Control
@@ -1415,7 +1577,9 @@ if (screen === 'data' && session) {
         <View style={styles.premiumActions}>
           <TouchableOpacity
             style={styles.premiumPrimaryButton}
-            onPress={() => setScreen('register')}
+            onPress={() =>
+              setScreen('register')
+            }
             activeOpacity={0.85}
           >
             <Text style={styles.premiumPrimaryText}>
@@ -1429,7 +1593,9 @@ if (screen === 'data' && session) {
 
           <TouchableOpacity
             style={styles.premiumSecondaryButton}
-            onPress={() => setScreen('login')}
+            onPress={() =>
+              setScreen('login')
+            }
             activeOpacity={0.85}
           >
             <Text style={styles.premiumSecondaryText}>
@@ -1490,12 +1656,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  refreshIndicator: {
-    position: 'absolute',
-    top: 8,
-    right: 18,
   },
 
   // ====================================================
