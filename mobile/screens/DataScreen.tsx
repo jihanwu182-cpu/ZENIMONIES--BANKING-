@@ -2,6 +2,7 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -120,14 +121,10 @@ const normalizePhoneNumber = (
 ): string => {
   let digits = value.replace(/\D/g, '');
 
-  // International Nigerian format
-  // 2348012345678 -> 08012345678
   if (digits.startsWith('234')) {
     digits = '0' + digits.slice(3);
   }
 
-  // Number entered without the first zero
-  // 8012345678 -> 08012345678
   if (
     digits.length === 10 &&
     !digits.startsWith('0')
@@ -198,8 +195,6 @@ const detectNetworkFromPhone = (
       '0705',
       '0905',
       '0915',
-      '0805',
-      '0705',
     ],
 
     t2mobile: [
@@ -230,7 +225,7 @@ const detectNetworkFromPhone = (
 };
 
 // ======================================================
-// NORMALIZE DATA PLANS
+// PLAN NORMALIZATION
 // ======================================================
 
 const normalizeDataPlan = (
@@ -279,9 +274,21 @@ const normalizeDataPlan = (
     return null;
   }
 
+  // Automatically extract allowance from plan name.
+  const allowanceMatch = String(name).match(
+    /(\d+(?:\.\d+)?\s*(?:MB|GB|TB))/i,
+  );
+
+  // Automatically extract validity from plan name.
+  const validityMatch = String(name).match(
+    /(\d+\s*(?:day|days|week|weeks|month|months|hour|hours))/i,
+  );
+
   return {
     variation_code: String(variationCode),
+
     name: String(name),
+
     amount,
 
     network:
@@ -293,13 +300,15 @@ const normalizeDataPlan = (
       plan.validity ??
       plan.duration ??
       plan.validity_period ??
-      plan.expiry,
+      plan.expiry ??
+      validityMatch?.[1],
 
     allowance:
       plan.allowance ??
       plan.data_amount ??
       plan.size ??
-      plan.volume,
+      plan.volume ??
+      allowanceMatch?.[1],
 
     description:
       plan.description ??
@@ -324,6 +333,43 @@ const normalizeDataPlan = (
 
     raw: plan,
   };
+};
+
+// ======================================================
+// EXTRACT PLANS FROM API RESPONSE
+// ======================================================
+
+const extractPlansFromResponse = (
+  response: any,
+): any[] => {
+  if (!response) {
+    return [];
+  }
+
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  const possibleArrays = [
+    response.plans,
+    response.data?.plans,
+    response.data,
+    response.result?.plans,
+    response.result,
+    response.results,
+    response.products,
+    response.data?.products,
+    response.variations,
+    response.data?.variations,
+  ];
+
+  for (const candidate of possibleArrays) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
 };
 
 // ======================================================
@@ -358,13 +404,10 @@ const DataScreen = ({
       colors?.border ??
       (isDark ? '#303A30' : COLORS.border),
 
-    green:
-      colors?.primary ??
-      COLORS.green,
+    // ZENIMONIES DARK GREEN BRAND
+    green: COLORS.darkGreen,
 
-    darkGreen:
-      colors?.darkGreen ??
-      COLORS.darkGreen,
+    darkGreen: COLORS.darkGreen,
   };
 
   const authToken = token || '';
@@ -409,6 +452,8 @@ const DataScreen = ({
   const [transactionResult, setTransactionResult] =
     useState<any>(null);
 
+  const requestIdRef = useRef(0);
+
   // ====================================================
   // PHONE NUMBER
   // ====================================================
@@ -417,7 +462,6 @@ const DataScreen = ({
     (value: string) => {
       const cleaned = value.replace(/\D/g, '');
 
-      // Allow international format while typing
       const formatted = cleaned.slice(0, 13);
 
       setPhone(formatted);
@@ -437,8 +481,19 @@ const DataScreen = ({
   // ====================================================
 
   const loadPlans = useCallback(async () => {
+    const currentRequest =
+      ++requestIdRef.current;
+
     if (!authToken) {
       setPlans([]);
+      setSelectedPlan(null);
+      setLoadingPlans(false);
+
+      Alert.alert(
+        'Session expired',
+        'Please log in again to load data plans.',
+      );
+
       return;
     }
 
@@ -447,49 +502,65 @@ const DataScreen = ({
     setSelectedPlan(null);
 
     try {
-      const response = await fetch(
-        `${API_BASE}/data/plans?network=${selectedNetwork.id}`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-            Accept: 'application/json',
-          },
-        },
+      const url =
+        `${API_BASE}/data/plans?network=` +
+        encodeURIComponent(selectedNetwork.id);
+
+      console.log(
+        'ZENIMONIES DATA PLANS REQUEST:',
+        selectedNetwork.id,
       );
 
-      const data = await response.json();
+      const response = await fetch(url, {
+        method: 'GET',
+
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          Accept: 'application/json',
+        },
+      });
+
+      const responseText =
+        await response.text();
+
+      let data: any = {};
+
+      try {
+        data = responseText
+          ? JSON.parse(responseText)
+          : {};
+      } catch {
+        throw new Error(
+          'The server returned an invalid response.',
+        );
+      }
+
+      console.log(
+        'DATA PLANS HTTP STATUS:',
+        response.status,
+      );
+
+      console.log(
+        'DATA PLANS RESPONSE:',
+        JSON.stringify(data),
+      );
 
       if (!response.ok) {
         throw new Error(
           data.message ||
             data.error ||
-            'Unable to load data plans.',
+            data.details ||
+            `Request failed (${response.status})`,
         );
       }
 
-      // Support multiple API response structures
-      let rawPlans: any[] = [];
+      const rawPlans =
+        extractPlansFromResponse(data);
 
-      if (Array.isArray(data.plans)) {
-        rawPlans = data.plans;
-      } else if (
-        Array.isArray(data.data?.plans)
-      ) {
-        rawPlans = data.data.plans;
-      } else if (
-        Array.isArray(data.data)
-      ) {
-        rawPlans = data.data;
-      } else if (
-        Array.isArray(data.result?.plans)
-      ) {
-        rawPlans = data.result.plans;
-      } else if (
-        Array.isArray(data.results)
-      ) {
-        rawPlans = data.results;
-      }
+      console.log(
+        'RAW DATA PLANS COUNT:',
+        rawPlans.length,
+      );
 
       const normalizedPlans = rawPlans
         .map((plan, index) =>
@@ -500,16 +571,44 @@ const DataScreen = ({
             plan !== null,
         );
 
+      console.log(
+        'NORMALIZED DATA PLANS COUNT:',
+        normalizedPlans.length,
+      );
+
+      if (
+        currentRequest !==
+        requestIdRef.current
+      ) {
+        return;
+      }
+
       setPlans(normalizedPlans);
 
       if (normalizedPlans.length === 0) {
         console.log(
-          'Data plans response:',
+          'No usable data plans were returned.',
+        );
+
+        console.log(
+          'Raw response:',
           JSON.stringify(data, null, 2),
         );
       }
     } catch (error: any) {
-      console.log('Data plans error:', error);
+      console.error(
+        'ZENIMONIES DATA PLANS ERROR:',
+        error,
+      );
+
+      if (
+        currentRequest !==
+        requestIdRef.current
+      ) {
+        return;
+      }
+
+      setPlans([]);
 
       Alert.alert(
         'Unable to load plans',
@@ -517,12 +616,21 @@ const DataScreen = ({
           'Please check your internet connection and try again.',
       );
     } finally {
-      setLoadingPlans(false);
+      if (
+        currentRequest ===
+        requestIdRef.current
+      ) {
+        setLoadingPlans(false);
+      }
     }
   }, [authToken, selectedNetwork.id]);
 
   useEffect(() => {
     loadPlans();
+
+    return () => {
+      requestIdRef.current++;
+    };
   }, [loadPlans]);
 
   // ====================================================
@@ -543,7 +651,6 @@ const DataScreen = ({
       .join(' ')
       .toLowerCase();
 
-    // Hot Deals must be checked before Special
     if (
       text.includes('hot') ||
       text.includes('deal') ||
@@ -689,6 +796,7 @@ const DataScreen = ({
         'Phone number required',
         'Please enter the phone number you want to recharge.',
       );
+
       return;
     }
 
@@ -699,6 +807,7 @@ const DataScreen = ({
         'Invalid phone number',
         'Enter a valid Nigerian phone number. You can enter it with or without the first zero, or with +234.',
       );
+
       return;
     }
 
@@ -707,6 +816,7 @@ const DataScreen = ({
         'Select a data plan',
         'Please select a data plan to continue.',
       );
+
       return;
     }
 
@@ -724,6 +834,7 @@ const DataScreen = ({
         'Invalid PIN',
         'Please enter your 4-digit transaction PIN.',
       );
+
       return;
     }
 
@@ -758,7 +869,21 @@ const DataScreen = ({
         },
       );
 
-      const data = await response.json();
+      const responseText =
+        await response.text();
+
+      let data: any = {};
+
+      try {
+        data = responseText
+          ? JSON.parse(responseText)
+          : {};
+      } catch {
+        data = {
+          message:
+            'The server returned an invalid response.',
+        };
+      }
 
       setPinModalVisible(false);
       setTransactionPin('');
@@ -1172,7 +1297,9 @@ const DataScreen = ({
                 { color: theme.muted },
               ]}
             >
-              Try another category or search term.
+              {plans.length === 0
+                ? `No ${selectedNetwork.name} data plans are currently available. Please try again.`
+                : 'Try another category or search term.'}
             </Text>
 
             <TouchableOpacity
