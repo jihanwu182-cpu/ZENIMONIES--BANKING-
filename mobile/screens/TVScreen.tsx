@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,6 +23,7 @@ interface TVPackage {
   name: string;
   amount: number;
   description?: string;
+  provider?: string;
 }
 
 interface TVCustomer {
@@ -44,6 +46,10 @@ interface TVScreenProps {
 
   packages?: TVPackage[];
 }
+
+// ============================================================
+// ZENIMONIES ORIGINAL BRAND COLORS
+// ============================================================
 
 const GREEN = '#78A900';
 const DARK_GREEN = '#527900';
@@ -72,8 +78,12 @@ const providers: TVProvider[] = [
 ];
 
 const formatCurrency = (amount: number) => {
-  return `₦${amount.toLocaleString('en-NG')}`;
+  return `₦${Number(amount).toLocaleString('en-NG')}`;
 };
+
+// ============================================================
+// TV SCREEN
+// ============================================================
 
 export default function TVScreen({
   onValidate,
@@ -107,18 +117,49 @@ export default function TVScreen({
   const [showPin, setShowPin] =
     useState(false);
 
-  const [step, setStep] = useState(1);
+  // ============================================================
+  // FILTER PACKAGES BY PROVIDER
+  // ============================================================
+
+  const filteredPackages = useMemo(() => {
+    return packages.filter(item => {
+      if (!item.provider) {
+        return true;
+      }
+
+      return (
+        item.provider.toLowerCase() ===
+        selectedProvider.toLowerCase()
+      );
+    });
+  }, [packages, selectedProvider]);
+
+  // ============================================================
+  // PROVIDER SELECTION
+  // ============================================================
 
   const handleProviderChange = (provider: string) => {
+    if (loadingValidation || loadingSubscription) {
+      return;
+    }
+
     setSelectedProvider(provider);
+    setCustomerNumber('');
     setCustomer(null);
     setSelectedPackage(null);
+    setTransactionPin('');
     setValidated(false);
-    setStep(1);
+    setShowPin(false);
   };
 
+  // ============================================================
+  // CUSTOMER VALIDATION
+  // ============================================================
+
   const handleValidateCustomer = async () => {
-    if (!customerNumber.trim()) {
+    const number = customerNumber.trim();
+
+    if (!number) {
       Alert.alert(
         'Required',
         'Please enter your Smart Card or IUC number.'
@@ -128,8 +169,8 @@ export default function TVScreen({
 
     if (!onValidate) {
       Alert.alert(
-        'Not Connected',
-        'Customer validation has not yet been connected to the backend.'
+        'Service Unavailable',
+        'Customer validation is not currently connected.'
       );
       return;
     }
@@ -137,14 +178,28 @@ export default function TVScreen({
     try {
       setLoadingValidation(true);
 
+      setCustomer(null);
+      setValidated(false);
+      setSelectedPackage(null);
+
       const result = await onValidate(
         selectedProvider,
-        customerNumber.trim()
+        number
       );
 
-      setCustomer(result);
+      if (!result || !result.customerName) {
+        throw new Error(
+          'Customer verification returned incomplete information.'
+        );
+      }
+
+      setCustomer({
+        customerName: result.customerName,
+        customerNumber:
+          result.customerNumber || number,
+      });
+
       setValidated(true);
-      setStep(2);
 
       Alert.alert(
         'Customer Verified',
@@ -153,6 +208,7 @@ export default function TVScreen({
     } catch (error: any) {
       setCustomer(null);
       setValidated(false);
+      setSelectedPackage(null);
 
       Alert.alert(
         'Validation Failed',
@@ -164,10 +220,22 @@ export default function TVScreen({
     }
   };
 
+  // ============================================================
+  // PACKAGE SELECTION
+  // ============================================================
+
   const handleSelectPackage = (item: TVPackage) => {
+    if (!validated || loadingSubscription) {
+      return;
+    }
+
     setSelectedPackage(item);
-    setStep(3);
+    setTransactionPin('');
   };
+
+  // ============================================================
+  // SUBSCRIPTION CONFIRMATION
+  // ============================================================
 
   const handleSubscribe = async () => {
     if (!customer) {
@@ -186,7 +254,10 @@ export default function TVScreen({
       return;
     }
 
-    if (!transactionPin || transactionPin.length !== 4) {
+    if (
+      !transactionPin ||
+      transactionPin.length !== 4
+    ) {
       Alert.alert(
         'Invalid PIN',
         'Enter your 4-digit transaction PIN.'
@@ -196,25 +267,20 @@ export default function TVScreen({
 
     if (!onSubscribe) {
       Alert.alert(
-        'Not Connected',
-        'TV subscription payment has not yet been connected to the backend.'
+        'Service Unavailable',
+        'TV subscription payment is not currently connected.'
       );
       return;
     }
 
+    const providerName =
+      providers.find(
+        p => p.id === selectedProvider
+      )?.name || selectedProvider;
+
     Alert.alert(
       'Confirm Subscription',
-      `Provider: ${
-        providers.find(
-          p => p.id === selectedProvider
-        )?.name
-      }\n\nCustomer: ${
-        customer.customerName
-      }\n\nPackage: ${
-        selectedPackage.name
-      }\n\nAmount: ${formatCurrency(
-        selectedPackage.amount
-      )}`,
+      `Provider: ${providerName}\n\nCustomer: ${customer.customerName}\n\nCustomer Number: ${customer.customerNumber}\n\nPackage: ${selectedPackage.name}\n\nAmount: ${formatCurrency(selectedPackage.amount)}`,
       [
         {
           text: 'Cancel',
@@ -228,30 +294,117 @@ export default function TVScreen({
     );
   };
 
+  // ============================================================
+  // EXECUTE SUBSCRIPTION
+  // ============================================================
+
   const executeSubscription = async () => {
+    if (
+      !customer ||
+      !selectedPackage ||
+      !onSubscribe
+    ) {
+      return;
+    }
+
     try {
       setLoadingSubscription(true);
 
-      const result = await onSubscribe!(
+      const result = await onSubscribe(
         selectedProvider,
         customerNumber.trim(),
-        selectedPackage!.id,
+        selectedPackage.id,
         transactionPin
       );
 
+      const status =
+        result?.status?.toLowerCase?.() ||
+        result?.transaction?.status?.toLowerCase?.() ||
+        '';
+
+      // --------------------------------------------------------
+      // PENDING / PROCESSING
+      // --------------------------------------------------------
+
+      if (
+        status === 'pending' ||
+        status === 'processing' ||
+        result?.pending === true ||
+        result?.statusCode === 202
+      ) {
+        Alert.alert(
+          'Transaction Processing',
+          result?.message ||
+            'Your TV subscription is being processed. Please check your transaction history before attempting another payment.'
+        );
+
+        resetForm();
+        return;
+      }
+
+      // --------------------------------------------------------
+      // FAILED
+      // --------------------------------------------------------
+
+      if (
+        status === 'failed' ||
+        status === 'failure' ||
+        result?.success === false
+      ) {
+        Alert.alert(
+          'Transaction Failed',
+          result?.message ||
+            'Your subscription could not be completed.'
+        );
+
+        return;
+      }
+
+      // --------------------------------------------------------
+      // SUCCESS
+      // --------------------------------------------------------
+
       Alert.alert(
-        'Subscription Submitted',
+        'Subscription Successful',
         result?.message ||
-          'Your TV subscription has been submitted successfully.'
+          'Your TV subscription has been completed successfully.'
       );
 
-      setCustomerNumber('');
-      setTransactionPin('');
-      setCustomer(null);
-      setSelectedPackage(null);
-      setValidated(false);
-      setStep(1);
+      resetForm();
     } catch (error: any) {
+      const responseStatus =
+        error?.response?.status;
+
+      const errorCode =
+        error?.code ||
+        error?.response?.data?.code;
+
+      // --------------------------------------------------------
+      // AMBIGUOUS TRANSACTION
+      // --------------------------------------------------------
+
+      if (
+        responseStatus === 202 ||
+        errorCode === 'TRANSACTION_PENDING' ||
+        errorCode === 'PROCESSING' ||
+        errorCode === 'TIMEOUT' ||
+        errorCode === 'ECONNABORTED' ||
+        errorCode === 'ETIMEDOUT' ||
+        errorCode === 'ECONNRESET'
+      ) {
+        Alert.alert(
+          'Transaction Processing',
+          'We could not confirm the final status of this payment. Please check your transaction history before trying again.'
+        );
+
+        resetForm();
+        return;
+      }
+
+      // --------------------------------------------------------
+      // DEFINITE FAILURE
+      // --------------------------------------------------------
+
       Alert.alert(
         'Transaction Failed',
         error?.message ||
@@ -262,12 +415,30 @@ export default function TVScreen({
     }
   };
 
+  // ============================================================
+  // RESET
+  // ============================================================
+
+  const resetForm = () => {
+    setCustomerNumber('');
+    setTransactionPin('');
+    setCustomer(null);
+    setSelectedPackage(null);
+    setValidated(false);
+    setShowPin(false);
+  };
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* HEADER */}
 
@@ -311,8 +482,14 @@ export default function TVScreen({
                 onPress={() =>
                   handleProviderChange(provider.id)
                 }
-                activeOpacity={0.8}
+                activeOpacity={0.75}
+                disabled={
+                  loadingValidation ||
+                  loadingSubscription
+                }
               >
+                {/* LOGO PLACEHOLDER */}
+
                 <View
                   style={[
                     styles.providerLogo,
@@ -353,7 +530,7 @@ export default function TVScreen({
           })}
         </View>
 
-        {/* CUSTOMER NUMBER */}
+        {/* CUSTOMER DETAILS */}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>
@@ -370,6 +547,10 @@ export default function TVScreen({
             placeholderTextColor={MUTED}
             keyboardType="numeric"
             value={customerNumber}
+            editable={
+              !loadingValidation &&
+              !loadingSubscription
+            }
             onChangeText={value => {
               setCustomerNumber(value);
               setCustomer(null);
@@ -379,7 +560,11 @@ export default function TVScreen({
           />
 
           <TouchableOpacity
-            style={styles.validateButton}
+            style={[
+              styles.validateButton,
+              loadingValidation &&
+                styles.buttonDisabled,
+            ]}
             onPress={handleValidateCustomer}
             disabled={loadingValidation}
             activeOpacity={0.8}
@@ -428,19 +613,20 @@ export default function TVScreen({
               Select Package
             </Text>
 
-            {packages.length === 0 ? (
+            {filteredPackages.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>
                   No Packages Available
                 </Text>
 
                 <Text style={styles.emptyText}>
-                  TV packages will appear here when
-                  available from the service provider.
+                  Packages for this provider are
+                  currently unavailable. Please try
+                  again later.
                 </Text>
               </View>
             ) : (
-              packages.map(item => {
+              filteredPackages.map(item => {
                 const selected =
                   selectedPackage?.id === item.id;
 
@@ -455,7 +641,8 @@ export default function TVScreen({
                     onPress={() =>
                       handleSelectPackage(item)
                     }
-                    activeOpacity={0.8}
+                    activeOpacity={0.75}
+                    disabled={loadingSubscription}
                   >
                     <View style={styles.packageInfo}>
                       <Text style={styles.packageName}>
@@ -476,7 +663,8 @@ export default function TVScreen({
                     <View
                       style={[
                         styles.radio,
-                        selected && styles.radioSelected,
+                        selected &&
+                          styles.radioSelected,
                       ]}
                     >
                       {selected && (
@@ -490,9 +678,9 @@ export default function TVScreen({
           </>
         )}
 
-        {/* PAYMENT */}
+        {/* PAYMENT SUMMARY */}
 
-        {selectedPackage && (
+        {selectedPackage && customer && (
           <View style={styles.paymentCard}>
             <Text style={styles.cardTitle}>
               Payment Summary
@@ -518,7 +706,17 @@ export default function TVScreen({
               </Text>
 
               <Text style={styles.summaryValue}>
-                {customer?.customerName}
+                {customer.customerName}
+              </Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>
+                Customer Number
+              </Text>
+
+              <Text style={styles.summaryValue}>
+                {customer.customerNumber}
               </Text>
             </View>
 
@@ -546,6 +744,8 @@ export default function TVScreen({
               </Text>
             </View>
 
+            {/* TRANSACTION PIN */}
+
             <Text style={styles.label}>
               Transaction PIN
             </Text>
@@ -559,11 +759,19 @@ export default function TVScreen({
                 maxLength={4}
                 secureTextEntry={!showPin}
                 value={transactionPin}
-                onChangeText={setTransactionPin}
+                editable={!loadingSubscription}
+                onChangeText={value =>
+                  setTransactionPin(
+                    value.replace(/[^0-9]/g, '')
+                  )
+                }
               />
 
               <TouchableOpacity
-                onPress={() => setShowPin(!showPin)}
+                onPress={() =>
+                  setShowPin(!showPin)
+                }
+                disabled={loadingSubscription}
               >
                 <Text style={styles.showPin}>
                   {showPin ? 'Hide' : 'Show'}
@@ -571,8 +779,14 @@ export default function TVScreen({
               </TouchableOpacity>
             </View>
 
+            {/* PAYMENT BUTTON */}
+
             <TouchableOpacity
-              style={styles.payButton}
+              style={[
+                styles.payButton,
+                loadingSubscription &&
+                  styles.buttonDisabled,
+              ]}
               onPress={handleSubscribe}
               disabled={loadingSubscription}
               activeOpacity={0.8}
@@ -581,7 +795,8 @@ export default function TVScreen({
                 <ActivityIndicator color={WHITE} />
               ) : (
                 <Text style={styles.payButtonText}>
-                  Pay {formatCurrency(
+                  Pay{' '}
+                  {formatCurrency(
                     selectedPackage.amount
                   )}
                 </Text>
@@ -589,24 +804,15 @@ export default function TVScreen({
             </TouchableOpacity>
           </View>
         )}
-
-        {/* SECURITY */}
-
-        <View style={styles.securityNotice}>
-          <Text style={styles.securityIcon}>
-            🔒
-          </Text>
-
-          <Text style={styles.securityText}>
-            Your transaction is protected by
-            ZENIMONIES security.
-          </Text>
-        </View>
-
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+// ============================================================
+// STYLES
+// ORIGINAL ZENIMONIES BRANDING
+// ============================================================
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -623,6 +829,8 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
+
+  // HEADER
 
   header: {
     flexDirection: 'row',
@@ -658,6 +866,8 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
 
+  // SECTION TITLES
+
   sectionTitle: {
     fontSize: 17,
     fontWeight: '700',
@@ -665,6 +875,8 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     marginTop: 10,
   },
+
+  // PROVIDERS
 
   providerContainer: {
     flexDirection: 'row',
@@ -742,6 +954,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
+  // CUSTOMER CARD
+
   card: {
     backgroundColor: WHITE,
     borderRadius: 20,
@@ -777,6 +991,8 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
   },
 
+  // BUTTONS
+
   validateButton: {
     height: 50,
     borderRadius: 13,
@@ -791,6 +1007,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+
+  payButton: {
+    height: 54,
+    borderRadius: 14,
+    backgroundColor: DARK_GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+
+  payButtonText: {
+    color: WHITE,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+
+  buttonDisabled: {
+    opacity: 0.65,
+  },
+
+  // VERIFIED CUSTOMER
 
   customerCard: {
     backgroundColor: '#EAF5DE',
@@ -838,6 +1075,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  // PACKAGES
+
   packageCard: {
     backgroundColor: WHITE,
     borderRadius: 16,
@@ -878,6 +1117,8 @@ const styles = StyleSheet.create({
     marginTop: 9,
   },
 
+  // RADIO
+
   radio: {
     width: 22,
     height: 22,
@@ -899,6 +1140,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: GREEN,
   },
+
+  // EMPTY STATE
 
   emptyCard: {
     backgroundColor: WHITE,
@@ -922,6 +1165,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 20,
   },
+
+  // PAYMENT SUMMARY
 
   paymentCard: {
     backgroundColor: WHITE,
@@ -976,6 +1221,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  // PIN
+
   pinContainer: {
     height: 52,
     borderWidth: 1,
@@ -996,40 +1243,5 @@ const styles = StyleSheet.create({
     color: GREEN,
     fontWeight: '700',
     fontSize: 13,
-  },
-
-  payButton: {
-    height: 54,
-    borderRadius: 14,
-    backgroundColor: DARK_GREEN,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-
-  payButtonText: {
-    color: WHITE,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-
-  securityNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
-    paddingHorizontal: 10,
-  },
-
-  securityIcon: {
-    fontSize: 14,
-    marginRight: 8,
-  },
-
-  securityText: {
-    color: MUTED,
-    fontSize: 11,
-    textAlign: 'center',
-    flex: 1,
   },
 });
