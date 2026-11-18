@@ -1189,19 +1189,20 @@ const styles = StyleSheet.create({
   },
 
   pendingNotice: {
-    backgroundColor: '#FFF4D6',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
+  backgroundColor: '#F6F8F3',
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 12,
+  borderWidth: 1,
+  borderColor: '#E9EDE5',
+},
 
-  pendingNoticeText: {
-    color: '#775500',
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
-
+pendingNoticeText: {
+  color: '#527900',
+  fontSize: 12,
+  lineHeight: 18,
+  fontWeight: '600',
+},
   securityNotice: {
     flexDirection: 'row',
     alignItems: 'center',
