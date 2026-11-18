@@ -22,6 +22,23 @@ interface MeterCustomer {
   address?: string;
 }
 
+interface ElectricityPaymentResult {
+  success?: boolean;
+  status?: string;
+  message?: string;
+  reference?: string;
+  provider_reference?: string;
+  electricity_token?: string;
+  token?: string;
+  units?: string | number;
+  customer_name?: string;
+  customer_address?: string;
+  meter_number?: string;
+  meter_type?: string;
+  provider?: string;
+  [key: string]: any;
+}
+
 interface ElectricityScreenProps {
   onValidate?: (
     provider: string,
@@ -35,7 +52,7 @@ interface ElectricityScreenProps {
     meterType: 'prepaid' | 'postpaid',
     amount: number,
     transactionPin: string
-  ) => Promise<any>;
+  ) => Promise<ElectricityPaymentResult>;
 }
 
 const GREEN = '#78A900';
@@ -47,17 +64,17 @@ const WHITE = '#FFFFFF';
 const BORDER = '#E9EDE5';
 
 const providers: ElectricityProvider[] = [
-  { id: 'ikeja', name: 'Ikeja Electric' },
-  { id: 'eko', name: 'Eko Electric' },
-  { id: 'abuja', name: 'Abuja Electric' },
-  { id: 'ibadan', name: 'Ibadan Electric' },
-  { id: 'kano', name: 'Kano Electric' },
-  { id: 'kaduna', name: 'Kaduna Electric' },
-  { id: 'jos', name: 'Jos Electric' },
-  { id: 'enugu', name: 'Enugu Electric' },
-  { id: 'portharcourt', name: 'Port Harcourt Electric' },
-  { id: 'benin', name: 'Benin Electric' },
-  { id: 'yola', name: 'Yola Electric' },
+  { id: 'IKEDC', name: 'Ikeja Electric' },
+  { id: 'EKEDC', name: 'Eko Electric' },
+  { id: 'AEDC', name: 'Abuja Electric' },
+  { id: 'IBEDC', name: 'Ibadan Electric' },
+  { id: 'KEDCO', name: 'Kano Electric' },
+  { id: 'KAEDCO', name: 'Kaduna Electric' },
+  { id: 'JED', name: 'Jos Electric' },
+  { id: 'EEDC', name: 'Enugu Electric' },
+  { id: 'PHEDC', name: 'Port Harcourt Electric' },
+  { id: 'BEDC', name: 'Benin Electric' },
+  { id: 'YEDC', name: 'Yola Electric' },
 ];
 
 const formatCurrency = (amount: number) =>
@@ -68,7 +85,7 @@ export default function ElectricityScreen({
   onPay,
 }: ElectricityScreenProps) {
   const [selectedProvider, setSelectedProvider] =
-    useState('ikeja');
+    useState('IKEDC');
 
   const [meterType, setMeterType] =
     useState<'prepaid' | 'postpaid'>('prepaid');
@@ -98,22 +115,37 @@ export default function ElectricityScreen({
     useState(false);
 
   const [paymentResult, setPaymentResult] =
-    useState<any>(null);
+    useState<ElectricityPaymentResult | null>(null);
+
+  const [paymentStatus, setPaymentStatus] =
+    useState<
+      'completed' | 'pending' | 'failed' | null
+    >(null);
 
   const handleProviderChange = (provider: string) => {
+    if (loadingPayment) return;
+
     setSelectedProvider(provider);
     setCustomer(null);
     setValidated(false);
     setPaymentResult(null);
+    setPaymentStatus(null);
+    setAmount('');
+    setTransactionPin('');
   };
 
   const handleMeterTypeChange = (
     type: 'prepaid' | 'postpaid'
   ) => {
+    if (loadingPayment) return;
+
     setMeterType(type);
     setCustomer(null);
     setValidated(false);
     setPaymentResult(null);
+    setPaymentStatus(null);
+    setAmount('');
+    setTransactionPin('');
   };
 
   const handleValidateMeter = async () => {
@@ -135,6 +167,11 @@ export default function ElectricityScreen({
 
     try {
       setLoadingValidation(true);
+
+      setCustomer(null);
+      setValidated(false);
+      setPaymentResult(null);
+      setPaymentStatus(null);
 
       const result = await onValidate(
         selectedProvider,
@@ -194,6 +231,14 @@ export default function ElectricityScreen({
       return;
     }
 
+    if (paymentAmount > 1000000) {
+      Alert.alert(
+        'Maximum Amount',
+        'The maximum electricity payment is ₦1,000,000.'
+      );
+      return;
+    }
+
     if (
       !transactionPin ||
       transactionPin.length !== 4
@@ -213,21 +258,14 @@ export default function ElectricityScreen({
       return;
     }
 
+    const providerName =
+      providers.find(
+        p => p.id === selectedProvider
+      )?.name || selectedProvider;
+
     Alert.alert(
       'Confirm Payment',
-      `Provider: ${
-        providers.find(
-          p => p.id === selectedProvider
-        )?.name
-      }\n\nCustomer: ${
-        customer.customerName
-      }\n\nMeter Number: ${
-        meterNumber
-      }\n\nMeter Type: ${
-        meterType.toUpperCase()
-      }\n\nAmount: ${
-        formatCurrency(paymentAmount)
-      }`,
+      `Provider: ${providerName}\n\nCustomer: ${customer.customerName}\n\nMeter Number: ${meterNumber}\n\nMeter Type: ${meterType.toUpperCase()}\n\nAmount: ${formatCurrency(paymentAmount)}`,
       [
         {
           text: 'Cancel',
@@ -242,8 +280,13 @@ export default function ElectricityScreen({
   };
 
   const executePayment = async () => {
+    if (loadingPayment) return;
+
     try {
       setLoadingPayment(true);
+
+      setPaymentResult(null);
+      setPaymentStatus(null);
 
       const result = await onPay!(
         selectedProvider,
@@ -255,30 +298,136 @@ export default function ElectricityScreen({
 
       setPaymentResult(result);
 
-      Alert.alert(
-        'Payment Successful',
-        result?.message ||
-          'Your electricity payment was processed successfully.'
-      );
-    } catch (error: any) {
+      const status = String(
+        result?.status || ''
+      ).toLowerCase();
+
+      const isPending =
+        status === 'pending' ||
+        status === 'processing' ||
+        result?.httpStatus === 202 ||
+        result?.statusCode === 202;
+
+      const isSuccessful =
+        result?.success === true ||
+        status === 'completed' ||
+        status === 'successful';
+
+      if (isPending) {
+        setPaymentStatus('pending');
+
+        Alert.alert(
+          'Payment Processing',
+          result?.message ||
+            'Your electricity payment is being processed. Please do not make another payment for this meter until the current transaction is confirmed.'
+        );
+
+        return;
+      }
+
+      if (isSuccessful) {
+        setPaymentStatus('completed');
+
+        Alert.alert(
+          'Payment Successful',
+          result?.message ||
+            'Your electricity payment was processed successfully.'
+        );
+
+        return;
+      }
+
+      setPaymentStatus('failed');
+
       Alert.alert(
         'Payment Failed',
-        error?.message ||
-          'Your electricity payment could not be completed.'
+        result?.message ||
+          'The electricity payment could not be completed.'
       );
+    } catch (error: any) {
+      /*
+       * A network error does not always mean that the
+       * provider failed to receive the payment.
+       *
+       * If the backend indicates that the transaction
+       * may still be processing, do not encourage retry.
+       */
+
+      const status = String(
+        error?.status ||
+          error?.response?.status ||
+          ''
+      );
+
+      const errorCode = String(
+        error?.code || ''
+      ).toUpperCase();
+
+      const potentiallyAmbiguous =
+        status === '202' ||
+        errorCode === 'ECONNABORTED' ||
+        errorCode === 'ETIMEDOUT' ||
+        errorCode === 'ERR_NETWORK';
+
+      if (potentiallyAmbiguous) {
+        setPaymentStatus('pending');
+
+        setPaymentResult({
+          status: 'processing',
+          message:
+            'Your payment request may have been received. Please check your transaction history before attempting another payment.',
+        });
+
+        Alert.alert(
+          'Payment Status Unconfirmed',
+          'We could not confirm the payment status. Your request may still be processing. Please check your transaction history before trying again.'
+        );
+      } else {
+        setPaymentStatus('failed');
+
+        Alert.alert(
+          'Payment Failed',
+          error?.message ||
+            'Your electricity payment could not be completed.'
+        );
+      }
     } finally {
       setLoadingPayment(false);
+
+      /*
+       * Never retain the PIN after an attempt.
+       */
+      setTransactionPin('');
+      setShowPin(false);
     }
   };
 
   const resetForm = () => {
+    if (loadingPayment) return;
+
     setMeterNumber('');
     setAmount('');
     setTransactionPin('');
     setCustomer(null);
     setValidated(false);
     setPaymentResult(null);
+    setPaymentStatus(null);
+    setShowPin(false);
   };
+
+  const electricityToken =
+    paymentResult?.electricity_token ||
+    paymentResult?.token ||
+    null;
+
+  const paymentCompleted =
+    paymentStatus === 'completed';
+
+  const paymentPending =
+    paymentStatus === 'pending';
+
+  const paymentFailed =
+    paymentStatus === 'failed';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -334,6 +483,7 @@ export default function ElectricityScreen({
                   onPress={() =>
                     handleProviderChange(provider.id)
                   }
+                  disabled={loadingPayment}
                   activeOpacity={0.8}
                 >
                   <View
@@ -380,6 +530,7 @@ export default function ElectricityScreen({
               onPress={() =>
                 handleMeterTypeChange('prepaid')
               }
+              disabled={loadingPayment}
             >
               <Text
                 style={[
@@ -411,6 +562,7 @@ export default function ElectricityScreen({
               onPress={() =>
                 handleMeterTypeChange('postpaid')
               }
+              disabled={loadingPayment}
             >
               <Text
                 style={[
@@ -446,18 +598,22 @@ export default function ElectricityScreen({
             placeholderTextColor={MUTED}
             keyboardType="numeric"
             value={meterNumber}
+            editable={!loadingPayment}
             onChangeText={value => {
               setMeterNumber(value);
               setCustomer(null);
               setValidated(false);
               setPaymentResult(null);
+              setPaymentStatus(null);
+              setAmount('');
+              setTransactionPin('');
             }}
           />
 
           <TouchableOpacity
             style={styles.validateButton}
             onPress={handleValidateMeter}
-            disabled={loadingValidation}
+            disabled={loadingValidation || loadingPayment}
             activeOpacity={0.8}
           >
             {loadingValidation ? (
@@ -504,7 +660,7 @@ export default function ElectricityScreen({
 
         {/* AMOUNT */}
 
-        {validated && (
+        {validated && !paymentResult && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>
               Payment Amount
@@ -520,9 +676,11 @@ export default function ElectricityScreen({
               placeholderTextColor={MUTED}
               keyboardType="decimal-pad"
               value={amount}
+              editable={!loadingPayment}
               onChangeText={value => {
                 setAmount(value);
                 setPaymentResult(null);
+                setPaymentStatus(null);
               }}
             />
 
@@ -535,9 +693,12 @@ export default function ElectricityScreen({
                     amount === String(value) &&
                       styles.quickAmountSelected,
                   ]}
-                  onPress={() =>
-                    setAmount(String(value))
-                  }
+                  onPress={() => {
+                    setAmount(String(value));
+                    setPaymentResult(null);
+                    setPaymentStatus(null);
+                  }}
+                  disabled={loadingPayment}
                 >
                   <Text
                     style={[
@@ -567,13 +728,19 @@ export default function ElectricityScreen({
                 maxLength={4}
                 secureTextEntry={!showPin}
                 value={transactionPin}
-                onChangeText={setTransactionPin}
+                editable={!loadingPayment}
+                onChangeText={value =>
+                  setTransactionPin(
+                    value.replace(/\D/g, '')
+                  )
+                }
               />
 
               <TouchableOpacity
                 onPress={() =>
                   setShowPin(!showPin)
                 }
+                disabled={loadingPayment}
               >
                 <Text style={styles.showPin}>
                   {showPin ? 'Hide' : 'Show'}
@@ -604,56 +771,144 @@ export default function ElectricityScreen({
 
         {paymentResult && (
           <View style={styles.resultCard}>
-            <View style={styles.resultIcon}>
-              <Text style={styles.resultIconText}>
-                ✓
+            <View
+              style={[
+                styles.resultIcon,
+                paymentPending &&
+                  styles.pendingResultIcon,
+                paymentFailed &&
+                  styles.failedResultIcon,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.resultIconText,
+                  paymentPending &&
+                    styles.pendingResultIconText,
+                  paymentFailed &&
+                    styles.failedResultIconText,
+                ]}
+              >
+                {paymentCompleted
+                  ? '✓'
+                  : paymentPending
+                    ? '⏳'
+                    : '✕'}
               </Text>
             </View>
 
-            <Text style={styles.resultTitle}>
-              Payment Successful
+            <Text
+              style={[
+                styles.resultTitle,
+                paymentPending &&
+                  styles.pendingResultTitle,
+                paymentFailed &&
+                  styles.failedResultTitle,
+              ]}
+            >
+              {paymentCompleted
+                ? 'Payment Successful'
+                : paymentPending
+                  ? 'Payment Processing'
+                  : 'Payment Failed'}
             </Text>
 
             <Text style={styles.resultSubtitle}>
-              Your electricity payment was successful.
+              {paymentResult.message ||
+                (paymentCompleted
+                  ? 'Your electricity payment was successful.'
+                  : paymentPending
+                    ? 'Your payment is being processed.'
+                    : 'Your electricity payment could not be completed.')}
             </Text>
 
-            {paymentResult.token && (
+            {paymentResult.reference && (
               <>
                 <Text style={styles.tokenLabel}>
-                  Electricity Token
+                  Transaction Reference
                 </Text>
 
                 <View style={styles.tokenContainer}>
-                  <Text style={styles.tokenText}>
-                    {paymentResult.token}
+                  <Text style={styles.referenceText}>
+                    {paymentResult.reference}
                   </Text>
                 </View>
-
-                <TouchableOpacity
-                  style={styles.copyButton}
-                  onPress={() => {
-                    Alert.alert(
-                      'Token',
-                      paymentResult.token
-                    );
-                  }}
-                >
-                  <Text style={styles.copyButtonText}>
-                    View Token
-                  </Text>
-                </TouchableOpacity>
               </>
             )}
 
-            <TouchableOpacity
-              style={styles.newPaymentButton}
-              onPress={resetForm}
-            >
-              <Text style={styles.newPaymentButtonText}>
-                Make Another Payment
-              </Text>
-            </TouchableOpacity>
+            {/* TOKEN */}
+
+            {paymentCompleted &&
+              electricityToken && (
+                <>
+                  <Text style={styles.tokenLabel}>
+                    Electricity Token
+                  </Text>
+
+                  <View style={styles.tokenContainer}>
+                    <Text style={styles.tokenText}>
+                      {electricityToken}
+                    </Text>
+                  </View>
+
+                  {paymentResult.units && (
+                    <Text style={styles.unitsText}>
+                      Units: {paymentResult.units}
+                    </Text>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.copyButton}
+                    onPress={() => {
+                      Alert.alert(
+                        'Electricity Token',
+                        electricityToken
+                      );
+                    }}
+                  >
+                    <Text style={styles.copyButtonText}>
+                      View Token
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+            {/* PENDING WARNING */}
+
+            {paymentPending && (
+              <View style={styles.pendingNotice}>
+                <Text style={styles.pendingNoticeText}>
+                  Do not make another payment for this
+                  meter until this transaction has been
+                  confirmed.
+                </Text>
+              </View>
+            )}
+
+            {/* FAILED MESSAGE */}
+
+            {paymentFailed && (
+              <View style={styles.failedNotice}>
+                <Text style={styles.failedNoticeText}>
+                  If your wallet was debited, please
+                  check your transaction history before
+                  trying again.
+                </Text>
+              </View>
+            )}
+
+            {/* NEW PAYMENT */}
+
+            {(paymentCompleted || paymentFailed) && (
+              <TouchableOpacity
+                style={styles.newPaymentButton}
+                onPress={resetForm}
+              >
+                <Text style={styles.newPaymentButtonText}>
+                  Make Another Payment
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -1038,11 +1293,35 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  pendingResultIcon: {
+    backgroundColor: '#FFF4D6',
+  },
+
+  pendingResultIconText: {
+    color: '#B7791F',
+  },
+
+  failedResultIcon: {
+    backgroundColor: '#FDE8E8',
+  },
+
+  failedResultIconText: {
+    color: '#C53030',
+  },
+
   resultTitle: {
     fontSize: 19,
     fontWeight: '800',
     color: DARK_GREEN,
     marginTop: 15,
+  },
+
+  pendingResultTitle: {
+    color: '#B7791F',
+  },
+
+  failedResultTitle: {
+    color: '#C53030',
   },
 
   resultSubtitle: {
@@ -1077,6 +1356,20 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 
+  referenceText: {
+    fontSize: 13,
+    color: DARK_GREEN,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  unitsText: {
+    fontSize: 14,
+    color: DARK_GREEN,
+    fontWeight: '700',
+    marginTop: 10,
+  },
+
   copyButton: {
     backgroundColor: GREEN,
     borderRadius: 12,
@@ -1088,6 +1381,36 @@ const styles = StyleSheet.create({
   copyButtonText: {
     color: WHITE,
     fontWeight: '700',
+  },
+
+  pendingNotice: {
+    backgroundColor: '#FFF4D6',
+    borderRadius: 12,
+    padding: 13,
+    marginTop: 15,
+    width: '100%',
+  },
+
+  pendingNoticeText: {
+    color: '#8A5A00',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+
+  failedNotice: {
+    backgroundColor: '#FDE8E8',
+    borderRadius: 12,
+    padding: 13,
+    marginTop: 15,
+    width: '100%',
+  },
+
+  failedNoticeText: {
+    color: '#9B2C2C',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
   },
 
   newPaymentButton: {
