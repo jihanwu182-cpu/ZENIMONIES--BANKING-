@@ -11,6 +11,10 @@ import {
   SafeAreaView,
 } from 'react-native';
 
+// ======================================================
+// TYPES
+// ======================================================
+
 interface ElectricityProvider {
   id: string;
   name: string;
@@ -36,6 +40,8 @@ interface ElectricityPaymentResult {
   meter_number?: string;
   meter_type?: string;
   provider?: string;
+  httpStatus?: number;
+  statusCode?: number;
   [key: string]: any;
 }
 
@@ -55,6 +61,10 @@ interface ElectricityScreenProps {
   ) => Promise<ElectricityPaymentResult>;
 }
 
+// ======================================================
+// ZENIMONIES BRAND COLORS
+// ======================================================
+
 const GREEN = '#78A900';
 const DARK_GREEN = '#527900';
 const BLACK = '#172018';
@@ -62,6 +72,10 @@ const MUTED = '#858B83';
 const BACKGROUND = '#F6F8F3';
 const WHITE = '#FFFFFF';
 const BORDER = '#E9EDE5';
+
+// ======================================================
+// PROVIDERS
+// ======================================================
 
 const providers: ElectricityProvider[] = [
   { id: 'IKEDC', name: 'Ikeja Electric' },
@@ -77,8 +91,16 @@ const providers: ElectricityProvider[] = [
   { id: 'YEDC', name: 'Yola Electric' },
 ];
 
+// ======================================================
+// HELPERS
+// ======================================================
+
 const formatCurrency = (amount: number) =>
   `₦${amount.toLocaleString('en-NG')}`;
+
+// ======================================================
+// COMPONENT
+// ======================================================
 
 export default function ElectricityScreen({
   onValidate,
@@ -122,7 +144,13 @@ export default function ElectricityScreen({
       'completed' | 'pending' | 'failed' | null
     >(null);
 
-  const handleProviderChange = (provider: string) => {
+  // ====================================================
+  // PROVIDER
+  // ====================================================
+
+  const handleProviderChange = (
+    provider: string,
+  ) => {
     if (loadingPayment) return;
 
     setSelectedProvider(provider);
@@ -134,8 +162,12 @@ export default function ElectricityScreen({
     setTransactionPin('');
   };
 
+  // ====================================================
+  // METER TYPE
+  // ====================================================
+
   const handleMeterTypeChange = (
-    type: 'prepaid' | 'postpaid'
+    type: 'prepaid' | 'postpaid',
   ) => {
     if (loadingPayment) return;
 
@@ -148,20 +180,26 @@ export default function ElectricityScreen({
     setTransactionPin('');
   };
 
+  // ====================================================
+  // VALIDATE METER
+  // ====================================================
+
   const handleValidateMeter = async () => {
     if (!meterNumber.trim()) {
       Alert.alert(
         'Meter Number Required',
-        'Please enter your meter number.'
+        'Please enter your meter number.',
       );
+
       return;
     }
 
     if (!onValidate) {
       Alert.alert(
         'Not Connected',
-        'Meter validation has not yet been connected to the backend.'
+        'Meter validation has not yet been connected to the backend.',
       );
+
       return;
     }
 
@@ -176,7 +214,7 @@ export default function ElectricityScreen({
       const result = await onValidate(
         selectedProvider,
         meterNumber.trim(),
-        meterType
+        meterType,
       );
 
       setCustomer(result);
@@ -184,7 +222,7 @@ export default function ElectricityScreen({
 
       Alert.alert(
         'Meter Verified',
-        `Customer: ${result.customerName}`
+        `Customer: ${result.customerName}`,
       );
     } catch (error: any) {
       setCustomer(null);
@@ -193,19 +231,24 @@ export default function ElectricityScreen({
       Alert.alert(
         'Validation Failed',
         error?.message ||
-          'Unable to validate meter number. Please check the number and try again.'
+          'Unable to validate meter number. Please check the number and try again.',
       );
     } finally {
       setLoadingValidation(false);
     }
   };
 
+  // ====================================================
+  // PAYMENT VALIDATION
+  // ====================================================
+
   const handlePayment = () => {
     if (!validated || !customer) {
       Alert.alert(
         'Validate Meter',
-        'Please validate your meter number first.'
+        'Please validate your meter number first.',
       );
+
       return;
     }
 
@@ -218,24 +261,27 @@ export default function ElectricityScreen({
     ) {
       Alert.alert(
         'Invalid Amount',
-        'Enter a valid payment amount.'
+        'Enter a valid payment amount.',
       );
+
       return;
     }
 
     if (paymentAmount < 500) {
       Alert.alert(
         'Minimum Amount',
-        'The minimum electricity payment is ₦500.'
+        'The minimum electricity payment is ₦500.',
       );
+
       return;
     }
 
     if (paymentAmount > 1000000) {
       Alert.alert(
         'Maximum Amount',
-        'The maximum electricity payment is ₦1,000,000.'
+        'The maximum electricity payment is ₦1,000,000.',
       );
+
       return;
     }
 
@@ -245,22 +291,25 @@ export default function ElectricityScreen({
     ) {
       Alert.alert(
         'Invalid PIN',
-        'Enter your 4-digit transaction PIN.'
+        'Enter your 4-digit transaction PIN.',
       );
+
       return;
     }
 
     if (!onPay) {
       Alert.alert(
         'Not Connected',
-        'Electricity payment has not yet been connected to the backend.'
+        'Electricity payment has not yet been connected to the backend.',
       );
+
       return;
     }
 
     const providerName =
       providers.find(
-        p => p.id === selectedProvider
+        provider =>
+          provider.id === selectedProvider,
       )?.name || selectedProvider;
 
     Alert.alert(
@@ -275,12 +324,16 @@ export default function ElectricityScreen({
           text: 'Pay Now',
           onPress: executePayment,
         },
-      ]
+      ],
     );
   };
 
+  // ====================================================
+  // EXECUTE PAYMENT
+  // ====================================================
+
   const executePayment = async () => {
-    if (loadingPayment) return;
+    if (loadingPayment || !onPay) return;
 
     try {
       setLoadingPayment(true);
@@ -288,30 +341,36 @@ export default function ElectricityScreen({
       setPaymentResult(null);
       setPaymentStatus(null);
 
-      const result = await onPay!(
+      const result = await onPay(
         selectedProvider,
         meterNumber.trim(),
         meterType,
         Number(amount),
-        transactionPin
+        transactionPin,
       );
 
       setPaymentResult(result);
 
       const status = String(
-        result?.status || ''
+        result?.status || '',
       ).toLowerCase();
 
       const isPending =
         status === 'pending' ||
         status === 'processing' ||
+        status === 'unknown' ||
         result?.httpStatus === 202 ||
         result?.statusCode === 202;
 
+      // Pending takes priority over success.
       const isSuccessful =
-        result?.success === true ||
-        status === 'completed' ||
-        status === 'successful';
+        !isPending &&
+        (
+          result?.success === true ||
+          status === 'completed' ||
+          status === 'successful' ||
+          status === 'success'
+        );
 
       if (isPending) {
         setPaymentStatus('pending');
@@ -319,7 +378,7 @@ export default function ElectricityScreen({
         Alert.alert(
           'Payment Processing',
           result?.message ||
-            'Your electricity payment is being processed. Please do not make another payment for this meter until the current transaction is confirmed.'
+            'Your electricity payment is being processed. Please do not make another payment for this meter until the current transaction is confirmed.',
         );
 
         return;
@@ -331,7 +390,7 @@ export default function ElectricityScreen({
         Alert.alert(
           'Payment Successful',
           result?.message ||
-            'Your electricity payment was processed successfully.'
+            'Your electricity payment was processed successfully.',
         );
 
         return;
@@ -342,29 +401,28 @@ export default function ElectricityScreen({
       Alert.alert(
         'Payment Failed',
         result?.message ||
-          'The electricity payment could not be completed.'
+          'The electricity payment could not be completed.',
       );
     } catch (error: any) {
       /*
-       * A network error does not always mean that the
-       * provider failed to receive the payment.
-       *
-       * If the backend indicates that the transaction
-       * may still be processing, do not encourage retry.
+       * A network error does not always mean that
+       * the provider failed to receive the payment.
        */
 
       const status = String(
         error?.status ||
           error?.response?.status ||
-          ''
+          '',
       );
 
       const errorCode = String(
-        error?.code || ''
+        error?.code || '',
       ).toUpperCase();
 
       const potentiallyAmbiguous =
         status === '202' ||
+        status === '408' ||
+        status === '504' ||
         errorCode === 'ECONNABORTED' ||
         errorCode === 'ETIMEDOUT' ||
         errorCode === 'ERR_NETWORK';
@@ -380,27 +438,36 @@ export default function ElectricityScreen({
 
         Alert.alert(
           'Payment Status Unconfirmed',
-          'We could not confirm the payment status. Your request may still be processing. Please check your transaction history before trying again.'
+          'We could not confirm the payment status. Your request may still be processing. Please check your transaction history before trying again.',
         );
       } else {
         setPaymentStatus('failed');
 
+        setPaymentResult({
+          status: 'failed',
+          message:
+            error?.message ||
+            'Your electricity payment could not be completed.',
+        });
+
         Alert.alert(
           'Payment Failed',
           error?.message ||
-            'Your electricity payment could not be completed.'
+            'Your electricity payment could not be completed.',
         );
       }
     } finally {
       setLoadingPayment(false);
 
-      /*
-       * Never retain the PIN after an attempt.
-       */
+      // Never retain the PIN after an attempt.
       setTransactionPin('');
       setShowPin(false);
     }
   };
+
+  // ====================================================
+  // RESET
+  // ====================================================
 
   const resetForm = () => {
     if (loadingPayment) return;
@@ -415,6 +482,10 @@ export default function ElectricityScreen({
     setShowPin(false);
   };
 
+  // ====================================================
+  // PAYMENT RESULT
+  // ====================================================
+
   const electricityToken =
     paymentResult?.electricity_token ||
     paymentResult?.token ||
@@ -428,6 +499,10 @@ export default function ElectricityScreen({
 
   const paymentFailed =
     paymentStatus === 'failed';
+
+  // ====================================================
+  // UI
+  // ====================================================
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -613,7 +688,10 @@ export default function ElectricityScreen({
           <TouchableOpacity
             style={styles.validateButton}
             onPress={handleValidateMeter}
-            disabled={loadingValidation || loadingPayment}
+            disabled={
+              loadingValidation ||
+              loadingPayment
+            }
             activeOpacity={0.8}
           >
             {loadingValidation ? (
@@ -684,33 +762,37 @@ export default function ElectricityScreen({
               }}
             />
 
+            {/* QUICK AMOUNTS */}
+
             <View style={styles.quickAmounts}>
-              {[1000, 2000, 5000, 10000].map(value => (
-                <TouchableOpacity
-                  key={value}
-                  style={[
-                    styles.quickAmount,
-                    amount === String(value) &&
-                      styles.quickAmountSelected,
-                  ]}
-                  onPress={() => {
-                    setAmount(String(value));
-                    setPaymentResult(null);
-                    setPaymentStatus(null);
-                  }}
-                  disabled={loadingPayment}
-                >
-                  <Text
+              {[1000, 2000, 5000, 10000].map(
+                value => (
+                  <TouchableOpacity
+                    key={value}
                     style={[
-                      styles.quickAmountText,
+                      styles.quickAmount,
                       amount === String(value) &&
-                        styles.quickAmountTextSelected,
+                        styles.quickAmountSelected,
                     ]}
+                    onPress={() => {
+                      setAmount(String(value));
+                      setPaymentResult(null);
+                      setPaymentStatus(null);
+                    }}
+                    disabled={loadingPayment}
                   >
-                    ₦{value.toLocaleString('en-NG')}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.quickAmountText,
+                        amount === String(value) &&
+                          styles.quickAmountTextSelected,
+                      ]}
+                    >
+                      ₦{value.toLocaleString('en-NG')}
+                    </Text>
+                  </TouchableOpacity>
+                ),
+              )}
             </View>
 
             {/* PIN */}
@@ -731,7 +813,7 @@ export default function ElectricityScreen({
                 editable={!loadingPayment}
                 onChangeText={value =>
                   setTransactionPin(
-                    value.replace(/\D/g, '')
+                    value.replace(/\D/g, ''),
                   )
                 }
               />
@@ -822,6 +904,8 @@ export default function ElectricityScreen({
                     : 'Your electricity payment could not be completed.')}
             </Text>
 
+            {/* TRANSACTION REFERENCE */}
+
             {paymentResult.reference && (
               <>
                 <Text style={styles.tokenLabel}>
@@ -836,7 +920,7 @@ export default function ElectricityScreen({
               </>
             )}
 
-            {/* TOKEN */}
+            {/* ELECTRICITY TOKEN */}
 
             {paymentCompleted &&
               electricityToken && (
@@ -862,7 +946,7 @@ export default function ElectricityScreen({
                     onPress={() => {
                       Alert.alert(
                         'Electricity Token',
-                        electricityToken
+                        electricityToken,
                       );
                     }}
                   >
@@ -899,7 +983,8 @@ export default function ElectricityScreen({
 
             {/* NEW PAYMENT */}
 
-            {(paymentCompleted || paymentFailed) && (
+            {(paymentCompleted ||
+              paymentFailed) && (
               <TouchableOpacity
                 style={styles.newPaymentButton}
                 onPress={resetForm}
@@ -929,6 +1014,10 @@ export default function ElectricityScreen({
   );
 }
 
+// ======================================================
+// STYLES — ZENIMONIES BRAND PALETTE ONLY
+// ======================================================
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -944,6 +1033,8 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
+
+  // HEADER
 
   header: {
     flexDirection: 'row',
@@ -968,7 +1059,9 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: '#E8F3D9',
+    backgroundColor: BACKGROUND,
+    borderWidth: 1,
+    borderColor: BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -977,12 +1070,16 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
 
+  // SECTION
+
   sectionTitle: {
     fontSize: 17,
     fontWeight: '700',
     color: BLACK,
     marginBottom: 14,
   },
+
+  // PROVIDERS
 
   providerCard: {
     backgroundColor: WHITE,
@@ -1009,7 +1106,7 @@ const styles = StyleSheet.create({
 
   providerOptionSelected: {
     borderColor: GREEN,
-    backgroundColor: '#F5FAED',
+    backgroundColor: BACKGROUND,
   },
 
   providerName: {
@@ -1045,6 +1142,8 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN,
   },
 
+  // CARD
+
   card: {
     backgroundColor: WHITE,
     borderRadius: 20,
@@ -1069,6 +1168,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+  // METER TYPE
+
   meterTypeContainer: {
     flexDirection: 'row',
     gap: 10,
@@ -1086,7 +1187,7 @@ const styles = StyleSheet.create({
   meterTypeSelected: {
     borderColor: GREEN,
     borderWidth: 2,
-    backgroundColor: '#F5FAED',
+    backgroundColor: BACKGROUND,
   },
 
   meterTypeTitle: {
@@ -1109,6 +1210,8 @@ const styles = StyleSheet.create({
     color: DARK_GREEN,
   },
 
+  // INPUT
+
   input: {
     height: 52,
     borderWidth: 1,
@@ -1119,6 +1222,8 @@ const styles = StyleSheet.create({
     color: BLACK,
     backgroundColor: WHITE,
   },
+
+  // VALIDATION
 
   validateButton: {
     height: 50,
@@ -1135,15 +1240,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  // CUSTOMER
+
   customerCard: {
-    backgroundColor: '#EAF5DE',
+    backgroundColor: BACKGROUND,
     borderRadius: 18,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 22,
     borderWidth: 1,
-    borderColor: '#D4E8BD',
+    borderColor: BORDER,
   },
 
   verifiedIcon: {
@@ -1187,6 +1294,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  // AMOUNT
+
   amountInput: {
     height: 58,
     borderWidth: 1,
@@ -1217,7 +1326,7 @@ const styles = StyleSheet.create({
 
   quickAmountSelected: {
     borderColor: GREEN,
-    backgroundColor: '#F5FAED',
+    backgroundColor: BACKGROUND,
   },
 
   quickAmountText: {
@@ -1230,6 +1339,8 @@ const styles = StyleSheet.create({
     color: DARK_GREEN,
     fontWeight: '700',
   },
+
+  // PIN
 
   pinContainer: {
     height: 52,
@@ -1253,6 +1364,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
+  // PAYMENT BUTTON
+
   payButton: {
     height: 54,
     borderRadius: 14,
@@ -1268,6 +1381,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  // RESULT
+
   resultCard: {
     backgroundColor: WHITE,
     borderRadius: 20,
@@ -1282,7 +1397,9 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#E8F3D9',
+    backgroundColor: BACKGROUND,
+    borderWidth: 1,
+    borderColor: BORDER,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1294,19 +1411,21 @@ const styles = StyleSheet.create({
   },
 
   pendingResultIcon: {
-    backgroundColor: '#FFF4D6',
+    backgroundColor: BACKGROUND,
+    borderColor: BORDER,
   },
 
   pendingResultIconText: {
-    color: '#B7791F',
+    color: DARK_GREEN,
   },
 
   failedResultIcon: {
-    backgroundColor: '#FDE8E8',
+    backgroundColor: BACKGROUND,
+    borderColor: BORDER,
   },
 
   failedResultIconText: {
-    color: '#C53030',
+    color: DARK_GREEN,
   },
 
   resultTitle: {
@@ -1317,11 +1436,11 @@ const styles = StyleSheet.create({
   },
 
   pendingResultTitle: {
-    color: '#B7791F',
+    color: DARK_GREEN,
   },
 
   failedResultTitle: {
-    color: '#C53030',
+    color: DARK_GREEN,
   },
 
   resultSubtitle: {
@@ -1331,6 +1450,8 @@ const styles = StyleSheet.create({
     marginTop: 7,
   },
 
+  // TOKEN
+
   tokenLabel: {
     fontSize: 13,
     color: BLACK,
@@ -1339,9 +1460,9 @@ const styles = StyleSheet.create({
   },
 
   tokenContainer: {
-    backgroundColor: '#F5FAED',
+    backgroundColor: BACKGROUND,
     borderWidth: 1,
-    borderColor: '#D4E8BD',
+    borderColor: BORDER,
     borderRadius: 12,
     padding: 15,
     marginTop: 10,
@@ -1383,8 +1504,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  // PENDING NOTICE
+
   pendingNotice: {
-    backgroundColor: '#FFF4D6',
+    backgroundColor: BACKGROUND,
+    borderWidth: 1,
+    borderColor: BORDER,
     borderRadius: 12,
     padding: 13,
     marginTop: 15,
@@ -1392,14 +1517,18 @@ const styles = StyleSheet.create({
   },
 
   pendingNoticeText: {
-    color: '#8A5A00',
+    color: DARK_GREEN,
     fontSize: 12,
     lineHeight: 18,
     textAlign: 'center',
   },
 
+  // FAILED NOTICE
+
   failedNotice: {
-    backgroundColor: '#FDE8E8',
+    backgroundColor: BACKGROUND,
+    borderWidth: 1,
+    borderColor: BORDER,
     borderRadius: 12,
     padding: 13,
     marginTop: 15,
@@ -1407,11 +1536,13 @@ const styles = StyleSheet.create({
   },
 
   failedNoticeText: {
-    color: '#9B2C2C',
+    color: DARK_GREEN,
     fontSize: 12,
     lineHeight: 18,
     textAlign: 'center',
   },
+
+  // NEW PAYMENT
 
   newPaymentButton: {
     borderWidth: 1,
@@ -1428,6 +1559,8 @@ const styles = StyleSheet.create({
     color: DARK_GREEN,
     fontWeight: '700',
   },
+
+  // SECURITY
 
   securityNotice: {
     flexDirection: 'row',
