@@ -384,31 +384,30 @@ const DataScreen = ({
   isDark = false,
 }: Props) => {
   const theme = {
-    background:
-      colors?.background ??
-      (isDark ? '#121712' : COLORS.background),
+  background:
+    colors?.background ??
+    (isDark ? '#121712' : COLORS.background),
 
-    card:
-      colors?.card ??
-      (isDark ? '#202720' : COLORS.white),
+  card:
+    colors?.card ??
+    (isDark ? '#202720' : COLORS.white),
 
-    text:
-      colors?.text ??
-      (isDark ? '#FFFFFF' : COLORS.black),
+  text:
+    colors?.text ??
+    (isDark ? '#FFFFFF' : COLORS.black),
 
-    muted:
-      colors?.muted ??
-      (isDark ? '#A4ADA4' : COLORS.muted),
+  muted:
+    colors?.muted ??
+    (isDark ? '#A4ADA4' : COLORS.muted),
 
-    border:
-      colors?.border ??
-      (isDark ? '#303A30' : COLORS.border),
+  border:
+    colors?.border ??
+    (isDark ? '#303A30' : COLORS.border),
 
-    // ZENIMONIES DARK GREEN BRAND
-    green: COLORS.darkGreen,
-
-    darkGreen: COLORS.darkGreen,
-  };
+  // ZENIMONIES BRAND COLOURS
+  green: COLORS.darkGreen,
+  darkGreen: COLORS.darkGreen,
+};
 
   const authToken = token || '';
 
@@ -736,39 +735,32 @@ const DataScreen = ({
   // ====================================================
 
   const filteredPlans = useMemo(() => {
-    return plans.filter(plan => {
-      const category =
-        getPlanCategory(plan);
+  return plans.filter(plan => {
+    const category = getPlanCategory(plan);
 
-      const matchesCategory =
-        selectedCategory === 'All Plans' ||
-        category === selectedCategory;
+    const matchesCategory =
+      selectedCategory === 'All Plans' ||
+      category === selectedCategory;
 
-      const searchText = [
-        plan.name,
-        plan.allowance,
-        plan.validity,
-        plan.description,
-        plan.category,
-        plan.amount,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
+    const searchText = [
+      plan.name,
+      plan.allowance,
+      plan.validity,
+      plan.description,
+      plan.category,
+      plan.amount,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
 
-      const matchesSearch =
-        search.trim() === '' ||
-        searchText.includes(
-          search.trim().toLowerCase(),
-        );
+    const matchesSearch =
+      search.trim() === '' ||
+      searchText.includes(search.trim().toLowerCase());
 
-      return (
-        matchesCategory &&
-        matchesSearch
-      );
-    });
-  }, [plans, selectedCategory, search]);
-
+    return matchesCategory && matchesSearch;
+  });
+}, [plans, selectedCategory, search]);
   // ====================================================
   // CURRENCY
   // ====================================================
