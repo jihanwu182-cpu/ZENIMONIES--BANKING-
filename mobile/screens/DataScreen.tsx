@@ -434,15 +434,14 @@ const DataScreen = ({
 }: Props) => {
   // Approved ZENIMONIES palette only.
   const theme = {
-    background: COLORS.background,
-    card: COLORS.white,
-    text: COLORS.black,
-    muted: COLORS.muted,
-    border: COLORS.border,
-    green: COLORS.green,
-    darkGreen: COLORS.darkGreen,
-  };
-
+  background: colors.background,
+  card: colors.card,
+  text: colors.text,
+  muted: colors.muted,
+  border: colors.border,
+  green: colors.green,
+  darkGreen: colors.darkGreen,
+};
   const authToken = token || '';
 
   // ====================================================
