@@ -170,7 +170,6 @@ const sogoRequest = async ({
     );
   }
 };
-
 // ============================================================
 // PLAN RESPONSE NORMALIZATION
 // ============================================================
@@ -188,55 +187,91 @@ const extractPlans = (responseData) => {
       ? responseData.variations
       : [];
 
-  return plans.map((plan) => {
-    const amount = Number(
-      plan.amount ??
-      plan.price ??
-      plan.variation_amount ??
-      plan.cost
-    );
+  return plans
+    .map((plan) => {
+      const amount = Number(
+        plan.amount ??
+        plan.price ??
+        plan.variation_amount ??
+        plan.cost
+      );
 
-    return {
-      variation_code: String(
+      const variationCode = String(
         plan.variation_code ??
         plan.variationCode ??
         plan.code ??
         ''
-      ),
+      ).trim();
 
-      name:
+      const name =
         plan.name ||
         plan.plan_name ||
         plan.description ||
-        'Data bundle',
+        plan.bundle_name ||
+        'Data bundle';
 
-      amount,
-
-      network:
-        plan.network ||
-        plan.network_slug ||
-        null,
-
-      validity:
+      const validity =
         plan.validity ||
         plan.validity_period ||
-        null,
+        plan.duration ||
+        plan.expiry ||
+        null;
 
-      allowance:
+      const allowance =
         plan.allowance ||
         plan.bundle ||
         plan.data_size ||
-        null,
+        plan.volume ||
+        plan.size ||
+        null;
 
-      raw: plan,
-    };
-  }).filter((plan) => {
-    return (
-      plan.variation_code &&
-      Number.isFinite(plan.amount) &&
-      plan.amount > 0
-    );
-  });
+      const description =
+        plan.description ||
+        plan.details ||
+        plan.plan_description ||
+        null;
+
+      const category =
+        plan.category ||
+        plan.plan_category ||
+        plan.type ||
+        plan.plan_type ||
+        null;
+
+      return {
+        variation_code: variationCode,
+        name,
+        amount,
+
+        network:
+          plan.network ||
+          plan.network_slug ||
+          null,
+
+        validity,
+        allowance,
+        description,
+        category,
+
+        // Additional provider metadata
+        fixedPrice: plan.fixedPrice ?? plan.fixed_price ?? null,
+        isPromotional:
+          plan.is_promotional ??
+          plan.promotion ??
+          plan.promotional ??
+          false,
+
+        // Preserve provider's original response
+        raw: plan,
+      };
+    })
+    .filter((plan) => {
+      return (
+        plan.variation_code &&
+        Number.isFinite(plan.amount) &&
+        plan.amount > 0
+      );
+    });
 };
 
 // ============================================================
